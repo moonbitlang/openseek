@@ -340,6 +340,7 @@ fn ApprovalNotice::render(
     [
       @html.button(
         class="composer-approval-action composer-approval-deny",
+        attrs=@html.Attrs::build().data_set("testid", "approval-deny"),
         type_="button",
         title=ui(locale, if is_message { CancelLabel } else { RefuseHint }),
         on_click=action_emit(ApprovalAnswered(identity~, allow=false)),
@@ -347,6 +348,7 @@ fn ApprovalNotice::render(
       ),
       @html.button(
         class="composer-approval-action composer-approval-allow",
+        attrs=@html.Attrs::build().data_set("testid", "approval-allow"),
         type_="button",
         title=ui(locale, if is_message { SendLabel } else { AllowOnceHint }),
         on_click=action_emit(ApprovalAnswered(identity~, allow=true)),
@@ -516,9 +518,9 @@ fn ContextComponent::render(
                     type_="button",
                     disabled=!enabled || !steer_available,
                     title=ui(locale, SteerLabel),
-                    attrs=@html.Attrs::build().aria_label(
-                      ui(locale, SteerLabel),
-                    ),
+                    attrs=@html.Attrs::build()
+                      .data_set("testid", "queued-input-steer")
+                      .aria_label(ui(locale, SteerLabel)),
                     on_click=action_emit(
                       QueuedInputSteerRequested(identity~, id=item.id),
                     ),
@@ -537,13 +539,15 @@ fn ContextComponent::render(
                     } else {
                       ui(locale, EditLabel)
                     },
-                    attrs=@html.Attrs::build().aria_label(
-                      if editing {
-                        ui(locale, EditingLabel)
-                      } else {
-                        ui(locale, EditLabel)
-                      },
-                    ),
+                    attrs=@html.Attrs::build()
+                      .data_set("testid", "queued-input-edit")
+                      .aria_label(
+                        if editing {
+                          ui(locale, EditingLabel)
+                        } else {
+                          ui(locale, EditLabel)
+                        },
+                      ),
                     on_click=action_emit(
                       QueuedInputEditRequested(identity~, id=item.id),
                     ),
@@ -554,9 +558,9 @@ fn ContextComponent::render(
                     type_="button",
                     disabled=!enabled,
                     title=ui(locale, DeleteLabel),
-                    attrs=@html.Attrs::build().aria_label(
-                      ui(locale, DeleteLabel),
-                    ),
+                    attrs=@html.Attrs::build()
+                      .data_set("testid", "queued-input-delete")
+                      .aria_label(ui(locale, DeleteLabel)),
                     on_click=action_emit(
                       QueuedInputDeleteRequested(identity~, id=item.id),
                     ),
@@ -569,6 +573,7 @@ fn ContextComponent::render(
         }
         rows[item.id] = @html.details(
           class="composer-context-row queued-input-row composer-context-disclosure",
+          attrs=@html.Attrs::build().data_set("queued-input-id", item.id),
           [
             @html.summary(
               class="composer-context-summary",
@@ -848,6 +853,8 @@ pub fn WorktreeArchiveDialog::render(
 /// One removable context chip. The caller supplies meaning and commands; this
 /// package owns the exact DOM shape.
 priv struct MentionChip {
+  kind : String
+  path : String?
   glyph : String
   label : String
   title : String
@@ -868,6 +875,7 @@ fn MentionChip::render(
     Some(command) =>
       @html.button(
         class="mention-jump",
+        attrs=@html.Attrs::build().data_set("testid", "mention-jump"),
         type_="button",
         title=self.title,
         on_click=command,
@@ -888,7 +896,17 @@ fn MentionChip::render(
       ),
     )
   }
-  @html.div(class="mention-chip", children)
+  @html.div(
+    class="mention-chip",
+    attrs=match self.path {
+      Some(path) =>
+        @html.Attrs::build()
+        .data_set("mention-kind", self.kind)
+        .data_set("mention-path", path)
+      None => @html.Attrs::build().data_set("mention-kind", self.kind)
+    },
+    children,
+  )
 }
 
 ///|
@@ -1138,8 +1156,10 @@ fn reveal_completion_selection() -> @cmd.Cmd {
 ///|
 /// One caller-owned completion row rendered inside the composer popup. The
 /// caller keeps the row's action and payload; this view-only value contains
-/// only its two visible strings.
+/// its stable accepted value/path as well as its visible strings.
 priv struct CompletionRow {
+  value : String
+  path : String?
   label : String
   detail : String
 }
@@ -1165,6 +1185,10 @@ fn CompletionView::render(
   ignore(locale)
   let rows : Array[@html.Html] = []
   for index, item in self.rows {
+    let attrs = @html.Attrs::build().data_set("completion-value", item.value)
+    if item.path is Some(path) {
+      ignore(attrs.data_set("completion-path", path))
+    }
     rows.push(
       @html.div(
         class=if index == self.selected {
@@ -1172,7 +1196,7 @@ fn CompletionView::render(
         } else {
           "menu-option completion-item"
         },
-        attrs=@html.Attrs::build().on_mousedown(event => {
+        attrs=attrs.on_mousedown(event => {
           event.prevent_default()
           pick(index)
         }),

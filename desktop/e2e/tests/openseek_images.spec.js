@@ -12,13 +12,13 @@ async function open(page) {
   await app.install();
   await app.goto();
   await app.openSession();
-  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
+  await expect(page.locator('#composer-attach')).toBeVisible();
   return app;
 }
 
 async function select(page) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await (await chooser).setFiles(image);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
 }
@@ -68,7 +68,7 @@ test('OpenSeek restores images after rejection and includes pasted images in ste
   await select(page);
   await page.locator('#task').fill('Inspect both colors');
   await page.locator('#send').click();
-  await expect(page.getByText('Image start rejected', { exact: false }).first()).toBeVisible();
+  await expect(page.locator('.notification')).toContainText('Image start rejected');
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('Inspect both colors');
   app.rpcErrors.delete('agent.start');
@@ -97,7 +97,7 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.queue')?.params.images).toEqual([url]);
   await expect(page.locator('.composer-image')).toHaveCount(0);
-  await page.locator('.queued-input-action[aria-label="Edit"]').click();
+  await page.getByTestId('queued-input-edit').click();
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
   await page.locator('#task').fill('Compare these');
   const replyFor = app.replyFor.bind(app);
@@ -123,7 +123,7 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await page.locator('#send').click();
   await expect(page.locator('#task')).toHaveValue('');
   await expect(page.locator('.composer-image')).toHaveCount(0);
-  await page.locator('.queued-input-action[aria-label="Edit"]').click();
+  await page.getByTestId('queued-input-edit').click();
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
   await remove.click();
   await expect(page.locator('.composer-image')).toHaveCount(0);

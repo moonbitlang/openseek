@@ -58,19 +58,23 @@ fn Draft::image_previews(
   disabled~ : Bool,
 ) -> Array[@html.Html] {
   self.images.mapi((index, image) => {
-    @html.div(class="composer-image", [
-      @html.img(src=image.url, alt=image.name, title=image.name),
-      @html.button(
-        type_="button",
-        class="composer-image-remove",
-        disabled~,
-        title=ui(locale, RemoveImage),
-        on_click=emit(ImageRemoved(index)),
-        attrs=@html.Attrs::build().aria_label(
-          ui(locale, RemovePrefix) + image.name,
+    @html.div(
+      class="composer-image",
+      attrs=@html.Attrs::build().data_set("image-name", image.name),
+      [
+        @html.img(src=image.url, alt=image.name, title=image.name),
+        @html.button(
+          type_="button",
+          class="composer-image-remove",
+          disabled~,
+          title=ui(locale, RemoveImage),
+          on_click=emit(ImageRemoved(index)),
+          attrs=@html.Attrs::build().aria_label(
+            ui(locale, RemovePrefix) + image.name,
+          ),
+          @icons.icon(@icons.icon_close),
         ),
-        @icons.icon(@icons.icon_close),
-      ),
-    ])
+      ],
+    )
   })
 }

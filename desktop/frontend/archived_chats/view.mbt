@@ -93,6 +93,7 @@ fn row_view(
   let title = if row.openable {
     @html.button(
       class="archived-chat-open",
+      attrs=@html.Attrs::build().data_set("action", "open"),
       type_="button",
       title=row.title,
       on_click=(actions.open)(row.id),
@@ -114,6 +115,7 @@ fn row_view(
             type_="button",
             title~,
             disabled=!enabled,
+            attrs=@html.Attrs::build().data_set("action", "restore"),
             on_click=(actions.restore)(row.id),
             text(locale, Restore),
           ),
@@ -125,6 +127,7 @@ fn row_view(
             type_="button",
             title~,
             disabled=!enabled,
+            attrs=@html.Attrs::build().data_set("action", "delete"),
             on_click=(actions.delete)(row.id),
             text(locale, Delete),
           ),
@@ -132,7 +135,7 @@ fn row_view(
       Archive(..) => ()
     }
   }
-  @html.div(class="archived-chat-row", [
+  @html.div(id="archived-chat:" + row.id.key(), class="archived-chat-row", [
     title,
     @html.div(class="archived-chat-actions", buttons),
   ])
@@ -154,6 +157,7 @@ fn view(
         class="button compact archived-chats-back",
         type_="button",
         on_click=actions.back,
+        id="archived-chats-back",
         [
           @icons.icon(@icons.icon_arrow_left),
           @html.text(text(locale, BackToSettings)),
@@ -178,6 +182,7 @@ fn view(
           placeholder=text(locale, Filter),
           on_input=emit.map(query => QueryChanged(query)),
           attrs=@html.Attrs::build()
+            .id("archived-chats-filter")
             .aria_label(text(locale, Filter))
             .data_set("focus-target", ""),
         ),

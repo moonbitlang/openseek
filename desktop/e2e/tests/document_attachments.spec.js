@@ -17,7 +17,7 @@ async function open(page) {
 
 async function select(page, files = pdf) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await (await chooser).setFiles(files);
   await expect(page.locator('.composer-attachment-confirm')).toBeVisible();
 }
@@ -35,9 +35,9 @@ test('PDF upload waits for confirmation then opens from its existing file mentio
   expect(imports(app)).toHaveLength(0);
   expect(app.requests.some(r => r.method === 'fs.prepare_attachment')).toBe(false);
   expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.locator('[data-testid="attachment-upload"]').click();
   await expect(page.locator('.composer-attachment-confirm')).toHaveCount(0);
-  const chip = page.locator('.mention-chip').filter({ hasText: pdf.name });
+  const chip = page.locator(`.mention-chip[data-mention-path=${JSON.stringify(`.openseek/attachments/upload-1/${pdf.name}`)}]`);
   await expect(chip).toBeVisible();
   expect(imports(app)).toHaveLength(1);
   expect(imports(app)[0].params.source.data_base64).toBe(pdf.buffer.toString('base64'));
@@ -60,10 +60,10 @@ test('PDF upload waits for confirmation then opens from its existing file mentio
   await expect(page.locator('.mention-chip')).toHaveCount(1);
   await preview.locator('textarea').fill('Explain the selected passage');
   await preview.getByRole('checkbox').check();
-  await preview.getByRole('button', { name: 'Add feedback', exact: true }).click();
+  await preview.locator('.agent-feedback-input-action').click();
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toHaveCount(2);
-  await expect(page.locator('.mention-chip').filter({ hasText: 'Explain the selected passage' })).toBeVisible();
+  await expect(page.locator('.mention-chip[data-mention-kind="office-selection"]')).toBeVisible();
   expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('<office_selection>');
@@ -83,20 +83,20 @@ test('cancelling or failing a document import keeps the editable draft', async (
   const app = await open(page);
   await page.locator('#task').fill('Keep this draft');
   await select(page);
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByTestId('attachment-cancel').click();
   await expect(page.locator('.composer-attachment-confirm')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   expect(imports(app)).toHaveLength(0);
   app.rpcErrors.set('fs.import_attachment', 'Attachment upload failed');
   await select(page);
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.locator('[data-testid="attachment-upload"]').click();
   await expect(page.getByRole('alert')).toContainText('Attachment upload failed');
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await expect(page.locator('#send')).toBeEnabled();
   app.rpcErrors.delete('fs.import_attachment');
   await select(page);
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.locator('[data-testid="attachment-upload"]').click();
   await expect(page.locator('.mention-chip')).toContainText(pdf.name);
   expect(app.pageErrors).toEqual([]);
 });
@@ -120,16 +120,16 @@ test('DOCX, XLSX and PPTX drops with empty MIME types use original-file previews
   expect(prevented).toBe(true);
   await expect(page.locator('.composer-attachment-confirm')).toHaveCount(3);
   for (const document of documents) {
-    await page.locator('.composer-attachment-confirm').filter({ hasText: document.name })
-      .getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+    await page.locator(`.composer-attachment-confirm[data-attachment-name=${JSON.stringify(document.name)}]`)
+      .locator('[data-testid="attachment-upload"]').click();
   }
   await expect(page.locator('.mention-chip')).toHaveCount(3);
-  await page.locator('.mention-chip').filter({ hasText: 'Report.DOCX' }).locator('.mention-jump').click();
+  await page.locator('.mention-chip[data-mention-path=".openseek/attachments/upload-1/Report.DOCX"]').locator('.mention-jump').click();
   await expect(page.locator('.word-page')).toContainText('Walking on imported air');
   await page.evaluate(() => { window.testOfficeRoot = document.getElementById('openseek-office-surface'); });
-  await page.locator('.mention-chip').filter({ hasText: 'table.xlsx' }).locator('.mention-jump').click();
+  await page.locator('.mention-chip[data-mention-path=".openseek/attachments/upload-2/table.xlsx"]').locator('.mention-jump').click();
   await expect(page.locator('.sheet-document table').first()).toBeVisible();
-  await page.locator('.mention-chip').filter({ hasText: 'slides.PPTX' }).locator('.mention-jump').click();
+  await page.locator('.mention-chip[data-mention-path=".openseek/attachments/upload-3/slides.PPTX"]').locator('.mention-jump').click();
   await expect(page.locator('.pptx-slide')).toHaveCount(2);
   await expect(page.locator('.pptx-slide').first()).toContainText('PPTX preview');
   expect(await page.evaluate(() => window.testOfficeRoot === document.getElementById('openseek-office-surface'))).toBe(true);
@@ -142,12 +142,12 @@ test('DOCX, XLSX and PPTX drops with empty MIME types use original-file previews
 test('a staging failure keeps the document reference and rejects the prompt before starting an agent', async ({ page }) => {
   const app = await open(page);
   await select(page);
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.locator('[data-testid="attachment-upload"]').click();
   await expect(page.locator('.mention-chip')).toContainText(pdf.name);
   await page.locator('#task').fill('Read this document');
   app.rpcErrors.set('fs.stage_attachments', 'Could not stage attachment');
   await page.locator('#send').click();
-  await expect(page.getByText('Could not stage attachment', { exact: false }).first()).toBeVisible();
+  await expect(page.locator('.notification')).toContainText('Could not stage attachment');
   expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
   await expect(page.locator('#task')).toHaveValue('Read this document');
   await expect(page.locator('.mention-chip')).toContainText(pdf.name);

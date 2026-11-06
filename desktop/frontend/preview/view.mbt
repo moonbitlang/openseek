@@ -88,6 +88,7 @@ pub fn toolbar_view(
         "browser-nav-button"
       },
       title=ui(locale, ReloadLabel),
+      id="browser-reload",
       on_click=actions.reload,
       icon(icon_sync),
     ),

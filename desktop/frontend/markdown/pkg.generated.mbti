@@ -10,7 +10,7 @@ import {
 }
 
 // Values
-pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : String, label~ : String) -> @html.Html
+pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, kind? : String, title~ : String, label~ : String) -> @html.Html
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 

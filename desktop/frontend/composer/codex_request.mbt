@@ -186,6 +186,7 @@ fn CodexRequestInput::approval_actions(
         controls.push(
           @html.button(
             class="codex-request-action codex-request-action-primary",
+            attrs=@html.Attrs::build().data_set("approval-decision", "accept"),
             on_click=action_emit(
               CodexRequestResponded(
                 identity~,
@@ -200,6 +201,9 @@ fn CodexRequestInput::approval_actions(
         controls.push(
           @html.button(
             class="codex-request-action",
+            attrs=@html.Attrs::build().data_set(
+              "approval-decision", "acceptForSession",
+            ),
             on_click=action_emit(
               CodexRequestResponded(
                 identity~,
@@ -214,6 +218,7 @@ fn CodexRequestInput::approval_actions(
         controls.push(
           @html.button(
             class="codex-request-action codex-request-action-danger",
+            attrs=@html.Attrs::build().data_set("approval-decision", "decline"),
             on_click=action_emit(
               CodexRequestResponded(
                 identity~,
@@ -228,6 +233,7 @@ fn CodexRequestInput::approval_actions(
         controls.push(
           @html.button(
             class="codex-request-action codex-request-action-danger",
+            attrs=@html.Attrs::build().data_set("approval-decision", "cancel"),
             on_click=action_emit(
               CodexRequestResponded(
                 identity~,
@@ -242,6 +248,9 @@ fn CodexRequestInput::approval_actions(
         controls.push(
           @html.button(
             class="codex-request-action",
+            attrs=@html.Attrs::build().data_set(
+              "approval-decision", "acceptWithExecpolicyAmendment",
+            ),
             on_click=action_emit(
               CodexRequestResponded(
                 identity~,
@@ -437,6 +446,7 @@ fn CodexRequestInput::render(
     | "item/tool/requestUserInput"
     | "mcpServer/elicitation/request")
   @html.details(
+    attrs=@html.Attrs::build().data_set("request-key", self.request_key),
     open=self.expanded,
     class=if supported {
       "composer-context-row codex-request composer-context-disclosure"

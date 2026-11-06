@@ -1,5 +1,6 @@
 ///|
 pub(all) struct Item {
+  key : String
   label : String
   title : String
   icon : @html.Html?
@@ -394,6 +395,7 @@ pub fn dropdown(
                 on_select=item.command,
                 class="action-menu-item",
                 title=item.title,
+                attrs=@html.Attrs::build().data_set("action", item.key),
                 item_children(item),
               )
           }
@@ -481,6 +483,10 @@ fn[Input : Eq] menu_component(
                             on_select=item.command,
                             class="action-menu-item",
                             title=item.title,
+                            attrs=@html.Attrs::build().data_set(
+                              "action",
+                              item.key,
+                            ),
                             item_children(item),
                           )
                       }
@@ -533,6 +539,10 @@ fn[Input : Eq] menu_component(
                               on_select=item.command,
                               class="action-menu-item",
                               title=item.title,
+                              attrs=@html.Attrs::build().data_set(
+                                "action",
+                                item.key,
+                              ),
                               item_children(item),
                             )
                         }

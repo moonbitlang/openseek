@@ -100,8 +100,9 @@ fn Account::device_menu(
   select_device : (String?) -> @cmd.Cmd,
   locale~ : @i18n.Locale,
 ) -> @action_menu.Definition {
-  fn choice(label : String, current : Bool, command : @cmd.Cmd) {
+  fn choice(key : String, label : String, current : Bool, command : @cmd.Cmd) {
     @action_menu.Entry::Action({
+      key,
       label,
       title: label,
       icon: if current {
@@ -116,17 +117,25 @@ fn Account::device_menu(
   }
   let cloud = @messages.text(locale, Cloud)
   let entries = [
-    choice(cloud, self.page is CloudPage, select_device(None)),
+    choice("cloud", cloud, self.page is CloudPage, select_device(None)),
     Separator,
   ]
   for device in self.online_devices {
     let current = self.page is DevicePage(id~, ..) && id == device.id
-    entries.push(choice(device.name, current, select_device(Some(device.id))))
+    entries.push(
+      choice(
+        "device:" + device.id,
+        device.name,
+        current,
+        select_device(Some(device.id)),
+      ),
+    )
   }
   if self.online_devices.is_empty() {
     let label = @messages.text(locale, NoDevicesOnline)
     entries.push(
       Action({
+        key: "no-devices",
         label,
         title: label,
         icon: None,
@@ -163,6 +172,7 @@ fn Actions::mode_option(
   let title = @messages.text(input.locale, label)
   let selected = input.mode == mode
   @html.button(
+    id=if mode is ChatMode { "sidebar-chat-mode" } else { "sidebar-work-mode" },
     class=if selected {
       "sidebar-mode-option active"
     } else {
@@ -233,6 +243,7 @@ pub fn component(
     }
     if !input.search.query().is_blank() && input.search_results().is_empty() {
       rows["search:empty"] = @html.div(
+        id="session-search-empty",
         class="conversation-row placeholder",
         @html.span(
           class="sidebar-label sidebar-notice",
@@ -262,6 +273,7 @@ pub fn component(
           } else {
             "sidebar-button"
           },
+          id="sidebar-skills",
           on_click=actions.open_skills,
           [
             @html.span(
@@ -282,6 +294,7 @@ pub fn component(
           } else {
             "sidebar-button"
           },
+          id="sidebar-schedules",
           on_click=actions.open_schedules,
           [
             @html.span(class="sidebar-icon", @icons.icon(@icons.icon_clockface)),
@@ -300,6 +313,7 @@ pub fn component(
         } else {
           "sidebar-button"
         },
+        id="sidebar-settings",
         on_click=actions.open_settings,
         [
           @html.span(
@@ -330,6 +344,7 @@ pub fn component(
           class="console-account-action",
           disabled=account.busy,
           title=@messages.text(input.locale, RefreshDevices),
+          id="sidebar-refresh",
           on_click=actions.refresh_account,
           @messages.text(input.locale, Refresh),
         ),
@@ -338,6 +353,7 @@ pub fn component(
         @html.button(
           class="console-account-action",
           disabled=account.busy,
+          id="sidebar-sign-out",
           on_click=actions.sign_out,
           @messages.text(input.locale, SignOut),
         ),

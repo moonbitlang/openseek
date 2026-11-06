@@ -61,6 +61,7 @@ pub fn row_context(
                     on_select=item.command,
                     class="action-menu-item",
                     title=item.title,
+                    attrs=@html.Attrs::build().data_set("action", item.key),
                     item_children(item),
                   )
               }

@@ -1,14 +1,11 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, cloudOrigin } from './support/cloud_harness.js';
 
-const label = 'Help improve SeekMoon';
 const endpoint = `${cloudOrigin}/v1/me/preferences`;
-const toggle = page => page.getByRole('switch', { name: label, exact: true });
-const accountPanel = page => page.locator('.settings-group', {
-  has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }),
-});
+const toggle = page => page.locator('#settings-content-improvement');
+const accountPanel = page => page.locator('#settings-account');
 async function openSettings(page) {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
 }
 
 test('account preferences load on opening Settings and save only the confirmed server value', async ({ page }) => {
@@ -62,7 +59,7 @@ test('read failures and malformed responses never imply consent', async ({ page 
     await openSettings(page);
     await expect(accountPanel(page).getByRole('alert')).toContainText('Could not load account preferences');
     await expect(toggle(page)).toHaveCount(0);
-    await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
+    await page.getByRole('dialog').locator('[data-slot="dialog-close"]').click();
   }
   result = { json: { allow_content_improvement: false } };
   await openSettings(page);
@@ -119,10 +116,10 @@ for (const delayed of ['GET', 'PATCH']) {
     await expect.poll(() => typeof release).toBe('function');
     const panel = accountPanel(page);
     for (const userId of ['456', '123']) {
-      await panel.getByRole('button', { name: 'Sign out', exact: true }).click();
+      await panel.locator('#settings-sign-out').click();
       await expect(toggle(page)).toHaveCount(0);
       cloud.userId = userId;
-      await panel.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await panel.locator('#settings-sign-in').click();
       await expect(toggle(page)).toBeEnabled();
       await expect(toggle(page)).not.toBeChecked();
     }

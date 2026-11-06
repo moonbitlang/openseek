@@ -667,6 +667,7 @@ fn viewer_notice(
     content.push(
       @html.button(
         type_="button",
+        id="file-preview-anyway",
         class="button secondary small",
         on_click=dispatch(
           PreviewLargeFile(owner=ctx.owner, epoch=state.request_epoch, path~),
@@ -787,6 +788,7 @@ fn tree_pane(
     @html.div(
       class="explorer-tabs",
       attrs=@html.Attrs::build()
+        .id("explorer-views")
         .role("tablist")
         .aria_label(ui(locale, ExplorerViews)),
       [
@@ -1154,6 +1156,7 @@ fn git_graph_inventory(
         @html.div(
           class="git-graph-list",
           attrs=@html.Attrs::build()
+            .id("git-commit-history")
             .role("tree")
             .aria_label(ui(locale, CommitHistory)),
           children,
@@ -1473,6 +1476,7 @@ fn git_commit_row(
       on_click=dispatch(GitCommitSelected(commit.id)),
       attrs=@html.Attrs::build()
         .id(git_commit_row_id(index))
+        .data_set("commit", commit.id)
         .role("treeitem")
         .aria_label(
           "\{commit.subject}, \{commit.author}, \{commit.authored_at}, \{commit.id}",
@@ -1630,6 +1634,7 @@ fn git_commit_files(
                 ),
                 on_click=dispatch(HistoricalFileSelected(diff)),
                 attrs=@html.Attrs::build()
+                  .data_set("path", file.path)
                   .role("treeitem")
                   .aria_current(if selected { "page" } else { "false" }),
                 contents,
@@ -1689,6 +1694,7 @@ fn file_inventory(
       attrs=@html.Attrs::build()
         .id("workspace-file-tree")
         .role("tree")
+        .id("workspace-files")
         .aria_label(ui(locale, WorkspaceFiles))
         .tabindex(if entries.is_empty() { 0 } else { -1 }),
       children,
@@ -2112,6 +2118,7 @@ fn crumb_link(
     title=dynamic_text(locale, DShowFiles(label.to_string())),
     on_click=dispatch(RevealDirectory(path)),
     attrs=@html.Attrs::build()
+      .data_set("path", path.0)
       .aria_controls(BreadcrumbPickerId)
       .aria_expanded(open.to_string())
       .on_keydown(event => {
@@ -2167,6 +2174,7 @@ fn office_viewer_toolbar(
           } else {
             "office-viewer-control"
           },
+          id="office-pages-toggle",
           title=ui(locale, OfficePages),
           disabled=pdf &&
             active_pdf_document(state, ctx)
@@ -2190,7 +2198,9 @@ fn office_viewer_toolbar(
           state.pending_region_feedback(ctx) is Some(_) ||
           state.has_pinned_office_selection(ctx),
         on_click=dispatch(OfficeRegionRequested),
-        attrs=@html.Attrs::build().aria_label(ui(locale, OfficeRegion)),
+        attrs=@html.Attrs::build()
+          .id("office-annotate-region")
+          .aria_label(ui(locale, OfficeRegion)),
         @icons.icon(@icons.icon_region_capture),
       ),
       excel_copy_controls(locale~, dispatch, state, ctx),
@@ -2209,6 +2219,7 @@ fn office_viewer_toolbar(
             placeholder=ui(locale, OfficeFind),
             on_input=dispatch.map(value => OfficeSearchChanged(value)),
             attrs=@html.Attrs::build()
+              .id("office-find")
               .aria_label(ui(locale, OfficeFind))
               .data_set("focus-owner", ""),
           ),
@@ -2220,7 +2231,9 @@ fn office_viewer_toolbar(
         title=ui(locale, OfficeZoomOut),
         disabled=config.zoom <= minimum,
         on_click=zoom_out,
-        attrs=@html.Attrs::build().aria_label(ui(locale, OfficeZoomOut)),
+        attrs=@html.Attrs::build()
+          .id("office-zoom-out")
+          .aria_label(ui(locale, OfficeZoomOut)),
         "−",
       ),
       @html.span(class="office-viewer-zoom-value", "\{config.zoom}%"),
@@ -2230,7 +2243,9 @@ fn office_viewer_toolbar(
         title=ui(locale, OfficeZoomIn),
         disabled=config.zoom >= maximum,
         on_click=zoom_in,
-        attrs=@html.Attrs::build().aria_label(ui(locale, OfficeZoomIn)),
+        attrs=@html.Attrs::build()
+          .id("office-zoom-in")
+          .aria_label(ui(locale, OfficeZoomIn)),
         "+",
       ),
       if pdf {
@@ -2265,6 +2280,7 @@ fn office_viewer_toolbar(
           } else {
             ui(locale, OfficeInstalledFonts)
           },
+          id="office-font-source",
           on_click=dispatch(OfficeSystemFontsToggled),
           attrs=@html.Attrs::build()
             .aria_label(ui(locale, OfficeFontSource))
@@ -2315,6 +2331,9 @@ pub fn breadcrumb_view(
             } else {
               ui(locale, ShowFileTree)
             },
+            attrs=@html.Attrs::build()
+              .id("file-tree-toggle")
+              .aria_expanded(state.tree_open.to_string()),
             on_click=dispatch(ToggleTree),
             icon(icon_folder),
           ),
@@ -2409,7 +2428,7 @@ pub fn breadcrumb_view(
           type_="button",
           class="file-reveal-button",
           title=label,
-          attrs=@html.Attrs::build().aria_label(label),
+          attrs=@html.Attrs::build().id("file-share").aria_label(label),
           on_click=command,
           [@icons.icon_link_external(), @html.text(label)],
         )
@@ -2440,6 +2459,9 @@ pub fn breadcrumb_view(
       } else {
         ui(locale, ShowFileTree)
       },
+      attrs=@html.Attrs::build()
+        .id("file-tree-toggle")
+        .aria_expanded(state.tree_open.to_string()),
       on_click=dispatch(ToggleTree),
       icon(icon_folder),
     ),
@@ -2538,7 +2560,15 @@ fn mbti_view_button(
     } else {
       dispatch(MbtiViewModeSelected(mode))
     },
-    attrs=@html.Attrs::build().aria_pressed(active.to_string()),
+    attrs=@html.Attrs::build()
+      .id(
+        if mode == MbtiDiagram {
+          "mbti-view-diagram"
+        } else {
+          "mbti-view-source"
+        },
+      )
+      .aria_pressed(active.to_string()),
     label,
   )
 }
@@ -2618,7 +2648,15 @@ fn moon_mod_view_button(
     // An already-selected failed dependency view treats another click as an
     // explicit retry; the update loop leaves every other same-mode click inert.
     on_click=dispatch(MoonModViewModeSelected(mode)),
-    attrs=@html.Attrs::build().aria_pressed(active.to_string()),
+    attrs=@html.Attrs::build()
+      .id(
+        if mode == MoonModDependencies {
+          "moon-mod-view-dependencies"
+        } else {
+          "moon-mod-view-source"
+        },
+      )
+      .aria_pressed(active.to_string()),
     label,
   )
 }
@@ -2901,6 +2939,7 @@ fn review_mode_toolbar(
     },
     attrs=@html.Attrs::build()
       .role("toolbar")
+      .id("review-mode-toolbar")
       .aria_label(ui(locale, ReviewMode)),
     children,
   )
@@ -3196,6 +3235,7 @@ fn review_hunk_toggle_button(
     disabled~,
     on_click=dispatch(ToggleActiveReviewHunk),
     attrs=@html.Attrs::build()
+      .id("review-hunk-toggle")
       .aria_label(
         if disabled {
           ui(locale, HunkViewed)
@@ -3491,6 +3531,7 @@ fn review_progress(
     },
     on_click=dispatch(ToggleReviewProgress),
     attrs=@html.Attrs::build()
+      .id("review-file-toggle")
       .aria_label(
         if reviewed {
           ui(locale, MarkFileUnreviewed)
@@ -3831,7 +3872,9 @@ fn review_filter_controls(
           dispatch(ChangeFiltersCleared),
           focus_change_filter_after_render(),
         ]),
-        attrs=@html.Attrs::build().aria_label(ui(locale, ClearFilters)),
+        attrs=@html.Attrs::build()
+          .id("review-clear-filters")
+          .aria_label(ui(locale, ClearFilters)),
         ui(locale, ClearLabel),
       ),
     ]),
@@ -3929,9 +3972,9 @@ fn change_extension_filter(
                   selected.contains(option.0)
                 ),
               on_change=dispatch.map(_ => ChangeExtensionToggled(option.0)),
-              attrs=@html.Attrs::build().aria_label(
-                extension_label(locale~, option.0),
-              ),
+              attrs=@html.Attrs::build()
+                .data_set("extension", option.0.unwrap_or(""))
+                .aria_label(extension_label(locale~, option.0)),
             ),
             @html.span(extension_label(locale~, option.0)),
             @html.span(class="review-type-count", option.1.to_string()),

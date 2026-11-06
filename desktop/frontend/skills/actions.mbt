@@ -45,6 +45,7 @@ fn installed_menu(
         let label = ui(locale, UpdateTo(candidate.version))
         entries.push(
           Action({
+            key: "update",
             label,
             title: label,
             icon: Some(icon(@icons.icon_arrow_up)),
@@ -60,6 +61,7 @@ fn installed_menu(
         }
         entries.push(
           Action({
+            key: "uninstall",
             label: ui(locale, Uninstall),
             title: ui(locale, Uninstall),
             icon: Some(icon(@icons.icon_trash)),

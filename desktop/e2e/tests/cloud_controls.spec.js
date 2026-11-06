@@ -29,9 +29,9 @@ async function running(page) {
 
 async function followup(page, content, mode) {
   await page.locator('#task').fill(content);
-  const choice = page.getByRole('button', { name: 'Follow-up action', exact: true });
+  const choice = page.locator('#composer-followup-select');
   await choice.click();
-  await page.getByRole('option', { name: mode === 'queue' ? /^Queue next/ : /^Steer now/ }).click();
+  await page.locator(`[role=option][data-value=${mode}]`).click();
   await page.locator('#send').click();
 }
 
@@ -59,7 +59,7 @@ test('Cloud native command errors use Local error reporting without failing a ta
   await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
   await page.locator('#task').fill('Keep editing this draft');
   await app.emitSessionEvent(sessionA, 'command_error', { error: 'Command was not understood' });
-  await expect(page.getByText('Command was not understood', { exact: true })).toBeVisible();
+  await expect(page.locator('.notification')).toHaveText('Command was not understood');
   await expect(page.locator('#stop')).toBeEnabled();
   await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
   await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
@@ -145,19 +145,19 @@ test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', a
   await expect(page.locator('#task')).toHaveValue('');
   expect(app.postCount).toBe(1);
   const first = controls(app, 'queue')[0];
-  await rows.getByTitle('Edit', { exact: true }).click();
+  await rows.getByTestId('queued-input-edit').click();
   await expect(page.locator('#task')).toHaveValue('First queued input');
   await page.locator('#task').fill('Edited queued input');
-  await page.getByTitle('Save queued message', { exact: true }).click();
+  await page.locator('#send').click();
   await expect(rows).toContainText('Edited queued input');
   await expect(page.locator('#task')).toHaveValue('');
   expect(controls(app, 'queue')[1]).toMatchObject({ task_id: first.task_id, action: 'edit', id: first.id, content: 'Edited queued input' });
   await followup(page, 'Withdraw this input', 'queue');
   await expect(rows).toHaveCount(2);
   await expect(page.locator('#task')).toHaveValue('');
-  await rows.filter({ hasText: 'Withdraw this input' }).getByTitle('Delete', { exact: true }).click();
+  await page.locator(`[data-queued-input-id=${JSON.stringify(controls(app, 'queue').at(-1).id)}]`).getByTestId('queued-input-delete').click();
   await expect(rows).toHaveCount(1);
-  await rows.getByTitle('Steer', { exact: true }).click();
+  await rows.getByTestId('queued-input-steer').click();
   await expect(rows).toHaveCount(0);
   await expect(page.locator('.pending-steer-row')).toContainText('Edited queued input');
   expect(controls(app, 'queue').at(-1)).toEqual({ task_id: first.task_id, action: 'steer', id: first.id });
@@ -181,13 +181,13 @@ test('Cloud conversation switching restores drafts and paused queue controls', a
   await expect(page.locator('#task')).toHaveValue('Draft belonging to A');
   const row = page.locator('.queued-input-row');
   await expect(row).toContainText('Retained after stopping');
-  await expect(row.getByTitle('Edit', { exact: true })).toBeEnabled();
-  await expect(row.getByTitle('Delete', { exact: true })).toBeEnabled();
-  await expect(row.getByTitle('Steer', { exact: true })).toBeDisabled();
+  await expect(row.getByTestId('queued-input-edit')).toBeEnabled();
+  await expect(row.getByTestId('queued-input-delete')).toBeEnabled();
+  await expect(row.getByTestId('queued-input-steer')).toBeDisabled();
   await page.locator('#send').click();
   await expect(page.locator('#stop')).toBeEnabled();
   const task = app.controlState(sessionA).task_id;
-  await expect(row.getByTitle('Edit', { exact: true })).toBeEnabled();
+  await expect(row.getByTestId('queued-input-edit')).toBeEnabled();
   await app.finishTask(sessionA);
   const queued = app.controlState(sessionA).data.queue[0];
   await app.emitSessionEvent(sessionA, 'task_started', { submission_id: queued.id, previous_task_id: task }, { task: 'queued-next-task' });
@@ -267,8 +267,10 @@ for (const stopped of [false, true]) {
   test(`Cloud paused queue can be edited and withdrawn after ${stopped ? 'Stop' : 'failure'}`, async ({ page }) => {
     const app = await running(page);
     await followup(page, 'Keep this queued input', 'queue');
+    const keepId = controls(app, 'queue').at(-1).id;
     await expect(page.locator('#task')).toHaveValue('');
     await followup(page, 'Withdraw while paused', 'queue');
+    const withdrawId = controls(app, 'queue').at(-1).id;
     await expect(page.locator('.queued-input-row')).toHaveCount(2);
     const previous = app.controlState(sessionA).task_id;
     if (stopped) {
@@ -278,17 +280,17 @@ for (const stopped of [false, true]) {
     await app.finishTask(sessionA, 'failed');
     await expect(page.locator('#stop')).toHaveCount(0);
     const rows = page.locator('.queued-input-row');
-    await expect(rows.getByTitle('Steer', { exact: true }).first()).toBeDisabled();
-    await rows.filter({ hasText: 'Keep this queued input' }).getByTitle('Edit', { exact: true }).click();
+    await expect(rows.getByTestId('queued-input-steer').first()).toBeDisabled();
+    await page.locator(`[data-queued-input-id=${JSON.stringify(keepId)}]`).getByTestId('queued-input-edit').click();
     await expect(page.locator('#task')).toHaveValue('Keep this queued input');
     await page.locator('#task').fill('Edited while paused');
-    await expect(page.getByTitle('Save queued message', { exact: true })).toBeEnabled();
+    await expect(page.locator('#send')).toBeEnabled();
     await expect(page.locator('#stop')).toHaveCount(0);
-    await page.getByTitle('Save queued message', { exact: true }).click();
-    await expect(rows.filter({ hasText: 'Edited while paused' })).toHaveCount(1);
+    await page.locator('#send').click();
+    await expect(page.locator(`[data-queued-input-id=${JSON.stringify(keepId)}]`)).toContainText('Edited while paused');
     await expect(page.locator('#task')).toHaveValue('');
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'edit', content: 'Edited while paused' });
-    await rows.filter({ hasText: 'Withdraw while paused' }).getByTitle('Delete', { exact: true }).click();
+    await page.locator(`[data-queued-input-id=${JSON.stringify(withdrawId)}]`).getByTestId('queued-input-delete').click();
     await expect(rows).toHaveCount(1);
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'withdraw' });
     expect(app.postCount).toBe(1);
@@ -297,10 +299,10 @@ for (const stopped of [false, true]) {
     await expect(page.locator('#stop')).toBeEnabled();
     let current = app.controlState(sessionA).task_id;
     expect(current).not.toBe(previous);
-    await rows.getByTitle('Edit', { exact: true }).click();
+    await rows.getByTestId('queued-input-edit').click();
     await expect(page.locator('#task')).toHaveValue('Edited while paused');
     await page.locator('#task').fill('Edit bound to the new task');
-    await page.getByTitle('Save queued message', { exact: true }).click();
+    await page.locator('#send').click();
     await expect(rows).toContainText('Edit bound to the new task');
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: current, action: 'edit' });
     if (stopped) {

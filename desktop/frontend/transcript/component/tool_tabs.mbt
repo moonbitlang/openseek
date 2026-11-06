@@ -8,6 +8,7 @@
 
 ///|
 priv struct ToolCallTab {
+  key : String
   label : String
   body : @html.Html
 }
@@ -34,9 +35,17 @@ fn tool_call_tabs(
         id~,
         checked=index == 0,
         class="tool-call-tab-input",
+        attrs=@html.Attrs::build().data_set("tool-tab-input", tab.key),
       ),
     )
-    children.push(@html.label(class="tool-call-tab-label", for_=id, tab.label))
+    children.push(
+      @html.label(
+        class="tool-call-tab-label",
+        for_=id,
+        attrs=@html.Attrs::build().data_set("tool-tab", tab.key),
+        tab.label,
+      ),
+    )
   }
   children.push(
     @html.div(
@@ -45,7 +54,10 @@ fn tool_call_tabs(
         for tab in tabs => {
           @html.div(
             class="tool-call-tab-panel",
-            attrs=@html.Attrs::build().role("region").aria_label(tab.label),
+            attrs=@html.Attrs::build()
+              .data_set("tool-panel", tab.key)
+              .role("region")
+              .aria_label(tab.label),
             [tab.body],
           )
         }
@@ -92,17 +104,23 @@ fn tool_arguments_tabbed_view(
   let tabs : Array[ToolCallTab] = []
   match custom_card(locale~, name, arguments) {
     Some((label, card)) => {
-      tabs.push({ label, body: card, })
+      tabs.push({ key: "arguments", label, body: card, })
       tabs.push({
+        key: "original-json",
         label: ui(locale, OriginalJson),
         body: original_json_content(arguments),
       })
     }
     None => {
       let content = json_arguments_content(arguments)
-      tabs.push({ label: ui(locale, ArgumentsLabel), body: content.body, })
+      tabs.push({
+        key: "arguments",
+        label: ui(locale, ArgumentsLabel),
+        body: content.body,
+      })
       if content.has_distinct_original {
         tabs.push({
+          key: "original-json",
           label: ui(locale, OriginalJson),
           body: original_json_content(arguments),
         })
@@ -130,10 +148,12 @@ fn tool_output_tabs(
   if name == "mbtx" && @read_html.read_workflow_output(output) is Some(rendered) {
     return [
       {
+        key: "output",
         label: ui(locale, OutputLabel),
         body: @html.pre(class="tool-call-output", [rendered]),
       },
       {
+        key: "original-output",
         label: ui(locale, OriginalOutput),
         body: @html.pre(class="tool-card-original-json", output),
       },
@@ -141,6 +161,7 @@ fn tool_output_tabs(
   }
   [
     {
+      key: "output",
       label: ui(locale, OutputLabel),
       body: @html.pre(class="tool-call-output", truncate_output(output)),
     },

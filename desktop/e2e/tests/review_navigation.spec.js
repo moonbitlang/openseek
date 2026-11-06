@@ -8,7 +8,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 // shortcut scope. Only select a mode that is not shown yet, so every wait
 // below observes a real change.
 async function selectDiffMode(page, mode) {
-  const button = page.getByRole('button', { name: `${mode} diff`, exact: true });
+  const button = page.locator(`[data-diff-mode="${mode.toLowerCase()}"]`);
   if (await button.getAttribute('aria-pressed') !== 'true') {
     await button.click();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
@@ -48,7 +48,7 @@ async function settleReviewScroll(page) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.locator('#review-changes-body').locator('[role="treeitem"][data-path="src/main.mbt"]').click();
     await selectDiffMode(page, mode);
     const position = page.locator('.review-hunk-position');
     await settleReviewScroll(page);
@@ -56,16 +56,16 @@ async function settleReviewScroll(page) {
     pauseGitRefresh = true;
     await expect.poll(() => heldGitRefreshes).toBeGreaterThan(0);
     for (let i = 2; i <= 12; i++) {
-      await page.getByRole('button', { name: 'Next change', exact: true }).click();
+      await page.locator('[data-action="next-diff-change"]').click();
       await settleReviewScroll(page);
       await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
-      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
+      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line[data-line="2"]')).toBeInViewport();
     }
     for (let i = 11; i >= 1; i--) {
-      await page.getByRole('button', { name: 'Previous change', exact: true }).click();
+      await page.locator('[data-action="previous-diff-change"]').click();
       await settleReviewScroll(page);
       await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
-      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
+      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line[data-line="2"]')).toBeInViewport();
     }
     // Reading with the wheel must still update the active hunk after a reveal.
     await page.locator('#semantic-review-host').hover();
@@ -89,19 +89,18 @@ for (const mode of ['Line', 'Tree']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
-    const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
+    const main = changes.locator('[role="treeitem"][data-path="src/main.mbt"]');
+    const lib = changes.locator('[role="treeitem"][data-path="src/lib.mbt"]');
     await main.click();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-    await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
-    const navigation = page.getByRole('group', { name: 'Diff change navigation' });
+    await page.locator('#file-tree-toggle').click();
+    await page.locator(`[data-diff-mode="${mode.toLowerCase()}"]`).click();
+    const navigation = page.locator('#review-change-navigation');
     const position = navigation.locator('.review-hunk-position');
     await expect(navigation).toHaveCount(1);
-    await expect(page.getByRole('group', { name: 'Changed file navigation' })).toHaveCount(0);
     await expect(position).toHaveText('Change 1 of 2');
     // Backward entry into an uncached file must survive its asynchronous read
     // and land on the last change, not the normal first-change initialization.
-    await navigation.getByRole('button', { name: 'Previous change', exact: true }).click();
+    await navigation.locator('[data-action="previous-diff-change"]').click();
     await expect(lib).toHaveAttribute('aria-current', 'page');
     await expect(position).toHaveText('Change 2 of 2');
     await expect(navigation.locator('.review-nav-position')).toHaveText('File 2 of 2');
@@ -114,7 +113,7 @@ for (const mode of ['Line', 'Tree']) {
     await page.keyboard.press('n');
     await expect(lib).toHaveAttribute('aria-current', 'page');
     await expect(position).toHaveText('Change 1 of 2');
-    await navigation.getByRole('button', { name: 'Next change', exact: true }).click();
+    await navigation.locator('[data-action="next-diff-change"]').click();
     await expect(position).toHaveText('Change 2 of 2');
     await page.keyboard.press('n');
     await expect(main).toHaveAttribute('aria-current', 'page');
@@ -137,14 +136,14 @@ for (const mode of ['Line', 'Tree']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
-    const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
+    const main = changes.locator('[role="treeitem"][data-path="src/main.mbt"]');
+    const lib = changes.locator('[role="treeitem"][data-path="src/lib.mbt"]');
     await main.click();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
+    await page.locator('#file-tree-toggle').click();
     await selectDiffMode(page, mode);
-    const navigation = page.getByRole('group', { name: 'Diff change navigation' });
-    const next = navigation.getByRole('button', { name: 'Next change', exact: true });
-    const previous = navigation.getByRole('button', { name: 'Previous change', exact: true });
+    const navigation = page.locator('#review-change-navigation');
+    const next = navigation.locator('[data-action="next-diff-change"]');
+    const previous = navigation.locator('[data-action="previous-diff-change"]');
     const position = navigation.locator('.review-hunk-position');
     const mark = page.locator('.review-navigation-controls .review-progress');
     await expect(position).toHaveText('Change 1 of 3');
@@ -172,7 +171,7 @@ for (const mode of ['Line', 'Tree']) {
     await expect(main).toHaveAttribute('aria-current', 'page');
     await expect(position).toHaveText('Change 1 of 3');
     await page.keyboard.press('m');
-    await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#review-file-toggle')).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('n');
     await expect(lib).toHaveAttribute('aria-current', 'page');
     await expect(position).toHaveText('Change 1 of 3');
@@ -212,13 +211,13 @@ test('review shortcuts preserve modified keys, composition, repeats, and feedbac
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
+  await page.locator('#panel-expand').click();
   const changes = page.locator('#review-changes-body');
-  const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
+  const main = changes.locator('[role="treeitem"][data-path="src/main.mbt"]');
   await main.click();
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
-  const next = page.getByRole('button', { name: 'Next change', exact: true });
+  await page.locator('#file-tree-toggle').click();
+  await page.locator('[data-diff-mode="line"]').click();
+  const next = page.locator('[data-action="next-diff-change"]');
   const consumed = await next.evaluate(button => ['ctrlKey', 'altKey', 'metaKey', 'shiftKey', 'isComposing', 'repeat'].map(flag => {
     const event = new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true, [flag]: true });
     button.dispatchEvent(event);
@@ -226,13 +225,13 @@ test('review shortcuts preserve modified keys, composition, repeats, and feedbac
   }));
   expect(consumed).toEqual([false, false, false, false, false, false]);
   const modified = page.locator('.moonbit-diff-editor:visible .moonbit-diff-editor-modified');
-  await modified.locator('.view-line').filter({ hasText: 'working tree' }).first().hover();
+  await modified.locator('.view-line[data-line="2"]').hover();
   await modified.locator('.agent-feedback-glyph.line-hover').click();
   const feedback = page.locator('.agent-feedback-input-widget textarea');
   await expect(feedback).toBeVisible();
   await feedback.pressSequentially('npm');
   await expect(feedback).toHaveValue('npm');
   await expect(main).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'false');
   expect(app.pageErrors).toEqual([]);
 });

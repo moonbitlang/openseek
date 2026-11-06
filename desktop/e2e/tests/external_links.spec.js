@@ -22,7 +22,7 @@ for (const [name, options] of [
     await app.openSession();
     const originalURL = page.url();
     const popupPromise = context.waitForEvent('page', { timeout: 5000 });
-    await page.locator('.transcript').getByRole('link', { name: 'External docs' }).click(options);
+    await page.locator('.transcript a[href="https://example.test/docs"]').click(options);
     const popup = await popupPromise;
     await expect(popup).toHaveURL('https://example.test/docs');
     expect(page.url()).toBe(originalURL);

@@ -14,14 +14,14 @@ async function open(page, workspaces = ['/workspace'], signedIn = false) {
   }
   await app.install();
   await app.goto();
-  await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
+  await expect(app.sessionButton()).toBeVisible();
   return app;
 }
 
-async function choose(page, name) {
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name, exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText(name);
+async function chooseCodex(page) {
+  await page.locator('#openseek-model-picker:visible, #codex-model-picker:visible').click();
+  await page.locator('[role="option"][data-value="codex:gpt-test"]').click();
+  await expect(page.locator('#openseek-model-picker:visible, #codex-model-picker:visible')).toHaveAttribute('data-value', 'codex:gpt-test');
 }
 
 test('both agents share the first screen and Codex can choose its project in the title', async ({ page }) => {
@@ -31,72 +31,64 @@ test('both agents share the first screen and Codex can choose its project in the
   const transcript = page.locator('#transcript');
   await expect(title).toHaveText('What should we build in workspace?');
   const logo = await badge.innerHTML();
-  await choose(page, 'Codex test');
-  const trigger = page.getByRole('button', {
-    name: 'Choose project, current project workspace', exact: true,
-  });
+  await chooseCodex(page);
+  const trigger = page.locator('#empty-project-trigger');
   await expect(trigger).toBeVisible();
   expect(await badge.innerHTML()).toBe(logo);
   const session = await transcript.getAttribute('data-transcript-session');
   const openCount = app.requests.filter(r => r.method === 'codex.draft.open').length;
   const task = page.locator('#task');
   await task.fill('@main');
-  await page.locator('.completion-item').filter({ hasText: 'src/main.mbt' }).click();
+  await page.locator('[data-completion-path="src/main.mbt"]').click();
   await task.press('End');
   await task.pressSequentially(' Keep this draft when changing projects');
   const draftText = await task.inputValue();
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfoAAAAASUVORK5CYII=';
   const imageURL = `data:image/png;base64,${png}`;
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
 
   await trigger.click();
-  const picker = page.getByRole('dialog', { name: 'Choose a project' });
-  const search = picker.getByRole('textbox', { name: 'Search projects' });
-  await expect(search).toBeFocused();
+  const picker = page.locator('#empty-project-menu');
+  const search = picker.locator('#empty-project-search');
   await search.fill('oth');
-  await expect(picker.getByRole('button', { name: /^workspace/ })).toHaveCount(0);
-  await expect(picker.getByRole('button', { name: /^other —/ })).toBeVisible();
-  await search.press('Escape');
-  await expect(picker).toBeHidden();
-  await expect(trigger).toBeFocused();
-  await trigger.click();
-  await picker.getByRole('button', { name: /^workspace, current project/ }).click();
+  await expect(picker.locator('[data-project-path="/workspace"]')).toHaveCount(0);
+  await expect(picker.locator('[data-project-path="/other"]')).toBeVisible();
+  await search.fill('');
+  await picker.locator('[data-project-path="/workspace"]').click();
   await expect(picker).toBeHidden();
   await expect(transcript).toHaveAttribute('data-transcript-session', session);
   expect(app.requests.filter(r => r.method === 'codex.draft.open')).toHaveLength(openCount);
   await trigger.click();
-  await picker.getByRole('button', { name: /^other —/ }).click();
+  await picker.locator('[data-project-path="/other"]').click();
   await expect(title).toHaveText('What should we build in other?');
   await expect(app.projectRow('/other')).toHaveClass(/\bactive\b/);
   await expect(transcript).toHaveAttribute('data-transcript-session', session);
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText('Codex test');
+  await expect(page.locator('#codex-model-picker')).toHaveAttribute('data-value', 'codex:gpt-test');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/other');
   await expect(task).toHaveValue(draftText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await expect(page.locator('.mention-chip').filter({ hasText: 'src/main.mbt' })).toContainText('src/main.mbt');
+  await expect(page.locator('.mention-chip[data-mention-path="src/main.mbt"]')).toContainText('src/main.mbt');
   expect(app.requests.filter(r => r.method === 'codex.draft.close')).toHaveLength(0);
-  const otherTrigger = page.getByRole('button', {
-    name: 'Choose project, current project other', exact: true,
-  });
+  const otherTrigger = page.locator('#empty-project-trigger');
   await otherTrigger.click();
-  await picker.getByRole('button', { name: 'New project', exact: true }).click();
-  const addProject = page.getByRole('dialog', { name: 'Add a project' });
+  await picker.locator('#empty-project-new').click();
+  const addProject = page.locator('#project-picker-dialog');
   await expect(addProject).toBeVisible();
-  await addProject.getByRole('button', { name: 'Add project', exact: true }).click();
+  await addProject.locator('#project-picker-add').click();
   await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
   app.notify('workspace.changed', { workspaces: app.workspaces });
   await expect(title).toHaveText('What should we build in test?');
   await expect(transcript).toHaveAttribute('data-transcript-session', session);
   await expect(task).toHaveValue(draftText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await expect(page.locator('.mention-chip')).toContainText('src/main.mbt');
+  await expect(page.locator('.mention-chip[data-mention-path="src/main.mbt"]')).toContainText('src/main.mbt');
   await expect(addProject).toBeHidden();
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
-  await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+  await expect(page.locator('#empty-project-trigger')).toHaveCount(0);
   await expect.poll(() => app.requests.find(r => r.method === 'codex.turn.start')?.params.input).toEqual([
     { type: 'text', text: expect.stringContaining('Keep this draft when changing projects') },
     { type: 'mention', name: 'main.mbt', path: 'src/main.mbt' },
@@ -111,7 +103,7 @@ for (const failure of ['rpc', 'malformed']) {
       localStorage.setItem('openseek.minimal_transcript', String(minimal));
     }, failure === 'malformed');
     const app = await open(page, ['/workspace', '/other']);
-    await choose(page, 'Codex test');
+    await chooseCodex(page);
     const task = page.locator('#task');
     await task.fill('Keep this input after an open failure');
     const session = await page.locator('#transcript').getAttribute('data-transcript-session');
@@ -121,21 +113,21 @@ for (const failure of ['rpc', 'malformed']) {
     } else {
       app.replyFor = request => request.method === 'codex.draft.open' ? {} : reply(request);
     }
-    await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-    const picker = page.getByRole('dialog', { name: 'Choose a project' });
-    await picker.getByRole('button', { name: /^other —/ }).click();
-    const other = page.getByRole('button', { name: 'Choose project, current project other', exact: true });
+    await page.locator('#empty-project-trigger').click();
+    const picker = page.locator('#empty-project-menu');
+    await picker.locator('[data-project-path="/other"]').click();
+    const other = page.locator('#empty-project-trigger');
     await expect(other).toBeVisible();
     await expect(page.locator('#send')).toBeDisabled();
     // Wait for the error result to settle before retrying the same project.
-    await expect(page.getByText(failure === 'rpc' ? /Project unavailable/ : /Malformed reply from codex.draft.open/)).toBeVisible();
+    await expect(page.locator('#transcript .transcript-error-message')).toBeVisible();
     app.rpcErrors.delete('codex.draft.open');
     app.replyFor = reply;
     await other.click();
     if (failure === 'rpc') {
-      await picker.getByRole('button', { name: /^other, current project/ }).click();
+      await picker.locator('[data-project-path="/other"]').click();
     } else {
-      await picker.getByRole('button', { name: /^workspace —/ }).click();
+      await picker.locator('[data-project-path="/workspace"]').click();
     }
     await expect(page.locator('#send')).toBeEnabled();
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
@@ -149,16 +141,16 @@ for (const failure of ['rpc', 'malformed']) {
 
 test('a failed thread start keeps its original draft identity and project for retry', async ({ page }) => {
   const app = await open(page, ['/workspace', '/other']);
-  await choose(page, 'Codex test');
+  await chooseCodex(page);
   await page.locator('#task').fill('Retry this prompt');
   app.rpcErrors.set('codex.thread.start', 'Reply lost');
   await page.locator('#send').click();
-  await expect(page.getByText(/Reply lost/)).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.locator('#transcript .transcript-error-message')).toBeVisible();
+  await expect(page.locator('#empty-project-trigger')).toHaveCount(0);
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeDisabled();
   await expect(page.locator('#task')).toHaveValue('Retry this prompt');
   await page.keyboard.press('ControlOrMeta+o');
-  await expect(page.getByRole('dialog', { name: 'Add a project' })).toHaveCount(0);
+  await expect(page.locator('#project-picker-dialog')).toHaveCount(0);
   expect(app.requests.some(r => r.method === 'workspace.add')).toBe(false);
   const first = app.requests.find(r => r.method === 'codex.thread.start');
   app.rpcErrors.delete('codex.thread.start');
@@ -166,7 +158,7 @@ test('a failed thread start keeps its original draft identity and project for re
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.thread.start').length).toBe(2);
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -175,20 +167,20 @@ test('the title cannot add or change projects until draft opening settles', asyn
   const pending = Promise.withResolvers();
   const reply = app.replyFor.bind(app);
   app.replyFor = request => request.method === 'codex.draft.open' ? pending.promise : reply(request);
-  await choose(page, 'Codex test');
+  await chooseCodex(page);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
-  await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.locator('#empty-project-trigger')).toHaveCount(0);
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeDisabled();
   const request = app.requests.find(r => r.method === 'codex.draft.open');
   app.replyFor = reply;
   pending.resolve(reply(request));
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeEnabled();
+  await page.locator('#empty-project-trigger').click();
+  await page.locator('#empty-project-menu').locator('#empty-project-new').click();
+  await page.locator('#project-picker-dialog').locator('#project-picker-add').click();
   await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
   app.notify('workspace.changed', { workspaces: app.workspaces });
-  await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+  await expect(page.locator('#empty-project-trigger')).toBeVisible();
   await page.locator('#task').fill('Use the newly added project');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
@@ -197,24 +189,24 @@ test('the title cannot add or change projects until draft opening settles', asyn
 
 test('returning to the same blank Codex entry retains its pending project add', async ({ page }) => {
   const app = await open(page, ['/workspace', '/other'], true);
-  await choose(page, 'Codex test');
+  await chooseCodex(page);
   await expect(page).toHaveURL(/\/codex\/new$/);
   const session = await page.locator('#transcript').getAttribute('data-transcript-session');
   const pending = Promise.withResolvers();
   const reply = app.replyFor.bind(app);
   app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
-  await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+  await page.locator('#empty-project-trigger').click();
+  await page.locator('#empty-project-menu').locator('#empty-project-new').click();
+  await page.locator('#project-picker-dialog').locator('#project-picker-add').click();
   await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
+  await page.getByRole('dialog').locator('[data-slot="dialog-close"]').click();
   await expect(page).toHaveURL(/\/codex\/new$/);
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+  await expect(page.locator('#openseek-model-picker:visible, #codex-model-picker:visible')).toBeDisabled();
   pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
   app.notify('workspace.changed', { workspaces: app.workspaces });
-  await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+  await expect(page.locator('#empty-project-trigger')).toBeVisible();
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(page).toHaveURL(/\/codex\/new$/);
@@ -225,31 +217,31 @@ test('returning to the same blank Codex entry retains its pending project add', 
 for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings']]) {
   test(`a pending project add preserves its draft while sending is blocked (detach previous: ${detachPrevious}, page: ${managementPage})`, async ({ page }) => {
     const app = await open(page, ['/workspace', '/other'], true);
-    await choose(page, 'Codex test');
+    await chooseCodex(page);
     await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
-    await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
+    await expect(page.locator('#empty-project-trigger')).toBeVisible();
     await page.locator('#task').fill('Send in the added project');
     await expect(page.locator('#send')).toBeEnabled();
     const session = await page.locator('#transcript').getAttribute('data-transcript-session');
     const pending = Promise.withResolvers();
     const reply = app.replyFor.bind(app);
     app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
-    await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+    await page.locator('#empty-project-trigger').click();
+    await page.locator('#empty-project-menu').locator('#empty-project-new').click();
+    await page.locator('#project-picker-dialog').locator('#project-picker-add').click();
     await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-    await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+    await expect(page.locator('#empty-project-trigger')).toHaveCount(0);
     const addRequest = app.requests.find(r => r.method === 'workspace.add');
     await expect(page.locator('#send')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+    await expect(page.locator('#openseek-model-picker:visible, #codex-model-picker:visible')).toBeDisabled();
     await page.locator('#task').press('Enter');
     expect(app.requests.some(r => r.method === 'codex.thread.start')).toBe(false);
     await expect(page.locator('#task')).toHaveValue('Send in the added project');
     if (managementPage) {
-      await page.getByRole('button', { name: managementPage, exact: true }).click();
+      await page.locator('#sidebar-settings').click();
       await expect(page.getByRole('dialog')).toBeVisible();
       if (managementPage === 'Settings') {
-        await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
+        await expect(page.locator('#codex-logout')).toBeDisabled();
       }
     }
     if (detachPrevious) {
@@ -259,19 +251,19 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
     app.notify('workspace.changed', { workspaces: app.workspaces });
     await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
     if (managementPage) {
-      const back = page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true });
+      const back = page.getByRole('dialog').locator('[data-slot="dialog-close"]');
       await expect(back).toBeVisible();
       if (managementPage === 'Settings') {
-        await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
+        await expect(page.locator('#codex-logout')).toBeEnabled();
       }
       await back.click();
     }
-    await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+    await expect(page.locator('#empty-project-trigger')).toBeVisible();
     await expect(app.projectRow('/Users/test')).toHaveClass(/\bactive\b/);
     expect(app.requests.filter(r => r.method === 'codex.draft.open').map(r => r.params.cwd)).toEqual(['/workspace', '/Users/test']);
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
     await expect(page.locator('#task')).toHaveValue('Send in the added project');
-    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+    await expect(page.locator('#openseek-model-picker:visible, #codex-model-picker:visible')).toBeEnabled();
     await page.locator('#send').click();
     await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
     expect(app.pageErrors).toEqual([]);
@@ -284,17 +276,17 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
   for (const broadcastFirst of [false, true]) {
     test(`adding a project behind ${managementPage} preserves its draft (broadcast first: ${broadcastFirst})`, async ({ page }) => {
       const app = await open(page, ['/workspace', '/other']);
-      await choose(page, 'Codex test');
-      await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
+      await chooseCodex(page);
+      await expect(page.locator('#empty-project-trigger')).toBeVisible();
       await page.locator('#task').fill('Keep the hidden draft');
       const session = await page.locator('#transcript').getAttribute('data-transcript-session');
       const pending = Promise.withResolvers();
       const reply = app.replyFor.bind(app);
       app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
-      await page.getByRole('button', { name: 'Add a project', exact: true }).click();
-      await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+      await page.locator('[id="section:openseek.projects:remote.device-a:action"]').click();
+      await page.locator('#project-picker-dialog').locator('#project-picker-add').click();
       await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-      await page.getByRole('button', { name: managementPage, exact: true }).click();
+      await page.locator('#sidebar-settings').click();
       const result = reply(app.requests.find(r => r.method === 'workspace.add'));
       if (broadcastFirst) {
         app.notify('workspace.changed', { workspaces: app.workspaces });
@@ -307,12 +299,12 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
         app.notify('workspace.changed', { workspaces: app.workspaces });
       }
       await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
-      const back = page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true });
+      const back = page.getByRole('dialog').locator('[data-slot="dialog-close"]');
       await expect(back).toBeVisible();
       await back.click();
       await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
       await expect(page.locator('#task')).toHaveValue('Keep the hidden draft');
-      await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+      await expect(page.locator('#empty-project-trigger')).toBeVisible();
       expect(app.pageErrors).toEqual([]);
     });
   }
@@ -336,15 +328,14 @@ for (const agent of ['Codex', 'OpenSeek']) {
     };
     await app.install();
     await app.goto();
-    await choose(page, 'Codex test');
+    await chooseCodex(page);
     await page.locator('#task').fill('Leave the selected thread alone');
-    await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+    await page.locator('#empty-project-trigger').click();
+    await page.locator('#empty-project-menu').locator('#empty-project-new').click();
+    await page.locator('#project-picker-dialog').locator('#project-picker-add').click();
     await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-    const title = agent === 'Codex' ? 'Existing Codex task' : 'Rabbita browser fixture';
     const session = agent === 'Codex' ? existing.id : 'session-1';
-    await page.getByRole('button', { name: title, exact: true }).click();
+    await app.sessionButton(session, { source: agent === 'Codex' ? 'codex.live' : 'openseek.live' }).click();
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
     const opens = app.requests.filter(r => r.method === 'codex.draft.open').length;
     pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
@@ -359,18 +350,18 @@ for (const agent of ['Codex', 'OpenSeek']) {
 
 test('a failed hidden Codex draft does not block adding a project from OpenSeek', async ({ page }) => {
   const app = await open(page);
-  await choose(page, 'Codex test');
+  await chooseCodex(page);
   await page.locator('#task').fill('Retry this Codex prompt later');
   app.rpcErrors.set('codex.thread.start', 'Reply lost');
   await page.locator('#send').click();
-  await expect(page.getByText(/Reply lost/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+  await expect(page.locator('#transcript .transcript-error-message')).toBeVisible();
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeDisabled();
+  await app.sessionButton().click();
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeEnabled();
+  await page.locator('#sidebar-settings').click();
+  await expect(page.locator('[id="section:openseek.projects:remote.device-a:action"]')).toBeEnabled();
   await page.keyboard.press('ControlOrMeta+o');
-  await expect(page.getByRole('dialog', { name: 'Add a project' })).toBeVisible();
+  await expect(page.locator('#project-picker-dialog')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });

@@ -159,6 +159,7 @@ fn EmptyProjectControl::render(
             focus_empty_project_trigger_after_render(),
           ]),
           attrs=@html.Attrs::build()
+            .data_set("project-path", project.root.path)
             .aria_label(
               if selected {
                 "\{project.label}, current project — \{project.root.path}"
@@ -241,6 +242,7 @@ fn EmptyProjectControl::render(
             type_="button",
             on_click=@cmd.batch([self.dismiss, self.new_project]),
             attrs=@html.Attrs::build()
+              .id("empty-project-new")
               .on_blur(event => self.dismiss_on_blur(event))
               .on_keydown(event => self.keydown(event)),
             [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewProject))],

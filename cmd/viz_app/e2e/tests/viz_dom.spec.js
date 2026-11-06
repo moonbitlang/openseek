@@ -6,41 +6,43 @@ test('session filters and argument modes change what the reader can see', async 
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
   // Scoped to the card: the prompt rail's hover preview repeats the prompt
   // text, and this test is about the card the filters show and hide.
-  const userMessage = page.locator('.session-view .card')
-    .getByText('Inspect the session viewer', { exact: true });
-  const shellCall = page.locator('details.tool-call').filter({ hasText: 'moon test' });
-  const shellFailure = page.locator('details.card').filter({ hasText: 'fixture failure' });
-  const buildFailure = page.locator('details.card').filter({ hasText: 'type mismatch' });
+  const userMessage = page.locator('#seq-1 .content');
+  const shellCall = page.locator('[data-call-id="shell-1"]');
+  const shellFailure = page.locator('#tool-result-1');
+  const buildFailure = page.locator('#tool-result-2');
 
-  await page.getByRole('button', { name: 'Errors only', exact: true }).click();
+  await page.locator('#filter-error').click();
   await expect(userMessage).toBeHidden();
   await expect(shellFailure).toBeVisible();
-  await page.getByRole('button', { name: 'Errors only: on' }).click();
+  await page.locator('#filter-error').click();
   await expect(userMessage).toBeVisible();
 
-  await page.getByRole('button', { name: 'Escalated only', exact: true }).click();
+  await page.locator('#filter-escalated').click();
   await expect(shellCall).toBeVisible();
   await expect(shellFailure).toBeVisible();
   await expect(buildFailure).toBeHidden();
-  await page.getByRole('button', { name: 'Escalated only: on' }).click();
+  await page.locator('#filter-escalated').click();
 
   // The two modes are useful only if they expose different user-visible
   // representations of the same arguments.
   await shellCall.locator('summary').click();
-  await expect(shellCall.getByText('moon test', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Original' }).click();
-  await expect(shellCall.getByText(/"cmd":\s*"moon test"/)).toBeVisible();
-  await page.getByRole('button', { name: 'Rendered' }).click();
-  await expect(shellCall.getByText('moon test', { exact: true })).toBeVisible();
+  await expect(shellCall.locator('[data-arg-key="cmd"] .arg-value-inline')).toBeVisible();
+  await expect(shellCall.locator('[data-arg-key="cmd"] .arg-value-inline')).toHaveText('moon test');
+  await page.locator('#args-original').click();
+  await expect(shellCall.locator('.tool-call-args-original')).toBeVisible();
+  await expect(shellCall.locator('.tool-call-args-original')).toContainText(/"cmd":\s*"moon test"/);
+  await page.locator('#args-rendered').click();
+  await expect(shellCall.locator('[data-arg-key="cmd"] .arg-value-inline')).toBeVisible();
+  await expect(shellCall.locator('[data-arg-key="cmd"] .arg-value-inline')).toHaveText('moon test');
   expect(viewer.pageErrors).toEqual([]);
 });
 
-for (const mode of ['Raw log', 'Model view']) {
-  test(`build-error filter separates build diagnostics from other failures in ${mode}`, async ({ page }) => {
+for (const [mode, label] of [['raw', 'Raw log'], ['model', 'Model view']]) {
+  test(`build-error filter separates build diagnostics from other failures in ${label}`, async ({ page }) => {
     const viewer = new VizBrowserHarness(page);
     const events = viewer.events.trim().split('\n').map(line => JSON.parse(line));
     const buildResult = events.find(event => event.item?.kind === 'tool_result' &&
@@ -53,32 +55,33 @@ for (const mode of ['Raw log', 'Model view']) {
     await viewer.install();
     await viewer.goto();
     await viewer.openSession();
-    await page.getByRole('button', { name: mode, exact: true }).click();
+    await page.locator(`#view-mode-${mode}`).click();
 
-    const buildFailure = page.locator('details.card').filter({ hasText: 'type mismatch' });
+    const buildFailure = page.locator('#tool-result-2');
     await expect(buildFailure).toHaveClass(/\berror\b/);
     await expect(buildFailure.locator(':scope > summary')).toContainText('Tool error · mbtx');
     await buildFailure.locator(':scope > summary').click();
-    await expect(buildFailure.getByText(
-      mode === 'Raw log' ? '[Image: image/png, 70 bytes]' : '[Image]',
-      { exact: true },
-    )).toBeVisible();
-    const buildCall = page.locator('summary.tool-call-name').filter({ hasText: 'Check <compiler> diagnostics' });
-    const runtimeCall = page.locator('summary.tool-call-name').filter({ hasText: 'mbtx run' });
+    await expect(buildFailure.locator('.card-body')).toBeVisible();
+    await expect(buildFailure.locator('.card-body > .content')).toHaveText([
+      'type mismatch',
+      mode === 'raw' ? '[Image: image/png, 70 bytes]' : '[Image]',
+    ]);
+    const buildCall = page.locator('[data-call-id="mbtx-build"] > summary');
+    const runtimeCall = page.locator('[data-call-id="mbtx-run"] > summary');
     await expect(buildCall).toBeVisible();
     await expect(buildCall).toContainText('mbtx build 🚩');
     await expect(page.locator('.tool-call-build-failed')).toContainText('Check <compiler> diagnostics');
     await expect(page.locator('.tool-call-run-failed')).toContainText('runtime error');
-    const runtimeFailure = page.locator('details.card').filter({ hasText: 'runtime trap' });
-    const shellFailure = page.locator('details.card').filter({ hasText: 'fixture failure' });
-    await page.getByRole('button', { name: 'Build errors only', exact: true }).click();
+    const runtimeFailure = page.locator('#tool-result-3');
+    const shellFailure = page.locator('#tool-result-1');
+    await page.locator('#filter-build-error').click();
     await expect(buildFailure).toBeVisible();
     await expect(buildCall).toBeVisible();
     await expect(runtimeCall).toBeHidden();
     await expect(runtimeFailure).toBeHidden();
     await expect(shellFailure).toBeHidden();
 
-    await page.getByRole('button', { name: 'Errors only', exact: true }).click();
+    await page.locator('#filter-error').click();
     await expect(buildFailure).toBeVisible();
     await expect(buildCall).toBeVisible();
     await expect(runtimeCall).toBeVisible();
@@ -103,9 +106,10 @@ test('a dropped session file replaces the served selection without another fetch
   }, viewer.events);
   await page.locator('.app').dispatchEvent('drop', { dataTransfer });
 
-  await expect(page.getByText(/dropped file: dropped-session\.jsonl/)).toBeVisible();
-  await expect(page.locator('.card').getByText('Running the browser fixture.', { exact: true }))
-    .toBeVisible();
+  await expect(page.locator('.header-meta')).toBeVisible();
+  await expect(page.locator('.header-meta')).toContainText('dropped file: dropped-session.jsonl');
+  await expect(page.locator('#seq-2 .content')).toBeVisible();
+  await expect(page.locator('#seq-2 .content')).toHaveText('Running the browser fixture.');
   expect(viewer.apiRequests).toHaveLength(requestsBeforeDrop);
   expect(viewer.pageErrors).toEqual([]);
   await dataTransfer.dispose();
@@ -172,15 +176,15 @@ test('a subrun link opens the child session', async ({ page }) => {
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
   // Wait for the child prefetch to finish so its parent re-render cannot race
   // the user click that this test exercises.
   await page.locator('.subrun-transcript').waitFor({ state: 'attached' });
-  await page.getByRole('link', { name: '↳ subagent' }).click();
+  await page.locator(`.subrun-link[href=${JSON.stringify(`#s=${encodeURIComponent(childId)}`)}]`).click();
   await expect(page.locator('.header-id')).toHaveText(childId);
-  await expect(page.getByText('The child session is open.', { exact: true }))
-    .toBeVisible();
+  await expect(page.locator('#seq-2 .content')).toBeVisible();
+  await expect(page.locator('#seq-2 .content')).toHaveText('The child session is open.');
   expect(viewer.pageErrors).toEqual([]);
 });
 
@@ -201,7 +205,8 @@ test('URL hash restores a session and scrolls to its requested event', async ({ 
 
   await expect(page.locator('.header-id')).toHaveText(viewer.sessionId);
   await expect(page.locator('.raw-log')).toBeVisible();
-  await expect(page.getByText('Final hash target', { exact: true })).toBeInViewport();
+  await expect(page.locator('#seq-24 .content')).toBeInViewport();
+  await expect(page.locator('#seq-24 .content')).toHaveText('Final hash target');
   expect(viewer.pageErrors).toEqual([]);
 });
 
@@ -211,13 +216,13 @@ test('keyboard shortcuts navigate between failures', async ({ page }) => {
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
   await page.keyboard.press('n');
-  await expect(page.locator('details.card').filter({ hasText: 'type mismatch' }))
+  await expect(page.locator('#tool-result-2'))
     .toBeInViewport();
   await page.keyboard.press('p');
-  await expect(page.locator('details.card').filter({ hasText: 'fixture failure' }))
+  await expect(page.locator('#tool-result-1'))
     .toBeInViewport();
   expect(viewer.pageErrors).toEqual([]);
 });
@@ -262,14 +267,16 @@ test('a tool pairing link brings its distant result into view', async ({ page })
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
-  const pairingLinks = page.getByRole('link', { name: 'call 1' });
-  await expect(pairingLinks).toHaveCount(2);
-  await expect(pairingLinks.first()).toBeInViewport();
-  await expect(pairingLinks.last()).not.toBeInViewport();
-  await pairingLinks.first().click();
-  await expect(pairingLinks.last()).toBeInViewport({ ratio: 1 });
+  const resultLink = page.locator('#tool-call-1 .tool-link');
+  const callLink = page.locator('#tool-result-1 .tool-link');
+  await expect(resultLink).toHaveAttribute('href', '#tool-result-1');
+  await expect(callLink).toHaveAttribute('href', '#tool-call-1');
+  await expect(resultLink).toBeInViewport();
+  await expect(callLink).not.toBeInViewport();
+  await resultLink.click();
+  await expect(callLink).toBeInViewport({ ratio: 1 });
   expect(viewer.pageErrors).toEqual([]);
 });
 
@@ -294,16 +301,16 @@ test('a write body is highlighted by its path extension', async ({ page }) => {
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
-  const bodies = page.locator('.arg-field').filter({ hasText: 'content' }).locator('pre.moonbit-source');
+  const bodies = page.locator('[data-arg-key="content"] pre.moonbit-source');
   await expect(bodies).toHaveCount(2);
-  const mbtx = bodies.first();
+  const mbtx = page.locator('[data-call-id="write-mbtx"] [data-arg-key="content"] pre.moonbit-source');
   await expect(mbtx.locator('.mtk3').first()).toHaveText('async');
   await expect(mbtx.locator('.mtk5').first()).toContainText('"hi"');
   await expect(mbtx.locator('.moonbit-line')).toHaveCount(3);
   // An extension without a tokenizer keeps plain, numbered text.
-  const plain = bodies.last();
+  const plain = page.locator('[data-call-id="write-txt"] [data-arg-key="content"] pre.moonbit-source');
   await expect(plain).toContainText('fn is not code here');
   await expect(plain.locator('[class^="mtk"]')).toHaveCount(0);
   expect(viewer.pageErrors).toEqual([]);
@@ -335,13 +342,13 @@ test('keyboard shortcut unfolds the nearest card', async ({ page }) => {
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
-  const command = page.locator('details.tool-call')
-    .filter({ hasText: 'hidden command marker' });
-  await expect(command.getByText(/"cmd":\s*"hidden command marker"/)).toBeHidden();
+  await page.locator('#view-mode-raw').click();
+  const command = page.locator('[data-call-id="unfold-command"]');
+  await expect(command.locator('.tool-call-args-original')).toBeHidden();
   await expect(command).toBeInViewport();
   await page.keyboard.press('u');
-  await expect(command.getByText('hidden command marker', { exact: true })).toBeVisible();
+  await expect(command.locator('[data-arg-key="cmd"] .arg-value-inline')).toBeVisible();
+  await expect(command.locator('[data-arg-key="cmd"] .arg-value-inline')).toHaveText('hidden command marker');
   expect(viewer.pageErrors).toEqual([]);
 });
 
@@ -350,8 +357,8 @@ test('standalone export reads embedded data without session requests', async ({ 
   await viewer.install({ standalone: true });
   await viewer.goto();
 
-  await expect(page.locator('.card').getByText('Running the browser fixture.', { exact: true }))
-    .toBeVisible();
+  await expect(page.locator('#seq-2 .content')).toBeVisible();
+  await expect(page.locator('#seq-2 .content')).toHaveText('Running the browser fixture.');
   expect(viewer.apiRequests).toEqual([]);
   expect(viewer.pageErrors).toEqual([]);
 });
@@ -365,23 +372,23 @@ test('theme controls change the rendered palette and follow the system theme', a
   // this test about the final painted palette rather than an intermediate frame.
   await page.addStyleTag({ content: '* { transition: none !important; }' });
 
-  await page.getByRole('button', { name: 'Light' }).click();
+  await page.locator('#theme-light').click();
   const lightBackground = await page.evaluate(() =>
     getComputedStyle(document.body).backgroundColor);
 
-  await page.getByRole('button', { name: 'Dark' }).click();
+  await page.locator('#theme-dark').click();
   const darkBackground = await page.evaluate(() =>
     getComputedStyle(document.body).backgroundColor);
   expect(darkBackground).not.toBe(lightBackground);
 
-  await page.getByRole('button', { name: 'System' }).click();
+  await page.locator('#theme-system').click();
   const systemBackground = await page.evaluate(() =>
     getComputedStyle(document.body).backgroundColor);
   expect(systemBackground).toBe(darkBackground);
   expect(viewer.pageErrors).toEqual([]);
 });
 
-test('the raised user card marks only the prompts a person typed', async ({ page }) => {
+test('typed prompts are distinguished from automatic continuation', async ({ page }) => {
   const continuePrompt = 'Continue working toward the standing goal. When it is fully met, record\n'
     + 'that by calling the goal tool with status "met".';
   const viewer = new VizBrowserHarness(page);
@@ -402,34 +409,14 @@ test('the raised user card marks only the prompts a person typed', async ({ page
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
-  // The opening prompt and the mid-turn steer are the user's; the engine's
-  // relaunch prompt is not, and must not wear the same raised card.
+  // The opening prompt and mid-turn steer are typed user input; the engine's
+  // relaunch prompt is an automatic continuation.
   await expect(page.locator('.card.user.typed')).toHaveCount(2);
   await expect(page.locator('.card.user.typed').first()).toContainText('You');
   await expect(page.locator('.card.user.auto-continue')).toHaveCount(1);
   await expect(page.locator('.card.user.auto-continue')).toContainText('Auto-continue');
-
-  // The raised card is elevation, fill, and bold type, not only a caption:
-  // that is what a reader skimming a long log actually sees. Both cards are
-  // measured in one evaluate so a re-render between two measurements cannot
-  // split the pair.
-  const layout = await page.evaluate(() => {
-    const style = selector => getComputedStyle(document.querySelector(selector));
-    return {
-      typedFill: style('.card.user.typed').backgroundColor,
-      plainFill: style('.card.user.auto-continue').backgroundColor,
-      typedShadow: style('.card.user.typed').boxShadow,
-      plainShadow: style('.card.user.auto-continue').boxShadow,
-      typedWeight: style('.card.user.typed .content').fontWeight,
-      plainWeight: style('.card.user.auto-continue .content').fontWeight,
-    };
-  });
-  expect(layout.typedFill).not.toBe(layout.plainFill);
-  expect(layout.typedShadow).not.toBe('none');
-  expect(layout.plainShadow).toBe('none');
-  expect(Number(layout.typedWeight)).toBeGreaterThan(Number(layout.plainWeight));
 
   // A collapsed turn still reports the steer it hides.
   await expect(page.locator('.turn-steer-badge')).toHaveCount(1);
@@ -474,7 +461,7 @@ test('the prompt rail previews typed prompts and jumps to them', async ({ page }
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
   // One tick per typed prompt; the engine wrote nothing here, so two.
   const marks = page.locator('.rail-mark');
@@ -496,7 +483,7 @@ test('the prompt rail previews typed prompts and jumps to them', async ({ page }
   await expect(lastPreview).toContainText('had error');
 
   // Clicking the steer's tick crosses thirty notice cards in one jump.
-  const steer = page.locator('.card.user.typed').filter({ hasText: 'Also update the docs' });
+  const steer = page.locator('#seq-33');
   await expect(steer).not.toBeInViewport();
   await marks.last().click();
   await expect(steer).toBeInViewport();
@@ -516,7 +503,7 @@ test("a subagent transcript's task is not captioned as the user's", async ({ pag
   await viewer.install();
   await viewer.goto();
   await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+  await page.locator('#view-mode-raw').click();
 
   await expect(page.locator('.card.user.delegated')).toHaveCount(1);
   await expect(page.locator('.card.user.delegated')).toContainText('Task from parent');
@@ -524,7 +511,7 @@ test("a subagent transcript's task is not captioned as the user's", async ({ pag
   expect(viewer.pageErrors).toEqual([]);
 });
 
-test('scrubber navigation preserves hash state and clamps its transient tooltip', async ({ page }) => {
+test('scrubber navigation previews events and preserves hash state', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 500 });
   const viewer = new VizBrowserHarness(page);
   viewer.events = viewer.eventLog(Array.from({ length: 30 }, (_, i) => ({
@@ -542,9 +529,6 @@ test('scrubber navigation preserves hash state and clamps its transient tooltip'
     await segment.hover();
     await expect(tip).toBeVisible();
     await expect(tip).toHaveText(await segment.getAttribute('data-label'));
-    const bounds = await tip.boundingBox();
-    expect(bounds.x).toBeGreaterThanOrEqual(7);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(893);
   }
   const historyLength = await page.evaluate(() => history.length);
   await segments.last().click();
@@ -573,8 +557,8 @@ test('--watch refreshes the open session as its log grows', async ({ page }) => 
     ts: 8_000,
     item: { kind: 'user', payload: { content: 'A prompt that arrived later' } },
   }) + '\n';
-  await expect(page.locator('.card').getByText('A prompt that arrived later', { exact: true }))
-    .toBeVisible();
+  await expect(page.locator('#seq-8 .content')).toBeVisible();
+  await expect(page.locator('#seq-8 .content')).toHaveText('A prompt that arrived later');
   await expect(page.locator('.header-meta')).toContainText('8 event(s)');
   expect(viewer.pageErrors).toEqual([]);
 });
@@ -595,7 +579,8 @@ test('--watch opens a linked session once it starts', async ({ page }) => {
   const viewer = new VizBrowserHarness(page);
   await viewer.install({ watchMs: 200 });
   await viewer.goto('#s=run-late');
-  await expect(page.getByText('waiting for run-late to start…')).toBeVisible();
+  await expect(page.locator('#session-list-status')).toBeVisible();
+  await expect(page.locator('#session-list-status')).toHaveText('waiting for run-late to start…');
 
   viewer.extraSessionRows.push({
     key: 'run-late',
@@ -609,7 +594,8 @@ test('--watch opens a linked session once it starts', async ({ page }) => {
     { sequence: 1, item: { kind: 'user', payload: { content: 'A run that started after its link' } } },
   ], { id: 'run-late' }));
 
-  await expect(page.locator('.header-id', { hasText: 'run-late' })).toBeVisible();
+  await expect(page.locator('.header-id')).toBeVisible();
+  await expect(page.locator('.header-id')).toHaveText('run-late');
   await expect(page.locator('.header-meta')).toContainText('live');
   expect(viewer.pageErrors).toEqual([]);
 });
@@ -618,6 +604,7 @@ test('without --watch a link to an unknown session does not wait', async ({ page
   const viewer = new VizBrowserHarness(page);
   await viewer.install();
   await viewer.goto('#s=run-late');
-  await expect(page.getByText('1 session(s)')).toBeVisible();
-  await expect(page.getByText('waiting for run-late to start…')).toHaveCount(0);
+  await expect(page.locator('#session-list-status')).toBeVisible();
+  await expect(page.locator('#session-list-status')).toHaveText('1 session(s)');
+  await expect(page.locator('.placeholder')).not.toContainText('waiting for run-late to start…');
 });

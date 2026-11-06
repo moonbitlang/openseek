@@ -6,12 +6,12 @@ async function openCodex(page) {
   app.codexModels = [{ id: 'gpt-test', displayName: 'Codex focus', isDefault: true }];
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'Codex focus', exact: true }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await page.locator('[role=option][data-value="codex:gpt-test"]:visible').click();
   await expect(page.locator('#task')).toHaveAttribute('placeholder', /Ask Codex/);
   await expect(page.locator('#task')).toBeEnabled();
   await page.locator('#task').fill('Review this project');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
   return app;
 }
@@ -35,8 +35,8 @@ function resolve(app, id, generation) {
   });
 }
 
-function card(page, text) {
-  return page.locator('.codex-request').filter({ hasText: text });
+function card(page, requestKey) {
+  return page.locator(`.codex-request[data-request-key=${JSON.stringify(requestKey)}]`);
 }
 
 // Parallel exec_command calls can both wait for approval in the same thread.
@@ -46,7 +46,7 @@ test('removing an earlier approval preserves keyboard focus and response ownersh
   approval(app, 'second-command', 3);
   const second = card(page, 'second-command');
   await second.locator(':scope > summary').click();
-  const approve = second.getByRole('button', { name: 'Approve once', exact: true });
+  const approve = second.locator('[data-approval-decision="accept"]:visible');
   await approve.focus();
   const original = await approve.elementHandle();
   resolve(app, 'first-command', 4);
@@ -81,7 +81,7 @@ for (const kind of ['question', 'mcp-form']) {
       });
     }
     if (kind === 'mcp-form') {
-      await page.locator('.codex-request').filter({ hasText: 'Choose files' }).locator(':scope > summary').click();
+      await card(page, 'editable').locator(':scope > summary').click();
     }
     const input = page.locator(kind === 'question' ? '.user-question-answer' : '.codex-request textarea');
     const draft = kind === 'question' ? 'the parser files' : '{"scope":"parser"}';
@@ -100,17 +100,17 @@ for (const kind of ['question', 'mcp-form']) {
     await expect(input).toHaveValue(edited);
     if (kind === 'question') {
       const question = page.locator('.user-question-card');
-      await expect(question.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+      await expect(question.getByTestId('question-submit')).toBeEnabled();
       await question.locator('textarea').press('Enter');
-      await expect(question.getByText('Any details?', { exact: true })).toBeVisible();
+      await expect(question.locator('[data-question-id=details] .user-question-title')).toHaveText('Any details?');
       await question.locator('textarea').fill('Keep keyboard support.');
       app.rpcErrors.set('codex.server_request.respond', 'Temporary failure');
-      await expect(question.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await expect(question.getByTestId('question-submit')).toBeEnabled();
       await question.locator('textarea').press('Enter');
       await expect(question.locator('.user-question-error')).toContainText('Temporary failure');
       await expect(question.locator('textarea')).toHaveValue('Keep keyboard support.');
       app.rpcErrors.delete('codex.server_request.respond');
-      await expect(question.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await expect(question.getByTestId('question-submit')).toBeEnabled();
       await question.locator('textarea').press('Enter');
       const responses = () => app.requests.filter(r => r.method === 'codex.server_request.respond');
       await expect.poll(() => responses().length).toBe(2);
@@ -140,14 +140,14 @@ test('reusing a request id with a new response token replaces its DOM node', asy
   const app = await openCodex(page);
   approval(app, 'old-command', 2, 'reused-id');
   await card(page, 'old-command').locator(':scope > summary').click();
-  const old = card(page, 'old-command').getByRole('button', { name: 'Approve once', exact: true });
+  const old = card(page, 'old-command').locator('[data-approval-decision="accept"]:visible');
   await old.focus();
   const original = await old.elementHandle();
   approval(app, 'new-command', 3, 'reused-id');
   await expect(card(page, 'old-command')).toHaveCount(0);
   await expect(card(page, 'new-command')).not.toHaveAttribute('open', '');
   await card(page, 'new-command').locator(':scope > summary').click();
-  const replacement = card(page, 'new-command').getByRole('button', { name: 'Approve once', exact: true });
+  const replacement = card(page, 'new-command').locator('[data-approval-decision="accept"]:visible');
   await expect(replacement).toBeVisible();
   expect(await original.evaluate(node => node.isConnected)).toBe(false);
   await expect(replacement).not.toBeFocused();

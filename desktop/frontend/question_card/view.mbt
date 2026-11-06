@@ -92,6 +92,7 @@ pub fn Model::view(
     @html.button(
       type_="button",
       class="button compact composer-context-action user-question-submit",
+      attrs=@html.Attrs::build().data_set("testid", "question-submit"),
       disabled=action_disabled,
       on_click=action,
       label(locale, if sending { Sending } else if last { Send } else { Next }),
@@ -102,79 +103,86 @@ pub fn Model::view(
     let value = if draft is Some(Written(text)) { text } else { "" }
     let input_id = request_id + "-" + question.id
     [
-      @html.fieldset(class="user-question-field", disabled~, [
-        @html.legend(class="user-question-title", question.title),
-        @html.div(
-          class="user-question-options",
-          question.options.mapi((index, option) => {
-            @html.button(
-              type_="button",
-              class=if draft is Some(Chosen(selected)) &&
-                selected == option.label {
-                "user-question-option selected"
-              } else {
-                "user-question-option"
-              },
-              attrs=@html.Attrs::build().aria_pressed(
-                (draft is Some(Chosen(selected)) && selected == option.label).to_string(),
-              ),
-              disabled~,
-              on_click=emit(Select(question=question.id, option=option.label)),
-              [
-                @html.span(
-                  class="user-question-number",
-                  attrs=@html.Attrs::build().aria_hidden("true"),
-                  (index + 1).to_string(),
-                ),
-                @html.span(class="user-question-option-text", [
-                  @html.span(option.label),
-                  @html.span(
-                    class="user-question-option-description",
-                    option.description,
-                  ),
-                ]),
-              ],
-            )
-          }),
-        ),
-        @html.div(class="user-question-response", [
+      @html.fieldset(
+        class="user-question-field",
+        attrs=@html.Attrs::build().data_set("question-id", question.id),
+        disabled~,
+        [
+          @html.legend(class="user-question-title", question.title),
           @html.div(
-            class="user-question-input",
-            attrs=@html.Attrs::build().data_set("focus-owner", ""),
-            [
-              @icons.icon(@icons.icon_edit),
-              @html.textarea(
-                id=input_id,
+            class="user-question-options",
+            question.options.mapi((index, option) => {
+              @html.button(
+                type_="button",
+                class=if draft is Some(Chosen(selected)) &&
+                  selected == option.label {
+                  "user-question-option selected"
+                } else {
+                  "user-question-option"
+                },
                 attrs=@html.Attrs::build()
-                  .data_set("focus-target", "")
-                  .on_keydown(event => {
-                    if event.key() == "Enter" &&
-                      !event.shift_key() &&
-                      !event.is_composing() {
-                      event.prevent_default()
-                      if action_disabled {
-                        @cmd.none
-                      } else {
-                        action
-                      }
-                    } else {
-                      @cmd.none
-                    }
-                  }),
-                class="user-question-answer",
-                rows=1,
-                value~,
+                  .data_set("question-option", option.label)
+                  .aria_pressed(
+                    (draft is Some(Chosen(selected)) && selected == option.label).to_string(),
+                  ),
                 disabled~,
-                placeholder=label(locale, Answer),
-                title=question.title,
-                on_input=emit.map(text => Edit(question=question.id, text~)),
-                "",
-              ),
-            ],
+                on_click=emit(Select(question=question.id, option=option.label)),
+                [
+                  @html.span(
+                    class="user-question-number",
+                    attrs=@html.Attrs::build().aria_hidden("true"),
+                    (index + 1).to_string(),
+                  ),
+                  @html.span(class="user-question-option-text", [
+                    @html.span(option.label),
+                    @html.span(
+                      class="user-question-option-description",
+                      option.description,
+                    ),
+                  ]),
+                ],
+              )
+            }),
           ),
-          @html.div(class="user-question-footer", [actions]),
-        ]),
-      ]),
+          @html.div(class="user-question-response", [
+            @html.div(
+              class="user-question-input",
+              attrs=@html.Attrs::build().data_set("focus-owner", ""),
+              [
+                @icons.icon(@icons.icon_edit),
+                @html.textarea(
+                  id=input_id,
+                  attrs=@html.Attrs::build()
+                    .data_set("focus-target", "")
+                    .on_keydown(event => {
+                      if event.key() == "Enter" &&
+                        !event.shift_key() &&
+                        !event.is_composing() {
+                        event.prevent_default()
+                        if action_disabled {
+                          @cmd.none
+                        } else {
+                          action
+                        }
+                      } else {
+                        @cmd.none
+                      }
+                    }),
+                  class="user-question-answer",
+                  rows=1,
+                  value~,
+                  disabled~,
+                  placeholder=label(locale, Answer),
+                  title=question.title,
+                  on_input=emit.map(text => Edit(question=question.id, text~)),
+                  "",
+                ),
+              ],
+            ),
+            @html.div(class="user-question-footer", [actions]),
+          ]),
+        ],
+      ),
     ]
   } else {
     []
@@ -194,9 +202,9 @@ pub fn Model::view(
                 type_="button",
                 class="icon-button icon-button-compact user-question-previous",
                 title=label(locale, PreviousQuestion),
-                attrs=@html.Attrs::build().aria_label(
-                  label(locale, PreviousQuestion),
-                ),
+                attrs=@html.Attrs::build()
+                  .data_set("testid", "question-previous")
+                  .aria_label(label(locale, PreviousQuestion)),
                 disabled=disabled || self.current == 0,
                 on_click=emit(Navigate(index=self.current - 1)),
                 @icons.icon(@icons.icon_chevron_down),
@@ -209,9 +217,9 @@ pub fn Model::view(
                 type_="button",
                 class="icon-button icon-button-compact user-question-next",
                 title=label(locale, NextQuestion),
-                attrs=@html.Attrs::build().aria_label(
-                  label(locale, NextQuestion),
-                ),
+                attrs=@html.Attrs::build()
+                  .data_set("testid", "question-next")
+                  .aria_label(label(locale, NextQuestion)),
                 disabled=disabled || last,
                 on_click=emit(Navigate(index=self.current + 1)),
                 @icons.icon(@icons.icon_chevron_down),
@@ -225,7 +233,9 @@ pub fn Model::view(
           type_="button",
           class="icon-button icon-button-compact user-question-close",
           title=label(locale, Skip),
-          attrs=@html.Attrs::build().aria_label(label(locale, Skip)),
+          attrs=@html.Attrs::build()
+            .data_set("testid", "question-skip")
+            .aria_label(label(locale, Skip)),
           disabled~,
           on_click=emit(Submit(skip=true)),
           @icons.icon(@icons.icon_close),

@@ -84,6 +84,7 @@ fn file_label(path : String) -> (String, String) {
 
 ///|
 fn toggle_button(
+  id : String,
   label : String,
   title : String,
   pressed : Bool,
@@ -93,6 +94,7 @@ fn toggle_button(
     class=if pressed { "search-option pressed" } else { "search-option" },
     title~,
     attrs=@html.Attrs::build()
+      .id(id)
       .aria_pressed(pressed.to_string())
       .on_click(_ => command),
     label,
@@ -135,6 +137,7 @@ fn whole_word_toggle_button(
     class=if pressed { "search-option pressed" } else { "search-option" },
     title~,
     attrs=@html.Attrs::build()
+      .id("search-whole-word")
       .aria_label(title)
       .aria_pressed(pressed.to_string())
       .on_click(_ => command),
@@ -185,6 +188,7 @@ fn mode_control(
         "search-mode-button"
       },
       attrs=@html.Attrs::build()
+        .id("search-mode-text")
         .aria_label(ui(locale, TextSearch))
         .aria_pressed((mode is Text).to_string())
         .on_click(_ => emit(ModeChanged(Text))),
@@ -197,6 +201,7 @@ fn mode_control(
         "search-mode-button"
       },
       attrs=@html.Attrs::build()
+        .id("search-mode-code")
         .aria_label(ui(locale, CodeSearch))
         .aria_pressed((mode is Semantic).to_string())
         .on_click(_ => emit(ModeChanged(Semantic))),
@@ -215,6 +220,7 @@ fn mode_options(
   if page.mode is Text {
     @html.div(class="search-mode-options", [
       toggle_button(
+        "search-match-case",
         "Aa",
         ui(locale, MatchCase),
         page.text.case_sensitive,
@@ -226,6 +232,7 @@ fn mode_options(
         emit(ToggleWholeWord),
       ),
       toggle_button(
+        "search-regex",
         ".*",
         ui(locale, RegularExpression),
         page.text.regex,
@@ -255,6 +262,7 @@ fn pattern_repair_control(
     } else {
       "search-option pattern-repair-button"
     },
+    id="search-fix-pattern",
     title=label,
     attrs=@html.Attrs::build()
       .aria_label(label)
@@ -411,6 +419,9 @@ fn result_row(
             target.start_line_number.to_string(),
           ),
         ),
+        attrs=@html.Attrs::build()
+          .data_set("path", result.path)
+          .data_set("line", line.line.to_string()),
         on_click=open_match(result.path, target),
         class=if slices.is_empty() {
           "search-preview-line context"
@@ -450,6 +461,7 @@ fn file_group_view(
       class="search-file-header",
       title=group.path,
       attrs=@html.Attrs::build()
+        .data_set("path", group.path)
         .aria_expanded((!collapsed).to_string())
         .on_click(_ => emit(ToggleFile(group.path))),
       [
@@ -511,6 +523,7 @@ fn search_message(
               if page.mode is Semantic &&
                 (code == "invalid_pattern" || code == "search_failed") {
                 @html.button(
+                  id="search-fix-pattern-error",
                   class="search-fix-pattern-link",
                   on_click=emit(FixPattern),
                   ui(locale, FixPattern),
@@ -586,16 +599,22 @@ fn search_body(
           @html.span("\{selected_count} selected"),
           if filtered {
             @html.button(
+              id="search-show-all",
               on_click=emit(SetSemanticResultFilter(AllSemanticResults)),
               "Show all",
             )
           } else {
             @html.button(
+              id="search-show-selected",
               on_click=emit(SetSemanticResultFilter(SelectedSemanticResults)),
               "Show selected",
             )
           },
-          @html.button(on_click=emit(ClearSelection), "Clear selection"),
+          @html.button(
+            id="search-clear-selection",
+            on_click=emit(ClearSelection),
+            "Clear selection",
+          ),
         ]),
       )
     }
@@ -695,6 +714,7 @@ fn semantic_hit_view(
       @html.button(
         class="search-semantic-select",
         attrs=@html.Attrs::build()
+          .data_set("testid", "search-select-match")
           .aria_label(if selected { "Deselect match" } else { "Select match" })
           .aria_pressed(selected.to_string())
           .on_click(_ => emit(ToggleSemanticHit(key))),
@@ -720,6 +740,7 @@ fn semantic_group_select_view(
   @html.span(
     class="search-semantic-group-select",
     attrs=@html.Attrs::build()
+      .data_set("testid", "search-select-" + subject)
       .aria_label(
         if selected {
           "Deselect \{subject}"
@@ -766,6 +787,7 @@ fn semantic_file_group_view(
       class="search-file-header",
       title=path,
       attrs=@html.Attrs::build()
+        .data_set("path", path)
         .aria_expanded((!collapsed).to_string())
         .on_click(_ => emit(ToggleFile(semantic_file_key(pattern, path)))),
       [
@@ -861,6 +883,7 @@ fn page_view(
           placeholder=ui(locale, IncludeExample),
           on_input=emit.map(value => IncludeChanged(value)),
           attrs=@html.Attrs::build()
+            .id("search-include")
             .aria_label(ui(locale, IncludeFiles))
             .data_set("focus-owner", ""),
         ),
@@ -873,6 +896,7 @@ fn page_view(
           placeholder=ui(locale, ExcludeExample),
           on_input=emit.map(value => ExcludeChanged(value)),
           attrs=@html.Attrs::build()
+            .id("search-exclude")
             .aria_label(ui(locale, ExcludeFiles))
             .data_set("focus-owner", ""),
         ),
@@ -903,6 +927,7 @@ fn page_view(
           placeholder="inspect($(x:arg))",
           on_input=emit.map(value => PatternChanged(0, value)),
           attrs=@html.Attrs::build()
+            .id("search-pattern-0")
             .aria_label(ui(locale, PatternLabel))
             .data_set("focus-owner", "")
             .on_keydown(event => submit_search_on_enter(event, emit)),
@@ -921,6 +946,7 @@ fn page_view(
         } else {
           "search-option search-details-toggle"
         },
+        id="search-details-toggle",
         title=ui(locale, ToggleDetails),
         attrs=@html.Attrs::build()
           .aria_expanded(page.details_open.to_string())
@@ -939,6 +965,7 @@ fn page_view(
                 placeholder="inspect($(x:arg))",
                 on_input=emit.map(value => PatternChanged(index, value)),
                 attrs=@html.Attrs::build()
+                  .id("search-pattern-" + index.to_string())
                   .aria_label(ui(locale, PatternLabel))
                   .data_set("focus-owner", "")
                   .on_keydown(event => submit_search_on_enter(event, emit)),
@@ -961,6 +988,7 @@ fn page_view(
     details,
     @html.div(class="search-toolbar", [
       @html.button(
+        id="search-refresh",
         title=ui(locale, RefreshLabel),
         on_click=emit(Refresh),
         ui(locale, RefreshLabel),

@@ -48,7 +48,7 @@ test('PDF citations open the exact physical page from inline badges, cards and s
   const second = page.locator('.page[data-page-number="2"]');
   await expect(second).toHaveClass(/office-citation-target/);
   await expect(second).toBeInViewport();
-  await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('2');
+  await expect(page.locator('#pdf-page-number')).toHaveValue('2');
   await expect(page.locator('.office-selection-preview')).toBeHidden();
   await capture(page, 'office-citation-pdf.png');
   await page.locator('.citation-sources summary').click();
@@ -101,7 +101,7 @@ test('Excel citation cards switch worksheets and highlight only the exact cited 
   await expect(summary).toBeVisible();
   await expect(summary.locator('td.office-citation-target')).toHaveCount(4);
   await expect(summary.locator('[data-cell="C5"]')).toBeInViewport();
-  await expect(page.getByRole('tab', { name: '季度汇总', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[role=tab][data-excel-sheet-tab="季度汇总"]')).toHaveAttribute('aria-selected', 'true');
   await capture(page, 'office-citation-excel.png');
   await page.locator('.citation-sources summary').click();
   await page.locator('.citation-source[data-source="2"]').click();
@@ -141,10 +141,10 @@ test('Excel citations reveal a far virtual range without a native scroll and kee
   app.directoryEntries['/workspace/docs'] = [{ name: 'large-workbook.xlsx', is_dir: false }];
   app.searchFiles = ['docs/large-workbook.xlsx'];
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('large-workbook.xlsx');
-  await page.getByRole('option', { name: /large-workbook\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/large-workbook.xlsx"]').click();
   await expect(page.locator('td[data-cell="A1"]')).toHaveText('START');
   await page.locator('.citation[data-citation="1"] button').click();
   const sparse = page.locator('section[data-sheet="Sparse"]');
@@ -171,7 +171,7 @@ test('Excel citations reveal a far virtual range without a native scroll and kee
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Excel citations into a closed panel wait for the virtual sheet layout before revealing', async ({ page }) => {
+test('Excel citations into a closed panel reveal the virtual sheet target after opening', async ({ page }) => {
   // The panel opens with the citation, so the first reveal can run before the
   // virtual viewport has a size. It must reveal once the sheet is laid out.
   const app = await openAnswer(page, [

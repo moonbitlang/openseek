@@ -13,6 +13,7 @@ pub fn toolbar(
       title=ui(locale, ShowComments),
       on_click=emit(Toggle),
       attrs=@html.Attrs::build()
+        .id("github-review-toggle")
         .role("switch")
         .aria_label(ui(locale, CommentsLabel))
         .aria_checked(state.enabled.to_string()),
@@ -34,6 +35,7 @@ pub fn toolbar(
         class="github-review-refresh",
         title=ui(locale, RefreshComments),
         disabled=state.loading || state.busy,
+        id="github-review-refresh",
         on_click=emit(Refresh),
         "↻",
       )
@@ -81,6 +83,9 @@ fn comment_view(
             class="github-review-delete",
             title=ui(locale, DeleteComment),
             disabled=state.busy,
+            attrs=@html.Attrs::build().data_set(
+              "testid", "github-review-delete",
+            ),
             on_click=emit(DeleteRequested(comment.id)),
             @icons.icon_trash(),
           )
@@ -107,6 +112,9 @@ fn comment_view(
             @html.button(
               class="danger",
               disabled=state.busy,
+              attrs=@html.Attrs::build().data_set(
+                "testid", "github-review-delete-confirm",
+              ),
               on_click=emit(DeleteConfirmed(comment.id)),
               ui(locale, DeleteLabel),
             ),
@@ -137,7 +145,16 @@ pub fn composer(
   }
   @html.div(
     class="github-review-composer",
-    attrs=@html.Attrs::build().data_set("draft", target.key()),
+    attrs=@html.Attrs::build()
+      .data_set("draft", target.key())
+      .data_set(
+        "draft-kind",
+        if target is Line(..) {
+          "line"
+        } else {
+          "thread"
+        },
+      ),
     [
       @html.textarea(
         id="github-review-input:" + target.key(),
@@ -152,6 +169,7 @@ pub fn composer(
         disabled=state.busy,
         on_input=body => emit(Edit(target, body)),
         attrs=@html.Attrs::build()
+          .data_set("testid", "github-review-input")
           .aria_label(title)
           .on_focus(_ => emit(Compose(target)))
           .on_keydown(event => {
@@ -173,12 +191,16 @@ pub fn composer(
         @html.div(class="github-review-composer-actions", [
           @html.button(
             disabled=state.busy,
+            attrs=@html.Attrs::build().data_set(
+              "testid", "github-review-cancel",
+            ),
             on_click=emit(Cancel(target)),
             ui(locale, CancelLabel),
           ),
           @html.button(
             class="github-review-send",
             disabled=state.busy || !enabled || body.trim().is_empty(),
+            attrs=@html.Attrs::build().data_set("testid", "github-review-send"),
             on_click=emit(Send(target)),
             if state.busy {
               ui(locale, SendingLabel)
@@ -234,7 +256,9 @@ pub fn thread_view(
           @html.button(
             class="github-review-resolved-toggle",
             on_click=emit(Expand(thread.id)),
-            attrs=@html.Attrs::build().aria_expanded((!collapsed).to_string()),
+            attrs=@html.Attrs::build()
+              .data_set("testid", "github-review-expand")
+              .aria_expanded((!collapsed).to_string()),
             if collapsed {
               ui(locale, ResolvedShow)
             } else {
@@ -271,6 +295,9 @@ pub fn thread_view(
               @html.button(
                 class="github-review-resolve",
                 disabled=state.busy,
+                attrs=@html.Attrs::build().data_set(
+                  "testid", "github-review-resolve",
+                ),
                 on_click=emit(Resolve(thread.id, !thread.resolved)),
                 if thread.resolved {
                   ui(locale, UnresolveConversation)
@@ -359,6 +386,7 @@ pub fn status_view(
           class="github-review-update",
           type_="button",
           disabled=updating || state.busy,
+          attrs=@html.Attrs::build().data_set("testid", "github-review-update"),
           on_click=update_pr,
           if updating {
             ui(locale, UpdatingCheckout)

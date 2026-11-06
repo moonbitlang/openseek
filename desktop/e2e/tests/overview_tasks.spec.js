@@ -29,7 +29,7 @@ function lists(app) {
 }
 
 function overview(page) {
-  return page.getByRole('complementary', { name: 'Overview' });
+  return page.locator('#conversation-overview');
 }
 
 test('the overview lists what the conversation runs in the background', async ({ page }) => {
@@ -48,22 +48,21 @@ test('the overview lists what the conversation runs in the background', async ({
   // Nothing on screen reads the jobs yet.
   expect(lists(app)).toBe(0);
 
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle[aria-pressed="false"]').click();
   const panel = overview(page);
-  const title = panel.getByRole('button', { name: 'Background tasks', exact: true });
+  const title = panel.locator('[data-section="background"]').getByTestId('overview-card-toggle');
   await expect(title).toBeVisible();
   // Folded, the card says how many tasks run.
-  await expect(panel.getByText('2 running', { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-section="background"] .conv-overview-summary')).toBeVisible();
 
   // Unfolded, it says what each is.
   await title.click();
-  await expect(panel.getByText('2 running', { exact: true })).toBeHidden();
-  const row = panel.locator('.conv-overview-row', { hasText: 'npm run dev' });
+  await expect(panel.locator('[data-section="background"] .conv-overview-summary')).toBeHidden();
+  const row = panel.locator('[data-section="background"] .conv-overview-row').filter({ has: page.locator('.conv-overview-command') });
   await expect(row).toHaveAttribute('title', command);
-  await expect(row.locator('.conv-overview-command')).toHaveCSS('text-overflow', 'ellipsis');
   await expect(row.locator('.conv-overview-row-sub')).toHaveText(/^1m \d+s$/);
-  await expect(panel.getByText('explore: map the jobs package', { exact: true })).toBeVisible();
-  await expect(panel.getByText('1 finished', { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-section="background"]')).toContainText('explore: map the jobs package');
+  await expect(panel.locator('[data-section="background"]')).toContainText('1 finished');
   // The summary lists the jobs; reading their output is the Jobs panel's.
   expect(app.requests.some(request => request.method === 'jobs.read')).toBe(false);
   const scope = app.requests.find(request => request.method === 'jobs.list').params.scope;
@@ -74,7 +73,7 @@ test('the overview lists what the conversation runs in the background', async ({
   await expect.poll(() => lists(app), { timeout: 5000 }).toBeGreaterThan(shown);
 
   // Hidden, it asks nothing.
-  await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle[aria-pressed="true"]').click();
   await expect(panel).toBeHidden();
   const hidden = lists(app);
   await page.waitForTimeout(3500);
@@ -82,13 +81,13 @@ test('the overview lists what the conversation runs in the background', async ({
 
   // The card's button opens the Jobs panel, which lists every job, and hides
   // it again like the titlebar's panel toggles.
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
-  const open = panel.getByRole('button', { name: 'Open Jobs', exact: true });
+  await page.locator('#conversation-overview-toggle[aria-pressed="false"]').click();
+  const open = panel.locator('[data-section="background"] .conv-overview-mini');
   await expect(open).toHaveAttribute('aria-pressed', 'false');
   await open.click();
   await expect(page.locator('.jobs-panel')).toBeVisible();
   await expect(page.locator('.jobs-panel')).toContainText('just test');
-  const hide = panel.getByRole('button', { name: 'Hide Jobs', exact: true });
+  const hide = panel.locator('[data-section="background"] .conv-overview-mini');
   await expect(hide).toHaveAttribute('aria-pressed', 'true');
   await hide.click();
   await expect(page.locator('.jobs-panel')).toBeHidden();

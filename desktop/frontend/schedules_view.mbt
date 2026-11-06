@@ -27,12 +27,14 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.button(
         class="button",
         disabled=page.busy,
+        attrs=@html.Attrs::build().data_set("testid", "schedule-new"),
         on_click=emit(New),
         ui(locale, NewSchedule),
       ),
       @html.button(
         class="button secondary",
         disabled=page.busy,
+        attrs=@html.Attrs::build().data_set("testid", "schedule-refresh"),
         on_click=emit(Poll),
         ui(locale, RefreshLabel),
       ),
@@ -54,6 +56,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.h2(ui(locale, RunLog)),
           @html.button(
             class="button secondary",
+            attrs=@html.Attrs::build().data_set("testid", "schedule-close-log"),
             on_click=emit(CloseLog),
             ui(locale, CloseLog),
           ),
@@ -73,7 +76,11 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     fn field(label : String, name : String, value : String) -> @html.Html {
       @html.label(class="schedule-field", [
         @html.span(label),
-        @html.input(value~, on_input=emit.map(value => Field(name, value))),
+        @html.input(
+          id="schedule-" + name,
+          value~,
+          on_input=emit.map(value => Field(name, value)),
+        ),
       ])
     }
     content.push(
@@ -90,6 +97,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.span(ui(locale, WorkingDirectory)),
           @html.select(
             attrs=@html.Attrs::build()
+              .id("schedule-workspace")
               .aria_label(ui(locale, WorkingDirectory))
               .value_prop(form.workspace.unwrap_or("auto")),
             on_change=emit.map(value => Field("workspace", value)),
@@ -107,6 +115,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.label(class="schedule-field", [
           @html.span(ui(locale, TaskLabel)),
           @html.textarea(
+            id="schedule-task",
             value=form.task,
             on_input=emit.map(value => Field("task", value)),
             "",
@@ -117,6 +126,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             @html.span(ui(locale, ScheduleLabel)),
             @html.select(
               attrs=@html.Attrs::build()
+                .id("schedule-timing")
                 .aria_label(ui(locale, ScheduleLabel))
                 .value_prop(if form.once { "once" } else { "every" }),
               on_change=emit.map(value => Field("timing", value)),
@@ -136,17 +146,20 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="button",
             disabled=page.busy,
+            attrs=@html.Attrs::build().data_set("testid", "schedule-save-run"),
             on_click=emit(Save(true)),
             ui(locale, SaveRunNow),
           ),
           @html.button(
             class="button secondary",
             disabled=page.busy,
+            attrs=@html.Attrs::build().data_set("testid", "schedule-save"),
             on_click=emit(Save(false)),
             ui(locale, SaveSchedule),
           ),
           @html.button(
             class="button secondary",
+            attrs=@html.Attrs::build().data_set("testid", "schedule-cancel"),
             on_click=emit(CloseForm),
             ui(locale, CancelLabel),
           ),
@@ -155,7 +168,13 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   if page.snapshot.entries.is_empty() {
-    content.push(@html.p(class="schedule-empty", ui(locale, EmptySchedules)))
+    content.push(
+      @html.p(
+        id="schedule-empty",
+        class="schedule-empty",
+        ui(locale, EmptySchedules),
+      ),
+    )
   }
   for entry in page.snapshot.entries {
     let running = page.snapshot.runs.any(run => {
@@ -182,65 +201,76 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         }
     }
     content.push(
-      @html.div(class="schedule-card", [
-        @html.h2(entry.spec.name),
-        @html.p(
-          class="schedule-meta",
-          timing +
-          " · " +
-          (if entry.run_requested { ui(locale, QueuedLabel) } else { next }),
-        ),
-        @html.p(
-          class="schedule-meta",
-          entry.spec.workspace.unwrap_or(ui(locale, AutomaticDirectory)),
-        ),
-        @html.p(class="schedule-task", entry.spec.task),
-        match entry.notice {
-          Some(notice) => @html.p(class="schedule-meta", notice)
-          None => @html.nothing
-        },
-        @html.div(class="schedule-toolbar", [
-          @html.button(
-            class="button secondary",
-            disabled=page.busy || running || entry.run_requested,
-            on_click=emit(Action(entry.id, "run")),
-            ui(locale, RunNow),
+      @html.div(
+        class="schedule-card",
+        attrs=@html.Attrs::build().data_set("schedule-id", entry.id),
+        [
+          @html.h2(entry.spec.name),
+          @html.p(
+            class="schedule-meta",
+            timing +
+            " · " +
+            (if entry.run_requested { ui(locale, QueuedLabel) } else { next }),
           ),
-          @html.button(
-            class="button secondary",
-            disabled=page.busy,
-            on_click=emit(
-              Action(entry.id, if entry.enabled { "pause" } else { "resume" }),
-            ),
-            if entry.enabled {
-              ui(locale, PauseLabel)
-            } else {
-              ui(locale, ResumeLabel)
-            },
+          @html.p(
+            class="schedule-meta",
+            entry.spec.workspace.unwrap_or(ui(locale, AutomaticDirectory)),
           ),
-          @html.button(
-            class="button secondary",
-            disabled=page.busy,
-            on_click=emit(Edit(entry.id)),
-            ui(locale, EditLabel),
-          ),
-          if running {
-            @html.button(
-              class="button secondary",
-              disabled=page.busy,
-              on_click=emit(Action(entry.id, "stop")),
-              ui(locale, StopRun),
-            )
-          } else {
-            @html.button(
-              class="button secondary",
-              disabled=page.busy,
-              on_click=emit(Action(entry.id, "delete")),
-              ui(locale, DeleteLabel),
-            )
+          @html.p(class="schedule-task", entry.spec.task),
+          match entry.notice {
+            Some(notice) => @html.p(class="schedule-meta", notice)
+            None => @html.nothing
           },
-        ]),
-      ]),
+          @html.div(class="schedule-toolbar", [
+            @html.button(
+              class="button secondary",
+              disabled=page.busy || running || entry.run_requested,
+              attrs=@html.Attrs::build().data_set("testid", "schedule-run"),
+              on_click=emit(Action(entry.id, "run")),
+              ui(locale, RunNow),
+            ),
+            @html.button(
+              class="button secondary",
+              disabled=page.busy,
+              attrs=@html.Attrs::build()
+                .data_set("testid", "schedule-toggle")
+                .aria_pressed(entry.enabled.to_string()),
+              on_click=emit(
+                Action(entry.id, if entry.enabled { "pause" } else { "resume" }),
+              ),
+              if entry.enabled {
+                ui(locale, PauseLabel)
+              } else {
+                ui(locale, ResumeLabel)
+              },
+            ),
+            @html.button(
+              class="button secondary",
+              disabled=page.busy,
+              attrs=@html.Attrs::build().data_set("testid", "schedule-edit"),
+              on_click=emit(Edit(entry.id)),
+              ui(locale, EditLabel),
+            ),
+            if running {
+              @html.button(
+                class="button secondary",
+                disabled=page.busy,
+                attrs=@html.Attrs::build().data_set("testid", "schedule-stop"),
+                on_click=emit(Action(entry.id, "stop")),
+                ui(locale, StopRun),
+              )
+            } else {
+              @html.button(
+                class="button secondary",
+                disabled=page.busy,
+                attrs=@html.Attrs::build().data_set("testid", "schedule-delete"),
+                on_click=emit(Action(entry.id, "delete")),
+                ui(locale, DeleteLabel),
+              )
+            },
+          ]),
+        ],
+      ),
     )
   }
   for running in [true, false] {
@@ -269,40 +299,54 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     }
     for run in runs.rev_iter() {
       section.push(
-        @html.div(class="schedule-card", [
-          @html.h3(run.name),
-          @html.p(
-            class="schedule-meta",
-            schedule_time(locale~, run.started_at) +
-            " · " +
-            schedule_status(locale~, run.status),
-          ),
-          if run.status is Running {
+        @html.div(
+          class="schedule-card",
+          attrs=@html.Attrs::build().data_set("run-id", run.id),
+          [
+            @html.h3(run.name),
+            @html.p(
+              class="schedule-meta",
+              schedule_time(locale~, run.started_at) +
+              " · " +
+              schedule_status(locale~, run.status),
+            ),
+            if run.status is Running {
+              @html.button(
+                class="button secondary",
+                disabled=page.busy,
+                attrs=@html.Attrs::build().data_set("testid", "schedule-stop"),
+                on_click=emit(Action(run.schedule_id, "stop")),
+                ui(locale, StopRun),
+              )
+            } else {
+              @html.nothing
+            },
             @html.button(
               class="button secondary",
-              disabled=page.busy,
-              on_click=emit(Action(run.schedule_id, "stop")),
-              ui(locale, StopRun),
-            )
-          } else {
-            @html.nothing
-          },
-          @html.button(
-            class="button secondary",
-            on_click=emit(Open(run)),
-            ui(locale, OpenSession),
-          ),
-          @html.button(
-            class="button secondary",
-            on_click=emit(Log(run.log_path)),
-            ui(locale, ViewLog),
-          ),
-          @html.p(class="schedule-log", ui(locale, LogLabel) + run.log_path),
-        ]),
+              attrs=@html.Attrs::build().data_set(
+                "testid", "schedule-open-session",
+              ),
+              on_click=emit(Open(run)),
+              ui(locale, OpenSession),
+            ),
+            @html.button(
+              class="button secondary",
+              attrs=@html.Attrs::build().data_set("testid", "schedule-view-log"),
+              on_click=emit(Log(run.log_path)),
+              ui(locale, ViewLog),
+            ),
+            @html.p(class="schedule-log", ui(locale, LogLabel) + run.log_path),
+          ],
+        ),
       )
     }
     content.push(
-      @html.section(attrs=@html.Attrs::build().aria_label(title), section),
+      @html.section(
+        attrs=@html.Attrs::build()
+          .id(if running { "schedule-running" } else { "schedule-history" })
+          .aria_label(title),
+        section,
+      ),
     )
   }
   @page_shell.body(class="settings-page schedules-page", content)

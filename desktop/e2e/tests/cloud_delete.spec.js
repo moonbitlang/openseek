@@ -3,13 +3,13 @@ import { CloudHarness, authOrigin, cloudOrigin, sessionA, sessionB, sessionC } f
 
 async function menu(page, cloud, id) {
   await cloud.rowContainer(id).hover();
-  await cloud.rowContainer(id).getByRole('button', { name: 'Conversation actions', exact: true }).click();
+  await cloud.rowContainer(id).locator('[id$=":actions-trigger"]').click();
 }
 
 async function askDelete(page, cloud, id) {
   await menu(page, cloud, id);
-  await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toBeVisible();
+  await page.locator('[role=menuitem][data-action=delete]:visible').click();
+  await expect(page.locator('#delete-chat-confirm')).toBeVisible();
 }
 
 const deletes = cloud => cloud.requests.filter(request => request.method === 'DELETE');
@@ -24,16 +24,16 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
     await cloud.open();
     await page.locator('#task').fill('Draft that belongs to deleted A');
     await menu(page, cloud, sessionA);
-    await expect(page.getByRole('menuitem', { name: 'Rename…', exact: true })).toBeEnabled();
-    await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeEnabled();
-    await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click();
-    await expect(page.getByText(/“Cloud fixture A”.*permanently deleted/)).toContainText('Cloud fixture A');
-    await expect(page.getByText(/“Cloud fixture A”.*permanently deleted/)).not.toContainText('worktree');
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.locator('[role=menuitem][data-action=rename]:visible')).toBeEnabled();
+    await expect(page.locator('[role=menuitem][data-action=archive]:visible')).toBeEnabled();
+    await page.locator('[role=menuitem][data-action=delete]:visible').click();
+    await expect(page.locator('#delete-chat-dialog')).toContainText('Cloud fixture A');
+    await expect(page.locator('#delete-chat-dialog')).not.toContainText('worktree');
+    await page.locator('#delete-chat-cancel').click();
     expect(deletes(cloud)).toHaveLength(0);
     await expect(cloud.row(sessionA)).toBeVisible();
     await askDelete(page, cloud, sessionA);
-    await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+    await page.locator('#delete-chat-confirm').click();
     await expect(cloud.row(sessionA)).toHaveCount(0);
     await expect(cloud.row(sessionC)).toHaveCount(0);
     await expect(page.locator('#task')).toHaveValue('');
@@ -58,7 +58,7 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
     await cloud.open();
     await page.locator('#task').fill('Preserve this draft');
     await askDelete(page, cloud, sessionA);
-    await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+    await page.locator('#delete-chat-confirm').click();
     await expect(page.locator('aside')).toContainText(failure === 409 ? 'after it finishes' : failure === 503 ? 'HTTP 503' : 'unreachable');
     await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
     await expect(page.locator('#task')).toHaveValue('Preserve this draft');
@@ -66,7 +66,7 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
     cloud.deleteStatus = 204;
     cloud.deleteOffline = false;
     await askDelete(page, cloud, sessionA);
-    await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+    await page.locator('#delete-chat-confirm').click();
     await expect(cloud.row(sessionA)).toHaveCount(0);
     await expect(cloud.row(sessionC)).toHaveCount(0);
   });
@@ -79,7 +79,7 @@ test('delete 404 converges as already removed without signing out', async ({ pag
   await cloud.goto();
   await cloud.open();
   await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await page.locator('#delete-chat-confirm').click();
   await expect(cloud.row(sessionA)).toHaveCount(0);
   await expect(cloud.row(sessionC)).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
@@ -109,7 +109,7 @@ test('a history response captured before deletion cannot restore its row or cont
   await expect.poll(() => cloud.requests.filter(request => request.path.endsWith(`/${sessionA}/messages`)).length).toBe(1);
   await askDelete(page, cloud, sessionA);
   cloud.pauseHistory = null;
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await page.locator('#delete-chat-confirm').click();
   await expect(cloud.row(sessionC)).toHaveCount(0);
   finish();
   await expect(cloud.row(sessionA)).toHaveCount(0);
@@ -124,7 +124,7 @@ test('device browser traversal reports deleted Cloud destinations as missing', a
   const notice = page.locator('.navigation-notice');
   await cloud.open(sessionA); await cloud.open(sessionB);
   await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await page.locator('#delete-chat-confirm').click();
   await expect(cloud.row(sessionA)).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionA}`);

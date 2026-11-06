@@ -518,12 +518,14 @@ fn delete_modal(
       @rui.dialog_footer([
         @html.button(
           class="button secondary",
+          id="delete-chat-cancel",
           on_click=dispatch(CancelDeleteSession),
           shell_text(locale, CancelLabel),
         ),
         @html.button(
           class="button danger",
           disabled=!enabled,
+          id="delete-chat-confirm",
           on_click=dispatch(ConfirmDeleteSession),
           shell_text(locale, DeletePermanently),
         ),

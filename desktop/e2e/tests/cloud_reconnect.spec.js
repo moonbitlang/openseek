@@ -70,8 +70,8 @@ test('Cloud repeated reconnects retain pending inputs, queue and later drafts wi
   const app = await running(page);
   for (const mode of ['Queue next', 'Steer now']) {
     await page.locator('#task').fill(mode);
-    await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
-    await page.getByRole('option', { name: new RegExp(`^${mode}`) }).click();
+    await page.locator('#composer-followup-select').click();
+    await page.locator(`[role=option][data-value=${mode === 'Queue next' ? 'queue' : 'steer'}]`).click();
     await page.locator('#send').click();
     await expect(page.locator('#task')).toHaveValue('');
   }
@@ -94,8 +94,8 @@ test('Cloud repeated reconnects retain pending inputs, queue and later drafts wi
   await expect(page.locator('#transcript').getByText('Steer now', { exact: true })).toHaveCount(1);
   await app.finishTask(sessionA, 'failed');
   await expect(page.locator('#stop')).toHaveCount(0);
-  await expect(page.locator('.queued-input-row').getByTitle('Edit', { exact: true })).toBeEnabled();
-  await expect(page.locator('.queued-input-row').getByTitle('Steer', { exact: true })).toBeDisabled();
+  await expect(page.locator('.queued-input-row').getByTestId('queued-input-edit')).toBeEnabled();
+  await expect(page.locator('.queued-input-row').getByTestId('queued-input-steer')).toBeDisabled();
   await expect(page.locator('#task')).toHaveValue('Later typing');
   expect(app.requests.filter(request => request.method === 'POST')).toHaveLength(posts);
   expect(app.device.pageErrors).toEqual([]);
@@ -139,9 +139,9 @@ for (const leave of ['switch', 'sign out']) {
       await app.open(sessionB);
       await expect.poll(() => observations(app, sessionB).length).toBe(1);
     } else {
-      await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
-      await section.getByRole('button', { name: 'Sign out', exact: true }).click();
+      await page.locator('#sidebar-settings').click();
+      const section = page.locator('#management-dialog');
+      await section.locator('#settings-sign-out').click();
       await expect(app.row(sessionA)).toBeHidden();
     }
     await page.clock.runFor(5000);
@@ -169,7 +169,7 @@ for (const status of [401, 404, 403]) {
   });
 }
 
-for (const operation of ['Archive', 'Delete…']) {
+for (const operation of ['archive', 'delete']) {
   test(`Cloud ${operation} cancels an idle conversation reconnect`, async ({ page }) => {
     const app = new CloudHarness(page);
     await app.install();
@@ -181,9 +181,9 @@ for (const operation of ['Archive', 'Delete…']) {
     await app.disconnectSession(sessionA);
     await expect(page.locator('.composer-banner')).toContainText('reconnecting');
     await app.rowContainer(sessionA).hover();
-    await app.rowContainer(sessionA).getByRole('button', { name: 'Conversation actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: operation, exact: true }).click();
-    if (operation === 'Delete…') await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+    await app.rowContainer(sessionA).locator('[id$=":actions-trigger"]').click();
+    await page.locator(`[role=menuitem][data-action=${operation}]:visible`).click();
+    if (operation === 'delete') await page.locator('#delete-chat-confirm').click();
     await expect(page.locator('main .topbar-title')).toHaveText('New chat');
     await page.clock.runFor(5000);
     expect(observations(app)).toHaveLength(1);

@@ -3,13 +3,13 @@ import { CloudHarness, sessionA, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id = sessionA) {
   await cloud.rowContainer(id).hover();
-  await cloud.rowContainer(id).getByRole('button', { name: 'Conversation actions', exact: true }).click();
+  await cloud.rowContainer(id).locator('[id$=":actions-trigger"]').click();
 }
 
 async function rename(page, cloud, title) {
   await menu(page, cloud);
-  await page.getByRole('menuitem', { name: 'Rename…', exact: true }).click();
-  const field = page.getByRole('textbox', { name: 'Rename conversation', exact: true });
+  await page.locator('[role=menuitem][data-action=rename]:visible').click();
+  const field = page.locator('.conversation-rename-input');
   await field.fill(title);
   return field;
 }
@@ -34,11 +34,11 @@ const creations = cloud => cloud.requests.filter(request => request.method === '
     expect(patches(cloud)[0].path).toBe(`/v1/sessions/${sessionA}`);
     expect(patches(cloud)[0].headers.authorization).toBe('Bearer ts_fixture-123');
     await page.locator('#task').fill('Continue the plan');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     await expect(page.locator('#transcript')).toContainText('calculation complete');
     await expect(page.locator('main h1')).toHaveText('Release planning');
     await page.reload();
-    await page.getByRole('button', { name: 'Chat', exact: true }).click();
+    await page.locator('#sidebar-chat-mode').click();
     await cloud.open();
     await expect(page.locator('main h1')).toHaveText('Release planning');
     expect(cloud.device.pageErrors).toEqual([]);
@@ -58,7 +58,7 @@ const creations = cloud => cloud.requests.filter(request => request.method === '
     const field = await rename(page, cloud, 'Rejected title');
     await field.press('Enter');
     await expect(field).toHaveCount(0);
-    await expect(page.getByText(/Rename failed:/)).toBeVisible();
+    await expect(page.locator('.notification')).toBeVisible();
     await expect(cloud.row(sessionA)).toHaveText('Cloud fixture A');
     expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
     cloud.patchStatus = 204;
@@ -99,7 +99,7 @@ for (const status of [401, 404]) {
     await cloud.open();
     await page.locator('#task').fill('Unsent Cloud draft');
     await menu(page, cloud);
-    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+    await page.locator('[role=menuitem][data-action=archive]:visible').click();
     await expect(cloud.row(sessionC)).toHaveCount(0);
     await expect(page.locator('main h1')).toHaveText('New chat');
     await expect(page.locator('#task')).toHaveValue('');
@@ -113,8 +113,8 @@ for (const status of [401, 404]) {
     await expect(page.locator('#transcript')).toContainText('Earlier Cloud answer.');
     await expect(page.locator('.archived-read-only')).toHaveText('Archived conversation · Read onlyRestore');
     await expect(page.locator('#task')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
-    await page.locator('main').getByRole('button', { name: 'Restore', exact: true }).click();
+    await expect(page.locator('#send')).toHaveCount(0);
+    await page.locator('#archived-conversation-restore').click();
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
     await expect(page.locator('.archived-read-only')).toHaveCount(0);
     await expect(page.locator('#task')).toHaveValue('Unsent Cloud draft');
@@ -136,7 +136,7 @@ for (const status of [401, 404]) {
     await cloud.open();
     await page.locator('#task').fill('Keep the draft');
     await menu(page, cloud);
-    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+    await page.locator('[role=menuitem][data-action=archive]:visible').click();
     await expect(page.locator('aside')).toContainText(failure === 'network' ? 'unreachable' : `HTTP ${failure}`);
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
     await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
@@ -144,7 +144,7 @@ for (const status of [401, 404]) {
     expect(creations(cloud)).toHaveLength(0);
     expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
     await menu(page, cloud);
-    await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeEnabled();
+    await expect(page.locator('[role=menuitem][data-action=archive]:visible')).toBeEnabled();
   });
 }
 
@@ -155,7 +155,7 @@ test('Cloud restore keeps its read-only view after failure and disables its arch
   await cloud.install();
   await cloud.goto();
   await cloud.openArchived(sessionA);
-  const restore = page.locator('main').getByRole('button', { name: 'Restore', exact: true });
+  const restore = page.locator('#archived-conversation-restore');
   await restore.click();
   await expect(page.locator('aside')).toContainText('HTTP 503');
   await expect(cloud.row(sessionA)).toHaveCount(0);
@@ -168,8 +168,8 @@ test('Cloud restore keeps its read-only view after failure and disables its arch
     await expect(restore).toBeDisabled();
     await cloud.openArchivedChats();
     const row = cloud.archivedRow(sessionA);
-    await expect(row.getByRole('button', { name: 'Restore', exact: true })).toBeDisabled();
-    await expect(row.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+    await expect(row.locator('[data-action=restore]')).toBeDisabled();
+    await expect(row.locator('[data-action=delete]')).toBeDisabled();
     expect(cloud.requests.filter(request => request.method === 'DELETE')).toHaveLength(0);
   } finally {
     finish();

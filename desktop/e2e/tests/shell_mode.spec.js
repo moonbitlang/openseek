@@ -50,7 +50,7 @@ function sentResult(app) {
 
 // The running row's button: the terminal stays out of the way until asked for.
 async function showTerminal(page) {
-  await page.locator('.shell-commands-running').getByRole('button', { name: 'Terminal' }).click();
+  await page.locator('.shell-commands-running button').click();
   await expect(page.locator('.terminal-panel.open')).toBeVisible();
 }
 
@@ -133,7 +133,7 @@ test('a ! command whose terminal cannot open runs nothing and comes back', async
   const app = await open(page);
   app.rpcErrors.set('terminal.open', 'terminal requires a conversation workspace');
   await typeCommand(page, '!pwd');
-  await expect(page.getByText('terminal requires a conversation workspace', { exact: false }).first()).toBeVisible();
+  await expect(page.locator('.notifications > .notification:visible')).toContainText(['terminal requires a conversation workspace']);
   await expect(page.locator('.composer-mode-chip')).toBeVisible();
   await expect(page.locator('#task')).toHaveValue('!pwd');
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
@@ -181,7 +181,7 @@ test('a ! command whose worktree cannot be set up runs nothing and comes back', 
   await app.goto();
   await page.locator('button.composer-worktree').click();
   await typeCommand(page, '!pwd');
-  await expect(page.getByText('the command did not run', { exact: false }).first()).toBeVisible();
+  await expect(page.locator('.notifications > .notification:visible')).toContainText(['the command did not run']);
   await expect(page.locator('.composer-mode-chip')).toBeVisible();
   await expect(page.locator('#task')).toHaveValue('!pwd');
   expect(app.requests.some(r => r.method === 'terminal.open')).toBe(false);
@@ -226,7 +226,7 @@ test('a tab closed as its command exits still delivers the result once', async (
 test('a command finishing beside an open shell tab leaves the keyboard in the composer', async ({ page }) => {
   const app = await open(page);
   // The user's own shell is open in the panel.
-  await page.locator('button[title*="erminal (Ctrl"]').first().click();
+  await page.locator('#terminal-toggle').click();
   await expect(page.locator('.terminal-panel.open .terminal-tab')).toHaveCount(1);
   await page.locator('#task').click();
   await typeCommand(page, '!ls');

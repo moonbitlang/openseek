@@ -45,6 +45,7 @@ fn office_pages_view(
         @html.button(
           type_="button",
           class="office-viewer-control",
+          id="office-pages-close",
           title=ui(locale, OfficeClosePages),
           attrs=@html.Attrs::build().aria_label(ui(locale, OfficeClosePages)),
           on_click=dispatch(OfficePagesToggled),

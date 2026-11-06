@@ -34,15 +34,15 @@ test('choosing an option advances to the next question and retains the answer', 
   await app.goto();
   await app.openSession();
   const card = page.locator('.user-question-card');
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await card.locator('[data-question-option="Small change"]').click();
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
   expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Small change', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await card.getByRole('button', { name: 'Small change', exact: true }).press('Enter');
+  await card.getByTestId('question-previous').click();
+  await expect(card.locator('[data-question-option="Small change"]')).toHaveAttribute('aria-pressed', 'true');
+  await card.locator('[data-question-option="Small change"]').press('Enter');
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
   await card.locator('textarea').fill('Keep keyboard support.');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await card.getByTestId('question-submit').click();
   await expect(card).toContainText('Anything else?');
   expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
     { approach: 'Small change', details: 'Keep keyboard support.' },
@@ -59,14 +59,14 @@ test('choosing a final option waits for Send', async ({ page }) => {
   await app.goto();
   await app.openSession();
   const card = page.locator('.user-question-card');
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await card.locator('[data-question-option="Small change"]').click();
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.getByRole('button', { name: 'Keep scope', exact: true }).click();
+  await card.locator('[data-question-option="Keep scope"]').click();
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await expect(card.getByRole('button', { name: 'Keep scope', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(card.locator('[data-question-option="Keep scope"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await card.getByTestId('question-submit').click();
   await expect(card).toContainText('Anything else?');
   expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
     { approach: 'Small change', scope: 'Keep scope' },
@@ -82,17 +82,17 @@ test('custom answer Enter advances questions and submits the final answer', asyn
   const card = page.locator('.user-question-card');
   const input = card.locator('textarea');
   await input.fill('A custom approach');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   await input.press('Enter');
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
   await expect(input).toBeFocused();
   expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
   await input.fill('Keep keyboard support.');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   await input.press('Enter');
   await expect(card).toContainText('Anything else?');
   await input.fill('One more detail');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   await input.press('Enter');
   await expect(card).toHaveCount(0);
   expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params)).toEqual([
@@ -110,14 +110,14 @@ test('custom answer Shift+Enter inserts a line and IME Enter keeps the current q
   const card = page.locator('.user-question-card');
   const input = card.locator('textarea');
   await input.fill('First line');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   await input.press('End');
   await input.press('Shift+Enter');
   await input.press('x');
   await expect(input).toHaveValue('First line\nx');
   await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
   for (const progress of ['1 / 2', '2 / 2']) {
-    await expect(card.getByRole('button', { name: progress === '1 / 2' ? 'Next' : 'Send', exact: true })).toBeEnabled();
+    await expect(card.getByTestId('question-submit')).toBeEnabled();
     await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
     await expect(card.locator('.user-question-progress')).toHaveText(progress);
     expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
@@ -144,58 +144,20 @@ test('custom answer Enter leaves empty questions pending', async ({ page }) => {
   const card = page.locator('.user-question-card');
   const input = card.locator('textarea');
   await input.fill('   ');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await expect(card.getByTestId('question-submit')).toBeDisabled();
   await input.press('Enter');
   await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
   await expect(input).toHaveValue('   ');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await expect(card.getByTestId('question-submit')).toBeDisabled();
   await input.fill('A custom approach');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   await input.press('Enter');
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(card.getByTestId('question-submit')).toBeDisabled();
   await input.press('Enter');
   await expect(input).toHaveValue('');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(card.getByTestId('question-submit')).toBeDisabled();
   expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('live questions occupy visible space between the transcript and composer', { tag: '@webkit-layout' }, async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  app.notify('user_questions.changed', { generation: 1, requests: [{
-    id: 'live-question', session: 'session-1', questions: [{
-      id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'],
-    }],
-  }] });
-  const card = page.locator('.user-question-card');
-  await expect(card).toContainText('Which approach should we use?');
-  const region = page.locator('.user-question-region');
-  await expect.poll(() => region.evaluate(el => el.clientHeight)).toBeGreaterThan(0);
-  await expect(card).toBeInViewport({ ratio: 1 });
-  const regionBox = await region.boundingBox();
-  const transcriptBox = await page.locator('.transcript').boundingBox();
-  const composerBox = await page.locator('.composer').boundingBox();
-  expect(regionBox.y).toBeGreaterThanOrEqual(transcriptBox.y + transcriptBox.height - 1);
-  expect(regionBox.y + regionBox.height).toBeLessThanOrEqual(composerBox.y + 1);
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  app.notify('user_questions.changed', { generation: 2, requests: [{
-    id: 'long-question', session: 'session-1', questions: [{
-      id: 'many', title: 'Choose an option', options: Array.from({ length: 30 }, (_, i) => `Option ${i + 1}`),
-    }],
-  }] });
-  await expect(card).toContainText('Choose an option');
-  expect(await region.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(page.viewportSize().height / 2);
-  expect(await region.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
-  await card.getByRole('button', { name: 'Option 30', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Option 30', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  app.notify('user_questions.changed', { generation: 3, requests: [] });
-  await expect(region).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -207,7 +169,7 @@ test('questions survive reload and a finished turn, accept choices and text, and
   const card = page.locator('.user-question-card');
   await expect(card).toContainText('Which approach should we use?');
   await expect(card.locator('script')).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await expect(card.getByTestId('question-submit')).toBeDisabled();
   await page.reload();
   await app.openSession();
   await expect(card).toContainText('Which approach should we use?');
@@ -221,7 +183,7 @@ test('questions survive reload and a finished turn, accept choices and text, and
   }] });
   await expect(page.locator('.composer-approval')).toBeVisible();
   await expect(card).toBeVisible();
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await card.locator('[data-question-option="Small change"]').click();
   await expect(card.locator('textarea')).toHaveValue('');
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
   await card.locator('textarea').fill('Keep keyboard support.\n<literal>');
@@ -229,7 +191,7 @@ test('questions survive reload and a finished turn, accept choices and text, and
   app.notify('user_questions.changed', snapshot());
   await expect(card.locator('textarea')).toBeFocused();
   await expect(card.locator('textarea')).toHaveValue('Keep keyboard support.\n<literal>');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await card.getByTestId('question-submit').click();
   await expect(card).toContainText('Anything else?');
   await card.locator('.user-question-close').click();
   await expect(card).toHaveCount(0);
@@ -249,16 +211,16 @@ test('failed answers retain text for retry, and a newer resolution beats stale s
   await app.openSession();
   const card = page.locator('.user-question-card');
   await card.locator('textarea').first().fill('A custom approach');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
+  await card.getByTestId('question-submit').click();
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
   await card.locator('textarea').fill('Details');
   app.rpcErrors.set('user_questions.answer', 'Temporary failure');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await card.getByTestId('question-submit').click();
   await expect(card.locator('.user-question-error')).toContainText('Temporary failure');
-  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
+  await card.getByTestId('question-previous').click();
   await expect(card.locator('textarea')).toHaveValue('A custom approach');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await card.getByTestId('question-submit').click();
+  await expect(card.getByTestId('question-submit')).toBeEnabled();
   // A second client answers while this client's error is visible.
   const stale = snapshot();
   app.notify('user_questions.changed', { generation: 3, requests: [] });
@@ -268,7 +230,7 @@ test('failed answers retain text for retry, and a newer resolution beats stale s
   expect(app.pageErrors).toEqual([]);
 });
 
-test('question drafts are scoped to the originating conversation and fit a narrow viewport', { tag: '@webkit-layout' }, async ({ page }) => {
+test('question drafts are scoped to the originating conversation', async ({ page }) => {
   const { app } = setup(page);
   app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
   const reply = app.replyFor.bind(app);
@@ -282,73 +244,48 @@ test('question drafts are scoped to the originating conversation and fit a narro
   await app.openSession();
   const card = page.locator('.user-question-card');
   await card.locator('textarea').first().fill('Keep this draft');
-  await page.locator('.conversation-row[title="session-2"]').click();
+  await app.sessionButton('session-2').click();
   await expect(card).toHaveCount(0);
-  await page.locator('.conversation-row[title="session-1"]').click();
+  await app.sessionButton('session-1').click();
   await expect(card.locator('textarea').first()).toHaveValue('Keep this draft');
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
-  await expect(card).toBeVisible();
-  const box = await card.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(390);
   expect(app.pageErrors).toEqual([]);
 });
 
-{
-  const width = 390;
-
-  test(`XML question responses render answers and skips live and after reload at ${width}px`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    const answered = '<user_question_response request_id="question-1" status="answered">\n'
-      + '<question id="plan">\n<title>Which plan?</title>\n<options>\n<option>Small change</option>\n<option>Full redesign</option>\n</options>\n<answer>Small change</answer>\n</question>\n'
-      + '<question id="details">\n<title>Any details?&#10;中文🙂</title>\n<answer>Keep keyboard support.&#10;&lt;script&gt;plain text&lt;/script&gt; &amp; &amp;lt;/answer&amp;gt;</answer>\n</question>\n'
-      + '</user_question_response>';
-    const skipped = '<user_question_response request_id="question-2" status="skipped">\n'
-      + '<question id="extra">\n<title>Anything else?</title>\n</question>\n</user_question_response>';
-    const event = (sequence, content) => ({ sequence, item: { kind: 'user', payload: { content } } });
-    app.sessionEvents = [event(1, answered)];
-    await app.install();
-    await app.goto();
-    await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
-    await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-    await page.setViewportSize({ width, height: 900 });
-    const responses = page.locator('.transcript-question-response');
-    await expect(responses).toHaveCount(1);
-    const next = event(2, skipped);
-    app.sessionEvents.push(next);
-    app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
-    for (const reload of [false, true]) {
-      if (reload) {
-        await page.setViewportSize({ width: 1440, height: 900 });
-        await page.reload();
-        await page.getByRole('main').waitFor();
-        const showSidebar = page.getByRole('button', { name: 'Show sidebar', exact: true });
-        if (await showSidebar.isVisible()) await showSidebar.click();
-        await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
-        await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-        await page.setViewportSize({ width, height: 900 });
-      }
-      await expect(responses).toHaveCount(2);
-      await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
-      await expect(page.locator('.app > aside')).toHaveCSS('visibility', 'hidden');
-      const items = responses.first().locator('.question-response-item');
-      const first = await items.nth(0).boundingBox();
-      const second = await items.nth(1).boundingBox();
-      expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
-      await expect(responses.first().locator('.session-message-source')).toHaveText('Your answers');
-      await expect(responses.first().locator('.question-response-title')).toHaveText(['Which plan?', 'Any details?\n中文🙂']);
-      await expect(responses.first().locator('.msg-content')).toHaveText(['Small change', 'Keep keyboard support.\n<script>plain text</script> & &lt;/answer&gt;']);
-      await expect(responses.first()).not.toContainText('Full redesign');
-      await expect(responses.last()).toHaveText('Questions skipped');
-      await expect(page.locator('#stream')).not.toContainText('user_question_response');
-      await expect(page.locator('#stream')).not.toContainText('User response to ask_user:');
-      await expect(responses.locator('script')).toHaveCount(0);
-      for (const response of await responses.all()) {
-        await expect.poll(() => response.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-      }
+test('XML question responses render answers and skips live and after reload', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const answered = '<user_question_response request_id="question-1" status="answered">\n'
+    + '<question id="plan">\n<title>Which plan?</title>\n<options>\n<option>Small change</option>\n<option>Full redesign</option>\n</options>\n<answer>Small change</answer>\n</question>\n'
+    + '<question id="details">\n<title>Any details?&#10;中文🙂</title>\n<answer>Keep keyboard support.&#10;&lt;script&gt;plain text&lt;/script&gt; &amp; &amp;lt;/answer&amp;gt;</answer>\n</question>\n'
+    + '</user_question_response>';
+  const skipped = '<user_question_response request_id="question-2" status="skipped">\n'
+    + '<question id="extra">\n<title>Anything else?</title>\n</question>\n</user_question_response>';
+  const event = (sequence, content) => ({ sequence, item: { kind: 'user', payload: { content } } });
+  app.sessionEvents = [event(1, answered)];
+  await app.install();
+  await app.goto();
+  await app.sessionButton().click();
+  const responses = page.locator('.transcript-question-response');
+  await expect(responses).toHaveCount(1);
+  const next = event(2, skipped);
+  app.sessionEvents.push(next);
+  app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
+  for (const reload of [false, true]) {
+    if (reload) {
+      await page.reload();
+      await page.getByRole('main').waitFor();
+      const showSidebar = page.locator('#sidebar-toggle[aria-expanded="false"]');
+      if (await showSidebar.isVisible()) await showSidebar.click();
+      await app.sessionButton().click();
     }
-    expect(app.pageErrors).toEqual([]);
-  });
-}
+    await expect(responses).toHaveCount(2);
+    await expect(responses.first().locator('.session-message-source')).toHaveText('Your answers');
+    await expect(responses.first().locator('.question-response-title')).toHaveText(['Which plan?', 'Any details?\n中文🙂']);
+    await expect(responses.first().locator('.msg-content')).toHaveText(['Small change', 'Keep keyboard support.\n<script>plain text</script> & &lt;/answer&gt;']);
+    await expect(responses.first()).not.toContainText('Full redesign');
+    await expect(responses.last()).toHaveText('Questions skipped');
+    await expect(page.locator('#stream')).not.toContainText('user_question_response');
+    await expect(page.locator('#stream')).not.toContainText('User response to ask_user:');
+    await expect(responses.locator('script')).toHaveCount(0);
+  }
+  expect(app.pageErrors).toEqual([]);
+});

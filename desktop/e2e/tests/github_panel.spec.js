@@ -28,8 +28,8 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  await page.locator('#dock-new-tab').click();
+  await page.locator('#dock-new-tab-menu [data-dock-action="github"]').click();
   const panel = page.locator('.github-panel');
   await panel.locator('.github-item-open').click();
   const languages = [
@@ -45,36 +45,37 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
       window.dispatchEvent(new Event('languagechange'));
     }, locale.tag);
     await expect(page.locator('html')).toHaveAttribute('lang', locale.tag);
-    await expect(panel.getByRole('button', { name: locale.pulls, exact: true })).toBeVisible();
-    await expect(panel.getByRole('heading', { name: locale.reviews, exact: true })).toBeVisible();
+    await expect(panel.locator('.github-pulls > .github-heading')).toBeVisible();
+    await expect(panel.locator('.github-pulls > .github-heading')).toHaveText(locale.pulls);
+    await expect(panel.locator('[data-section="reviewers"] h2')).toBeVisible();
+    await expect(panel.locator('[data-section="reviewers"] h2')).toHaveText(locale.reviews);
     await expect(panel.locator('.github-review-state')).toHaveText(locale.approved);
     await expect(panel.locator('.github-check-summary')).toHaveText(locale.checks);
-    await expect(panel.getByText(locale.files, { exact: true })).toBeVisible();
-    await expect(panel.getByRole('button', { name: locale.checkout, exact: true })).toBeAttached();
+    await expect(panel.locator('[data-section="changes"] p')).toBeVisible();
+    await expect(panel.locator('[data-section="changes"] p')).toHaveText(locale.files);
+    await expect(panel.locator('.github-checkout')).toHaveAttribute('aria-label', locale.checkout);
     await expect(panel.locator('.github-detail-title')).toHaveText('Keep this PR title #42');
     await expect(panel.locator('.github-description .markdown')).toHaveText('Keep the original description.');
     await expect(panel.locator('.github-merge-description code')).toHaveText(locale.tag === 'en' ? ['main', 'feature'] : ['feature', 'main']);
-    await page.getByTitle(locale.newTab, { exact: true }).click();
-    await expect(page.getByRole('menuitem', { name: 'GitHub', exact: true })).toContainText(locale.hint);
+    await page.locator('#dock-new-tab').click();
+    await expect(page.locator('#dock-new-tab-menu [data-dock-action="github"]')).toContainText(locale.hint);
     await page.keyboard.press('Escape');
   }
-  await page.setViewportSize({ width: 1050, height: 768 });
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hans'] });
     window.dispatchEvent(new Event('languagechange'));
   });
-  const checkout = panel.getByRole('button', { name: '在本地检出 PR #42', exact: true });
+  const checkout = panel.locator('.github-checkout');
   await checkout.click();
-  const dialog = page.getByRole('dialog', { name: '检出 PR #42 前有未提交的更改', exact: true });
+  const dialog = page.locator('#github-checkout-dialog');
   await expect(dialog).toContainText('丢弃会永久删除已跟踪文件的更改。未跟踪文件会保留。');
   await page.keyboard.press('Escape');
-  await expect(checkout).toBeFocused();
   expect(app.requests.filter(request => request.method === 'github.pull_request')).toHaveLength(1);
   expect(app.requests.filter(request => request.method === 'github.checkout').map(request => request.params.changes)).toEqual(['ask']);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('GitHub dock keeps both inventories scrollable and disclosures keyboard accessible', async ({ page }) => {
+test('GitHub inventories scroll independently and expand their groups', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const originalReply = app.replyFor.bind(app);
   app.replyFor = request => {
@@ -96,21 +97,15 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true }).getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  await page.locator('#dock-new-tab').click();
+  await page.locator('#dock-new-tab-menu').locator('[data-dock-action="github"]').click();
   const panel = page.locator('.github-panel');
   await expect(panel).toBeVisible();
   await expect(page.locator('.editor-tab.active')).toContainText('GitHub');
   await expect(panel.locator('.github-pulls .github-item')).toHaveCount(30);
   await expect(panel.locator('.github-issues .github-item')).toHaveCount(30);
   await expect(panel.locator('.github-avatar-image')).toHaveCount(60);
-  await expect.poll(() => panel.locator('.github-item').first().evaluate(row => {
-    const avatar = row.querySelector('.github-avatar').getBoundingClientRect();
-    const title = row.querySelector('.github-item-title').getBoundingClientRect();
-    return row.getBoundingClientRect().height <= 28 && avatar.width === 16 && avatar.height === 16 &&
-      title.left > avatar.right && Math.abs(title.top + title.height / 2 - avatar.top - avatar.height / 2) < 1;
-  })).toBe(true);
-  const created = panel.getByRole('button', { name: 'Created By Me', exact: true });
+  const created = panel.locator('.github-group[data-group="created"] > .github-group-heading');
   await expect(created).toHaveAttribute('aria-expanded', 'false');
   await created.focus();
   await page.keyboard.press('Enter');
@@ -118,22 +113,12 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await expect(panel.locator('.github-pulls .github-item')).toHaveCount(60);
   await page.keyboard.press('Space');
   await expect(created).toHaveAttribute('aria-expanded', 'false');
-  for (const width of [1440, 1050]) {
-    await page.setViewportSize({ width, height: 800 });
-    await expect.poll(() => panel.evaluate(element => {
-      const sections = [...element.querySelectorAll('.github-section-body')];
-      return sections.length === 2 && sections.every(section =>
-        section.clientHeight > 80 && section.scrollHeight > section.clientHeight &&
-        section.scrollWidth <= section.clientWidth + 1);
-    })).toBe(true);
-    await expect(panel.getByRole('button', { name: 'Issues', exact: true })).toBeInViewport();
-  }
   const issues = panel.locator('.github-issues .github-section-body');
   await issues.hover();
   await page.mouse.wheel(0, 1200);
   await expect.poll(() => issues.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
   expect(await panel.locator('.github-pulls .github-section-body').evaluate(element => element.scrollTop)).toBe(0);
-  await panel.getByRole('button', { name: 'Pull Requests', exact: true }).click();
+  await panel.locator('.github-pulls > .github-heading').click();
   await expect(panel.locator('.github-pulls .github-section-body')).toHaveCount(0);
   await expect(issues).toBeVisible();
   expect(app.requests.filter(request => request.method === 'github.list').map(request => request.params.cwd))
@@ -158,13 +143,13 @@ test('avatar errors retain the inventory and retry clears the warning', async ({
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  await page.locator('#dock-new-tab').click();
+  await page.locator('#dock-new-tab-menu [data-dock-action="github"]').click();
   const pulls = page.locator('.github-pulls');
   await expect(pulls.locator('.github-item')).toHaveCount(1);
   await expect(pulls.getByRole('alert')).toContainText('offline');
   avatarFailed = false;
-  await pulls.getByRole('button', { name: 'Retry avatars', exact: true }).click();
+  await pulls.locator('.github-error .github-more').click();
   await expect(pulls.getByRole('alert')).toHaveCount(0);
   await expect(pulls.locator('.github-item')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);

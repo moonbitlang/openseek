@@ -16,14 +16,14 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await composer.press('Enter');
     const queued = page.locator('.queued-input-row');
     await expect(queued).toContainText('Original queued message');
-    await queued.getByTitle('Edit', { exact: true }).click();
+    await queued.getByTestId('queued-input-edit').click();
     await expect(composer).toHaveValue('Original queued message');
     await composer.fill('Edited queued message');
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await page.locator('#composer-attach').click();
     await (await chooser).setFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: readFileSync(new URL('../fixtures/office/two-pages.pdf', import.meta.url)) });
-    await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
-    const mention = page.locator('.mention-chip').filter({ hasText: 'notes.pdf', hasNotText: 'Context added during save' });
+    await page.locator('[data-testid="attachment-upload"]').click();
+    const mention = page.locator('.mention-chip[data-mention-kind=file][data-mention-path=".openseek/attachments/upload-1/notes.pdf"]');
     await expect(mention).toBeVisible();
 
     // Hold the host response so the real composer can receive repeated input
@@ -37,7 +37,7 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
       }
       return replyFor(request);
     };
-    const save = page.getByTitle('Save queued message', { exact: true });
+    const save = page.locator('#send');
     await save.click();
     await expect.poll(() => heldRequest?.id).toBeDefined();
     await expect(composer).toBeDisabled();
@@ -70,8 +70,8 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await expect(preview).toBeVisible();
     await preview.locator('textarea').fill('Context added during save');
     await preview.getByRole('checkbox').check();
-    await preview.getByRole('button', { name: 'Add feedback', exact: true }).click();
-    const added = page.locator('.mention-chip').filter({ hasText: 'Context added during save' });
+    await preview.locator('.agent-feedback-input-action').click();
+    const added = page.locator('.mention-chip[data-mention-kind="office-selection"]');
     await expect(added).toBeVisible();
     expect(heldRequest.params.text).not.toContain('Context added during save');
     const response = outcome === 'rpc-error'
@@ -118,7 +118,7 @@ test('queued edit keeps its draft when a failed run precedes acceptance', async 
   await composer.fill('Original queued message');
   await composer.press('Enter');
   const queued = page.locator('.queued-input-row');
-  await queued.getByTitle('Edit', { exact: true }).click();
+  await queued.getByTestId('queued-input-edit').click();
   await expect(composer).toHaveValue('Original queued message');
   await composer.fill('Keep this revision');
   const replyFor = app.replyFor.bind(app);
@@ -130,7 +130,7 @@ test('queued edit keeps its draft when a failed run precedes acceptance', async 
     }
     return replyFor(request);
   };
-  await page.getByTitle('Save queued message', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => heldRequest?.id).toBeDefined();
   await expect(composer).toBeDisabled();
   // Inject a terminal before the held reply to exercise draft protection.
@@ -151,7 +151,7 @@ test('queued edit keeps its draft when a failed run precedes acceptance', async 
   app.notify('session.changed', {
     change: 'renamed', session: 'session-1', workspace: '/workspace',
   });
-  await expect(page.getByText('After late acceptance', { exact: true }).first()).toBeVisible();
+  await expect(app.sessionButton()).toHaveText('After late acceptance');
   await expect(composer).toHaveValue('Continue editing after the run ended');
   await expect(queued).toHaveCount(0);
   await page.locator('#send').click();

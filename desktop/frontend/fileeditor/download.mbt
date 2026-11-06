@@ -183,7 +183,10 @@ fn download_button(
     title=label,
     disabled=pending,
     on_click=dispatch(DownloadFile(desktop~, path~)),
-    attrs=@html.Attrs::build().aria_label(label).aria_busy(pending.to_string()),
+    attrs=@html.Attrs::build()
+      .id("file-download")
+      .aria_label(label)
+      .aria_busy(pending.to_string()),
     [@icons.icon_arrow_down(), @html.text(label)],
   )
 }

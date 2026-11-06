@@ -23,18 +23,18 @@ class CodexImagesHarness extends DesktopBrowserHarness {
   async openCodex() {
     await this.install();
     await this.goto();
-    await this.page.getByRole('button', { name: 'Model', exact: true }).click();
-    await this.page.getByRole('option', { name: 'Codex images', exact: true }).click();
+    await this.page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+    await this.page.locator('[role=option][data-value="codex:gpt-test"]:visible').click();
     // Attach files also exists in the previous agent's composer. Wait for
     // the model switch to install the Codex draft before dispatching files.
     await expect(this.page.locator('#task')).toHaveAttribute('placeholder',
       'Ask Codex to inspect, edit, or explain this workspace.');
-    await expect(this.page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
+    await expect(this.page.locator('#composer-attach')).toBeVisible();
   }
 
   async select(files) {
     const chooser = this.page.waitForEvent('filechooser');
-    await this.page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await this.page.locator('#composer-attach').click();
     await (await chooser).setFiles(files);
   }
 
@@ -84,7 +84,7 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
   expect(await app.transfer('paste')).toBe(true);
   expect(await app.transfer('drop', { name: 'dropped.png' })).toBe(true);
   await expect(page.locator('.composer-image')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Remove pasted.png', exact: true }).click();
+  await page.locator('.composer-image[data-image-name="pasted.png"] .composer-image-remove').click();
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await page.locator('#task').fill('Inspect the screenshot');
   await page.locator('#send').click();
@@ -99,7 +99,7 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
   startReply.resolve();
   await expect(page.locator('#task')).toHaveAttribute('placeholder',
     'Steer the running task — your message joins it at the next step.');
-  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
+  await expect(page.locator('#composer-attach')).toBeVisible();
   expect(await app.transfer('paste')).toBe(true);
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await page.locator('#send').click();
@@ -123,7 +123,7 @@ test('failed sends preserve attachments and invalid selections preserve the prio
   await app.select({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024 + 1) });
   await expect(page.getByRole('alert')).toContainText('5 MiB');
   await page.locator('#send').click();
-  await expect(page.getByText('Image send failed', { exact: false }).first()).toBeVisible();
+  await expect(page.locator('.transcript-error-message')).toContainText('Image send failed');
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await expect(page.locator('#send')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
@@ -137,14 +137,14 @@ test('slow file reads disable send and report read errors without losing text', 
     File.prototype.arrayBuffer = () => new Promise((_, reject) => { window.rejectImageRead = reject; });
   });
   await app.select(image);
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeDisabled();
   await expect(page.locator('#send')).toBeDisabled();
   await page.locator('#task').press('Enter');
   expect(app.requests.some(r => r.method === 'codex.turn.start')).toBe(false);
   await page.evaluate(() => window.rejectImageRead(new Error('test read failure')));
   await expect(page.getByRole('alert')).toContainText('test read failure');
   await expect(page.locator('#task')).toHaveValue('Keep this text');
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
   await expect(page.locator('#send')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
@@ -179,7 +179,7 @@ test('canceling the file picker removes its input and permits another selection'
   const app = new CodexImagesHarness(page);
   await app.openCodex();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   const input = (await chooser).element();
   await input.evaluate(element => element.dispatchEvent(new Event('cancel')));
   await expect(page.locator('input[type="file"]')).toHaveCount(0);

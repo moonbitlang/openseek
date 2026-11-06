@@ -19,6 +19,12 @@ fn management_dialog_view(
   }
   fn pane(kind : ManagementDialog, content : @html.Html) -> @html.Html {
     @html.div(
+      id=match kind {
+        Settings => "management-settings"
+        ArchivedChats => "management-archived-chats"
+        Skills => "management-skills"
+        Schedules => "management-schedules"
+      },
       class="management-dialog-pane",
       hidden=model.host_incompatible() || model.management_dialog != Some(kind),
       content,

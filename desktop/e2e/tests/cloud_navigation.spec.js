@@ -53,7 +53,7 @@ test('Cloud home opens the composer after sign-in', async ({ page }) => {
   const cloud = new CloudHarness(page, { cached: false });
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
-  const login = page.locator('main').getByRole('button', { name: 'Sign in with GitHub' });
+  const login = page.locator('#cloud-sign-in');
   await expect(login).toBeVisible();
   await expect(page.locator('#task')).toHaveCount(0);
   await login.click();
@@ -67,7 +67,7 @@ test('Cloud login returns to the exact deep link without creating a session', as
   await cloud.install();
   const destination = `${sessionURL(sessionA)}?source=shared`;
   await page.goto(destination);
-  const login = page.locator('.cloud-home').getByRole('button', { name: /Sign in.*GitHub/i });
+  const login = page.locator('#cloud-sign-in');
   await expect(login).toBeVisible();
   const request = page.waitForRequest(request => new URL(request.url()).pathname === '/v2/auth/login');
   await login.click();
@@ -90,7 +90,7 @@ for (const status of [404, 503]) {
     } else {
       await expect(page.locator('.conversation-load-state')).toContainText(`HTTP ${status}`);
       cloud.historyStatus = 200;
-      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      await page.locator('#conversation-load-retry').click();
       await expect(page.locator('#task')).toBeVisible();
     }
     await expect(page).toHaveURL(sessionURL(sessionA));
@@ -108,7 +108,7 @@ test('late Cloud history cannot replace a newer URL selection', async ({ page })
   await page.goto(sessionURL(sessionA));
   await expect.poll(() => cloud.requests.some(r => r.path === `/v1/sessions/${sessionA}/messages`)).toBe(true);
   cloud.pauseHistory = null;
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await cloud.open(sessionB);
   release();
   await expect(page).toHaveURL(sessionURL(sessionB));
@@ -303,12 +303,12 @@ test('a Cloud URL is reauthorized after account change without retaining the old
   await cloud.install();
   await page.goto(sessionURL(sessionA));
   await expect(page.locator('#transcript')).toContainText('First account history');
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.locator('.cloud-home button')).toHaveText('Sign in with GitHub');
+  await page.locator('#sidebar-sign-out').click();
+  await expect(page.locator('#cloud-sign-in')).toHaveText('Sign in with GitHub');
   await expect(page.getByText('First account history', { exact: true })).toHaveCount(0);
   cloud.userId = '456';
   cloud.historyStatus = 403;
-  await page.locator('.cloud-home button').click();
+  await page.locator('#cloud-sign-in').click();
   await expect(page.locator('.conversation-load-state')).toContainText('HTTP 403');
   await expect(page).toHaveURL(sessionURL(sessionA));
   await expect(page.getByText('First account history', { exact: true })).toHaveCount(0);
@@ -348,7 +348,7 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   await page.goto(sessionURL(sessionA));
   await expect(page.locator('#transcript')).toContainText('Readable despite metadata failure');
   await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.locator('aside').getByText('Couldn’t load chats', { exact: true })).toBeVisible();
+  await expect(page.locator('[id="placeholder:cloud-list-status"]')).toBeVisible();
   expect(creations(cloud)).toEqual([]);
 });
 
@@ -369,8 +369,8 @@ test('Cloud keeps displayed history when a background read fails during a send',
 
   cloud.historyStatus = 503;
   await page.locator('#task').fill('Start a new turn');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByText(/HTTP 503/).first()).toBeVisible();
+  await page.locator('#send').click();
+  await expect(page.locator('.transcript-error-message')).toContainText('HTTP 503');
   await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
 
   cloud.historyStatus = 200;

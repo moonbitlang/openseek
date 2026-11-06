@@ -53,7 +53,19 @@ fn ToolStatus::view(
   }
   @html.span(
     class~,
-    attrs=@html.Attrs::build().role("img").aria_label(label).title(label),
+    attrs=@html.Attrs::build()
+      .data_set(
+        "tool-status",
+        match self {
+          Snapshot => "snapshot"
+          Pending => "pending"
+          Succeeded => "succeeded"
+          Failed => "failed"
+        },
+      )
+      .role("img")
+      .aria_label(label)
+      .title(label),
     icon,
   )
 }

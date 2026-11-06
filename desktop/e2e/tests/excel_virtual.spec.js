@@ -13,12 +13,12 @@ async function openWorkbook(page) {
   app.directoryEntries['/workspace/docs'] = [{ name: 'large-workbook.xlsx', is_dir: false }];
   app.searchFiles = ['docs/large-workbook.xlsx'];
   await app.install(); await app.goto(); await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('large-workbook.xlsx');
-  await page.getByRole('option', { name: /large-workbook\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/large-workbook.xlsx"]').click();
   await expect(page.locator('td[data-cell="A1"]')).toHaveText('START');
   return app;
 }

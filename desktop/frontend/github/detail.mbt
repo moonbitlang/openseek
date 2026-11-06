@@ -119,7 +119,9 @@ fn detail_actions(
     ),
     @html.button(
       class="github-action-button",
-      attrs=@html.Attrs::build().aria_label(ui(locale, RefreshPullRequest)),
+      attrs=@html.Attrs::build()
+        .id("github-detail-refresh")
+        .aria_label(ui(locale, RefreshPullRequest)),
       disabled=!active || detail.loading,
       on_click=emit(RefreshDetail),
       [
@@ -308,11 +310,16 @@ fn relative_date(value : String, locale : String) -> String {
 }
 
 ///|
-fn metadata_section(title : String, children : Array[@html.Html]) -> @html.Html {
-  @html.section(class="github-metadata-section", [
-    @html.h2(title),
-    @html.div(children),
-  ])
+fn metadata_section(
+  key : String,
+  title : String,
+  children : Array[@html.Html],
+) -> @html.Html {
+  @html.section(
+    class="github-metadata-section",
+    attrs=@html.Attrs::build().data_set("section", key),
+    [@html.h2(title), @html.div(children)],
+  )
 }
 
 ///|
@@ -327,6 +334,7 @@ fn metadata_view(
       .aria_label(ui(locale, DetailsLabel)),
     [
       metadata_section(
+        "reviewers",
         ui(locale, ReviewersLabel),
         if pr.reviewers.is_empty() {
           [@html.p(class="github-metadata-empty", ui(locale, NoReviews))]
@@ -353,6 +361,7 @@ fn metadata_view(
         },
       ),
       metadata_section(
+        "assignees",
         ui(locale, AssigneesLabel),
         if pr.assignees.is_empty() {
           [@html.p(class="github-metadata-empty", ui(locale, NoAssignees))]
@@ -361,6 +370,7 @@ fn metadata_view(
         },
       ),
       metadata_section(
+        "labels",
         ui(locale, LabelsLabel),
         if pr.labels.is_empty() {
           [@html.p(class="github-metadata-empty", ui(locale, NoLabels))]
@@ -373,13 +383,13 @@ fn metadata_view(
           ]
         },
       ),
-      metadata_section(ui(locale, MilestoneLabel), [
+      metadata_section("milestone", ui(locale, MilestoneLabel), [
         @html.p(
           class=if pr.milestone is None { "github-metadata-empty" } else { "" },
           pr.milestone.unwrap_or(ui(locale, NoMilestone)),
         ),
       ]),
-      metadata_section(ui(locale, ChangesLabel), [
+      metadata_section("changes", ui(locale, ChangesLabel), [
         @html.p(ui(locale, ChangedFiles(pr.changed_files))),
         @html.div(class="github-diffstat", [
           @html.span(class="github-additions", "+\{pr.additions}"),

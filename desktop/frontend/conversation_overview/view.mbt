@@ -74,7 +74,10 @@ pub fn toggle(
     },
     type_="button",
     title=label,
-    attrs=@html.Attrs::build().aria_label(label).aria_pressed(open.to_string()),
+    attrs=@html.Attrs::build()
+      .id("conversation-overview-toggle")
+      .aria_label(label)
+      .aria_pressed(open.to_string()),
     on_click~,
     @icons.icon(@icons.icon_preview),
   )
@@ -95,7 +98,9 @@ pub fn view(
 ) -> @html.Html {
   @html.aside(
     class="conv-overview",
-    attrs=@html.Attrs::build().aria_label(text(locale, Overview)),
+    attrs=@html.Attrs::build()
+      .id("conversation-overview")
+      .aria_label(text(locale, Overview)),
     [
       card(
         locale,
@@ -248,27 +253,41 @@ fn card(
     Connectors => text(locale, ConnectorsTitle)
     BackgroundTasks => text(locale, BackgroundTasksTitle)
   }
-  @html.div(class="conv-overview-card", [
-    @html.div(class="conv-overview-card-head", [
-      @html.button(
-        class=if open {
-          "conv-overview-card-title open"
-        } else {
-          "conv-overview-card-title"
-        },
-        type_="button",
-        attrs=@html.Attrs::build().aria_expanded(open.to_string()),
-        on_click=emit(Toggled(section)),
-        [@html.span(title), @icons.icon(@icons.icon_chevron_down)],
-      ),
-      @html.div(class="conv-overview-card-aside", aside),
-    ]),
-    if open {
-      @html.div(class="conv-overview-card-rows", rows)
-    } else {
-      @html.nothing
-    },
-  ])
+  @html.div(
+    class="conv-overview-card",
+    attrs=@html.Attrs::build().data_set(
+      "section",
+      match section {
+        Environment => "environment"
+        Changes => "changes"
+        Connectors => "connectors"
+        BackgroundTasks => "background"
+      },
+    ),
+    [
+      @html.div(class="conv-overview-card-head", [
+        @html.button(
+          class=if open {
+            "conv-overview-card-title open"
+          } else {
+            "conv-overview-card-title"
+          },
+          type_="button",
+          attrs=@html.Attrs::build()
+            .data_set("testid", "overview-card-toggle")
+            .aria_expanded(open.to_string()),
+          on_click=emit(Toggled(section)),
+          [@html.span(title), @icons.icon(@icons.icon_chevron_down)],
+        ),
+        @html.div(class="conv-overview-card-aside", aside),
+      ]),
+      if open {
+        @html.div(class="conv-overview-card-rows", rows)
+      } else {
+        @html.nothing
+      },
+    ],
+  )
 }
 
 ///|
@@ -280,6 +299,7 @@ fn refresh_button(locale : @i18n.Locale, refresh : @cmd.Cmd?) -> @html.Html {
     title=label,
     disabled=refresh is None,
     attrs=@html.Attrs::build().aria_label(label),
+    id="connectors-refresh",
     on_click=refresh.unwrap_or(@cmd.none),
     @icons.icon(@icons.icon_sync),
   )

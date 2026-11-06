@@ -10,6 +10,7 @@ export const browserAccount = {
 export class LocalConsoleHarness extends CloudHarness {
   constructor(page, origin) {
     super(page, { cached: false });
+    this.device.channel = 'remote.host';
     this.origin = new URL(origin).origin;
     this.userId = browserAccount.user.user_id;
     this.localRequests = [];

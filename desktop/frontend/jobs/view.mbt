@@ -156,6 +156,7 @@ pub fn panel(
     ]),
     @html.button(
       class="jobs-action",
+      id="jobs-refresh",
       on_click=emit(Poll),
       disabled=state.listing,
       ui(locale, RefreshLabel),
@@ -227,7 +228,10 @@ pub fn panel(
         @html.button(
           class="jobs-row jobs-row-\{status_class}" +
             (if selected { " selected" } else { "" }),
-          attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
+          attrs=@html.Attrs::build()
+            .data_set("job-id", job.id)
+            .data_set("job-generation", job.generation)
+            .aria_pressed(selected.to_string()),
           title=job.command,
           on_click=emit(Select(job.generation, job.id)),
           [
@@ -267,6 +271,7 @@ pub fn panel(
           @html.button(
             class="jobs-action jobs-more",
             disabled=state.listing,
+            id="jobs-more",
             on_click=emit(More),
             ui(locale, LoadOlder),
           ),
@@ -275,7 +280,10 @@ pub fn panel(
       rows.push(
         @html.div(
           class="jobs-group",
-          attrs=@html.Attrs::build().role("group").aria_label(title),
+          attrs=@html.Attrs::build()
+            .id(if terminal { "jobs-history" } else { "jobs-active" })
+            .role("group")
+            .aria_label(title),
           if terminal {
             [
               @html.button(
@@ -370,7 +378,11 @@ pub fn panel(
         )
       }
       details.push(
-        @html.div(class="jobs-detail-meta", job_timing(locale~, job)),
+        @html.div(
+          id="jobs-detail-timing",
+          class="jobs-detail-meta",
+          job_timing(locale~, job),
+        ),
       )
       if !job.state.is_terminal() {
         let activity = match job.last_output_at_ms {
@@ -390,6 +402,7 @@ pub fn panel(
       let actions : Array[@html.Html] = [
         @html.button(
           class="jobs-action",
+          id="jobs-copy-id",
           on_click=@clipboard.copy(Text(job.id)),
           ui(locale, CopyId),
         ),
@@ -398,6 +411,7 @@ pub fn panel(
         actions.push(
           @html.button(
             class="jobs-action",
+            id="jobs-open-transcript",
             on_click=emit(OpenSession(info.session)),
             ui(locale, OpenTranscript),
           ),
@@ -408,6 +422,7 @@ pub fn panel(
               class="jobs-action",
               on_click=@clipboard.copy(Text(path)),
               ui(locale, CopyWorktreePath),
+              id="jobs-copy-worktree",
             ),
           )
         }
@@ -421,9 +436,11 @@ pub fn panel(
             class="jobs-action",
             on_click=@clipboard.copy(Text(path)),
             ui(locale, CopyPath),
+            id="jobs-copy-path",
           ),
           @html.button(
             class="jobs-action",
+            id="jobs-copy-tail",
             on_click=@clipboard.copy(
               Text(tail_command(path, follow=!job.state.is_terminal())),
             ),
@@ -431,6 +448,7 @@ pub fn panel(
           ),
           @html.button(
             class="jobs-action",
+            id="jobs-reload",
             on_click=emit(Reload),
             ui(locale, ReloadTail),
           ),
@@ -440,6 +458,7 @@ pub fn panel(
         actions.push(
           @html.button(
             class="jobs-action",
+            id="jobs-follow",
             on_click=emit(ToggleFollow),
             attrs=@html.Attrs::build().aria_pressed(state.follow.to_string()),
             if state.follow {
@@ -457,6 +476,7 @@ pub fn panel(
             disabled=!view.controllable ||
               state.stopping ||
               job.state is Stopping,
+            id="jobs-stop",
             on_click=emit(Stop),
             if state.stopping || job.state is Stopping {
               ui(locale, StoppingLabel)

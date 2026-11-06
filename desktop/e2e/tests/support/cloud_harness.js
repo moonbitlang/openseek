@@ -36,6 +36,7 @@ export class CloudHarness {
     this.cached = cached;
     this.accountSignedIn = cached;
     this.device = new DesktopBrowserHarness(page);
+    if (desktop) this.device.channel = 'local';
     this.requests = [];
     this.hostRequests = [];
     this.notifications = [];
@@ -626,7 +627,7 @@ export class CloudHarness {
 
   async goto() {
     await this.page.goto(`${authOrigin}/console/index.html?device=device-a`);
-    const dismiss = this.page.getByRole('button', { name: 'Not now', exact: true });
+    const dismiss = this.page.locator('#api-setup-dismiss');
     const hasCookie = (await this.page.context().cookies(authOrigin)).some(cookie => cookie.name === 'session');
     if (!this.device.hostSettings.has_deepseek_key && (this.desktop || this.accountSignedIn || this.meStatus === 200 || hasCookie)) {
       await expect(dismiss).toBeVisible();
@@ -634,7 +635,7 @@ export class CloudHarness {
     } else {
       await expect(dismiss).toHaveCount(0);
     }
-    await this.page.getByRole('button', { name: 'Chat', exact: true }).click();
+    await this.page.locator('#sidebar-chat-mode').click();
     if (this.cached && !this.archived.has(sessionA)) await this.row(sessionA).waitFor();
   }
 
@@ -648,18 +649,19 @@ export class CloudHarness {
 
   // Archived conversations are managed within the Settings dialog.
   async openArchivedChats() {
-    await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await this.page.getByRole('button', { name: 'Manage', exact: true }).click();
-    await expect(this.page.getByRole('dialog', { name: 'Archived chats', exact: true })).toBeVisible();
+    await this.page.locator('#sidebar-settings').click();
+    await this.page.locator('#archived-chats-manage').click();
+    await expect(this.page.locator('#management-archived-chats')).toBeVisible();
   }
 
   archivedRow(id) {
-    return this.page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
+    const key = `archived-chat:conversation:cloud.archived:${this.userId}:${id}:`;
+    return this.page.locator(`[id=${JSON.stringify(key)}]`);
   }
 
   async openArchived(id) {
     await this.openArchivedChats();
-    await this.archivedRow(id).getByRole('button', { name: new RegExp(`^${this.titles.get(id)}`) }).click();
+    await this.archivedRow(id).locator('[data-action="open"]').click();
   }
 
   async open(id = sessionA) {
@@ -672,10 +674,10 @@ export class CloudHarness {
   }
 
   async create() {
-    await this.page.locator('aside button[aria-label="New chat"]').click();
+    await this.page.locator('[id^="section:cloud.chats:"][id$=":action"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
-    await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
-    await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+    await expect(this.page.locator('#conversation-export')).toHaveCount(0);
+    await expect(this.page.locator('#model')).toBeDisabled();
     await expect(this.page.locator('#task')).toBeEnabled();
   }
 

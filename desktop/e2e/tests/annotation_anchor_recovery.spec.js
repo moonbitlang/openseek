@@ -8,12 +8,12 @@ for (const existing of [false, true]) {
     await app.install();
     await app.goto();
     await app.openSession();
-    await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+    await page.locator('#sidebar-toggle[aria-expanded="true"]').click();
     await app.openReview({ waitForHistory: false });
-    await page.getByRole('tab', { name: 'Files', exact: true }).click();
+    await page.locator('#explorer-files-tab').click();
     await app.openQuickOpen();
     await page.locator('#quick-open-input').fill('report.pdf');
-    await page.getByRole('option', { name: /report\.pdf/ }).click();
+    await page.locator('#quick-open-list [data-path="docs/report.pdf"]').click();
     await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
     const items = page.locator('.page[data-page-number="1"] [data-pdf-item]');
     const select = async item => item.evaluate(element => {
@@ -63,7 +63,7 @@ for (const existing of [false, true]) {
     await page.locator('#office-feedback-input').getByRole('checkbox').check();
     await input.press('Enter');
     await page.locator('#task').fill('Explain the selected passage');
-    await page.getByTitle('Send', { exact: true }).click();
+    await page.locator('#send').click();
     await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('<office_selection>');
     const task = app.requests.find(r => r.method === 'agent.start').params.task;
     const quote = JSON.parse(task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
@@ -80,12 +80,12 @@ test('an unavailable Word anchor clears the old composer and permits reselection
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle[aria-expanded="true"]').click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('report.docx');
-  await page.getByRole('option', { name: /report\.docx/ }).click();
+  await page.locator('#quick-open-list [data-path="docs/report.docx"]').click();
   const source = page.locator('.word-page svg text').first();
   const select = (whole, clear) => source.evaluate((element, { whole, clear }) => {
     const range = document.createRange();

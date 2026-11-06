@@ -1112,7 +1112,11 @@ fn tool_call_view(
   ]
   let original = pretty_json(call.arguments)
   if is_blank_args(original) {
-    return @html.div(id?=anchor, class=cls) <| [
+    return @html.div(
+      id?=anchor,
+      class=cls,
+      attrs=@html.Attrs::build().data_set("call-id", call.id),
+    ) <| [
       @html.div(class="tool-call-name") <| name_row,
     ]
   }
@@ -1123,7 +1127,12 @@ fn tool_call_view(
   // A plan is the task's live state, not noisy arguments: its card starts
   // unfolded (still collapsible), where every other call folds by default.
   let open_by_default = plan_steps.map(_ => true)
-  @html.details(open?=open_by_default, id?=anchor, class=cls) <| [
+  @html.details(
+    open?=open_by_default,
+    id?=anchor,
+    class=cls,
+    attrs=@html.Attrs::build().data_set("call-id", call.id),
+  ) <| [
     @html.summary(class="tool-call-name") <| name_row,
     rendered,
     @html.pre(class="tool-call-args tool-call-args-original") <| original,
@@ -1208,7 +1217,10 @@ fn arg_field(
       ])
     _ => render_value(value)
   }
-  @html.div(class="arg-field") <| [
+  @html.div(
+    class="arg-field",
+    attrs=@html.Attrs::build().data_set("arg-key", key),
+  ) <| [
     @html.span(class="arg-key") <| key,
     value_html,
   ]

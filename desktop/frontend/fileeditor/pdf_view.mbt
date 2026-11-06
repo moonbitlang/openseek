@@ -18,7 +18,9 @@ fn pdf_viewer_toolbar(
       class="office-viewer-control",
       disabled=!ready || document.page <= 1,
       title=ui(locale, PdfPreviousPage),
-      attrs=@html.Attrs::build().aria_label(ui(locale, PdfPreviousPage)),
+      attrs=@html.Attrs::build()
+        .id("pdf-previous-page")
+        .aria_label(ui(locale, PdfPreviousPage)),
       on_click=dispatch(PdfPageChanged((document.page - 1).to_string())),
       "‹",
     ),
@@ -29,6 +31,7 @@ fn pdf_viewer_toolbar(
       value=document.page.to_string(),
       on_change=dispatch.map(value => PdfPageChanged(value)),
       attrs=@html.Attrs::build()
+        .id("pdf-page-number")
         .aria_label(ui(locale, PdfPageNumber))
         .disabled(!ready),
     ),
@@ -39,7 +42,9 @@ fn pdf_viewer_toolbar(
       disabled=!ready ||
         document.pages.map(pages => document.page >= pages).unwrap_or(true),
       title=ui(locale, PdfNextPage),
-      attrs=@html.Attrs::build().aria_label(ui(locale, PdfNextPage)),
+      attrs=@html.Attrs::build()
+        .id("pdf-next-page")
+        .aria_label(ui(locale, PdfNextPage)),
       on_click=dispatch(PdfPageChanged((document.page + 1).to_string())),
       "›",
     ),
@@ -48,7 +53,9 @@ fn pdf_viewer_toolbar(
       class="office-viewer-control",
       disabled=!ready,
       title=ui(locale, PdfFitWidth),
-      attrs=@html.Attrs::build().aria_label(ui(locale, PdfFitWidth)),
+      attrs=@html.Attrs::build()
+        .id("pdf-fit-width")
+        .aria_label(ui(locale, PdfFitWidth)),
       on_click=dispatch(PdfFitWidth),
       "↔",
     ),
@@ -57,7 +64,9 @@ fn pdf_viewer_toolbar(
       class="office-viewer-control",
       disabled=!ready,
       title=ui(locale, PdfRotate),
-      attrs=@html.Attrs::build().aria_label(ui(locale, PdfRotate)),
+      attrs=@html.Attrs::build()
+        .id("pdf-rotate")
+        .aria_label(ui(locale, PdfRotate)),
       on_click=dispatch(PdfRotated),
       "↻",
     ),
@@ -75,7 +84,9 @@ fn pdf_viewer_toolbar(
           PdfCapture
         },
       ),
-      attrs=@html.Attrs::build().aria_label(ui(locale, PdfCapture)),
+      attrs=@html.Attrs::build()
+        .id("pdf-capture")
+        .aria_label(ui(locale, PdfCapture)),
       on_click=dispatch(PdfCaptureRequested),
       @icons.icon(@icons.icon_device_camera),
     ),
@@ -98,7 +109,9 @@ fn pdf_viewer_toolbar(
         class="office-viewer-control",
         disabled=no_matches,
         title=ui(locale, PdfPreviousMatch),
-        attrs=@html.Attrs::build().aria_label(ui(locale, PdfPreviousMatch)),
+        attrs=@html.Attrs::build()
+          .id("pdf-previous-match")
+          .aria_label(ui(locale, PdfPreviousMatch)),
         on_click=dispatch(PdfFind(true)),
         "‹",
       ),
@@ -109,7 +122,9 @@ fn pdf_viewer_toolbar(
         class="office-viewer-control",
         disabled=no_matches,
         title=ui(locale, PdfNextMatch),
-        attrs=@html.Attrs::build().aria_label(ui(locale, PdfNextMatch)),
+        attrs=@html.Attrs::build()
+          .id("pdf-next-match")
+          .aria_label(ui(locale, PdfNextMatch)),
         on_click=dispatch(PdfFind(false)),
         "›",
       ),
@@ -151,6 +166,7 @@ fn pdf_password_dialog(
         [
           @html.div([
             @html.input(
+              id="pdf-password",
               input_type=Password,
               value=document.map(document => document.password).unwrap_or(""),
               placeholder=ui(locale, PdfPassword),
@@ -173,10 +189,12 @@ fn pdf_password_dialog(
             @html.button(
               type_="button",
               class="button secondary",
+              id="pdf-password-cancel",
               on_click=dispatch(PdfPasswordCancelled),
               ui(locale, CancelSelection),
             ),
             @html.button(
+              id="pdf-password-submit",
               type_="submit",
               class="button primary",
               disabled=document

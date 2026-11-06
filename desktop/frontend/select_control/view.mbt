@@ -236,6 +236,7 @@ fn Control::trigger_attrs(
 ) -> @html.Attrs {
   @html.Attrs::build()
   .id(self.id)
+  .data_set("value", self.selected)
   .aria_label(self.aria_label)
   .aria_haspopup("listbox")
   .aria_controls(self.menu_id())
@@ -376,7 +377,9 @@ pub fn Control::render(self : Control) -> @html.Html {
             type_="button",
             title=option.label,
             on_click=choose,
-            attrs=self.option_attrs(index, option_count, selected),
+            attrs=self
+              .option_attrs(index, option_count, selected)
+              .data_set("value", option.value),
             option.row_contents(selected),
           ),
         )

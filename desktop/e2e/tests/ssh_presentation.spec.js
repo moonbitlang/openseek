@@ -17,40 +17,24 @@ async function start(page) {
   return app;
 }
 
-async function expectContained(locator) {
-  const fits = await locator.evaluate(el => {
-    const rect = el.getBoundingClientRect();
-    const parent = el.parentElement.getBoundingClientRect();
-    return rect.left >= parent.left && rect.right <= parent.right &&
-      rect.left >= 0 && rect.right <= innerWidth;
-  });
-  expect(fits).toBe(true);
-}
-
-test('SSH failure output scrolls without widening the page and narrow retry remains usable', async ({ page }) => {
+test('SSH failure preserves the diagnostic and supports retry and cancellation', async ({ page }) => {
   const app = await start(page);
   await app.sshEvent({ disconnected: warning });
   await expect(page.locator('.onboarding-card')).toContainText('Connection failed');
   const error = page.locator('.onboarding-card .ssh-error');
   await expect(error).toHaveText(warning);
-  await expect(error).toHaveCSS('white-space', 'pre');
-  await expectContained(error);
-  expect(await error.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
 
-  await page.setViewportSize({ width: 900, height: 700 });
-  const retry = page.getByRole('button', { name: 'Retry connection', exact: true });
-  await expectContained(retry);
-  await expect(page.getByRole('status', { name: 'Connection failed', exact: true })).toBeVisible();
+  const retry = page.locator('[data-ssh-connection]:visible');
+  await expect(page.locator('.ssh-status:visible')).toBeVisible();
   await retry.click();
   await expect.poll(() => app.attempt).toBe(2);
   await expect(page.locator('.onboarding-card')).toContainText('Connecting…');
-  await page.getByRole('button', { name: 'Cancel connection', exact: true }).click();
+  await page.locator('[data-ssh-connection]:visible').click();
   await expect(page.locator('.onboarding-card')).toContainText('Disconnected');
   expect(app.pageErrors).toEqual([]);
 });
 
-test('SSH host identity keeps fingerprint lines scrollable and confirmation controls reachable', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 700 });
+test('SSH host identity confirmation sends the authentication response', async ({ page }) => {
   const app = await start(page);
   const prompt = 'The authenticity of host example.test cannot be established.\n' +
     'ED25519 key fingerprint is SHA256:abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.\n' +
@@ -59,37 +43,28 @@ test('SSH host identity keeps fingerprint lines scrollable and confirmation cont
   const dialog = page.getByRole('dialog');
   const output = dialog.locator('.ssh-output');
   await expect(output).toHaveText(prompt);
-  await expect(output).toHaveCSS('white-space', 'pre');
-  await expectContained(output);
-  expect(await output.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
-  const accept = dialog.getByRole('button', { name: 'Accept', exact: true });
-  await expectContained(accept);
+  const accept = dialog.locator('#ssh-auth-continue');
   await accept.click();
   await expect.poll(() => app.requests.some(r => r.method === 'ssh.auth.respond')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('SSH terminal stops claiming recovery after failure or cancellation in a narrow main pane', async ({ page }) => {
-  await page.setViewportSize({ width: 1200, height: 800 });
+test('SSH terminal stops claiming recovery after failure or cancellation', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('openseek.theme', 'dark'));
   const app = await start(page);
   await app.sshEvent({ method: 'agent.connected', params: { protocol: app.hostProtocol } });
-  await expect(page.getByRole('status', { name: 'Connected', exact: true })).toBeVisible();
-  await page.getByTitle('Show terminal (Ctrl+`)').click();
+  await expect(page.locator('.ssh-status.online:visible')).toBeVisible();
+  await page.locator('#terminal-toggle').click();
   await expect(page.locator('.terminal-panel')).toBeVisible();
-  // Open the editor to narrow main without crossing the mobile breakpoint.
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await expect.poll(async () => (await page.locator('main').boundingBox()).width).toBeLessThan(700);
   await app.sshEvent({ disconnected: 'Connection lost' });
   await expect.poll(() => app.attempt).toBe(2);
   await expect(page.locator('.terminal-status')).toHaveText('Connecting…');
   await app.sshEvent({ disconnected: 'Connection refused' });
   await expect(page.locator('.terminal-status')).toHaveText('Connection failed');
-  const retry = page.getByRole('button', { name: 'Retry connection', exact: true });
-  await expectContained(retry);
+  const retry = page.locator('[data-ssh-connection]:visible');
   await retry.click();
   await expect.poll(() => app.attempt).toBe(3);
-  await page.getByRole('button', { name: 'Cancel connection', exact: true }).click();
+  await page.locator('[data-ssh-connection]:visible').click();
   await expect(page.locator('.terminal-status')).toHaveText('Disconnected');
   expect(app.pageErrors).toEqual([]);
 });

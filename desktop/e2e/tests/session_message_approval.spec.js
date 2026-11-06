@@ -49,9 +49,9 @@ test('message approvals survive idle reload and turn completion, and advance ind
   app.notify('agent.finished', { run_id: 'run-e2e', status: 'finished', answer: 'Done' });
   await expect(card).toContainText('Send to “Test B”');
 
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await card.getByTestId('approval-allow').click();
   await expect(card).toContainText('Send to “Test C”');
-  await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await card.getByTestId('approval-deny').click();
   await expect(card).toHaveCount(0);
   expect(app.requests.filter(item => item.method === 'agent.approval').map(item => ({
     id: item.params.id, allow: item.params.allow,
@@ -80,7 +80,7 @@ test('a running engine approval takes priority over a background message approva
   app.notify('agent.approvals', { generation: 1, approvals: [engine, message] });
   const card = page.locator('.composer-approval');
   await expect(card).toContainText('mbtx');
-  await expect(card.getByRole('button', { name: 'Allow once', exact: true })).toBeVisible();
+  await expect(card.getByTestId('approval-allow')).toBeVisible();
   // Replaying a snapshot must not mutate it or duplicate either question.
   app.notify('agent.approvals', { generation: 1, approvals: [engine, message] });
   await expect(card).toHaveCount(1);
@@ -98,7 +98,7 @@ test('received messages and delivery results render tagged context live and afte
   app.sessionEvents = [event(1, message)];
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+  await app.sessionButton().click();
   const received = page.locator('.session-message').first();
   await expect(received.locator('.session-message-source')).toHaveText('Message from another conversation');
   await expect(received.locator('.session-message-source')).toHaveAttribute('title', 'chat-A');
@@ -111,7 +111,7 @@ test('received messages and delivery results render tagged context live and afte
   app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
   await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
   await page.reload();
-  await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+  await app.sessionButton().click();
   await expect(page.locator('.session-message')).toHaveCount(2);
   await expect(received.locator('.msg-content')).toHaveText(text.replaceAll('`', ''));
   await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
@@ -138,7 +138,7 @@ for (const running of [false, true]) {
       await page.locator('#send').click();
       await expect(page.locator('#stop')).toBeVisible();
     }
-    await page.locator('.conversation-row[title="session-2"]').click();
+    await app.sessionButton('session-2').click();
     await expect(page.locator('main > .topbar h1')).toHaveText('Another conversation');
     const status = page.locator('main > .topbar .run-status');
     const before = await status.textContent();
@@ -146,10 +146,10 @@ for (const running of [false, true]) {
       session: 'session-1', run_id: null,
       event: { event: 'session_error', error: 'Could not deliver message result: the sender is unavailable' },
     });
-    await expect(page.getByText('the engine could not save an item to this session: Could not deliver message result: the sender is unavailable', { exact: true })).toBeVisible();
+    await expect(page.locator('.notification')).toHaveText('the engine could not save an item to this session: Could not deliver message result: the sender is unavailable');
     await expect(status).toHaveText(before);
     await expect(page.locator('#stop')).toBeHidden();
-    await page.locator('.conversation-row[title="session-1"]').click();
+    await app.sessionButton('session-1').click();
     if (running) {
       await expect(page.locator('#stop')).toBeVisible();
     } else {

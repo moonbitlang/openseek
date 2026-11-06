@@ -76,6 +76,9 @@ pub fn Control::view(
             class="mention-remove",
             type_="button",
             title=RemoveSelected.text(locale),
+            attrs=@html.Attrs::build().data_set(
+              "testid", "changes-remove-group",
+            ),
             on_click=remove(changes),
             @icons.icon(@icons.icon_close),
           )
@@ -208,7 +211,9 @@ fn Control::popup(
                   class="changes-open",
                   type_="button",
                   title=OpenReview.text(locale),
-                  attrs=@html.Attrs::build().aria_label(OpenReview.text(locale)),
+                  attrs=@html.Attrs::build()
+                    .data_set("testid", "changes-open-review")
+                    .aria_label(OpenReview.text(locale)),
                   on_click=(self.open_review)(single),
                   OpenReviewLink.text(locale),
                 ),
@@ -218,6 +223,9 @@ fn Control::popup(
                       class="changes-remove",
                       type_="button",
                       title=RemoveChange.text(locale),
+                      attrs=@html.Attrs::build().data_set(
+                        "testid", "changes-remove",
+                      ),
                       on_click=remove([single]),
                       @icons.icon(@icons.icon_close),
                     )
@@ -238,13 +246,9 @@ fn Control::popup(
             class="changes-file-header",
             type_="button",
             title=path,
-            attrs=@html.Attrs::build().aria_expanded(
-              if collapsed {
-                "false"
-              } else {
-                "true"
-              },
-            ),
+            attrs=@html.Attrs::build()
+              .data_set("change-path", path)
+              .aria_expanded(if collapsed { "false" } else { "true" }),
             on_click=(self.toggle_file)(key),
             [
               @html.span(
@@ -277,6 +281,7 @@ fn Control::popup(
     attrs={
       let attrs = @html.Attrs::build()
         .id(self.id + "-popup")
+        .data_set("testid", "selected-changes")
         .role("dialog")
         .aria_label(SelectedChanges.text(locale))
       if self.remove is Some(_) {
@@ -295,6 +300,7 @@ fn Control::popup(
           class="changes-close",
           type_="button",
           title=CloseSelected.text(locale),
+          attrs=@html.Attrs::build().data_set("testid", "changes-close"),
           on_click=self.dismiss,
           @icons.icon(@icons.icon_close),
         ),
@@ -314,6 +320,9 @@ fn Control::popup(
           Some(remove) =>
             @html.button(
               type_="button",
+              attrs=@html.Attrs::build().data_set(
+                "testid", "changes-remove-group",
+              ),
               on_click=remove(changes),
               RemoveGroup.text(locale),
             )

@@ -58,6 +58,7 @@ pub fn view(
     let selected = suggestion_active && index == picker.path_selection
     let row_attrs = @html.Attrs::build()
       .id(path_row_id(index))
+      .data_set("path", target)
       .aria_label(dynamic_text(locale, DOpenFolder(name.to_string())))
     let row_attrs = if path_editing {
       row_attrs.role("option").aria_selected(selected.to_string())
@@ -152,6 +153,7 @@ pub fn view(
               type_="button",
               disabled=!can_create,
               on_click=emit(BeginCreateFolder),
+              attrs=@html.Attrs::build().id("project-picker-new-folder"),
               [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
             ),
           ]),
@@ -252,7 +254,9 @@ fn path_editor(
       type_="button",
       title=ui(locale, CancelPathEditing),
       on_click=emit(CancelPathEdit),
-      attrs=@html.Attrs::build().aria_label(ui(locale, CancelPathEditing)),
+      attrs=@html.Attrs::build()
+        .id("project-picker-path-cancel")
+        .aria_label(ui(locale, CancelPathEditing)),
       @icons.icon(@icons.icon_close),
     ),
   ])
@@ -275,6 +279,7 @@ fn new_folder_row(
       placeholder=ui(locale, NewFolderName),
       on_input=emit.map(value => NewFolderNameChanged(value)),
       attrs=@html.Attrs::build()
+        .id("project-picker-folder-name")
         .aria_label(ui(locale, NewFolderName))
         .data_set("focus-owner", "")
         .disabled(picker.loading)
@@ -304,6 +309,7 @@ fn new_folder_row(
       type_="button",
       disabled=picker.loading,
       on_click=emit(CancelCreateFolder),
+      attrs=@html.Attrs::build().id("project-picker-create-cancel"),
       ui(locale, CancelLabel),
     ),
     @html.button(
@@ -311,6 +317,7 @@ fn new_folder_row(
       type_="button",
       disabled=picker.loading || !valid,
       on_click=emit(CreateFolder),
+      attrs=@html.Attrs::build().id("project-picker-create"),
       if picker.loading {
         ui(locale, CreatingLabel)
       } else {
@@ -356,6 +363,7 @@ fn picker_footer(
         class="button secondary",
         type_="button",
         on_click=emit(Close),
+        attrs=@html.Attrs::build().id("project-picker-cancel"),
         ui(locale, CancelLabel),
       ),
       @html.button(
@@ -363,6 +371,7 @@ fn picker_footer(
         type_="button",
         disabled=!can_confirm,
         on_click=emit(Confirm),
+        attrs=@html.Attrs::build().id("project-picker-add"),
         ui(locale, AddProjectLabel),
       ),
     ]),
@@ -419,7 +428,9 @@ fn picker_breadcrumbs(
         title=ui(locale, EditPath),
         disabled=picker.loading,
         on_click=emit(EditPath),
-        attrs=@html.Attrs::build().aria_label(ui(locale, EditCurrentPath)),
+        attrs=@html.Attrs::build()
+          .id("project-picker-edit-path")
+          .aria_label(ui(locale, EditCurrentPath)),
         ui(locale, ThisPc),
       ),
     )
@@ -448,9 +459,13 @@ fn picker_breadcrumbs(
         emit(Navigate("/"))
       },
       attrs=if segments.is_empty() {
-        @html.Attrs::build().aria_label(ui(locale, EditCurrentPath))
+        @html.Attrs::build()
+        .id("project-picker-edit-path")
+        .aria_label(ui(locale, EditCurrentPath))
       } else {
-        @html.Attrs::build().aria_label(ui(locale, OpenRootFolder))
+        @html.Attrs::build()
+        .data_set("path", "/")
+        .aria_label(ui(locale, OpenRootFolder))
       },
       "/",
     ),
@@ -493,9 +508,13 @@ fn picker_breadcrumbs(
           emit(Navigate(prefix))
         },
         attrs=if index == segments.length() - 1 {
-          @html.Attrs::build().aria_label(ui(locale, EditCurrentPath))
+          @html.Attrs::build()
+          .id("project-picker-edit-path")
+          .aria_label(ui(locale, EditCurrentPath))
         } else {
-          @html.Attrs::build().aria_label(
+          @html.Attrs::build()
+          .data_set("path", prefix)
+          .aria_label(
             dynamic_text(locale, DOpenSegmentFolder(segment.to_string())),
           )
         },

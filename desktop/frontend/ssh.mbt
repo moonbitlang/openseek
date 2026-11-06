@@ -1165,9 +1165,11 @@ fn ssh_connection_button(
   @html.button(
     class="button secondary",
     attrs=if in_modal {
-      @html.Attrs::build().id("ssh-connection-action")
-    } else {
       @html.Attrs::build()
+      .id("ssh-connection-action")
+      .data_set("ssh-connection", id)
+    } else {
+      @html.Attrs::build().data_set("ssh-connection", id)
     },
     on_click=dispatch(
       Ssh(if connecting { Disconnect(id) } else { Connect(id) }),

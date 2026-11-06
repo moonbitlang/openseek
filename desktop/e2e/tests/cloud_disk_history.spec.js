@@ -56,10 +56,10 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   expect(unchanged.status()).toBe(304);
   expect(files.get(sessionA).etag).toBe(etag);
 
-  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+  await expect(page.locator('[id="placeholder:cloud-list-status:action"]')).toBeVisible();
   cloud.listStatus = 200;
   await page.unroute(offlineHistory, offlineRead);
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.locator('[id="placeholder:cloud-list-status:action"]').click();
   await expect(cloud.row(sessionA)).toHaveText('Cloud fixture A');
   await cloud.open(sessionA);
   await expect(transcript.getByText('Saved reply A')).toBeVisible();
@@ -73,9 +73,9 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
 
   const row = cloud.rowContainer(sessionA);
   await row.hover();
-  await row.getByRole('button', { name: 'Conversation actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click();
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await row.locator('[id$=":actions-trigger"]').click();
+  await page.locator('[role=menuitem][data-action=delete]:visible').click();
+  await page.locator('#delete-chat-confirm').click();
   await expect.poll(() => files.has(sessionA)).toBe(false);
   expect(files.has(sessionB)).toBe(true);
   expect(cloud.requests.some(request => request.method === 'DELETE' && request.path === `/v1/sessions/${sessionA}`)).toBe(true);

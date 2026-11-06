@@ -61,6 +61,7 @@ pub fn tab_menu(
   }
   let entries : Array[@action_menu.Entry] = [
     Action({
+      key: "close",
       label: ui(locale, CloseLabel),
       title: ui(locale, CloseTabHint),
       icon: None,
@@ -79,6 +80,12 @@ pub fn tab_menu(
     ] {
     entries.push(
       Action({
+        key: match selection {
+          All => "close-all"
+          Others(_) => "close-others"
+          ToLeft(_) => "close-left"
+          ToRight(_) => "close-right"
+        },
         label,
         title: label,
         icon: None,

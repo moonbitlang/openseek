@@ -284,6 +284,7 @@ fn Entry::attachment_confirmations(
           class="composer-context-row composer-attachment-confirm",
           attrs=@html.Attrs::build()
             .role("group")
+            .data_set("attachment-name", name)
             .aria_label(ui(locale, UploadAttachment)),
           [
             @html.div(class="composer-attachment-name", name),
@@ -295,6 +296,9 @@ fn Entry::attachment_confirmations(
               @html.button(
                 type_="button",
                 class="composer-goal-action",
+                attrs=@html.Attrs::build().data_set(
+                  "testid", "attachment-upload",
+                ),
                 on_click=emit(
                   AttachmentConfirmed(self.identity(), request.root, request.id),
                 ),
@@ -303,6 +307,9 @@ fn Entry::attachment_confirmations(
               @html.button(
                 type_="button",
                 class="composer-goal-action",
+                attrs=@html.Attrs::build().data_set(
+                  "testid", "attachment-cancel",
+                ),
                 on_click=emit(
                   AttachmentCancelled(self.identity(), request.root, request.id),
                 ),

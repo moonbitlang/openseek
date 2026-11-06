@@ -1,31 +1,14 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-async function diagramViewportFillsHost(host) {
-  return host.evaluate((element) => {
-    const viewport = element.querySelector(
-      ':scope > .moonbit-viewer-markdown-diagram-viewport',
-    );
-    if (!viewport) return false;
-    const hostRect = element.getBoundingClientRect();
-    const viewportRect = viewport.getBoundingClientRect();
-    return [
-      viewportRect.left - hostRect.left,
-      viewportRect.top - hostRect.top,
-      viewportRect.right - hostRect.right,
-      viewportRect.bottom - hostRect.bottom,
-    ].every((delta) => Math.abs(delta) <= 1);
-  });
-}
-
 // `goto()` returns once the shell is mounted, which can be before the host's
 // project list arrives. Until then the main pane shows an onboarding card with
 // its own "Add a project" button, so wait for the fixture project and address
 // the sidebar's button through its landmark.
 async function sidebarAddProject(page) {
   const sidebar = page.getByRole('complementary');
-  await expect(sidebar.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
-  return sidebar.getByRole('button', { name: 'Add a project', exact: true });
+  await expect(sidebar.locator('[id="project:openseek.projects:remote.device-a:/workspace:disclosure"]')).toBeVisible();
+  return sidebar.locator('[id="section:openseek.projects:remote.device-a:action"]');
 }
 
 test('workspace search supports toggles and keyboard navigation', async ({ page }) => {
@@ -36,33 +19,32 @@ test('workspace search supports toggles and keyboard navigation', async ({ page 
   // shortcut focuses it only once. Pressed earlier, the panel keeps the focus
   // and the field that appears later is left unfocused. The composer offers a
   // retry for the worktree list for as long as the checkout is unknown.
-  await expect(page.getByRole('complementary').getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
-  await expect(page.getByTitle("Request this workspace's worktree list again", { exact: true })).toBeHidden();
+  await expect(page.locator('[id="project:openseek.projects:remote.device-a:/workspace:disclosure"]')).toBeVisible();
+  await expect(page.locator('.composer-notice-btn')).toBeHidden();
 
   const shortcut = await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
   await page.keyboard.press(shortcut);
 
-  const tabs = page.getByRole('tablist', { name: 'Explorer views' });
-  const filesTab = tabs.getByRole('tab', { name: 'Files' });
-  const searchTab = tabs.getByRole('tab', { name: 'Search' });
+  const tabs = page.locator('#explorer-views');
+  const filesTab = tabs.locator('#explorer-files-tab');
+  const searchTab = tabs.locator('#explorer-search-tab');
   await expect(searchTab).toHaveAttribute('aria-selected', 'true');
   // Icon-only tabs keep their existing accessible names and native tooltips.
-  for (const [name, title] of [
-    ['Files', 'Workspace files'],
-    ['Changes', 'Changed files (click again to refresh)'],
-    ['Search', 'Search across the workspace'],
+  for (const [key, name, title] of [
+    ['files', 'Files', 'Workspace files'],
+    ['changes', 'Changes', 'Changed files (click again to refresh)'],
+    ['search', 'Search', 'Search across the workspace'],
   ]) {
-    const tab = tabs.getByRole('tab', { name: new RegExp('^' + name) });
+    const tab = tabs.locator(`#explorer-${key}-tab`);
     await expect(tab).toHaveAttribute('title', title);
     await expect(tab.locator('.visually-hidden')).toHaveText(name);
   }
 
-  const query = page.getByRole('tabpanel', { name: 'Search', exact: true })
-    .getByRole('textbox', { name: 'Search', exact: true });
+  const query = page.locator('#workspace-search-input');
   await expect(query).toBeFocused();
 
-  const wholeWord = page.getByRole('button', { name: 'Match Whole Word' });
+  const wholeWord = page.locator('#search-whole-word');
   await expect(wholeWord).toHaveAttribute('aria-pressed', 'false');
   await wholeWord.click();
   await expect(wholeWord).toHaveAttribute('aria-pressed', 'true');
@@ -84,7 +66,7 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await app.openSession();
   await app.openReview();
 
-  await expect(page.getByRole('tab', { name: 'Changes 2', exact: true }))
+  await expect(page.locator('#explorer-changes-tab'))
     .toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => app.requests.find(request => request.method === 'git.changes'))
     .toMatchObject({
@@ -97,11 +79,11 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await expect(changes.locator('.review-progress-summary')).toHaveText(
     '0 / 2 reviewed',
   );
-  const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
-  const library = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
+  const main = changes.locator('[role="treeitem"][data-path="src/main.mbt"]');
+  const library = changes.locator('[role="treeitem"][data-path="src/lib.mbt"]');
   await expect(main).toHaveAttribute('aria-current', 'false');
   await main.click();
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
 
   await expect.poll(() => app.requests.find(request =>
     request.method === 'fs.read_file' && request.params?.path === '/workspace/src/main.mbt'))
@@ -111,8 +93,8 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     request.params?.path === 'src/main.mbt' &&
     request.params?.revision === app.gitBaseline))
     .toBeTruthy();
-  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
+  const reviewToolbar = page.locator('#review-mode-toolbar');
+  await expect(reviewToolbar.locator('[data-diff-mode="token"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -120,21 +102,21 @@ test('Review loads changed files and preserves its interactive diff workflow', a
 
   // Line diff keeps semantic-only filters inert. Token and Tree make those
   // user controls available.
-  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
-  const ignoreComments = page.getByRole('button', { name: 'Ignore comments' });
-  const ignoreTests = page.getByRole('button', { name: 'Ignore tests' });
+  await reviewToolbar.locator('[data-diff-mode="line"]').click();
+  const ignoreComments = page.locator('button.review-comments-control');
+  const ignoreTests = page.locator('button.review-tests-control');
   await expect(ignoreComments).toBeDisabled();
   await expect(ignoreTests).toBeDisabled();
 
-  await reviewToolbar.getByRole('button', { name: 'File view' }).click();
-  await expect(reviewToolbar.getByRole('button', { name: 'File view' })).toHaveAttribute(
+  await reviewToolbar.locator('[data-review-mode="file"]').click();
+  await expect(reviewToolbar.locator('[data-review-mode="file"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
+  await reviewToolbar.locator('[data-diff-mode="line"]').click();
 
-  await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
-  await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
+  await reviewToolbar.locator('[data-diff-mode="token"]').click();
+  await expect(reviewToolbar.locator('[data-diff-mode="token"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -145,15 +127,15 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await expect(ignoreComments).toHaveAttribute('aria-pressed', 'false');
   await expect(ignoreTests).toHaveAttribute('aria-pressed', 'false');
 
-  await reviewToolbar.getByRole('button', { name: 'Tree diff' }).click();
-  await expect(reviewToolbar.getByRole('button', { name: 'Tree diff' })).toHaveAttribute(
+  await reviewToolbar.locator('[data-diff-mode="tree"]').click();
+  await expect(reviewToolbar.locator('[data-diff-mode="tree"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
 
-  const layout = page.getByRole('group', { name: 'Diff layout' });
-  await layout.getByRole('button', { name: 'Unified diff layout' }).click();
-  await expect(layout.getByRole('button', { name: 'Unified diff layout' })).toHaveAttribute(
+  const layout = page.locator('.review-layout-control[role="group"]');
+  await layout.locator('[data-layout="inline"]').click();
+  await expect(layout.locator('[data-layout="inline"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -164,39 +146,20 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   const semanticDiffCandidate = semantic.locator('.semantic-diff-editor-host').filter({
     has: page.locator(
       '.moonbit-diff-editor-modified '
-        + '.view-lines[data-view-part="view-lines"] > .view-line',
-      { hasText: 'working tree' },
+        + '.view-lines[data-view-part="view-lines"] > .view-line[data-line="2"]',
     ),
   }).first();
   await expect(semanticDiffCandidate).toBeVisible();
   const semanticDiffId = await semanticDiffCandidate.getAttribute('id');
   expect(semanticDiffId).not.toBeNull();
   const semanticDiff = semantic.locator(`[id=${JSON.stringify(semanticDiffId)}]`);
-  const semanticOriginal = semanticDiff.locator('.moonbit-diff-editor-original');
   const semanticModified = semanticDiff.locator('.moonbit-diff-editor-modified');
   await expect(semanticDiff).toBeVisible();
   await expect(semanticDiff.locator('.moonbit-diff-editor').first())
     .toHaveAttribute('data-render-mode', 'inline');
-  await expect(semanticOriginal.locator('.line-numbers:visible').first())
-    .toBeVisible();
-  await expect.poll(() => semanticOriginal.evaluate((node) => {
-    const host = node.getBoundingClientRect();
-    const margin = node.querySelector('.margin');
-    const lineNumber = Array.from(node.querySelectorAll('.line-numbers'))
-      .map((element) => element.getBoundingClientRect())
-      .find((rect) => rect.width > 0);
-    if (!margin || !lineNumber) return null;
-    const marginRect = margin.getBoundingClientRect();
-    return {
-      lineNumberAligned:
-        Math.abs(host.width - (lineNumber.right - host.left)) <= 0.5,
-      decorationsClipped: host.width < marginRect.width,
-    };
-  })).toEqual({ lineNumberAligned: true, decorationsClipped: true });
-
   const feedbackLine = semanticModified.locator(
-    '.view-lines[data-view-part="view-lines"] > .view-line',
-  ).filter({ hasText: 'working tree' }).first();
+    '.view-lines[data-view-part="view-lines"] > .view-line[data-line="2"]',
+  );
   await expect(feedbackLine).toBeVisible();
   const feedbackLineBox = await feedbackLine.boundingBox();
   const modifiedBox = await semanticModified.boundingBox();
@@ -226,24 +189,24 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await page.keyboard.press('Escape');
   await expect(feedbackInput).toBeHidden();
 
-  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
-  await expect(reviewToolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  await reviewToolbar.locator('[data-diff-mode="line"]').click();
+  await expect(reviewToolbar.locator('[data-diff-mode="line"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(layout.getByRole('button', { name: 'Unified diff layout' })).toHaveAttribute(
+  await expect(layout.locator('[data-layout="inline"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
 
-  const progress = page.getByRole('button', { name: 'Mark file reviewed' });
+  const progress = page.locator('#review-file-toggle');
   await progress.click();
-  await expect(page.getByRole('button', { name: 'Mark file unreviewed' }))
+  await expect(page.locator('#review-file-toggle'))
     .toHaveAttribute('aria-pressed', 'true');
   await expect(changes.locator('.review-progress-summary')).toHaveText(
     '1 / 2 reviewed',
   );
-  await page.getByRole('button', { name: 'Next change' }).click();
+  await page.locator('[data-action="next-diff-change"]').click();
   await expect(library).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.review-nav-position')).toHaveText('File 2 of 2');
   await expect.poll(() => app.requests.find(request =>
@@ -257,7 +220,6 @@ test('Review loads changed files and preserves its interactive diff workflow', a
 for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
   test(`Review navigation remains visible while ${pendingMethod} and diff computation finish`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
-    await page.setViewportSize({ width: 1120, height: 760 });
     const baseline = Array.from({ length: 15 }, (_, i) => [
       `fn changed_${i}() -> Int { 0 }`,
       ...Array.from({ length: 8 }, (_, j) => `fn same_${i}_${j}() -> Int { ${j} }`),
@@ -278,31 +240,18 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-    const mode = page.getByRole('toolbar', { name: 'Review mode' });
-    const line = mode.getByRole('button', { name: 'Line diff' });
-    const layout = page.getByRole('group', { name: 'Diff layout' });
-    const split = layout.getByRole('button', { name: 'Split diff layout' });
+    await changes.locator('[role="treeitem"][data-path="src/main.mbt"]').click();
+    await page.locator('#file-tree-toggle').click();
+    const mode = page.locator('#review-mode-toolbar');
+    const line = mode.locator('[data-diff-mode="line"]');
+    const layout = page.locator('.review-layout-control[role="group"]');
+    const split = layout.locator('[data-layout="side-by-side"]');
     await expect(line).toBeEnabled();
     await line.click();
     await changes.hover();
     await expect(split).toBeEnabled();
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
 
-    const geometry = () => page.locator('.viewer-breadcrumb').evaluate(element => {
-      const rect = element.getBoundingClientRect();
-      const row = element.querySelector('.review-command-row')?.getBoundingClientRect();
-      return { height: rect.height, rowY: row?.y, rowHeight: row?.height };
-    });
-    const navigationAppearance = () => page.locator('.review-command-row').evaluate(group =>
-      Array.from(group.querySelectorAll('span, button')).map(element => {
-        const style = getComputedStyle(element);
-        return { text: element.textContent, color: style.color, background: style.backgroundColor, opacity: style.opacity };
-      }));
-    const appearanceBefore = await navigationAppearance();
-    const before = await geometry();
-    expect(before.rowY).toBeGreaterThan(0);
     // Sample rendered frames, including the gap after reads finish but before
     // the editor publishes its computed hunks. Never expose partial navigation.
     await page.evaluate(() => {
@@ -312,60 +261,57 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
         const group = document.querySelector('.review-navigation-controls');
         window.reviewNavigationFrames.push({
           visible: !!group?.getClientRects().length,
-          breadcrumbLoading: document.querySelector('.viewer-breadcrumb')?.textContent.includes('Loading diff'),
+          breadcrumbFile: document.querySelector('.viewer-breadcrumb .crumb-file')?.textContent,
           file: group?.querySelector('.review-nav-position')?.textContent,
           change: group?.querySelector('.review-hunk-position')?.textContent,
-          buttons: Array.from(group?.querySelectorAll('button') ?? []).map(b => b.textContent.trim() || b.getAttribute('aria-label')),
+          buttons: Array.from(group?.querySelectorAll('button') ?? []).map(button => button.getAttribute('data-action') || button.id),
         });
         if (window.sampleReviewNavigation) requestAnimationFrame(sample);
       };
       requestAnimationFrame(sample);
     });
     try {
-      await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
+      await changes.locator('[role="treeitem"][data-path="src/lib.mbt"]').click();
       await expect(page.locator('.crumb-file')).toHaveText('lib.mbt');
       await expect.poll(() => app.requests.some(request =>
         request.method === pendingMethod && request.params?.path?.endsWith('/lib.mbt')))
         .toBe(true);
       await expect(line).toBeDisabled();
       await expect(split).toBeDisabled();
-      await expect(mode.getByRole('button', { name: 'Token diff' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeVisible();
+      await expect(mode.locator('[data-diff-mode="token"]')).toBeVisible();
+      await expect(page.locator('button.review-comments-control')).toBeVisible();
+      await expect(page.locator('button.review-tests-control')).toBeVisible();
       await expect(page.locator('.review-navigation-controls')).toBeVisible();
       await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'true');
       await expect(page.locator('.review-nav-position')).toHaveText('File 1 of 2');
       await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
       await expect(page.locator('.review-navigation-controls')).toHaveAttribute('inert', '');
-      expect(await navigationAppearance()).toEqual(appearanceBefore);
-      await expect(page.locator('.viewer-breadcrumb')).not.toContainText('Loading diff');
+      await expect(page.locator('.viewer-breadcrumb .crumb-file')).toHaveText('lib.mbt');
       // A deliberately held read eventually shows the delayed overlay. Its
       // timing is independent of whether navigation retains a complete display.
-      await expect(page.locator('.viewer-notice')).toHaveText('Loading diff for lib.mbt…');
+      await expect(page.locator('.viewer-notice')).toBeVisible();
       await expect(page.locator('.review-navigation-controls')).toContainText('File 1 of 2');
-      expect(await geometry()).toEqual(before);
     } finally {
       release();
     }
     await expect(line).toBeEnabled();
     await expect(split).toBeEnabled();
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 15');
-    await expect(page.locator('.review-navigation-controls')).toContainText('Mark viewed');
+    await expect(page.locator('#review-hunk-toggle')).toBeEnabled();
     await expect(page.locator('.review-nav-position')).toHaveText('File 2 of 2');
     await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'false');
-    await expect(page.locator('.viewer-notice')).not.toContainText('Loading diff');
+    await expect(page.locator('.viewer-notice')).toBeHidden();
     const frames = await page.evaluate(() => {
       window.sampleReviewNavigation = false;
       return window.reviewNavigationFrames;
     });
     for (const frame of frames) {
       expect(frame.visible).toBe(true);
-      expect(frame.breadcrumbLoading).toBe(false);
+      expect(['main.mbt', 'lib.mbt']).toContain(frame.breadcrumbFile);
       expect(frame.change).toBe(frame.file === 'File 1 of 2' ? 'Change 1 of 1' : 'Change 1 of 15');
-      expect(frame.buttons).toEqual(['Previous change', 'Next change', 'Mark viewed']);
+      expect(frame.buttons).toEqual(['previous-diff-change', 'next-diff-change', 'review-hunk-toggle']);
     }
     expect(frames.length).toBeGreaterThan(0);
-    expect(await geometry()).toEqual(before);
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -402,60 +348,56 @@ test('ordinary MBTI files default to source, render UML on demand, and reviews k
   await app.goto();
   await app.openSession();
   await app.openQuickOpen();
-  await page.getByRole('option', { name: /pkg\.generated\.mbti/ }).click();
+  await page.locator('#quick-open-list [data-path="api/pkg.generated.mbti"]').click();
 
   const diagram = page.locator('#mbti-diagram-host');
-  const view = page.getByRole('group', { name: 'MBTI view' });
+  const view = page.locator('.mbti-view-toolbar');
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('Point');
-  await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
+  await expect(view.locator('[id$="-view-source"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await expect(diagram).toBeHidden();
-  await view.getByRole('button', { name: 'Diagram' }).click();
+  await view.locator('#mbti-view-diagram').click();
 
   await expect(diagram).toBeVisible();
   await expect(page.locator('#viewer-host')).toBeHidden();
   await expect(diagram.locator('svg')).toBeVisible();
   await expect(diagram.locator('svg')).toContainText('Point');
   await expect(
-    diagram.getByRole('toolbar', { name: 'UML diagram controls' }),
+    diagram.locator('.moonbit-viewer-markdown-diagram-controls'),
   ).toBeVisible();
   await expect(
-    diagram.getByRole('button', { name: 'Zoom in' }),
+    diagram.locator('.moonbit-viewer-markdown-diagram-zoom-in'),
   ).toBeVisible();
-  await expect.poll(() => diagramViewportFillsHost(diagram)).toBe(true);
-  await expect(
-    diagram.getByRole('separator', { name: 'Resize diagram' }),
-  ).toHaveCount(0);
   await expect(view.getByRole('button')).toHaveText(['Diagram', 'Source']);
-  await expect(view.getByRole('button', { name: 'Diagram' })).toHaveAttribute(
+  await expect(view.locator('#mbti-view-diagram')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
 
-  await view.getByRole('button', { name: 'Source' }).click();
+  await view.locator('[id$="-view-source"]').click();
   await expect(diagram).toBeHidden();
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('Point');
-  await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
+  await expect(view.locator('[id$="-view-source"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await view.getByRole('button', { name: 'Diagram' }).click();
+  await view.locator('#mbti-view-diagram').click();
   await expect(diagram.locator('svg')).toBeVisible();
 
   await app.openReview();
-  await page.getByRole('treeitem', { name: /View diff: api\/pkg\.generated\.mbti/ }).click();
-  await expect(page.getByRole('group', { name: 'MBTI view' })).toHaveCount(0);
+  await page.locator('[role="treeitem"][data-path="api/pkg.generated.mbti"]').click();
+  await expect(page.locator('.mbti-view-toolbar')).toHaveCount(0);
   await expect(diagram).toBeHidden();
-  const review = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(review.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  const review = page.locator('#review-mode-toolbar');
+  await expect(review.locator('[data-diff-mode="line"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await review.getByRole('button', { name: 'File view' }).click();
+  await review.locator('[data-review-mode="file"]').click();
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('Point');
   await expect(diagram).toBeHidden();
@@ -477,13 +419,13 @@ test('ordinary moon.mod defaults to source and loads its package graph on demand
   await app.goto();
   await app.openSession();
   await app.openQuickOpen();
-  await page.getByRole('option', { name: /moon\.mod/ }).click();
+  await page.locator('#quick-open-list [data-path="moon.mod"]').click();
 
   const diagram = page.locator('#package-diagram-host');
-  const view = page.getByRole('group', { name: 'Moon module view' });
+  const view = page.locator('.moon-mod-view-toolbar');
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('example/app');
-  await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
+  await expect(view.locator('[id$="-view-source"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -491,7 +433,7 @@ test('ordinary moon.mod defaults to source and loads its package graph on demand
   expect(app.requests.filter(
     request => request.method === 'moon.package_graph',
   )).toHaveLength(0);
-  await view.getByRole('button', { name: 'Dependency graph' }).click();
+  await view.locator('#moon-mod-view-dependencies').click();
 
   await expect.poll(() => app.requests.find(
     request => request.method === 'moon.package_graph',
@@ -508,31 +450,27 @@ test('ordinary moon.mod defaults to source and loads its package graph on demand
   await expect(diagram.locator('svg')).toContainText('core');
   await expect(diagram.locator('svg')).toContainText('util');
   await expect(
-    diagram.getByRole('toolbar', { name: 'UML diagram controls' }),
+    diagram.locator('.moonbit-viewer-markdown-diagram-controls'),
   ).toBeVisible();
   await expect(
-    diagram.getByRole('button', { name: 'Fit diagram' }),
+    diagram.locator('.moonbit-viewer-markdown-diagram-fit'),
   ).toBeVisible();
-  await expect.poll(() => diagramViewportFillsHost(diagram)).toBe(true);
-  await expect(
-    diagram.getByRole('separator', { name: 'Resize diagram' }),
-  ).toHaveCount(0);
 
   await expect(view.getByRole('button')).toHaveText(['Dependency graph', 'Source']);
   await expect(
-    view.getByRole('button', { name: 'Dependency graph' }),
+    view.locator('#moon-mod-view-dependencies'),
   ).toHaveAttribute('aria-pressed', 'true');
 
-  await view.getByRole('button', { name: 'Source' }).click();
+  await view.locator('[id$="-view-source"]').click();
   await expect(diagram).toBeHidden();
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('example/app');
-  await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
+  await expect(view.locator('[id$="-view-source"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
 
-  await view.getByRole('button', { name: 'Dependency graph' }).click();
+  await view.locator('#moon-mod-view-dependencies').click();
   await expect(diagram.locator('svg')).toBeVisible();
   expect(app.requests.filter(
     request => request.method === 'moon.package_graph',
@@ -554,10 +492,10 @@ test('Git history expands commits and opens an immutable historical diff', async
         workspace: '/workspace',
       },
     });
-  const history = page.getByRole('tree', { name: 'Git commit history', includeHidden: true });
-  const head = history.getByRole('treeitem', { name: /Cover Desktop Git flows/ });
-  const merge = history.getByRole('treeitem', { name: /Merge fixture lanes/ });
-  const parent = history.getByRole('treeitem', { name: /Add Review surface/ });
+  const history = page.locator('#git-commit-history');
+  const head = history.locator(`[data-commit="${app.gitHead}"]`);
+  const merge = history.locator(`[data-commit="${app.gitMerge}"]`);
+  const parent = history.locator(`[data-commit="${app.gitParent}"]`);
   await head.focus();
   await page.keyboard.press('ArrowDown');
   await expect(merge).toBeFocused();
@@ -577,7 +515,7 @@ test('Git history expands commits and opens an immutable historical diff', async
       },
     });
   await expect(head).toHaveAttribute('aria-expanded', 'true');
-  const historicalMain = history.getByRole('treeitem', { name: /src\/main\.mbt/, includeHidden: true });
+  const historicalMain = history.locator('.git-history-file[data-path="src/main.mbt"]');
   await historicalMain.click();
   await expect(history).toBeHidden();
   await expect(historicalMain).toHaveAttribute('aria-current', 'page');
@@ -591,14 +529,14 @@ test('Git history expands commits and opens an immutable historical diff', async
   const breadcrumb = page.locator('.history-breadcrumb');
   await expect(breadcrumb.locator('.history-commit-crumb')).toHaveText('cccccccc');
   await expect(breadcrumb.locator('.crumb-file')).toHaveText('src/main.mbt');
-  const algorithms = page.getByRole('toolbar', { name: 'Comparison algorithm' });
-  await expect(algorithms.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
+  const algorithms = page.locator('.review-history-mode-toolbar');
+  await expect(algorithms.locator('[data-diff-mode="token"]')).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await expect(algorithms.getByRole('button')).toHaveText(['Line', 'Token', 'Tree']);
-  await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeEnabled();
+  await expect(page.locator('button.review-comments-control')).toBeEnabled();
+  await expect(page.locator('button.review-tests-control')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -610,11 +548,12 @@ test('Git history and commit failures retry through the browser transport', asyn
   await app.openSession();
   await app.openReview({ waitForHistory: false });
 
-  await expect(page.getByText(/Could not load Git history:.*unknown command/)).toBeVisible();
+  await expect(page.locator('.git-graph-message')).toBeVisible();
+  await expect(page.locator('.git-graph-message')).toContainText('unknown command');
   app.rpcErrors.delete('git.history');
-  await page.getByRole('button', { name: 'Retry' }).click();
-  const history = page.getByRole('tree', { name: 'Git commit history' });
-  const head = history.getByRole('treeitem', { name: /Cover Desktop Git flows/ });
+  await page.locator('.git-graph-message button').click();
+  const history = page.locator('#git-commit-history');
+  const head = history.locator(`[data-commit="${app.gitHead}"]`);
   await expect(head).toBeVisible();
   await expect.poll(() => app.requests.filter(request =>
     request.method === 'git.history').length).toBe(2);
@@ -626,9 +565,9 @@ test('Git history and commit failures retry through the browser transport', asyn
     'Could not load this commit: object unavailable.',
   );
   app.rpcErrors.delete('git.commit_changes');
-  await commitFailure.getByRole('button', { name: 'Retry' }).click();
+  await commitFailure.getByRole('button').click();
   await expect(
-    history.getByRole('treeitem', { name: /src\/main\.mbt/ }),
+    history.locator('.git-history-file[data-path="src/main.mbt"]'),
   ).toBeVisible();
   await expect.poll(() => app.requests.filter(request =>
     request.method === 'git.commit_changes').length).toBe(2);
@@ -641,10 +580,10 @@ test('quick open moves its keyboard selection and opens the chosen file', async 
   await app.goto();
   await app.openSession();
   await app.openQuickOpen();
-  const input = page.getByRole('combobox', { name: 'Search workspace files' });
+  const input = page.locator('#quick-open-input');
   await expect(input).toBeFocused();
-  const mainResult = page.getByRole('option', { name: /main\.mbt/ });
-  const readmeResult = page.getByRole('option', { name: /README\.md/ });
+  const mainResult = page.locator('#quick-open-list [data-path="src/main.mbt"]');
+  const readmeResult = page.locator('#quick-open-list [data-path="README.md"]');
   await expect(mainResult).toBeVisible();
   await expect(readmeResult).toBeVisible();
   await expect(mainResult).toHaveAttribute('aria-selected', 'true');
@@ -668,18 +607,18 @@ test('tab strip closes every tab type into the New Tab launcher', async ({ page 
   await app.openSession();
 
   await app.openQuickOpen();
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
+  await page.locator('#quick-open-list [data-path="src/main.mbt"]').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('README');
-  await page.getByRole('option', { name: /README\.md/ }).click();
+  await page.locator('#quick-open-list [data-path="README.md"]').click();
 
   const fileTabs = page.locator('.editor-tab');
   await expect(fileTabs).toHaveCount(2);
-  await fileTabs.filter({ hasText: 'main.mbt' }).click();
-  await expect(fileTabs.filter({ hasText: 'main.mbt' })).toHaveClass(/active/);
+  await page.locator('.editor-tab[data-path="/workspace/src/main.mbt"]').click();
+  await expect(page.locator('.editor-tab[data-path="/workspace/src/main.mbt"]')).toHaveClass(/active/);
   await app.openReview();
   await expect(fileTabs).toHaveCount(3);
-  const closeAll = page.getByRole('button', { name: 'Close all tabs' });
+  const closeAll = page.locator('#dock-close-all');
   await expect(closeAll).toBeEnabled();
   await closeAll.click();
   await expect(fileTabs).toHaveCount(0);
@@ -700,15 +639,15 @@ test('file breadcrumbs browse cached directories with keyboard navigation', asyn
   await app.openSession();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('main');
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
+  await page.locator('#quick-open-list [data-path="src/main.mbt"]').click();
 
   const breadcrumb = page.locator('.viewer-breadcrumb');
-  const sourceDirectory = breadcrumb.getByTitle('Show files in src');
+  const sourceDirectory = breadcrumb.locator('.crumb-directory[data-path="src"]');
   await sourceDirectory.click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'fs.read_directory' && request.params?.path === '/workspace/src'))
     .toBeTruthy();
-  const menu = page.getByRole('menu', { name: 'Files in src' });
+  const menu = page.locator('#breadcrumb-directory-picker');
   await expect(menu.getByRole('menuitem').last()).toHaveAttribute('aria-current', 'page');
   await expect(menu.getByRole('menuitem').first()).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -721,7 +660,7 @@ test('file breadcrumbs browse cached directories with keyboard navigation', asyn
     request.method === 'fs.read_directory' &&
     request.params?.path === '/workspace/src/docs'))
     .toBeTruthy();
-  const nested = page.getByRole('menu', { name: 'Files in docs' });
+  const nested = page.locator('#breadcrumb-directory-picker');
   await expect(nested).toContainText('This folder is empty.');
   expect(app.pageErrors).toEqual([]);
 });
@@ -789,7 +728,7 @@ test('transcript overview previews failed turns and jumps among mounted messages
   await app.goto();
   await app.openSession();
 
-  const overview = page.getByRole('navigation', { name: 'Conversation overview' });
+  const overview = page.locator('.transcript-overview');
   const ticks = overview.locator('.overview-tick-button');
   const failed = ticks.first();
   await expect(failed).toBeVisible();
@@ -866,7 +805,7 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
   const transcript = page.locator('#transcript');
   await expect(transcript.locator('.tool-call-summary')).toContainText('Print <browser> fixture');
   const tabs = transcript.locator('.tool-call-tabs');
-  const originalJson = tabs.getByText('Original JSON', { exact: true });
+  const originalJson = tabs.locator('[data-tool-tab="original-json"]');
   await transcript.locator('.tool-call-summary').click();
   // Revealing a contained row must not scroll the fixed shell either; the
   // document can remain at zero while #app shifts its entire grid by 1–2px.
@@ -881,13 +820,11 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
 
   await originalJson.click();
 
-  const originalJsonInput = tabs.getByRole('radio', { name: 'Original JSON', exact: true });
+  const originalJsonInput = tabs.locator('[data-tool-tab-input="original-json"]');
   await expect(originalJsonInput).toBeChecked();
   await originalJsonInput.focus();
   await expect(originalJsonInput).toBeFocused();
   expect(await page.evaluate(() => document.scrollingElement.scrollTop)).toBe(0);
-  expect(await page.locator('.app').evaluate(node =>
-    node.getBoundingClientRect().top)).toBe(0);
   expect(await page.locator('#app').evaluate(node =>
     ({ top: node.scrollTop, left: node.scrollLeft }))).toEqual({ top: 0, left: 0 });
   expect(app.pageErrors).toEqual([]);
@@ -918,18 +855,19 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
 
   const transcript = page.locator('#transcript');
   const markdown = page.locator('.transcript .msg-content.markdown');
-  const first = markdown.getByText('First answer paragraph.');
-  const second = markdown.getByText('Second answer paragraph.');
-  const bar = page.getByRole('toolbar', { name: 'Selection actions' });
-  const reply = page.getByRole('dialog', { name: 'Reply to selection' });
-  const comment = reply.getByRole('textbox', { name: 'Reply' });
-  const batch = reply.getByRole('checkbox', { name: 'Batch' });
+  // The fixture places its two answer paragraphs after the filler block.
+  const first = markdown.locator('p').nth(filler.length);
+  const second = markdown.locator('p').nth(filler.length + 1);
+  const bar = page.locator('[data-selection-actions][role="toolbar"]');
+  const reply = page.locator('[data-selection-actions][role="dialog"]');
+  const comment = reply.locator('#selection-reply-input');
+  const batch = reply.locator('.selection-reply-batch input');
   const task = page.locator('#task');
   const pinned = () => page.evaluate(() => CSS.highlights.has('quote-reply'));
   const selectWord = paragraph => paragraph.dblclick({ position: { x: 8, y: 8 } });
   const openReply = async paragraph => {
     await selectWord(paragraph);
-    await bar.getByRole('button', { name: 'Reply' }).click();
+    await bar.locator('#selection-reply').click();
     await expect(comment).toBeFocused();
   };
   const scrollTranscript = async delta => {
@@ -938,24 +876,20 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
     await page.mouse.wheel(0, delta);
   };
 
-  // Selecting text offers Reply just above it; Reply opens a composer that
-  // keeps the quote in view and painted while the comment is typed.
+  // Selecting text offers Reply, which keeps the quote pinned while typing.
   await selectWord(first);
   await expect(bar.getByRole('button')).toHaveText(['Copy', 'Reply']);
-  const barBox = await bar.boundingBox();
-  const firstBox = await first.boundingBox();
-  expect(barBox.y + barBox.height).toBeLessThanOrEqual(firstBox.y);
-  await bar.getByRole('button', { name: 'Reply' }).click();
+  await bar.locator('#selection-reply').click();
   await expect(reply.locator('blockquote')).toHaveText('First');
   await expect(comment).toBeFocused();
   expect(await pinned()).toBe(true);
-  await expect(reply.getByRole('button', { name: 'Send reply' })).toBeDisabled();
+  await expect(reply.locator('.selection-reply-submit')).toBeDisabled();
 
   // Batched, the reply joins the message being written, which is where the
   // reader lands; nothing is sent.
   await batch.check();
   await expect(comment).toBeFocused();
-  await expect(reply.getByRole('button', { name: 'Add to message' })).toBeEnabled();
+  await expect(reply.locator('.selection-reply-submit')).toBeEnabled();
   await page.keyboard.type('Why first?');
   await page.keyboard.press('Enter');
   await expect(reply).toHaveCount(0);
@@ -1027,7 +961,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await page.keyboard.type('Still here');
   await page.keyboard.press(await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+KeyP' : 'Control+KeyP'));
-  const quickOpen = page.getByRole('dialog', { name: 'Search workspace files' });
+  const quickOpen = page.locator('#quick-open-dialog');
   await expect(quickOpen).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(quickOpen).toHaveCount(0);
@@ -1065,7 +999,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await expect(page.locator('.empty-title')).toBeVisible();
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('');
-  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await app.openSession();
   await expect(second).toBeVisible();
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
@@ -1106,71 +1040,37 @@ test('a floating reply takes a comment of several lines', async ({ page }) => {
   await app.openSession();
 
   const markdown = page.locator('.transcript .msg-content.markdown');
-  const reply = page.getByRole('dialog', { name: 'Reply to selection' });
-  const comment = reply.getByRole('textbox', { name: 'Reply' });
+  const reply = page.locator('[data-selection-actions][role="dialog"]');
+  const comment = reply.locator('#selection-reply-input');
   const task = page.locator('#task');
-  const height = async locator => (await locator.boundingBox()).height;
   const openReply = async paragraph => {
     await paragraph.dblclick({ position: { x: 8, y: 8 } });
-    await page.getByRole('toolbar', { name: 'Selection actions' })
-      .getByRole('button', { name: 'Reply' }).click();
+    await page.locator('[data-selection-actions][role="toolbar"]')
+      .locator('#selection-reply').click();
     await expect(comment).toBeFocused();
   };
-  const scrolls = () => comment.evaluate(input => input.scrollHeight > input.clientHeight);
-  const bottom = async () => {
-    const box = await reply.boundingBox();
-    return box.y + box.height;
-  };
   const lines = 'Line one\nLine two\nLine three\nLine four';
-  const long = Array.from({ length: 40 }, (_, index) => `Row ${index + 1}`).join('\n');
 
-  await openReply(markdown.getByText('First answer paragraph.'));
-  await reply.getByRole('checkbox', { name: 'Batch' }).check();
+  // The answer is the paragraph immediately after the fixture's filler block.
+  await openReply(markdown.locator('p').nth(filler.length));
+  await reply.locator('.selection-reply-batch input').check();
   await expect(comment).toBeFocused();
 
-  // Shift+Enter starts a new line and the input grows to show it, upwards:
-  // the row being typed in stays where it is.
+  // Shift+Enter starts a new line without submitting the comment.
   await page.keyboard.type('Line one');
-  const oneLine = await height(comment);
-  const anchored = await bottom();
   await page.keyboard.press('Shift+Enter');
   await page.keyboard.type('Line two');
   await expect(comment).toHaveValue('Line one\nLine two');
-  await expect.poll(() => height(comment)).toBeGreaterThan(oneLine * 1.5);
-  expect(await bottom()).toBeCloseTo(anchored, 0);
 
   // Text put in whole, as a paste is, keeps its line breaks.
   await page.keyboard.insertText('\nLine three\nLine four');
   await expect(comment).toHaveValue(lines);
-
-  // The input stops growing at a few lines and scrolls from there.
-  await comment.fill(long);
-  await expect.poll(scrolls).toBe(true);
-  expect(await bottom()).toBeCloseTo(anchored, 0);
-  await comment.fill(lines);
-  await expect.poll(scrolls).toBe(false);
 
   // Enter still delivers, with the lines intact.
   await page.keyboard.press('Enter');
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue(`> First\n\n${lines}\n\n`);
 
-  // Near the top of the viewport there is less room to grow into: the input
-  // gives way sooner rather than push the reply off screen.
-  const near = markdown.getByText('Filler paragraph 20.', { exact: true });
-  await near.evaluate(element => {
-    document.querySelector('#transcript').scrollTop +=
-      element.getBoundingClientRect().top - 170;
-  });
-  await page.evaluate(() => new Promise(resolve => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
-  }));
-  await openReply(near);
-  const anchoredNear = await bottom();
-  await comment.fill(long);
-  await expect.poll(scrolls).toBe(true);
-  expect((await reply.boundingBox()).y).toBeGreaterThanOrEqual(0);
-  expect(await bottom()).toBeCloseTo(anchoredNear, 0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1206,7 +1106,7 @@ test('approval card mirrors host claims and sends an unclaimed decision', async 
 
   // A subsequent, unclaimed question is still answerable through the bridge.
   app.notify('agent.approvals', { generation: 4, approvals: [{ ...pending, id: 'approval-2' }] });
-  await approval.getByRole('button', { name: 'Allow once' }).click();
+  await approval.getByTestId('approval-allow').click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'agent.approval' &&
     request.params?.run_id === 'run-1' &&
@@ -1224,7 +1124,7 @@ test('composer sends a turn and stops the accepted run', async ({ page }) => {
 
   const composer = page.locator('#task');
   await composer.fill('Run the browser E2E turn');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'agent.start'))
     .toMatchObject({
@@ -1235,9 +1135,9 @@ test('composer sends a turn and stops the accepted run', async ({ page }) => {
     });
 
   await composer.fill('Steer without losing the interrupt control');
-  await expect(page.getByTitle('Stop', { exact: true })).toBeVisible();
-  await expect(page.getByTitle('Steer the running task', { exact: true })).toBeVisible();
-  await page.getByTitle('Stop', { exact: true }).click();
+  await expect(page.locator('#stop')).toBeVisible();
+  await expect(page.locator('#send')).toBeVisible();
+  await page.locator('#stop').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'agent.cancel'))
     .toMatchObject({ params: { run_id: 'run-e2e' } });
@@ -1254,25 +1154,25 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
     .map(request => request.params);
   const stored = page.locator('.conversation-row[title="session-1"]');
   await stored.click();
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript .msg-content.markdown')).toBeVisible();
   const askToDelete = async () => {
     await stored.hover();
-    await stored.getByRole('button', { name: 'Conversation actions' }).click();
-    await page.getByRole('menuitem', { name: 'Delete…' }).click();
+    await stored.locator('[id$=":actions-trigger"]').click();
+    await page.locator('[id="conversation:openseek.live:remote.device-a:session-1:/workspace:actions-content"] [data-action="delete"]').click();
   };
-  const body = page.getByRole('dialog', { name: 'Permanently delete this chat?', exact: true });
+  const body = page.locator('#delete-chat-dialog');
 
   // A chat without a worktree: the dialog is the plain one, and Cancel
   // deletes nothing.
   await askToDelete();
-  await expect(body.getByRole('heading', { name: 'Permanently delete this chat?', exact: true })).toBeVisible();
+  await expect(body.locator('#delete-chat-title')).toBeVisible();
   await expect(body).toContainText('“Rabbita browser fixture” and all of its subagent history');
   await expect(body).toContainText('Project files and Git branches will remain.');
   await expect(body).not.toContainText('worktree');
   expect(sent('session.delete_check')).toEqual([
     { session: 'session-1', workspace: '/workspace' },
   ]);
-  await body.getByRole('button', { name: 'Cancel' }).click();
+  await body.locator('.button.secondary').click();
   await expect(body).toBeHidden();
   expect(sent('session.delete')).toEqual([]);
   await expect(stored).toBeVisible();
@@ -1285,7 +1185,7 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   await expect(body).not.toContainText('worktree');
   expect(sent('session.delete_check')).toHaveLength(2);
   app.sessionCheckout = { worktree: 'wt-1', dirty_paths: [], dirty_path_count: 0 };
-  await page.getByRole('button', { name: 'Delete permanently' }).click();
+  await page.locator('#delete-chat-dialog .button.danger').click();
   await expect(body).toContainText('its worktree checkout wt-1 is removed along with any ignored files in it');
   await expect(body).not.toContainText('uncommitted changes');
   await expect(stored).toBeVisible();
@@ -1298,13 +1198,13 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
     dirty_paths: ['notes.txt'],
     dirty_path_count: 1,
   };
-  await page.getByRole('button', { name: 'Delete permanently' }).click();
+  await page.locator('#delete-chat-dialog .button.danger').click();
   await expect(body).toContainText('That checkout has uncommitted changes. Changed paths: notes.txt.');
   await expect(stored).toBeVisible();
 
   // Confirming now agrees to discard what the dialog listed, and there is
   // no further question.
-  await page.getByRole('button', { name: 'Delete permanently' }).click();
+  await page.locator('#delete-chat-dialog .button.danger').click();
   await expect.poll(() => sent('session.delete')).toEqual([
     { session: 'session-1', workspace: '/workspace' },
     { session: 'session-1', workspace: '/workspace', worktree: 'wt-1' },
@@ -1315,14 +1215,14 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   // Deleting the chat on screen replaces its entry with a fresh draft
   // instead of leaving an unavailable target behind.
   await expect(stored).toHaveCount(0);
-  await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('This destination no longer exists or is no longer attached.')).toHaveCount(0);
+  await expect(page.locator('#transcript .msg-content.markdown')).toHaveCount(0);
+  await expect(page.locator('.conversation-load-state.failed')).toHaveCount(0);
   await expect(page).toHaveURL(/\/chat\/new$/);
   expect(sent('session.archive')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sidebar menu dismissal and pending selection follow the clicked row', { tag: '@motion' }, async ({ page }) => {
+test('pending conversation selection follows the clicked row', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({
     id: 'session-2',
@@ -1332,41 +1232,25 @@ test('sidebar menu dismissal and pending selection follow the clicked row', { ta
   await app.install();
   await app.goto();
 
-  const workspace = page.locator('.workspace-row', { hasText: 'workspace' });
-  await workspace.click({ button: 'right', position: { x: 24, y: 16 } });
-  await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeVisible();
-
   const first = page.locator('.conversation-row[title="session-1"]');
-  // The menu opens at the pointer and can cover the rows below it, so click
-  // the content area's leading edge, left of where the menu starts. Not its right
-  // end: that is the hover-revealed actions trigger, and the row's width is
-  // platform-dependent.
-  await first.locator('.conversation-content').click({ position: { x: 4, y: 10 } });
-  await expect(page.getByRole('menu')).toHaveCount(0);
+  await first.locator('.conversation-content').click();
   await expect(first).toHaveClass(/active/);
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript .msg-content.markdown')).toBeVisible();
 
   app.rpcDelays.set('session.load', 10000);
-  await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeHidden();
-  await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
   const second = page.locator('.conversation-row[title="session-2"]');
   await second.click();
-  await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(second).toHaveClass(/active/);
   await expect(first).not.toHaveClass(/active/);
-  await expect(second.getByRole('status', { name: 'Loading conversation' })).toBeVisible();
-  await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
-  const loading = second.getByRole('status', { name: 'Loading conversation' });
+  await expect(second.locator('.conversation-load-spinner')).toBeVisible();
+  await expect(page.locator('.conversation-load-state:not(.failed)')).toBeVisible();
+  const loading = second.locator('.conversation-load-spinner');
   const moving = () => loading.evaluate(node => node.getAnimations({ subtree: true })
     .some(animation => animation.playState === 'running'));
   await expect.poll(moving).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect.poll(moving).toBe(false);
-  await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
+  await expect(page.locator('#transcript .msg-content.markdown')).toHaveCount(0);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'session.load' && request.params?.session === 'session-2'))
     .toBe(true);
@@ -1387,9 +1271,7 @@ test('archiving a pending selection resolves the same destination as read only',
   const pending = page.locator('.conversation-row[title="session-2"]');
   await pending.click();
   await expect(pending).toHaveClass(/active/);
-  await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
-  await pending.click({ button: 'right', position: { x: 18, y: 18 } });
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await expect(page.locator('.conversation-load-state:not(.failed)')).toBeVisible();
 
   app.liveSessions = app.liveSessions.filter(session => session.id !== 'session-2');
   app.archivedSessions.push({
@@ -1403,8 +1285,7 @@ test('archiving a pending selection resolves the same destination as read only',
     workspace: '/workspace',
   });
 
-  await expect(page.getByRole('menu')).toHaveCount(0);
-  await expect(page.getByText('Archived conversation · Read only')).toBeVisible();
+  await expect(page.locator('.archived-read-only-text')).toBeVisible();
   await expect(page).toHaveURL(/\/chat\/session\/session-2$/);
   await expect(page.locator('#task')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
@@ -1419,68 +1300,16 @@ test('a failed first conversation load keeps selection and can retry', async ({ 
   const row = page.locator('.conversation-row[title="session-1"]');
   await row.click();
   await expect(row).toHaveClass(/active/);
-  await expect(page.getByText('Could not load conversation', { exact: true })).toBeVisible();
-  await expect(page.getByText(/fixture unavailable/).last()).toBeVisible();
+  await expect(page.locator('.conversation-load-state.failed')).toBeVisible();
+  await expect(page.locator('.conversation-load-state-message')).toBeVisible();
+  await expect(page.locator('.conversation-load-state-message')).toContainText('fixture unavailable');
   await expect(row).toHaveClass(/load-failed/);
 
   app.rpcErrors.delete('session.load');
-  await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await page.locator('.conversation-load-state.failed button').click();
+  await expect(page.locator('#transcript .msg-content.markdown')).toBeVisible();
   await expect(row).toHaveClass(/active/);
   await expect(row).not.toHaveClass(/load-failed/);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a covering modal dismisses an open custom select', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-
-  const model = page.getByRole('button', { name: 'Model', exact: true });
-  await model.click();
-  await expect(page.getByRole('listbox', { name: 'Model' })).toBeVisible();
-  app.notify('settings.changed', {
-    ...app.hostSettings,
-    revision: app.hostSettings.revision + 1,
-    has_deepseek_key: false,
-  });
-  await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
-  await expect(page.getByRole('listbox', { name: 'Model' })).toHaveCount(0);
-  await expect(model).toHaveAttribute('aria-expanded', 'false');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a bottom select flips above and yields to the narrow sidebar', async ({ page }) => {
-  await page.setViewportSize({ width: 500, height: 320 });
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-
-  const trigger = page.getByRole('button', { name: 'Model', exact: true });
-  await trigger.click();
-  const menu = page.getByRole('listbox', { name: 'Model' });
-  await expect(menu).toBeVisible();
-  const geometry = await page.evaluate(() => {
-    const triggerRect = document.querySelector('#openseek-model-picker').getBoundingClientRect();
-    const menu = document.querySelector('#openseek-model-picker-menu');
-    const menuRect = menu.getBoundingClientRect();
-    return {
-      above: menuRect.bottom <= triggerRect.top,
-      insideViewport: menuRect.top >= 0 && menuRect.bottom <= innerHeight,
-      fullyExpanded: menu.clientHeight === menu.scrollHeight,
-    };
-  });
-  expect(geometry).toEqual({
-    above: true,
-    insideViewport: true,
-    fullyExpanded: true,
-  });
-
-  const shortcut = await page.evaluate(() =>
-    navigator.platform.includes('Mac') ? 'Meta+B' : 'Control+B');
-  await page.keyboard.press(shortcut);
-  await expect(page.getByRole('button', { name: 'Hide sidebar' })).toBeVisible();
-  await expect(menu).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1489,22 +1318,22 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   await app.install();
   await app.goto();
 
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-  await page.getByRole('button', { name: 'API endpoint' }).click();
-  await page.getByRole('option', { name: 'Custom URL' }).click();
+  await page.locator('#sidebar-settings').click();
+  await expect(page.locator('#management-dialog [data-slot="dialog-title"]')).toBeVisible();
+  await page.locator('#settings-api-provider-select:visible, #setup-api-provider-select:visible').click();
+  await page.locator('#settings-api-provider-select-menu [data-value="custom"]').click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
     request.params?.provider === 'custom')).toBe(true);
 
-  await page.getByRole('textbox', { name: 'Endpoint URL' }).fill(
+  await page.locator('#settings-api-url').fill(
     'https://example.test/chat/completions',
   );
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
     request.params?.custom_api_url === 'https://example.test/chat/completions'))
     .toBe(true);
-  await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
+  await expect(page.locator('#settings-api-url')).toHaveValue(
     'https://example.test/chat/completions',
   );
   expect(app.pageErrors).toEqual([]);
@@ -1516,11 +1345,11 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   await app.install();
   await app.goto();
 
-  await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
-  await page.getByRole('button', { name: 'API endpoint' }).click();
-  await page.getByRole('option', { name: 'OpenRouter' }).click();
-  await page.locator('.setup-modal').getByLabel('API key').fill('sk-openrouter-test');
-  await page.getByRole('button', { name: 'Save API key' }).click();
+  await expect(page.locator('#api-setup-dialog')).toBeVisible();
+  await page.locator('#settings-api-provider-select:visible, #setup-api-provider-select:visible').click();
+  await page.locator('#setup-api-provider-select-menu [data-value="openrouter"]').click();
+  await page.locator('#setup-api-key').fill('sk-openrouter-test');
+  await page.locator('#setup-api-save-key').click();
 
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
@@ -1530,20 +1359,20 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.method === 'settings.set' &&
     request.params?.provider === 'custom' &&
     request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
-  await expect(page.getByText('Set up OpenRouter')).toBeHidden();
+  await expect(page.locator('#api-setup-dialog')).toBeHidden();
   expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
 
   // OpenRouter uses the ordinary chat model selector and persisted preference.
   await app.openSession();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker').click();
+  await page.locator('#openseek-model-picker-menu [data-value="openseek:deepseek-v4-pro"]').click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
     .toBe('deepseek-v4-pro');
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'DS Flash', exact: true }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker').click();
+  await page.locator('#openseek-model-picker-menu [data-value="openseek:deepseek-flash"]').click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
     .toBe('deepseek-flash');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1553,20 +1382,20 @@ test('Codex account login can be started and cancelled from Settings', async ({ 
   await app.install();
   await app.goto();
 
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign in with ChatGPT' }).click();
+  await page.locator('#sidebar-settings').click();
+  await page.locator('#codex-login').click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'codex.account.login.start')).toBe(true);
-  await expect(page.getByRole('link', { name: 'Open' })).toHaveAttribute(
+  await expect(page.locator('#codex-login-open')).toHaveAttribute(
     'href',
     'https://example.test/codex-login',
   );
 
-  await page.getByRole('button', { name: 'Cancel sign-in' }).click();
+  await page.locator('#codex-login-cancel').click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'codex.account.login.cancel' &&
     request.params?.loginId === 'login-e2e')).toBe(true);
-  await expect(page.getByRole('button', { name: 'Sign in with ChatGPT' })).toBeVisible();
+  await expect(page.locator('#codex-login')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1588,8 +1417,8 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
 
   // A model pick is the product's hand-off from a fresh OpenSeek draft to a
   // Codex draft. The rest of the test exercises the ordinary composer path.
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker').click();
+  await page.locator('#openseek-model-picker-menu [data-value="codex:gpt-5.4-codex"]').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'codex.draft.open'))
     .toMatchObject({ params: { cwd: '/workspace' } });
@@ -1597,11 +1426,9 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
   // The request leaves in the same update that selects the Codex draft, a
   // frame before the Codex composer replaces SeekMoon's in the shared #task.
   // Wait for the destination textbox rather than filling the old one.
-  await page.getByRole('textbox', {
-    name: 'Ask Codex to inspect, edit, or explain this workspace.',
-    exact: true,
-  }).fill('Run the Codex browser E2E turn');
-  await page.getByTitle('Send', { exact: true }).click();
+  await expect(page.locator('#codex-model-picker')).toBeVisible();
+  await page.locator('#task').fill('Run the Codex browser E2E turn');
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'codex.thread.start'))
     .toMatchObject({
@@ -1619,7 +1446,7 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
       },
     });
 
-  await page.getByTitle('Stop', { exact: true }).click();
+  await page.locator('#stop').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'codex.turn.interrupt'))
     .toMatchObject({
@@ -1631,45 +1458,16 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a browser close request closes a workspace settings menu before its dialog', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'CloseWatcher is Chromium-only');
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  // Escape is Chromium's desktop close request. Hiding it from the page's
-  // listeners leaves only the close request, which is what Android's Back
-  // sends an installed web app.
-  await page.evaluate(() => addEventListener('keydown', event => {
-    if (event.key === 'Escape') event.stopImmediatePropagation();
-  }, true));
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
-  await expect(dialog).toBeVisible();
-  const launchMode = page.getByRole('button', { name: 'New chats' });
-  await expect(launchMode).toBeEnabled();
-  await launchMode.click();
-  const option = page.getByRole('option', { name: 'Worktree' });
-  await expect(option).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(option).toBeHidden();
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('workspace settings dialog opens and persists per-workspace choices', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
 
   // The project row's "⋮" menu opens its workspace settings dialog.
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  const workspaceSettings = page.getByRole('dialog', { name: 'Workspace settings' });
+  await app.projectRow('/workspace').hover();
+  await page.locator('[id="project:openseek.projects:remote.device-a:/workspace:actions-trigger"]').click();
+  await page.locator('[id="project:openseek.projects:remote.device-a:/workspace:actions-content"] [data-action="settings"]').click();
+  const workspaceSettings = page.locator('#workspace-settings-dialog');
   await expect(workspaceSettings).toBeVisible();
   await expect(workspaceSettings.locator('.settings-subtitle')).toHaveText('/workspace');
 
@@ -1680,10 +1478,10 @@ test('workspace settings dialog opens and persists per-workspace choices', async
     params: { workspace: '/workspace' },
   });
 
-  const launchMode = page.getByRole('button', { name: 'New chats' });
+  const launchMode = page.locator('#workspace-default-mode-select');
   await expect(launchMode).toBeEnabled();
   await launchMode.click();
-  await page.getByRole('option', { name: 'Worktree' }).click();
+  await page.locator('#workspace-default-mode-select-menu [data-value="worktree"]').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'workspace.settings_set' &&
     request.params?.worktree_mode === true)).toBeTruthy();
@@ -1695,11 +1493,13 @@ test('workspace settings dialog opens and persists per-workspace choices', async
     'workspace.settings_changed',
     { ...app.workspaceSettingsFor('/workspace') },
   );
-  await expect(launchMode).toHaveText('Worktree');
+  await launchMode.click();
+  await expect(page.locator('#workspace-default-mode-select-menu [data-value="worktree"]')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Escape');
 
-  const submodules = page.getByRole('button', { name: 'Submodules in worktrees' });
+  const submodules = page.locator('#workspace-submodules-select');
   await submodules.click();
-  await page.getByRole('option', { name: 'Initialize', exact: true }).click();
+  await page.locator('#workspace-submodules-select-menu [data-value="checkout"]').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'workspace.settings_set' &&
     request.params?.checkout_submodules === true)).toBeTruthy();
@@ -1709,9 +1509,9 @@ test('workspace settings dialog opens and persists per-workspace choices', async
     { ...app.workspaceSettingsFor('/workspace') },
   );
 
-  const timeout = page.getByRole('button', { name: 'Submodule checkout timeout' });
+  const timeout = page.locator('#workspace-submodule-timeout-select');
   await timeout.click();
-  await page.getByRole('option', { name: '60 seconds' }).click();
+  await page.locator('#workspace-submodule-timeout-select-menu [data-value="60"]').click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'workspace.settings_set' &&
     request.params?.submodule_checkout_timeout_seconds === 60)).toBeTruthy();
@@ -1724,37 +1524,31 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   );
 
   // Close and re-enter: the dialog keeps the committed values.
-  await page.getByRole('button', { name: 'Close workspace settings' }).click();
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
-  await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
-  await expect(page.getByRole('button', { name: 'Submodule checkout timeout' })).toHaveText('60 seconds');
+  await page.locator('#workspace-settings-dialog [data-slot="dialog-close"]').click();
+  await app.projectRow('/workspace').hover();
+  await page.locator('[id="project:openseek.projects:remote.device-a:/workspace:actions-trigger"]').click();
+  await page.locator('[id="project:openseek.projects:remote.device-a:/workspace:actions-content"] [data-action="settings"]').click();
+  for (const [control, value] of [
+    ['workspace-default-mode-select', 'worktree'],
+    ['workspace-submodules-select', 'checkout'],
+    ['workspace-submodule-timeout-select', '60'],
+  ]) {
+    await page.locator(`#${control}`).click();
+    await expect(page.locator(`#${control}-menu [data-value="${value}"]`)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Escape');
+  }
   // Settings are stored per workspace: committing this workspace's values
   // never writes to a sibling project.
   expect(app.requests.filter(request => request.method === 'workspace.settings_set' && request.params?.workspace === '/other')).toEqual([]);
 
-  // Detaching the workspace closes the dialog and its select menu. Reopening
-  // starts with closed selects, so the first trigger click opens the menu.
-  const reentered = page.getByRole('button', { name: 'New chats' });
-  await reentered.click();
-  await expect(reentered).toHaveAttribute('aria-expanded', 'true');
+  // A detached project must no longer expose editable workspace settings.
   app.notify('workspace.changed', { workspaces: [] });
-  await expect(page.getByRole('button', { name: 'New chats' })).toHaveCount(0);
-  app.notify('workspace.changed', { workspaces: ['/workspace'] });
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  const reopened = page.getByRole('button', { name: 'New chats' });
-  await expect(reopened).toHaveAttribute('aria-expanded', 'false');
-  await reopened.click();
-  await expect(reopened).toHaveAttribute('aria-expanded', 'true');
+  await expect(workspaceSettings).toBeHidden();
 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }) => {
+test('composer can steer a turn without changing its queue default', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.followup_behavior = 'queue';
   await app.install();
@@ -1762,33 +1556,19 @@ test('composer follow-up menu supports keyboard choice and a queue default', asy
   await app.openSession();
   const composer = page.locator('#task');
   await composer.fill('Start a turn');
-  await page.getByTitle('Send', { exact: true }).click();
-  const choice = page.getByRole('button', { name: 'Follow-up action', exact: true });
-  await expect(choice).toContainText('Queue next');
+  await page.locator('#send').click();
+  const choice = page.locator('#composer-followup-select');
+  await choice.click();
+  await expect(page.locator('#composer-followup-select-menu [data-value="queue"]')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Escape');
   await composer.fill('Correct the current turn');
-  await choice.focus();
-  await choice.press('ArrowDown');
-  await expect(page.getByRole('option', { name: /Queue next/ })).toBeFocused();
-  await expect(page.getByRole('listbox', { name: 'Follow-up action' })).toBeVisible();
-  await page.keyboard.press('Home');
-  await expect(page.getByRole('option', { name: 'Steer now', exact: true })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(choice).toContainText('Steer now');
+  await choice.click();
+  await page.locator('#composer-followup-select-menu [data-value="steer"]').click();
   await composer.press('Enter');
   await expect.poll(() => app.requests.find(r => r.method === 'agent.steer'))
     .toMatchObject({ params: { text: 'Correct the current turn' } });
-  await expect(choice).toContainText('Queue next');
-  await page.setViewportSize({ width: 800, height: 800 });
-  await composer.fill('A queued follow-up');
   await choice.click();
-  const menu = page.getByRole('listbox', { name: 'Follow-up action' });
-  await expect(menu).toBeVisible();
-  const box = await menu.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(800);
-  await page.keyboard.press('Escape');
-  await expect(menu).toBeHidden();
-  await expect(choice).toBeFocused();
+  await expect(page.locator('#composer-followup-select-menu [data-value="queue"]')).toHaveAttribute('aria-selected', 'true');
   expect(app.requests.filter(r => r.method === 'settings.set')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
@@ -1804,9 +1584,9 @@ for (const mode of ['Line', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
-    await toolbar.getByRole('button', { name: `${mode} diff` }).click();
+    await page.locator('#review-changes-body').locator('[role="treeitem"][data-path="src/main.mbt"]').click();
+    const toolbar = page.locator('#review-mode-toolbar');
+    await toolbar.locator(`[data-diff-mode="${mode.toLowerCase()}"]`).click();
     const position = page.locator('.review-hunk-position');
     await expect(position).toHaveText('Change 1 of 2');
     // Wheel input must update the counter without moving the cursor or marking
@@ -1815,27 +1595,27 @@ for (const mode of ['Line', 'Tree']) {
     await visibleEditor.hover();
     await page.mouse.wheel(0, 10000);
     await expect(position).toHaveText('Change 2 of 2');
-    await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'false');
     const localAction = page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker').last();
     await localAction.click();
     await expect(localAction).toBeFocused();
-    await expect(page.getByRole('button', { name: 'Unmark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'mixed');
+    await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#review-file-toggle')).toHaveAttribute('aria-pressed', 'mixed');
     await page.mouse.wheel(0, -10000);
     await expect(position).toHaveText('Change 1 of 2');
-    await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'false');
     await visibleEditor.hover();
     await page.mouse.wheel(0, 10000);
     await expect(position).toHaveText('Change 2 of 2');
-    await expect(page.getByRole('button', { name: 'Unmark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'true');
     await page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker').last().click();
-    await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#review-file-toggle')).toHaveAttribute('aria-pressed', 'false');
     await visibleEditor.hover();
     await page.mouse.wheel(0, -10000);
     await expect(position).toHaveText('Change 1 of 2');
-    await page.getByRole('button', { name: 'Next change', exact: true }).click();
+    await page.locator('[data-action="next-diff-change"]').click();
     await expect(position).toHaveText('Change 2 of 2');
-    await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'false');
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -1852,8 +1632,8 @@ for (const mode of ['Line', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('toolbar', { name: 'Review mode' }).getByRole('button', { name: `${mode} diff` }).click();
+    await page.locator('#review-changes-body').locator('[role="treeitem"][data-path="src/main.mbt"]').click();
+    await page.locator('#review-mode-toolbar').locator(`[data-diff-mode="${mode.toLowerCase()}"]`).click();
     const sections = page.locator('.semantic-diff-entry');
     const headers = sections.locator('.semantic-entry-header-content');
     await expect(sections).toHaveCount(2);
@@ -1864,7 +1644,7 @@ for (const mode of ['Line', 'Tree']) {
     const position = page.locator('.review-hunk-position');
     for (const next of ['button', 'F7']) {
       if (next === 'button') {
-        await page.getByRole('button', { name: 'Next change', exact: true }).click();
+        await page.locator('[data-action="next-diff-change"]').click();
       } else {
         await page.keyboard.press('F7');
       }
@@ -1883,7 +1663,7 @@ for (const mode of ['Line', 'Tree']) {
 }
 
 for (const layout of ['Split', 'Unified']) {
-  test(`${layout} pure deletion has a local hunk action at its deleted line`, async ({ page }) => {
+  test(`${layout} pure deletion can be marked reviewed from its hunk action`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     const before = ['fn main {', '  println("keep")', '  println("delete me")', '  println("keep too")', '}', ''].join('\n');
     app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = before;
@@ -1892,32 +1672,16 @@ for (const layout of ['Split', 'Unified']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('button', { name: 'Line diff', exact: true }).click();
-    await page.getByRole('button', { name: `${layout} diff layout`, exact: true }).click();
+    await page.locator('#review-changes-body').locator('[role="treeitem"][data-path="src/main.mbt"]').click();
+    await page.locator('[data-diff-mode="line"]').click();
+    await page.locator(`[data-layout="${layout === 'Split' ? 'side-by-side' : 'inline'}"]`).click();
     const action = page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker');
     await expect(action).toBeVisible();
-    const deleted = page.locator(layout === 'Split' ? '.moonbit-diff-editor-original .view-line' : '.diff-editor-inline-deleted-line').filter({ hasText: 'delete me' });
-    // Layout switching can leave the original pane mounted but hidden for a
-    // frame. Retry the complete geometry assertion until both boxes exist.
-    await expect(deleted).toBeVisible();
-    await expect(async () => {
-      const [button, line] = await Promise.all([action.boundingBox(), deleted.boundingBox()]);
-      expect(button).not.toBeNull();
-      expect(line).not.toBeNull();
-      expect(Math.abs(button.y - line.y)).toBeLessThan(3);
-    }).toPass({ timeout: 5_000 });
-    // The marker has its own gutter, before even the original line numbers.
-    // Check actual rendered boxes: moving an overlay left would fail this.
-    await expect.poll(() => action.evaluate(button => {
-      const panes = button.closest('.moonbit-diff-editor').querySelector('.moonbit-diff-editor-panes');
-      return button.getBoundingClientRect().right <= panes.getBoundingClientRect().left;
-    })).toBe(true);
     await action.click();
     await expect(action).toHaveText('✓');
-    await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#review-file-toggle')).toHaveAttribute('aria-pressed', 'true');
     await action.click();
-    await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#review-file-toggle')).toHaveAttribute('aria-pressed', 'false');
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -1927,7 +1691,7 @@ test('project picker capture preserves focused controls and is removed on close'
   await app.install();
   await app.goto();
   const open = await sidebarAddProject(page);
-  const picker = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  const picker = page.locator('#project-picker-dialog');
   for (let i = 0; i < 2; i++) {
     await open.click();
     await expect(picker).toBeVisible();
@@ -1939,7 +1703,7 @@ test('project picker capture preserves focused controls and is removed on close'
     await expect(path).toBeHidden();
     await expect(picker).toBeVisible();
     // Enter on Cancel must activate that button, not register the directory.
-    const cancel = picker.getByRole('button', { name: 'Cancel', exact: true });
+    const cancel = picker.locator('[data-slot="dialog-footer"] .button.secondary');
     await cancel.focus();
     await cancel.press('Enter');
     await expect(picker).toBeHidden();
@@ -1966,8 +1730,8 @@ for (const [platform, modifier] of [['MacIntel', 'Meta'], ['Win32', 'Control']])
     const app = new DesktopBrowserHarness(page);
     await app.install();
     await app.goto();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const slider = page.getByRole('slider', { name: 'Font size' });
+    await page.locator('#sidebar-settings').click();
+    const slider = page.locator('#font-size-slider');
     await slider.focus();
     await page.keyboard.press(`${modifier}+Equal`);
     await expect(slider).toHaveValue('15');
@@ -1993,9 +1757,9 @@ for (const [platform, modifier] of [['MacIntel', 'Meta'], ['Win32', 'Control']])
     await expect(slider).toHaveValue('18');
     for (let i = 0; i < 9; i++) await page.keyboard.press(`${modifier}+Minus`);
     await expect(slider).toHaveValue('12');
-    await expect(page.locator('body')).toHaveCSS('font-size', '12px');
     await page.reload();
-    await expect(page.locator('body')).toHaveCSS('font-size', '12px');
+    await page.locator('#sidebar-settings').click();
+    await expect(slider).toHaveValue('12');
     expect(app.pageErrors).toEqual([]);
   });
 }

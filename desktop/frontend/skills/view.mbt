@@ -106,10 +106,15 @@ fn installed_row(
   header.push(
     installed_actions(locale, state, channel, skill, emit, "skill-action", menu),
   )
-  @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
-    @html.div(class="skill-header", header),
-    @html.div(class="skill-info", info),
-  ])
+  @html.div(
+    class="skill-row",
+    attrs=@html.Attrs::build().data_set("skill-id", skill.id),
+    on_click=emit(PreviewInstalled(skill)),
+    [
+      @html.div(class="skill-header", header),
+      @html.div(class="skill-info", info),
+    ],
+  )
 }
 
 ///|
@@ -131,10 +136,12 @@ fn market_row(
     @html.button(
       class="button primary skill-action",
       disabled=pending is Some(_),
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        emit(Install(item))
-      }),
+      attrs=@html.Attrs::build()
+        .data_set("action", "install")
+        .on_click(event => {
+          event.stop_propagation()
+          emit(Install(item))
+        }),
       if pending is Some(action) {
         ui(locale, action.label())
       } else {
@@ -155,6 +162,9 @@ fn market_row(
   ]
   @html.div(
     class="skill-row",
+    attrs=@html.Attrs::build()
+      .data_set("skill-module", item.module_name)
+      .data_set("skill-package", item.package_path),
     title=item.repository,
     on_click=emit(PreviewMarket(item)),
     [
@@ -323,6 +333,7 @@ fn detail_action(
       let pending = state.pending_action(input.channel, item.identity())
       @html.button(
         class="button primary skill-action",
+        attrs=@html.Attrs::build().data_set("action", "install"),
         disabled=pending is Some(_),
         on_click=emit(Install(item)),
         if pending is Some(action) {
@@ -398,6 +409,7 @@ fn list_page(
         @html.div(class="page-eyebrow", ui(locale, Library)),
         @html.button(
           class="button skills-refresh",
+          id="skills-refresh",
           disabled=catalog_loading,
           on_click=emit(RefreshCatalog),
           if catalog_loading {
@@ -415,6 +427,7 @@ fn list_page(
       [
         icon(icon_search),
         @html.input(
+          id="skills-search",
           input_type=@html.InputType::Search,
           value=state.query,
           placeholder=ui(locale, Search),
@@ -452,16 +465,25 @@ fn list_page(
     )
   }
   sections.push(
-    @settings.group(icon_extensions, ui(locale, InstalledLabel), [
-      // Filtering must not reuse another skill's stateful menu DOM.
-      @html.div(style=["display:contents"], installed_rows),
-    ]),
+    @settings.group(
+      icon_extensions,
+      ui(locale, InstalledLabel),
+      [
+        // Filtering must not reuse another skill's stateful menu DOM.
+        @html.div(style=["display:contents"], installed_rows),
+      ],
+      id="skills-installed",
+    ),
   )
   let market_rows : Array[@html.Html] = []
   match state.catalog {
     Idle | Loading(_) =>
       market_rows.push(
-        @html.div(class="skills-empty", ui(locale, LoadingCatalog)),
+        @html.div(
+          id="skills-catalog-loading",
+          class="skills-empty",
+          ui(locale, LoadingCatalog),
+        ),
       )
     Failed(message) =>
       market_rows.push(@html.div(class="skills-empty danger", message))
@@ -496,7 +518,7 @@ fn list_page(
     }
   }
   sections.push(
-    @html.div(class="settings-group", [
+    @html.div(id="skills-available", class="settings-group", [
       @html.div(class="settings-group-head", [
         icon(icon_package),
         @html.h2(ui(locale, Registry)),

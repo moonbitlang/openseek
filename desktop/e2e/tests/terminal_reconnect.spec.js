@@ -5,7 +5,7 @@ async function openTerminal(page, app) {
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByTitle('Show terminal (Ctrl+`)').click();
+  await page.locator('#terminal-toggle').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
   const input = page.locator('.terminal-instance:visible .xterm-helper-textarea');
   await input.focus();
@@ -37,7 +37,7 @@ test('socket loss reconnects the terminal without replaying active or queued inp
   expect(app.requests.filter(r => r.method === 'terminal.input').map(r => r.params)).toEqual([
     { id: 'terminal-1', data: 'maybe-delivered' },
   ]);
-  await expect(page.getByText('Close this terminal and open a new one.', { exact: false })).toHaveCount(0);
+  await expect(page.locator('.terminal-status')).not.toContainText(['Close this terminal and open a new one.']);
   await page.locator('.terminal-instance:visible .xterm-helper-textarea').focus();
   await page.keyboard.insertText('fresh-input');
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.input').map(r => r.params)).toEqual([
