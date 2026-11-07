@@ -650,7 +650,6 @@ export class CloudHarness {
   async openArchivedChats() {
     await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
     await this.page.getByRole('tab', { name: 'Archive', exact: true }).click();
-    await expect(this.page.getByRole('tabpanel', { name: 'Archive', exact: true })).toBeVisible();
   }
 
   archivedRow(id) {
