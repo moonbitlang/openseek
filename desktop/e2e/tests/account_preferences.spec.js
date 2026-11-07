@@ -6,7 +6,7 @@ const endpoint = `${cloudOrigin}/v1/me/preferences`;
 const toggle = page => page.getByRole('switch', { name: label, exact: true });
 async function openSettings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
 }
 
 test('account preferences load on opening Settings and save only the confirmed server value', async ({ page }) => {

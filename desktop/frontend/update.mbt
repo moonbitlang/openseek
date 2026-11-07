@@ -2758,7 +2758,7 @@ fn update_msg(
                 if conv.prompt_ready() {
                   OpenApiSetup
                 } else {
-                  SettingsSectionSelected(Runtime)
+                  SettingsSectionSelected(Engine)
                 },
                 model,
               )
@@ -4090,7 +4090,7 @@ fn update_msg(
           // The Codex group's placeholder row: not a model, a doorway.
           // Sign-in and connection state live in the Settings page's Codex
           // group.
-          update_msg(dispatch, SettingsSectionSelected(Runtime), model)
+          update_msg(dispatch, SettingsSectionSelected(Engine), model)
       }
     }
     CodexEffortPicked(value) => {
@@ -4535,7 +4535,7 @@ fn update_msg(
         cmd,
         {
           ..focused,
-          management_dialog: Some(Settings(Runtime)),
+          management_dialog: Some(Settings(Engine)),
           setup_api_key: "",
           api_setup_open: false,
           select_menu: None,
@@ -16371,7 +16371,7 @@ test "the Codex group's placeholder row opens Settings" {
     test_model(),
   )
   // Sign-in and connection state live in the Settings page's Codex group.
-  assert_true(opened.management_dialog is Some(Settings(Runtime)))
+  assert_true(opened.management_dialog is Some(Settings(Engine)))
   // A placeholder pick is a doorway, not a model: nothing was selected.
   assert_true(opened.default_agent is OpenSeekAgent)
 }
@@ -16744,7 +16744,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     ),
     {
       ..test_model(),
-      management_dialog: Some(Settings(Runtime)),
+      management_dialog: Some(Settings(Engine)),
       host_settings_revision: 0,
       api_provider: Custom,
       custom_api_url: "https://ok.example/chat",
@@ -17020,7 +17020,7 @@ test "a settled host save that completes the setup closes the modal" {
   // owned by the Settings page rather than an open setup modal.
   let page = {
     ..typing,
-    management_dialog: Some(Settings(Runtime)),
+    management_dialog: Some(Settings(Engine)),
     api_setup_open: false,
     select_menu: Some(ApiProviderMenu),
   }.flush_host_settings()
@@ -17238,7 +17238,7 @@ test "saving a key marks the active provider credential only" {
     api_provider: Deepseek,
     deepseek_key_saved: false,
     setup_api_key: "  sk-new  ",
-    management_dialog: Some(Settings(Runtime)),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
   assert_true(saved_deepseek.deepseek_key_saved)
@@ -17247,7 +17247,7 @@ test "saving a key marks the active provider credential only" {
   inspect(saved_deepseek.settings_saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
-  assert_true(saved_deepseek.management_dialog is Some(Settings(Runtime)))
+  assert_true(saved_deepseek.management_dialog is Some(Settings(Engine)))
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
@@ -17256,12 +17256,12 @@ test "saving a key marks the active provider credential only" {
     deepseek_key_saved: false,
     custom_api_url: "https://proxy.example/chat/completions",
     setup_api_key: "  sk-custom-new  ",
-    management_dialog: Some(Settings(Runtime)),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
   assert_false(saved_custom.deepseek_key_saved)
   assert_true(saved_custom.custom_key_saved)
-  assert_true(saved_custom.management_dialog is Some(Settings(Runtime)))
+  assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
     ..test_model(),
@@ -17269,20 +17269,20 @@ test "saving a key marks the active provider credential only" {
     deepseek_key_saved: false,
     glm_key_saved: false,
     setup_api_key: "  glm-new  ",
-    management_dialog: Some(Settings(Runtime)),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
   assert_true(saved_glm.glm_key_saved)
   assert_false(saved_glm.deepseek_key_saved)
   assert_false(saved_glm.custom_key_saved)
-  assert_true(saved_glm.management_dialog is Some(Settings(Runtime)))
+  assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
     ..test_model(),
     api_provider: OpenRouter,
     deepseek_key_saved: false,
     custom_key_saved: false,
     setup_api_key: "  sk-openrouter-new  ",
-    management_dialog: Some(Settings(Runtime)),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
   assert_true(saved_openrouter.custom_key_saved)
@@ -17296,7 +17296,7 @@ test "sidebar navigation leaves the settings page" {
   let model = {
     ..test_model(),
     api_provider: Deepseek,
-    management_dialog: Some(Settings(Runtime)),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, next) = update(
     dispatch,
@@ -22188,7 +22188,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
 ///|
 test "tool decode semantics wait for their durable error tool result" {
   let dispatch = test_dispatch()
-  let semantic = Engine(
+  let semantic = DeviceMsg::Engine(
     Some("r7"),
     @wire.ToolCallDecodeError(
       tool_call_id="call",

@@ -977,12 +977,11 @@ priv enum ManagementDialog {
 #derive(Eq)
 priv enum SettingsSection {
   General
+  Engine
   Account
-  Runtime
-  SshHosts
+  Connections
   ArchivedChats
-  Diagnostics
-  Updates
+  SystemSettings
 }
 
 ///|

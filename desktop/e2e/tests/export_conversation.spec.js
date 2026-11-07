@@ -248,8 +248,8 @@ test('a host share pending during account change never uses the new account or e
   await expect.poll(() => app.count('session.share')).toBe(1);
   await dialog.getByRole('button', { name: 'Close export dialog' }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-  const account = page.getByRole('region', { name: 'Account · Remote access', exact: true });
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
+  const account = page.getByRole('region', { name: 'Account', exact: true });
   await account.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(account.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
   app.userId = '456';

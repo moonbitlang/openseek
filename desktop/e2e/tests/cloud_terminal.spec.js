@@ -116,8 +116,8 @@ test('account replacement closes this client sockets and cannot display the old 
   const old = terminal.connections[0];
   terminal.output(old, 'OLD_ACCOUNT\r\n');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-  const account = page.getByRole('region', { name: 'Account · Remote access', exact: true });
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
+  const account = page.getByRole('region', { name: 'Account', exact: true });
   await account.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect.poll(() => old.closed).toBe(true);
   cloud.userId = '456';
@@ -245,8 +245,8 @@ test('signing out while Cloud ! runs clears the operation without submitting it 
   await cloud.open();
   const tab = await shell(page, terminal, 'ls');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-  await page.getByRole('region', { name: 'Account · Remote access', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
+  await page.getByRole('region', { name: 'Account', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect.poll(() => tab.connection.closed).toBe(true);
   expect(cloud.postCount).toBe(0);
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);

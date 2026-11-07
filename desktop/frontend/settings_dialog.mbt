@@ -3,11 +3,10 @@ fn SettingsSection::id(self : SettingsSection) -> String {
   match self {
     General => "general"
     Account => "account"
-    Runtime => "runtime"
-    SshHosts => "ssh-hosts"
+    Engine => "engine"
+    Connections => "connections"
     ArchivedChats => "archived-chats"
-    Diagnostics => "diagnostics"
-    Updates => "updates"
+    SystemSettings => "system"
   }
 }
 
@@ -18,15 +17,11 @@ fn SettingsSection::label(
 ) -> String {
   match self {
     General => @settings.text(locale, General)
-    Account =>
-      @settings.text(locale, Account) +
-      " · " +
-      @settings.text(locale, RemoteAccess)
-    Runtime => @settings.text(locale, ModelsAndRuntime)
-    SshHosts => @settings.text(locale, SshHosts)
+    Account => @settings.text(locale, Account)
+    Engine => @settings.text(locale, Engine)
+    Connections => @settings.text(locale, Connections)
     ArchivedChats => @archived_chats.text(locale, Title)
-    Diagnostics => @settings.text(locale, Diagnostics)
-    Updates => @settings.text(locale, Updates)
+    SystemSettings => @settings.text(locale, SystemSettings)
   }
 }
 
@@ -34,8 +29,8 @@ fn SettingsSection::label(
 fn SettingsSection::available(self : SettingsSection, model : Model) -> Bool {
   match self {
     General | Account | ArchivedChats => true
-    Runtime => model.has_host()
-    SshHosts | Diagnostics | Updates => model.is_desktop
+    Engine => model.has_host()
+    Connections | SystemSettings => model.is_desktop
   }
 }
 
@@ -64,12 +59,11 @@ fn settings_page(
   for
     section in [
       General,
+      Engine,
       Account,
-      Runtime,
-      SshHosts,
+      Connections,
       ArchivedChats,
-      Diagnostics,
-      Updates,
+      SystemSettings,
     ] {
     if !section.available(model) {
       continue
@@ -97,8 +91,14 @@ fn settings_page(
     let content = match section {
       General => [settings_general_group(dispatch, model)]
       Account =>
-        [@ui.form_section(icon_key, label, remote_access_rows(dispatch, model))]
-      Runtime => {
+        [
+          @ui.form_section(
+            icon_key,
+            label,
+            settings_account_rows(dispatch, model),
+          ),
+        ]
+      Engine => {
         let subtitle = if !model.host_settings_loaded() {
           @settings.text(model.locale, LoadingSettings)
         } else if model.api_ready() {
@@ -116,10 +116,21 @@ fn settings_page(
           ..settings_runtime_groups(dispatch, model),
         ]
       }
-      SshHosts => [ssh_settings(dispatch, model)]
+      Connections =>
+        [
+          ssh_settings(dispatch, model),
+          @ui.form_section(
+            icon_link_external,
+            @settings.text(model.locale, RemoteAccess),
+            remote_access_rows(dispatch, model),
+          ),
+        ]
       ArchivedChats => [archived_chats_html]
-      Diagnostics => [settings_diagnostics_group(dispatch, model)]
-      Updates => [settings_updates_group(dispatch, model)]
+      SystemSettings =>
+        [
+          settings_updates_group(dispatch, model),
+          settings_diagnostics_group(dispatch, model),
+        ]
     }
     panels.push(
       @rui.tabs_content(
@@ -134,7 +145,10 @@ fn settings_page(
           @html.div(
             class="form-layout",
             [
-              ..if section == Runtime || section == ArchivedChats {
+              ..if section == Engine ||
+                section == Connections ||
+                section == ArchivedChats ||
+                section == SystemSettings {
                 [@html.h2(label)]
               } else {
                 []

@@ -1491,7 +1491,7 @@ test('settings persist host API changes through settings.set', async ({ page }) 
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Models & runtime', exact: true }).click();
+  await page.getByRole('tab', { name: 'Engine', exact: true }).click();
   await page.getByRole('button', { name: 'API endpoint' }).click();
   await page.getByRole('option', { name: 'Custom URL' }).click();
   await expect.poll(() => app.requests.some(request =>
@@ -1555,7 +1555,7 @@ test('Codex account login can be started and cancelled from Settings', async ({ 
   await app.goto();
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Models & runtime', exact: true }).click();
+  await page.getByRole('tab', { name: 'Engine', exact: true }).click();
   await page.getByRole('button', { name: 'Sign in with ChatGPT' }).click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'codex.account.login.start')).toBe(true);

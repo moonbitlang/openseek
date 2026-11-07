@@ -91,7 +91,9 @@ pub(all) enum Message {
   Settings
   Preferences
   General
-  ModelsAndRuntime
+  Connections
+  SystemSettings
+  RemoteAccessSignInRequired
   SshHosts
   Interface
   TranscriptView

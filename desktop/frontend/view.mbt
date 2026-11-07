@@ -869,34 +869,11 @@ fn codex_account_rows(
 }
 
 ///|
-/// The Remote access group's rows: sign-in state against the SeekMoon
-/// relay. The relay no longer depends on the chat provider — only the
-/// hosted chat proxy was retired — so it is always available.
-fn remote_access_rows(
+fn settings_account_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> Array[@html.Html] {
   let rows : Array[@html.Html] = []
-  // A development build serves this very frontend on loopback for the
-  // system browser, so the console can be worked on against this host with
-  // no relay in between. Open uses a stable URL with no browser authorization.
-  if model.is_desktop && model.console_url is Some(url) {
-    rows.push(
-      @ui.form_row(
-        "Local console",
-        [
-          @html.a(
-            class="button secondary setting-link",
-            href=url,
-            target=Blank,
-            rel="noopener noreferrer",
-            [icon(icon_link_external), @html.span("Open")],
-          ),
-        ],
-        desc="Development build — open the console this host serves in a browser on this machine.",
-      ),
-    )
-  }
   let controls : Array[@html.Html] = if model.account is Some(account) {
     [
       if account.user.avatar_url.is_empty() {
@@ -981,6 +958,38 @@ fn remote_access_rows(
       ),
     )
   }
+  if model.settings_section() == Account && model.remote_error is Some(message) {
+    rows.push(
+      @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
+    )
+  }
+  rows
+}
+
+///|
+fn remote_access_rows(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
+  let rows : Array[@html.Html] = []
+  // The development console uses loopback, independently of relay sign-in.
+  if model.is_desktop && model.console_url is Some(url) {
+    rows.push(
+      @ui.form_row(
+        "Local console",
+        [
+          @html.a(
+            class="button secondary setting-link",
+            href=url,
+            target=Blank,
+            rel="noopener noreferrer",
+            [icon(icon_link_external), @html.span("Open")],
+          ),
+        ],
+        desc="Development build — open the console this host serves in a browser on this machine.",
+      ),
+    )
+  }
   if model.is_desktop {
     let enabled = model.remote_access
       .map(status => status.device_url is Some(_) || status.managed_by_env)
@@ -991,6 +1000,21 @@ fn remote_access_rows(
     let online = model.remote_access
       .map(status => status.connected)
       .unwrap_or(false)
+    if model.account is None && !managed {
+      rows.push(
+        @ui.form_row(
+          @settings.text(model.locale, Account),
+          [
+            @html.button(
+              class="button secondary",
+              on_click=dispatch(SettingsSectionSelected(Account)),
+              @settings.text(model.locale, SignIn),
+            ),
+          ],
+          desc=@settings.text(model.locale, RemoteAccessSignInRequired),
+        ),
+      )
+    }
     rows.push(
       @ui.form_row(
         @settings.text(model.locale, RemoteControl),
@@ -1033,7 +1057,8 @@ fn remote_access_rows(
       )
     }
   }
-  if model.remote_error is Some(message) {
+  if model.settings_section() == Connections &&
+    model.remote_error is Some(message) {
     rows.push(
       @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
     )
@@ -1424,6 +1449,31 @@ fn settings_runtime_groups(
       ],
       desc=@settings.text(locale, MaxStepsDescription),
     ),
+    @ui.form_row(
+      @settings.text(locale, Followup),
+      [
+        FollowupBehaviorMenu.setting_control(
+          dispatch,
+          model,
+          id="followup-behavior-select",
+          options=[
+            @select_control.ViewOption(
+              value="steer",
+              label=@settings.text(locale, Steer),
+            ),
+            @select_control.ViewOption(
+              value="queue",
+              label=@settings.text(locale, Queue),
+            ),
+          ],
+          selected=model.followup_behavior.wire(),
+          aria_label=@settings.text(locale, Followup),
+          change=dispatch.map(value => FollowupBehaviorChanged(value)),
+          disabled=!settings_loaded,
+        ),
+      ],
+      desc=@settings.text(locale, FollowupDescription),
+    ),
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(
     dispatch,
@@ -1447,7 +1497,6 @@ fn settings_general_group(
   model : Model,
 ) -> @html.Html {
   let locale = model.locale
-  let settings_loaded = model.host_settings_loaded()
   @ui.form_section(icon_layout, @settings.text(locale, General), [
     @ui.form_row(
       @settings.text(locale, TranscriptView),
@@ -1505,31 +1554,6 @@ fn settings_general_group(
         ),
       ],
       desc=@settings.text(locale, LanguageDescription),
-    ),
-    @ui.form_row(
-      @settings.text(locale, Followup),
-      [
-        FollowupBehaviorMenu.setting_control(
-          dispatch,
-          model,
-          id="followup-behavior-select",
-          options=[
-            @select_control.ViewOption(
-              value="steer",
-              label=@settings.text(locale, Steer),
-            ),
-            @select_control.ViewOption(
-              value="queue",
-              label=@settings.text(locale, Queue),
-            ),
-          ],
-          selected=model.followup_behavior.wire(),
-          aria_label=@settings.text(locale, Followup),
-          change=dispatch.map(value => FollowupBehaviorChanged(value)),
-          disabled=!settings_loaded,
-        ),
-      ],
-      desc=@settings.text(locale, FollowupDescription),
     ),
     @ui.form_row(
       @settings.text(locale, Theme),

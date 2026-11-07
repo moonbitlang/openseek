@@ -63,8 +63,8 @@ for (const leave of ['switch', 'sign out']) {
       await expect.poll(() => observations(app, sessionB).length).toBe(1);
     } else {
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-      const section = page.getByRole('region', { name: 'Account · Remote access', exact: true });
+      await page.getByRole('tab', { name: 'Account', exact: true }).click();
+      const section = page.getByRole('region', { name: 'Account', exact: true });
       await section.getByRole('button', { name: 'Sign out', exact: true }).click();
       await expect(app.row(sessionA)).toBeHidden();
     }

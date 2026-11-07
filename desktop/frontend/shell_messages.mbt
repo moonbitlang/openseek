@@ -169,15 +169,15 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (TraditionalChinese, LoadingDevice) => "正在載入裝置…"
     (Japanese, LoadingDevice) => "デバイスを読み込み中…"
     (English, NoDevices) =>
-      "No devices yet — open SeekMoon and sign in under Settings → Remote access."
+      "No devices yet — open SeekMoon, sign in under Settings → Account, then enable Remote control under Connections → Remote access."
     (Spanish, NoDevices) =>
-      "Aún no hay dispositivos; abre SeekMoon e inicia sesión en Configuración → Acceso remoto."
+      "Aún no hay dispositivos; abre SeekMoon, inicia sesión en Configuración → Cuenta y activa Control remoto en Conexiones → Acceso remoto."
     (SimplifiedChinese, NoDevices) =>
-      "尚无设备，请打开 SeekMoon 并在“设置 → 远程访问”中登录。"
+      "尚无设备，请打开 SeekMoon，在“设置 → 账户”中登录，然后在“连接 → 远程访问”中开启远程控制。"
     (TraditionalChinese, NoDevices) =>
-      "尚無裝置，請開啟 SeekMoon 並在“設定 → 遠端存取”中登入。"
+      "尚無裝置，請開啟 SeekMoon，在「設定 → 帳戶」中登入，然後在「連線 → 遠端存取」中開啟遠端控制。"
     (Japanese, NoDevices) =>
-      "デバイスがありません。SeekMoon を開き、「設定 → リモートアクセス」からログインしてください。"
+      "デバイスがありません。SeekMoon を開き、「設定 → アカウント」でログインしてから、「接続 → リモートアクセス」でリモートコントロールを有効にしてください。"
     (English, NoOnlineDevice) => "No online device — reconnecting…"
     (Spanish, NoOnlineDevice) =>
       "No hay dispositivos en línea; reconectando…"
