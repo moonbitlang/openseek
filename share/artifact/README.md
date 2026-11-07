@@ -71,7 +71,8 @@ workspace sources.
 
 1. Adapt the question, model and view in the scratch working project to the
    user's question. The `rabbita/` starter illustrates Amdahl's law with two
-   inputs and an immediate answer.
+   inputs, an immediate answer and an interactive mathplotlib chart. Clicking a
+   point selects its worker count for the answer and follow-up.
 2. Keep the executable JavaScript format `iife`. Provide `index.html` with
    inline styles, the view's mount element (the starter uses `app`), and exactly
    one `<!-- openseek:script -->` marker where compiled code should run.
@@ -166,14 +167,7 @@ application compiles separately for JavaScript and runs inside the preview.
 
 ## Interactive charts
 
-Charts use the `Lampese/mathplotlib` and Rabbita APIs to produce interactive HTML.
-
-Copy all four inputs from `example/`: `moon.mod`, `moon.pkg`, `main.mbt` and
-`index.html`. The example's own HTML template supplies the `chart` mount and
-inline chart styles. Edit the MoonBit application for the actual data, check it
-with `moon -C PROJECT check --target js --deny-warn`, run relevant tests, and use
-the generic `build.mbtx` recipe described above.
-
-The example includes hover values, click selection and legend toggles. Keep
-these interactions in local Rabbita state. Cite data sources in the surrounding
-answer.
+The same `rabbita/` starter uses `Lampese/mathplotlib` to draw the speedup
+curve. Its model handles hover and point selection; clicking a point updates
+the workers input and the state offered for follow-up. Adapt the chart, data
+and state to the question. Cite data sources in the surrounding answer.

@@ -407,15 +407,6 @@ app -> api: Request
 api -> app: Response
 ```
 
-## Interactive Charts
-
-Use ordinary MoonBit/mathplotlib/Rabbita code to generate interactive charts.
-Copy the four inputs in <bundled-resources>/artifact/example/ (moon.mod,
-moon.pkg, main.mbt, index.html) into a scratch working project. The chart's own
-HTML supplies its mount and inline styles. Check/test the application and use
-the generic packaging recipe and file-reference contract below. Keep data source
-citations in the surrounding answer.
-
 ## Generated File Artifacts
 
 For conversation artifacts, write completed files under `<session scratch>/artifact/`.
@@ -436,6 +427,7 @@ conclusion, caveats and citations in the surrounding prose.
 
 Read `<bundled-resources>/artifact/README.md` and the starter sources before
 authoring. Write ordinary MoonBit/Rabbita source with local state and events.
+The same starter illustrates interactive charts with mathplotlib when useful.
 The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch
 paths and packaging with `build.mbtx`. Check the application, run relevant model
 tests and reference the completed page with the fence returned by the packager.

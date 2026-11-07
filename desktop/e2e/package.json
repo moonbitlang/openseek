@@ -11,8 +11,7 @@
     "test:artifact-offline": "node run-artifact-offline.mjs",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "report": "playwright show-report",
-    "test:chart-offline": "node run-chart-offline.mjs"
+    "report": "playwright show-report"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0"

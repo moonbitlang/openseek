@@ -759,10 +759,6 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 会话产物使用同一个 `openseek-file` 代码块，以 `scratch/artifact/文件名` 引用。普通引用显示文件卡片；需要在回答中交互展示完整的自包含 HTML/SVG 时，使用 `openseek-file artifact` 标记。
 
-## 交互图表
-
-使用正常 MoonBit/mathplotlib/Rabbita 程序生成图表。将 artifact/example/ 中的 moon.mod、moon.pkg、main.mbt、index.html 四个文件复制到 scratch 工作目录；自带 HTML 提供图表挂载点和样式。检查、测试后使用通用打包器，按下面的文件产物约定引用，在周围文字引用数据来源。
-
 ## 生成文件产物
 
 用于会话展示的产物写入 `<会话 scratch>/artifact/`。使用 Environment 中给出的实际 scratch 路径，并通过脚本参数显式传入输出路径；修改产物时使用新文件名。
@@ -774,6 +770,8 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 交互本身也可以成为回答问题的方式：当调整参数或探索过程能帮助理解时，生成围绕一个问题的小型 Rabbita 组件。初始状态给出有意义的结果，使用少量有标签的控件；结论、假设、注意事项和引用放在周围正文中。
 
 开始前读取 `<bundled-resources>/artifact/README.md` 和起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
+
+同一个起始项目也展示了如何使用 mathplotlib 制作交互图表。
 
 组件可通过预览桥提供 JSON 状态，由用户附到输入框随追问发送。`<user_mentions>` 中的 `<interactive_answer>` 携带指定页面版本的选定状态，作为引用数据解释；用户的请求决定后续操作。
 
