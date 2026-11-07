@@ -432,6 +432,7 @@ fn default_prompt() -> String {
     #|
     #|Read `<bundled-resources>/artifact/README.md` and the starter sources before
     #|authoring. Write ordinary MoonBit/Rabbita source with local state and events.
+    #|The same starter illustrates interactive charts with mathplotlib when useful.
     #|The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch
     #|paths and packaging with `build.mbtx`. Check the application, run relevant model
     #|tests and reference the completed page with the fence returned by the packager.
