@@ -20,11 +20,11 @@ pub(all) enum Message {
 ///|
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
-    (English, Title) => "Archived chats"
-    (Spanish, Title) => "Conversaciones archivadas"
-    (SimplifiedChinese, Title) => "已归档对话"
-    (TraditionalChinese, Title) => "已歸檔對話"
-    (Japanese, Title) => "アーカイブ済みチャット"
+    (English, Title) => "Archive"
+    (Spanish, Title) => "Archivo"
+    (SimplifiedChinese, Title) => "归档"
+    (TraditionalChinese, Title) => "歸檔"
+    (Japanese, Title) => "アーカイブ"
     (English, Description) =>
       "Archived conversations stay out of the sidebar. Restore one to continue it, or delete it permanently."
     (Spanish, Description) =>
