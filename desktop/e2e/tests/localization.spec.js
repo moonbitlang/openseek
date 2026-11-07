@@ -46,7 +46,7 @@ test('language selection updates Settings and sidebar and persists across reload
   await expect(page.locator('aside .section-label', { hasText: /^项目$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '主题', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: '通用', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await page.getByRole('tab', { name: '模型与运行', exact: true }).click();
+  await page.getByRole('tab', { name: '引擎', exact: true }).click();
   await expect(page.getByRole('button', { name: 'API 端点', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存 API 密钥', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '打开 config.toml', exact: true })).toBeVisible();
