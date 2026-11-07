@@ -104,6 +104,7 @@ html.is-resizing .sidebar-resize-handle {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  border-top: 1px solid var(--color-border);
   /* The scroll box spans to the sidebar's edge, and the rows inside it stop
      `--sidebar-inset` short of it however the platform draws its scrollbar. A
      classic bar (Windows, Linux) fills the stable gutter and holds the rows
