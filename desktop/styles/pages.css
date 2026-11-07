@@ -118,19 +118,6 @@ a:where(.setting-link) {
   --dialog-max-height: min(52rem, 80dvh);
 }
 
-.management-dialog-pane:not([hidden]) {
-  display: contents;
-}
-#management-dialog .management-dialog-pane > .management-page {
-  overflow: visible;
-  width: 100%;
-  box-sizing: border-box;
-}
-#management-dialog .management-page > .management-page-content {
-  width: 100%;
-  max-width: none;
-  margin-inline: 0;
-}
 .management-page {
   grid-row: 2 / -1;
   min-height: 0;
@@ -254,10 +241,15 @@ h2 {
   white-space: nowrap;
 }
 
-.settings-group-card {
+.settings-group-card,
+.schedule-card,
+.schedule-form {
   background: var(--color-bg-canvas);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+.settings-group-card {
   padding: var(--space-1) var(--space-6);
 }
 
@@ -326,9 +318,6 @@ h2 {
   box-sizing: border-box;
   padding: var(--space-4);
   resize: vertical;
-  color: inherit;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font: inherit;
 }
@@ -543,10 +532,6 @@ button.archived-chat-open:hover .archived-chat-title {
 }
 
 /* ---------- skills page ---------- */
-.skills-page > .management-page-content {
-  gap: var(--space-7);
-}
-
 .skills-header {
   display: grid;
   gap: var(--space-4);
@@ -575,11 +560,8 @@ button.archived-chat-open:hover .archived-chat-title {
   align-items: center;
   gap: var(--space-5);
   width: 100%;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-4) var(--space-5);
-  color: var(--color-text-muted);
 }
 
 .skills-search input,
@@ -1091,14 +1073,13 @@ button.archived-chat-open:hover .archived-chat-title {
 }
 
 /* Scheduled tasks share the Settings page's type scale and theme. */
-.schedules-page > .management-page-content { max-width: 900px; }
 .schedule-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-5) 0; }
-.schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: var(--space-6); margin: var(--space-6) 0; }
+.schedule-card, .schedule-form { padding: var(--space-6); margin: var(--space-6) 0; }
 .schedule-card h2, .schedule-card h3 { margin: 0 0 var(--space-4); font-size: var(--font-size-emphasis); }
 .schedule-meta, .schedule-log, .schedule-empty { color: var(--color-text-muted); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .schedule-task { white-space: pre-wrap; overflow-wrap: anywhere; }
 .schedule-field { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-5) 0; }
-.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: var(--space-4); color: inherit; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; }
+.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: var(--space-4); border-radius: var(--radius-sm); font: inherit; }
 .schedule-field textarea { min-height: 100px; resize: vertical; }
 .schedule-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
 .schedule-error { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-danger); }

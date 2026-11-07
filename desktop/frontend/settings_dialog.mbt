@@ -129,9 +129,7 @@ fn settings_page(
         id=panel_id,
         labelledby=trigger_id,
         class="settings-tab-panel",
-        style=[
-          "min-height:0;overflow:auto;padding:var(--space-7);font-size:var(--font-size-md)",
-        ],
+        style=["font-size:var(--font-size-md)"],
         [
           @html.div(
             class="settings",
@@ -153,7 +151,7 @@ fn settings_page(
     orientation~,
     class="settings-page settings-tabs",
     style=[
-      "display:grid;grid-template-columns:var(--settings-columns);grid-template-rows:var(--settings-rows);gap:0;align-items:stretch;height:100%;min-height:0;color:var(--color-text-primary)",
+      "display:grid;grid-template-columns:var(--settings-columns);grid-template-rows:var(--settings-rows);gap:0;align-items:stretch;height:100%;min-height:0",
     ],
     [
       @rui.tabs_list(
