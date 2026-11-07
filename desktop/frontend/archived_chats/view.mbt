@@ -157,7 +157,7 @@ fn view(
   ]
   if groups.is_empty() {
     content.push(@html.div(class="archived-chats-empty", text(locale, Empty)))
-    return @page_shell.body(class="archived-chats-page", content)
+    return @ui.dialog_page(class="archived-chats-page", content)
   }
   content.push(
     @html.div(
@@ -189,14 +189,14 @@ fn view(
       Chats | Other => @icons.icon_archive
     }
     content.push(
-      @settings.group(
+      @ui.form_section(
         icon,
         group_label(locale, group.kind),
         group.rows.map(row => row_view(locale, row, actions)),
       ),
     )
   }
-  @page_shell.body(class="archived-chats-page", content)
+  @ui.dialog_page(class="archived-chats-page", content)
 }
 
 ///|

@@ -97,7 +97,7 @@ fn settings_page(
     let content = match section {
       General => [settings_general_group(dispatch, model)]
       Account =>
-        [@settings.group(icon_key, label, remote_access_rows(dispatch, model))]
+        [@ui.form_section(icon_key, label, remote_access_rows(dispatch, model))]
       Runtime => {
         let subtitle = if !model.host_settings_loaded() {
           @settings.text(model.locale, LoadingSettings)

@@ -164,7 +164,7 @@ fn dialog_contents(
     Unloaded => (false, true, 10)
   }
   let conversation_rows : Array[@html.Html] = [
-    @settings.row(
+    @ui.form_row(
       ui(locale, NewChatsLabel),
       [
         setting_select(
@@ -193,7 +193,7 @@ fn dialog_contents(
     ),
   ]
   let worktree_rows : Array[@html.Html] = [
-    @settings.row(
+    @ui.form_row(
       ui(locale, SubmodulesLabel),
       [
         setting_select(
@@ -220,7 +220,7 @@ fn dialog_contents(
       ],
       desc=ui(locale, SubmodulesDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       ui(locale, CheckoutTimeout),
       [
         setting_select(
@@ -267,12 +267,12 @@ fn dialog_contents(
         ],
       ),
       @html.div(class="settings", [
-        @settings.group(
+        @ui.form_section(
           @icons.icon_worktree,
           ui(locale, ConversationsLabel),
           conversation_rows,
         ),
-        @settings.group(
+        @ui.form_section(
           @icons.icon_worktree,
           ui(locale, WorktreesLabel),
           worktree_rows,

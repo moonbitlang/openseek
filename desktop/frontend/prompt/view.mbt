@@ -12,7 +12,7 @@ pub fn Model::view(
   dismiss~ : @cmd.Cmd,
 ) -> Array[@html.Html] {
   [
-    @settings.row(
+    @ui.form_row(
       text(locale, AdditionalPrompt),
       [
         @select_control.Control(
@@ -52,7 +52,7 @@ pub fn Model::view(
     ),
     ..if self.source is Custom {
       [
-        @settings.row(
+        @ui.form_row(
           text(locale, CustomPrompt),
           [
             @html.textarea(

@@ -304,17 +304,17 @@
 .workspace-settings-name {
   font-weight: 500;
 }
-#workspace-settings-dialog .settings {
+#workspace-settings-dialog .form-layout {
   gap: 1.5em;
 }
-#workspace-settings-dialog .setting-row {
+#workspace-settings-dialog .form-row {
   flex-wrap: wrap;
   gap: 0.75em;
 }
-#workspace-settings-dialog .setting-text {
+#workspace-settings-dialog .form-row-text {
   flex: 1 1 16em;
 }
-#workspace-settings-dialog .setting-control {
+#workspace-settings-dialog .form-row-controls {
   flex: 1 1 12em;
   width: auto;
   min-width: 0;

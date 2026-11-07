@@ -4,7 +4,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/i18n",
-  "openseek_desktop/frontend/settings",
+  "openseek_desktop/frontend/ui",
   "openseek_desktop/frontend/select_control",
 }
 

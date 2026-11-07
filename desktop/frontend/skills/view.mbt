@@ -452,7 +452,7 @@ fn list_page(
     )
   }
   sections.push(
-    @settings.group(icon_extensions, ui(locale, InstalledLabel), [
+    @ui.form_section(icon_extensions, ui(locale, InstalledLabel), [
       // Filtering must not reuse another skill's stateful menu DOM.
       @html.div(style=["display:contents"], installed_rows),
     ]),
@@ -496,15 +496,9 @@ fn list_page(
     }
   }
   sections.push(
-    @html.div(class="settings-group", [
-      @html.div(class="settings-group-head", [
-        icon(icon_package),
-        @html.h2(ui(locale, Registry)),
-      ]),
-      @html.div(class="settings-group-card card-surface", market_rows),
-    ]),
+    @ui.form_section(icon_package, ui(locale, Registry), market_rows),
   )
-  @page_shell.body(
+  @ui.dialog_page(
     class="skills-page",
     attrs=@html.Attrs::build().on_scroll(event => {
       guard event.target().to_element() is Some(element) else {
@@ -535,7 +529,7 @@ fn installed_actions(
   let enablement_locked = state.pending_enabled(channel, item.id) ||
     pending.map_or(false, action => action.blocks_enablement())
   let buttons : Array[@html.Html] = [
-    @settings.switch_control(
+    @ui.switch_control(
       enabled~,
       label="\{item.name}: \{label}",
       title=label,

@@ -771,7 +771,7 @@ fn codex_account_rows(
   let codex = model.codex
   let channel = model.focused
   let rows : Array[@html.Html] = [
-    @settings.row(
+    @ui.form_row(
       @settings.text(model.locale, Status),
       [],
       desc="\{codex.connection_label(locale=model.locale)} · \{codex.account_label(locale=model.locale)}",
@@ -779,7 +779,7 @@ fn codex_account_rows(
   ]
   if codex.signed_in() {
     rows.push(
-      @settings.row(
+      @ui.form_row(
         @settings.text(model.locale, Account),
         [
           @html.button(
@@ -794,7 +794,7 @@ fn codex_account_rows(
     )
   } else if codex.sign_in_required() && !@interop.is_native_ssh(channel) {
     rows.push(
-      @settings.row(
+      @ui.form_row(
         @settings.text(model.locale, SignIn),
         [
           @html.button(
@@ -810,7 +810,7 @@ fn codex_account_rows(
   }
   if codex.pending_auth_url() is Some(url) {
     rows.push(
-      @settings.row(
+      @ui.form_row(
         @settings.text(model.locale, SignInPage),
         [
           // The shared external-link listener keeps the desktop webview in
@@ -838,7 +838,7 @@ fn codex_account_rows(
   }
   if @interop.is_native_ssh(channel) {
     rows.push(
-      @settings.row(
+      @ui.form_row(
         "Remote Codex",
         [
           @html.button(
@@ -853,7 +853,7 @@ fn codex_account_rows(
     return rows
   }
   rows.push(
-    @settings.row(
+    @ui.form_row(
       @settings.text(model.locale, Configuration),
       [
         @html.button(
@@ -882,7 +882,7 @@ fn remote_access_rows(
   // no relay in between. Open uses a stable URL with no browser authorization.
   if model.is_desktop && model.console_url is Some(url) {
     rows.push(
-      @settings.row(
+      @ui.form_row(
         "Local console",
         [
           @html.a(
@@ -917,7 +917,7 @@ fn remote_access_rows(
   } else if model.remote_connecting {
     [
       @html.span(
-        class="setting-desc",
+        class="form-row-description",
         attrs=@html.Attrs::build().role("status"),
         @settings.text(model.locale, WaitingBrowser),
       ),
@@ -940,13 +940,13 @@ fn remote_access_rows(
       ),
     )
   }
-  rows.push(@settings.row(@settings.text(model.locale, Account), controls))
+  rows.push(@ui.form_row(@settings.text(model.locale, Account), controls))
   if model.account is Some(_) {
     let preferences = model.account_preferences
     let controls : Array[@html.Html] = []
     if preferences.value is Some(enabled) {
       controls.push(
-        @settings.switch_control(
+        @ui.switch_control(
           enabled~,
           label=@settings.text(model.locale, HelpImproveSeekMoon),
           disabled=preferences.pending ||
@@ -974,7 +974,7 @@ fn remote_access_rows(
       )
     }
     rows.push(
-      @settings.row(
+      @ui.form_row(
         @settings.text(model.locale, HelpImproveSeekMoon),
         controls,
         desc=@settings.text(model.locale, ContentImprovementDescription),
@@ -992,13 +992,13 @@ fn remote_access_rows(
       .map(status => status.connected)
       .unwrap_or(false)
     rows.push(
-      @settings.row(
+      @ui.form_row(
         @settings.text(model.locale, RemoteControl),
         if managed {
           []
         } else {
           [
-            @settings.switch_control(
+            @ui.switch_control(
               enabled~,
               label=@settings.text(model.locale, RemoteControl),
               disabled=model.account is None ||
@@ -1021,7 +1021,7 @@ fn remote_access_rows(
     )
     if model.remote_access is Some({ device_url: Some(url), .. }) {
       rows.push(
-        @settings.row(@settings.text(model.locale, DevicePage), [
+        @ui.form_row(@settings.text(model.locale, DevicePage), [
           @html.a(
             href=url,
             target=Blank,
@@ -1035,7 +1035,7 @@ fn remote_access_rows(
   }
   if model.remote_error is Some(message) {
     rows.push(
-      @settings.row(@settings.text(model.locale, Problem), [], desc=message),
+      @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
     )
   }
   rows
@@ -1255,7 +1255,7 @@ fn api_settings_rows(
 ) -> Array[@html.Html] {
   if @interop.is_native_ssh(model.focused) {
     return [
-      @settings.row(
+      @ui.form_row(
         "API key fallback from this computer",
         [
           @html.button(
@@ -1274,7 +1274,7 @@ fn api_settings_rows(
     ..if !ready {
       [byok_setup_guide(dispatch, model)]
     },
-    @settings.row(
+    @ui.form_row(
       @settings.text(model.locale, ApiEndpoint),
       [
         ApiProviderMenu.setting_control(
@@ -1307,7 +1307,7 @@ fn api_settings_rows(
   ]
   if model.api_provider is Custom {
     rows.push(
-      @settings.row(
+      @ui.form_row(
         @settings.text(model.locale, EndpointUrl),
         [
           @html.input(
@@ -1339,7 +1339,7 @@ fn api_settings_rows(
         (@settings.text(model.locale, CustomApiKey), model.custom_key_saved)
     }
     rows.push(
-      @settings.row(
+      @ui.form_row(
         key_label,
         [
           @html.input(
@@ -1385,7 +1385,7 @@ fn settings_runtime_groups(
   let engine_rows : Array[@html.Html] = [
     ..if model.host_settings_error is Some(error) {
       [
-        @settings.row(
+        @ui.form_row(
           @settings.text(locale, LoadingSettings),
           [
             @html.span(error),
@@ -1408,7 +1408,7 @@ fn settings_runtime_groups(
       toggle=dispatch(ToggleSelectMenu(PromptMenu)),
       dismiss=dispatch(CloseSelectMenu),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, MaxSteps),
       [
         @html.input(
@@ -1431,9 +1431,9 @@ fn settings_runtime_groups(
     id_prefix="settings-api",
   )
   [
-    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
-    @settings.group(icon_key, "API", api_rows),
-    @settings.group(
+    @ui.form_section(icon_sparkle, @settings.text(locale, Engine), engine_rows),
+    @ui.form_section(icon_key, "API", api_rows),
+    @ui.form_section(
       icon_extensions,
       "Codex",
       codex_account_rows(dispatch, model),
@@ -1448,8 +1448,8 @@ fn settings_general_group(
 ) -> @html.Html {
   let locale = model.locale
   let settings_loaded = model.host_settings_loaded()
-  @settings.group(icon_layout, @settings.text(locale, General), [
-    @settings.row(
+  @ui.form_section(icon_layout, @settings.text(locale, General), [
+    @ui.form_row(
       @settings.text(locale, TranscriptView),
       [
         @rui.button_group(
@@ -1479,7 +1479,7 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, TranscriptViewDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, Language),
       [
         LanguageMenu.setting_control(
@@ -1506,7 +1506,7 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, LanguageDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, Followup),
       [
         FollowupBehaviorMenu.setting_control(
@@ -1531,7 +1531,7 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, FollowupDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, Theme),
       [
         ThemeMenu.setting_control(
@@ -1559,7 +1559,7 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, ThemeDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, FontSize),
       [
         @html.input(
@@ -1590,7 +1590,7 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, FontSizeDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, NotificationCorner),
       [
         NotificationCornerMenu.setting_control(
@@ -1622,7 +1622,7 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, NotificationDescription),
     ),
-    @settings.row(
+    @ui.form_row(
       @settings.text(locale, FileTreeLayout),
       [
         TreeLayoutMenu.setting_control(
@@ -1655,14 +1655,14 @@ fn settings_diagnostics_group(
   model : Model,
 ) -> @html.Html {
   let locale = model.locale
-  @settings.group(
+  @ui.form_section(
     @icons.icon_settings_gear,
     @settings.text(locale, Diagnostics),
     [
-      @settings.row(
+      @ui.form_row(
         @settings.text(locale, FpsOverlay),
         [
-          @settings.switch_control(
+          @ui.switch_control(
             enabled=model.fps_overlay_enabled,
             label=@settings.text(locale, FpsOverlay),
             on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
@@ -1680,8 +1680,8 @@ fn settings_updates_group(
   model : Model,
 ) -> @html.Html {
   let locale = model.locale
-  @settings.group(icon_sync, @settings.text(locale, Updates), [
-    @settings.row(
+  @ui.form_section(icon_sync, @settings.text(locale, Updates), [
+    @ui.form_row(
       @settings.text(locale, CheckUpdates),
       update_check_controls(dispatch, model),
       desc=@settings.text(locale, CurrentVersion(model.app_version)),
