@@ -23,7 +23,6 @@ pub fn text(@i18n.Locale, Message) -> String
 
 // Types and methods
 pub(all) struct Actions {
-  back : @cmd.Cmd
   open : (@conversation.Id) -> @cmd.Cmd
   restore : (@conversation.Id) -> @cmd.Cmd
   delete : (@conversation.Id) -> @cmd.Cmd
@@ -52,8 +51,6 @@ pub(all) enum Message {
   Title
   Description
   ArchivedCount(Int32)
-  Manage
-  BackToSettings
   Filter
   Chats
   Other

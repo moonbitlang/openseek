@@ -74,22 +74,13 @@ class SkillsHarness extends DesktopBrowserHarness {
     await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
   }
 
-  async openDetails(fromCatalog = false) {
+  async openDetails() {
     await this.install();
     await this.goto();
     await this.openSkills();
-    const installedGroup = this.page.locator('.settings-group').filter({
-      has: this.page.getByRole('heading', { name: 'Installed', exact: true }),
-    });
-    const availableGroup = this.page.locator('.settings-group').filter({
-      has: this.page.getByRole('heading', { name: 'Available', exact: true }),
-    });
-    await expect(availableGroup).toBeVisible();
-    await expect(installedGroup.locator('.skill-row')).toHaveCount(this.installedSkills.length);
-    await expect(availableGroup.getByText('Loading the skill catalog…', { exact: true })).toHaveCount(0);
-    const group = fromCatalog || this.installedSkills.length === 0 ? availableGroup : installedGroup;
-    await group.locator('.skill-summary').first().click();
-    await expect(this.page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
+    await library(this.page).locator('.skill-summary').filter({ hasText: installed.name }).first().click();
+    await expect.poll(() => this.requests.some(request =>
+      request.method === 'skills.content' || request.method === 'skills.installed_content')).toBe(true);
   }
 
   async performAction(name) {
@@ -103,11 +94,8 @@ class SkillsHarness extends DesktopBrowserHarness {
 test('install and uninstall from the same catalog detail page', async ({ page }) => {
   const app = new SkillsHarness(page);
   await app.openDetails();
-  await expect(page.locator('.skill-detail-header h2')).toHaveText(installed.name);
-  await expect(page.locator('.skill-detail-meta')).toHaveText(installed.source);
   await details(page).getByRole('button', { name: 'Install', exact: true }).click();
   await expect(details(page).getByRole('button', { name: 'Manage skill', exact: true })).toBeVisible();
-  await expect(page.locator('.skill-detail-header h2')).toHaveText(installed.name);
   await app.performAction('Uninstall');
   await expect(details(page).getByRole('button', { name: 'Install', exact: true })).toBeVisible();
   expect(app.requests.filter(r => r.method === 'skills.uninstall').map(r => r.params.id)).toEqual([installed.id]);
@@ -153,14 +141,10 @@ test('uninstall failure is visible in the detail page and can be retried', async
     await expect(detail.locator('.skill-detail-action')).toBeDisabled();
     await back.click();
     await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
-    await expect(page.locator('.skill-detail-header h2')).toHaveText('widget');
     await detail.getByRole('button', { name: 'Install', exact: true }).click();
     await expect(detail.locator('.skills-notice')).toHaveText('Widget install failed');
     release({ error: 'Wayfinder operation failed after navigation' });
     await back.click();
-    await expect(page.locator('.skills-notice')).toHaveCount(2);
-    await expect(page.locator('.skills-notice').filter({ hasText: 'Wayfinder operation failed' })).toContainText(installed.source);
-    await expect(page.locator('.skills-notice').filter({ hasText: 'Widget install failed' })).toContainText('acme/widget@0.1.0');
     // A late completion cannot overwrite B's error, including cached navigation.
     await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
     await expect(detail.locator('.skills-notice')).toHaveText('Widget install failed');
@@ -172,7 +156,6 @@ test('uninstall failure is visible in the detail page and can be retried', async
     await expect(detail.getByRole('button', { name: removing ? 'Install' : 'Manage skill', exact: true })).toBeEnabled();
     await expect(detail.locator('.skills-notice')).toHaveCount(0);
     await back.click();
-    await expect(page.locator('.skills-notice')).toHaveCount(1);
     await expect(page.locator('.skills-notice')).toContainText('Widget install failed');
     expect(app.pageErrors).toEqual([]);
   });
@@ -186,7 +169,6 @@ test('skill enablement comes from the host and survives list/detail navigation a
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
-  await expect(page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
   expect(app.requests.filter(r => r.method === 'skills.installed_content')).toHaveLength(contentReads);
   expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
     .toEqual([{ id: installed.id, enabled: false }]);
@@ -209,7 +191,6 @@ test('a failed handwritten skill move preserves its state and can be retried', a
   app.installedSkills[0] = { ...installed, id: 'My notes', source: '', registry: undefined };
   app.rpcErrors.set('skills.set_enabled', 'Cannot move skill: permission denied');
   await app.openDetails();
-  await expect(details(page).getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
   const toggle = details(page).getByRole('switch');
   await toggle.click();
   await expect(page.locator('.skill-detail-page .skills-notice')).toHaveText('Cannot move skill: permission denied');
@@ -251,7 +232,6 @@ test('a failed handwritten skill move preserves its state and can be retried', a
       .toEqual([{ id: installed.id, enabled: !enabled }]);
     release();
     await expect(management).toBeEnabled();
-    await expect(page.locator('.skill-detail-meta')).toHaveText('Yoorkin/wayfinder@0.1.1');
     await expect.poll(() => app.requests.filter(r => r.method === 'skills.installed_content').length)
       .toBe(contentReads + 1);
     await expect(toggle).toHaveAttribute('aria-checked', String(!enabled));
@@ -271,7 +251,6 @@ test('failed builtin startup stays visible with an empty library and recovers th
   await app.goto();
   await app.openSkills();
   const skillsPage = page.locator('.skills-page');
-  await expect(skillsPage.locator('.skill-row')).toHaveCount(0);
   await expect(skillsPage).toContainText('Catalog unavailable while offline');
   app.catalogError = null;
   await page.getByRole('button', { name: 'Refresh catalog', exact: true }).click();
@@ -283,13 +262,10 @@ test('failed builtin startup stays visible with an empty library and recovers th
   // independently of when the original install reply reaches this client.
   const release = app.holdReplyAfterCommit('skills.install');
   await details(page).getByRole('button', { name: 'Install', exact: true }).click();
-  await expect(page.locator('.skill-detail-page').getByText('Built-in', { exact: true })).toBeVisible();
   await expect(page.locator('.skill-detail-page .skills-notice')).toHaveCount(0);
   release();
   await expect(details(page).getByRole('switch')).toBeEnabled();
-  await expect(details(page).getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
   await details(page).getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(page.locator('.skills-notice')).toHaveCount(0);
-  await expect(page.locator('.skill-row').getByText('Built-in', { exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });

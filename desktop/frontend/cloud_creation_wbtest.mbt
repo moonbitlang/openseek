@@ -218,7 +218,7 @@ test "Cloud creation behind Settings promotes its navigation without leaving Set
     ),
     settings,
   )
-  assert_true(created.management_dialog is Some(Settings))
+  assert_true(created.management_dialog is Some(Settings(General)))
   let (_, back) = update(test_dispatch(), CloseManagementDialog, created)
   assert_true(
     back.cloud_identity() is Some(@interop.Cloud(session="new-cloud", ..)),

@@ -1,7 +1,6 @@
 import {
   "moonbit-community/rui",
   "moonbitlang/core/immut/vector",
-  "openseek_desktop/frontend/page_shell",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/clipboard",
@@ -14,7 +13,7 @@ import {
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",
-  "openseek_desktop/frontend/settings",
+  "openseek_desktop/frontend/ui",
   "openseek_desktop/frontend/action_menu",
 }
 

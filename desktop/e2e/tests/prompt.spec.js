@@ -13,6 +13,7 @@ class PromptHarness extends DesktopBrowserHarness {
 async function settings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Models & runtime', exact: true }).click();
   return page.getByRole('button', { name: 'Additional prompt', exact: true });
 }
 

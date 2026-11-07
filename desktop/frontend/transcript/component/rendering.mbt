@@ -207,7 +207,7 @@ fn EmptyProjectControl::render(
           .popover("manual"),
         [
           @html.div(
-            class="empty-project-search",
+            class="empty-project-search input-surface",
             attrs=@html.Attrs::build().data_set("focus-owner", ""),
             [
               @html.span(
@@ -215,6 +215,7 @@ fn EmptyProjectControl::render(
                 @icons.icon(@icons.icon_search),
               ),
               @html.input(
+                class="field-surface",
                 input_type=@html.InputType::Text,
                 value=self.query,
                 autofocus=true,

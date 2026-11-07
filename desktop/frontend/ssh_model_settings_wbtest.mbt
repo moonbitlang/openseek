@@ -10,13 +10,13 @@ test "SSH API settings open the local host and wait for its authoritative settin
     ..test_model().register_ssh(profile),
     is_desktop: true,
     focused: @interop.ChannelId::Remote(profile.id),
-    management_dialog: Some(Settings),
+    management_dialog: Some(Settings(Runtime)),
     setup_api_key: "unsaved-remote-key",
     api_setup_open: true,
   }.apply_host_settings(host_settings(provider="custom", has_custom_key=true))
   let (_, opened) = update(test_dispatch(), OpenLocalApiSettings, remote)
   assert_eq(opened.focused, Local)
-  assert_true(opened.management_dialog is Some(Settings))
+  assert_true(opened.management_dialog is Some(Settings(Runtime)))
   assert_false(opened.api_setup_open || opened.host_settings_loaded())
   assert_eq(opened.setup_api_key, "")
   let (_, pending) = update(test_dispatch(), SaveApiKey, opened)

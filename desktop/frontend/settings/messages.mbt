@@ -81,6 +81,9 @@ pub(all) enum Message {
   System
   Settings
   Preferences
+  General
+  ModelsAndRuntime
+  SshHosts
   Interface
   TranscriptView
   TranscriptViewDescription
@@ -138,6 +141,21 @@ pub(all) enum Message {
 /// ```
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, General) => "General"
+    (Spanish, General) => "General"
+    (SimplifiedChinese, General) => "通用"
+    (TraditionalChinese, General) => "一般"
+    (Japanese, General) => "一般"
+    (English, ModelsAndRuntime) => "Models & runtime"
+    (Spanish, ModelsAndRuntime) => "Modelos y ejecución"
+    (SimplifiedChinese, ModelsAndRuntime) => "模型与运行"
+    (TraditionalChinese, ModelsAndRuntime) => "模型與執行"
+    (Japanese, ModelsAndRuntime) => "モデルと実行"
+    (English, SshHosts) => "SSH hosts"
+    (Spanish, SshHosts) => "Hosts SSH"
+    (SimplifiedChinese, SshHosts) => "SSH 主机"
+    (TraditionalChinese, SshHosts) => "SSH 主機"
+    (Japanese, SshHosts) => "SSH ホスト"
     (English, HelpImproveSeekMoon) => "Help improve SeekMoon"
     (Spanish, HelpImproveSeekMoon) => "Ayudar a mejorar SeekMoon"
     (SimplifiedChinese, HelpImproveSeekMoon) => "帮助改进 SeekMoon"

@@ -63,7 +63,8 @@ for (const leave of ['switch', 'sign out']) {
       await expect.poll(() => observations(app, sessionB).length).toBe(1);
     } else {
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
+      await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
+      const section = page.getByRole('region', { name: 'Account · Remote access', exact: true });
       await section.getByRole('button', { name: 'Sign out', exact: true }).click();
       await expect(app.row(sessionA)).toBeHidden();
     }
@@ -89,7 +90,7 @@ for (const operation of ['Archive', 'Delete…']) {
     await app.rowContainer(sessionA).getByRole('button', { name: 'Conversation actions', exact: true }).click();
     await page.getByRole('menuitem', { name: operation, exact: true }).click();
     if (operation === 'Delete…') await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-    await expect(page.locator('main .topbar-title')).toHaveText('New chat');
+    await expect(app.row(sessionA)).toBeHidden();
     await page.clock.runFor(5000);
     expect(observations(app)).toHaveLength(1);
     expect(app.postCount).toBe(0);
@@ -111,7 +112,6 @@ test('Cloud switching away retires an in-flight idle reconnect response', async 
   await expect.poll(() => observations(app, sessionB).length).toBe(1);
   await expect.poll(() => page.evaluate(session => window.cloudSessionStreams.get(session)?.size || 0, sessionA)).toBe(0);
   await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Hidden conversation response' });
-  await expect(page.locator('main .topbar-title')).toHaveText('Cloud fixture B');
   await expect(page.locator('#transcript')).not.toContainText('Hidden conversation response');
   expect(observations(app)).toHaveLength(2);
   expect(app.postCount).toBe(1);

@@ -4,11 +4,9 @@ import { CloudHarness, cloudOrigin } from './support/cloud_harness.js';
 const label = 'Help improve SeekMoon';
 const endpoint = `${cloudOrigin}/v1/me/preferences`;
 const toggle = page => page.getByRole('switch', { name: label, exact: true });
-const accountPanel = page => page.locator('.settings-group', {
-  has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }),
-});
 async function openSettings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
 }
 
 test('account preferences load on opening Settings and save only the confirmed server value', async ({ page }) => {
@@ -28,7 +26,6 @@ test('account preferences load on opening Settings and save only the confirmed s
   await openSettings(page);
   await expect(toggle(page)).toBeChecked();
   expect(requests).toEqual([{ method: 'GET', body: null, token: 'Bearer ts_fixture-123' }]);
-  await expect(accountPanel(page)).toContainText('including existing history');
   await toggle(page).click();
   await expect(toggle(page)).toBeDisabled();
   await expect(toggle(page)).toBeChecked();

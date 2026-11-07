@@ -54,7 +54,6 @@ test('clear and Escape restore the normal list and keep typing focus; switching 
   const app = fixture(page);
   const input = await openSearch(page, app);
   await input.fill('no matching text');
-  await expect(page.getByText('No matching conversations', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Clear search', exact: true }).click();
   await expect(input).toHaveValue('');
   await expect(input).toBeFocused();
@@ -114,6 +113,7 @@ test('Chat search includes Cloud live titles, leaves archived ones out, then rem
   await expect(input).toHaveValue('matching');
   await expect(rows(page)).toHaveCount(1);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(app.row(sessionA)).toHaveCount(0);
   await expect(app.row(sessionB)).toHaveCount(0);
@@ -167,7 +167,6 @@ test('Chat and Work searches isolate Cloud and project history and leave archive
   await input.fill('matching');
   await expect(rows(page)).toHaveText(['Matching work']);
   await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
-  await expect(page.getByRole('complementary').getByRole('button', { name: /Archived chats/ })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

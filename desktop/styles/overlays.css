@@ -137,7 +137,6 @@
   border: 0;
   outline: none;
   overflow-y: auto;
-  background: transparent;
   color: var(--color-text-primary);
   font: inherit;
   resize: none;
@@ -187,7 +186,6 @@
   padding: var(--space-3) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
   line-height: var(--line-height-normal);
@@ -304,17 +302,17 @@
 .workspace-settings-name {
   font-weight: 500;
 }
-#workspace-settings-dialog .settings {
+#workspace-settings-dialog .form-layout {
   gap: 1.5em;
 }
-#workspace-settings-dialog .setting-row {
+#workspace-settings-dialog .form-row {
   flex-wrap: wrap;
   gap: 0.75em;
 }
-#workspace-settings-dialog .setting-text {
+#workspace-settings-dialog .form-row-text {
   flex: 1 1 16em;
 }
-#workspace-settings-dialog .setting-control {
+#workspace-settings-dialog .form-row-controls {
   flex: 1 1 12em;
   width: auto;
   min-width: 0;
@@ -515,7 +513,6 @@
   flex: 1 1 auto;
   padding: var(--space-5) 0;
   border: 0;
-  background: transparent;
   font: var(--font-weight-regular) var(--font-size-md) /
     var(--line-height-normal) var(--font-family-sans);
 }

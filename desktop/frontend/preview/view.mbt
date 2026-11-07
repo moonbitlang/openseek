@@ -98,7 +98,7 @@ pub fn toolbar_view(
       on_input=actions.input,
       attrs=@html.Attrs::build()
         .id(AddressInputId)
-        .class("browser-address")
+        .class("browser-address field-surface")
         .data_set("focus-owner", "")
         .on_keydown(event => {
           match event.key() {

@@ -84,7 +84,7 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   let dispatch = test_dispatch()
   let model = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, model)
-  assert_true(settings.management_dialog is Some(Settings))
+  assert_true(settings.management_dialog is Some(Settings(General)))
   let (_, cloud) = update(
     dispatch,
     OpenCloudConversation(account="fixture-user", session="cloud-a"),

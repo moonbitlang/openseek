@@ -1,14 +1,11 @@
 // Feature-owned UI messages; all built-in languages are exhaustive.
 
 ///|
-/// Chrome of the archived-conversations page and its Settings entry; never
-/// user-authored titles.
+/// Chrome of the archived-conversations tab; never user-authored titles.
 pub(all) enum Message {
   Title
   Description
   ArchivedCount(Int32)
-  Manage
-  BackToSettings
   Filter
   Chats
   Other
@@ -23,11 +20,11 @@ pub(all) enum Message {
 ///|
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
-    (English, Title) => "Archived chats"
-    (Spanish, Title) => "Conversaciones archivadas"
-    (SimplifiedChinese, Title) => "已归档对话"
-    (TraditionalChinese, Title) => "已歸檔對話"
-    (Japanese, Title) => "アーカイブ済みチャット"
+    (English, Title) => "Archive"
+    (Spanish, Title) => "Archivo"
+    (SimplifiedChinese, Title) => "归档"
+    (TraditionalChinese, Title) => "歸檔"
+    (Japanese, Title) => "アーカイブ"
     (English, Description) =>
       "Archived conversations stay out of the sidebar. Restore one to continue it, or delete it permanently."
     (Spanish, Description) =>
@@ -54,16 +51,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (TraditionalChinese, ArchivedCount(count)) => "\{count} 個已歸檔對話"
     (Japanese, ArchivedCount(count)) =>
       "アーカイブ済みの会話 \{count} 件"
-    (English, Manage) => "Manage"
-    (Spanish, Manage) => "Gestionar"
-    (SimplifiedChinese, Manage) => "管理"
-    (TraditionalChinese, Manage) => "管理"
-    (Japanese, Manage) => "管理"
-    (English, BackToSettings) => "Back to settings"
-    (Spanish, BackToSettings) => "Volver a la configuración"
-    (SimplifiedChinese, BackToSettings) => "返回设置"
-    (TraditionalChinese, BackToSettings) => "返回設定"
-    (Japanese, BackToSettings) => "設定に戻る"
     (English, Filter) => "Filter archived chats"
     (Spanish, Filter) => "Filtrar conversaciones archivadas"
     (SimplifiedChinese, Filter) => "筛选已归档对话"

@@ -970,8 +970,19 @@ priv enum Screen {
 priv enum ManagementDialog {
   Skills
   Schedules
-  Settings
+  Settings(SettingsSection)
+}
+
+///|
+#derive(Eq)
+priv enum SettingsSection {
+  General
+  Account
+  Runtime
+  SshHosts
   ArchivedChats
+  Diagnostics
+  Updates
 }
 
 ///|
@@ -1810,7 +1821,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
-  OpenArchivedChats
+  SettingsSectionSelected(SettingsSection)
   CloseManagementDialog
   OpenLocalApiSettings
   Navigation(NavigationMsg)
@@ -3146,7 +3157,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
   if self.api_ready() {
     { ..self, api_setup_open: false, api_setup_dismissed: false, select_menu, }
   } else if self.api_setup_dismissed ||
-    self.management_dialog is Some(Settings) ||
+    self.management_dialog is Some(Settings(_)) ||
     self.cloud_selected() {
     { ..self, api_setup_open: false, select_menu, }
   } else {
