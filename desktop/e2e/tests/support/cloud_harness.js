@@ -434,7 +434,10 @@ export class CloudHarness {
       if (this.pauseHistory) await this.pauseHistory;
       if (status !== 200) return route.fulfill({ status, headers, contentType: 'application/json', body });
       const cacheHeaders = { ...headers, ETag: etag, 'Cache-Control': 'no-store' };
-      if ((await request.headerValue('If-None-Match')) === etag) {
+      // WebKit routing rejects all 3xx, including 304. Send the full history
+      // there; Chromium retains conditional-response coverage.
+      if (this.page.context().browser().browserType().name() !== 'webkit'
+          && (await request.headerValue('If-None-Match')) === etag) {
         return route.fulfill({ status: 304, headers: cacheHeaders });
       }
       return route.fulfill({ status, headers: cacheHeaders, contentType: 'application/json', body });
