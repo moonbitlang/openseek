@@ -253,7 +253,7 @@ fn MessageEditor::view(
   }
   Some(
     @html.div(
-      class="message-editor composer-surface",
+      class="message-editor composer-surface input-surface",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
         @html.textarea(

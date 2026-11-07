@@ -233,7 +233,7 @@ fn path_editor(
   } else {
     base_attrs
   }
-  @html.div(class="picker-path-editor", [
+  @html.div(class="picker-path-editor input-surface", [
     @html.span(
       class="picker-path-editor-icon",
       attrs=@html.Attrs::build().aria_hidden("true"),

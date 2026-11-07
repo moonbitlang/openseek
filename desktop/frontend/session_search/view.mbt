@@ -75,5 +75,5 @@ pub fn Model::view(
       ),
     )
   }
-  @html.div(class="sidebar-search", children)
+  @html.div(class="sidebar-search input-surface", children)
 }

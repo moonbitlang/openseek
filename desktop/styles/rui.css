@@ -23,7 +23,7 @@
   --rui-destructive-ring: var(--color-danger-border) !important;
   --rui-border: var(--color-divider) !important;
   --rui-input: var(--color-border) !important;
-  --rui-input-background: var(--color-bg-subtle) !important;
+  --rui-input-background: var(--color-bg-canvas) !important;
   --rui-outline-background: var(--color-bg-canvas) !important;
   --rui-outline-border: var(--color-border) !important;
   --rui-outline-hover-bg: var(--color-bg-subtle) !important;

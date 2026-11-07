@@ -68,8 +68,14 @@ button {
   }
 }
 
+input,
+textarea,
+.input-surface,
 .field-surface {
-  background: var(--color-bg-subtle);
+  background-color: var(--color-bg-canvas);
+}
+
+.field-surface {
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
 }
@@ -93,7 +99,6 @@ button {
 .search-field > input {
   flex: 1;
   border: none;
-  background: transparent;
   color: inherit;
   padding: 0;
   border-radius: 0;

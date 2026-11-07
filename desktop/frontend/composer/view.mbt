@@ -1015,7 +1015,7 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   }
   @html.section(class="composer", [
     @html.div(class="composer-context", self.before_inner),
-    @html.div(class="composer-inner", attrs~, inner),
+    @html.div(class="composer-inner input-surface", attrs~, inner),
     @html.div(class="composer-toolbar", [
       @html.div(class="composer-status", self.leading),
       @html.div(class="composer-status composer-status-trailing", self.trailing),
