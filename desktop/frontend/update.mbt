@@ -4917,27 +4917,19 @@ fn update_msg(
         // in the composer.
         if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
           if conv.queue_edit is Some(Editing(id~)) {
+            let (action, saving) = conv.prepare_queue_edit(id, run_id)
             return (
               queue_openseek(
                 locale=model.locale,
                 dispatch,
                 model.focused,
                 conv.session_id,
-                @protocol.QueueEdit(
-                  id~,
-                  text=task,
-                  images=conv.images.map(image => image.url),
-                ),
+                action,
                 run_id,
               ),
               // Freeze this edit until the RPC settles. Both UI and update
               // guards reject repeated saves without replacing its draft.
-              model.replace_conversation({
-                ..conv,
-                queue_edit: Some(
-                  Saving(id~, run_id~, mentions=conv.mentions.copy()),
-                ),
-              }),
+              model.replace_conversation(saving),
             )
           }
           let (model, submission_id) = model.allocate_submission_id()
@@ -22730,6 +22722,65 @@ test "CloseDockTabs All keeps the empty launcher at the chosen panel size" {
   })
   assert_true(normal.right_panel_open)
   assert_false(normal.right_panel_expanded)
+  for empty in [closed, normal] {
+    let (_, opened) = update(
+      dispatch,
+      FileEditor(FileSelected(path=Relative("src/alpha.mbt"), name="alpha.mbt")),
+      empty,
+    )
+    let opened = opened.test_resolve_editor("src/alpha.mbt")
+    assert_true(
+      opened.dock_state().tabs ==
+      [@dock.DockTab::File(path=opened.test_file("src/alpha.mbt"))],
+    )
+    assert_true(
+      @dock.active_file(opened.dock_state()) ==
+      Some(opened.test_file("src/alpha.mbt")),
+    )
+    assert_true(opened.right_panel_open)
+    assert_eq(opened.right_panel_expanded, empty.right_panel_expanded)
+  }
+}
+
+///|
+test "relative file tab closes keep the context file and the surviving picker" {
+  let dispatch = test_dispatch()
+  let mut model = desktop_model()
+  for name in ["alpha", "bravo", "charlie"] {
+    let path = "src/\{name}.mbt"
+    let (_, opened) = update(
+      dispatch,
+      FileEditor(FileSelected(path=Relative(path), name="\{name}.mbt")),
+      model,
+    )
+    model = opened.test_resolve_editor(path)
+  }
+  let (_, picker) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
+  let mixed = { ..picker, right_panel_expanded: true, }
+  let alpha = @dock.DockTab::File(path=mixed.test_file("src/alpha.mbt"))
+  let bravo = @dock.DockTab::File(path=mixed.test_file("src/bravo.mbt"))
+  let charlie = @dock.DockTab::File(path=mixed.test_file("src/charlie.mbt"))
+  let (_, menu) = update(dispatch, DockTabMenuChanged(true), mixed)
+  assert_true(menu.dock_state().active is Some(FilePicker))
+  let cases : Array[(@dock.CloseSelection, Array[@dock.DockTab], @dock.DockTab)] = [
+    (Others(bravo), [bravo], bravo),
+    (ToLeft(bravo), [bravo, charlie, FilePicker], FilePicker),
+    (ToRight(bravo), [alpha, bravo], bravo),
+  ]
+  for (selection, survivors, active) in cases {
+    let (_, dismissed) = update(dispatch, DockTabMenuChanged(false), menu)
+    let (_, closed) = update(dispatch, CloseDockTabs(selection), dismissed)
+    assert_true(closed.dock_state().tabs == survivors)
+    assert_true(closed.dock_state().active == Some(active))
+    assert_false(closed.dock_tab_menu_open)
+    assert_true(closed.right_panel_open)
+    assert_true(closed.right_panel_expanded)
+    for tab in [alpha, bravo, charlie] {
+      guard tab is File(path~) else { fail("expected a file tab") }
+      assert_eq(closed.file_panel.docs.contains(path), survivors.contains(tab))
+    }
+  }
+  assert_true(mixed.dock_state().tabs == [alpha, bravo, charlie, FilePicker])
 }
 
 ///|
@@ -24327,4 +24378,499 @@ test "a subagent of an archived conversation opens from the archive" {
     is Some({ session: "desktop-parent-sr-1", record: ArchivedRecord, .. }) else {
     fail("expected the child to open from the archive")
   }
+}
+
+///|
+test "queued save consumes only submitted lines from a merged review selection" {
+  let initial = { ..running_model(), followup_behavior: FollowupQueue, }
+  let conv = initial.active()
+  let file = initial.test_file("src/main.mbt")
+  let change : @fileeditor.ChangedFile = {
+    path: Relative("src/main.mbt"),
+    original_path: None,
+    index_status: " ",
+    worktree_status: "M",
+    kind: ChangeModified,
+  }
+  guard file_ctx(initial).placement is Some(placement) else {
+    fail("review fixture needs a checkout")
+  }
+  let panel = {
+    ..initial.file_panel,
+    owner: Some(file_ctx(initial).owner),
+    placement: @fileeditor.PlacementLive(placement),
+    changes_head: Some("baseline"),
+    docs: Map([
+      (
+        file,
+        @fileeditor.Doc::{
+          name: "main.mbt",
+          state: TabLoaded(content="  100\n\n  200\n", sig="current"),
+          review: Some({
+            generation: 1,
+            working_generation: 1,
+            baseline: ReviewContent("  1\n\n  2\n"),
+            view_mode: ReviewDiff,
+            selected: change,
+          }),
+          stale: false,
+        },
+      ),
+    ]),
+  }
+  let first : @mention_context.ReviewChanges = {
+    source: {
+      workspace: "/work",
+      file: "src/main.mbt",
+      original_file: None,
+      base: Some("baseline"),
+      // Digest of the complete original/modified fixture above, as carried
+      // by a real ReviewContextChanged event from the editor.
+      version: "240f13a563a89d8d306eafa0698bef5cb33a1d5c354b41fb9f44648d87c7d48d",
+    },
+    excerpts: [
+      {
+        original: [{ number: 1, text: "  1", }],
+        modified: [{ number: 1, text: "  100", }],
+      },
+    ],
+  }
+  let second = {
+    ..first,
+    excerpts: [
+      {
+        original: [{ number: 3, text: "  2", }],
+        modified: [{ number: 3, text: "  200", }],
+      },
+    ],
+  }
+  let base = { ..initial, file_panel: panel, }.replace_conversation({
+    ..conv,
+    queued_inputs: [{ id: "queued", content: "Queued message", images: [], }],
+  })
+  let (_, editing) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.QueuedInputEditRequested(
+        identity=base.composer_input().identity,
+        id="queued",
+      ),
+    ),
+    base,
+  )
+  assert_eq(editing.active().task, "Queued message")
+  let (_, selected) = update(
+    test_dispatch(),
+    FileEditor(
+      @fileeditor.ReviewContextChanged(
+        owner={ channel: conv.device, session: conv.session_id, },
+        selection=first,
+        adding=true,
+      ),
+    ),
+    editing,
+  )
+  assert_eq(selected.active().mentions, [
+    { ref_: ReviewChanges(first), range: None, },
+  ])
+  let (_, saving) = update(test_dispatch(), Send, selected)
+  guard saving.active().queue_edit
+    is Some(Saving(id~, run_id~, mentions=submitted)) else {
+    fail("expected the first selection to be captured by the queued save")
+  }
+  let (request, planned) = selected.active().prepare_queue_edit(id, run_id)
+  guard request is @protocol.QueueEdit(id=request_id, text=sent, images~) else {
+    fail("the queued save must plan a typed edit request")
+  }
+  assert_eq(request_id, id)
+  assert_eq(images, [])
+  assert_true(planned == saving.active())
+  assert_eq(submitted, selected.active().mentions)
+  assert_true(sent.contains("\n  100\n"))
+  assert_false(sent.contains("\n  200\n"))
+  assert_true(saving.composer_input().presentation.disabled)
+  let (_, merged) = update(
+    test_dispatch(),
+    FileEditor(
+      @fileeditor.ReviewContextChanged(
+        owner={ channel: conv.device, session: conv.session_id, },
+        selection=second,
+        adding=true,
+      ),
+    ),
+    saving,
+  )
+  assert_eq(merged.active().mentions, [
+    {
+      ref_: ReviewChanges({
+        ..first,
+        excerpts: first.excerpts + second.excerpts,
+      }),
+      range: None,
+    },
+  ])
+  assert_eq(saving.active().mentions, selected.active().mentions)
+  let acknowledgement = FromDevice(
+    conv.device,
+    QueueAccepted(
+      session=conv.session_id,
+      action=QueueEdit(id~, text=sent, images=[]),
+      run_id~,
+    ),
+  )
+  let (_, accepted) = update(test_dispatch(), acknowledgement, merged)
+  assert_false(accepted.composer_input().presentation.disabled)
+  assert_eq(accepted.active().task, "")
+  assert_true(accepted.active().queue_edit is None)
+  assert_eq(accepted.active().mentions, [
+    { ref_: ReviewChanges(second), range: None, },
+  ])
+  assert_eq(accepted.active().queued_inputs[0].content, sent)
+  assert_eq(accepted.submission_sequence, saving.submission_sequence + 1)
+  let (_, repeated) = update(test_dispatch(), acknowledgement, accepted)
+  assert_eq(repeated.active().mentions, accepted.active().mentions)
+  assert_eq(repeated.submission_sequence, accepted.submission_sequence)
+  let (_, next) = update(test_dispatch(), Send, repeated)
+  guard next.active().pending_steers is [pending] else {
+    fail("the remaining selection must create one queued follow-up")
+  }
+  assert_true(pending.behavior is FollowupQueue)
+  assert_eq(pending.run_id, Some(run_id))
+  assert_true(pending.content.contains("\n  200\n"))
+  assert_false(pending.content.contains("\n  100\n"))
+  assert_eq(next.active().queued_inputs.length(), 2)
+  assert_eq(next.active().queued_inputs[1].content, pending.content)
+}
+
+///|
+test "a failed run retires a queued save before its late acceptance" {
+  let base = running_model()
+  let base = base.replace_conversation({
+    ..base.active(),
+    queued_inputs: [
+      { id: "queued", content: "Original queued message", images: [], },
+    ],
+  })
+  let (_, editing) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.QueuedInputEditRequested(
+        identity=base.composer_input().identity,
+        id="queued",
+      ),
+    ),
+    base,
+  )
+  assert_eq(editing.active().task, "Original queued message")
+  let draft : @composer.Draft = {
+    task: "Keep this revision",
+    images: [],
+    mentions: [],
+  }
+  let (_, saving) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.DraftSubmitted(
+        identity=editing.composer_input().identity,
+        draft~,
+      ),
+    ),
+    editing,
+  )
+  guard saving.active().queue_edit is Some(Saving(id~, run_id~, ..)) else {
+    fail("expected a pending queued save")
+  }
+  assert_true(saving.composer_input().presentation.disabled)
+  assert_eq(saving.active().task, draft.task)
+  let (_, finished) = update_dev(
+    test_dispatch(),
+    Finished(run_id~, status="failed", answer=None),
+    saving,
+  )
+  assert_true(
+    finished.active().run is NoRun(ended=Some(RunFinished(RunFailed))),
+  )
+  assert_true(finished.active().queued_inputs.is_empty())
+  assert_true(finished.active().queue_edit is None)
+  assert_false(finished.composer_input().presentation.disabled)
+  assert_eq(finished.active().task, draft.task)
+  // Typing belongs to the composer. An obsolete acceptance must neither
+  // advance its acknowledgement sequence nor replace the draft it projects.
+  let edited = { ..draft, task: "Continue editing after the run ended", }
+  let (_, accepted) = update_dev(
+    test_dispatch(),
+    QueueAccepted(
+      session=finished.active().session_id,
+      action=QueueEdit(id~, text=draft.prompt(), images=[]),
+      run_id~,
+    ),
+    finished,
+  )
+  assert_eq(accepted.submission_sequence, finished.submission_sequence)
+  assert_eq(accepted.composer_input().draft, finished.composer_input().draft)
+  assert_true(accepted.active().queued_inputs.is_empty())
+  assert_true(accepted.active().queue_edit is None)
+  let (_, restarted) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.DraftSubmitted(
+        identity=accepted.composer_input().identity,
+        draft=edited,
+      ),
+    ),
+    accepted,
+  )
+  assert_true(restarted.active().run is Starting(..))
+  guard restarted.active().pending_prompt is Some(pending) else {
+    fail("the edited draft must start a new turn")
+  }
+  assert_eq(pending.draft, edited.task)
+  assert_eq(pending.mentions, edited.mentions)
+  assert_eq(pending.images, edited.images)
+  assert_true(restarted.active().queued_inputs.is_empty())
+}
+
+///|
+test "large semantic submissions retry the same snapshot and retain selection changes after success" {
+  let dispatch = test_dispatch()
+  let reference = large_semantic_reference_for_test()
+  let initial = test_model().replace_conversation({
+    ..test_conversation(),
+    task: "Inspect the original selection",
+  })
+  let owner : @interop.ConversationKey = {
+    channel: initial.focused,
+    session: initial.active_session,
+  }
+  let (_, selected) = update(
+    dispatch,
+    FileEditor(SemanticSelectionChanged(owner~, reference=Some(reference))),
+    initial,
+  )
+  assert_true(selected.active().pending_semantic_submission is None)
+  let (_, preparing) = update(dispatch, Send, selected)
+  guard preparing.active().pending_semantic_submission is Some(first) else {
+    fail("large selection must prepare before starting")
+  }
+  assert_true(preparing.active().pending_prompt is None)
+  assert_true(preparing.composer_input().presentation.disabled)
+  let (_, duplicate) = update(dispatch, Send, preparing)
+  assert_true(duplicate == preparing)
+  let (_, failed) = update(
+    dispatch,
+    SemanticSelectionMaterializationFailed(
+      owner~,
+      submission_id=first.submission_id,
+      message="disk full",
+    ),
+    preparing,
+  )
+  assert_true(failed.active().pending_semantic_submission is None)
+  assert_false(failed.composer_input().presentation.disabled)
+  assert_eq(failed.active().task, "Inspect the original selection")
+  assert_eq(failed.active().mentions, selected.active().mentions)
+  assert_eq(
+    failed.notifications.last().unwrap().message,
+    "Could not prepare semantic-search selection: disk full",
+  )
+  let (_, retry) = update(dispatch, Send, failed)
+  guard retry.active().pending_semantic_submission is Some(pending) else {
+    fail("retry must prepare a fresh submission")
+  }
+  assert_true(pending.submission_id != first.submission_id)
+  assert_eq(
+    pending.reference.materialize_payload(root=pending.reference.root).to_json(),
+    first.reference.materialize_payload(root=first.reference.root).to_json(),
+  )
+  assert_eq(pending.reference.matches.length(), 101)
+  let latest = { ..reference, matches: reference.matches[:100].to_owned(), }
+  let (_, changed) = update(
+    dispatch,
+    FileEditor(SemanticSelectionChanged(owner~, reference=Some(latest))),
+    retry,
+  )
+  assert_true(changed.active().pending_semantic_submission == Some(pending))
+  let completion : Msg = SemanticSelectionMaterialized(
+    owner~,
+    submission_id=pending.submission_id,
+    artifact={
+      path: ".openseek/agent-context/semantic-search/selection.jsonl",
+      pattern_count: 1,
+      match_count: 101,
+    },
+  )
+  let (_, sent) = update(dispatch, completion, changed)
+  guard sent.active().pending_prompt is Some(prompt) else {
+    fail("completion must start the captured draft")
+  }
+  assert_eq(prompt.draft, "Inspect the original selection")
+  assert_true(
+    prompt.mentions
+    is [{ ref_: SemanticSearchArtifact({ match_count: 101, .. }), .. }],
+  )
+  assert_eq(sent.active().mentions, [
+    { ref_: SemanticSearch(latest), range: None, },
+  ])
+  assert_eq(sent.active().task, "")
+  assert_true(sent.active().pending_semantic_submission is None)
+  let (_, repeated) = update(dispatch, completion, sent)
+  assert_true(repeated == sent)
+}
+
+///|
+test "failed semantic preparation retries the latest or cleared selection inline" {
+  for clear in [false, true] {
+    let dispatch = test_dispatch()
+    let reference = large_semantic_reference_for_test()
+    let initial = test_model().replace_conversation({
+      ..test_conversation(),
+      task: "Inspect selected matches",
+    })
+    let owner : @interop.ConversationKey = {
+      channel: initial.focused,
+      session: initial.active_session,
+    }
+    let (_, selected) = update(
+      dispatch,
+      FileEditor(SemanticSelectionChanged(owner~, reference=Some(reference))),
+      initial,
+    )
+    let (_, preparing) = update(dispatch, Send, selected)
+    guard preparing.active().pending_semantic_submission is Some(pending) else {
+      fail("expected preparation")
+    }
+    let latest = if clear {
+      None
+    } else {
+      Some({ ..reference, matches: reference.matches[:100].to_owned(), })
+    }
+    let (_, changed) = update(
+      dispatch,
+      FileEditor(SemanticSelectionChanged(owner~, reference=latest)),
+      preparing,
+    )
+    let (_, failed) = update(
+      dispatch,
+      SemanticSelectionMaterializationFailed(
+        owner~,
+        submission_id=pending.submission_id,
+        message="disk full",
+      ),
+      changed,
+    )
+    assert_eq(failed.active().task, "Inspect selected matches")
+    assert_eq(failed.active().mentions, changed.active().mentions)
+    assert_true(failed.active().pending_semantic_submission is None)
+    let (_, sent) = update(dispatch, Send, failed)
+    assert_true(sent.active().pending_semantic_submission is None)
+    guard sent.active().pending_prompt is Some(prompt) else {
+      fail("a small or cleared selection starts without materialization")
+    }
+    assert_eq(prompt.draft, "Inspect selected matches")
+    assert_eq(prompt.mentions, changed.active().mentions)
+    if clear {
+      assert_true(prompt.mentions.is_empty())
+    } else {
+      assert_true(
+        prompt.mentions is [{ ref_: SemanticSearch({ matches, .. }), .. }] &&
+        matches.length() == 100,
+      )
+    }
+    let (_, obsolete) = update(
+      dispatch,
+      SemanticSelectionMaterialized(
+        owner~,
+        submission_id=pending.submission_id,
+        artifact={ path: "old.jsonl", pattern_count: 1, match_count: 101, },
+      ),
+      sent,
+    )
+    assert_true(obsolete == sent)
+  }
+}
+
+///|
+test "queued edits cannot replace a semantic submission's frozen draft or steer target" {
+  let dispatch = test_dispatch()
+  let initial = running_model().replace_conversation({
+    ..running_conversation(),
+    task: "Inspect the original selection",
+    queued_inputs: [
+      { id: "queued", content: "Queued draft to preserve", images: [], },
+    ],
+  })
+  let owner : @interop.ConversationKey = {
+    channel: initial.focused,
+    session: initial.active_session,
+  }
+  let (_, selected) = update(
+    dispatch,
+    FileEditor(
+      SemanticSelectionChanged(
+        owner~,
+        reference=Some(large_semantic_reference_for_test()),
+      ),
+    ),
+    initial,
+  )
+  let (_, preparing) = update(
+    dispatch,
+    SendFollowup(@composer.SteerNow),
+    selected,
+  )
+  guard preparing.active().pending_semantic_submission is Some(pending) else {
+    fail("expected preparation")
+  }
+  let edit : Msg = ComposerAction(
+    @composer.QueuedInputEditRequested(
+      identity=preparing.composer_input().identity,
+      id="queued",
+    ),
+  )
+  let (_, ignored) = update(dispatch, edit, preparing)
+  assert_true(ignored == preparing)
+  assert_true(ignored.active().queue_edit is None)
+  let (_, sent) = update(
+    dispatch,
+    SemanticSelectionMaterialized(owner~, submission_id=pending.submission_id, artifact={
+      path: "selection.jsonl",
+      pattern_count: 1,
+      match_count: 101,
+    }),
+    ignored,
+  )
+  guard sent.active().pending_steers is [steer] else {
+    fail("completion must steer once")
+  }
+  assert_true(steer.behavior is FollowupSteer)
+  assert_eq(steer.run_id, Some("r7"))
+  assert_true(steer.content.contains("Inspect the original selection"))
+  assert_true(
+    steer.content.contains(
+      "<semantic_search_file path=\"selection.jsonl\" patterns=\"1\" matches=\"101\">",
+    ),
+  )
+  assert_true(sent.active().queued_inputs == initial.active().queued_inputs)
+  assert_eq(sent.active().task, "")
+  let (_, editing) = update(dispatch, edit, sent)
+  assert_eq(editing.active().task, "Queued draft to preserve")
+  assert_true(editing.active().queue_edit is Some(Editing(id="queued")))
+  let edited = editing.replace_conversation({
+    ..editing.active(),
+    task: "Edited after preparation",
+  })
+  let (_, saving) = update(dispatch, Send, edited)
+  guard saving.active().queue_edit is Some(Saving(id~, run_id~, ..)) else {
+    fail("edit should save after preparation")
+  }
+  let (action, _) = edited.active().prepare_queue_edit(id, run_id)
+  let (_, accepted) = update_dev(
+    dispatch,
+    QueueAccepted(session=owner.session, action~, run_id~),
+    saving,
+  )
+  assert_true(
+    accepted.active().queued_inputs ==
+    [{ id: "queued", content: "Edited after preparation", images: [], }],
+  )
 }

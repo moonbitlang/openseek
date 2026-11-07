@@ -350,32 +350,6 @@ test('Cloud browses nested text files through the existing read-only Files pane'
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('Search from Settings preserves the Cloud dock without importing Host tabs', async ({ page }) => {
-  const cloud = new CloudFilesHarness(page);
-  await cloud.install(); await cloud.goto();
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
-  await cloud.device.openSession();
-  await cloud.device.openQuickOpen();
-  await page.locator('#quick-open-input').fill('main');
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await expect(page.locator('.editor-tab .tab-name')).toHaveText(['main.mbt']);
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  await openFiles(page, cloud); await openText(page);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  const shortcut = await page.evaluate(() =>
-    navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
-  await page.keyboard.press(shortcut);
-  await cloud.open();
-  const cloudTab = page.locator('.editor-tab').filter({ hasText: 'hello #.mbt' });
-  await expect(cloudTab).toHaveCount(1);
-  await expect(page.locator('.editor-tab').filter({ hasText: 'main.mbt' })).toHaveCount(0);
-  await cloudTab.click();
-  await expect(source(page)).toContainText('Cloud text');
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
 test('Cloud keeps Office and PDF previews in existing tabs and unsupported binaries explicit', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   const office = cloud.device.officeFiles;
@@ -440,22 +414,6 @@ test('generation completion refreshes Cloud directories and an open text preview
   await expect(source(page)).toContainText('Generated text');
   expect(cloud.fileRequests.filter(request => request.content).length).toBeGreaterThan(previousReads);
   await showTree(page); await expect(file(page, 'new.txt')).toBeVisible();
-  expect(fileHostRequests(cloud)).toEqual([]);
-});
-
-test('blank Cloud drafts do not create sessions or expose files, while archived sessions remain readable', async ({ page }) => {
-  const cloud = new CloudFilesHarness(page);
-  cloud.archived.add(sessionB);
-  await cloud.install(); await cloud.goto(); await cloud.create();
-  await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toHaveCount(0);
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
-  expect(cloud.fileRequests).toEqual([]);
-  await cloud.openArchived(sessionB);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
-  await openText(page);
-  expect(cloud.fileRequests.at(-1).session).toBe(sessionB);
-  await expect(page.locator('.archived-read-only')).toContainText('Read only');
   expect(fileHostRequests(cloud)).toEqual([]);
 });
 

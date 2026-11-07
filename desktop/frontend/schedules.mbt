@@ -215,6 +215,27 @@ fn schedule_form_spec(
 }
 
 ///|
+fn schedule_save_payload(
+  locale~ : @i18n.Locale = English,
+  form : ScheduleForm,
+  run_now : Bool,
+) -> Result[@protocol.ScheduleSavePayload, String] {
+  schedule_form_spec(locale~, form).map(spec => { id: form.id, spec, run_now, })
+}
+
+///|
+fn SchedulePage::can_run(
+  self : SchedulePage,
+  entry : @protocol.ScheduleEntry,
+) -> Bool {
+  !self.busy &&
+  !entry.run_requested &&
+  !self.snapshot.runs.any(run => {
+    run.schedule_id == entry.id && run.status is Running
+  })
+}
+
+///|
 fn update_schedules(
   dispatch : @cmd.Emit[Msg],
   msg : SchedulePageMsg,
@@ -369,15 +390,10 @@ fn update_schedules(
       guard !page.busy && page.form is Some(form) else {
         return (@cmd.none, model)
       }
-      match schedule_form_spec(locale=model.locale, form) {
+      match schedule_save_payload(locale=model.locale, form, run_now) {
         Err(error) =>
           (@cmd.none, { ..model, schedules: { ..page, error: Some(error), }, })
-        Ok(spec) =>
-          request_schedules(
-            dispatch,
-            model,
-            Save({ id: form.id, spec, run_now, }),
-          )
+        Ok(payload) => request_schedules(dispatch, model, Save(payload))
       }
     }
     Action(id, action) =>
@@ -517,5 +533,175 @@ fn Model::wants_schedule_updates(self : Model) -> Bool {
     self.screen is Chat &&
     self.active_conversation() is Some(conv) &&
     self.scheduled_session_read_only(conv)
+  )
+}
+
+///|
+test "failed schedule saves retain every field and explicit retry preserves the saved form" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update_schedules(dispatch, New, test_model())
+  let (_, named) = update_schedules(
+    dispatch,
+    Field("name", "Daily work"),
+    opened,
+  )
+  let (_, edited) = update_schedules(
+    dispatch,
+    Field("task", "Inspect changes"),
+    named,
+  )
+  guard edited.schedules.form is Some(form) else {
+    fail("expected schedule form")
+  }
+  assert_eq(form.minutes, "30")
+  guard schedule_save_payload(form, false) is Ok(payload) else {
+    fail("expected a valid schedule request")
+  }
+  assert_eq(payload.to_json(), {
+    "spec": {
+      "name": "Daily work",
+      "task": "Inspect changes",
+      "timing": { "kind": "every", "minutes": 30 },
+      "timeout_minutes": 30,
+    },
+    "run_now": false,
+  })
+  let (_, saving) = update_schedules(dispatch, Save(false), edited)
+  let (_, repeated) = update_schedules(dispatch, Save(false), edited)
+  assert_true(saving.schedules == repeated.schedules)
+  let (_, duplicate) = update_schedules(dispatch, Save(false), saving)
+  assert_true(duplicate.schedules == saving.schedules)
+  let (_, failed) = update_schedules(
+    dispatch,
+    Loaded(
+      saving.focused,
+      saving.schedules.sequence,
+      true,
+      Err("Cannot save: disk full"),
+    ),
+    saving,
+  )
+  assert_true(failed.schedules.form == Some(form))
+  assert_eq(failed.schedules.error, Some("Cannot save: disk full"))
+  assert_false(failed.schedules.busy)
+  let (_, retry) = update_schedules(dispatch, Save(false), failed)
+  assert_true(retry.schedules.busy)
+  assert_true(retry.schedules.sequence > saving.schedules.sequence)
+  assert_eq(retry.schedules.error, None)
+  let entry : @protocol.ScheduleEntry = {
+    id: "plan-1",
+    spec: payload.spec,
+    enabled: true,
+    run_requested: false,
+    notice: None,
+    next_at: None,
+  }
+  let (_, saved) = update_schedules(
+    dispatch,
+    Loaded(
+      retry.focused,
+      retry.schedules.sequence,
+      true,
+      Ok({ entries: [entry], runs: [], }),
+    ),
+    retry,
+  )
+  assert_true(saved.schedules.form is None)
+  let (_, reopened) = update_schedules(dispatch, Edit(entry.id), saved)
+  assert_true(reopened.schedules.form == Some({ ..form, id: Some(entry.id), }))
+}
+
+///|
+test "automatic schedule save and run omits workspace and keeps its queued entry unavailable for another run" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update_schedules(dispatch, New, test_model())
+  let (_, named) = update_schedules(
+    dispatch,
+    Field("name", "Community updates"),
+    opened,
+  )
+  let (_, edited) = update_schedules(
+    dispatch,
+    Field("task", "Summarize new community posts."),
+    named,
+  )
+  guard edited.schedules.form is Some(form) else {
+    fail("expected schedule form")
+  }
+  assert_eq(form.workspace, None)
+  guard schedule_save_payload(form, true) is Ok(payload) else {
+    fail("expected a valid save-and-run request")
+  }
+  assert_eq(payload.to_json(), {
+    "spec": {
+      "name": "Community updates",
+      "task": "Summarize new community posts.",
+      "timing": { "kind": "every", "minutes": 30 },
+      "timeout_minutes": 30,
+    },
+    "run_now": true,
+  })
+  let (_, saving) = update_schedules(dispatch, Save(true), edited)
+  let entry : @protocol.ScheduleEntry = {
+    id: "plan-1",
+    spec: payload.spec,
+    enabled: true,
+    run_requested: true,
+    notice: None,
+    next_at: None,
+  }
+  let (_, saved) = update_schedules(
+    dispatch,
+    Loaded(
+      saving.focused,
+      saving.schedules.sequence,
+      true,
+      Ok({ entries: [entry], runs: [], }),
+    ),
+    saving,
+  )
+  assert_true(saved.schedules.form is None)
+  assert_eq(saved.schedules.snapshot.entries, [entry])
+  assert_false(saved.schedules.can_run(entry))
+  assert_true(saved.schedules.can_run({ ..entry, run_requested: false, }))
+  let (_, reopened) = update_schedules(dispatch, Edit(entry.id), saved)
+  assert_true(reopened.schedules.form == Some({ ..form, id: Some(entry.id), }))
+}
+
+///|
+test "a missing schedule log preserves the recorded setup failure without a page error" {
+  let base = test_model()
+  let run : @protocol.ScheduleRun = {
+    id: "old-run",
+    schedule_id: "old-plan",
+    name: "Community",
+    workspace: "/workspace",
+    session: "old-session",
+    started_at: 1,
+    finished_at: Some(2),
+    status: Failed("Could not prepare working directory"),
+    log_path: "/missing.log",
+  }
+  let model = {
+    ..base,
+    management_dialog: Some(Schedules),
+    schedules: {
+      ..SchedulePage::empty(),
+      owner: Some(base.focused),
+      snapshot: { entries: [], runs: [run], },
+    },
+  }
+  let msg = LogLoaded(base.focused, run.log_path, Err("No such file"))
+  let (_, failed) = update_schedules(test_dispatch(), msg, model)
+  let (_, repeated) = update_schedules(test_dispatch(), msg, model)
+  assert_true(failed.schedules == repeated.schedules)
+  assert_eq(failed.schedules.error, None)
+  assert_eq(
+    failed.schedules.log,
+    Some(
+      (
+        "/missing.log", "Recorded failure:\nCould not prepare working directory\n\nLog could not be read:\nNo such file",
+      ),
+    ),
   )
 }

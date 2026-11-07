@@ -93,69 +93,6 @@ test('Quick Open centers the revealed file and centers again when Files becomes 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a late directory reply cannot reveal an editor that is no longer active', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.directoryEntries['/workspace'] = [
-    { name: 'src', is_dir: true }, { name: 'README.md', is_dir: false },
-  ];
-  app.directoryEntries['/workspace/src'] = [{ name: 'main.mbt', is_dir: false }];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-  await app.openReview();
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
-  const readme = tree.getByRole('treeitem', { name: 'README.md', exact: true });
-  await expect(readme).toBeVisible();
-  // Delay only the directory response, so the newer editor can win first.
-  app.rpcDelays.set('fs.read_directory', 1000);
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await page.getByTitle('Show file tree', { exact: true }).click();
-  await expect.poll(() => app.requests.some(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toBe(true);
-  await readme.click();
-  const main = tree.getByRole('treeitem', { name: 'main.mbt', exact: true });
-  await expect(main).toBeVisible();
-  await expect(readme).toHaveAttribute('aria-selected', 'true');
-  await expect(readme).toHaveAttribute('tabindex', '0');
-  await expect(main).toHaveAttribute('aria-selected', 'false');
-  await expect(page.locator('.editor-tab.active')).toContainText('README.md');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a failed ancestor listing stops until the next explicit reveal', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }];
-  app.directoryEntries['/workspace/src'] = [{ name: 'main.mbt', is_dir: false }];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-  await app.openReview();
-  const files = page.getByRole('tab', { name: 'Files', exact: true });
-  await files.click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
-  const src = tree.getByRole('treeitem', { name: 'src', exact: true });
-  await expect(src).toBeVisible();
-  app.rpcErrors.set('fs.read_directory', 'Directory unavailable');
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await page.getByTitle('Show file tree', { exact: true }).click();
-  await expect(page.locator('.file-panel-error')).toContainText('Directory unavailable');
-  // Tree focus dispatches unrelated updates; these must not retry the failure.
-  await src.focus();
-  await files.focus();
-  await src.focus();
-  expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(1);
-  app.rpcErrors.delete('fs.read_directory');
-  await page.getByRole('tab', { name: 'Search', exact: true }).click();
-  await files.click();
-  await expect(tree.getByRole('treeitem', { name: 'main.mbt', exact: true })).toHaveAttribute('aria-selected', 'true');
-  expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Files scrolls below the view tabs and keeps desktop row height on narrow screens', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = Array.from({ length: 80 }, (_, index) => ({

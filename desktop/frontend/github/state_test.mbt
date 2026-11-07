@@ -144,6 +144,33 @@ test "GitHub lists load on expansion and failures stay local to their group" {
 }
 
 ///|
+test "avatar warnings retain the inventory while retry replaces only its warning" {
+  let initial = active_state()
+  let inventory = reply(42)
+  let warning = {
+    ..inventory,
+    avatar_error: Some("Could not load GitHub avatars: offline"),
+  }
+  let loaded = step(initial, Listed(initial.epoch, AllOpen, Ok(warning)))
+  assert_eq(loaded.all_open.reply, Some(warning))
+  assert_false(loaded.all_open.loading)
+  assert_true(loaded.all_open.error is None)
+  let retrying = step(loaded, Retry(AllOpen))
+  assert_true(retrying.all_open.loading)
+  assert_eq(retrying.all_open.reply, Some(warning))
+  assert_true(retrying.issues == loaded.issues)
+  let recovered = step(retrying, Listed(retrying.epoch, AllOpen, Ok(inventory)))
+  assert_false(recovered.all_open.loading)
+  assert_true(recovered.all_open.error is None)
+  assert_eq(recovered.all_open.reply, Some(inventory))
+  assert_eq(
+    recovered.all_open.reply.map(value => value.items),
+    Some(warning.items),
+  )
+  assert_true(recovered.all_open.reply is Some({ avatar_error: None, .. }))
+}
+
+///|
 test "refresh supersedes pending loads and growing lists replace their old prefix" {
   let state = active_state()
   let refreshed = step(state, Refresh)

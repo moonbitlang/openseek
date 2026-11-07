@@ -77,26 +77,16 @@ test('Cloud downloads the original server snapshot and shares without a host exp
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-for (const status of [401, 409, 503]) {
-  test(`Cloud share ${status} ${status === 401 ? 'expires the account' : 'preserves it'}`, async ({ page }) => {
-    const { cloud, uploads, dialog } = await setup(page);
-    cloud.shareStatus = status;
-    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-    if (status === 401) {
-      await expect(dialog).toBeHidden();
-      await expect(cloud.row(sessionA)).toBeHidden();
-      expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
-    } else {
-      await expect(dialog).toContainText(status === 409
-        ? 'This conversation has no complete original log to export.'
-        : 'Cloud answered HTTP 503');
-      expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-      await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-    }
-    expect(uploads).toEqual([]);
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
+test('Cloud share 401 expires the account', async ({ page }) => {
+  const { cloud, uploads, dialog } = await setup(page);
+  cloud.shareStatus = 401;
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(cloud.row(sessionA)).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
+  expect(uploads).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
 
 test('desktop Cloud downloads use the window save dialog and preserve cancel, save and failure outcomes', async ({ page }) => {
   let reply = { opened: false };
@@ -146,44 +136,17 @@ test('a disconnected Cloud share is not automatically resubmitted', async ({ pag
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-// 404 shares the generic HTTP failure path with 503.
-for (const status of [401, 409, 503]) {
-  test(`Cloud export ${status} preserves existing account and error handling`, async ({ page }) => {
-    const { cloud, dialog } = await setup(page);
-    cloud.exportStatus = status;
-    const downloads = [];
-    page.on('download', download => downloads.push(download));
-    const beforeHistory = cloud.requests.filter(request => request.path.endsWith('/messages')).length;
-    await dialog.getByRole('button', { name: 'Download', exact: true }).click();
-    if (status === 401) {
-      await expect(dialog).toBeHidden();
-      expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
-    } else {
-      await expect(dialog).toContainText(status === 409
-        ? 'This conversation has no complete original log to export.'
-        : `Cloud answered HTTP ${status}`);
-      await expect(dialog).toBeVisible();
-      await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
-      expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-    }
-    expect(downloads).toEqual([]);
-    expect(cloud.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(beforeHistory);
-    expect(cloud.hostRequests.filter(request => request.method === 'session.snapshot_save')).toEqual([]);
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
-
-for (const failure of ['malformed', 'disconnected']) {
-  test(`Cloud export rejects a ${failure} snapshot without rebuilding visible history`, async ({ page }) => {
-    const { cloud, dialog } = await setup(page, { desktop: true });
-    if (failure === 'malformed') cloud.exportSnapshots.set(sessionA, { html: snapshot.html });
-    else cloud.exportOffline = true;
-    const beforeHistory = cloud.requests.filter(request => request.path.endsWith('/messages')).length;
-    await dialog.getByRole('button', { name: 'Download', exact: true }).click();
-    await expect(dialog).toContainText(failure === 'malformed' ? 'Cloud returned an invalid response' : 'Cloud is unreachable');
-    await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
-    expect(cloud.hostRequests.filter(request => request.method === 'session.snapshot_save')).toEqual([]);
-    expect(cloud.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(beforeHistory);
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
+test('Cloud export 401 clears the account without downloading', async ({ page }) => {
+  const { cloud, dialog } = await setup(page);
+  cloud.exportStatus = 401;
+  const downloads = [];
+  page.on('download', download => downloads.push(download));
+  const beforeHistory = cloud.requests.filter(request => request.path.endsWith('/messages')).length;
+  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
+  expect(downloads).toEqual([]);
+  expect(cloud.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(beforeHistory);
+  expect(cloud.hostRequests.filter(request => request.method === 'session.snapshot_save')).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});

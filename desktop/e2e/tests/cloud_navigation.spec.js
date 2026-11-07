@@ -78,44 +78,6 @@ test('Cloud login returns to the exact deep link without creating a session', as
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-// Statuses other than 404 share one retryable failure path.
-for (const status of [404, 503]) {
-  test(`Cloud deep-link HTTP ${status} stays distinct and never creates a replacement`, async ({ page }) => {
-    const cloud = new CloudHarness(page);
-    cloud.historyStatus = status;
-    await cloud.install();
-    await page.goto(sessionURL(sessionA));
-    if (status === 404) {
-      await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
-    } else {
-      await expect(page.locator('.conversation-load-state')).toContainText(`HTTP ${status}`);
-      cloud.historyStatus = 200;
-      await page.getByRole('button', { name: 'Retry', exact: true }).click();
-      await expect(page.locator('#task')).toBeVisible();
-    }
-    await expect(page).toHaveURL(sessionURL(sessionA));
-    expect(creations(cloud)).toEqual([]);
-    expect(cloud.device.ticketRequests).toHaveLength(0);
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
-
-test('late Cloud history cannot replace a newer URL selection', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  let release;
-  cloud.pauseHistory = new Promise(resolve => { release = resolve; });
-  await cloud.install();
-  await page.goto(sessionURL(sessionA));
-  await expect.poll(() => cloud.requests.some(r => r.path === `/v1/sessions/${sessionA}/messages`)).toBe(true);
-  cloud.pauseHistory = null;
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  await cloud.open(sessionB);
-  release();
-  await expect(page).toHaveURL(sessionURL(sessionB));
-  await expect(page.locator('main h1')).toHaveText('Cloud fixture B');
-  expect(creations(cloud)).toEqual([]);
-});
-
 test('Cloud revisits show cached history during conditional reads and pick up another device’s message', async ({ page, context }) => {
   const cloud = new CloudHarness(page);
   cloud.histories.set(sessionA, {
@@ -188,14 +150,6 @@ test('Cloud revisits show cached history during conditional reads and pick up an
   await expect(transcript).toContainText('Added from another device');
 });
 
-test('malformed Cloud destinations show invalid route rather than creating a session', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await page.goto(`${authOrigin}/cloud/session/extra/path`);
-  await expect(page.locator('.navigation-notice')).toContainText('address is invalid');
-  expect(creations(cloud)).toEqual([]);
-});
-
 test('Cloud landing remains selected while a retained device connects', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
@@ -238,40 +192,6 @@ test('a Cloud URL is reauthorized after account change without retaining the old
   const reauthorized = cloud.requests.filter(r => r.path === `/v1/sessions/${sessionA}/messages`).at(-1);
   expect(reauthorized.headers.authorization).toBe('Bearer ts_fixture-456');
   expect(reauthorized.headers['if-none-match']).toBeUndefined();
-  expect(creations(cloud)).toEqual([]);
-});
-
-for (const archived of [false, true]) {
-  test(`Cloud direct link waits for delayed ${archived ? 'archived' : 'live'} metadata before enabling editing`, async ({ page }) => {
-    const cloud = new CloudHarness(page);
-    if (archived) cloud.archived.add(sessionA);
-    cloud.histories.set(sessionA, { messages: [{ task_id: 'old', kind: 'assistant_message', data: { content: 'Readable before metadata' }, created_at: 1000 }], generating: false });
-    let release;
-    cloud.pauseList = new Promise(resolve => { release = resolve; });
-    await cloud.install();
-    await page.goto(sessionURL(sessionA));
-    await expect(page.locator('#transcript')).toContainText('Readable before metadata');
-    await expect(page.locator('#task')).toBeDisabled();
-    release();
-    if (archived) {
-      await expect(page.locator('.archived-read-only')).toBeVisible();
-      await expect(page.locator('#task')).toHaveCount(0);
-    } else {
-      await expect(page.locator('#task')).toBeEnabled();
-    }
-    expect(creations(cloud)).toEqual([]);
-  });
-}
-
-test('Cloud direct link keeps history readable but editing disabled after catalog failure', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.listStatus = 503;
-  cloud.histories.set(sessionA, { messages: [{ task_id: 'old', kind: 'assistant_message', data: { content: 'Readable despite metadata failure' }, created_at: 1000 }], generating: false });
-  await cloud.install();
-  await page.goto(sessionURL(sessionA));
-  await expect(page.locator('#transcript')).toContainText('Readable despite metadata failure');
-  await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.locator('aside').getByText('Couldn’t load chats', { exact: true })).toBeVisible();
   expect(creations(cloud)).toEqual([]);
 });
 

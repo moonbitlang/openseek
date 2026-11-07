@@ -202,7 +202,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.div(class="schedule-toolbar", [
           @html.button(
             class="button secondary",
-            disabled=page.busy || running || entry.run_requested,
+            disabled=!page.can_run(entry),
             on_click=emit(Action(entry.id, "run")),
             ui(locale, RunNow),
           ),

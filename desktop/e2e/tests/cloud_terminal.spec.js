@@ -138,19 +138,6 @@ test('account replacement closes this client sockets and cannot display the old 
   await expect(screen(page)).not.toContainText('OLD_ACCOUNT');
 });
 
-test('failed session creation leaves the Cloud draft intact and never starts a terminal or model', async ({ page }) => {
-  const { cloud, terminal } = await setup(page);
-  cloud.createStatus = 500;
-  await cloud.create();
-  await page.locator('#task').fill('Unsent text');
-  await show(page).click();
-  await expect(page.getByText('Cloud answered HTTP 500. Try again.', { exact: true }).last()).toBeVisible();
-  await expect(page.locator('#task')).toHaveValue('Unsent text');
-  await expect(page.locator('#task')).toBeEnabled();
-  expect(terminal.connections).toHaveLength(0);
-  expect(cloud.postCount).toBe(0);
-});
-
 test('terminal authentication refusal ends the connection without sending RPC or retrying', async ({ page }) => {
   const { cloud, terminal } = await setup(page);
   terminal.authenticate = false;

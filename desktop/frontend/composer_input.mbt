@@ -431,6 +431,30 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
 }
 
 ///|
+fn Conversation::prepare_queue_edit(
+  self : Conversation,
+  id : String,
+  run_id : String,
+) -> (@protocol.QueueAction, Conversation) {
+  let draft : @composer.Draft = {
+    task: self.task,
+    images: self.images,
+    mentions: self.mentions,
+  }
+  (
+    @protocol.QueueEdit(
+      id~,
+      text=draft.prompt().trim().to_owned(),
+      images=self.images.map(image => image.url),
+    ),
+    {
+      ..self,
+      queue_edit: Some(Saving(id~, run_id~, mentions=self.mentions.copy())),
+    },
+  )
+}
+
+///|
 /// The prompts the user sent in this conversation, oldest first, in the form
 /// the composer shows them again: typed text with chip markers, no envelopes.
 /// A `!` command comes back as the `!command` draft that ran it, but only where
@@ -517,4 +541,29 @@ fn Model::openseek_commands(self : Model) -> Array[@composer.SlashCommand] {
       prompt: Some(SimplifyPrompt),
     },
   ]
+}
+
+///|
+test "ultrareview projects the bundled swarm prompt into the composer" {
+  let commands = test_model().composer_input().slash_commands.filter(command => {
+    command.command == "ultrareview"
+  })
+  guard commands is [{ label: "/ultrareview", prompt: Some(prompt), .. }] else {
+    fail("expected one ultrareview prompt command")
+  }
+  assert_true(prompt.contains("\"@builtin/review.mbtx\""))
+  assert_true(prompt.contains("\"--swarm\""))
+  assert_true(prompt.has_suffix("Focus:"))
+}
+
+///|
+test "simplify projects the bundled sweep prompt into the composer" {
+  let commands = test_model().composer_input().slash_commands.filter(command => {
+    command.command == "simplify"
+  })
+  guard commands is [{ label: "/simplify", prompt: Some(prompt), .. }] else {
+    fail("expected one simplify prompt command")
+  }
+  assert_true(prompt.contains("\"@builtin/simplify.mbtx\""))
+  assert_true(prompt.has_suffix("Focus:"))
 }

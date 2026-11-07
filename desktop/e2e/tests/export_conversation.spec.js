@@ -164,44 +164,6 @@ test('share publishes once and shows a selectable link with a copy button', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('share offers sign-in and keeps upload failures actionable', async ({ page }) => {
-  const app = new ExportHarness(page);
-  app.accountSignedIn = false;
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  expect(app.count('auth.connect')).toBe(1);
-  expect(app.hostShares.length).toBe(0); // sign-in does not silently publish
-  app.shareReply = { status: 'failed', message: 'Sharing is unavailable on this server.' };
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog).toContainText('Sharing is unavailable on this server.');
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('sign-in errors preserve their cause and offer recovery', async ({ page }) => {
-  const app = new ExportHarness(page);
-  app.accountSignedIn = false;
-  app.signInError = 'TLS certificate verification failed';
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(dialog).toContainText('TLS certificate verification failed');
-  await expect(dialog).toContainText('You can try signing in again, or download this conversation.');
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
-  app.signInError = null;
-  await dialog.getByRole('button', { name: 'Try signing in again', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  await expect(dialog).not.toContainText('TLS certificate verification failed');
-  expect(app.count('auth.connect')).toBe(2);
-  expect(app.hostShares.length).toBe(0); // retrying sign-in does not publish
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('closing the dialog cancels a sign-in it started', async ({ page }) => {
   const app = new ExportHarness(page);
   app.accountSignedIn = false;

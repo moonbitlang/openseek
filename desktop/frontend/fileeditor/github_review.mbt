@@ -151,6 +151,31 @@ fn github_review_target_line(
 }
 
 ///|
+fn github_review_comment_target(
+  state : @github_review.State,
+  section : @moon_diff_provider.SemanticReviewSection?,
+  original : Bool,
+  line : Int32,
+) -> @protocol.GithubDraftTarget? {
+  guard state.file is Some(Ok(Some(file))) &&
+    state.path is Some(path) &&
+    state.review is Some(review) &&
+    (if original { file.original } else { file.modified }) is Some(_) &&
+    github_review_target_line(section, original, line) is Some(line) &&
+    review.can_comment(path, original, line) else {
+    return None
+  }
+  Some(
+    @protocol.GithubDraftTarget::Line(
+      path~,
+      side=if original { "LEFT" } else { "RIGHT" },
+      line~,
+      head=review.head,
+    ),
+  )
+}
+
+///|
 fn github_review_layer(
   locale~ : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
@@ -290,39 +315,19 @@ fn install_github_review_widgets(
   }
   editor.set_line_widgets(widgets)
   let allowed = (original : Bool, line : Int32) => {
-    guard state.file is Some(Ok(Some(file))) &&
-      state.path is Some(path) &&
-      state.review is Some(review) &&
-      (if original { file.original } else { file.modified }) is Some(_) &&
-      github_review_target_line(section, original, line) is Some(line) else {
-      return false
-    }
-    review.can_comment(path, original, line)
+    github_review_comment_target(state, section, original, line) is Some(_)
   }
   let action = if matching &&
     state.enabled &&
     !state.busy &&
-    state.path is Some(path) &&
-    state.review is Some(review) {
+    state.path is Some(_) &&
+    state.review is Some(_) {
     Some((original : Bool, line : Int32) => {
-      guard allowed(original, line) &&
-        github_review_target_line(section, original, line) is Some(line) else {
+      guard github_review_comment_target(state, section, original, line)
+        is Some(target) else {
         return
       }
-      scheduler.add(
-        dispatch(
-          GithubReview(
-            @github_review.Compose(
-              @protocol.GithubDraftTarget::Line(
-                path~,
-                side=if original { "LEFT" } else { "RIGHT" },
-                line~,
-                head=review.head,
-              ),
-            ),
-          ),
-        ),
-      )
+      scheduler.add(dispatch(GithubReview(@github_review.Compose(target))))
     })
   } else {
     None
@@ -448,4 +453,183 @@ fn github_review_status(
     updating=ctx.github.checkout_busy(),
     current=ctx.github,
   )
+}
+
+///|
+fn github_comment_fixture() -> (State, Ctx) raise {
+  let (initial, ctx, change) = review_progress_state()
+  let original = "///|\npub fn retry_delay(attempt : Int) -> Int {\n  500 * attempt\n}\n\n///|\npub fn max_retries() -> Int {\n  3\n}\n"
+  let modified = "///|\npub fn retry_delay(attempt : Int) -> Int {\n  250 * attempt\n}\n\n///|\npub fn max_retries() -> Int {\n  5\n}\n"
+  let current = {
+    ..@github.State::empty(),
+    scope: Some({
+      channel: @interop.Local,
+      cwd: "/work",
+      branch: Some("feature"),
+      head: Some("head"),
+    }),
+    current: Some(
+      Ok({
+        branch: Some("feature"),
+        pull_request_url: Some("https://github.com/owner/project/pull/42"),
+        has_open_pull_request: true,
+      }),
+    ),
+  }
+  let review : @protocol.GithubReview = {
+    url: "https://github.com/owner/project/pull/42",
+    head: "head",
+    base: "base",
+    threads: [],
+    commentable: [
+      {
+        path: change.path.0,
+        left_lines: [3, 8],
+        right_lines: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      },
+    ],
+  }
+  let file : @protocol.GithubReviewFile = {
+    path: change.path.0,
+    original: Some(original),
+    modified: Some(modified),
+  }
+  let docs = initial.docs.copy()
+  docs[test_file(change.path.0)] = {
+    ..reviewed_doc(change.path, change, baseline=original),
+    state: TabLoaded(content=modified, sig="working"),
+  }
+  (
+    {
+      ..initial,
+      docs,
+      github_review: {
+        ..@github_review.State::empty(),
+        checkout: current.scope,
+        path: Some(change.path.0),
+        enabled: true,
+        review: Some(review),
+        file: Some(Ok(Some(file))),
+        files: [(change.path.0, Some(file))],
+      },
+    },
+    { ..ctx, github: current, },
+  )
+}
+
+///|
+test "GitHub comment actions admit only patch lines on present source sides" {
+  let (state, _) = github_comment_fixture()
+  let review = state.github_review
+  for
+    (original, line, expected) in [
+      (true, 2, None),
+      (true, 3, Some("LEFT")),
+      (false, 2, Some("RIGHT")),
+      (false, 33, None),
+      (true, 0, None),
+    ] {
+    let actual = github_review_comment_target(review, None, original, line)
+    assert_true(
+      actual ==
+      expected.map(side => {
+        @protocol.GithubDraftTarget::Line(
+          path="src/main.mbt",
+          side~,
+          line~,
+          head="head",
+        )
+      }),
+    )
+  }
+  let file = review.file.unwrap().unwrap().unwrap()
+  for original in [true, false] {
+    let missing = {
+      ..review,
+      file: Some(
+        Ok(
+          Some({
+            ..file,
+            original: if original {
+              None
+            } else {
+              file.original
+            },
+            modified: if original {
+              file.modified
+            } else {
+              None
+            },
+          }),
+        ),
+      ),
+    }
+    assert_true(
+      github_review_comment_target(missing, None, original, 3) is None,
+    )
+    assert_true(
+      github_review_comment_target(missing, None, !original, 3) is Some(_),
+    )
+  }
+}
+
+///|
+test "Token and Tree comment drafts retain the full-file patch coordinate" {
+  let (initial, ctx) = github_comment_fixture()
+  let emit = test_emit()
+  for mode in [ReviewDiffToken, ReviewDiffTree] {
+    let (_, selected) = update(emit, ReviewDiffModeSelected(mode), initial, ctx)
+    let (state, _) = sync(emit, selected, ctx)
+    let sections = semantic_sections(state.semantic_review_plan)
+    guard sections.filter(section => {
+        section.original_source.contains("max_retries")
+      })
+      is [section] else {
+      fail("expected the second function's semantic section")
+    }
+    let lines = section.original_source
+      .split("\n")
+      .map(line => line.to_owned())
+      .collect()
+    guard lines.search("  3") is Some(index) else {
+      fail("the semantic section lost its changed source line")
+    }
+    guard github_review_comment_target(
+        state.github_review,
+        Some(section),
+        true,
+        index + 1,
+      )
+      is Some(target) else {
+      fail("the changed source line must allow a GitHub comment")
+    }
+    let expected = @protocol.GithubDraftTarget::Line(
+      path="src/main.mbt",
+      side="LEFT",
+      line=8,
+      head="head",
+    )
+    assert_true(target == expected)
+    let (_, composing) = update(emit, GithubReview(Compose(target)), state, ctx)
+    let (_, edited) = update(
+      emit,
+      GithubReview(Edit(target, "Coordinate QA")),
+      composing,
+      ctx,
+    )
+    assert_true(
+      edited.github_review.drafts ==
+      [{ target: expected, body: "Coordinate QA", }],
+    )
+    assert_true(edited.github_review.active == Some(expected))
+    assert_false(edited.github_review.busy)
+    let (_, cancelled) = update(
+      emit,
+      GithubReview(Cancel(expected)),
+      edited,
+      ctx,
+    )
+    assert_true(cancelled.github_review.drafts.is_empty())
+    assert_true(cancelled.github_review.active is None)
+  }
 }

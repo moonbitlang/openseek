@@ -2997,3 +2997,239 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     },
   ])
 }
+
+///|
+fn search_catalog_model() -> Model raise {
+  let session : @cloud.Session = {
+    id: "cloud-a",
+    title: Some("Matching Cloud live"),
+    updated_at: Some(100),
+    generating: false,
+    archived: false,
+    approval: ApprovalAsk,
+  }
+  let model = {
+    ..test_model(),
+    cloud: {
+      ..@cloud.State::empty(),
+      user_id: Some("fixture-user"),
+      epoch: 3,
+      sessions: [session],
+    },
+    account: Some({
+      token: "ts_fixture",
+      user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
+    }),
+    is_desktop: true,
+  }
+  let (_, model) = update(
+    test_dispatch(),
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    model,
+  )
+  let channel = model.focused
+  let project = channel.test_project()
+  let chat_root = channel.test_resource("/app-data/workspaces")
+  let retired = channel.test_resource("/app-data/workspaces/Managed")
+  let work : @transcript.SessionListItem = {
+    id: "matching-work",
+    title: Some("Matching work"),
+    workspace: project,
+    workspace_name: "work",
+    updated_at_ms: Some(3),
+  }
+  let cloud = { ..model.cloud.sessions[0], title: Some("Matching Cloud live"), }
+  {
+    ..model.with_dev(dev => {
+      ..dev,
+      projects: [project, retired],
+      chat_root: Some(Ok(chat_root)),
+      sessions: [
+        work,
+        { ..work, id: "no-match", title: Some("Terminal rendering"), },
+        {
+          ..work,
+          id: "retired-local",
+          title: Some("Matching local chat"),
+          workspace: retired,
+        },
+      ],
+      archived: [
+        { ..work, id: "archived-work", title: Some("Matching work archive"), },
+      ],
+    }),
+    cloud: {
+      ..model.cloud,
+      sessions: [
+        cloud,
+        {
+          ..cloud,
+          id: "cloud-archive",
+          title: Some("Matching Cloud archive"),
+          archived: true,
+        },
+      ],
+    },
+  }
+}
+
+///|
+fn search_result_ids(model : Model) -> Array[String] {
+  model.sidebar_component_input().search_results().map(id => id.conversation())
+}
+
+///|
+test "Chat and Work search filter their own live catalogs and switching scopes clears the query" {
+  let initial = search_catalog_model()
+  let (_, work) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    initial,
+  )
+  let (_, matching) = update(
+    test_dispatch(),
+    SessionSearch(Changed("mAtChInG")),
+    work,
+  )
+  assert_eq(search_result_ids(matching), ["matching-work"])
+  assert_true(
+    matching.sidebar_component_input().filtered().sections
+    is [
+      {
+        entries: [
+          @section.Project(
+            { conversations: [{ label: "Matching work", .. }], .. }
+          ),
+        ],
+        ..
+      },
+    ],
+  )
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    matching,
+  )
+  assert_eq(chat.session_search.query(), "")
+  let (_, matching) = update(
+    test_dispatch(),
+    SessionSearch(Changed("matching")),
+    chat,
+  )
+  assert_eq(search_result_ids(matching), ["cloud-a"])
+  assert_true(
+    matching.sidebar_component_input().filtered().sections
+    is [
+      {
+        entries: [@section.Conversation({ label: "Matching Cloud live", .. })],
+        ..
+      },
+    ],
+  )
+  let (_, work) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    matching,
+  )
+  assert_eq(work.session_search.query(), "")
+  let (_, matching) = update(
+    test_dispatch(),
+    SessionSearch(Changed("matching")),
+    work,
+  )
+  assert_eq(search_result_ids(matching), ["matching-work"])
+  assert_eq(initial.session_search.query(), "")
+}
+
+///|
+test "Cloud title search retains its query when opened and drops signed-out results" {
+  let initial = search_catalog_model()
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    initial,
+  )
+  let (_, matching) = update(
+    test_dispatch(),
+    SessionSearch(Changed("matching")),
+    chat,
+  )
+  assert_eq(search_result_ids(matching), ["cloud-a"])
+  let (_, opened) = update(test_dispatch(), SessionSearch(Pick), matching)
+  assert_eq(opened.session_search.query(), "matching")
+  assert_eq(search_result_ids(opened), ["cloud-a"])
+  assert_true(
+    opened.cloud_identity()
+    is Some(@interop.Cloud(account="fixture-user", session="cloud-a")),
+  )
+  let (_, signed_out) = update(test_dispatch(), Console(SignOutClicked), opened)
+  assert_true(signed_out.account is None)
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    signed_out,
+  )
+  let (_, matching) = update(
+    test_dispatch(),
+    SessionSearch(Changed("matching")),
+    chat,
+  )
+  assert_true(search_result_ids(matching).is_empty())
+  let (_, picked) = update(test_dispatch(), SessionSearch(Pick), matching)
+  assert_true(picked.cloud_identity() is None)
+  assert_true(picked.loading_conversation == matching.loading_conversation)
+  assert_eq(picked.session_search.query(), "matching")
+}
+
+///|
+test "a catalog reply arriving after search clear projects the normal current list" {
+  let initial = test_model()
+  let dev = initial.dev()
+  let reply = SessionsLoaded(
+    [
+      {
+        id: "unicode",
+        title: Some("Unicode support"),
+        workspace: initial.focused.test_project(),
+        workspace_name: "work",
+        updated_at_ms: Some(2),
+      },
+      {
+        id: "terminal",
+        title: Some("Terminal rendering"),
+        workspace: initial.focused.test_project(),
+        workspace_name: "work",
+        updated_at_ms: Some(1),
+      },
+    ],
+    connection_generation=dev.connection_generation,
+    request_generation=dev.sessions_request_generation,
+  )
+  let (_, typing) = update(
+    test_dispatch(),
+    SessionSearch(Changed("unicode")),
+    initial,
+  )
+  assert_eq(typing.session_search.query(), "unicode")
+  let (_, cleared) = update(test_dispatch(), SessionSearch(Clear), typing)
+  let (_, loaded) = update_dev(test_dispatch(), reply, cleared)
+  assert_eq(loaded.session_search.query(), "")
+  assert_true(search_result_ids(loaded).is_empty())
+  let input = loaded.sidebar_component_input()
+  assert_true(input.filtered() == input)
+  assert_true(
+    input.sections.any(section => {
+      section.entries.any(entry => {
+        entry is @section.Project(project) &&
+        project.conversations.any(row => row.label == "Terminal rendering")
+      })
+    }),
+  )
+  let (_, searching_again) = update(
+    test_dispatch(),
+    SessionSearch(Changed("unicode")),
+    loaded,
+  )
+  assert_eq(search_result_ids(searching_again), ["unicode"])
+  assert_eq(cleared.session_search.query(), "")
+}
