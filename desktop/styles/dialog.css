@@ -57,6 +57,11 @@ dialog.dialog-scroll-layout[open] {
   overflow: auto;
 }
 
+.dialog-scroll-layout > div > .settings-dialog-body {
+  padding: 0;
+  overflow: hidden;
+}
+
 @media (max-width: 600px) {
   dialog.dialog-size-large {
     --dialog-width: calc(100vw - 2rem);

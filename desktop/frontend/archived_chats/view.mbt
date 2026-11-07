@@ -25,7 +25,6 @@ pub(all) struct Group {
 
 ///|
 pub(all) struct Actions {
-  back : @cmd.Cmd
   open : (@conversation.Id) -> @cmd.Cmd
   restore : (@conversation.Id) -> @cmd.Cmd
   delete : (@conversation.Id) -> @cmd.Cmd
@@ -139,8 +138,7 @@ fn row_view(
 }
 
 ///|
-/// The page body: a way back to Settings, the filter, then each group as a
-/// settings card.
+/// The filter and grouped conversation cards within Settings' archived tab.
 fn view(
   locale : @i18n.Locale,
   groups : Array[Group],
@@ -150,14 +148,9 @@ fn view(
 ) -> @html.Html {
   let content : Array[@html.Html] = [
     @html.div(class="settings-header", [
-      @html.button(
-        class="button compact archived-chats-back",
-        type_="button",
-        on_click=actions.back,
-        [
-          @icons.icon(@icons.icon_arrow_left),
-          @html.text(text(locale, BackToSettings)),
-        ],
+      @html.div(
+        class="settings-subtitle",
+        text(locale, ArchivedCount(count(groups))),
       ),
       @html.div(class="settings-subtitle", text(locale, Description)),
     ]),

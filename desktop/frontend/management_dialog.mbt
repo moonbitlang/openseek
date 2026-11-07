@@ -11,8 +11,7 @@ fn management_dialog_view(
   archived_chats_html : @html.Html,
 ) -> @html.Html {
   let title = match model.management_dialog {
-    Some(Settings) => @settings.text(model.locale, Settings)
-    Some(ArchivedChats) => @archived_chats.text(model.locale, Title)
+    Some(Settings(_)) => @settings.text(model.locale, Settings)
     Some(Skills) => @sidebar_messages.text(model.locale, Skills)
     Some(Schedules) => ui(model.locale, ScheduledTasks)
     None => ""
@@ -41,23 +40,33 @@ fn management_dialog_view(
       @rui.dialog_header([
         @rui.dialog_title(id="management-dialog-title", title),
       ]),
-      @html.div(class="dialog-scroll-body", [
-        // Stable panes retain their DOM while the shared dialog is closed.
-        pane(Settings, settings_page(dispatch, model)),
-        pane(ArchivedChats, archived_chats_html),
-        pane(Skills, skills_html),
-        pane(Schedules, schedules_page(dispatch, model)),
-        if model.management_dialog is Some(_) && model.host_incompatible() {
-          console_gate_view(
-            locale=model.locale,
-            dispatch,
-            model.console,
-            host_incompatible=true,
-          )
+      @html.div(
+        class=if model.management_dialog is Some(Settings(_)) &&
+          !model.host_incompatible() {
+          "dialog-scroll-body settings-dialog-body"
         } else {
-          @html.nothing
+          "dialog-scroll-body"
         },
-      ]),
+        [
+          // Stable panes retain their DOM while the shared dialog is closed.
+          pane(
+            Settings(model.settings_section()),
+            settings_page(dispatch, model, archived_chats_html),
+          ),
+          pane(Skills, skills_html),
+          pane(Schedules, schedules_page(dispatch, model)),
+          if model.management_dialog is Some(_) && model.host_incompatible() {
+            console_gate_view(
+              locale=model.locale,
+              dispatch,
+              model.console,
+              host_incompatible=true,
+            )
+          } else {
+            @html.nothing
+          },
+        ],
+      ),
     ],
   )
 }

@@ -1072,7 +1072,7 @@ fn main {
     // Reset the filter between visits, but render the closed page too so its
     // DOM is already mounted before the next opening.
     let archived_chats_html = state
-      .map(model => model.management_dialog is Some(ArchivedChats))
+      .map(model => model.management_dialog is Some(Settings(ArchivedChats)))
       .switch_by(
         _ => {
           @archived_chats.component(

@@ -25,7 +25,7 @@ test "Back's overlay dismissals close and never reopen" {
     let (_, dialog) = update(dispatch, CloseManagementDialog, {
       ..model,
       management_dialog: if open {
-        Some(Settings)
+        Some(Settings(General))
       } else {
         None
       },

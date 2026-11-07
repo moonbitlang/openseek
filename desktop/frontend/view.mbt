@@ -696,7 +696,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
     schedules_active: self.management_dialog is Some(Schedules),
     skills_active: self.management_dialog is Some(Skills),
-    settings_active: self.management_dialog is Some(Settings | ArchivedChats),
+    settings_active: self.management_dialog is Some(Settings(_)),
     account,
   }.filtered()
 }
@@ -1371,15 +1371,13 @@ fn api_settings_rows(
 }
 
 ///|
-/// Settings content for the shared management dialog.
-/// While the configured endpoint is unusable the BYOK guide leads the API
-/// group, and the composer keeps Send disabled until a usable endpoint is
-/// saved.
-fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+/// The runtime settings share their controls with the API-setup guide.
+fn settings_runtime_groups(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
   let locale = model.locale
-  let has_host = model.has_host()
   let settings_loaded = model.host_settings_loaded()
-  let ready = model.api_ready()
   // All providers use the composer's model selector; API setup only chooses
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
@@ -1429,298 +1427,262 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     model,
     id_prefix="settings-api",
   )
-  let groups : Array[@html.Html] = [
-    ..if model.is_desktop {
-      [ssh_settings(dispatch, model)]
-    } else {
-      []
-    },
-    ..if has_host {
-      [
-        @settings.group(
-          icon_sparkle,
-          @settings.text(locale, Engine),
-          engine_rows,
-        ),
-        @settings.group(icon_key, "API", api_rows),
-      ]
-    },
+  [
+    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
+    @settings.group(icon_key, "API", api_rows),
     @settings.group(
-      icon_key,
-      @settings.text(locale, Account) +
-      " · " +
-      @settings.text(locale, RemoteAccess),
-      remote_access_rows(dispatch, model),
+      icon_extensions,
+      "Codex",
+      codex_account_rows(dispatch, model),
     ),
-    ..if has_host {
-      [
-        @settings.group(
-          icon_extensions,
-          "Codex",
-          codex_account_rows(dispatch, model),
-        ),
-      ]
-    },
-    @settings.group(icon_layout, @settings.text(locale, Interface), [
-      @settings.row(
-        @settings.text(locale, TranscriptView),
-        [
-          @rui.button_group(
-            class="transcript-view-control",
-            aria_label=@settings.text(locale, TranscriptView),
-            [
-              @rui.button(
-                variant=Ghost,
-                size=Default,
-                on_click=dispatch(MinimalTranscriptChanged(true)),
-                attrs=@html.Attrs::build().aria_pressed(
-                  model.minimal_transcript.to_string(),
-                ),
-                @settings.text(locale, MinimalView),
-              ),
-              @rui.button(
-                variant=Ghost,
-                size=Default,
-                on_click=dispatch(MinimalTranscriptChanged(false)),
-                attrs=@html.Attrs::build().aria_pressed(
-                  (!model.minimal_transcript).to_string(),
-                ),
-                @settings.text(locale, DetailView),
-              ),
-            ],
-          ),
-        ],
-        desc=@settings.text(locale, TranscriptViewDescription),
-      ),
-      @settings.row(
-        @settings.text(locale, Language),
-        [
-          LanguageMenu.setting_control(
-            dispatch,
-            model,
-            id="language-select",
-            options=[
-              @select_control.ViewOption(
-                value="system",
-                label=@settings.text(locale, System),
-              ),
-              @select_control.ViewOption(value="en", label="English"),
-              @select_control.ViewOption(value="zh-Hans", label="简体中文"),
-              @select_control.ViewOption(value="zh-Hant", label="繁體中文"),
-              @select_control.ViewOption(value="ja", label="日本語"),
-              @select_control.ViewOption(value="es", label="Español"),
-            ],
-            selected=model.language.wire(),
-            aria_label=@settings.text(locale, Language),
-            change=@cmd.Emit(value => {
-              dispatch(LanguageChanged(value, browser_languages()))
-            }),
-          ),
-        ],
-        desc=@settings.text(locale, LanguageDescription),
-      ),
-      @settings.row(
-        @settings.text(locale, Followup),
-        [
-          FollowupBehaviorMenu.setting_control(
-            dispatch,
-            model,
-            id="followup-behavior-select",
-            options=[
-              @select_control.ViewOption(
-                value="steer",
-                label=@settings.text(locale, Steer),
-              ),
-              @select_control.ViewOption(
-                value="queue",
-                label=@settings.text(locale, Queue),
-              ),
-            ],
-            selected=model.followup_behavior.wire(),
-            aria_label=@settings.text(locale, Followup),
-            change=dispatch.map(value => FollowupBehaviorChanged(value)),
-            disabled=!settings_loaded,
-          ),
-        ],
-        desc=@settings.text(locale, FollowupDescription),
-      ),
-      @settings.row(
-        @settings.text(locale, Theme),
-        [
-          ThemeMenu.setting_control(
-            dispatch,
-            model,
-            id="theme-select",
-            options=[
-              @select_control.ViewOption(
-                value="system",
-                label=@settings.text(locale, System),
-              ),
-              @select_control.ViewOption(
-                value="light",
-                label=@settings.text(locale, Light),
-              ),
-              @select_control.ViewOption(
-                value="dark",
-                label=@settings.text(locale, Dark),
-              ),
-            ],
-            selected=model.theme.wire(),
-            aria_label=@settings.text(locale, Theme),
-            change=dispatch.map(value => ThemeChanged(value)),
-          ),
-        ],
-        desc=@settings.text(locale, ThemeDescription),
-      ),
-      @settings.row(
-        @settings.text(locale, FontSize),
-        [
-          @html.input(
-            input_type=@html.InputType::Range,
-            id="font-size-slider",
-            list="font-size-ticks",
-            class="setting-font-size-slider",
-            min=AppFontSizeMinPixels,
-            max=AppFontSizeMaxPixels,
-            step=1,
-            value=model.app_font_size.wire(),
-            on_input=dispatch.map(value => FontSizeChanged(value)),
-            attrs=@html.Attrs::build()
-              .aria_label(@settings.text(locale, FontSize))
-              .aria_valuetext("\{model.app_font_size.wire()}px"),
-          ),
-          @html.datalist(
-            id="font-size-ticks",
-            [
-              for size in AppFontSizeMinPixels..<=AppFontSizeMaxPixels => {
-                @html.option(value=size.to_string(), "")
-              }
-            ],
-          ),
-          @html.span(class="setting-font-size-value", [
-            @html.text("\{model.app_font_size.wire()}px"),
-          ]),
-        ],
-        desc=@settings.text(locale, FontSizeDescription),
-      ),
-      @settings.row(
-        @settings.text(locale, NotificationCorner),
-        [
-          NotificationCornerMenu.setting_control(
-            dispatch,
-            model,
-            id="notification-corner-select",
-            options=[
-              @select_control.ViewOption(
-                value="bottom-right",
-                label=@settings.text(locale, BottomRight),
-              ),
-              @select_control.ViewOption(
-                value="bottom-left",
-                label=@settings.text(locale, BottomLeft),
-              ),
-              @select_control.ViewOption(
-                value="top-right",
-                label=@settings.text(locale, TopRight),
-              ),
-              @select_control.ViewOption(
-                value="top-left",
-                label=@settings.text(locale, TopLeft),
-              ),
-            ],
-            selected=model.notification_corner.wire(),
-            aria_label=@settings.text(locale, NotificationCorner),
-            change=dispatch.map(value => NotificationCornerChanged(value)),
-          ),
-        ],
-        desc=@settings.text(locale, NotificationDescription),
-      ),
-      @settings.row(
-        @settings.text(locale, FileTreeLayout),
-        [
-          TreeLayoutMenu.setting_control(
-            dispatch,
-            model,
-            id="tree-layout-select",
-            options=[
-              @select_control.ViewOption(
-                value="right-sidebar",
-                label=@settings.text(locale, RightSidebar),
-              ),
-              @select_control.ViewOption(
-                value="bottom-panel",
-                label=@settings.text(locale, BottomPanel),
-              ),
-            ],
-            selected=model.tree_layout.wire(),
-            aria_label=@settings.text(locale, FileTreeLayout),
-            change=dispatch.map(value => TreeLayoutChanged(value)),
-          ),
-        ],
-        desc=@settings.text(locale, FileTreeDescription),
-      ),
-    ]),
   ]
-  groups.push(archived_chats_settings(dispatch, model))
-  // Self-update swaps the bundle under the desktop process, and the relay
-  // sign-in registers the machine the host runs on; from a browser both
-  // sections could only break things for whoever is at the machine.
-  if model.is_desktop {
-    groups.push(
-      @settings.group(
-        @icons.icon_settings_gear,
-        @settings.text(locale, Diagnostics),
-        [
-          @settings.row(
-            @settings.text(locale, FpsOverlay),
-            [
-              @settings.switch_control(
-                enabled=model.fps_overlay_enabled,
-                label=@settings.text(locale, FpsOverlay),
-                on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
+}
+
+///|
+fn settings_general_group(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
+  let locale = model.locale
+  let settings_loaded = model.host_settings_loaded()
+  @settings.group(icon_layout, @settings.text(locale, General), [
+    @settings.row(
+      @settings.text(locale, TranscriptView),
+      [
+        @rui.button_group(
+          class="transcript-view-control",
+          aria_label=@settings.text(locale, TranscriptView),
+          [
+            @rui.button(
+              variant=Ghost,
+              size=Default,
+              on_click=dispatch(MinimalTranscriptChanged(true)),
+              attrs=@html.Attrs::build().aria_pressed(
+                model.minimal_transcript.to_string(),
               ),
-            ],
-            desc=@settings.text(locale, FpsDescription),
+              @settings.text(locale, MinimalView),
+            ),
+            @rui.button(
+              variant=Ghost,
+              size=Default,
+              on_click=dispatch(MinimalTranscriptChanged(false)),
+              attrs=@html.Attrs::build().aria_pressed(
+                (!model.minimal_transcript).to_string(),
+              ),
+              @settings.text(locale, DetailView),
+            ),
+          ],
+        ),
+      ],
+      desc=@settings.text(locale, TranscriptViewDescription),
+    ),
+    @settings.row(
+      @settings.text(locale, Language),
+      [
+        LanguageMenu.setting_control(
+          dispatch,
+          model,
+          id="language-select",
+          options=[
+            @select_control.ViewOption(
+              value="system",
+              label=@settings.text(locale, System),
+            ),
+            @select_control.ViewOption(value="en", label="English"),
+            @select_control.ViewOption(value="zh-Hans", label="简体中文"),
+            @select_control.ViewOption(value="zh-Hant", label="繁體中文"),
+            @select_control.ViewOption(value="ja", label="日本語"),
+            @select_control.ViewOption(value="es", label="Español"),
+          ],
+          selected=model.language.wire(),
+          aria_label=@settings.text(locale, Language),
+          change=@cmd.Emit(value => {
+            dispatch(LanguageChanged(value, browser_languages()))
+          }),
+        ),
+      ],
+      desc=@settings.text(locale, LanguageDescription),
+    ),
+    @settings.row(
+      @settings.text(locale, Followup),
+      [
+        FollowupBehaviorMenu.setting_control(
+          dispatch,
+          model,
+          id="followup-behavior-select",
+          options=[
+            @select_control.ViewOption(
+              value="steer",
+              label=@settings.text(locale, Steer),
+            ),
+            @select_control.ViewOption(
+              value="queue",
+              label=@settings.text(locale, Queue),
+            ),
+          ],
+          selected=model.followup_behavior.wire(),
+          aria_label=@settings.text(locale, Followup),
+          change=dispatch.map(value => FollowupBehaviorChanged(value)),
+          disabled=!settings_loaded,
+        ),
+      ],
+      desc=@settings.text(locale, FollowupDescription),
+    ),
+    @settings.row(
+      @settings.text(locale, Theme),
+      [
+        ThemeMenu.setting_control(
+          dispatch,
+          model,
+          id="theme-select",
+          options=[
+            @select_control.ViewOption(
+              value="system",
+              label=@settings.text(locale, System),
+            ),
+            @select_control.ViewOption(
+              value="light",
+              label=@settings.text(locale, Light),
+            ),
+            @select_control.ViewOption(
+              value="dark",
+              label=@settings.text(locale, Dark),
+            ),
+          ],
+          selected=model.theme.wire(),
+          aria_label=@settings.text(locale, Theme),
+          change=dispatch.map(value => ThemeChanged(value)),
+        ),
+      ],
+      desc=@settings.text(locale, ThemeDescription),
+    ),
+    @settings.row(
+      @settings.text(locale, FontSize),
+      [
+        @html.input(
+          input_type=@html.InputType::Range,
+          id="font-size-slider",
+          list="font-size-ticks",
+          class="setting-font-size-slider",
+          min=AppFontSizeMinPixels,
+          max=AppFontSizeMaxPixels,
+          step=1,
+          value=model.app_font_size.wire(),
+          on_input=dispatch.map(value => FontSizeChanged(value)),
+          attrs=@html.Attrs::build()
+            .aria_label(@settings.text(locale, FontSize))
+            .aria_valuetext("\{model.app_font_size.wire()}px"),
+        ),
+        @html.datalist(
+          id="font-size-ticks",
+          [
+            for size in AppFontSizeMinPixels..<=AppFontSizeMaxPixels => {
+              @html.option(value=size.to_string(), "")
+            }
+          ],
+        ),
+        @html.span(class="setting-font-size-value", [
+          @html.text("\{model.app_font_size.wire()}px"),
+        ]),
+      ],
+      desc=@settings.text(locale, FontSizeDescription),
+    ),
+    @settings.row(
+      @settings.text(locale, NotificationCorner),
+      [
+        NotificationCornerMenu.setting_control(
+          dispatch,
+          model,
+          id="notification-corner-select",
+          options=[
+            @select_control.ViewOption(
+              value="bottom-right",
+              label=@settings.text(locale, BottomRight),
+            ),
+            @select_control.ViewOption(
+              value="bottom-left",
+              label=@settings.text(locale, BottomLeft),
+            ),
+            @select_control.ViewOption(
+              value="top-right",
+              label=@settings.text(locale, TopRight),
+            ),
+            @select_control.ViewOption(
+              value="top-left",
+              label=@settings.text(locale, TopLeft),
+            ),
+          ],
+          selected=model.notification_corner.wire(),
+          aria_label=@settings.text(locale, NotificationCorner),
+          change=dispatch.map(value => NotificationCornerChanged(value)),
+        ),
+      ],
+      desc=@settings.text(locale, NotificationDescription),
+    ),
+    @settings.row(
+      @settings.text(locale, FileTreeLayout),
+      [
+        TreeLayoutMenu.setting_control(
+          dispatch,
+          model,
+          id="tree-layout-select",
+          options=[
+            @select_control.ViewOption(
+              value="right-sidebar",
+              label=@settings.text(locale, RightSidebar),
+            ),
+            @select_control.ViewOption(
+              value="bottom-panel",
+              label=@settings.text(locale, BottomPanel),
+            ),
+          ],
+          selected=model.tree_layout.wire(),
+          aria_label=@settings.text(locale, FileTreeLayout),
+          change=dispatch.map(value => TreeLayoutChanged(value)),
+        ),
+      ],
+      desc=@settings.text(locale, FileTreeDescription),
+    ),
+  ])
+}
+
+///|
+fn settings_diagnostics_group(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
+  let locale = model.locale
+  @settings.group(
+    @icons.icon_settings_gear,
+    @settings.text(locale, Diagnostics),
+    [
+      @settings.row(
+        @settings.text(locale, FpsOverlay),
+        [
+          @settings.switch_control(
+            enabled=model.fps_overlay_enabled,
+            label=@settings.text(locale, FpsOverlay),
+            on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
           ),
         ],
+        desc=@settings.text(locale, FpsDescription),
       ),
-    )
-    groups.push(
-      @settings.group(icon_sync, @settings.text(locale, Updates), [
-        @settings.row(
-          @settings.text(locale, CheckUpdates),
-          update_check_controls(dispatch, model),
-          desc=@settings.text(locale, CurrentVersion(model.app_version)),
-        ),
-      ]),
-    )
-  }
-  @page_shell.body(class="settings-page", [
-    @html.div(class="settings-header", [
-      @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-      // The subtitle describes host runtime settings, which a page without a
-      // host never loads.
-      if has_host {
-        @html.div(
-          class="settings-subtitle",
-          if !settings_loaded {
-            @settings.text(locale, LoadingSettings)
-          } else if ready {
-            @settings.text(locale, RuntimeSettings)
-          } else {
-            match model.api_provider {
-              Deepseek => @settings.text(locale, DeepseekKey)
-              Glm => @settings.text(locale, GlmKey)
-              OpenRouter => @settings.text(locale, OpenRouterKey)
-              Custom => @settings.text(locale, CustomEndpoint)
-            }
-          },
-        )
-      } else {
-        @html.nothing
-      },
-    ]),
-    @html.div(class="settings", groups),
+    ],
+  )
+}
+
+///|
+fn settings_updates_group(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
+  let locale = model.locale
+  @settings.group(icon_sync, @settings.text(locale, Updates), [
+    @settings.row(
+      @settings.text(locale, CheckUpdates),
+      update_check_controls(dispatch, model),
+      desc=@settings.text(locale, CurrentVersion(model.app_version)),
+    ),
   ])
 }
 

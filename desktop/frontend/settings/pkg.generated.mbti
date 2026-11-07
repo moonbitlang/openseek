@@ -98,6 +98,9 @@ pub(all) enum Message {
   System
   Settings
   Preferences
+  General
+  ModelsAndRuntime
+  SshHosts
   Interface
   TranscriptView
   TranscriptViewDescription

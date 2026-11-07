@@ -84,6 +84,7 @@ async function installDesktop(page, { managed = false } = {}) {
 test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
 
   const connect = section.getByRole('button', { name: 'Sign in', exact: true });
@@ -121,6 +122,7 @@ test('account sign-in remains independent of the remote access toggle and signs 
 test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'FPS overlay', exact: true });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.focus();
@@ -130,6 +132,7 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
   await toggle.scrollIntoViewIfNeeded();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -140,6 +143,7 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
 test('environment-managed remote access keeps its connection while the account logs out', async ({ page }) => {
   const auth = await installDesktop(page, { managed: true });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
   await expect(section.getByRole('switch')).toHaveCount(0);
   await expect(section).toContainText('Signing out does not close this debug connection.');

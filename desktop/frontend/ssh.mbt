@@ -1252,7 +1252,11 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     )
   }
-  @settings.group(@icons.icon_server, "SSH hosts", rows)
+  @settings.group(
+    @icons.icon_server,
+    @settings.text(model.locale, SshHosts),
+    rows,
+  )
 }
 
 ///|

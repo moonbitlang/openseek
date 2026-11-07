@@ -649,12 +649,12 @@ export class CloudHarness {
   // Archived conversations are managed within the Settings dialog.
   async openArchivedChats() {
     await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await this.page.getByRole('button', { name: 'Manage', exact: true }).click();
-    await expect(this.page.getByRole('dialog', { name: 'Archived chats', exact: true })).toBeVisible();
+    await this.page.getByRole('tab', { name: 'Archived chats', exact: true }).click();
+    await expect(this.page.getByRole('tabpanel', { name: 'Archived chats', exact: true })).toBeVisible();
   }
 
   archivedRow(id) {
-    return this.page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
+    return this.page.getByRole('tabpanel', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
   }
 
   async openArchived(id) {

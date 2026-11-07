@@ -55,6 +55,7 @@ test('browser login and session recovery use only v2 account endpoints', async (
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const recovered = page.waitForResponse(response => new URL(response.url()).pathname === '/v2/auth/session');
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await settings.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   await settings.getByRole('button', { name: 'Sign in', exact: true }).click();
   await recovered;
   await expect(settings).not.toBeVisible();
@@ -159,6 +160,7 @@ test('browser account sign-out clears Cloud and never signs out the computer', a
   await cloud.goto();
   await cloud.open();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
   await section.getByRole('button', { name: 'Sign out', exact: true }).click();
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
@@ -254,6 +256,7 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
     await cloud.goto();
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
     await expect(page.getByText(message, { exact: true })).toBeVisible();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
     expect(cloud.exchangeCount).toBe(0);
@@ -357,6 +360,7 @@ test('Cloud sign-out closes the local reader even when stream cancellation rejec
     await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
     const cancelled = cloud.sessionStreamCancellations;
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
     const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
     await section.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect.poll(() => cloud.sessionStreamCancellations).toBeGreaterThan(cancelled);

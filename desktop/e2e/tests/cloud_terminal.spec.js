@@ -120,6 +120,7 @@ test('account replacement closes this client sockets and cannot display the old 
   const old = terminal.connections[0];
   terminal.output(old, 'OLD_ACCOUNT\r\n');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   const account = page.locator('.settings-group', { hasText: 'Account · Remote access' });
   await account.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect.poll(() => old.closed).toBe(true);
@@ -250,6 +251,7 @@ test('signing out while Cloud ! runs clears the operation without submitting it 
   await cloud.open();
   const tab = await shell(page, terminal, 'ls');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   await page.locator('.settings-group', { hasText: 'Account · Remote access' }).getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect.poll(() => tab.connection.closed).toBe(true);
   expect(cloud.postCount).toBe(0);

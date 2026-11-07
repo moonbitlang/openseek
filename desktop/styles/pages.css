@@ -173,6 +173,60 @@ h2 {
   font-size: var(--font-size-md);
 }
 
+.settings-tabs {
+  --settings-columns: 14rem minmax(0, 1fr);
+  --settings-rows: minmax(0, 1fr);
+}
+
+.settings-tab-list {
+  border-inline-end: 1px solid var(--color-border);
+}
+
+.settings-tab-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container: settings-content / inline-size;
+}
+
+.settings-tab-panel .management-page {
+  grid-row: auto;
+  overflow: visible;
+}
+
+.settings-tab-panel .management-page-content {
+  max-width: none;
+  margin: 0;
+}
+
+@container settings-content (max-width: 38rem) {
+  .settings-tab-panel .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-tab-panel .setting-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-tabs {
+    --settings-columns: minmax(0, 1fr);
+    --settings-rows: auto minmax(0, 1fr);
+    --settings-tab-white-space: nowrap;
+  }
+
+  .settings-tab-list {
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
 .settings {
   display: grid;
   align-content: start;
@@ -304,15 +358,6 @@ h2 {
 .archived-chats-page > .management-page-content,
 .archived-chats-page .settings-group {
   grid-template-columns: minmax(0, 1fr);
-}
-
-.archived-chats-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  justify-self: start;
-  margin-inline-start: -0.75em;
-  color: var(--color-text-secondary);
 }
 
 .archived-chats-empty {

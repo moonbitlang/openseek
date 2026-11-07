@@ -979,6 +979,7 @@ test('a retired Cloud account cannot hand its delayed download to the browser', 
   await page.getByRole('button', { name: 'Download to local', exact: true }).click();
   await expect.poll(() => cloud.fileRequests.filter(r => r.download).length).toBe(1);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
   const account = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
   await account.getByRole('button', { name: 'Sign out', exact: true }).click();
   const response = settledResponse(page, r => new URL(r.url()).pathname.endsWith('/files/download'));
