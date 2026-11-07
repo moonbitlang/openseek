@@ -132,7 +132,7 @@ fn settings_page(
         style=["font-size:var(--font-size-md)"],
         [
           @html.div(
-            class="settings",
+            class="form-layout",
             [
               ..if section == Runtime || section == ArchivedChats {
                 [@html.h2(label)]

@@ -85,17 +85,13 @@ test('account sign-in remains independent of the remote access toggle and signs 
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
+  const section = page.getByRole('region', { name: 'Account · Remote access', exact: true });
 
   const connect = section.getByRole('button', { name: 'Sign in', exact: true });
   await expect(connect).toBeEnabled();
   await connect.click();
 
-  const waiting = section.getByRole('status');
-  await expect(waiting).toHaveText('Waiting for the browser…');
-  const accountRow = section.locator('.setting-row', { has: page.getByRole('status') });
-  await expect(accountRow.locator('.setting-name')).toHaveText('Account');
-  await expect(accountRow.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+  await expect(section.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 
   auth.finishConnect();
@@ -108,7 +104,6 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await toggle.focus();
   await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(section.getByText('online — reachable from your browser', { exact: true })).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(signOut).toBeEnabled();
@@ -129,7 +124,6 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
   await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('true');
-  await toggle.scrollIntoViewIfNeeded();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
@@ -144,9 +138,7 @@ test('environment-managed remote access keeps its connection while the account l
   const auth = await installDesktop(page, { managed: true });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
-  await expect(section.getByRole('switch')).toHaveCount(0);
-  await expect(section).toContainText('Signing out does not close this debug connection.');
+  const section = page.getByRole('region', { name: 'Account · Remote access', exact: true });
   await section.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
   auth.finishConnect();

@@ -133,18 +133,6 @@
     display: none;
   }
 
-  /* Settings and Skills: one column — label and description above,
-     the control below at full width. */
-  .setting-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-4);
-  }
-  .setting-control {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   /* Errors stay below the header so a failed send leaves its restored draft
      and retry controls visible. Bound a group of errors as well as each one. */
   .notifications.corner-bottom-right,

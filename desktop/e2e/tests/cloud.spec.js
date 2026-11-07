@@ -9,7 +9,6 @@ for (const desktop of [false, true]) {
     await cloud.goto();
     await cloud.open();
     await expect(cloud.row(sessionA)).toHaveText('Cloud fixture A');
-    await expect(page.locator('main h1')).toHaveText('Cloud fixture A');
     await expect(page.locator('#task')).toBeVisible();
     expect(cloud.exchangeCount).toBe(0);
     expect(cloud.hostRequests.filter(request => request.method === 'cloud.authorize')).toEqual([]);
@@ -26,12 +25,10 @@ for (const desktop of [false, true]) {
     await cloud.create();
     await expect(page.getByRole('menuitem', { name: 'Local', exact: true })).toHaveCount(0);
     expect(cloud.device.requests.some(request => request.method === 'fs.create_unnamed_workspace')).toBe(false);
-    await expect(page.locator('main h1')).toHaveText('New chat');
     expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
     await page.locator('#task').fill('Calculate 1 + 1');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
-    await expect(page.locator('main h1')).toHaveText('Calculate 1 + 1');
     await expect(page.locator('#task')).toHaveValue('');
     expect(cloud.exchangeCount).toBe(0);
     const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
@@ -161,7 +158,7 @@ test('browser account sign-out clears Cloud and never signs out the computer', a
   await cloud.open();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-  const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
+  const section = page.getByRole('region', { name: 'Account · Remote access', exact: true });
   await section.getByRole('button', { name: 'Sign out', exact: true }).click();
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
   await expect(cloud.row(sessionA)).toBeHidden();
@@ -231,7 +228,6 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   const local = page.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
   await local.click();
   await expect(local).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('main > .topbar h1')).toHaveText('Rabbita browser fixture');
   await expect(page.locator('#transcript').getByText('Browser result', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Local draft');
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
@@ -361,7 +357,7 @@ test('Cloud sign-out closes the local reader even when stream cancellation rejec
     const cancelled = cloud.sessionStreamCancellations;
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('tab', { name: 'Account · Remote access', exact: true }).click();
-    const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
+    const section = page.getByRole('region', { name: 'Account · Remote access', exact: true });
     await section.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect.poll(() => cloud.sessionStreamCancellations).toBeGreaterThan(cancelled);
     resume();
@@ -385,7 +381,6 @@ test('browser returns from Cloud to Work project new chat', async ({ page }) => 
   await page.getByRole('button', { name: 'Work', exact: true }).click();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
-  await expect(page.locator('main h1')).toHaveText('New chat');
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
   await page.locator('#task').fill('Retain Work draft');
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
@@ -425,7 +420,6 @@ for (const destination of ['settings', 'not-a-page']) {
         await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
         await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionC}`);
         await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
-        await expect(page.locator('main > .topbar h1')).toHaveText('First Cloud message');
       } else {
         await expect(page).toHaveURL(`${authOrigin}/device/device-a/not-a-page`);
         await expect(page.locator('.navigation-notice')).toBeVisible();

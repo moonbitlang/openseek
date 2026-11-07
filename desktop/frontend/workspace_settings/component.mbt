@@ -266,7 +266,7 @@ fn dialog_contents(
           @html.div(class="page-subtitle", workspace.path),
         ],
       ),
-      @html.div(class="settings", [
+      @html.div(class="form-layout", [
         @ui.form_section(
           @icons.icon_worktree,
           ui(locale, ConversationsLabel),

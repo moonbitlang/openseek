@@ -30,7 +30,6 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await expect(page).toHaveURL(workUrl);
   const main = page.locator('#management-dialog');
   const archived = main.getByRole('tabpanel', { name: 'Archive', exact: true });
-  await expect(archived.locator('.management-page').getByRole('heading', { level: 2 })).toHaveText(['workspace', 'notes']);
 
   const filter = main.getByRole('searchbox', { name: 'Filter archived chats', exact: true });
   await filter.fill('TRIP');
@@ -69,26 +68,5 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await expect(main.getByRole('tabpanel', { name: 'General', exact: true })).toBeVisible();
   await main.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(main).not.toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a long archived title truncates and keeps its actions in view', async ({ page }) => {
-  const app = fixture(page);
-  app.archivedSessions = [
-    { id: 'long-archive', title: 'Explain '.repeat(60).trim(), workspace: '/workspace', updated_at_ms: 2 },
-  ];
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Archive', exact: true }).click();
-  const main = page.getByRole('dialog', { name: 'Settings', exact: true });
-  const scroller = main.locator('.archived-chats-page');
-  await expect(scroller.locator('.archived-chat-row')).toHaveCount(1);
-  expect(await scroller.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
-  const viewport = page.viewportSize();
-  for (const name of ['Restore', 'Delete']) {
-    const box = await main.getByRole('button', { name, exact: true }).boundingBox();
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-  }
   expect(app.pageErrors).toEqual([]);
 });

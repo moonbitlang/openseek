@@ -316,5 +316,5 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.section(attrs=@html.Attrs::build().aria_label(title), section),
     )
   }
-  @ui.dialog_page(class="settings-page schedules-page", content)
+  @ui.dialog_page(class="schedules-page", content)
 }

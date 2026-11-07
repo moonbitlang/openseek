@@ -49,11 +49,15 @@ pub fn form_section(
   title : String,
   rows : Array[@html.Html],
 ) -> @html.Html {
-  @html.div(class="form-section", [
-    @html.div(class="form-section-header", [
-      @icons.icon(icon_image),
-      @html.h2(title),
-    ]),
-    @html.div(class="form-section-body card-surface", rows),
-  ])
+  @html.section(
+    class="form-section",
+    attrs=@html.Attrs::build().aria_label(title),
+    [
+      @html.div(class="form-section-header", [
+        @icons.icon(icon_image),
+        @html.h2(title),
+      ]),
+      @html.div(class="form-section-body card-surface", rows),
+    ],
+  )
 }
