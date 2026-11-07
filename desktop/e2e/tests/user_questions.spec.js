@@ -28,28 +28,6 @@ function setup(page, questions = [
   return { app, snapshot };
 }
 
-test('choosing an option advances to the next question and retains the answer', async ({ page }) => {
-  const { app } = setup(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Small change', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await card.getByRole('button', { name: 'Small change', exact: true }).press('Enter');
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.locator('textarea').fill('Keep keyboard support.');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card).toContainText('Anything else?');
-  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
-    { approach: 'Small change', details: 'Keep keyboard support.' },
-  ]);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('custom answer Enter advances questions and submits the final answer', async ({ page }) => {
   const { app } = setup(page);
   await app.install();

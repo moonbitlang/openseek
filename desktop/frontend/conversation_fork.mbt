@@ -530,3 +530,267 @@ test "the fork of a worktree conversation opens in its own worktree" {
 fn ConversationFork::is_edit(self : ConversationFork) -> Bool {
   self.kind is EditedMessage(_)
 }
+
+///|
+fn editable_conversation_fixture() -> Model raise {
+  let base = test_model()
+  let source = {
+    ..base.active(),
+    task: "Keep the composer draft",
+    watermark: 8,
+    sync: Synced,
+    messages: [
+      {
+        kind: User(content=Content([Text("First question")])),
+        sequence: Some(1),
+        ts: None,
+      },
+      { kind: Answer("First answer"), sequence: Some(3), ts: None, },
+      {
+        kind: User(content=Content([Text("Second question")])),
+        sequence: Some(4),
+        ts: None,
+      },
+      { kind: Answer("Second answer"), sequence: Some(6), ts: None, },
+      {
+        kind: User(content=Content([Text("Continue working")])),
+        sequence: Some(7),
+        ts: None,
+      },
+      {
+        kind: Assistant(
+          reasoning=None,
+          prose=Some("Still working"),
+          calls=[],
+          replay=false,
+          finished=false,
+          end_sequence=None,
+        ),
+        sequence: Some(8),
+        ts: None,
+      },
+    ],
+  }
+  let other = {
+    ..empty_conversation(Local, "desktop-other", source.project()),
+    sync: Synced,
+    watermark: 1,
+    messages: [
+      {
+        kind: User(content=Content([Text("An unrelated conversation")])),
+        sequence: Some(1),
+        ts: None,
+      },
+    ],
+  }
+  let model = base
+    .replace_conversation(source)
+    .replace_conversation(other)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [
+        { ..archived_item(source.session_id), title: Some("Source title"), },
+        { ..archived_item("desktop-other"), title: Some("Other conversation"), },
+      ],
+    })
+  {
+    ..model,
+    navigation: {
+      ..model.navigation,
+      location: Some({
+        device: Some("local"),
+        target: Session(source.session_id),
+      }),
+      phase: Active,
+      sessions: Some(Ok(())),
+      archived: Some(Ok(())),
+    },
+  }
+}
+
+///|
+test "first and later edits freeze the complete request and retry before replacing their source" {
+  let model = editable_conversation_fixture()
+  let emit = test_dispatch()
+  guard model.transcript_slot() is Some(slot) else {
+    fail("missing transcript")
+  }
+  let draft : @composer.Draft = {
+    task: "Revised question",
+    images: [{ name: "Image", url: "data:image/png;base64,aW1hZ2U=", }],
+    mentions: [{ ref_: File(path="src/main.mbt"), range: None, }],
+  }
+  for sequence in [1, 4] {
+    let action = UserMessageEditRequested(slot=slot.key(), sequence~, draft~)
+    let (_, requested) = update(emit, action, model)
+    guard requested.conversation_fork is Some(pending) &&
+      pending.kind is EditedMessage(payload) else {
+      fail("edit request was not prepared")
+    }
+    assert_eq(payload.session, "desktop-test")
+    assert_eq(payload.workspace, "/work")
+    assert_eq(payload.through, if sequence == 1 { None } else { Some(3) })
+    assert_eq(payload.source_sequence, 8)
+    assert_eq(payload.source_title, "Source title")
+    assert_eq(payload.images, ["data:image/png;base64,aW1hZ2U="])
+    assert_true(payload.task.has_prefix("Revised question"))
+    assert_true(payload.task.contains("<file path=\"src/main.mbt\"/>"))
+    assert_true(requested.active().messages == model.active().messages)
+    assert_eq(requested.active().task, "Keep the composer draft")
+    let (_, duplicate) = update(emit, action, requested)
+    assert_true(duplicate.conversation_fork == requested.conversation_fork)
+    let (_, failed) = update(
+      emit,
+      ForkCompleted(pending, Err("Edit unavailable"), fresh_session="fallback"),
+      requested,
+    )
+    assert_true(failed.conversation_fork is None)
+    assert_true(failed.active().messages == model.active().messages)
+    assert_eq(failed.active().task, model.active().task)
+    assert_true(
+      failed.notifications.last() is Some({ message: "Edit unavailable", .. }),
+    )
+    let (_, retry) = update(emit, action, failed)
+    assert_true(retry.conversation_fork == Some(pending))
+    let (_, completed) = update(
+      emit,
+      ForkCompleted(
+        pending,
+        Ok({ session: "desktop-edited", title: "Source title", }),
+        fresh_session="fallback",
+      ),
+      retry,
+    )
+    assert_true(completed.conversation_fork is None)
+    assert_true(completed.find_conversation(Local, "desktop-test") is None)
+    assert_true(
+      completed.host_selection() is Some({ session: "desktop-edited", .. }),
+    )
+    assert_true(completed.active().run is NoRun(..))
+    assert_true(completed.active().pending_prompt is None)
+    assert_eq(completed.active().task, "")
+    let (_, replayed) = update(
+      emit,
+      ForkCompleted(
+        pending,
+        Ok({ session: "desktop-edited", title: "Source title", }),
+        fresh_session="fallback",
+      ),
+      completed,
+    )
+    assert_true(replayed.conversations == completed.conversations)
+  }
+}
+
+///|
+test "an edit completing after navigation preserves the other conversation and its draft" {
+  let model = editable_conversation_fixture()
+  guard model.transcript_slot() is Some(slot) else {
+    fail("missing transcript")
+  }
+  let (_, requested) = update(
+    test_dispatch(),
+    UserMessageEditRequested(slot=slot.key(), sequence=4, draft={
+      task: "Edited in the source",
+      images: [],
+      mentions: [],
+    }),
+    model,
+  )
+  guard requested.conversation_fork is Some(pending) &&
+    pending.kind is EditedMessage(payload) else {
+    fail("missing edit")
+  }
+  assert_eq(payload.task, "Edited in the source")
+  let (_, selected) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-other"),
+    requested,
+  )
+  let selected = selected.replace_conversation({
+    ..selected.active(),
+    task: "Unrelated draft",
+  })
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: "desktop-edited", title: "Edited source", }),
+      fresh_session="fallback",
+    ),
+    selected,
+  )
+  assert_eq(completed.active_session, "desktop-other")
+  assert_eq(completed.active().task, "Unrelated draft")
+  assert_true(completed.navigation.location == selected.navigation.location)
+  assert_true(completed.find_conversation(Local, "desktop-test") is None)
+  assert_true(
+    completed.find_conversation(Local, "desktop-edited")
+    is Some({ pending_prompt: None, run: NoRun(..), .. }),
+  )
+}
+
+///|
+test "an edit failure retires an externally deleted source without disturbing a newer selection" {
+  for navigate in [false, true] {
+    let model = editable_conversation_fixture()
+    guard model.transcript_slot() is Some(slot) else {
+      fail("missing transcript")
+    }
+    let (_, requested) = update(
+      test_dispatch(),
+      UserMessageEditRequested(slot=slot.key(), sequence=4, draft={
+        task: "An edit overtaken by deletion",
+        images: [],
+        mentions: [],
+      }),
+      model,
+    )
+    guard requested.conversation_fork is Some(pending) else {
+      fail("missing edit")
+    }
+    let (_, deleted) = update_dev(
+      test_dispatch(),
+      SessionsChanged(
+        change="deleted",
+        key={ session: "desktop-test", workspace: model.active().project(), },
+        fresh_session=Some("fallback"),
+      ),
+      requested,
+    )
+    assert_true(deleted.conversation_fork == Some(pending))
+    assert_true(
+      deleted.find_conversation(Local, "desktop-test") is Some(source) &&
+      source.messages == model.active().messages,
+    )
+    let selected = if navigate {
+      let (_, other) = update(
+        test_dispatch(),
+        OpenSession(Local, "desktop-other"),
+        deleted,
+      )
+      other.replace_conversation({ ..other.active(), task: "Unrelated draft", })
+    } else {
+      deleted
+    }
+    let (_, failed) = update(
+      test_dispatch(),
+      ForkCompleted(pending, Err("Source deleted"), fresh_session="fallback"),
+      selected,
+    )
+    assert_true(failed.conversation_fork is None)
+    assert_true(failed.find_conversation(Local, "desktop-test") is None)
+    assert_false(failed.dev().sessions.any(item => item.id == "desktop-test"))
+    assert_true(
+      failed.notifications.last() is Some({ message: "Source deleted", .. }),
+    )
+    if navigate {
+      assert_eq(failed.active_session, "desktop-other")
+      assert_eq(failed.active().task, "Unrelated draft")
+      assert_true(failed.navigation.location == selected.navigation.location)
+    } else {
+      assert_true(failed.navigation.phase is Missing)
+      assert_true(failed.navigation.location == model.navigation.location)
+    }
+  }
+}

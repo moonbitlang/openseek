@@ -4,12 +4,12 @@
 ///|
 /// The list aggregates notices; a detail shows only its skill's operation
 /// failures. Library loading errors apply to either view.
-fn notice_views(
+fn notice_messages(
   state : State,
   input : Input,
   target : PreviewTarget?,
-) -> Array[@html.Html] {
-  let nodes : Array[@html.Html] = []
+) -> Array[String] {
+  let messages : Array[String] = []
   for notice in state.notices {
     let message = match notice {
       LibraryLoadFailed(message) => message
@@ -47,9 +47,20 @@ fn notice_views(
         message
       }
     }
-    nodes.push(@html.div(class="skills-notice danger", message))
+    messages.push(message)
   }
-  nodes
+  messages
+}
+
+///|
+fn notice_views(
+  state : State,
+  input : Input,
+  target : PreviewTarget?,
+) -> Array[@html.Html] {
+  notice_messages(state, input, target).map(message => {
+    @html.div(class="skills-notice danger", message)
+  })
 }
 
 ///|

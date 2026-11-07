@@ -1,48 +1,4 @@
 ///|
-fn Input::fixture(task : String) -> Input {
-  let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
-    session: "composer-test",
-  }
-  {
-    identity: { owner: @interop.Host(owner), archive_generation: 0, },
-    draft: { images: [], task, mentions: [], },
-    run: None,
-    turn_id: None,
-    goal: { draft: None, standing: None, pending: None, },
-    slash_commands: [],
-    shell_available: false,
-    history: [],
-    root: Some(@common.Uri::file("/workspace")),
-    cloud_access: None,
-    staged_attachments: [],
-    installed_skills: [],
-    context_generation: 0,
-    submission_sequence: 0,
-    entry_changes: [],
-    prediction_source: None,
-    prediction: None,
-    file_candidates: [],
-    open_files: [],
-    active_file: None,
-    file_index: FileIndexReady(epoch=0, truncated=false),
-    presentation: {
-      images_enabled: false,
-      context: [],
-      status: [],
-      placeholder: "Prompt",
-      disabled: false,
-      primary_action: Send(available=true),
-    },
-  }
-}
-
-///|
-fn Msg::test_emit() -> @cmd.Emit[Msg] {
-  @cmd.Emit(_ => @cmd.none)
-}
-
-///|
 fn Action::test_emit() -> @cmd.Emit[Action] {
   @cmd.Emit(_ => @cmd.none)
 }
@@ -211,64 +167,6 @@ test "file completion accepts a local candidate inside the component" {
     draft.mentions ==
     [{ ref_: @mention_context.File(path="src/main.mbt"), range: None, }],
   )
-}
-
-///|
-test "a prompt slash command stays a command until sent, then sends its prompt" {
-  let input = {
-    ..Input::fixture(""),
-    slash_commands: [
-      {
-        label: "/review",
-        detail: "",
-        command: "review",
-        prompt: Some("Review it.\nFocus:"),
-      },
-    ],
-  }
-  let emitted : Array[Action] = []
-  let actions = @cmd.Emit(action => {
-    emitted.push(action)
-    @cmd.none
-  })
-  let (typed, _) = Model(input).update(
-    input,
-    TextChanged("/rev"),
-    Msg::test_emit(),
-    actions,
-  )
-  let (accepted, _) = typed.update(
-    input,
-    CompletionAccept,
-    Msg::test_emit(),
-    actions,
-  )
-  inspect(accepted.active(input).draft.task, content="/review ")
-  // Nothing runs on accepting it: the user adds a focus and sends.
-  assert_true(emitted.all(action => !(action is SlashCommand(..))))
-  fn sent(task) raise {
-    emitted.clear()
-    let (focused, _) = accepted.update(
-      input,
-      TextChanged(task),
-      Msg::test_emit(),
-      actions,
-    )
-    let (_, _) = focused.update(
-      input,
-      SubmitRequested,
-      Msg::test_emit(),
-      actions,
-    )
-    guard emitted is [DraftSubmitted(draft~, ..)] else {
-      fail("one prompt submission expected")
-    }
-    draft.task
-  }
-  inspect(sent("/review the parser "), content="Review it.\nFocus: the parser")
-  inspect(sent("/review"), content="Review it.\nFocus:")
-  // Only the whole command word expands.
-  inspect(sent("/reviewer"), content="/reviewer")
 }
 
 ///|

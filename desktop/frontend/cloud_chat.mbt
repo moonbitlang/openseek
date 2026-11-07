@@ -711,3 +711,339 @@ fn Model::cloud_chat_rows(
     )
   })
 }
+
+///|
+fn integrated_cloud_model() -> Model {
+  let state = {
+    ..@cloud.State::empty(),
+    user_id: Some("fixture-user"),
+    epoch: 3,
+    sessions: [
+      {
+        id: "cloud-a",
+        title: Some("Cloud conversation"),
+        updated_at: Some(100),
+        generating: false,
+        archived: false,
+        approval: ApprovalAsk,
+      },
+    ],
+  }
+  let model = {
+    ..test_model(),
+    cloud: state,
+    account: Some({
+      token: "ts_fixture",
+      user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
+    }),
+    is_desktop: true,
+    deepseek_key_saved: false,
+  }
+  let (_, model) = update(
+    test_dispatch(),
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    model,
+  )
+  let request = model.cloud.conversations.get("cloud-a").unwrap().request
+  let (_, model) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Loaded(3, "cloud-a", request, {
+        prediction: None,
+        session: {
+          version: None,
+          id: None,
+          system_prompt: None,
+          events: Some([
+            {
+              sequence: 1,
+              ts: Some(100),
+              item: @protocol.Assistant({
+                content: "Cloud answer",
+                reasoning_content: None,
+                tool_calls: None,
+                is_replay: None,
+              }),
+            },
+          ]),
+        },
+        etag: None,
+        offset: None,
+        messages: [
+          {
+            task_id: "finished-task",
+            kind: "assistant_message",
+            data: { "content": "Cloud answer" },
+            engine_sequence: None,
+            created_at: 100,
+          },
+        ],
+        generating: false,
+      }),
+    ),
+    model,
+  )
+  model.with_cloud_baseline("cloud-a")
+}
+
+///|
+fn Model::with_cloud_baseline(self : Model, session : String) -> Model {
+  let conversations = self.cloud.conversations.copy()
+  conversations[session] = { ..conversations[session], last_seq: Some(0), }
+  { ..self, cloud: { ..self.cloud, conversations, }, }
+}
+
+///|
+fn test_cloud_history(text : String) -> @cloud.History {
+  {
+    prediction: None,
+    session: {
+      version: None,
+      id: None,
+      system_prompt: None,
+      events: Some([
+        {
+          sequence: 1,
+          ts: Some(100),
+          item: @protocol.Assistant({
+            content: text,
+            reasoning_content: None,
+            tool_calls: None,
+            is_replay: None,
+          }),
+        },
+      ]),
+    },
+    etag: None,
+    offset: None,
+    messages: [
+      {
+        task_id: "finished-task",
+        kind: "assistant_message",
+        data: { "content": Json(text) },
+        engine_sequence: None,
+        created_at: 100,
+      },
+    ],
+    generating: false,
+  }
+}
+
+///|
+test "Cloud direct links keep history readable while metadata controls editing" {
+  let initial = integrated_cloud_model()
+  let unknown = { ..initial, cloud: { ..initial.cloud, sessions: [], }, }
+  let (_, waiting) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Refresh),
+    unknown,
+  )
+  let before = waiting.cloud_conversation().unwrap()
+  assert_true(waiting.composer_input().presentation.disabled)
+  assert_true(before.records == initial.cloud_conversation().unwrap().records)
+  for archived in [false, true] {
+    let (_, ready) = update(
+      test_dispatch(),
+      CloudAction(
+        @cloud.Listed(
+          waiting.cloud.epoch,
+          waiting.cloud.list_request,
+          initial.cloud.sessions.map(session => { ..session, archived, }),
+        ),
+      ),
+      waiting,
+    )
+    assert_eq(ready.cloud_archived(), archived)
+    assert_eq(ready.composer_input().presentation.disabled, archived)
+    assert_true(ready.cloud_conversation().unwrap().records == before.records)
+    assert_true(ready.cloud.creation is None)
+    assert_true(ready.cloud_identity() == waiting.cloud_identity())
+    assert_true(file_ctx(ready).placement is None)
+    assert_true(file_ctx(ready).cloud_files is Some(_))
+  }
+  let (_, failed) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.ListFailed(
+        waiting.cloud.epoch,
+        waiting.cloud.list_request,
+        Http(503),
+      ),
+    ),
+    waiting,
+  )
+  assert_true(failed.cloud.list_status is Failed)
+  assert_true(failed.composer_input().presentation.disabled)
+  assert_true(failed.cloud_conversation().unwrap().records == before.records)
+  assert_true(failed.cloud.creation is None)
+  assert_true(failed.cloud_identity() == waiting.cloud_identity())
+}
+
+///|
+test "Cloud deep-link missing and retryable failures preserve the requested address without creation" {
+  let initial = { ..integrated_cloud_model(), is_desktop: false, }
+  let (_, opening) = update(
+    test_dispatch(),
+    Navigation(Browser({ path: "/cloud/session/cloud-b", })),
+    initial,
+  )
+  let request = opening.cloud.conversations["cloud-b"].request
+  let location = opening.navigation.location
+  for status in [404, 503] {
+    let (_, failed) = update(
+      test_dispatch(),
+      CloudAction(
+        @cloud.LoadFailed(opening.cloud.epoch, "cloud-b", request, Http(status)),
+      ),
+      opening,
+    )
+    assert_true(failed.navigation.location == location)
+    assert_true(failed.cloud.creation is None)
+    if status == 404 {
+      assert_true(failed.navigation.phase is Missing)
+      assert_true(failed.cloud.retired.contains("cloud-b"))
+      assert_false(failed.cloud.conversations.contains("cloud-b"))
+    } else {
+      assert_true(
+        failed.cloud.conversations["cloud-b"].notice ==
+        Some("Cloud answered HTTP 503. Try again."),
+      )
+      let (_, retry) = update(
+        test_dispatch(),
+        OpenCloudConversation(account="fixture-user", session="cloud-b"),
+        failed,
+      )
+      assert_true(retry.cloud.conversations["cloud-b"].request > request)
+      let (_, ready) = update(
+        test_dispatch(),
+        CloudAction(
+          @cloud.Loaded(
+            retry.cloud.epoch,
+            "cloud-b",
+            retry.cloud.conversations["cloud-b"].request,
+            test_cloud_history("Recovered history"),
+          ),
+        ),
+        retry,
+      )
+      assert_true(
+        ready.cloud.conversations["cloud-b"].records ==
+        test_cloud_history("Recovered history").messages,
+      )
+      assert_true(ready.cloud.creation is None)
+      assert_true(ready.navigation.location == location)
+    }
+  }
+}
+
+///|
+test "late Cloud history cannot replace a newer URL selection and invalid routes cannot create a session" {
+  let initial = { ..integrated_cloud_model(), is_desktop: false, }
+  let (_, opening) = update(
+    test_dispatch(),
+    Navigation(Browser({ path: "/cloud/session/cloud-b", })),
+    initial,
+  )
+  let request = opening.cloud.conversations["cloud-b"].request
+  let (_, newer) = update(
+    test_dispatch(),
+    Navigation(Browser({ path: "/cloud/session/cloud-c", })),
+    opening,
+  )
+  let (_, late) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Loaded(
+        opening.cloud.epoch,
+        "cloud-b",
+        request,
+        test_cloud_history("Late history"),
+      ),
+    ),
+    newer,
+  )
+  assert_true(late.navigation.location == newer.navigation.location)
+  assert_true(
+    late.cloud_identity() ==
+    Some(@interop.Cloud(account="fixture-user", session="cloud-c")),
+  )
+  assert_true(
+    late.cloud.conversations["cloud-c"] == newer.cloud.conversations["cloud-c"],
+  )
+  assert_true(late.cloud.creation is None)
+  let (_, invalid) = update(
+    test_dispatch(),
+    Navigation(Browser({ path: "/cloud/session/extra/path", })),
+    initial,
+  )
+  assert_true(invalid.navigation.phase is Invalid)
+  assert_true(invalid.cloud.creation is None)
+}
+
+///|
+test "failed terminal session creation retains the Cloud composer owner without opening a terminal or model task" {
+  let (_, blank) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Create),
+    integrated_cloud_model(),
+  )
+  let identity = blank.composer_input().identity
+  let (_, pending) = update(
+    test_dispatch(),
+    Terminal(@terminal.ToggleTerminal),
+    blank,
+  )
+  assert_true(pending.cloud.creating_session())
+  assert_false(pending.terminal.is_open())
+  assert_true(terminal_ctx(pending).placement is None)
+  let creation = pending.cloud.creation.unwrap()
+  let (_, failed) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.CreateFailed(pending.cloud.epoch, creation.request, Http(500)),
+    ),
+    pending,
+  )
+  assert_true(failed.composer_input().identity == identity)
+  assert_false(failed.composer_input().presentation.disabled)
+  assert_false(failed.cloud.creating_session())
+  assert_true(failed.terminal == blank.terminal)
+  assert_true(failed.cloud.conversations[creation.id].outgoing is None)
+  assert_false(failed.cloud.conversations[creation.id].sending)
+  assert_false(failed.cloud.conversations[creation.id].generating)
+  assert_true(
+    failed.notifications.any(notification => {
+      notification.message == "Cloud answered HTTP 500. Try again."
+    }),
+  )
+  assert_true(failed.composer_entry_changes == blank.composer_entry_changes)
+}
+
+///|
+test "blank Cloud drafts expose no file workspace while archived conversations retain read-only files" {
+  let initial = integrated_cloud_model()
+  let (_, blank) = update(test_dispatch(), CloudAction(@cloud.Create), initial)
+  assert_false(blank.cloud.creating_session())
+  assert_true(file_ctx(blank).root() is None)
+  assert_true(file_ctx(blank).placement is None)
+  assert_false(blank.file_panel_visible())
+  let archived = {
+    ..initial,
+    cloud: {
+      ..initial.cloud,
+      sessions: initial.cloud.sessions.map(session => {
+        ..session,
+        archived: true,
+      }),
+    },
+  }
+  assert_true(archived.cloud_archived())
+  let ctx = file_ctx(archived)
+  assert_true(
+    ctx.owner == @interop.Cloud(account="fixture-user", session="cloud-a"),
+  )
+  assert_true(ctx.placement is None)
+  assert_true(ctx.cloud_files is Some(_))
+  assert_true(ctx.root() is Some(_))
+  assert_true(archived.composer_input().presentation.disabled)
+}

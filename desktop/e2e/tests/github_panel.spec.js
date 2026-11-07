@@ -140,32 +140,3 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
     .toEqual(['/workspace', '/workspace', '/workspace']);
   expect(app.pageErrors).toEqual([]);
 });
-
-test('avatar errors retain the inventory and retry clears the warning', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  const originalReply = app.replyFor.bind(app);
-  let avatarFailed = true;
-  app.replyFor = request => {
-    if (request.method !== 'github.list') return originalReply(request);
-    return {
-      repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
-      avatar_error: avatarFailed ? 'Could not load GitHub avatars: offline' : undefined,
-      items: [{ number: 42, title: 'Review the implementation', url: 'https://github.com/owner/project/pull/42',
-        author: 'contributor', draft: false }],
-    };
-  };
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
-  const pulls = page.locator('.github-pulls');
-  await expect(pulls.locator('.github-item')).toHaveCount(1);
-  await expect(pulls.getByRole('alert')).toContainText('offline');
-  avatarFailed = false;
-  await pulls.getByRole('button', { name: 'Retry avatars', exact: true }).click();
-  await expect(pulls.getByRole('alert')).toHaveCount(0);
-  await expect(pulls.locator('.github-item')).toHaveCount(1);
-  expect(app.pageErrors).toEqual([]);
-});

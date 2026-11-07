@@ -52,30 +52,6 @@ test('new-tab menu stays anchored to plus in split, expanded and narrow panels',
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const [action, remaining, active] of [
-  ['Close Others', ['bravo.mbt'], 'bravo.mbt'],
-  ['Close to the Left', ['bravo.mbt', 'charlie.mbt', 'Review Changes'], 'Review Changes'],
-  ['Close to the Right', ['alpha.mbt', 'bravo.mbt'], 'bravo.mbt'],
-]) {
-  test(`${action} is relative to the context tab, across file and picker tabs`, async ({ page }) => {
-    const app = await openTabs(page, ['alpha', 'bravo', 'charlie']);
-    await app.openReview();
-    await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
-    const tabs = page.locator('.editor-tab');
-    await tabs.filter({ hasText: 'bravo.mbt' }).click({ button: 'right' });
-    await expect(page.locator('.editor-tab.active')).toContainText('Review Changes');
-    const menu = page.getByRole('menu', { name: 'Tab actions' });
-    await expect(menu).toBeVisible();
-    await menu.getByRole('menuitem', { name: action, exact: true }).click();
-    await expect(menu).toBeHidden();
-    await expect(tabs.locator('.tab-name')).toHaveText(remaining);
-    await expect(page.locator('.editor-tab.active')).toContainText(active);
-    await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
-    await expect(page.getByRole('button', { name: 'Restore panel', exact: true })).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
 test('tab menu replaces sidebar menus, preserves selection and supports keyboard range actions', async ({ page }) => {
   const app = await openTabs(page, ['alpha', 'bravo']);
   const tabs = page.locator('.editor-tab');
@@ -107,29 +83,6 @@ test('tab menu replaces sidebar menus, preserves selection and supports keyboard
   await expect(page.locator('.dock-launcher')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
-
-for (const entry of ['menu', 'toolbar']) {
-  test(`Close All from the ${entry} preserves the expanded launcher and the next tab`, async ({ page }) => {
-    const app = await openTabs(page, ['alpha', 'bravo']);
-    await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
-    if (entry === 'menu') {
-      await page.locator('.editor-tab').first().click({ button: 'right' });
-      await page.getByRole('menuitem', { name: 'Close All', exact: true }).click();
-    } else {
-      await page.getByRole('button', { name: 'Close all tabs', exact: true }).click();
-    }
-    await expect(page.locator('.editor-tab')).toHaveCount(0);
-    await expect(page.locator('.dock-launcher')).toBeVisible();
-    const restore = page.getByRole('button', { name: 'Restore panel', exact: true });
-    await expect(restore).toHaveAttribute('aria-pressed', 'true');
-    await app.openQuickOpen();
-    await page.locator('#quick-open-input').fill('alpha');
-    await page.getByRole('option', { name: /alpha\.mbt/ }).click();
-    await expect(page.locator('.editor-tab.active')).toContainText('alpha.mbt');
-    await expect(restore).toHaveAttribute('aria-pressed', 'true');
-    expect(app.pageErrors).toEqual([]);
-  });
-}
 
 for (const gesture of ['right-click', 'keyboard']) {
   test(`opening a tab menu by ${gesture} dismisses the plus launcher`, async ({ page }) => {

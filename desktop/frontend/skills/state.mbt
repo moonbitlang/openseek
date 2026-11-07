@@ -618,3 +618,386 @@ pub extend Preview with Eq::{equal, not_equal}
 
 ///|
 pub extend PreviewTarget with Eq::{equal, not_equal}
+
+///|
+fn test_skill(enabled~ : Bool, name~ : String = "widget") -> InstalledItem {
+  {
+    id: "acme-widget",
+    name,
+    description: "",
+    source: "acme/widget@1.0.0",
+    registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
+    enabled,
+  }
+}
+
+///|
+fn test_input(installed~ : Array[InstalledItem]) -> Input {
+  { channel: @interop.ChannelId::Local, installed, }
+}
+
+///|
+fn test_emit() -> @cmd.Emit[Msg] {
+  @cmd.Emit(_ => @cmd.none)
+}
+
+///|
+/// The request number of the read a preview is waiting on.
+fn test_pending_request(preview : Preview) -> Int32 raise {
+  match preview {
+    Loading(request~, ..) => request
+    _ => fail("expected a pending preview read")
+  }
+}
+
+///|
+fn test_market(version~ : String = "1.0.0") -> MarketItem {
+  {
+    name: "widget",
+    module_name: "acme/widget",
+    package_path: "",
+    version,
+    description: "Build widgets",
+    author: "acme",
+    repository: "",
+  }
+}
+
+///|
+fn test_step(
+  state : State,
+  msg : Msg,
+  input : Input,
+) -> (State, Outcome?) raise {
+  let (_, next, outcome) = state.handle(test_emit(), msg, input)
+  let (_, repeated, repeated_outcome) = state.handle(test_emit(), msg, input)
+  assert_true(next == repeated)
+  assert_true(outcome == repeated_outcome)
+  (next, outcome)
+}
+
+///|
+fn test_ready(state : State, input : Input) -> State raise {
+  guard state.preview is Loading(target~, request~) else {
+    fail("expected a content read")
+  }
+  test_step(
+    state,
+    PreviewLoaded(
+      channel=input.channel,
+      target~,
+      request~,
+      content="Skill body",
+    ),
+    input,
+  ).0
+}
+
+///|
+test "one catalog detail installs, reports uninstall failure, and retries removal" {
+  let market = test_market()
+  let skill = test_skill(enabled=true)
+  let empty = test_input(installed=[])
+  let installed = test_input(installed=[skill])
+  let (catalog, _) = test_step(
+    State::empty(),
+    CatalogLoaded(channel=empty.channel, items=[market]),
+    empty,
+  )
+  let (loading, _) = test_step(catalog, PreviewMarket(market), empty)
+  let detail = test_ready(loading, empty)
+  let (installing, _) = test_step(detail, Install(market), empty)
+  assert_true(
+    installing.busy is [{ action: Installing(source="acme/widget@1.0.0"), .. }],
+  )
+  let (done, outcome) = test_step(
+    installing,
+    ActionDone(
+      channel=empty.channel,
+      action=Installing(source=skill.source),
+      error=None,
+    ),
+    empty,
+  )
+  assert_true(outcome is Some(LibraryChanged(channel=Local)))
+  let (_, loading) = done.sync_library(test_emit(), installed)
+  let detail = test_ready(loading, installed)
+  assert_true(
+    detail_action_target(Market(market), detail, installed) ==
+    Some(Installed(skill)),
+  )
+  let (removing, _) = test_step(detail, Uninstall(skill), installed)
+  let action = Uninstalling(source=skill.source, id=skill.id)
+  assert_true(removing.busy is [{ action: pending, .. }] && pending == action)
+  let (failed, outcome) = test_step(
+    removing,
+    ActionDone(
+      channel=installed.channel,
+      action~,
+      error=Some("Cannot remove skill: permission denied"),
+    ),
+    installed,
+  )
+  assert_true(outcome is None)
+  assert_true(failed.busy.is_empty())
+  assert_eq(notice_messages(failed, installed, Some(Installed(skill))), [
+    "Cannot remove skill: permission denied",
+  ])
+  assert_true(
+    detail_action_target(Market(market), failed, installed) ==
+    Some(Installed(skill)),
+  )
+  let (retry, _) = test_step(failed, Uninstall(skill), installed)
+  assert_true(retry.notices.is_empty())
+  let (removed, outcome) = test_step(
+    retry,
+    ActionDone(channel=installed.channel, action~, error=None),
+    empty,
+  )
+  assert_true(outcome is Some(LibraryChanged(channel=Local)))
+  assert_true(removed.detail_open(empty.channel))
+  assert_true(
+    detail_action_target(Installed(skill), removed, empty) ==
+    Some(Market(market)),
+  )
+  assert_true(removed.busy.is_empty())
+  assert_true(removed.notices.is_empty())
+}
+
+///|
+test "late skill errors retain their targets across cached navigation and retry" {
+  let skill = test_skill(enabled=true)
+  let input = test_input(installed=[skill])
+  let other = { ..test_market(), name: "other", module_name: "acme/other", }
+  let (loading, _) = test_step(State::empty(), PreviewInstalled(skill), input)
+  let ready = test_ready(loading, input)
+  let (removing, _) = test_step(ready, Uninstall(skill), input)
+  let removal = Uninstalling(source=skill.source, id=skill.id)
+  let (list, _) = test_step(removing, BackToList, input)
+  let (loading, _) = test_step(list, PreviewMarket(other), input)
+  let ready = test_ready(loading, input)
+  let (installing, _) = test_step(ready, Install(other), input)
+  let (other_failed, _) = test_step(
+    installing,
+    ActionDone(
+      channel=input.channel,
+      action=Installing(source=source_label(other)),
+      error=Some("Other install failed"),
+    ),
+    input,
+  )
+  let (both_failed, _) = test_step(
+    other_failed,
+    ActionDone(
+      channel=input.channel,
+      action=removal,
+      error=Some("Removal failed after navigation"),
+    ),
+    input,
+  )
+  assert_eq(notice_messages(both_failed, input, Some(Market(other))), [
+    "Other install failed",
+  ])
+  let (list, _) = test_step(both_failed, BackToList, input)
+  assert_eq(notice_messages(list, input, None), [
+    "acme/other@1.0.0: Other install failed", "acme/widget@1.0.0: Removal failed after navigation",
+  ])
+  let (cached_other, _) = test_step(list, PreviewMarket(other), input)
+  assert_true(cached_other.preview is Ready(target=Market(_), request=0, ..))
+  assert_eq(notice_messages(cached_other, input, Some(Market(other))), [
+    "Other install failed",
+  ])
+  let (list, _) = test_step(cached_other, BackToList, input)
+  let (cached_skill, _) = test_step(list, PreviewInstalled(skill), input)
+  assert_true(cached_skill.preview is Ready(target=Installed(_), request=0, ..))
+  assert_eq(notice_messages(cached_skill, input, Some(Installed(skill))), [
+    "Removal failed after navigation",
+  ])
+  let (retry, _) = test_step(cached_skill, Uninstall(skill), input)
+  assert_true(notice_messages(retry, input, Some(Installed(skill))).is_empty())
+  let (done, outcome) = test_step(
+    retry,
+    ActionDone(channel=input.channel, action=removal, error=None),
+    test_input(installed=[]),
+  )
+  assert_true(outcome is Some(LibraryChanged(channel=Local)))
+  assert_eq(notice_messages(done, input, None), [
+    "acme/other@1.0.0: Other install failed",
+  ])
+}
+
+///|
+test "handwritten enablement failure keeps the host value and retries the same operation" {
+  let skill = {
+    ..test_skill(enabled=true),
+    id: "My notes",
+    name: "My notes",
+    source: "",
+    registry: None,
+  }
+  let input = test_input(installed=[skill])
+  let (loading, _) = test_step(State::empty(), PreviewInstalled(skill), input)
+  let ready = test_ready(loading, input)
+  let (sending, _) = test_step(ready, ToggleEnabled(skill.id), input)
+  let action = SettingEnabled(source="My notes", id=skill.id, enabled=false)
+  assert_true(sending.busy is [{ action: pending, .. }] && pending == action)
+  assert_true(
+    detail_action_target(Installed(skill), sending, input) ==
+    Some(Installed(skill)),
+  )
+  let (failed, outcome) = test_step(
+    sending,
+    ActionDone(
+      channel=input.channel,
+      action~,
+      error=Some("Cannot move skill: permission denied"),
+    ),
+    input,
+  )
+  assert_true(outcome is None)
+  assert_false(failed.pending_enabled(input.channel, skill.id))
+  assert_eq(notice_messages(failed, input, Some(Installed(skill))), [
+    "Cannot move skill: permission denied",
+  ])
+  let (retry, _) = test_step(failed, ToggleEnabled(skill.id), input)
+  assert_true(retry.busy is [{ action: pending, .. }] && pending == action)
+  assert_true(retry.notices.is_empty())
+  let (done, outcome) = test_step(
+    retry,
+    ActionDone(channel=input.channel, action~, error=None),
+    input,
+  )
+  assert_true(outcome is Some(LibraryChanged(channel=Local)))
+  let disabled = { ..skill, enabled: false, }
+  let input = test_input(installed=[disabled])
+  let (_, refreshed) = done.sync_library(test_emit(), input)
+  assert_true(refreshed.preview == ready.preview)
+  assert_true(
+    detail_action_target(Installed(skill), refreshed, input) ==
+    Some(Installed(disabled)),
+  )
+  assert_true(refreshed.notices.is_empty())
+}
+
+///|
+test "updating and enablement settle independently and reload content only for a new version" {
+  for enabled in [true, false] {
+    let skill = test_skill(enabled~)
+    let input = test_input(installed=[skill])
+    let market = test_market(version="1.0.1")
+    let (loading, _) = test_step(State::empty(), PreviewInstalled(skill), input)
+    let ready = test_ready(loading, input)
+    let (updating, _) = test_step(ready, Update(market), input)
+    let update : PendingSkillAction = Updating(source=source_label(market))
+    assert_true(
+      updating.pending_action(input.channel, market.identity()) == Some(update),
+    )
+    assert_false(update.blocks_enablement())
+    let (both, _) = test_step(updating, ToggleEnabled(skill.id), input)
+    let toggle = SettingEnabled(
+      source=skill.source,
+      id=skill.id,
+      enabled=!enabled,
+    )
+    assert_eq(both.busy.length(), 2)
+    assert_true(both.busy.any(operation => operation.action == toggle))
+    let (duplicate, _) = test_step(both, ToggleEnabled(skill.id), input)
+    assert_true(duplicate == both)
+    let (toggled, outcome) = test_step(
+      both,
+      ActionDone(channel=input.channel, action=toggle, error=None),
+      input,
+    )
+    assert_true(outcome is Some(LibraryChanged(channel=Local)))
+    let changed = { ..skill, enabled: !enabled, }
+    let changed_input = test_input(installed=[changed])
+    let (_, refreshed) = toggled.sync_library(test_emit(), changed_input)
+    assert_true(refreshed.preview == ready.preview)
+    assert_true(
+      refreshed.pending_action(input.channel, market.identity()) == Some(update),
+    )
+    assert_false(refreshed.pending_enabled(input.channel, skill.id))
+    let (done, outcome) = test_step(
+      refreshed,
+      ActionDone(channel=input.channel, action=update, error=None),
+      changed_input,
+    )
+    assert_true(outcome is Some(LibraryChanged(channel=Local)))
+    let upgraded = { ..changed, source: source_label(market), }
+    let upgraded_input = test_input(installed=[upgraded])
+    let (_, reloading) = done.sync_library(test_emit(), upgraded_input)
+    assert_eq(
+      test_pending_request(reloading.preview),
+      preview_request_id(ready.preview) + 1,
+    )
+    let loaded = test_ready(reloading, upgraded_input)
+    assert_true(loaded.busy.is_empty())
+    assert_true(
+      detail_action_target(Installed(skill), loaded, upgraded_input) ==
+      Some(Installed(upgraded)),
+    )
+  }
+}
+
+///|
+test "empty-library builtin failure survives catalog retry until host refresh confirms installation" {
+  let input = test_input(installed=[])
+  let market = test_market()
+  let error : @protocol.BuiltinSkillError = {
+    registry: {
+      module_name: market.module_name,
+      package_path: market.package_path,
+    },
+    message: "Startup sync failed: registry offline",
+  }
+  let initial = State::empty().with_builtin_errors(input.channel, [error])
+  let (failed, _) = test_step(
+    initial,
+    CatalogFailed(channel=input.channel, message="Catalog unavailable"),
+    input,
+  )
+  assert_true(failed.catalog is Failed("Catalog unavailable"))
+  let (refreshing, _) = test_step(failed, RefreshCatalog, input)
+  assert_true(refreshing.catalog is Loading(channel=Local))
+  let (catalog, _) = test_step(
+    refreshing,
+    CatalogLoaded(channel=input.channel, items=[market]),
+    input,
+  )
+  let (loading, _) = test_step(catalog, PreviewMarket(market), input)
+  let ready = test_ready(loading, input)
+  assert_eq(notice_messages(ready, input, Some(Market(market))), [
+    "acme/widget: Startup sync failed: registry offline",
+  ])
+  let (installing, _) = test_step(ready, Install(market), input)
+  let skill = { ..test_skill(enabled=true), builtin: true, }
+  let installed = test_input(installed=[skill])
+  let invalidated = installing.with_builtin_errors(input.channel, [])
+  let (_, loading) = invalidated.sync_library(test_emit(), installed)
+  let confirmed = test_ready(loading, installed)
+  assert_true(confirmed.notices.is_empty())
+  assert_true(
+    confirmed.pending_action(input.channel, market.identity())
+    is Some(Installing(..)),
+  )
+  assert_true(
+    detail_action_target(Market(market), confirmed, installed) ==
+    Some(Installed(skill)),
+  )
+  let (done, outcome) = test_step(
+    confirmed,
+    ActionDone(
+      channel=input.channel,
+      action=Installing(source=skill.source),
+      error=None,
+    ),
+    installed,
+  )
+  assert_true(outcome is Some(LibraryChanged(channel=Local)))
+  assert_true(done.busy.is_empty())
+  let (unchanged, _) = test_step(done, Uninstall(skill), installed)
+  assert_true(unchanged == done)
+  let (list, _) = test_step(unchanged, BackToList, installed)
+  assert_true(notice_messages(list, installed, None).is_empty())
+}

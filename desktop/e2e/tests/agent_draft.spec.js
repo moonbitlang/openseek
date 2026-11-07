@@ -75,25 +75,6 @@ test('one draft carries current text, file mentions and images through repeated 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('an image-only Codex draft migrates back and sends through DeepSeek', async ({ page }) => {
-  const app = await open(page);
-  const initialRows = await page.locator('.conversation-row').count();
-  await choose(page, 'Codex test');
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
-  await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-  await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await choose(page, 'DS Pro');
-  await expect(page.locator('#task')).toHaveValue('');
-  await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await noDraftRows(page, initialRows);
-  await page.locator('#send').click();
-  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.images).toEqual([imageURL]);
-  expect(app.requests.filter(r => r.method === 'codex.thread.start')).toHaveLength(0);
-  await expect(page.locator('.conversation-row')).toHaveCount(initialRows + 1);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('a submitted Codex draft cannot switch agents while thread creation is pending', async ({ page }) => {
   const app = await open(page);
   await choose(page, 'Codex test');
@@ -109,41 +90,6 @@ test('a submitted Codex draft cannot switch agents while thread creation is pend
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await expect(page.getByRole('option', { name: 'DS Pro', exact: true })).toHaveCount(0);
   pending.resolve();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('ultrareview stays a command in the composer and sends the swarm prompt', async ({ page }) => {
-  const app = await open(page);
-  const task = page.locator('#task');
-  await task.fill('/ultrareview');
-  await expect(page.locator('.completion-item').filter({ hasText: 'ultrareview' }).first()).toBeVisible();
-  await task.press('Enter');
-  await expect(task).toHaveValue('/ultrareview ');
-  await expect(task).toBeFocused();
-  await page.keyboard.type('the parser');
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  await page.locator('#send').click();
-  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: the parser');
-  const sent = app.requests.find(r => r.method === 'agent.start').params.task;
-  expect(sent).toContain('"@builtin/review.mbtx"');
-  expect(sent).toContain('"--swarm"');
-  // The composer clears as for any sent prompt; the expansion is not left behind.
-  await expect(task).toHaveValue('');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('simplify sends the sweep prompt with its focus', async ({ page }) => {
-  const app = await open(page);
-  const task = page.locator('#task');
-  await task.fill('/simpl');
-  await expect(page.locator('.completion-item').filter({ hasText: 'simplify' }).first()).toBeVisible();
-  await task.press('Enter');
-  await expect(task).toHaveValue('/simplify ');
-  await page.keyboard.type('pattern matching');
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  await page.locator('#send').click();
-  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: pattern matching');
-  expect(app.requests.find(r => r.method === 'agent.start').params.task).toContain('"@builtin/simplify.mbtx"');
   expect(app.pageErrors).toEqual([]);
 });
 

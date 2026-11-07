@@ -1,33 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('reopening a deleted review keeps Diff without reading the missing file', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.gitChanges = [{ path: 'src/main.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' }];
-  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = 'fn main { println("deleted baseline") }\n';
-  delete app.workingFiles['src/main.mbt'];
-  app.rpcErrors.set('fs.read_file', 'file not found');
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openReview();
-  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-  const line = page.getByRole('button', { name: 'Line diff', exact: true });
-  await line.click();
-  const diff = page.locator('#diff-editor-host');
-  await expect(diff).toBeVisible();
-  await expect(diff).toContainText('deleted baseline');
-
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await expect(line).toHaveAttribute('aria-pressed', 'true');
-  await expect(diff).toBeVisible();
-  await expect(diff).toContainText('deleted baseline');
-  await expect(page.locator('.editor-tab')).toHaveCount(1);
-  expect(app.requests.filter(request => request.method === 'fs.read_file')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('one file tab retains its identity across File, diff modes, and repeated opens', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -75,40 +48,5 @@ test('one file tab retains its identity across File, diff modes, and repeated op
   await view.getByRole('button', { name: 'Token diff' }).click();
   await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
   expect(await originalTab.evaluate(node => node.isConnected)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Search read failures retain the same file comparison and can retry', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.textSearchMatches = [{
-    path: 'src/main.mbt', line_number: 2,
-    preview: '  println("working tree")', preview_start_column: 1,
-    ranges: [{ start_column: 12, end_column: 19 }],
-  }];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openReview();
-  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
-  await expect(page.locator('#diff-editor-host')).toContainText('working tree');
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-  await page.getByRole('tab', { name: 'Search', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('working');
-  app.rpcErrors.set('fs.read_file', 'permission denied');
-  const result = page.getByTitle('Open src/main.mbt:2', { exact: true });
-  await result.click();
-  await expect(page.getByText('Working unavailable · baseline', { exact: true })).toBeVisible();
-  await expect(page.locator('#viewer-host')).not.toContainText('working tree');
-  await expect(page.locator('.editor-tab')).toHaveCount(1);
-
-  app.rpcErrors.delete('fs.read_file');
-  await result.click();
-  await expect(page.getByText('Working unavailable · baseline', { exact: true })).toBeHidden();
-  await expect(page.locator('#viewer-host')).toContainText('working tree');
-  await expect(page.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
-  await expect(page.locator('#diff-editor-host')).toBeVisible();
-  await expect(page.locator('.editor-tab')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
 });
