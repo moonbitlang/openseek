@@ -81,6 +81,11 @@ pub(all) enum Message {
   System
   Settings
   Preferences
+  General
+  Connections
+  SystemSettings
+  RemoteAccessSignInRequired
+  SshHosts
   Interface
   TranscriptView
   TranscriptViewDescription
@@ -138,6 +143,36 @@ pub(all) enum Message {
 /// ```
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, General) => "General"
+    (Spanish, General) => "General"
+    (SimplifiedChinese, General) => "通用"
+    (TraditionalChinese, General) => "一般"
+    (Japanese, General) => "一般"
+    (English, Connections) => "Connections"
+    (Spanish, Connections) => "Conexiones"
+    (SimplifiedChinese, Connections) => "连接"
+    (TraditionalChinese, Connections) => "連線"
+    (Japanese, Connections) => "接続"
+    (English, SystemSettings) => "System"
+    (Spanish, SystemSettings) => "Sistema"
+    (SimplifiedChinese, SystemSettings) => "系统"
+    (TraditionalChinese, SystemSettings) => "系統"
+    (Japanese, SystemSettings) => "システム"
+    (English, RemoteAccessSignInRequired) =>
+      "Sign in under Account to allow other devices to access this computer."
+    (Spanish, RemoteAccessSignInRequired) =>
+      "Inicia sesión en Cuenta para permitir que otros dispositivos accedan a este equipo."
+    (SimplifiedChinese, RemoteAccessSignInRequired) =>
+      "在“账户”中登录后，可允许其他设备访问这台电脑。"
+    (TraditionalChinese, RemoteAccessSignInRequired) =>
+      "在「帳戶」中登入後，可允許其他裝置存取這台電腦。"
+    (Japanese, RemoteAccessSignInRequired) =>
+      "他のデバイスからこのコンピューターへのアクセスを許可するには、「アカウント」でログインしてください。"
+    (English, SshHosts) => "SSH hosts"
+    (Spanish, SshHosts) => "Hosts SSH"
+    (SimplifiedChinese, SshHosts) => "SSH 主机"
+    (TraditionalChinese, SshHosts) => "SSH 主機"
+    (Japanese, SshHosts) => "SSH ホスト"
     (English, HelpImproveSeekMoon) => "Help improve SeekMoon"
     (Spanish, HelpImproveSeekMoon) => "Ayudar a mejorar SeekMoon"
     (SimplifiedChinese, HelpImproveSeekMoon) => "帮助改进 SeekMoon"

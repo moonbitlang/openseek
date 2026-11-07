@@ -363,7 +363,6 @@ test('Search from Settings preserves the Cloud dock without importing Host tabs'
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await openFiles(page, cloud); await openText(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   const shortcut = await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
   await page.keyboard.press(shortcut);
@@ -979,7 +978,8 @@ test('a retired Cloud account cannot hand its delayed download to the browser', 
   await page.getByRole('button', { name: 'Download to local', exact: true }).click();
   await expect.poll(() => cloud.fileRequests.filter(r => r.download).length).toBe(1);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const account = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
+  const account = page.getByRole('region', { name: 'Account', exact: true });
   await account.getByRole('button', { name: 'Sign out', exact: true }).click();
   const response = settledResponse(page, r => new URL(r.url()).pathname.endsWith('/files/download'));
   release(); await response;

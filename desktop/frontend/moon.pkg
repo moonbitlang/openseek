@@ -12,7 +12,7 @@ import {
   "moonbitlang/openseek/workspace_file_ref",
   "openseek_desktop/frontend/navigation/browser" @navigation_browser,
   "moonbit-community/rabbita/nav",
-  "openseek_desktop/frontend/page_shell",
+  "openseek_desktop/frontend/ui",
   "openseek_desktop/frontend/archived_chats",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",

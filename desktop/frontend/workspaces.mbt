@@ -938,7 +938,12 @@ test "a Codex project add preserves its draft in either reply order" {
         { ..test_model(), screen: Codex, default_agent: CodexAgent, },
       )
       for
-        initial_dialog in [None, Some(Settings), Some(Skills), Some(Schedules)] {
+        initial_dialog in [
+          None,
+          Some(Settings(General)),
+          Some(Skills),
+          Some(Schedules),
+        ] {
         let (_, confirmed) = adopt_picked_directory(
           dispatch,
           channel,
@@ -972,7 +977,7 @@ test "a Codex project add preserves its draft in either reply order" {
         for
           management_dialog in [
             None,
-            Some(Settings),
+            Some(Settings(General)),
             Some(Skills),
             Some(Schedules),
           ] {
@@ -1046,7 +1051,13 @@ test "OpenSeek selection supersedes retained Codex project ownership" {
     { ..test_model(), screen: Codex, },
   )
   assert_false(started.can_pick_project(channel))
-  for management_dialog in [None, Some(Settings), Some(Skills), Some(Schedules)] {
+  for
+    management_dialog in [
+      None,
+      Some(Settings(General)),
+      Some(Skills),
+      Some(Schedules),
+    ] {
     let selected = { ..started, screen: Chat, management_dialog, }
     assert_true(selected.can_pick_project(channel))
     let (_, focused) = focus_added_project(

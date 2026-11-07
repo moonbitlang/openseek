@@ -148,16 +148,6 @@ controls. It must not conceal what will change, what did change, whether the
 result is trustworthy, what failed, or how the user can recover. Simplicity is
 the removal of unnecessary decisions, not the removal of necessary truth.
 
-## Archived chats
-
-Archived conversations leave the sidebar and its search. Settings' **Manage**
-button opens archived chats within the management dialog, without changing the
-underlying work surface or browser URL. The list groups Cloud chats first, then
-projects, and offers a title/group filter, Restore, and Delete where supported.
-Opening a conversation closes the dialog and shows its read-only transcript.
-**Back to settings** returns within the dialog; dismissing it reveals the work
-surface. Each visit starts with an empty filter.
-
 ## Operational companion
 
 Concrete defaults for feedback, wait thresholds, motion, reduced motion,

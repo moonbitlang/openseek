@@ -234,9 +234,10 @@ fn dialog_view(
     on_cancel=emit(Dismiss),
     attrs=@html.Attrs::build().aria_label(dialog_label),
     @html.div([
-      @html.div(class="quick-open-input-wrap", [
+      @html.div(class="quick-open-input-wrap input-surface", [
         @icons.icon(@icons.icon_search),
         @html.input(
+          class="field-surface",
           input_type=@html.InputType::Text,
           value=open.value,
           placeholder~,

@@ -34,13 +34,13 @@ aside {
   top: 0;
   bottom: 0;
   right: 0;
-  width: var(--resize-handle-width);
+  width: 4px;
   z-index: 3;
   cursor: col-resize;
 }
 .sidebar-resize-handle:hover,
 html.is-resizing .sidebar-resize-handle {
-  background: var(--color-accent-soft);
+  background: linear-gradient(to left, #257de0 50%, transparent 50%);
 }
 
 /* The fixed history controls and sidebar toggle share the shell header.
@@ -104,6 +104,7 @@ html.is-resizing .sidebar-resize-handle {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  border-top: 1px solid var(--color-border);
   /* The scroll box spans to the sidebar's edge, and the rows inside it stop
      `--sidebar-inset` short of it however the platform draws its scrollbar. A
      classic bar (Windows, Linux) fills the stable gutter and holds the rows
@@ -263,7 +264,6 @@ html.is-resizing .sidebar-resize-handle {
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
   outline: 1px solid var(--color-accent-border);
@@ -326,9 +326,6 @@ html.is-resizing .sidebar-resize-handle {
    (visibility, not display) so the label doesn't shift as it appears. */
 .row-archive {
   --icon-size: var(--icon-md);
-  --rui-button-bg: transparent;
-  --rui-button-fg: var(--color-text-muted);
-  --rui-control-radius: var(--radius-sm);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -349,8 +346,6 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 .row-archive:hover {
-  --rui-button-bg: var(--color-hover-subtle);
-  --rui-button-fg: var(--color-text-primary);
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -395,8 +390,6 @@ html.is-resizing .sidebar-resize-handle {
 /* An open conversation menu keeps its hover-revealed trigger in place of the
    status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
-  --rui-button-bg: var(--color-hover-subtle);
-  --rui-button-fg: var(--color-text-primary);
   visibility: visible;
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
@@ -821,7 +814,6 @@ button.row-twisty:hover {
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: 1px solid var(--color-focus-ring);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
   box-shadow: 0 0 0 2px
     color-mix(in srgb, var(--color-focus-ring) 16%, transparent);
 }
@@ -836,7 +828,6 @@ button.row-twisty:hover {
   height: 2rem;
   padding: 0 var(--space-2);
   border: 0;
-  background: transparent;
   font-size: var(--font-size-sm);
 }
 .picker-path-editor-cancel {
@@ -1044,7 +1035,6 @@ button.row-twisty:hover {
   width: 100%;
   height: 2.5rem;
   padding: 0 var(--space-4);
-  background: var(--color-bg-surface);
 }
 .picker-create-cancel,
 .picker-create-submit {
@@ -1261,7 +1251,6 @@ button.row-twisty:hover {
   padding: 0 var(--space-4);
   border: 1px solid var(--color-seam);
   border-radius: 7px;
-  background: var(--color-bg-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
   color: var(--color-text-muted);
   font-size: var(--font-size-md);
@@ -1277,7 +1266,6 @@ button.row-twisty:hover {
   padding: 0;
   border: 0;
   outline: none;
-  background: transparent;
   color: var(--color-text-primary);
   font: inherit;
 }

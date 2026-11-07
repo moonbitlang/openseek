@@ -67,7 +67,7 @@ test "Cloud deletion preserves another page and ignores another account's replie
     CloudAction(@cloud.Deleted(3, "cloud-a", request)),
     settings,
   )
-  assert_true(removed.management_dialog is Some(Settings))
+  assert_true(removed.management_dialog is Some(Settings(General)))
   assert_true(removed.cloud.creation is Some(_))
   let (_, switched) = update(
     test_dispatch(),

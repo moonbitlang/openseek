@@ -32,7 +32,15 @@ test "preferences wait for confirmation, reject duplicates and retain saved valu
     AccountPreferencesLoaded(request, Ok(false)),
     loading,
   )
-  let (_, saving) = update(dispatch, AccountPreferencesChanged(true), loaded)
+  let (_, account) = update(dispatch, SettingsSectionSelected(Account), loaded)
+  let (_, archived) = update(
+    dispatch,
+    SettingsSectionSelected(ArchivedChats),
+    account,
+  )
+  assert_true(account.account_preferences == loaded.account_preferences)
+  assert_true(archived.account_preferences == loaded.account_preferences)
+  let (_, saving) = update(dispatch, AccountPreferencesChanged(true), account)
   assert_true(saving.account_preferences.pending)
   assert_eq(saving.account_preferences.value, Some(false))
   let (_, duplicate) = update(dispatch, AccountPreferencesChanged(true), saving)

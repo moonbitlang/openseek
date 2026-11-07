@@ -139,7 +139,7 @@ pub fn Model::view(
         ),
         @html.div(class="user-question-response", [
           @html.div(
-            class="user-question-input",
+            class="user-question-input input-surface",
             attrs=@html.Attrs::build().data_set("focus-owner", ""),
             [
               @icons.icon(@icons.icon_edit),
@@ -161,7 +161,7 @@ pub fn Model::view(
                       @cmd.none
                     }
                   }),
-                class="user-question-answer",
+                class="user-question-answer field-surface",
                 rows=1,
                 value~,
                 disabled~,

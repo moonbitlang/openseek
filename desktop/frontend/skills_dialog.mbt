@@ -25,7 +25,7 @@ fn skills_detail_dialog_view(
           @skills.detail_title(model.locale),
         ),
       ]),
-      @html.div(class="dialog-scroll-body", [content]),
+      @html.div(class="dialog-scroll-body dialog-content", [content]),
     ],
   )
 }

@@ -2274,7 +2274,6 @@ button.git-history-file.selected {
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
-  background: transparent;
   font: inherit;
   font-size: var(--font-size-xs);
 }
@@ -2290,7 +2289,6 @@ button.git-history-file.selected {
 }
 .office-viewer-find input:focus {
   outline: 1px solid var(--color-accent);
-  background: var(--color-bg-surface);
 }
 .office-viewer-control {
   display: grid;
@@ -3693,7 +3691,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-seam); background: var(--color-bg-subtle); }
 .github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
-.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: 6px; font: inherit; line-height: 1.5; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); border: 1px solid var(--color-seam); border-radius: 6px; font: inherit; line-height: 1.5; }
 .github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
 .github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
 .github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }

@@ -135,7 +135,7 @@ pub fn view(
         ]),
       ]),
       @html.div(
-        class="picker-content dialog-scroll-body",
+        class="picker-content dialog-scroll-body dialog-content",
         [
           ..match location {
             Some(control) => [control]
@@ -233,7 +233,7 @@ fn path_editor(
   } else {
     base_attrs
   }
-  @html.div(class="picker-path-editor", [
+  @html.div(class="picker-path-editor input-surface", [
     @html.span(
       class="picker-path-editor-icon",
       attrs=@html.Attrs::build().aria_hidden("true"),
@@ -242,6 +242,7 @@ fn path_editor(
     @html.input(
       input_type=@html.InputType::Text,
       value~,
+      class="field-surface",
       autofocus=true,
       placeholder=ui(locale, EnterFolderPath),
       on_input=emit.map(next => PathChanged(next)),
@@ -271,6 +272,7 @@ fn new_folder_row(
     @html.input(
       input_type=@html.InputType::Text,
       value=name,
+      class="field-surface",
       autofocus=true,
       placeholder=ui(locale, NewFolderName),
       on_input=emit.map(value => NewFolderNameChanged(value)),

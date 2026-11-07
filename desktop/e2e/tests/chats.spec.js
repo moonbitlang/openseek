@@ -68,6 +68,7 @@ test('a project draft survives Chat navigation and account sign-out', async ({ p
   await sidebarMode(page, 'Chat').click();
   await cloud.open();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('dialog', { name: 'Settings', exact: true })
     .getByRole('button', { name: 'Dismiss', exact: true }).click();

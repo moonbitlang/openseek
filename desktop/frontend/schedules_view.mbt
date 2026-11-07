@@ -19,9 +19,9 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let page = model.schedules
   let emit = dispatch.map(msg => SchedulePage(msg))
   let content : Array[@html.Html] = [
-    @html.div(class="settings-header", [
+    @html.div(class="page-header", [
       @html.div(class="page-eyebrow", model.focused_device_name()),
-      @html.p(class="settings-subtitle", ui(locale, ScheduleDescription)),
+      @html.p(class="page-subtitle", ui(locale, ScheduleDescription)),
     ]),
     @html.div(class="schedule-toolbar", [
       @html.button(
@@ -49,7 +49,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   if page.log is Some((path, text)) {
     content.push(
-      @html.div(class="schedule-card", [
+      @html.div(class="schedule-card schedule-panel card-surface", [
         @html.div(class="schedule-toolbar", [
           @html.h2(ui(locale, RunLog)),
           @html.button(
@@ -58,7 +58,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             ui(locale, CloseLog),
           ),
         ]),
-        @html.p(class="schedule-log", path),
+        @html.p(class="schedule-meta", path),
         @html.pre(class="schedule-log-content", text),
       ]),
     )
@@ -73,11 +73,16 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     fn field(label : String, name : String, value : String) -> @html.Html {
       @html.label(class="schedule-field", [
         @html.span(label),
-        @html.input(value~, on_input=emit.map(value => Field(name, value))),
+        @html.input(
+          class="schedule-input field-surface",
+          value~,
+          attrs=@html.Attrs::build().data_set("focus-owner", ""),
+          on_input=emit.map(value => Field(name, value)),
+        ),
       ])
     }
     content.push(
-      @html.div(class="schedule-form", [
+      @html.div(class="schedule-form schedule-panel card-surface", [
         @html.h2(
           if form.id is Some(_) {
             ui(locale, EditSchedule)
@@ -89,7 +94,9 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.label(class="schedule-field", [
           @html.span(ui(locale, WorkingDirectory)),
           @html.select(
+            class="schedule-input field-surface",
             attrs=@html.Attrs::build()
+              .data_set("focus-owner", "")
               .aria_label(ui(locale, WorkingDirectory))
               .value_prop(form.workspace.unwrap_or("auto")),
             on_change=emit.map(value => Field("workspace", value)),
@@ -97,7 +104,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           ),
         ]),
         @html.p(
-          class="settings-subtitle",
+          class="page-subtitle",
           if form.workspace is None {
             ui(locale, AutomaticDirectoryDescription)
           } else {
@@ -107,6 +114,8 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.label(class="schedule-field", [
           @html.span(ui(locale, TaskLabel)),
           @html.textarea(
+            class="schedule-input field-surface",
+            attrs=@html.Attrs::build().data_set("focus-owner", ""),
             value=form.task,
             on_input=emit.map(value => Field("task", value)),
             "",
@@ -116,7 +125,9 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.label(class="schedule-field", [
             @html.span(ui(locale, ScheduleLabel)),
             @html.select(
+              class="schedule-input field-surface",
               attrs=@html.Attrs::build()
+                .data_set("focus-owner", "")
                 .aria_label(ui(locale, ScheduleLabel))
                 .value_prop(if form.once { "once" } else { "every" }),
               on_change=emit.map(value => Field("timing", value)),
@@ -130,8 +141,8 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           field(ui(locale, TimeoutMinutes), "timeout", form.timeout),
         ]),
         field(ui(locale, ModelDefault), "model", form.model),
-        @html.p(class="settings-subtitle", ui(locale, SchedulePermissions)),
-        @html.p(class="settings-subtitle", ui(locale, RunNowDescription)),
+        @html.p(class="page-subtitle", ui(locale, SchedulePermissions)),
+        @html.p(class="page-subtitle", ui(locale, RunNowDescription)),
         @html.div(class="schedule-toolbar", [
           @html.button(
             class="button",
@@ -155,7 +166,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   if page.snapshot.entries.is_empty() {
-    content.push(@html.p(class="schedule-empty", ui(locale, EmptySchedules)))
+    content.push(@html.p(class="schedule-meta", ui(locale, EmptySchedules)))
   }
   for entry in page.snapshot.entries {
     let running = page.snapshot.runs.any(run => {
@@ -182,7 +193,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         }
     }
     content.push(
-      @html.div(class="schedule-card", [
+      @html.div(class="schedule-card schedule-panel card-surface", [
         @html.h2(entry.spec.name),
         @html.p(
           class="schedule-meta",
@@ -258,7 +269,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     if runs.is_empty() {
       section.push(
         @html.p(
-          class="schedule-empty",
+          class="schedule-meta",
           if running {
             ui(locale, NoRunningTasks)
           } else {
@@ -269,7 +280,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     }
     for run in runs.rev_iter() {
       section.push(
-        @html.div(class="schedule-card", [
+        @html.div(class="schedule-card schedule-panel card-surface", [
           @html.h3(run.name),
           @html.p(
             class="schedule-meta",
@@ -297,7 +308,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             on_click=emit(Log(run.log_path)),
             ui(locale, ViewLog),
           ),
-          @html.p(class="schedule-log", ui(locale, LogLabel) + run.log_path),
+          @html.p(class="schedule-meta", ui(locale, LogLabel) + run.log_path),
         ]),
       )
     }
@@ -305,5 +316,5 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.section(attrs=@html.Attrs::build().aria_label(title), section),
     )
   }
-  @page_shell.body(class="settings-page schedules-page", content)
+  @ui.dialog_page(class="schedules-page", content)
 }

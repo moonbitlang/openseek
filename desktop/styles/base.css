@@ -68,10 +68,42 @@ button {
   }
 }
 
-/* App-owned text-entry controls share one content and state contract. Their
-   existing focus markers also keep this rule out of embedded Viewer content;
-   no second opt-in class is required. Components may replace frame geometry
-   when a field lives inside a composite surface. */
+input,
+textarea,
+.input-surface,
+.field-surface {
+  background-color: var(--color-bg-canvas);
+}
+
+.field-surface {
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.card-surface {
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+}
+
+.search-field > input {
+  flex: 1;
+  border: none;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+
 :where(
   input[data-focus-owner],
   input[data-focus-target],
@@ -80,10 +112,7 @@ button {
 ) {
   min-width: 0;
   padding: 0.75em 0.75em;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
   font-size: var(--font-size-md);
 
   &::placeholder {
@@ -533,7 +562,7 @@ html.native-titlebar-overlay .app
 
 
 /* SSH identity is separate from the executable command. */
-.ssh-host-row { display: flex; align-items: center; gap: 1rem; padding: var(--space-6) var(--space-7); border-bottom: 1px solid var(--color-divider); }
+.ssh-host-row { display: flex; align-items: center; gap: 1rem; padding: var(--space-6) 0; border-bottom: 1px solid var(--color-divider); }
 .ssh-host-icon { display: flex; padding: var(--space-5); border-radius: 10px; background: var(--color-bg-subtle); color: var(--color-text-secondary); }
 .ssh-host-copy { flex: 1; min-width: 0; }
 .ssh-host-title { padding: 0; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -541,9 +570,9 @@ html.native-titlebar-overlay .app
 .ssh-host-address { margin: var(--space-2) 0 var(--space-4); }
 .ssh-host-actions, .ssh-auth-actions, .ssh-settings-footer { display: flex; align-items: center; gap: var(--space-4); }
 .ssh-more { display: flex; padding: var(--space-3); }
-.ssh-settings-footer { justify-content: space-between; padding: var(--space-6) var(--space-7); gap: var(--space-6); }
+.ssh-settings-footer { justify-content: space-between; padding: var(--space-6) 0; gap: var(--space-6); }
 .ssh-settings-footer button { display: flex; align-items: center; gap: var(--space-3); }
-.ssh-empty { padding: var(--space-4) var(--space-7); color: var(--color-text-secondary); }
+.ssh-empty { padding: var(--space-4) 0; color: var(--color-text-secondary); }
 .ssh-status { display: inline-flex; gap: var(--space-3); align-items: center; color: var(--color-text-secondary); font-size: var(--font-size-caption); flex-shrink: 0; }
 .ssh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .ssh-status.online .ssh-dot { background: #43876a; }
@@ -599,8 +628,6 @@ html.native-titlebar-overlay .app
 .ssh-context .button { flex: 0 0 auto; white-space: nowrap; margin-left: auto; font-size: var(--font-size-caption); padding: var(--space-2) var(--space-4); }
 
 .terminal-host-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-
-.ssh-settings-error { padding: 0 var(--space-7) var(--space-6); }
 
 .ssh-auth { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-4); }
 .ssh-auth-heading { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
