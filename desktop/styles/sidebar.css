@@ -34,13 +34,13 @@ aside {
   top: 0;
   bottom: 0;
   right: 0;
-  width: var(--resize-handle-width);
+  width: 4px;
   z-index: 3;
   cursor: col-resize;
 }
 .sidebar-resize-handle:hover,
 html.is-resizing .sidebar-resize-handle {
-  background: var(--color-accent-soft);
+  background: linear-gradient(to left, #257de0 50%, transparent 50%);
 }
 
 /* The fixed history controls and sidebar toggle share the shell header.
