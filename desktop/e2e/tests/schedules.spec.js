@@ -44,6 +44,11 @@ test('schedule form, running controls, and completed session navigation', async 
   await page.getByLabel('Task', { exact: true }).fill('Check the repository and summarize findings.');
   await page.getByLabel('Schedule', { exact: true }).selectOption('once');
   await page.getByLabel('Minutes', { exact: true }).fill('10');
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ width: 420, height: 900 });
+  await expect(page.getByRole('dialog', { name: 'Scheduled tasks', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeVisible();
+  await page.setViewportSize(viewport);
   await page.getByRole('button', { name: 'Save schedule', exact: true }).click();
   await expect(page.locator('.schedule-form')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Inspect project', exact: true })).toBeVisible();
@@ -60,65 +65,6 @@ test('schedule form, running controls, and completed session navigation', async 
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
   await expect.poll(() => app.requests.some(r => r.method === 'session.load')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('failed save retains the draft and editing preserves its fields', async ({ page }) => {
-  const app = new ScheduleHarness(page);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await page.getByRole('button', { name: 'New schedule', exact: true }).click();
-  await page.getByLabel('Name', { exact: true }).fill('Daily work');
-  await page.getByLabel('Task', { exact: true }).fill('Inspect changes');
-  app.rpcErrors.set('schedules.save', 'Cannot save: disk full');
-  await page.getByRole('button', { name: 'Save schedule', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('disk full');
-  await expect(page.getByLabel('Task', { exact: true })).toHaveValue('Inspect changes');
-  app.rpcErrors.delete('schedules.save');
-  await page.getByRole('button', { name: 'Save schedule', exact: true }).click();
-  await expect(page.locator('.schedule-form')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Daily work');
-  await expect(page.getByLabel('Minutes', { exact: true })).toHaveValue('30');
-  await page.setViewportSize({ width: 420, height: 900 });
-  await expect(page.getByRole('dialog', { name: 'Scheduled tasks', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('automatic directory and save-and-run-now work without choosing a project', async ({ page }) => {
-  const app = new ScheduleHarness(page);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await page.getByRole('button', { name: 'New schedule', exact: true }).click();
-  await expect(page.getByLabel('Working directory', { exact: true })).toHaveValue('auto');
-  await page.getByLabel('Name', { exact: true }).fill('Community updates');
-  await page.getByLabel('Task', { exact: true }).fill('Summarize new community posts.');
-  await page.getByRole('button', { name: 'Save and run now', exact: true }).click();
-  await expect(page.locator('.schedule-form')).toHaveCount(0);
-  const payload = app.requests.find(r => r.method === 'schedules.save').params;
-  expect(payload.run_now).toBe(true);
-  expect(payload.spec).not.toHaveProperty('workspace');
-  expect(payload.spec.timing).toEqual({ kind: 'every', minutes: 30 });
-  await expect(page.getByText('Every 30 min · Queued', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByLabel('Working directory', { exact: true })).toHaveValue('auto');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('old setup failure remains readable when no log file was created', async ({ page }) => {
-  const app = new ScheduleHarness(page);
-  app.schedules.runs.push({ id: 'old-run', schedule_id: 'old-plan', name: 'Community', workspace: '/workspace', session: 'old-session', started_at: Date.now(), finished_at: Date.now(), status: { kind: 'failed', message: 'Could not prepare working directory' }, log_path: '/missing.log' });
-  app.rpcErrors.set('fs.read_file', 'No such file');
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await page.getByRole('button', { name: 'View log', exact: true }).click();
-  await expect(page.locator('.schedule-log-content')).toContainText('Could not prepare working directory');
-  await expect(page.getByRole('alert')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

@@ -62,33 +62,6 @@ test('message approvals survive idle reload and turn completion, and advance ind
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a running engine approval takes priority over a background message approval', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.locator('#task').fill('Start');
-  await page.locator('#send').click();
-  const message = {
-    id: 'msg-background', session: 'session-1', run_id: null,
-    tool_name: 'session.send', detail: 'target-chat', body: 'Exact message', answered: false,
-  };
-  const engine = {
-    id: 'engine-approval', session: 'session-1', run_id: 'run-e2e',
-    tool_name: 'mbtx', detail: 'Run command', body: 'command', answered: false,
-  };
-  app.notify('agent.approvals', { generation: 1, approvals: [engine, message] });
-  const card = page.locator('.composer-approval');
-  await expect(card).toContainText('mbtx');
-  await expect(card.getByRole('button', { name: 'Allow once', exact: true })).toBeVisible();
-  // Replaying a snapshot must not mutate it or duplicate either question.
-  app.notify('agent.approvals', { generation: 1, approvals: [engine, message] });
-  await expect(card).toHaveCount(1);
-  app.notify('agent.approvals', { generation: 2, approvals: [message] });
-  await expect(card).toContainText('Send to “target-chat”');
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('received messages and delivery results render tagged context live and after reload', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const text = '这是跨会话审批测试，请确认收到。\n`inline code` <script>plain text</script>';
@@ -117,44 +90,3 @@ test('received messages and delivery results render tagged context live and afte
   await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
   expect(app.pageErrors).toEqual([]);
 });
-
-for (const running of [false, true]) {
-  test(`delivery feedback failures remain session-scoped with an ${running ? 'active' : 'idle'} sender`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
-    const replyFor = app.replyFor.bind(app);
-    app.replyFor = request => {
-      const reply = replyFor(request);
-      if (request.method === 'session.load') {
-        reply.session.id = request.params.session;
-      }
-      return reply;
-    };
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    if (running) {
-      await page.locator('#task').fill('Continue the task');
-      await page.locator('#send').click();
-      await expect(page.locator('#stop')).toBeVisible();
-    }
-    await page.locator('.conversation-row[title="session-2"]').click();
-    await expect(page.locator('main > .topbar h1')).toHaveText('Another conversation');
-    const status = page.locator('main > .topbar .run-status');
-    const before = await status.textContent();
-    app.notify('agent.event', {
-      session: 'session-1', run_id: null,
-      event: { event: 'session_error', error: 'Could not deliver message result: the sender is unavailable' },
-    });
-    await expect(page.getByText('the engine could not save an item to this session: Could not deliver message result: the sender is unavailable', { exact: true })).toBeVisible();
-    await expect(status).toHaveText(before);
-    await expect(page.locator('#stop')).toBeHidden();
-    await page.locator('.conversation-row[title="session-1"]').click();
-    if (running) {
-      await expect(page.locator('#stop')).toBeVisible();
-    } else {
-      await expect(page.locator('#stop')).toBeHidden();
-    }
-    expect(app.pageErrors).toEqual([]);
-  });
-}

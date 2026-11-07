@@ -396,3 +396,117 @@ fn State::sync_review_navigation_display(self : State, ctx : Ctx) -> State {
 
 ///|
 pub extend ReviewNavigationDisplay with Eq::{equal, not_equal}
+
+///|
+test "marking hunks drives skip policy through completion and reopening" {
+  let emit = test_emit()
+  let (initial, ctx, first) = review_progress_state()
+  let last = test_modified_change(Relative("src/last.mbt"))
+  let last_file = test_file(last.path.0)
+  let docs = initial.docs.copy()
+  docs[last_file] = reviewed_doc(last.path, last)
+  let state = {
+    ..initial,
+    docs,
+    changes: ChangeListReady(
+      repository=true,
+      files=[first, last],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  let ctx = { ..ctx, open_files: [test_file(first.path.0), last_file], }
+  let last_ctx = { ..ctx, active_file: Some(last_file), }
+  let hunks = [
+    review_test_hunk(5, 6, 5, 6),
+    review_test_hunk(45, 46, 45, 46),
+    review_test_hunk(85, 86, 85, 86),
+  ]
+  let all = hunks[0].union(hunks[1]).union(hunks[2])
+  let middle = activate_review_hunk(state, ctx, first, hunks[1], all, 1, 3)
+  let (_, marked_middle) = update(emit, ToggleActiveReviewHunk, middle, ctx)
+  assert_eq(
+    review_hunk_navigation_index(
+      marked_middle,
+      Some(first),
+      hunks,
+      Some(0),
+      false,
+    ),
+    Some(2),
+  )
+  assert_eq(
+    review_hunk_navigation_index(
+      marked_middle,
+      Some(first),
+      hunks,
+      Some(2),
+      true,
+    ),
+    Some(0),
+  )
+  let final_hunk = activate_review_hunk(
+    marked_middle,
+    ctx,
+    first,
+    hunks[2],
+    all,
+    2,
+    3,
+  )
+  let (_, marked_final) = update(emit, ToggleActiveReviewHunk, final_hunk, ctx)
+  assert_eq(
+    review_hunk_navigation_index(marked_final, Some(first), hunks, None, true),
+    Some(0),
+  )
+  let first_hunk = activate_review_hunk(
+    marked_final,
+    ctx,
+    first,
+    hunks[0],
+    all,
+    0,
+    3,
+  )
+  let (_, first_complete) = update(
+    emit,
+    ToggleActiveReviewHunk,
+    first_hunk,
+    ctx,
+  )
+  assert_true(first_complete.changed_file_review_state(first) is ReviewComplete)
+  assert_true(
+    review_navigation_neighbor(first_complete, ctx, false) == Some(last),
+  )
+  assert_true(
+    review_navigation_neighbor(first_complete, last_ctx, true) is None,
+  )
+  let mut complete = first_complete
+  for index in 0..<hunks.length() {
+    let active = activate_review_hunk(
+      complete,
+      last_ctx,
+      last,
+      hunks[index],
+      all,
+      index,
+      3,
+    )
+    let (_, marked) = update(emit, ToggleActiveReviewHunk, active, last_ctx)
+    complete = marked
+  }
+  assert_true(complete.changed_file_review_state(last) is ReviewComplete)
+  assert_false(review_diff_navigation_enabled(complete, last_ctx))
+  let (_, reopened) = update(emit, ToggleActiveReviewHunk, complete, last_ctx)
+  assert_true(reopened.changed_file_review_state(last) is ReviewInProgress)
+  assert_true(review_diff_navigation_enabled(reopened, last_ctx))
+  assert_eq(
+    review_hunk_navigation_index(reopened, Some(last), hunks, None, false),
+    Some(2),
+  )
+  assert_eq(
+    review_hunk_navigation_index(reopened, Some(last), hunks, None, true),
+    Some(2),
+  )
+  assert_true(review_navigation_neighbor(reopened, last_ctx, true) is None)
+}

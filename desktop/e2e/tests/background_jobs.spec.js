@@ -135,56 +135,6 @@ test('UUID suffix collisions expand labels while selection and copying retain fu
   expect(app.pageErrors).toEqual([]);
 });
 
-test('groups lifecycle states and defaults to an active job even after newer history', async ({ page }) => {
-  app = new BackgroundJobsHarness(page);
-  const live = app.jobs[0];
-  const fixtures = [
-    ['completed', { kind: 'exited', code: 0 }, 'Completed'],
-    ['stopped', { kind: 'stopped', reason: 'user' }, 'Stopped'],
-    ['interrupted', { kind: 'interrupted' }, 'Interrupted'],
-    ['limited', { kind: 'stopped', reason: 'time_limit' }, 'Stopped · time limit reached'],
-    ['stopping', { kind: 'stopping' }, 'Stopping…'],
-  ];
-  for (const [id, state] of fixtures) {
-    const view = app.view('runtime-new', id, app.oldPath, state);
-    view.job.description = `Lifecycle ${id}`;
-    // Even a controllable stopping job must not offer a second stop request.
-    view.controllable = state.kind === 'stopping';
-    app.jobs.push(view);
-  }
-  app.jobs.splice(0, 1); app.jobs.splice(1, 0, live);
-  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
-  const active = page.getByRole('group', { name: 'In progress', exact: true });
-  const history = page.getByRole('group', { name: 'History', exact: true });
-  await expect(active.locator('.jobs-row')).toHaveCount(2);
-  await expect(history.locator('.jobs-row')).toHaveCount(5);
-  expect(await page.locator('.jobs-group').evaluateAll(groups => groups.map(el => el.getAttribute('aria-label')))).toEqual(['In progress', 'History']);
-  await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'false');
-  await expandHistory(page);
-  for (const [id, , label] of fixtures) {
-    await page.getByRole('button', { name: new RegExp(`Lifecycle ${id}`) }).click();
-    await expect(page.locator('.jobs-detail-title')).toContainText(label);
-    if (id === 'stopping') {
-      await expect(page.getByRole('button', { name: 'Stopping…', exact: true })).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
-    } else {
-      await expect(page.locator('.jobs-output-note')).toHaveText('Output ended');
-      await expect(page.getByRole('button', { name: /^(Stop job|Pause|Follow output)$/ })).toHaveCount(0);
-      if (id === 'interrupted') {
-        await expect(page.locator('.jobs-detail')).toContainText('End time unavailable');
-        await expect(page.locator('.jobs-detail')).not.toContainText('Running for');
-      }
-    }
-  }
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await page.setViewportSize({ width: 1000, height: 850 });
-  await page.getByRole('button', { name: /Lifecycle limited/ }).click();
-  await expect.poll(() => page.locator('.jobs-panel, .jobs-row, .jobs-status').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
-  expect(app.requests.filter(r => r.method === 'jobs.stop')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('completion drains paused output then stops log polling while history stays fresh', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await mount(page);
@@ -214,34 +164,6 @@ test('completion drains paused output then stops log polling while history stays
   expect(app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(reads);
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }) => {
-  await mount(page);
-  const toggle = page.locator('.jobs-history-toggle');
-  const active = page.getByRole('group', { name: 'In progress', exact: true });
-  const oldJob = page.getByRole('button', { name: /Earlier failing test run/ });
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
-  await expect(oldJob).toHaveCount(0);
-  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await toggle.focus(); await page.keyboard.press('Enter');
-  await expect(oldJob).toBeVisible();
-  const lists = app.requests.filter(r => r.method === 'jobs.list').length;
-  await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists);
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await oldJob.click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
-  await toggle.click();
-  await expect(oldJob).toHaveCount(0);
-  await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
-  await active.getByRole('button', { name: /Watch build output/ }).click();
-  // A completing selection remains readable without opening its History group.
-  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
-  await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -284,82 +206,5 @@ test('background program calls update live and retain edit diffs after reload', 
   await trace.locator(':scope > summary').click();
   await expect(trace.getByRole('img', { name: 'Tool failed' })).toBeVisible();
   await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('subagent jobs read as agents with their outcome, spend and transcript', async ({ page }) => {
-  app = new BackgroundJobsHarness(page);
-  const live = app.view('runtime-new', 'agent-live', app.oldPath, { kind: 'running' });
-  live.job.command = 'openseek run --kind explore --session session-1-sr-1';
-  live.job.subagent = {
-    kind: 'explore', label: 'where is the parser built?', session: 'session-1-sr-1',
-    launch: { kind: 'direct' }, workspace: { kind: 'in_place' },
-  };
-  const done = app.view('runtime-new', 'agent-done', app.oldPath, { kind: 'exited', code: 0 });
-  done.job.command = 'openseek run --kind review --session session-1-sr-2';
-  done.job.subagent = {
-    kind: 'review', label: 'audit the CSV change', session: 'session-1-sr-2',
-    launch: { kind: 'direct' }, workspace: { kind: 'in_place' },
-    outcome: { kind: 'captured' },
-    usage: { kind: 'known', steps: 12, prompt_tokens: 1000, completion_tokens: 200, source: 'result' },
-    report: { kind: 'stored' },
-  };
-  app.jobs.splice(0, app.jobs.length, live, done);
-  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  const active = page.getByRole('group', { name: 'In progress', exact: true });
-  await expect(active.locator('.jobs-row')).toHaveCount(1);
-  await expect(active.locator('.jobs-command')).toHaveText('explore: where is the parser built?');
-  await expandHistory(page);
-  const history = page.getByRole('group', { name: 'History', exact: true });
-  const row = history.locator('.jobs-row');
-  await expect(row.locator('.jobs-command')).toHaveText('review: audit the CSV change');
-  await expect(row.locator('.jobs-status')).toHaveText('Reported');
-  await expect(row.locator('.jobs-row-meta')).toContainText('12 steps · 1200 tokens');
-  await row.click();
-  await expect(page.locator('.jobs-detail')).toContainText('Session: session-1-sr-2');
-  await expect(page.getByRole('button', { name: 'Open transcript', exact: true })).toBeVisible();
-  await page.emulateMedia({ colorScheme: 'dark' });
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a worker job shows its worktree, where its changes stand and why', async ({ page }) => {
-  app = new BackgroundJobsHarness(page);
-  const worktree = (state) => ({
-    name: 'csv-quotes', path: '/work/demo/.worktrees/csv-quotes',
-    branch: 'openseek/csv-quotes--1a2b3c4d-sr-3', base: '5e1f0a7', allowed_paths: ['src/csv'], state,
-  });
-  const committed = app.view('runtime-new', 'agent-worker', app.oldPath, { kind: 'exited', code: 0 });
-  committed.job.command = 'openseek run --kind worker --session session-1-sr-3';
-  committed.job.subagent = {
-    kind: 'worker', label: 'handle escaped quotes', session: 'session-1-sr-3',
-    launch: { kind: 'direct' },
-    workspace: { kind: 'worktree', worktree: worktree({ kind: 'committed', commit: '9c41d2e8f0b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3' }) },
-    outcome: { kind: 'captured' },
-    usage: { kind: 'known', steps: 21, prompt_tokens: 3000, completion_tokens: 400, source: 'result' },
-    report: { kind: 'stored' },
-  };
-  const rejected = app.view('runtime-new', 'agent-stray', app.oldPath, { kind: 'exited', code: 0 });
-  rejected.job.command = 'openseek run --kind worker --session session-1-sr-4';
-  rejected.job.subagent = {
-    kind: 'worker', label: 'rename the reader', session: 'session-1-sr-4',
-    launch: { kind: 'direct' },
-    workspace: { kind: 'worktree', worktree: { ...worktree({ kind: 'unmergeable', defects: ['out-of-scope changes (allowed: src/csv): src/main.mbt'] }), name: 'reader', path: '/work/demo/.worktrees/reader', branch: 'openseek/reader--1a2b3c4d-sr-4' } },
-    outcome: { kind: 'captured' },
-    report: { kind: 'stored' },
-  };
-  app.jobs.splice(0, app.jobs.length, committed, rejected);
-  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expandHistory(page);
-  const history = page.getByRole('group', { name: 'History', exact: true });
-  await history.locator('.jobs-row', { hasText: 'worker: handle escaped quotes' }).click();
-  const detail = page.locator('.jobs-detail');
-  await expect(detail).toContainText('Worktree csv-quotes · branch openseek/csv-quotes--1a2b3c4d-sr-3');
-  await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: committed 9c41d2e8f0 on its branch, ready to take');
-  await expect(detail).toContainText('/work/demo/.worktrees/csv-quotes');
-  await expect(page.getByRole('button', { name: 'Copy worktree path', exact: true })).toBeVisible();
-  await history.locator('.jobs-row', { hasText: 'worker: rename the reader' }).click();
-  await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: not mergeable; kept for inspection');
-  await expect(detail.locator('.jobs-worktree-reason')).toHaveText('out-of-scope changes (allowed: src/csv): src/main.mbt');
-  await page.emulateMedia({ colorScheme: 'dark' });
   expect(app.pageErrors).toEqual([]);
 });

@@ -1,49 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('Review filters changed paths live, clears, and preserves the open diff', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.gitChanges.push({ path: 'docs/guide.md', index_status: ' ', worktree_status: 'M', kind: 'modified' });
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openReview();
-  const changes = page.locator('#review-changes-body');
-  const input = page.getByRole('textbox', { name: 'Filter changed files by path' });
-  const rows = changes.locator('.change-row');
-  await expect(rows).toHaveCount(3);
-  await changes.locator('[data-path="src/main.mbt"]').click();
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-  const activeTab = page.locator('.editor-tab.active');
-  await expect(activeTab).toContainText('main.mbt');
-  await input.fill('SRC/');
-  await expect(rows).toHaveCount(2);
-  await expect(page.getByRole('status')).toHaveText('Showing 2 of 3 files');
-  await expect(input).toBeFocused();
-  await changes.locator('[data-path="src/main.mbt"]').press('ArrowDown');
-  await expect(changes.locator('[data-path="src/lib.mbt"]')).toBeFocused();
-  await expect(activeTab).toContainText('main.mbt');
-  await page.keyboard.press('Enter');
-  await expect(activeTab).toContainText('lib.mbt');
-  await input.fill('docs/');
-  await expect(rows).toHaveCount(1);
-  await expect(rows).toContainText('guide.md');
-  await expect(activeTab).toContainText('lib.mbt');
-  await input.fill('does-not-exist');
-  await expect(rows).toHaveCount(0);
-  await expect(changes.getByText('No files match these filters.', { exact: true })).toBeVisible();
-  await input.press('Escape');
-  await expect(rows).toHaveCount(3);
-  await expect(input).toBeFocused();
-  await input.fill('.mbt');
-  await expect(rows).toHaveCount(2);
-  await page.getByRole('button', { name: 'Clear file filters' }).click();
-  await expect(rows).toHaveCount(3);
-  await expect(input).toHaveValue('');
-  await expect(input).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Review combines extension checkboxes with paths and clears both filters', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitChanges.push(

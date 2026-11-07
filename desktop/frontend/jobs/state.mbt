@@ -573,3 +573,130 @@ fn upsert_job(
   }
   jobs.push(view)
 }
+
+///|
+fn fixture_owner(session : String) -> Owner {
+  {
+    channel: Remote("device-a"),
+    scope: { session, workspace: Some("/workspace"), archived: false, },
+  }
+}
+
+///|
+fn fixture_job(id : String, state : @wire.JobState) -> @protocol.JobView {
+  {
+    job: {
+      generation: "runtime",
+      id,
+      state,
+      revision: 2,
+      command: "worker",
+      description: None,
+      cwd: None,
+      started_at_ms: 1L,
+      backgrounded_at_ms: 2L,
+      finished_at_ms: None,
+      last_output_at_ms: None,
+      output_file: Some("job.out"),
+      output_persistent: true,
+      output_bytes: 0L,
+      output_chars: 0,
+      output_truncated: false,
+      invalid_utf8: false,
+      output_error: None,
+      persistence_error: None,
+      cleanup_error: None,
+      data: None,
+      subagent: None,
+    },
+    output_path: Some("/job.out"),
+    controllable: !state.is_terminal(),
+    error: None,
+  }
+}
+
+///|
+fn reading_fixture() -> State {
+  {
+    ..State::empty(),
+    owner: Some(fixture_owner("one")),
+    watch: Panel,
+    jobs: [fixture_job("bg-1", Running)],
+    selected: Some(("runtime", "bg-1")),
+    reading: true,
+    read_serial: 1,
+    reading_state: Some(Running),
+    read_budget: 3,
+    cursor: Some(0L),
+  }
+}
+
+///|
+test "job lifecycle labels and controls follow each selected outcome" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let cases : Array[(@wire.JobState, String, String)] = [
+    (Exited(0), "Completed", "completed"),
+    (Exited(7), "Failed · exit 7", "failed"),
+    (Stopped("user"), "Stopped", "stopped"),
+    (Interrupted, "Interrupted", "stopped"),
+    (Stopped("time_limit"), "Stopped · time limit reached", "failed"),
+    (Stopping, "Stopping…", "stopping"),
+  ]
+  for (status, label, tone) in cases {
+    let job = { ..fixture_job("outcome", status), controllable: true, }
+    assert_eq(job_status(job.job), (label, tone))
+    let (_, selected) = update(emit, Select("runtime", "outcome"), {
+      ..reading_fixture(),
+      jobs: [fixture_job("live", Running), job],
+    })
+    assert_eq(selected.selected, Some(("runtime", "outcome")))
+    assert_true(
+      selected_job(selected) is Some(view) && view.job.state == status,
+    )
+    assert_eq(selected_terminal(selected), status.is_terminal())
+    let (_, stopped) = update(emit, Stop, selected)
+    assert_false(stopped.stopping)
+    if status is Interrupted {
+      assert_eq(job_timing(job.job), "End time unavailable")
+    }
+  }
+}
+
+///|
+test "history expansion survives refreshes and a completed selection stays selected" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let live = fixture_job("live", Running)
+  let old = fixture_job("old", Exited(1))
+  let reply : @protocol.JobsListReply = {
+    jobs: [old, live],
+    selected: None,
+    next_offset: None,
+    errors: [],
+  }
+  let (_, loaded) = update(emit, Listed(0, 0, Ok(reply)), State::empty())
+  assert_false(loaded.history_expanded)
+  assert_eq(loaded.selected, Some(("runtime", "live")))
+  let (_, refreshed) = update(emit, Listed(0, 0, Ok(reply)), loaded)
+  assert_false(refreshed.history_expanded)
+  let (_, expanded) = update(emit, ToggleHistory, refreshed)
+  assert_true(expanded.history_expanded)
+  let (_, refreshed) = update(emit, Listed(0, 0, Ok(reply)), expanded)
+  assert_true(refreshed.history_expanded)
+  let (_, selected) = update(emit, Select("runtime", "old"), refreshed)
+  let (_, folded) = update(emit, ToggleHistory, selected)
+  assert_false(folded.history_expanded)
+  assert_eq(folded.selected, Some(("runtime", "old")))
+  let (_, active) = update(emit, Select("runtime", "live"), folded)
+  let (_, ended) = update(
+    emit,
+    Listed(
+      0,
+      0,
+      Ok({ ..reply, jobs: [old, fixture_job("live", Stopped("user"))], }),
+    ),
+    active,
+  )
+  assert_false(ended.history_expanded)
+  assert_eq(ended.selected, Some(("runtime", "live")))
+  assert_true(selected_terminal(ended))
+}

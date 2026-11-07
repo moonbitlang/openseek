@@ -164,6 +164,151 @@ fn TreeReveal::scroll_after_render(self : TreeReveal) -> @cmd.Cmd {
 }
 
 ///|
+test "a late ancestor listing reveals only the currently active editor" {
+  let emit = test_emit()
+  let root = @pathx.Relative::root()
+  let src = @pathx.Relative("src")
+  let main = @pathx.Relative("src/main.mbt")
+  let readme = @pathx.Relative("README.md")
+  let main_file = test_file(main.0)
+  let readme_file = test_file(readme.0)
+  let main_ctx = {
+    ..test_ctx(),
+    open_files: [main_file, readme_file],
+    active_file: Some(main_file),
+  }
+  let initial = {
+    ..owned_state(),
+    tree_open: true,
+    docs: Map([
+      (main_file, loaded_doc(main.0)),
+      (readme_file, loaded_doc(readme.0)),
+    ]),
+    children: Map([
+      (
+        root,
+        [
+          { name: "src", path: src, is_dir: true, },
+          { name: "README.md", path: readme, is_dir: false, },
+        ],
+      ),
+    ]),
+  }
+  let (waiting, _) = sync(emit, initial, main_ctx)
+  assert_eq(waiting.loading, [src])
+  assert_true(waiting.tree_reveal is TreeRevealPending(path) && path == main)
+  assert_eq(waiting.expanded, [src])
+
+  // The dock selects README while the old editor's ancestor is still loading.
+  let readme_ctx = { ..main_ctx, active_file: Some(readme_file), }
+  let (selected, _) = sync(emit, waiting, readme_ctx)
+  assert_eq(selected.tree_focus, Some(readme))
+  assert_eq(selected.loading, [src])
+  let (_, loaded) = update(
+    emit,
+    DirLoaded(
+      owner=readme_ctx.owner,
+      epoch=readme_ctx.request_epoch,
+      path=src,
+      entries=[{ name: "main.mbt", path: main, is_dir: false, }],
+    ),
+    selected,
+    readme_ctx,
+  )
+  let (revealed, _) = sync(emit, loaded, readme_ctx)
+  assert_true(revealed.loading.is_empty())
+  assert_eq(revealed.tree_focus, Some(readme))
+  assert_eq(tree_focus_target(revealed), Some(readme))
+  assert_true(revealed.tree_reveal is TreeRevealSettled(path) && path == readme)
+  assert_eq(visible_entries(revealed).map(row => row.0.path), [
+    src, main, readme,
+  ])
+}
+
+///|
+test "a failed ancestor listing waits for the next explicit editor reveal" {
+  let emit = test_emit()
+  let root = @pathx.Relative::root()
+  let src = @pathx.Relative("src")
+  let main = @pathx.Relative("src/main.mbt")
+  let file = test_file(main.0)
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
+  let initial = {
+    ..owned_state(),
+    tree_open: true,
+    docs: Map([(file, loaded_doc(main.0))]),
+    children: Map([(root, [{ name: "src", path: src, is_dir: true, }])]),
+  }
+  let (waiting, _) = sync(emit, initial, ctx)
+  assert_eq(waiting.loading, [src])
+  let (_, failed) = update(
+    emit,
+    DirFailed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=src,
+      message="Directory unavailable",
+    ),
+    waiting,
+    ctx,
+  )
+  let (failed, _) = sync(emit, failed, ctx)
+  assert_eq(failed.directory_errors.get(src), Some("Directory unavailable"))
+  assert_true(failed.loading.is_empty())
+  assert_true(failed.tree_reveal is TreeRevealSettled(path) && path == main)
+
+  // Focus and ordinary sync passes must not turn a failed reveal into a retry.
+  let (_, focused) = update(emit, TreeFocused(src), failed, ctx)
+  let (still_failed, _) = sync(emit, focused, ctx)
+  let (still_failed, _) = sync(emit, still_failed, ctx)
+  assert_true(still_failed.loading.is_empty())
+  assert_eq(still_failed.tree_focus, Some(src))
+  assert_eq(
+    still_failed.directory_errors.get(src),
+    Some("Directory unavailable"),
+  )
+  assert_true(
+    still_failed.tree_reveal is TreeRevealSettled(path) && path == main,
+  )
+
+  // Leaving Files resets the reveal; returning retries the uncached ancestor.
+  let (_, search) = update(
+    emit,
+    ExplorerModeSelected(ExplorerSearch),
+    still_failed,
+    ctx,
+  )
+  let (hidden, _) = sync(emit, search, ctx)
+  assert_true(hidden.tree_reveal is TreeRevealInactive)
+  let (_, files) = update(
+    emit,
+    ExplorerModeSelected(ExplorerFiles),
+    hidden,
+    ctx,
+  )
+  let (retrying, _) = sync(emit, files, ctx)
+  assert_eq(retrying.loading, [src])
+  assert_true(retrying.children.contains(root))
+  assert_true(retrying.tree_reveal is TreeRevealPending(path) && path == main)
+  let (still_loading, _) = sync(emit, retrying, ctx)
+  assert_eq(still_loading.loading, [src])
+  let (_, loaded) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=src, entries=[
+      { name: "main.mbt", path: main, is_dir: false, },
+    ]),
+    still_loading,
+    ctx,
+  )
+  let (revealed, _) = sync(emit, loaded, ctx)
+  assert_true(revealed.loading.is_empty())
+  assert_true(revealed.directory_errors.is_empty())
+  assert_eq(revealed.tree_focus, Some(main))
+  assert_eq(tree_focus_target(revealed), Some(main))
+  assert_true(revealed.tree_reveal is TreeRevealSettled(path) && path == main)
+}
+
+///|
 test "directory contents failure still reveals its row after the parent loads" {
   let emit = test_emit()
   let ctx = test_ctx()

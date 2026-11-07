@@ -599,6 +599,122 @@ fn open_document(
 }
 
 ///|
+test "positioned Content failures settle retained reviews and fence both generations" {
+  let emit = test_emit()
+  let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
+  let docs = owned_state().docs.copy()
+  docs[file] = reviewed_doc(path, test_modified_change(path))
+  let (_, pending) = open_document(
+    emit,
+    {
+      ..owned_state(),
+      docs,
+      review_generation: 1,
+      file_link_generation: 3,
+      explorer_mode: ExplorerSearch,
+    },
+    ctx,
+    file,
+    name="main.mbt",
+    range=Some(@common.Range(2, 1, 2, 4)),
+    had_active=true,
+  )
+  guard pending.docs.get(file) is Some({ review: Some(review), .. }) else {
+    fail("positioned open lost the comparison")
+  }
+  assert_true(review.view_mode is ReviewSource)
+  // Neither an old review read nor a superseded navigation may publish an
+  // error over the retained document. Current failures belong to that tab.
+  for
+    (file_generation, working_generation, accepted) in [
+      (pending.file_link_generation, review.working_generation - 1, false),
+      (pending.file_link_generation - 1, review.working_generation, false),
+      (pending.file_link_generation, review.working_generation, true),
+    ] {
+    let (_, result) = update(
+      emit,
+      FileFailed(
+        owner=ctx.owner,
+        epoch=ctx.request_epoch,
+        path=file,
+        file_link_generation=Some(file_generation),
+        review_generation=Some(working_generation),
+        message="permission denied",
+      ),
+      pending,
+      ctx,
+    )
+    if accepted {
+      assert_true(
+        result.docs.get(file)
+        is Some(
+          {
+            state: TabReadFailed("permission denied"),
+            review: Some(retained),
+            ..
+          }
+        ) &&
+        retained == review,
+      )
+      assert_true(result.error is None)
+      let (_, retrying) = open_document(
+        emit,
+        result,
+        ctx,
+        file,
+        name="main.mbt",
+        range=Some(@common.Range(2, 1, 2, 4)),
+        had_active=true,
+      )
+      guard retrying.docs.get(file) is Some({ review: Some(retry_review), .. }) else {
+        fail("retry lost the comparison")
+      }
+      assert_true(retry_review.view_mode is ReviewSource)
+      assert_true(retry_review.baseline == review.baseline)
+      assert_true(retry_review.working_generation > review.working_generation)
+      let (_, recovered) = update(
+        emit,
+        FileLoaded(
+          owner=ctx.owner,
+          epoch=ctx.request_epoch,
+          path=file,
+          name="main.mbt",
+          file=Content(content="recovered source", sig="2:16"),
+          file_link_generation=Some(retrying.file_link_generation),
+          review_generation=Some(retry_review.working_generation),
+          range=Some(@common.Range(2, 1, 2, 4)),
+          annotation=None,
+        ),
+        retrying,
+        ctx,
+      )
+      assert_eq(recovered.docs.length(), 1)
+      guard recovered.docs.get(file) is Some(recovered_doc) else {
+        fail("retry replaced the file identity")
+      }
+      assert_true(
+        recovered_doc.state is TabLoaded(content="recovered source", ..),
+      )
+      assert_true(recovered_doc.review is Some({ view_mode: ReviewSource, .. }))
+      assert_eq(
+        recovered_doc.diff_content(),
+        Some(("old source", "recovered source")),
+      )
+      let (_, diff) = update(emit, ToggleReviewDiff, recovered, ctx)
+      assert_eq(diff.docs.length(), 1)
+      assert_true(
+        diff.docs.get(file)
+        is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
+      )
+    } else {
+      assert_true(result == pending)
+    }
+  }
+}
+
+///|
 /// Open one row from Changes as a review. Existing working-tree files load
 /// through the ordinary reader while HEAD loads independently; whichever
 /// reply wins is parked on the same document and the late side completes the
@@ -5056,6 +5172,28 @@ fn loaded_doc(path : String) -> Doc {
     state: TabLoaded(content="", sig="1:0"),
     review: None,
     stale: false,
+  }
+}
+
+///|
+/// One open changed-file review document: `path` loaded from the fixture
+/// workspace with `baseline` as its HEAD side, in the given presentation.
+fn reviewed_doc(
+  path : @pathx.Relative,
+  selected : ChangedFile,
+  baseline~ : String = "old source",
+  view_mode~ : ReviewViewMode = ReviewDiff,
+  generation~ : Int32 = 1,
+) -> Doc {
+  {
+    ..loaded_doc(path.0),
+    review: Some({
+      generation,
+      working_generation: generation,
+      baseline: ReviewContent(baseline),
+      view_mode,
+      selected,
+    }),
   }
 }
 

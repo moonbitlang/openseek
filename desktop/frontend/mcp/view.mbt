@@ -37,6 +37,19 @@ pub fn checking(conversation : @interop.ConversationKey, state : State) -> Bool 
 }
 
 ///|
+#derive(Eq, Debug)
+priv enum ConnectorRow {
+  Note(String)
+  Item(
+    tone~ : String,
+    name~ : String,
+    note~ : String?,
+    detail~ : String?,
+    title~ : String
+  )
+}
+
+///|
 /// The rows the overview shows for `conversation`'s connectors when their
 /// card is unfolded: what that conversation's engine last reported.
 pub fn rows(
@@ -44,12 +57,21 @@ pub fn rows(
   conversation : @interop.ConversationKey,
   state : State,
 ) -> Array[@html.Html] {
-  let rows : Array[@html.Html] = []
+  row_data(locale~, conversation, state).map(row => row.render())
+}
+
+///|
+fn row_data(
+  locale~ : @i18n.Locale = English,
+  conversation : @interop.ConversationKey,
+  state : State,
+) -> Array[ConnectorRow] {
+  let rows : Array[ConnectorRow] = []
   match state.phase_for(conversation) {
-    Unchecked | Checking => rows.push(note(text(locale, Checking)))
+    Unchecked | Checking => rows.push(Note(text(locale, Checking)))
     CheckFailed(error) =>
       rows.push(
-        item(
+        Item(
           tone="danger",
           name=text(locale, CheckFailed),
           note=None,
@@ -58,9 +80,9 @@ pub fn rows(
         ),
       )
     Loaded(Stopped) | Reloading(Stopped) =>
-      rows.push(note(text(locale, EngineStopped)))
+      rows.push(Note(text(locale, EngineStopped)))
     Loaded(Connecting) | Reloading(Connecting) =>
-      rows.push(note(text(locale, EngineConnecting)))
+      rows.push(Note(text(locale, EngineConnecting)))
     Loaded(Running(status)) | Reloading(Running(status)) =>
       status_rows(locale, status, rows)
   }
@@ -73,12 +95,12 @@ pub fn rows(
 fn status_rows(
   locale : @i18n.Locale,
   status : @wire.McpStatus,
-  rows : Array[@html.Html],
+  rows : Array[ConnectorRow],
 ) -> Unit {
   for config in status.configs {
     if config.state is Failed(error) {
       rows.push(
-        item(
+        Item(
           tone="danger",
           name=config.path,
           note=Some(text(locale, Failed)),
@@ -90,7 +112,7 @@ fn status_rows(
   }
   if status.servers.is_empty() {
     if status.configs.all(config => config.state is Loaded) {
-      rows.push(note(text(locale, NotConfigured)))
+      rows.push(Note(text(locale, NotConfigured)))
     }
     return
   }
@@ -100,36 +122,26 @@ fn status_rows(
 }
 
 ///|
-/// A row that only says something: nothing went wrong, nothing listed.
-fn note(message : String) -> @html.Html {
-  @html.div(class="connectors-note", message)
-}
-
-///|
-/// One listed thing — a server or a configuration file: the app's status dot,
-/// its name with an optional detail line under it, a short note on the
-/// right, and everything else on hover.
-fn item(
-  tone~ : String,
-  name~ : String,
-  note~ : String?,
-  detail~ : String?,
-  title~ : String,
-) -> @html.Html {
-  let text_lines : Array[@html.Html] = [
-    @html.span(class="connectors-name", name),
-  ]
-  if detail is Some(detail) {
-    text_lines.push(@html.span(class="connectors-detail", detail))
+fn ConnectorRow::render(self : ConnectorRow) -> @html.Html {
+  match self {
+    Note(message) => @html.div(class="connectors-note", message)
+    Item(tone~, name~, note~, detail~, title~) => {
+      let text_lines : Array[@html.Html] = [
+        @html.span(class="connectors-name", name),
+      ]
+      if detail is Some(detail) {
+        text_lines.push(@html.span(class="connectors-detail", detail))
+      }
+      let children : Array[@html.Html] = [
+        @html.span(class="run-dot \{tone}", ""),
+        @html.div(class="connectors-text", text_lines),
+      ]
+      if note is Some(note) {
+        children.push(@html.span(class="connectors-state", note))
+      }
+      @html.div(class="connectors-row", title~, children)
+    }
   }
-  let children : Array[@html.Html] = [
-    @html.span(class="run-dot \{tone}", ""),
-    @html.div(class="connectors-text", text_lines),
-  ]
-  if note is Some(note) {
-    children.push(@html.span(class="connectors-state", note))
-  }
-  @html.div(class="connectors-row", title~, children)
 }
 
 ///|
@@ -138,7 +150,7 @@ fn item(
 fn server_row(
   locale : @i18n.Locale,
   server : @wire.McpServerStatus,
-) -> @html.Html {
+) -> ConnectorRow {
   let transport = match server.transport {
     Stdio => "stdio"
     Http => "http"
@@ -146,7 +158,7 @@ fn server_row(
   let reached = "\{transport} · \{server.target}"
   match server.state {
     Connected(tools) =>
-      item(
+      Item(
         tone="ok",
         name=server.name,
         note=Some(text(locale, ToolCount(tools.length()))),
@@ -155,7 +167,7 @@ fn server_row(
       )
     // The tools are still registered: these are the calls that now fail.
     Lost(tools) =>
-      item(
+      Item(
         tone="warn",
         name=server.name,
         note=Some(text(locale, Lost)),
@@ -163,7 +175,7 @@ fn server_row(
         title="\{reached}\n\{tool_list(tools)}",
       )
     NoTools =>
-      item(
+      Item(
         tone="",
         name=server.name,
         note=Some(text(locale, NoTools)),
@@ -171,7 +183,7 @@ fn server_row(
         title="\{reached}\n\{text(locale, NoToolsReason)}",
       )
     Failed(error) =>
-      item(
+      Item(
         tone="danger",
         name=server.name,
         note=Some(text(locale, Failed)),
@@ -179,7 +191,7 @@ fn server_row(
         title="\{reached}\n\{error}",
       )
     Skipped =>
-      item(
+      Item(
         tone="",
         name=server.name,
         note=Some(text(locale, Skipped)),
