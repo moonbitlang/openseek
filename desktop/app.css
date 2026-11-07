@@ -7,6 +7,7 @@
 @import url("./styles/palette-dark.css");
 @import url("./styles/tokens.css");
 @import url("./styles/base.css");
+@import url("./styles/rui.css");
 @import url("./styles/terminal.css");
 @import url("./styles/file_panel.css");
 @import url("./styles/sidebar.css");

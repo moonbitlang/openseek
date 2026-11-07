@@ -199,50 +199,6 @@
   --z-connection-lost: 80;
 }
 
-/* RUI supplies inline light-theme defaults around the app shell. Override
-   that theme boundary so component recipes share the app's selected palette. */
-[data-rui-theme] {
-  color-scheme: inherit !important;
-  --rui-background: var(--color-bg-canvas) !important;
-  --rui-foreground: var(--color-text-primary) !important;
-  --rui-card: var(--color-bg-surface) !important;
-  --rui-card-foreground: var(--color-text-primary) !important;
-  --rui-popover: var(--color-bg-surface) !important;
-  --rui-popover-foreground: var(--color-text-primary) !important;
-  --rui-primary: var(--color-accent) !important;
-  --rui-primary-foreground: var(--color-on-accent) !important;
-  --rui-secondary: var(--color-bg-subtle) !important;
-  --rui-secondary-foreground: var(--color-text-primary) !important;
-  --rui-muted: var(--color-bg-subtle) !important;
-  --rui-muted-foreground: var(--color-text-secondary) !important;
-  --rui-accent: var(--color-hover-subtle) !important;
-  --rui-accent-foreground: var(--color-text-primary) !important;
-  --rui-destructive: var(--color-danger) !important;
-  --rui-destructive-border: var(--color-danger-border) !important;
-  --rui-destructive-subtle: var(--color-danger-soft) !important;
-  --rui-destructive-surface: var(--color-danger) !important;
-  --rui-destructive-ring: var(--color-danger-border) !important;
-  --rui-border: var(--color-divider) !important;
-  --rui-input: var(--color-border) !important;
-  --rui-input-background: var(--color-bg-surface) !important;
-  --rui-outline-background: var(--color-bg-surface) !important;
-  --rui-outline-border: var(--color-border) !important;
-  --rui-outline-hover-bg: var(--color-hover-subtle) !important;
-  --rui-ghost-hover-bg: var(--color-hover-subtle) !important;
-  --rui-ring: var(--color-focus-ring) !important;
-  --rui-switch-unchecked: var(--color-control-surface) !important;
-  --rui-switch-thumb-checked: var(--color-on-accent) !important;
-  --rui-switch-thumb-unchecked: var(--color-on-accent) !important;
-  --rui-sidebar: var(--color-bg-canvas) !important;
-  --rui-sidebar-foreground: var(--color-text-primary) !important;
-  --rui-sidebar-primary: var(--color-accent) !important;
-  --rui-sidebar-primary-foreground: var(--color-on-accent) !important;
-  --rui-sidebar-accent: var(--color-hover-subtle) !important;
-  --rui-sidebar-accent-foreground: var(--color-text-primary) !important;
-  --rui-sidebar-border: var(--color-seam) !important;
-  --rui-sidebar-ring: var(--color-focus-ring) !important;
-}
-
 /* Settings moves the base from 12px through 18px. The derived tokens shift as
    one scale, preserving the hierarchy between labels, body text, and headings. */
 :root[data-font-size="12"] {
