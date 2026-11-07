@@ -670,12 +670,17 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     avatar: identity.1,
     busy: self.console.busy,
     notice: self.console.notice,
-    device: self.console.page_device.bind(id => {
-      self.console.roster
-      .iter()
-      .find_first(meta => meta.id == id)
-      .map(meta => meta.device_choice())
-    }),
+    page: if self.console.page_device is Some(id) {
+      DevicePage(
+        id~,
+        name=self.console.roster
+          .iter()
+          .find_first(meta => meta.id == id)
+          .map(meta => meta.name),
+      )
+    } else {
+      CloudPage
+    },
     online_devices: self.console.roster
     .filter(meta => meta.online)
     .map(meta => meta.device_choice()),
@@ -1246,6 +1251,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn api_settings_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  id_prefix~ : String,
 ) -> Array[@html.Html] {
   if @interop.is_native_ssh(model.focused) {
     return [
@@ -1274,7 +1280,7 @@ fn api_settings_rows(
         ApiProviderMenu.setting_control(
           dispatch,
           model,
-          id="api-provider-select",
+          id=id_prefix + "-provider-select",
           options=[
             @select_control.ViewOption(
               value="deepseek",
@@ -1350,10 +1356,7 @@ fn api_settings_rows(
               .disabled(!settings_loaded),
           ),
           @html.button(
-            // The id is layout only (grid placement); the fill is the
-            // shared primary style.
-            id="saveApiKey",
-            class="button primary",
+            class="button primary save-api-key",
             disabled=!settings_loaded || model.setup_api_key.is_blank(),
             on_click=dispatch(SaveApiKey),
             @settings.text(model.locale, SaveApiKey),
@@ -1421,7 +1424,11 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       desc=@settings.text(locale, MaxStepsDescription),
     ),
   ]
-  let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
+  let api_rows : Array[@html.Html] = api_settings_rows(
+    dispatch,
+    model,
+    id_prefix="settings-api",
+  )
   let groups : Array[@html.Html] = [
     ..if model.is_desktop {
       [ssh_settings(dispatch, model)]
@@ -1455,6 +1462,36 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ]
     },
     @settings.group(icon_layout, @settings.text(locale, Interface), [
+      @settings.row(
+        @settings.text(locale, TranscriptView),
+        [
+          @rui.button_group(
+            class="transcript-view-control",
+            aria_label=@settings.text(locale, TranscriptView),
+            [
+              @rui.button(
+                variant=Ghost,
+                size=Default,
+                on_click=dispatch(MinimalTranscriptChanged(true)),
+                attrs=@html.Attrs::build().aria_pressed(
+                  model.minimal_transcript.to_string(),
+                ),
+                @settings.text(locale, MinimalView),
+              ),
+              @rui.button(
+                variant=Ghost,
+                size=Default,
+                on_click=dispatch(MinimalTranscriptChanged(false)),
+                attrs=@html.Attrs::build().aria_pressed(
+                  (!model.minimal_transcript).to_string(),
+                ),
+                @settings.text(locale, DetailView),
+              ),
+            ],
+          ),
+        ],
+        desc=@settings.text(locale, TranscriptViewDescription),
+      ),
       @settings.row(
         @settings.text(locale, Language),
         [
@@ -1822,37 +1859,10 @@ fn session_tooltip(model : Model, conv : Conversation) -> String {
 }
 
 ///|
-/// The narrow layout always renders the minimal transcript: its titlebar has
-/// no detail toggle, and a phone has no room for the detailed view. The
-/// stored preference is preserved for the wide layout.
+/// The narrow layout always renders the minimal transcript. The Settings
+/// preference is preserved for the wide layout.
 fn Model::minimal_transcript_effective(self : Model) -> Bool {
   self.narrow || self.minimal_transcript
-}
-
-///|
-/// The debug icon is on for detailed mode. Both conversation sources use the
-/// inverse of the stored minimal preference, preserving existing choices.
-/// This local preference has no connection or run-state gate. Neighboring
-/// controls must clear their disabled state when Rabbita reuses their DOM
-/// for this button (see the Codex topbar).
-fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
-  @html.button(
-    class=if self.minimal_transcript {
-      "panel-toggle"
-    } else {
-      "panel-toggle active"
-    },
-    title=if self.minimal_transcript {
-      shell_text(self.locale, ShowDetailed)
-    } else {
-      shell_text(self.locale, ShowMinimal)
-    },
-    attrs=@html.Attrs::build()
-      .aria_label(shell_text(self.locale, DetailedMode))
-      .aria_pressed((!self.minimal_transcript).to_string()),
-    on_click=dispatch(MinimalTranscriptChanged(!self.minimal_transcript)),
-    icon(@icons.icon_debug),
-  )
 }
 
 ///|
@@ -1863,6 +1873,7 @@ fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
     } else {
       "panel-toggle terminal-toggle"
     },
+    disabled=false,
     title=shell_text(
       self.locale,
       if self.terminal.is_open() {
@@ -1908,9 +1919,6 @@ fn conversation_header(
     )
   }
   items.push(conversation_transfer_button(model.locale))
-  if !model.narrow {
-    items.push(model.detail_toggle(dispatch))
-  }
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
@@ -2201,11 +2209,15 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
-  management_pages : (@html.Html, @html.Html, @html.Html),
+  shell_overlays : (@html.Html, @html.Html, @html.Html),
+  management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
-  let (skills_html, workspace_settings_html, archived_chats_html) = management_pages
+  let (quick_open_html, selection_actions_html, transfer_menu_html) = shell_overlays
+  let (
+    (skills_list_html, skills_detail_html),
+    workspace_settings_html,
+    archived_chats_html,
+  ) = management_pages
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
@@ -2219,7 +2231,6 @@ fn view(
     },
     transcript: transcript_html,
     composer: codex_composer_html,
-    detail_toggle: model.detail_toggle(dispatch),
   }
   let header = match model.screen {
     Chat =>
@@ -2250,11 +2261,6 @@ fn view(
               on_click=dispatch(OpenCloudExport),
               icon(icon_chat_export),
             )
-          } else {
-            @html.nothing
-          },
-          if model.cloud_identity() is Some(_) && !model.narrow {
-            model.detail_toggle(dispatch)
           } else {
             @html.nothing
           },
@@ -2521,7 +2527,16 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
-    management_dialog_view(dispatch, model, skills_html, archived_chats_html),
+    management_dialog_view(
+      dispatch, model, skills_list_html, archived_chats_html,
+    ),
+    delete_modal(
+      locale=model.locale,
+      dispatch,
+      model.delete_confirm,
+      model.cloud,
+    ),
+    skills_detail_dialog_view(dispatch, model, skills_detail_html),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -2606,16 +2621,10 @@ fn view(
       }.render(locale=model.locale),
     )
   }
-  if !(model.management_dialog is Some(ArchivedChats)) &&
-    model.delete_confirm is Some(confirm) {
-    children.push(
-      delete_modal(locale=model.locale, dispatch, confirm, model.cloud),
-    )
-  }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
   children.push(quick_open_html)
-  children.push(context_menu_html)
+  children.push(selection_actions_html)
   children.push(transfer_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
@@ -2658,14 +2667,21 @@ fn update_confirm_modal(
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {
-  @html.div(class="modal-backdrop", on_click=dispatch(CancelUpdateRestart), [
-    @html.div(class="modal", [
-      @html.div(
-        class="modal-title",
-        dynamic_text(locale, DRestartQuestion(version)),
+  @rui.dialog(
+    id="update-restart-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_cancel=dispatch(CancelUpdateRestart),
+    attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
+    [
+      @rui.dialog_header(
+        @rui.dialog_title(
+          id="update-restart-title",
+          dynamic_text(locale, DRestartQuestion(version)),
+        ),
       ),
-      @html.div(class="modal-body", shell_text(locale, InterruptForUpdate)),
-      @html.div(class="modal-actions", [
+      @html.div(shell_text(locale, InterruptForUpdate)),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelUpdateRestart),
@@ -2677,8 +2693,8 @@ fn update_confirm_modal(
           shell_text(locale, RestartNow),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|
@@ -2689,8 +2705,7 @@ fn update_confirm_modal(
 /// over the Settings form (which already shows the same section), and
 /// disappears the moment a usable endpoint arrives. shell_text(model.locale, NotNow) dismisses for
 /// the session; the composer's BYOK notice keeps the reminder — and the way
-/// back here — visible. Clicks inside must not bubble to the backdrop, whose
-/// click dismisses.
+/// back here — visible.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let title = match model.api_provider {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
@@ -2698,26 +2713,24 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
     Custom => shell_text(model.locale, SetupEndpoint)
   }
-  @html.div(class="modal-backdrop", on_click=dispatch(DismissApiSetup), [
-    @html.div(
-      class="modal setup-modal",
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        @cmd.none
-      }),
-      [
-        @html.div(class="modal-title", title),
-        @html.div(class="setup-modal-form", api_settings_rows(dispatch, model)),
-        @html.div(class="modal-actions", [
-          @html.button(
-            class="button secondary",
-            on_click=dispatch(DismissApiSetup),
-            shell_text(model.locale, NotNow),
-          ),
-        ]),
-      ],
-    ),
-  ])
+  @rui.dialog(
+    id="api-setup-dialog",
+    class="setup-modal dialog-size-medium",
+    show_close=false,
+    on_cancel=dispatch(DismissApiSetup),
+    attrs=@html.Attrs::build().aria_labelledby("api-setup-title"),
+    [
+      @rui.dialog_header(@rui.dialog_title(id="api-setup-title", title)),
+      @html.div(api_settings_rows(dispatch, model, id_prefix="setup-api")),
+      @rui.dialog_footer([
+        @html.button(
+          class="button secondary",
+          on_click=dispatch(DismissApiSetup),
+          shell_text(model.locale, NotNow),
+        ),
+      ]),
+    ],
+  )
 }
 
 ///|

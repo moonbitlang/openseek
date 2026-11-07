@@ -12,7 +12,7 @@ async function annotateSelection(preview) {
   await preview.locator('textarea').press('Enter');
 }
 
-test('saved citations show full feedback and keep the separate prompt', async ({ page }, testInfo) => {
+test('saved citations show full feedback and keep the separate prompt', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const comment = 'Revise this explanation. '.repeat(5) + '\nKeep <script> as plain text. 修改这里。';
   const selection = (comment) => `<office_selection>\n${JSON.stringify({
@@ -44,7 +44,6 @@ test('saved citations show full feedback and keep the separate prompt', async ({
     'Show the browser fixture and explain the changes.',
   ]);
   await expect(sent.locator('script')).toHaveCount(0);
-  await sent.screenshot({ path: testInfo.outputPath('citation-feedback.png') });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -439,7 +438,7 @@ test('Excel annotation hides outside either horizontal edge and restores its dra
   expect(app.pageErrors).toEqual([]);
 });
 
-test('PowerPoint opens every slide with searchable text, cropped images and page navigation', async ({ page }, testInfo) => {
+test('PowerPoint opens every slide with searchable text, cropped images and page navigation', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1600, height: 1000 });
   const app = new DesktopBrowserHarness(page);
@@ -480,7 +479,6 @@ test('PowerPoint opens every slide with searchable text, cropped images and page
   await expect(slides.nth(1)).toHaveCSS('zoom', '1.1');
   await pinchZoom(page, slides.nth(1).locator('svg text').first());
   await expect(slides.nth(1)).toHaveCSS('zoom', '1.22');
-  await page.screenshot({ path: testInfo.outputPath('powerpoint-preview.png') });
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
   await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('');

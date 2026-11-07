@@ -8,8 +8,7 @@
 const TerminalResizeHandleId = "terminal-resize-handle"
 
 ///|
-/// The document class used while dragging to keep the row-resize cursor and
-/// suppress text selection outside the narrow grab strip.
+/// The drag class shared by the row-resize cursor and viewer mouse-event isolation.
 const TerminalResizingClass = "is-resizing-terminal"
 
 ///|
@@ -111,7 +110,7 @@ fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
 }
 
 ///|
-/// End the active drag and restore the document's normal cursor and selection.
+/// End the active drag and restore the cursor and viewer mouse events.
 fn TerminalResizer::finish(self : TerminalResizer) -> Unit {
   guard self.active.val else { return }
   self.active.val = false

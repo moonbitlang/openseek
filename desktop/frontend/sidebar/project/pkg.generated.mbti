@@ -19,6 +19,7 @@ pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale], @rabb
 // Types and methods
 pub(all) struct Actions {
   new_conversation : (Id) -> @cmd.Cmd
+  import_conversation : (Id) -> @cmd.Cmd
   open_settings : (Id) -> @cmd.Cmd
   detach : (Id) -> @cmd.Cmd
   host_details : (Id) -> @cmd.Cmd

@@ -64,11 +64,19 @@ fn State::load(
 ) -> (State, @cmd.Cmd) {
   guard token is Some(token) else { return (self, @cmd.none) }
   let conversation = self.conversations.get(id).unwrap_or(Conversation::empty())
-  guard !reuse || !conversation.history_reading else {
-    return (self, @cmd.none)
+  if conversation.history_reading {
+    // One latest-page read at a time. A revisit shares it. A durable SSE
+    // boundary needs a snapshot that started after it, so the settled read
+    // is applied and then followed by exactly one more read.
+    return if reuse {
+      (self, @cmd.none)
+    } else {
+      (
+        self.replace(id, { ..conversation, history_refresh_after_read: true, }),
+        @cmd.none,
+      )
+    }
   }
-  // A revisit shares the read. A durable SSE event needs a newer
-  // snapshot and supersedes the earlier response through the request id.
   let request = self.sequence + 1
   let next = self.replace(id, {
     ..conversation,
@@ -79,10 +87,49 @@ fn State::load(
   (
     { ..next, sequence: request, },
     run(emit, () => {
-      load_history(token, id, conversation.history_etag, self.epoch, request) catch {
+      load_latest_history(
+        token,
+        id,
+        conversation.history_etag,
+        self.epoch,
+        request,
+      ) catch {
         @cloud_client.RequestError(error) =>
           LoadFailed(self.epoch, id, request, error)
         _ => LoadFailed(self.epoch, id, request, Unreachable)
+      }
+    }),
+  )
+}
+
+///|
+/// Read again the first turn cached while it was running once a later turn
+/// became the latest page. Its records, and any preview waiting for them,
+/// are otherwise never refreshed.
+fn State::reread_turn(
+  self : State,
+  id : String,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+) -> (State, @cmd.Cmd) {
+  guard token is Some(token) &&
+    self.conversations.get(id) is Some(conversation) &&
+    conversation.history_turn_request is None &&
+    conversation.history_window.stale_offset() is Some(offset) else {
+    return (self, @cmd.none)
+  }
+  let request = self.sequence + 1
+  let next = self.replace(id, {
+    ..conversation,
+    history_turn_request: Some((request, offset)),
+  })
+  (
+    { ..next, sequence: request, },
+    run(emit, () => {
+      TurnLoaded(self.epoch, id, request, load_turn_history(token, id, offset)) catch {
+        @cloud_client.RequestError(error) =>
+          TurnFailed(self.epoch, id, request, error)
+        _ => TurnFailed(self.epoch, id, request, Unreachable)
       }
     }),
   )
@@ -204,6 +251,38 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
   match edit {
     Rename(_) => !session.archived
     Archive(archived) => session.archived != archived && self.can_delete(id)
+    SetApproval(mode) =>
+      session.approval != mode && self.can_choose_approval(id)
+  }
+}
+
+///|
+/// A running engine keeps the policy it started with, so the server refuses
+/// a change until the turn ends. A session the server has not created yet
+/// has no mode to change, and a save in flight holds the picker.
+pub fn State::can_choose_approval(self : State, id : String) -> Bool {
+  !self.retired.contains(id) &&
+  !self.deletions.contains(id) &&
+  !self.metadata_saves.contains(id) &&
+  self.sessions.any(session => {
+    session.id == id && !session.archived && !session.generating
+  }) &&
+  self.conversations
+  .get(id)
+  .map_or(true, conversation => {
+    !conversation.sending &&
+    conversation.outgoing is None &&
+    !conversation.generating
+  })
+}
+
+///|
+/// The mode the session's next engine starts with. Before the server creates
+/// the session, and on servers without approval modes, engines ask.
+pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+  match self.sessions.iter().find_first(session => session.id == id) {
+    Some(session) => session.approval
+    None => ApprovalAsk
   }
 }
 
@@ -224,7 +303,10 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   self.conversations.get(id) is Some(conversation) &&
   self.can_compose(id) &&
   !self.deletions.contains(id) &&
-  !(self.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
+  // The next turn's engine starts with the saved approval mode, never one
+  // still on its way to the server.
+  !(self.metadata_saves.get(id)
+  is Some({ edit: Archive(true) | SetApproval(_), .. })) &&
   !conversation.loading &&
   !conversation.sending &&
   conversation.outgoing is None &&
@@ -270,7 +352,9 @@ pub fn update(
   navigation~ : Int32,
   desktop_history~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
-  match msg {
+  // A boundary observed while this read was in flight may be missing from it.
+  // Settle the read first so its records are not discarded, then read again.
+  let follow_up = match msg {
     Loaded(epoch, id, request, _)
     | HistoryUnchanged(epoch, id, request, _)
     | LoadFailed(epoch, id, request, _) => {
@@ -279,14 +363,13 @@ pub fn update(
         conversation.request == request else {
         return (state, @cmd.none, None)
       }
-      if conversation.history_refresh_after_read && token is Some(_) {
-        // The new observer saw a change the shared read may have missed.
-        // Reuse the connection's read until it settles, then validate again.
-        let (next, command) = state.load(id, token, emit)
-        return (next, command, None)
+      if conversation.history_refresh_after_read {
+        Some(id)
+      } else {
+        None
       }
     }
-    _ => ()
+    _ => None
   }
   if state.update_command(msg, emit, token, navigation) is Some((next, command)) {
     return (next, command, None)
@@ -390,6 +473,7 @@ pub fn update(
             updated_at: None,
             generating: false,
             archived: false,
+            approval: ApprovalAsk,
           })
         }
       })
@@ -457,6 +541,7 @@ pub fn update(
           updated_at: None,
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -565,6 +650,7 @@ pub fn update(
                 archived,
                 generating: session.generating && !archived,
               }
+            SetApproval(approval) => { ..session, approval, }
           }
         }
       })
@@ -591,6 +677,19 @@ pub fn update(
       let metadata_saves = state.metadata_saves.copy()
       metadata_saves.remove(id)
       let (next, command) = { ..state, metadata_saves, }.failed(error)
+      // A turn that began before the save reached the server holds the mode.
+      if save.edit is SetApproval(_) && error is Http(409) {
+        return (
+          {
+            ..next,
+            notice: Some(
+              "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
+            ),
+          },
+          command,
+          None,
+        )
+      }
       (next, command, None)
     }
     Delete(id) => {
@@ -665,6 +764,8 @@ pub fn update(
           ..conversation,
           stream: Some(stream),
           last_seq: None,
+          // Frames before this connection's baseline may have been missed.
+          live_task: None,
         }),
         @cmd.none,
         None,
@@ -712,8 +813,6 @@ pub fn update(
             },
             last_seq: Some(snapshot.seq),
             history_resume_baseline: None,
-            history_refresh_after_read: conversation.history_refresh_after_read ||
-            (refresh_history && conversation.history_reading),
             generating: snapshot.data.active_task_id is Some(_),
             observed_task: match snapshot.data.active_task_id {
               Some(task) => Some(task)
@@ -765,7 +864,7 @@ pub fn update(
           }
           if admitted ||
             (baseline && conversation.watch_status == Reconnecting) ||
-            (refresh_history && !conversation.history_reading) {
+            refresh_history {
             let (next, command) = next.load(id, token, emit)
             (next, command, None)
           } else {
@@ -826,6 +925,7 @@ pub fn update(
       let request = state.sequence + 1
       let next = state.replace(id, {
         ..conversation.clear_progress().fence_history(request),
+        live_task: None,
         // Fence history reads from the interrupted connection. Only a fresh
         // snapshot can establish the run state for the following history read.
         stream: None,
@@ -911,11 +1011,17 @@ pub fn update(
       }
       let awaiting_disk = conversation.request == request &&
         conversation.history_reading
-      let conversation = { ..conversation, history_disk_request: None, }
+      // A boundary observed during the disk read is covered by the network
+      // read that follows it, which starts after that boundary.
+      let conversation = {
+        ..conversation,
+        history_disk_request: None,
+        history_reading: conversation.history_reading && !awaiting_disk,
+      }
       let next = state.replace(
         id,
         if history is Some(history) && !conversation.history_cached {
-          let cached = conversation.with_history_page(history, latest=true)
+          let cached = conversation.with_latest_page(history)
           {
             ..cached.restore_goal(cached.document),
             history_cached: true,
@@ -934,13 +1040,16 @@ pub fn update(
       (next, command, None)
     }
     LoadOlder(id) => {
-      guard token is Some(token) &&
-        state.conversations.get(id) is Some(conversation) &&
-        conversation.older_history_start() is Some(start) else {
+      guard state.conversations.get(id) is Some(conversation) &&
+        conversation.older_history_offset() is Some(offset) else {
         return (state, @cmd.none, None)
       }
-      let limit = start.min(HistoryPageSize)
-      let offset = start - limit
+      let window = conversation.history_window.reattach()
+      if window != conversation.history_window {
+        let next = conversation.with_history_window(window)
+        return (state.replace(id, next), @cmd.none, None)
+      }
+      guard token is Some(token) else { return (state, @cmd.none, None) }
       let request = state.sequence + 1
       let next = state.replace(id, {
         ..conversation,
@@ -949,7 +1058,12 @@ pub fn update(
       (
         { ..next, sequence: request, },
         run(emit, () => {
-          load_history(token, id, None, state.epoch, request, offset~, limit~) catch {
+          OlderLoaded(
+            state.epoch,
+            id,
+            request,
+            load_turn_history(token, id, offset),
+          ) catch {
             @cloud_client.RequestError(error) =>
               OlderFailed(state.epoch, id, request, error)
             _ => OlderFailed(state.epoch, id, request, Unreachable)
@@ -967,15 +1081,53 @@ pub fn update(
       }
       let conversation = { ..conversation, history_older_request: None, }
       let next = if owner == navigation && history.offset == Some(offset) {
-        conversation.with_history_page(
-          { ..history, generating: false, },
-          request~,
-          latest=false,
-        )
+        conversation.with_older_page({ ..history, generating: false, }, request)
       } else {
         conversation
       }
       (state.replace(id, next), @cmd.none, None)
+    }
+    TurnLoaded(epoch, id, request, history) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_turn_request is Some((pending, offset)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      // A later turn exists, so this one is finished whatever the
+      // session-wide generating flag says.
+      let settled = conversation.with_turn_page(
+        offset,
+        { ..history, generating: false, },
+        request,
+      )
+      let next = state.replace(id, { ..settled, history_turn_request: None, })
+      // A reply that no longer fits the window waits for the next latest
+      // read rather than asking for the same turn again.
+      if settled.history_window == conversation.history_window {
+        return (next, @cmd.none, None)
+      }
+      let (next, command) = next.reread_turn(id, token, emit)
+      (next, command, None)
+    }
+    TurnFailed(epoch, id, request, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_turn_request is Some((pending, _)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      // Previews stay. The next latest read tries the stale turn again.
+      let next = state.replace(id, {
+        ..conversation,
+        history_turn_request: None,
+      })
+      let (next, command) = if error is Unauthorized {
+        next.failed(error)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
     }
     OlderFailed(epoch, id, request, error) => {
       guard epoch == state.epoch &&
@@ -996,10 +1148,9 @@ pub fn update(
       (next, command, None)
     }
     Loaded(epoch, id, request, history) => {
-      let conversation = state.conversations[id].with_history_page(
+      let conversation = state.conversations[id].with_latest_page(
         history,
         request~,
-        latest=true,
       )
       let accepted = conversation.pending is Some(submission) &&
         history.messages.any(record => {
@@ -1114,10 +1265,12 @@ pub fn update(
       } else {
         @cmd.none
       }
+      let (next, turn) = next.reread_turn(id, token, emit)
       (
         next,
         @cmd.batch([
           refresh,
+          turn,
           if desktop_history {
             cache_mutation(
               true,
@@ -1134,10 +1287,7 @@ pub fn update(
     HistoryUnchanged(epoch, id, request, etag) => {
       let conversation = state.conversations[id]
       let observing = conversation.stream is Some({ active: true, .. })
-      let offset = conversation.history_pages
-        .keys()
-        .fold(init=0, (max, key) => max.max(key))
-      let conversation = match conversation.history_pages.get(offset) {
+      let conversation = match conversation.history_window.latest() {
         Some(page) =>
           conversation.acknowledge_assistants(
             request,
@@ -1164,13 +1314,17 @@ pub fn update(
           conversation.watch_status
         },
       })
+      let (next, turn) = next.reread_turn(id, token, emit)
       (
         next,
-        if conversation.generating && !observing {
-          poll(epoch, id, request, emit)
-        } else {
-          @cmd.none
-        },
+        @cmd.batch([
+          turn,
+          if conversation.generating && !observing {
+            poll(epoch, id, request, emit)
+          } else {
+            @cmd.none
+          },
+        ]),
         None,
       )
     }
@@ -1274,6 +1428,7 @@ pub fn update(
       let conversation = if event.kind == "task_started" {
         {
           ..conversation.clear_streams(),
+          reasoning_frontier: conversation.durable_frontier(),
           notification_answer: None,
           heartbeat: Some({
             stage: @composer.Thinking,
@@ -1312,6 +1467,11 @@ pub fn update(
           conversation.events
         },
         task: Some(event.task_id),
+        live_task: if event.kind == "task_started" {
+          Some(event.task_id)
+        } else {
+          conversation.live_task
+        },
         last_seq: Some(event.seq),
         generating: event.kind != "task_finished",
         observed_task: if event.kind == "task_finished" {
@@ -1454,7 +1614,14 @@ pub fn update(
       )
     }
   }
-  (next, command, select)
+  guard follow_up is Some(id) &&
+    next.conversations.get(id) is Some(conversation) &&
+    !conversation.history_reading &&
+    !next.needs_sign_in else {
+    return (next, command, select)
+  }
+  let (next, history) = next.load(id, token, emit)
+  (next, @cmd.batch([command, history]), select)
 }
 
 ///|

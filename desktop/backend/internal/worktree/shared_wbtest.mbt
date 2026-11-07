@@ -37,7 +37,7 @@ async test "a shared checkout goes only with the last conversation holding it" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
     let second = WorktreeOwner::openseek("second")
-    let created = create(host, resource_path(repo), first, _ => ())
+    let created = create(host, repo.resource_path(), first, _ => ())
     let checkout = worktree_dir(repo, created.name)
     bind_shared_fixture(repo, created.name, ["first", "second"])
     @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
@@ -45,7 +45,7 @@ async test "a shared checkout goes only with the last conversation holding it" {
     @fsx.write_text(checkout.join("draft.txt").to_path(), "uncommitted")
     // The other conversation still works here, so nothing is at risk: no
     // dirty refusal, no deletion, and no broadcast of an unchanged registry.
-    let published : Array[WorktreeInfo] = []
+    let published : Array[@protocol.WorktreeInfo] = []
     assert_eq(
       first.archive_checkout(host, false, on_committed=(_, infos) => {
         published.append(infos)
@@ -82,7 +82,7 @@ async test "a shared checkout goes only with the last conversation holding it" {
 async test "a record with a member's id in another project holds nothing" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
-    let created = create(host, resource_path(repo), first, _ => ())
+    let created = create(host, repo.resource_path(), first, _ => ())
     let checkout = worktree_dir(repo, created.name)
     bind_shared_fixture(repo, created.name, ["first", "second"])
     @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
@@ -102,7 +102,7 @@ async test "a record with a member's id in another project holds nothing" {
 async test "a sibling record that cannot be read refuses the archive" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
-    let created = create(host, resource_path(repo), first, _ => ())
+    let created = create(host, repo.resource_path(), first, _ => ())
     let checkout = worktree_dir(repo, created.name)
     // A name too long for the filesystem fails the stat with something
     // other than "no such file": whether that conversation left is unknown.
@@ -129,7 +129,7 @@ async test "a sibling record that cannot be read refuses the archive" {
 async test "an archive waits for another host's fork into the same worktree" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
-    let created = create(host, resource_path(repo), first, _ => ())
+    let created = create(host, repo.resource_path(), first, _ => ())
     let checkout = worktree_dir(repo, created.name)
     @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
     let theirs = lock_worktrees_file(repo)
@@ -154,7 +154,7 @@ async test "a worktree whose checkout is gone takes no new member" {
   with_recovery_fixture((repo, host) => {
     let created = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )
@@ -190,7 +190,7 @@ async test "a worktree whose checkout is gone takes no new member" {
 async test "a bound conversation holds a checkout only once it starts" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
-    let created = create(host, resource_path(repo), first, _ => ())
+    let created = create(host, repo.resource_path(), first, _ => ())
     let checkout = worktree_dir(repo, created.name)
     bind_shared_fixture(repo, created.name, ["first", "unstarted"])
     @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
@@ -211,13 +211,13 @@ async test "deleting one member's placement keeps the row for the others" {
   with_recovery_fixture((repo, host) => {
     let shared = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )
     let codex = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::codex("thread"),
       _ => (),
     )
@@ -245,14 +245,14 @@ async test "removing a shared worktree drains every bound conversation" {
   with_recovery_fixture((repo, host) => {
     let created = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )
     bind_shared_fixture(repo, created.name, ["first", "second"])
     let drained : Array[String] = []
     ignore(
-      remove(test_host(drained~), resource_path(repo), created.name, false, _ => {
+      remove(test_host(drained~), repo.resource_path(), created.name, false, _ => {
         ()
       }),
     )
@@ -268,11 +268,11 @@ async test "a fork is bound to its original's worktree around its record's creat
   with_recovery_fixture((repo, host) => {
     let created = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )
-    let published : Array[Array[WorktreeInfo]] = []
+    let published : Array[Array[@protocol.WorktreeInfo]] = []
     // The binding is already committed when the record is created, so an
     // archive of the original never sees a fork that is bound nowhere.
     let bound_at_creation : Array[String] = []

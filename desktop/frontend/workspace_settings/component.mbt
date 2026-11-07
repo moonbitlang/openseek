@@ -250,52 +250,44 @@ fn dialog_contents(
       desc=ui(locale, TimeoutDescription),
     ),
   ]
-  let dismiss = @cmd.batch([emit(CloseMenu), actions.dismiss])
   [
-    @html.div(class="workspace-settings-header", [
-      @html.h2(
+    @rui.dialog_header([
+      @rui.dialog_title(
         id="workspace-settings-title",
-        class="modal-title",
         ui(locale, WorkspaceSettingsLabel),
       ),
-      @html.button(
-        class="workspace-settings-close",
-        type_="button",
-        title=ui(locale, CloseLabel),
-        attrs=@html.Attrs::build().aria_label(ui(locale, CloseLabel)),
-        on_click=dismiss,
-        @icons.icon(@icons.icon_close),
-      ),
     ]),
-    @html.div(
-      id="workspace-settings-description",
-      class="workspace-settings-identity",
-      [
-        @html.div(class="workspace-settings-name", @resource.label(workspace)),
-        @html.div(class="settings-subtitle", workspace.path),
-      ],
-    ),
-    @html.div(class="settings", [
-      @settings.group(
-        @icons.icon_worktree,
-        ui(locale, ConversationsLabel),
-        conversation_rows,
-      ),
-      @settings.group(
-        @icons.icon_worktree,
-        ui(locale, WorktreesLabel),
-        worktree_rows,
-      ),
-    ]),
-    if input.error is Some(message) {
+    @html.div(class="dialog-scroll-body", [
       @html.div(
-        class="workspace-settings-error",
-        attrs=@html.Attrs::build().role("alert"),
-        message,
-      )
-    } else {
-      @html.nothing
-    },
+        id="workspace-settings-description",
+        class="workspace-settings-identity",
+        [
+          @html.div(class="workspace-settings-name", @resource.label(workspace)),
+          @html.div(class="settings-subtitle", workspace.path),
+        ],
+      ),
+      @html.div(class="settings", [
+        @settings.group(
+          @icons.icon_worktree,
+          ui(locale, ConversationsLabel),
+          conversation_rows,
+        ),
+        @settings.group(
+          @icons.icon_worktree,
+          ui(locale, WorktreesLabel),
+          worktree_rows,
+        ),
+      ]),
+      if input.error is Some(message) {
+        @html.div(
+          class="workspace-settings-error",
+          attrs=@html.Attrs::build().role("alert"),
+          message,
+        )
+      } else {
+        @html.nothing
+      },
+    ]),
   ]
 }
 
@@ -341,14 +333,14 @@ fn dialog_component(
     },
   )
   state.view3(input, locale, (state, input, locale) => {
-    @html.dialog(
+    @rui.dialog(
       id=DialogId,
-      class="modal workspace-settings-dialog",
+      class="dialog-size-medium dialog-scroll-layout",
+      close_label=ui(locale, CloseLabel),
       closedby="any",
-      on_cancel=@cmd.batch([emit(CloseMenu), actions.dismiss]),
-      on_close=_ => emit(CloseMenu),
+      on_cancel=@dialog.close(DialogId),
+      on_close=_ => @cmd.batch([emit(CloseMenu), actions.dismiss]),
       attrs=@html.Attrs::build()
-        .role("dialog")
         .aria_labelledby("workspace-settings-title")
         .aria_describedby("workspace-settings-description"),
       dialog_contents(locale~, input, state, emit, actions),

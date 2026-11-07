@@ -6,12 +6,6 @@ on:
       - "desktop/.moonbit-version"
       - "tools_sdk/**"
       - ".github/workflows/tools-sdk.yml"
-  push:
-    branches: [main]
-    paths:
-      - "desktop/.moonbit-version"
-      - "tools_sdk/**"
-      - ".github/workflows/tools-sdk.yml"
 
 jobs:
   check:

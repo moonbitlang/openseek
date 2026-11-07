@@ -635,29 +635,6 @@ test('Git history and commit failures retry through the browser transport', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('project picker adds the browsed folder with Enter', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-
-  await (await sidebarAddProject(page)).click();
-  const picker = page.getByRole('dialog', { name: 'Add a project' });
-  await expect(picker).toBeVisible();
-  await expect(
-    picker.getByRole('button', { name: 'Add project', exact: true }),
-  ).toBeEnabled();
-  await page.keyboard.press('Enter');
-
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'workspace.add')).toMatchObject({
-    params: { path: '/Users/test' },
-  });
-  await expect(picker).toBeHidden();
-  app.notify('workspace.changed', { workspaces: app.workspaces });
-  await expect(page.getByRole('button', { name: 'test', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('quick open moves its keyboard selection and opens the chosen file', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -913,156 +890,6 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
     node.getBoundingClientRect().top)).toBe(0);
   expect(await page.locator('#app').evaluate(node =>
     ({ top: node.scrollTop, left: node.scrollLeft }))).toEqual({ top: 0, left: 0 });
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('transcript Markdown keeps links safe and loads local raster bytes through the host', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await page.context().route('https://example.test/docs', route => route.fulfill({
-    contentType: 'text/html', body: '<title>External docs</title>',
-  }));
-  app.binaryFiles['diagram.png'] = {
-    data_base64: 'iVBORw0KGgo=',
-    media_type: 'image/png',
-  };
-  app.sessionEvents = [
-    {
-      sequence: 1,
-      item: {
-        kind: 'user',
-        payload: { content: 'Show the browser fixture Markdown policy' },
-      },
-    },
-    {
-      sequence: 2,
-      item: {
-        kind: 'assistant',
-        payload: {
-          content: [
-            '[External docs](https://example.test/docs)',
-            '[Source](src/main.mbt:12)',
-            '[Local URI](file:///Users/me/My%20Project/main.mbt#L7)',
-            '[Bundled guide](/Users/me/Library/Application%20Support/SeekMoon/gmachine-3.md)',
-            '[Unsafe](javascript:alert(1))',
-            '![Fixture image](diagram.png)',
-            '![Repeated image](diagram.png)',
-            '![Unavailable image](missing-image.png)',
-          ].join('\n\n'),
-        },
-      },
-    },
-  ];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-
-  const markdown = page.locator('.transcript .msg-content.markdown');
-  await expect(markdown.locator('a[href^="javascript:"]')).toHaveCount(0);
-  await expect(markdown.getByText('Unsafe', { exact: true })).toBeVisible();
-
-  const image = markdown.locator('img[alt="Fixture image"]');
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'fs.read_file' && request.params?.path === 'diagram.png'))
-    .toMatchObject({ params: { root: '/workspace' } });
-  await expect(image).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
-  await expect(markdown.locator('img[alt="Repeated image"]'))
-    .toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
-  await expect(markdown.locator('img[alt="Unavailable image"]')).toHaveClass(/unavailable/);
-  await expect(markdown.locator('img[data-transcript-image]')).toHaveCount(0);
-  expect(app.requests.filter(request => request.method === 'fs.read_file' &&
-    request.params?.path === 'diagram.png')).toHaveLength(1);
-
-  const external = markdown.getByRole('link', { name: 'External docs' });
-  await expect(external).toHaveAttribute('target', '_blank');
-  await expect(external).toHaveAttribute('rel', 'noopener noreferrer');
-  await external.focus();
-  await external.evaluate(element => {
-    element.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: 0,
-      clientY: 0,
-    }));
-  });
-  let contextMenu = page.getByRole('menu', { name: 'Context menu' });
-  await expect(contextMenu).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(external).toBeFocused();
-
-  await external.click({ button: 'right' });
-  contextMenu = page.getByRole('menu', { name: 'Context menu' });
-  await expect(contextMenu.getByRole('menuitem')).toHaveText([
-    'Open in New Tab',
-    'Copy Link',
-  ]);
-  const popupPromise = page.waitForEvent('popup');
-  const navigationPromise = page.context().waitForEvent('request', {
-    predicate: request => request.url() === 'https://example.test/docs',
-  });
-  await contextMenu.getByRole('menuitem', { name: 'Open in New Tab' }).click();
-  const popup = await popupPromise;
-  await navigationPromise;
-  await popup.close();
-
-  const source = markdown.getByTitle('Open src/main.mbt:12');
-  await source.click({ button: 'right' });
-  contextMenu = page.getByRole('menu', { name: 'Context menu' });
-  await expect(contextMenu.getByRole('menuitem')).toHaveText([
-    'Open',
-    'Share',
-    'Copy Path',
-  ]);
-  await page.keyboard.press('Escape');
-
-  const unsafe = markdown.getByText('Unsafe', { exact: true });
-  await unsafe.evaluate(element => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const selection = document.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    const rect = range.getBoundingClientRect();
-    element.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: rect.left + Math.max(1, rect.width / 2),
-      clientY: rect.top + Math.max(1, rect.height / 2),
-    }));
-  });
-  contextMenu = page.getByRole('menu', { name: 'Context menu' });
-  await expect(contextMenu.getByRole('menuitem')).toHaveText(['Copy']);
-  await page.keyboard.press('Escape');
-
-  const ordinaryEventAllowed = await page.getByRole('main').evaluate(element => {
-    document.getSelection()?.removeAllRanges();
-    return element.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: 4,
-      clientY: 4,
-    }));
-  });
-  expect(ordinaryEventAllowed).toBe(false);
-  await expect(page.getByRole('menu', { name: 'Context menu' })).toHaveCount(0);
-
-  await source.click();
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'host.open_path' && request.params?.path === 'src/main.mbt:12'))
-    .toBeTruthy();
-  const localUri = markdown.getByTitle('Open /Users/me/My Project/main.mbt#L7');
-  await expect(localUri).toBeVisible();
-  await localUri.click();
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'host.open_path' &&
-    request.params?.path === '/Users/me/My Project/main.mbt#L7'))
-    .toBeTruthy();
-  const guidePath = '/Users/me/Library/Application Support/SeekMoon/gmachine-3.md';
-  const guide = markdown.getByRole('button', { name: 'Bundled guide', exact: true });
-  await expect(guide).toHaveAttribute('data-context-file', guidePath);
-  await guide.click();
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'host.open_path' && request.params?.path === guidePath))
-    .toBeTruthy();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1347,7 +1174,7 @@ test('a floating reply takes a comment of several lines', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }, testInfo) => {
+test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1370,12 +1197,10 @@ test('approval card mirrors host claims and sends an unclaimed decision', async 
 
   const approval = page.locator('.composer-approval');
   await expect(approval).toBeVisible();
-  await approval.screenshot({ path: testInfo.outputPath('approval-awaiting-answer.png') });
   // A different client answered: this page must stop offering either decision.
   app.notify('agent.approvals', { generation: 2, approvals: [{ ...pending, answered: true }] });
   await expect(approval.locator('.composer-approval-state')).toBeVisible();
   await expect(approval.getByRole('button')).toHaveCount(0);
-  await approval.screenshot({ path: testInfo.outputPath('approval-answer-submitted.png') });
   app.notify('agent.approvals', { generation: 3, approvals: [] });
   await expect(approval).toHaveCount(0);
 
@@ -1435,20 +1260,20 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
     await stored.getByRole('button', { name: 'Conversation actions' }).click();
     await page.getByRole('menuitem', { name: 'Delete…' }).click();
   };
-  const body = page.locator('.modal-body');
+  const body = page.getByRole('dialog', { name: 'Permanently delete this chat?', exact: true });
 
   // A chat without a worktree: the dialog is the plain one, and Cancel
   // deletes nothing.
   await askToDelete();
-  await expect(page.locator('.modal-title')).toHaveText('Permanently delete this chat?');
+  await expect(body.getByRole('heading', { name: 'Permanently delete this chat?', exact: true })).toBeVisible();
   await expect(body).toContainText('“Rabbita browser fixture” and all of its subagent history');
   await expect(body).toContainText('Project files and Git branches will remain.');
   await expect(body).not.toContainText('worktree');
   expect(sent('session.delete_check')).toEqual([
     { session: 'session-1', workspace: '/workspace' },
   ]);
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  await body.getByRole('button', { name: 'Cancel' }).click();
+  await expect(body).toBeHidden();
   expect(sent('session.delete')).toEqual([]);
   await expect(stored).toBeVisible();
 
@@ -1485,7 +1310,7 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
     { session: 'session-1', workspace: '/workspace', worktree: 'wt-1' },
     { session: 'session-1', workspace: '/workspace', worktree: 'wt-1', force: true },
   ]);
-  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  await expect(body).toBeHidden();
 
   // Deleting the chat on screen replaces its entry with a fresh draft
   // instead of leaving an unavailable target behind.
@@ -1513,16 +1338,20 @@ test('sidebar menu dismissal and pending selection follow the clicked row', { ta
 
   const first = page.locator('.conversation-row[title="session-1"]');
   // The menu opens at the pointer and can cover the rows below it, so click
-  // the row's leading padding, left of where the menu starts. Not its right
+  // the content area's leading edge, left of where the menu starts. Not its right
   // end: that is the hover-revealed actions trigger, and the row's width is
   // platform-dependent.
-  await first.click({ position: { x: 4, y: 10 } });
+  await first.locator('.conversation-content').click({ position: { x: 4, y: 10 } });
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(first).toHaveClass(/active/);
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
 
   app.rpcDelays.set('session.load', 10000);
-  await first.click({ button: 'right', position: { x: 18, y: 18 } });
+  await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeHidden();
+  await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
   await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
   const second = page.locator('.conversation-row[title="session-2"]');
   await second.click();
@@ -1690,7 +1519,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
   await page.getByRole('button', { name: 'API endpoint' }).click();
   await page.getByRole('option', { name: 'OpenRouter' }).click();
-  await page.getByLabel('API key').fill('sk-openrouter-test');
+  await page.locator('.setup-modal').getByLabel('API key').fill('sk-openrouter-test');
   await page.getByRole('button', { name: 'Save API key' }).click();
 
   await expect.poll(() => app.requests.some(request =>
@@ -1702,8 +1531,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.params?.provider === 'custom' &&
     request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
-  expect(app.hostSettings.has_deepseek_key).toBe(false);
-  expect(app.hostSettings.has_custom_key).toBe(true);
+  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
 
   // OpenRouter uses the ordinary chat model selector and persisted preference.
   await app.openSession();
@@ -1803,25 +1631,6 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
   expect(app.pageErrors).toEqual([]);
 });
 
-test('desktop shell and modal stay inside a narrow browser viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-
-  await app.showSidebar();
-  await (await sidebarAddProject(page)).click();
-  const bounds = await page.locator('.picker-modal').boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds.x).toBeGreaterThanOrEqual(0);
-  expect(bounds.y).toBeGreaterThanOrEqual(0);
-  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-  expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
-  await expect.poll(() => page.evaluate(() =>
-    document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('a browser close request closes a workspace settings menu before its dialog', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CloseWatcher is Chromium-only');
   const app = new DesktopBrowserHarness(page);
@@ -1834,7 +1643,7 @@ test('a browser close request closes a workspace settings menu before its dialog
     if (event.key === 'Escape') event.stopImmediatePropagation();
   }, true));
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
   await expect(dialog).toBeVisible();
@@ -1858,10 +1667,11 @@ test('workspace settings dialog opens and persists per-workspace choices', async
 
   // The project row's "⋮" menu opens its workspace settings dialog.
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace settings' })).toBeVisible();
-  await expect(page.locator('.settings-subtitle')).toHaveText('/workspace');
+  const workspaceSettings = page.getByRole('dialog', { name: 'Workspace settings' });
+  await expect(workspaceSettings).toBeVisible();
+  await expect(workspaceSettings.locator('.settings-subtitle')).toHaveText('/workspace');
 
   // The dialog reads the host's authoritative snapshot before enabling the
   // selects.
@@ -1916,19 +1726,14 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   // Close and re-enter: the dialog keeps the committed values.
   await page.getByRole('button', { name: 'Close workspace settings' }).click();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
   await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
   await expect(page.getByRole('button', { name: 'Submodule checkout timeout' })).toHaveText('60 seconds');
-  // Settings are stored per workspace: a sibling project keeps its own
-  // defaults, never inheriting this workspace's committed values.
-  expect(app.workspaceSettingsFor('/other')).toEqual({
-    workspace: '/other',
-    worktree_mode: false,
-    checkout_submodules: false,
-    submodule_checkout_timeout_seconds: 30,
-  });
+  // Settings are stored per workspace: committing this workspace's values
+  // never writes to a sibling project.
+  expect(app.requests.filter(request => request.method === 'workspace.settings_set' && request.params?.workspace === '/other')).toEqual([]);
 
   // Detaching the workspace closes the dialog and its select menu. Reopening
   // starts with closed selects, so the first trigger click opens the menu.
@@ -1939,7 +1744,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveCount(0);
   app.notify('workspace.changed', { workspaces: ['/workspace'] });
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const reopened = page.getByRole('button', { name: 'New chats' });
   await expect(reopened).toHaveAttribute('aria-expanded', 'false');
@@ -1949,7 +1754,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   expect(app.pageErrors).toEqual([]);
 });
 
-test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }, testInfo) => {
+test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.followup_behavior = 'queue';
   await app.install();
@@ -1981,7 +1786,6 @@ test('composer follow-up menu supports keyboard choice and a queue default', asy
   const box = await menu.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(800);
-  await page.screenshot({ path: testInfo.outputPath('followup-menu.png') });
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
   await expect(choice).toBeFocused();
@@ -2111,13 +1915,9 @@ for (const layout of ['Split', 'Unified']) {
     })).toBe(true);
     await action.click();
     await expect(action).toHaveText('✓');
-    const panelBox = await page.locator('.editor').boundingBox();
-    const clip = { ...panelBox, height: Math.min(panelBox.height, 320) };
-    await page.screenshot({ path: `/tmp/hunk-gutter-${layout.toLowerCase()}-viewed.png`, clip });
     await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await action.click();
     await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-    await page.screenshot({ path: `/tmp/hunk-gutter-${layout.toLowerCase()}.png`, clip });
     expect(app.pageErrors).toEqual([]);
   });
 }

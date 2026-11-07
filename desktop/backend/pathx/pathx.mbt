@@ -115,22 +115,69 @@ pub fn Absolute::to_uri_path(self : Absolute) -> String? {
 }
 
 ///|
+/// Raised by `Absolute::resource_path` for a path with no reversible resource
+/// URI spelling, such as a UNC path.
+pub suberror UnsupportedResourcePath {
+  UnsupportedResourcePath
+}
+
+///|
+pub impl Show for UnsupportedResourcePath with fn output(_self, logger) {
+  logger.write_string("UNC paths are not supported by frontend resources")
+}
+
+///|
+pub extend UnsupportedResourcePath with Show::{output, to_string}
+
+///|
+/// `to_uri_path` for a path that must cross the frontend resource boundary.
+pub fn Absolute::resource_path(
+  self : Absolute,
+) -> String raise UnsupportedResourcePath {
+  guard self.to_uri_path() is Some(path) else { raise UnsupportedResourcePath }
+  path
+}
+
+///|
 /// Decode a frontend resource URI's slash-rooted path component into an
 /// absolute path for this host. Windows accepts only the reversible drive
 /// form produced by `Absolute::to_uri_path`; POSIX accepts its ordinary
 /// slash-rooted absolute paths. UNC is deliberately outside the transport
 /// contract because the URI authority belongs to the device channel.
-pub fn Absolute::from_uri_path(path : String) -> Absolute? {
-  guard path is ['/', ..] && !(path is ['/', '/', ..]) else { return None }
-  if @path.sep == '\\' {
-    guard path is ['/', drive, ':', '/', ..] && drive.is_ascii_path_drive() else {
-      return None
-    }
-    Path(path[1:].to_owned()).normalize().to_absolute()
-  } else {
-    Path(path).normalize().to_absolute()
+/// Raises `InvalidResourcePath` for a spelling outside that contract.
+pub fn Absolute::parse_resource_path(
+  path : String,
+) -> Absolute raise InvalidResourcePath {
+  guard path is ['/', ..] && !(path is ['/', '/', ..]) else {
+    raise InvalidResourcePath
   }
+  let native = if @path.sep == '\\' {
+    guard path is ['/', drive, ':', '/', ..] && drive.is_ascii_path_drive() else {
+      raise InvalidResourcePath
+    }
+    Path(path[1:].to_owned())
+  } else {
+    Path(path)
+  }
+  guard native.normalize().to_absolute() is Some(absolute) else {
+    raise InvalidResourcePath
+  }
+  absolute
 }
+
+///|
+/// A resource path that cannot name an absolute path on this host.
+pub suberror InvalidResourcePath {
+  InvalidResourcePath
+}
+
+///|
+pub impl Show for InvalidResourcePath with fn output(_self, logger) {
+  logger.write_string("path is not absolute")
+}
+
+///|
+pub extend InvalidResourcePath with Show::{output, to_string}
 
 ///|
 /// Whether this character can name a Windows drive in an absolute path.

@@ -464,7 +464,7 @@ test "the sidebar's device selector names the page device and lists only online 
   guard model.sidebar_component_input().account is Some(account) else {
     fail("a signed-in browser page shows its account")
   }
-  assert_eq(account.device, Some({ id: "d_on", name: "Mac", }))
+  assert_eq(account.page, DevicePage(id="d_on", name=Some("Mac")))
   assert_eq(account.online_devices, [
     { id: "d_on", name: "Mac", },
     { id: "d_air", name: "Air", },
@@ -473,9 +473,16 @@ test "the sidebar's device selector names the page device and lists only online 
   guard cloud.sidebar_component_input().account is Some(account) else {
     fail("a Cloud page shows its account")
   }
-  assert_eq(account.device, None)
-  // Choosing a device leaves this page's model alone; the load replaces it.
-  let (_, chosen) = update_msg(test_dispatch(), DeviceChosen("d_air"), model)
+  assert_eq(account.page, CloudPage)
+  // Choosing a device or Cloud leaves this page's model alone; the load
+  // replaces it.
+  let (_, chosen) = update_msg(
+    test_dispatch(),
+    DeviceChosen(Some("d_air")),
+    model,
+  )
+  assert_true(chosen == model)
+  let (_, chosen) = update_msg(test_dispatch(), DeviceChosen(None), model)
   assert_true(chosen == model)
 }
 

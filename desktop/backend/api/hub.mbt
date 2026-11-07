@@ -202,7 +202,7 @@ fn[T] Hub::subscribe(
 /// suspension point, so active runs and settlements form one atomic view.
 fn Hub::runs(
   self : Hub,
-  known? : Array[KnownRunPayload],
+  known? : Array[@protocol.KnownRunPayload],
 ) -> @protocol.RunsReply {
   let runs = self.active_starts.values().to_array()
   let settled : Array[@protocol.RunSettlementPayload] = []
@@ -226,7 +226,7 @@ fn Hub::runs(
 /// a session alone must not expose that session's completion history.
 fn settlement_matches(
   settlement : RunSettlement,
-  selector : KnownRunPayload,
+  selector : @protocol.KnownRunPayload,
 ) -> Bool {
   (selector.run_id is Some(_) || selector.submission_id is Some(_)) &&
   settlement.session == selector.session &&

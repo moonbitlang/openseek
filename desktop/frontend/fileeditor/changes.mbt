@@ -47,7 +47,7 @@ fn git_review_revision(reply : @protocol.GitChangesReply) -> String? {
 /// Ask the owning host for the checkout's review inventory. PR bases stay
 /// pinned; other checkouts prefer their default-branch fork point and fall
 /// back to the task's creation commit or HEAD status. As with filesystem
-/// calls, a resource hint belonging to another host is
+/// calls, a workspace belonging to another host is
 /// rejected before bridge access.
 fn list_changes(
   dispatch : @cmd.Emit[Msg],
@@ -55,29 +55,23 @@ fn list_changes(
   generation : Int32,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      // `refresh_changes` has already marked this generation in flight. A
-      // silent no-op would wedge the inventory in Loading/refreshing forever;
-      // settle it through the ordinary fenced failure path instead.
-      return dispatch(
-        ChangesFailed(
-          owner~,
-          generation~,
-          message="workspace moved to another host before Git refresh",
-        ),
-      )
-    _ => ()
+  guard workspace is Some(workspace) &&
+    @resource.belongs_to(workspace, owner.channel) else {
+    // Settle the in-flight request even when its workspace is unavailable.
+    return dispatch(
+      ChangesFailed(
+        owner~,
+        generation~,
+        message="conversation workspace is unavailable on this host",
+      ),
+    )
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.git_changes,
-        {
-          session: owner.session,
-          workspace: workspace.map(value => value.path),
-        },
+        { session: owner.session, workspace: workspace.path, },
       ) catch {
         error => {
           scheduler.add(

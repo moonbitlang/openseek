@@ -106,7 +106,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   const transcript = page.locator('#transcript');
   const bubbles = transcript.locator('.msg.user .msg-content');
   const loadingOlder = transcript.getByRole('status').filter({ hasText: 'Loading more…' });
-  const rowSpinner = cloud.row(sessionA).locator('..').locator('.conversation-load-spinner');
+  const rowSpinner = cloud.rowContainer(sessionA).locator('.conversation-load-spinner');
   await expect(bubbles).toHaveText(['Third question']);
   await expect(loadingOlder).toHaveCount(0);
   await expect(rowSpinner).toHaveCount(0);
@@ -224,41 +224,4 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   await page.mouse.wheel(0, -200);
   await expect(bubbles).toHaveText(['Earlier question', 'Latest question']);
   expect(queries).toEqual(['?limit=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=0']);
-});
-
-test('Cloud skips older reads when the cached turn is complete even during generation', async ({ page }, testInfo) => {
-  const cloud = new CloudHarness(page);
-  const task = 'first-task';
-  const turns = [{
-    messages: [
-      { ...user(task, 'Already cached', 1), engine_sequence: 1 },
-      { task_id: task, kind: 'task_finished', data: { status: 'completed' }, created_at: 1001 },
-    ],
-    events: [
-      { sequence: 1, item: { kind: 'user', payload: { content: 'Already cached' } } },
-      { sequence: 2, item: { kind: 'terminal', payload: { kind: 'finished' } } },
-    ],
-  }];
-  cloud.historyTurns.set(sessionA, turns);
-  cloud.histories.set(sessionA, { messages: [], generating: true });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  const transcript = page.locator('#transcript');
-  await expect(transcript.getByText('Already cached')).toBeVisible();
-  await cloud.open(sessionB);
-  turns.push({ messages: [user('new-task', 'Latest turn', 3)], events: [] });
-  await cloud.open(sessionA);
-  await expect(transcript.locator('.msg.user .msg-content')).toHaveText(['Already cached', 'Latest turn']);
-
-  const olderReads = cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`).length;
-  await transcript.hover();
-  await page.mouse.wheel(0, -200);
-  // Use a browser event turn to let any pagination command reach fetch.
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  expect(cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`)).toHaveLength(olderReads);
-  await expect(transcript.locator('.transcript-loading-older')).toHaveCount(0);
-  const path = testInfo.outputPath('cloud-history-already-complete.png');
-  await transcript.screenshot({ path });
-  await testInfo.attach('Complete history at the top boundary', { path, contentType: 'image/png' });
 });

@@ -1,4 +1,4 @@
-# OpenSeek Connect for Android
+# SeekMoon for Android
 
 Remote conversations through Connect. Kotlin hosts the shared MoonBit/Rabbita
 frontend; Connect conversations and commands run on the selected computer.
@@ -65,6 +65,32 @@ overrides it for a direct Gradle build. Versions follow the release workflow's
 Android `versionCode` of `major * 10000 + minor * 100 + patch + 1`.
 Older releases predating Android remain valid rollback targets.
 
+## Self-update
+
+Release builds update themselves from the same manifest as Desktop
+(`https://openseek-api.moonbitlang.cn/desktop/releases/latest.json`). Each
+time the app comes to the foreground, at most once every six hours, it
+compares the manifest's `version` with its own `versionName`. When
+`platforms.android` names a newer APK, a dialog offers to update. The system
+`DownloadManager` then fetches the APK into the app's external files
+directory, showing progress in the notification shade and retrying across
+network loss and process death. When the download completes while the app is
+in the foreground, or on the next return to it, the app checks the SHA-256
+and starts the installation. If no newer release exists, or the release has
+no APK, the app shows nothing, and manifest failures only reach the log; a
+failed download shows a message.
+
+Installing goes through `PackageInstaller`. The first time, Android asks the
+user to allow installs from SeekMoon (`REQUEST_INSTALL_PACKAGES`); the app
+then continues the installation when it returns from Settings. Android shows
+its own confirmation unless the device is on Android 12+ and this app
+installed the current version itself (`UPDATE_PACKAGES_WITHOUT_USER_ACTION`).
+If Android destroys the app while the user is in Settings, the pending
+installation is restored from the saved state. Installing stops the running
+app, and Android does not reopen it. Android rejects an APK signed with a
+different key, which is why every release must keep the same keystore.
+Debug builds (`.debug`) never check for updates.
+
 The launcher icon uses the white rabbit paths from
 `desktop/package/macos/appicon.svg` and the blue background (`#3B6EF5`) from
 Desktop's packaged `AppIcon.icns` / `appicon.png`. Android applies its own
@@ -100,12 +126,14 @@ WebViewAssetLoader reserves `https://seekmoon.moonbitlang.com/console/android/`
 for the APK bundle. The real Connect HTTP/WebSocket routes use that origin and
 the shared v2 account token; WebSocket connections use single-use Connect tickets.
 Browser login uses the existing `/v2/auth/account/start` and account exchange
-with S256 PKCE and a state-checked, short-lived loopback listener. The browser
-returns a completion signal through an app link; the account token never enters
-a URL. Android transfers the exchanged session into the WebView's existing account
+with S256 PKCE. Instead of a loopback port it passes the application ID as
+`scheme`, so the browser returns the state-checked code to
+`<application id>://oauth/complete`: Android freezes the app's process while
+the user is away from it, and a frozen process cannot answer a loopback
+redirect. The code is useless without the app's verifier, and the account token
+never enters a URL. Android transfers the exchanged session into the WebView's existing account
 store and reloads the current document. It does not parse the login `return_to`
-parameter, select Chat/Work or rebuild the frontend's current URL. Cancellation
-closes the listener; an interrupted process requires a fresh login attempt. WebView cookies and browser cookies stay separate.
+parameter, select Chat/Work or rebuild the frontend's current URL. An interrupted process requires a fresh login attempt. WebView cookies and browser cookies stay separate.
 
 Native ownership checks use the HTTPS origin, not an application route. The
 `/console/android/` mount identifies APK assets only; it does not determine
@@ -126,12 +154,16 @@ nothing of the frontend's layers or DOM (`desktop/frontend/dismiss/back.mbt`).
 
 Shared mobile layout, Chat/Connect entry and offline behavior are browser
 features. Their tests live under `desktop/e2e/tests` and require no Android
-build; see [Mobile browser client](../desktop/MOBILE_BROWSER.md). Android adds
-only native authentication, insets/lifecycle, Back, file picking and packaging.
-`conversation.css` hides the terminal and side-panel buttons for this first
-conversation-only client.
-Its link uses the absolute APK asset path, so a history change cannot relocate
-it. The shared frontend's `/assets/` resources are answered from the APK too. Responsive styling comes from the shared bundle.
+build; see [Desktop end-to-end tests](../desktop/e2e/README.md). Android adds
+only native authentication, insets/lifecycle, Back, file picking, downloads and
+packaging. The shared frontend's `/assets/` resources are answered from the
+APK. The APK adds no styling: which controls a phone or tablet shows is the
+shared bundle's responsive layout, as in a mobile browser.
+
+WebView cannot fetch a `blob:` download and drops the anchor's `download`
+name. A document-start script on the application origin remembers each blob
+anchor the page activates and reads it before the page revokes its URL; the
+shell then offers Android's save dialog (`BlobDownloads.kt`).
 
 After building the APK:
 
@@ -139,8 +171,10 @@ After building the APK:
 ./android/gradlew -p android testDebugUnitTest lintDebug
 ```
 
-The native tests exercise the actual loopback listener, PKCE verifier binding,
-stray callback rejection, denial, exchange failure, cancellation and timeout.
+The native tests cover the start URL's scheme and PKCE challenge, and the
+return URL's state check, denial and rejection of other returns. The code is
+redeemed only after the browser has returned to the app, since Android 15 and
+later fail a backgrounded app's network requests.
 Origin tests cover arbitrary frontend paths and reject other origins.
 On a test emulator with the Connect debug APK running:
 
@@ -149,9 +183,8 @@ ANDROID_SERIAL=emulator-5580 node android/smoke.mjs
 ```
 
 The Android smoke uses demo account/host responses, chooses the demo device
-from the sidebar's device selector, checks that the device page is still the
-APK's bundled document, verifies real keyboard insets, Back and
-sending/stopping, then
-reloads the real entry page. It preserves application data and credentials.
+from the sidebar's device selector, verifies real keyboard insets, Back,
+sending/stopping and that an export's Download opens Android's save dialog,
+then reloads the real entry page. It preserves application data and credentials.
 These fixture checks do not establish an end-to-end run on your real computer;
 that requires signing into GitHub and choosing your online device.

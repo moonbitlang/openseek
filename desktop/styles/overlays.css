@@ -1,20 +1,4 @@
-/* Shared themed menu surface for stable row actions and ephemeral app-shell
-   context. The action-menu module positions it inside the visual viewport. */
-.action-menu {
-  --icon-size: var(--icon-md);
-  position: fixed;
-  min-width: 180px;
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
-  z-index: var(--z-menu);
-}
-.action-menu[data-positioned="false"] {
-  visibility: hidden;
-}
-.action-menu-item {
+.selection-actions .action-menu-item {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -29,41 +13,36 @@
   text-align: left;
   cursor: pointer;
 }
-.action-menu-item:hover,
-.action-menu-item:focus-visible {
+.selection-actions .action-menu-item:hover,
+.selection-actions .action-menu-item:focus-visible {
   outline: none;
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
-.action-menu-item:disabled {
+.selection-actions .action-menu-item:disabled {
   cursor: default;
   opacity: 0.5;
 }
-.action-menu-item:disabled:hover {
+.selection-actions .action-menu-item:disabled:hover {
   background: transparent;
   color: var(--color-text-primary);
 }
-.action-menu-item.destructive:hover,
-.action-menu-item.destructive:focus-visible {
+.selection-actions .action-menu-item.destructive:hover,
+.selection-actions .action-menu-item.destructive:focus-visible {
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
-.action-menu-item > .icon {
+.selection-actions .action-menu-item > .icon {
   color: var(--color-text-muted);
 }
-.action-menu-item:hover > .icon,
-.action-menu-item:focus-visible > .icon {
+.selection-actions .action-menu-item:hover > .icon,
+.selection-actions .action-menu-item:focus-visible > .icon {
   color: inherit;
 }
 .action-menu-icon-placeholder {
   flex: 0 0 var(--icon-size);
   width: var(--icon-size);
   height: var(--icon-size);
-}
-.action-menu-separator {
-  height: 1px;
-  margin: var(--space-2);
-  background: var(--color-border);
 }
 
 /* Floating reply beside a fresh text selection. The action-menu module
@@ -114,7 +93,7 @@
   align-self: center;
   width: 1px;
   height: 16px;
-  background: var(--color-border);
+  background: var(--color-divider);
 }
 .selection-actions.replying {
   flex-direction: column;
@@ -128,7 +107,7 @@
   flex: none;
   margin: 0;
   padding-left: var(--space-4);
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
   overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
@@ -189,42 +168,10 @@
 }
 
 /* ---------- notifications ---------- */
-/* The export dialog uses the browser's modal top layer for keyboard focus. */
-dialog.export-dialog {
-  width: min(480px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-  box-sizing: border-box;
-  overflow: auto;
-  margin: auto;
-  color: var(--color-text-primary);
-}
-dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
-.export-dialog-header, .export-link-row {
+.export-link-row {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-}
-.export-dialog-header { justify-content: space-between; }
-.export-dialog-header .modal-title { margin-bottom: 0; }
-.export-dialog-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-.export-dialog-close:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
-}
-.export-dialog-close:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
 }
 .export-status { margin-top: var(--space-5); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .export-status:empty { margin-top: 0; }
@@ -350,84 +297,6 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
   color: var(--color-text-secondary);
 }
 
-/* ---------- confirmation modal ---------- */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: grid;
-  place-items: center;
-  background: color-mix(
-    in srgb,
-    var(--color-text-primary) 24%,
-    transparent
-  );
-}
-.modal {
-  width: min(420px, calc(100vw - 48px));
-  padding: var(--space-7);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
-}
-.modal-title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-.modal-body {
-  margin-top: var(--space-4);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-relaxed);
-  color: var(--color-text-secondary);
-}
-/* The API-setup modal is the API settings section lifted out of the page,
-   so it is wider than the confirmation dialogs and scrolls if needed. */
-.setup-modal {
-  width: min(600px, calc(100vw - 48px));
-  max-height: calc(100vh - 64px);
-  overflow-y: auto;
-}
-.setup-modal-form {
-  margin-top: var(--space-5);
-}
-dialog.workspace-settings-dialog {
-  width: min(44em, calc(100vw - 2em));
-  max-height: calc(100dvh - 2em);
-  margin: auto;
-  padding: 1.5em;
-  overflow: auto;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-relaxed);
-}
-.workspace-settings-dialog::backdrop {
-  background: var(--color-backdrop);
-}
-.workspace-settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1em;
-}
-.workspace-settings-close {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 2em;
-  height: 2em;
-  padding: 0;
-  border: 0;
-  color: var(--color-text-secondary);
-}
-.workspace-settings-close:hover {
-  background: var(--color-hover-subtle);
-}
-.workspace-settings-close:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
 .workspace-settings-identity {
   margin: 0.5em 0 1.5em;
   overflow-wrap: anywhere;
@@ -435,17 +304,17 @@ dialog.workspace-settings-dialog {
 .workspace-settings-name {
   font-weight: 500;
 }
-.workspace-settings-dialog .settings {
+#workspace-settings-dialog .settings {
   gap: 1.5em;
 }
-.workspace-settings-dialog .setting-row {
+#workspace-settings-dialog .setting-row {
   flex-wrap: wrap;
   gap: 0.75em;
 }
-.workspace-settings-dialog .setting-text {
+#workspace-settings-dialog .setting-text {
   flex: 1 1 16em;
 }
-.workspace-settings-dialog .setting-control {
+#workspace-settings-dialog .setting-control {
   flex: 1 1 12em;
   width: auto;
   min-width: 0;
@@ -455,12 +324,6 @@ dialog.workspace-settings-dialog {
   color: var(--color-danger);
   font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
-}
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-4);
-  margin-top: var(--space-6);
 }
 /* The standing-goal banner above the composer input (the compaction
    notice's slot) and the composer's goal-editing mode. */
@@ -486,7 +349,7 @@ dialog.workspace-settings-dialog {
 .composer-goal.editing {
   border-color: var(--color-accent-border);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 /* Sent but not yet durably confirmed: quieter than a standing goal, since
    the record may still never carry it. */
@@ -523,7 +386,7 @@ dialog.workspace-settings-dialog {
   color: var(--color-text-primary);
 }
 .composer-goal.editing .composer-goal-action {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .composer-goal.editing .composer-goal-action:hover {
   background: var(--color-bg-surface);
@@ -551,7 +414,7 @@ dialog.workspace-settings-dialog {
   height: 5px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: var(--color-border-subtle);
+  background: var(--color-control-surface);
 }
 .update-progress-fill {
   width: var(--progress-width, 0%);
@@ -625,8 +488,8 @@ dialog.workspace-settings-dialog {
   display: inline-block;
   padding: var(--space-4) 1rem;
   border-radius: var(--radius-sm);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   text-decoration: none;
   font-size: var(--font-size-md);
 }
@@ -635,42 +498,13 @@ dialog.workspace-settings-dialog {
 }
 
 /* ---------- unified file / workspace-symbol Quick Open ---------- */
-/* Codex-style command palette geometry with OpenSeek's own surface tokens.
-   It sits above toasts and ordinary modals but below the disconnected screen. */
-.quick-open-backdrop {
-  --quick-open-top: clamp(64px, calc(50vh - 220px), 160px);
-}
-
-.quick-open-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-quick-open);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: var(--quick-open-top) var(--space-6) var(--space-6);
-  /* Quick Open uses the shared backdrop hue at a softer opacity than modal
-     surfaces, without introducing another one-use theme token. */
-  background: color-mix(in srgb, var(--color-backdrop) 40%, transparent);
-}
-
-.quick-open-dialog {
-  width: min(520px, 100%);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-overlay);
-}
-
 .quick-open-input-wrap {
   display: flex;
   align-items: center;
   gap: var(--space-5);
   min-height: 52px;
   padding: 0 var(--space-6);
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .quick-open-input-wrap > .icon {
@@ -727,7 +561,7 @@ dialog.workspace-settings-dialog {
 
 .quick-open-row.selected .quick-open-kind,
 .quick-open-row:hover .quick-open-kind {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .quick-open-row-text {
@@ -823,7 +657,6 @@ dialog.workspace-settings-dialog {
 }
 
 /* Import into the current workspace or a new chat. */
-.session-import-dialog { width: min(640px, calc(100vw - 32px)); }
 .session-import-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -841,17 +674,3 @@ dialog.workspace-settings-dialog {
 }
 .session-import-status { min-height: 24px; margin-top: var(--space-5); color: var(--color-text-muted); overflow-wrap: anywhere; }
 .session-import-status:empty { display: none; }
-
-[id="conversation-transfer:actions"] {
-  min-width: 140px;
-}
-[id="conversation-transfer:actions"] .action-menu-item {
-  grid-template-columns: 16px minmax(0, 1fr);
-}
-[id="conversation-transfer:actions"] .action-menu-item:hover,
-[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
-  color: var(--color-text-primary);
-}
-[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
-  background: var(--color-bg-subtle);
-}

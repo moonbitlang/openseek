@@ -7,9 +7,8 @@
 // resize (fileeditor/editor_resize.mbt).
 
 ///|
-/// The class toggled on the document element for the duration of a drag —
-/// the same one the fileeditor resizers use, so the shared CSS shows the
-/// resize cursor and suppresses text selection everywhere for both drags.
+/// The drag class shared with the editor resizer for its cursor and viewer
+/// mouse-event isolation.
 const ResizingClass = "is-resizing"
 
 ///|

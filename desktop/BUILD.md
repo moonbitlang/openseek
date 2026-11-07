@@ -75,8 +75,8 @@ unminified MoonBit output is always in
 `_build/js/<profile>/build/openseek_desktop/frontend/frontend.js`.
 
 `--notarize` requires `--sign` and `--target dmg`. `--sign` requires a
-distribution target (`dmg` or `zip`). A failed ripgrep SHA-256 check deletes
-the invalid archive and stops immediately.
+distribution target (`dmg` or `zip`). A failed SHA-256 check deletes the
+invalid archive and stops immediately.
 
 ## Execution order
 
@@ -85,10 +85,9 @@ Package commands perform these steps:
 1. download and verify pinned Mermaid/xterm and standalone esbuild archives, then build the browser assets;
 2. Moon frontend, viz, host, and engine builds;
 3. Proton CEF setup;
-4. ripgrep download and SHA-256 verification;
-5. MoonBit seed download and `moonc -v` verification;
-6. staging of the fixed `seekmoon/` tree;
-7. one `proton_cli package` invocation for the requested formats.
+4. MoonBit seed download and `moonc -v` verification;
+5. staging of the fixed `seekmoon/` tree;
+6. one `proton_cli package` invocation for the requested formats.
 
 `package/dev` builds the frontend, viz, and engine, then calls
 `proton_cli dev --no-frontend`. Proton supplies the CEF environment and
@@ -118,9 +117,7 @@ seekmoon/
     viz/
   bin/
     openseek[.exe]
-    rg[.exe]
   toolchains/moonbit/<platform>/
-  licenses/ripgrep/
 ```
 
 `proton.project.json` includes `seekmoon/**`. Runtime code starts at

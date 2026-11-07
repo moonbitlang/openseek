@@ -14,11 +14,12 @@ priv struct FinishedSystemNotification {
 }
 
 ///|
-/// One live permission question shown by the local desktop host. Recovered
+/// One live permission question: a Local run's or a Cloud session's. Recovered
 /// pending approvals never construct this value, so reconnecting does not
-/// replay an old system notification.
+/// replay an old system notification. The payload is what a click opens: the
+/// Local run ID, or the Cloud conversation key.
 priv struct ApprovalSystemNotification {
-  run_id : String
+  payload : String
   tool_name : String
   detail : String
 }
@@ -151,7 +152,7 @@ fn Model::notification_badge_count(self : Model) -> Int32 {
   .iter()
   .count_if(entry => {
     let (id, conversation) = entry
-    conversation.unseen_finish &&
+    (conversation.unseen_finish || conversation.awaits_approval()) &&
     !self.cloud.is_archived(id) &&
     self.account is Some(account) &&
     self.cloud.user_id == Some(account.user.user_id)
@@ -272,6 +273,32 @@ fn cloud_finished_notification(
 }
 
 ///|
+/// Each Cloud question a live control snapshot newly publishes. Recovered
+/// questions, like Local's recovered approvals, do not notify again.
+fn cloud_approval_notifications(
+  previous : @cloud.State,
+  next : @cloud.State,
+) -> Array[ApprovalSystemNotification] {
+  guard previous.user_id == next.user_id && next.user_id is Some(account) else {
+    return []
+  }
+  let notifications : Array[ApprovalSystemNotification] = []
+  for id, after in next.conversations {
+    guard previous.conversations.get(id) is Some(before) &&
+      after.published_approval(before) is Some(question) else {
+      continue
+    }
+    let owner : @interop.ConversationIdentity = Cloud(account~, session=id)
+    notifications.push({
+      payload: owner.key(),
+      tool_name: question.tool_name,
+      detail: question.detail,
+    })
+  }
+  notifications
+}
+
+///|
 fn ApprovalSystemNotification::title(
   locale~ : @i18n.Locale = English,
   _self : ApprovalSystemNotification,
@@ -307,7 +334,11 @@ fn ApprovalSystemNotification::command(
   locale~ : @i18n.Locale = English,
   self : ApprovalSystemNotification,
 ) -> @cmd.Cmd {
-  show_system_notification(self.title(locale~), self.body(locale~), self.run_id)
+  show_system_notification(
+    self.title(locale~),
+    self.body(locale~),
+    self.payload,
+  )
 }
 
 ///|
@@ -323,7 +354,7 @@ fn approval_system_notification(
   guard run_id is Some(run_id) else { return None }
   match event {
     ApprovalRequested(tool_name~, detail~, ..) =>
-      Some({ run_id, tool_name, detail, })
+      Some({ payload: run_id, tool_name, detail, })
     _ => None
   }
 }

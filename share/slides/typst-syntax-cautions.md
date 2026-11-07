@@ -48,4 +48,4 @@ $dots$   // … (baseline ellipsis)
 $dots.c$ // ⋯ (centered ellipsis)
 ```
 
-For other symbols you are unsure about, validate a code snippet with a command such as `typst eval '$dots$'`, or consult the [official symbol table](https://typst.app/docs/reference/symbols/sym/).
+For other symbols you are unsure about, validate a code snippet with a command such as `moonx cli/typst eval '$dots$'`, or consult the [official symbol table](https://typst.app/docs/reference/symbols/sym/).

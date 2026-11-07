@@ -25,7 +25,7 @@ pub async fn edit_session(
   start~ : async (@protocol.StartPayload) -> Unit,
   on_created~ : (String) -> Unit,
   on_deleted~ : (String, String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   guard payload.source_sequence > 0 &&
     (!payload.task.is_blank() || !payload.images.is_empty()) else {
@@ -108,7 +108,7 @@ async fn prepare_session_edit(
   manager : EngineManager,
   payload : EditSource,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   if payload.through is Some(through) {
     return fork_session_in(
@@ -179,8 +179,8 @@ async fn commit_session_edit(
   manager : EngineManager,
   payload : EditReplacement,
   on_committed : (String, String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
-) -> SessionDeleteReply {
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.SessionDeleteReply {
   guard @session_store.safe_session_id(payload.session) &&
     @session_store.safe_session_id(payload.replacement) &&
     payload.session != payload.replacement &&

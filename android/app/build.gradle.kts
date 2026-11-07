@@ -55,17 +55,10 @@ android {
 
 val bundleConsole by tasks.registering(Sync::class) {
     val bundle = rootProject.layout.projectDirectory.dir("../desktop/dist/browser")
+    // The document names the shared frontend under root-absolute /assets/
+    // URLs, which the WebView answers from this bundle's assets directory.
     from(bundle)
-    from(rootProject.layout.projectDirectory.file("conversation.css"))
     into(layout.buildDirectory.dir("generated/consoleAssets"))
-    doLast {
-        val entry = destinationDir.resolve("index.html")
-        // The document names the shared frontend under root-absolute /assets/
-        // URLs, which the WebView answers from this bundle's assets directory.
-        entry.writeText(entry.readText()
-            .replace("</head>", "<link rel=\"stylesheet\" href=\"/console/android/conversation.css\" /></head>")
-            .replace("<body>", "<body class=\"android-connect\">"))
-    }
     doFirst {
         check(bundle.file("assets/frontend.js").asFile.isFile && bundle.file("index.html").asFile.isFile) {
             "Build the shared frontend first: node desktop/package/build.mjs browser --release"
@@ -79,4 +72,6 @@ dependencies {
     implementation("androidx.webkit:webkit:1.15.0")
     implementation("androidx.browser:browser:1.10.0")
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json is a stub in local unit tests.
+    testImplementation("org.json:json:20240303")
 }

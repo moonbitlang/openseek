@@ -75,13 +75,14 @@ fn update_message(
     EffortChanged(value) => (@cmd.none, state.with_selected_effort(value))
     ChoosePermission(mode) =>
       if state.can_choose_permission() {
+        let permission_picker = state.permission_picker.choose(mode)
         (
-          @cmd.none,
-          {
-            ..state,
-            permission_picker: state.permission_picker.choose(mode),
-            git_details_open: false,
+          if permission_picker is CodexPermissionConfirmingFullAccess(_) {
+            @dialog.show("codex-permission-dialog")
+          } else {
+            @cmd.none
           },
+          { ..state, permission_picker, git_details_open: false, },
         )
       } else {
         (@cmd.none, state)
@@ -436,6 +437,7 @@ fn update_message(
               }
             }
             next = { ..next, archive_confirm: Some({ thread_id, refusal, }), }
+            cmd = @dialog.show("worktree-archive-dialog")
           } else {
             // App-server has archived the task. A last-second dirty checkout
             // can be retained, but the task still leaves the active catalog.

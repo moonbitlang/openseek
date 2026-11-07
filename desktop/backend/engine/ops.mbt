@@ -15,7 +15,7 @@ pub async fn start_run(
   sink : EventSink,
   manager : EngineManager,
   payload : @protocol.StartPayload,
-) -> StartReply {
+) -> @protocol.StartReply {
   // Read the user's MCP configuration before the lifecycle lock, never under
   // it: the lock serializes every conversation's placement, and a slow home
   // directory must not hold all of them up.
@@ -151,7 +151,7 @@ fn mint_run_id() -> String raise EngineError {
 pub fn cancel_run(
   manager : EngineManager,
   payload : @protocol.CancelPayload,
-) -> CancelReply raise EngineError {
+) -> @protocol.CancelReply raise EngineError {
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
     live.phase is Running(run_id~, ..) else {
     return { run_id: None, }
@@ -495,7 +495,7 @@ async fn submit_session_command(
 pub fn steer_run(
   manager : EngineManager,
   payload : @protocol.SteerPayload,
-) -> SteerReply {
+) -> @protocol.SteerReply {
   guard !payload.text.is_blank() || !payload.images.is_empty() else {
     return { steered: false, run_id: None, }
   }
@@ -629,7 +629,7 @@ pub fn queue_run(
 pub fn approve_run(
   manager : EngineManager,
   payload : @protocol.ApprovalPayload,
-) -> ApprovalReply {
+) -> @protocol.ApprovalReply {
   guard !payload.id.is_blank() else { return { delivered: false, } }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
     live.phase is Running(run_id~, ..) else {
@@ -676,7 +676,7 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 /// in-project store, in registration order. A group whose listing fails
 /// reports the failure in its `error` field rather than failing the whole
 /// reply.
-pub async fn list_sessions() -> SessionsReply {
+pub async fn list_sessions() -> @protocol.SessionsReply {
   session_listing_groups(archived=false)
 }
 
@@ -694,8 +694,8 @@ pub async fn rename_session(
     raise EngineError("session id must not be empty")
   }
   guard !title.is_empty() else { raise EngineError("title must not be empty") }
-  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
   manager.workspace_lifecycle_lock.acquire()
@@ -716,7 +716,7 @@ pub async fn rename_session(
 pub async fn load_session(
   manager : EngineManager,
   payload : @protocol.LoadSessionPayload,
-) -> LoadSessionReply {
+) -> @protocol.LoadSessionReply {
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -730,8 +730,8 @@ pub async fn load_session(
   // detached workspace is rejected instead of silently probing another
   // store, which could return a different history for the same session id.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
+    let absolute = @pathx.Absolute::parse_resource_path(hint)
+    guard @workspaces.registered_dir(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
     Some(@workspaces.store_root(workspace))
@@ -780,7 +780,7 @@ pub async fn load_session(
 ///|
 /// The transcript of a conversation with no durable content: what a store
 /// holds for a session whose first turn has not committed anything.
-fn empty_session_reply(session : String) -> LoadSessionReply {
+fn empty_session_reply(session : String) -> @protocol.LoadSessionReply {
   {
     session: {
       version: None,
@@ -800,7 +800,7 @@ fn empty_session_reply(session : String) -> LoadSessionReply {
 pub async fn load_archived_session(
   manager : EngineManager,
   payload : @protocol.LoadSessionPayload,
-) -> LoadSessionReply {
+) -> @protocol.LoadSessionReply {
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -811,8 +811,8 @@ pub async fn load_archived_session(
   // one, find the archived record across all attached stores and the global
   // store, matching the placement rules of the archived index.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
+    let absolute = @pathx.Absolute::parse_resource_path(hint)
+    guard @workspaces.registered_dir(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
     Some(@session_store.archived_root(@workspaces.store_root(workspace)))
@@ -877,20 +877,7 @@ async fn follower_snapshot(
 }
 
 ///|
-/// A host-native absolute path at the protocol boundary. Resource URIs use
-/// their authority for the device, so UNC paths have no reversible encoding
-/// and are rejected explicitly instead of being published under a new host.
-fn @pathx.Absolute::resource_path(
-  self : @pathx.Absolute,
-) -> String raise EngineError {
-  guard self.to_uri_path() is Some(path) else {
-    raise EngineError("UNC paths are not supported by frontend resources")
-  }
-  path
-}
-
-///|
-pub async fn list_workspaces() -> WorkspacesReply {
+pub async fn list_workspaces() -> @protocol.WorkspacesReply {
   Workspaces(
     @workspaces.registered().map(path => path.resource_path()),
     chat_root=None,
@@ -901,10 +888,8 @@ pub async fn list_workspaces() -> WorkspacesReply {
 pub async fn attach_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
-) -> WorkspacesReply {
-  guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-    raise EngineError("workspace is not a supported absolute resource path")
-  }
+) -> @protocol.WorkspacesReply {
+  let absolute = @pathx.Absolute::parse_resource_path(path)
   let paths = @workspaces.add(absolute.0, paths => {
     on_committed(paths.map(path => path.resource_path()))
   })
@@ -916,10 +901,8 @@ pub async fn detach_workspace(
   manager : EngineManager,
   path : String,
   on_committed : (Array[String]) -> Unit,
-) -> WorkspacesReply {
-  guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-    raise EngineError("workspace is not a supported absolute resource path")
-  }
+) -> @protocol.WorkspacesReply {
+  let absolute = @pathx.Absolute::parse_resource_path(path)
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   let workspace = @workspaces.expanded_path(absolute.0)

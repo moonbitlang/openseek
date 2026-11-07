@@ -1,7 +1,5 @@
-// The application-shell context menu. Stable domain rows keep using
-// `context_attrs`; this adjacent adapter owns ephemeral DOM context such as a
-// text selection or a rendered link. Both paths share the same menu surface,
-// focus behavior, positioning, and theme.
+// The shell is the fallback context-menu trigger. Nested controls retain first
+// refusal; this adapter resolves links and selections, while RUI owns the menu.
 
 ///|
 #derive(Eq)
@@ -55,23 +53,14 @@ priv struct ContextRequest {
 
 ///|
 #derive(Eq)
-priv struct ContextOpen {
-  request : ContextRequest
-  x : Int32
-  y : Int32
+priv struct ContextState {
+  request : ContextRequest?
   restore_focus_id : String?
 }
 
 ///|
-#derive(Eq)
-priv struct ContextState {
-  open_context : ContextOpen?
-}
-
-///|
 priv enum ContextMsg {
-  Requested(ContextRequest, Int32, Int32, String?)
-  CloseContext
+  Requested(ContextRequest, String?)
 }
 
 ///|
@@ -124,25 +113,6 @@ fn selected_at(
 }
 
 ///|
-fn keyboard_anchor(element : @dom.Element) -> (Int32, Int32) {
-  let rect = if browser_selection().to_option() is Some(selection) &&
-    selection.count() > 0 {
-    let rect = selection.range(0).bounds()
-    if rect.get_width() > 0 || rect.get_height() > 0 {
-      rect
-    } else {
-      element.get_bounding_client_rect()
-    }
-  } else {
-    element.get_bounding_client_rect()
-  }
-  (
-    @math.round(rect.get_left()).to_int(),
-    @math.round(rect.get_bottom()).to_int(),
-  )
-}
-
-///|
 fn element_context(element : @dom.Element) -> ContextTarget {
   if element.closest("[data-context-file]") is Some(file) &&
     file.get_attribute("data-context-file") is Some(path) {
@@ -170,149 +140,41 @@ fn element_context(element : @dom.Element) -> ContextTarget {
 }
 
 ///|
-fn discard_temporary_focus(element : @dom.Element?) -> Unit {
-  if element is Some(element) &&
-    element.get_attribute("id") is Some(id) &&
-    element.get_attribute(TemporaryFocusAttribute) is Some(attr) &&
-    attr == id {
-    element.remove_attribute(TemporaryFocusAttribute)
-    element.remove_attribute("id")
-  }
-}
-
-///|
-fn install_context_menu_listener(
-  close : () -> Unit,
-  open : (ContextRequest, String?, Int32, Int32) -> Unit,
-) -> () -> Unit {
-  let document = @dom.document()
-  let mut remembered_selection : (Int32, Int32, String?)? = None
-  let mut temporary_focus : @dom.Element? = None
-  let mut next_focus_id = 0
-  let remember_focus = () => {
-    discard_temporary_focus(temporary_focus)
-    temporary_focus = None
-    guard document.get_active_element() is Some(active) &&
-      active.to_html_element() is Some(_) &&
-      !active.matches("body") else {
-      return None
-    }
-    if active.get_attribute("id") is Some(id) && !id.is_empty() {
-      return Some(id)
-    }
-    next_focus_id += 1
-    let id = "app-context-focus:\{next_focus_id}"
-    active.set_attribute("id", id)
-    active.set_attribute(TemporaryFocusAttribute, id)
-    temporary_focus = Some(active)
-    Some(id)
-  }
-  let on_mouse_down : @dom.Listener = event => {
-    guard event.to_mouse_event() is Some(mouse) &&
-      mouse.get_button() == 2 &&
-      event_element(event) is Some(element) else {
-      return
-    }
-    let x = mouse.get_client_x().to_int()
-    let y = mouse.get_client_y().to_int()
-    remembered_selection = Some((x, y, selected_at(element, x, y, false)))
-  }
-  // Capture closes the previous menu even when another owner stops bubbling.
-  let on_context_capture : @dom.Listener = _ => {
-    discard_temporary_focus(temporary_focus)
-    temporary_focus = None
-    close()
-  }
-  // Other owners get first refusal through ordinary DOM bubbling.
-  let on_context_menu : @dom.Listener = event => {
-    guard !event.get_default_prevented() &&
-      event_element(event) is Some(element) &&
-      event.to_mouse_event() is Some(mouse) else {
-      return
-    }
-    if element.closest("input, textarea, select, [contenteditable]")
-      is Some(control) &&
-      control.get_attribute("contenteditable") != Some("false") {
-      return
-    }
-    event.prevent_default()
-    let x = mouse.get_client_x().to_int()
-    let y = mouse.get_client_y().to_int()
-    let keyboard = x == 0 && y == 0
-    let mut selected_text = selected_at(element, x, y, keyboard)
-    if selected_text is None &&
-      remembered_selection is Some((old_x, old_y, text)) &&
-      (old_x.to_double() - x.to_double()).abs() <= 2 &&
-      (old_y.to_double() - y.to_double()).abs() <= 2 {
-      selected_text = text
-    }
-    remembered_selection = None
-    let (x, y) = if keyboard {
-      keyboard_anchor(element)
+fn context_keyboard_anchor(element : @dom.Element) -> (Int32, Int32) {
+  let rect = if browser_selection().to_option() is Some(selection) &&
+    selection.count() > 0 {
+    let rect = selection.range(0).bounds()
+    if rect.get_width() > 0 || rect.get_height() > 0 {
+      rect
     } else {
-      (@math.round(x.to_double()).to_int(), @math.round(y.to_double()).to_int())
+      element.get_bounding_client_rect()
     }
-    open(
-      { target: element_context(element), selected_text, },
-      remember_focus(),
-      x,
-      y,
-    )
+  } else {
+    element.get_bounding_client_rect()
   }
-  document.add_event_listener_with_options(
-    "mousedown",
-    on_mouse_down,
-    capture=true,
-  )
-  document.add_event_listener_with_options(
-    "contextmenu",
-    on_context_capture,
-    capture=true,
-  )
-  document.add_event_listener("contextmenu", on_context_menu)
-  () => {
-    document.remove_event_listener_with_options(
-      "mousedown",
-      on_mouse_down,
-      capture=true,
-    )
-    document.remove_event_listener_with_options(
-      "contextmenu",
-      on_context_capture,
-      capture=true,
-    )
-    document.remove_event_listener("contextmenu", on_context_menu)
-    discard_temporary_focus(temporary_focus)
-  }
+  (rect.get_left().round().to_int(), rect.get_bottom().round().to_int())
 }
 
 ///|
-priv suberror ContextMenuSubscription {
-  ContextMenuSubscription(@cmd.Emit[ContextMsg])
+fn context_editable(element : @dom.Element) -> Bool {
+  element.closest("input, textarea, select, [contenteditable]") is Some(control) &&
+  control.get_attribute("contenteditable") != Some("false")
 }
 
 ///|
-fn context_menu_subscription(emit : @cmd.Emit[ContextMsg]) -> @sub.Sub {
-  @sub.custom_sub("app-context-menu", Global, ContextMenuSubscription(emit), (
-    payload,
-    scheduler,
-  ) => {
-    guard payload is ContextMenuSubscription(emit) else { return None }
-    let mut emit = emit
-    let unload = install_context_menu_listener(
-      () => scheduler.add(emit(CloseContext)),
-      (request, restore, x, y) => {
-        scheduler.add(emit(Requested(request, x, y, restore)))
-      },
-    )
-    Some({
-      unload: _ => unload(),
-      update_tagger: payload => {
-        guard payload is ContextMenuSubscription(next) else { return }
-        emit = next
-      },
-    })
-  })
+fn context_focus_id(next_id : Ref[Int32]) -> String? {
+  guard @dom.document().get_active_element() is Some(active) &&
+    active.to_html_element() is Some(_) &&
+    !active.matches("body") else {
+    return None
+  }
+  if active.get_attribute("id") is Some(id) && !id.is_empty() {
+    return Some(id)
+  }
+  next_id.val += 1
+  let id = "app-context-focus:\{next_id.val}"
+  active.set_attribute("id", id)
+  Some(id)
 }
 
 ///|
@@ -473,90 +335,193 @@ fn context_definition(
 }
 
 ///|
-fn ContextOpen::as_menu_open(self : ContextOpen) -> Open {
-  {
-    target: GlobalContextTarget,
-    anchor: Pointer(self.x, self.y),
-    restore_focus_id: self.restore_focus_id,
-  }
-}
-
-///|
-/// Own the application shell's fallback context menu. More-specific controls
-/// run first through ordinary DOM bubbling; unclaimed events are either
-/// converted into this themed menu or suppressed when they have no action.
+/// RUI 0.5 exposes its scope through an HTML callback, rather than as an
+/// incremental value. Its renderer and open notifications supply the scope
+/// and root state for composing the changing shell and context actions.
 pub fn context_component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[ContextInput],
   actions : ContextActions,
+  content : @rabbita.Val[@html.Html],
 ) -> @rabbita.Val[@html.Html] {
-  let (state, emit) = @rabbita.create_state_with_input(
-    input~,
-    init=(_, _) => ({ open_context: None, }, @cmd.none),
-    update=(_state, input, msg, _) => {
+  let (state, emit) = @rabbita.create_state_with_init(
+    init=_ => ({ request: None, restore_focus_id: None, }, @cmd.none),
+    update=(_, msg, _) => {
       match msg {
-        Requested(request, x, y, restore_focus_id) => {
-          guard context_definition(input, request, actions) is Some(definition) &&
-            definition.enabled_indices() is [_, ..] else {
-            return ({ open_context: None, }, @cmd.none)
-          }
-          let open : ContextOpen = { request, x, y, restore_focus_id, }
-          (
-            { open_context: Some(open), },
-            @cmd.batch([
-              position(GlobalContextTarget, Pointer(x, y)),
-              focus_element(menu_id(GlobalContextTarget), true),
-            ]),
-          )
-        }
-        CloseContext => ({ open_context: None, }, @cmd.none)
+        Requested(request, restore_focus_id) =>
+          ({ request: Some(request), restore_focus_id, }, @cmd.none)
       }
-    },
-    subscriptions=(state, input, emit) => {
-      let requests = context_menu_subscription(emit)
-      guard state.open_context is Some(open) else { return requests }
-      let enabled = context_definition(input, open.request, actions).bind(definition => {
-        let enabled = definition.enabled_indices()
-        if enabled.is_empty() {
-          None
-        } else {
-          Some(enabled)
-        }
-      })
-      let focus = focus_subscription(
-        GlobalContextTarget,
-        enabled,
-        emit.map((_ : Unit) => CloseContext),
-      )
-      let subs = [
-        requests,
-        dismiss_subscription(
-          GlobalContextTarget,
-          emit.map((_ : Unit) => CloseContext),
-          dismiss_on_context=false,
-        ),
-        focus,
-      ]
-      // The menu renders only with an enabled action to offer.
-      if enabled is Some(_) {
-        subs.push(
-          @dismiss.on_back(
-            "context-menu-back",
-            emit.map((_ : Unit) => CloseContext),
-          ),
-        )
-      }
-      @sub.batch(subs)
     },
   )
-  state.map3(input, locale, (state, input, locale) => {
-    guard state.open_context is Some(open) &&
-      context_definition(locale~, input, open.request, actions)
-      is Some(definition) &&
-      !definition.enabled_indices().is_empty() else {
-      return @html.nothing
-    }
-    render_menu(open.as_menu_open(), definition, emit(CloseContext))
+  let remembered_selection : Ref[(Int32, Int32, String?)?] = Ref(None)
+  let next_focus_id = Ref(0)
+  let keyboard_request : Ref[ContextRequest?] = Ref(None)
+  let visible = Ref(false)
+  let render : Ref[
+    (@html.Html, @i18n.Locale, ContextInput, ContextState) -> @html.Html,
+  ] = Ref((content, _, _, _) => content)
+  let native = @rui.context_menu(
+    id=GlobalContextTarget,
+    on_open_change=open => {
+      visible.val = open
+      @cmd.none
+    },
+    scope => {
+      // RUI's item indices belong to this scope, not to shell-only updates.
+      let rendered_menu : Ref[@html.Html?] = Ref(None)
+      render.val = (content, locale, input, state) => {
+        let requested = (element, x, y, keyboard) => {
+          let mut selected_text = selected_at(element, x, y, keyboard)
+          if selected_text is None &&
+            remembered_selection.val is Some((old_x, old_y, text)) &&
+            (old_x - x).abs() <= 2 &&
+            (old_y - y).abs() <= 2 {
+            selected_text = text
+          }
+          remembered_selection.val = None
+          { target: element_context(element), selected_text, }
+        }
+        let accept = (event : @dom.Event, request) => {
+          guard context_definition(locale~, input, request, actions)
+            is Some(definition) &&
+            definition.has_enabled_actions() else {
+            event.prevent_default()
+            return @rui.popover_close(GlobalContextTarget + "-content")
+          }
+          emit(Requested(request, context_focus_id(next_focus_id)))
+        }
+        // The shell is the trigger, but keyboard invocation belongs beside
+        // the focused content, not at the shell's upper-left corner.
+        let keyboard_open = (event : @dom.Event, element) => {
+          event.prevent_default()
+          keyboard_request.val = Some(requested(element, 0, 0, true))
+          let (x, y) = context_keyboard_anchor(element)
+          dispatch_context_at(element, x, y)
+          keyboard_request.val = None
+          @cmd.none
+        }
+        let trigger_attrs = @html.Attrs::build()
+          .on_mousedown(event => {
+            if event.get_button() == 2 &&
+              event_element(event.as_event()) is Some(element) {
+              let x = event.get_client_x().to_int()
+              let y = event.get_client_y().to_int()
+              remembered_selection.val = Some(
+                (x, y, selected_at(element, x, y, false)),
+              )
+            }
+            @cmd.none
+          })
+          .on_contextmenu(event => {
+            guard !event.get_default_prevented() &&
+              event_element(event.as_event()) is Some(element) else {
+              return @cmd.none
+            }
+            if context_editable(element) {
+              event.stop_immediate_propagation()
+              return @cmd.none
+            }
+            if keyboard_request.val is Some(request) {
+              return accept(event.as_event(), request)
+            }
+            let x = event.get_client_x().to_int()
+            let y = event.get_client_y().to_int()
+            if x == 0 && y == 0 {
+              keyboard_open(event.as_event(), element)
+            } else {
+              accept(event.as_event(), requested(element, x, y, false))
+            }
+          })
+          .on_keydown(event => {
+            guard !event.get_default_prevented() &&
+              (
+                event.key() == "ContextMenu" ||
+                (event.key() == "F10" && event.shift_key())
+              ) &&
+              event_element(event.as_event()) is Some(element) else {
+              return @cmd.none
+            }
+            if context_editable(element) {
+              event.stop_immediate_propagation()
+              return @cmd.none
+            }
+            keyboard_open(event.as_event(), element)
+          })
+        let menu_attrs = @html.Attrs::build()
+          .data_set("action-menu-surface", GlobalContextTarget)
+          .on_contextmenu(event => {
+            event.prevent_default()
+            event.stop_propagation()
+            @cmd.none
+          })
+        if state.restore_focus_id is Some(id) {
+          ignore(menu_attrs.data_set("final-focus-id", id))
+        }
+        let menu = match rendered_menu.val {
+          Some(menu) => menu
+          None => {
+            let definition = state.request.bind(request => {
+              context_definition(locale~, input, request, actions)
+            })
+            let menu = @rui.context_menu_content(
+              scope,
+              aria_label=ui(locale, ContextMenu),
+              class="action-menu",
+              attrs=menu_attrs,
+              definition.map_or([], definition => {
+                definition.entries.map(entry => {
+                  match entry {
+                    Separator => @rui.context_menu_separator()
+                    Action(item) =>
+                      @rui.context_menu_item(
+                        scope,
+                        disabled=!item.enabled,
+                        destructive=item.destructive,
+                        on_select=item.command,
+                        class="action-menu-item",
+                        title=item.title,
+                        item_children(item),
+                      )
+                  }
+                })
+              }),
+            )
+            rendered_menu.val = Some(menu)
+            menu
+          }
+        }
+        @html.fragment([
+          @rui.context_menu_trigger(
+            scope,
+            tabindex=-1,
+            style=["width:100%;height:100%"],
+            attrs=trigger_attrs,
+            content,
+          ),
+          menu,
+        ])
+      }
+      @html.nothing
+    },
+  )
+  @rabbita.Val::map5(native, content, locale, input, state, (
+    _,
+    content,
+    locale,
+    input,
+    state,
+  ) => {
+    @rui.theme(
+      style=["display:contents"],
+      @html.span(
+        id=GlobalContextTarget + "-root",
+        style=["display:contents"],
+        attrs=@html.Attrs::build()
+          .data_set("slot", "context-menu")
+          .data_set("state", if visible.val { "open" } else { "closed" }),
+        (render.val)(content, locale, input, state),
+      ),
+    )
   })
 }
 

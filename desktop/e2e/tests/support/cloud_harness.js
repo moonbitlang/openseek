@@ -572,7 +572,7 @@ export class CloudHarness {
       this.controlSnapshots.set(session, { ...snapshot, data: { ...snapshot.data, compacting: false } });
     }
     const history = this.histories.get(session) || { messages: [], generating: false };
-    const transient = ['prediction_result', 'task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
+    const transient = ['prediction_result', 'task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'agent_finished', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
     if (!transient.includes(kind)) {
       this.histories.set(session, { ...history,
         messages: [...history.messages, { task_id: task, kind, data, created_at: 1000 + event.seq }],
@@ -642,6 +642,10 @@ export class CloudHarness {
     return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
   }
 
+  rowContainer(id) {
+    return this.page.locator('.conversation-row').filter({ has: this.row(id) });
+  }
+
   // Archived conversations are managed within the Settings dialog.
   async openArchivedChats() {
     await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -660,7 +664,9 @@ export class CloudHarness {
 
   async open(id = sessionA) {
     await this.row(id).click();
-    await expect(this.row(id)).toHaveAttribute('aria-current', 'true');
+    // Wait on the main pane, not the row's sidebar state: every Cloud spec
+    // opens through here, and a sidebar regression belongs to the specs that
+    // assert it rather than to all of them.
     await expect(this.page.locator('main .topbar-title')).toHaveText(this.titles.get(id) || 'New chat');
     await this.page.locator('#task').waitFor();
   }

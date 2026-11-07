@@ -24,7 +24,7 @@ async function showOverview(page) {
   return panel;
 }
 
-test('the changes card lists the checkout and what the agent attached, and removes an attachment', async ({ page }, testInfo) => {
+test('the changes card lists the checkout and what the agent attached, and removes an attachment', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   app.gitBranch = {
@@ -87,7 +87,6 @@ test('the changes card lists the checkout and what the agent attached, and remov
   await expect(current.locator('.conv-changes-icon')).toHaveClass(/\bopen\b/);
   await expect(rows.nth(2).getByText('codex/session-artifacts-ui', { exact: true })).toBeVisible();
   await expect(rows.nth(2).getByRole('link')).toHaveAttribute('href', `${repo}/tree/codex/session-artifacts-ui`);
-  await page.screenshot({ path: testInfo.outputPath('changes.png') });
   expect(requests(app, 'session.artifacts_list').map(request => request.params)).toEqual([{ session: 'session-1' }]);
   // Every attached pull request is looked up, the checkout's own included;
   // branches are not.
@@ -112,7 +111,7 @@ test('the changes card lists the checkout and what the agent attached, and remov
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the changes card appears when the agent attaches something to a conversation outside a repository', async ({ page }, testInfo) => {
+test('the changes card appears when the agent attaches something to a conversation outside a repository', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -130,7 +129,6 @@ test('the changes card appears when the agent attaches something to a conversati
   await expect(card.getByText('#2030', { exact: true })).toBeVisible();
   await expect(card.getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
   expect(requests(app, 'session.artifacts_list')).toHaveLength(2);
-  await page.screenshot({ path: testInfo.outputPath('changes-attached.png') });
 
   // Another session's change is not this card's business.
   app.notify('session.artifacts_changed', { session: 'another-session' });
@@ -158,5 +156,65 @@ test('a checkout without a pull request reads as its branch and local diff, mark
   // floor, and the row says so instead of presenting them as the whole size.
   await expect(current.locator('.conv-changes-diff')).toHaveAttribute('title', 'Some untracked files were not counted');
   await expect(current.getByRole('link')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('merged attached pull requests fold into one row that unfolds them', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  app.sessionArtifacts['session-1'] = [
+    { type: 'pull_request', url: `${repo}/pull/2201` },
+    { type: 'pull_request', url: `${repo}/pull/2202` },
+    { type: 'pull_request', url: `${repo}/pull/2203` },
+  ];
+  const summary = (number, state) => ({
+    number,
+    title: `Pull request ${number}`,
+    state,
+    draft: false,
+    url: `${repo}/pull/${number}`,
+    base: 'main',
+    additions: 1,
+    deletions: 0,
+    changed_files: 1,
+  });
+  app.githubPullRequestSummaries[`${repo}/pull/2201`] = summary(2201, 'open');
+  app.githubPullRequestSummaries[`${repo}/pull/2202`] = summary(2202, 'merged');
+  app.githubPullRequestSummaries[`${repo}/pull/2203`] = summary(2203, 'merged');
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const panel = await showOverview(page);
+  const card = changesCard(panel);
+  const rows = card.locator('.conv-changes-row');
+  const fold = card.getByRole('button', { name: '2 merged', exact: true });
+
+  // The open pull request keeps its row; the merged ones are one row.
+  await expect(fold).toBeVisible();
+  await expect(fold).toHaveAttribute('aria-expanded', 'false');
+  await expect(rows).toHaveCount(2);
+  await expect(card.getByText('Pull request 2201', { exact: true })).toBeVisible();
+  await expect(card.getByText('Pull request 2202', { exact: true })).toHaveCount(0);
+
+  await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'true');
+  await expect(rows).toHaveCount(4);
+  await expect(card.getByText('Pull request 2202', { exact: true })).toBeVisible();
+  await expect(card.getByText('Pull request 2203', { exact: true })).toBeVisible();
+
+  await fold.click();
+  await expect(rows).toHaveCount(2);
+
+  // One button takes every merged pull request off the conversation's list.
+  const foldRow = rows.filter({ has: page.getByRole('button', { name: '2 merged', exact: true }) });
+  await foldRow.hover();
+  await foldRow.getByRole('button', { name: 'Remove merged pull requests from this conversation' }).click();
+  await expect(fold).toHaveCount(0);
+  await expect(rows).toHaveCount(1);
+  await expect(card.getByText('Pull request 2201', { exact: true })).toBeVisible();
+  expect(requests(app, 'session.artifacts_remove').map(request => request.params.artifact.url).sort()).toEqual([
+    `${repo}/pull/2202`,
+    `${repo}/pull/2203`,
+  ]);
   expect(app.pageErrors).toEqual([]);
 });

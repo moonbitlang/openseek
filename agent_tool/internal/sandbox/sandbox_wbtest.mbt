@@ -77,14 +77,8 @@ async test "file profile transport keeps oversized contents out of argv on every
         "(deny file-write* (literal \"\{sbpl_string_escape(path)}\"))\n",
       ),
     )
-    assert_eq(
-      sandbox_exec_file_args(path, Exec("moon", ["check", "space in arg"])),
-      ["-f", path, "moon", "check", "space in arg"],
-    )
-    let command = "printf 'space in command'"
-    assert_eq(
-      sandbox_exec_file_args(path, Shell(command)),
-      ["-f", path, @platform_shell.program, ..@platform_shell.args(command)],
-    )
+    assert_eq(sandbox_exec_file_args(path, "moon", ["check", "space in arg"]), [
+      "-f", path, "moon", "check", "space in arg",
+    ])
   })
 }

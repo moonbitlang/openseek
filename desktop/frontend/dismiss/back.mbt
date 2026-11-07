@@ -1,8 +1,8 @@
 // Back closes the topmost open layer.
 //
-// A layer is anything shown over the page that Back should close before the
-// page itself is left: a menu, popover, dialog, the narrow layout's drawer and
-// overlay panels, a management page. Each layer mounts `on_back` while it is
+// Custom layers cover the page: menus, manual popovers, narrow-layout drawers
+// and overlay panels. Native dialogs own their cancel events and do not
+// register here. Each custom layer mounts `on_back` while it is
 // open, at its `Level`, and Back reaches the most recent layer of the highest
 // level, whichever component owns it. Within a level, layers stack in the
 // order they opened. Levels keep a layer that becomes one late (the narrow
@@ -61,8 +61,7 @@ pub(all) enum Level {
   Panel(Int32)
   /// A menu or dialog drawn in the page.
   Popup
-  /// A modal `<dialog>` or a `popover` element. The browser draws these in its
-  /// top layer, above everything in the page, in the order they opened.
+  /// A manually dismissed popover in the browser's top layer.
   TopLayer
 }
 
@@ -142,6 +141,23 @@ fn open_auto_popover() -> @dom.Element? {
 }
 
 ///|
+// Modal focus containment identifies the active dialog without a second stack.
+// Visible menus and manual popovers still delegate Back to their components.
+fn native_dialog_for_back() -> @dom.HTMLDialogElement? {
+  guard @dom.document().get_active_element() is Some(active) else {
+    return None
+  }
+  guard active.closest("dialog:modal") is Some(element) else { return None }
+  guard !has_visible_custom_menu(element) else { return None }
+  element.to_html_element().bind(element => element.to_html_dialog_element())
+}
+
+///|
+extern "js" fn has_visible_custom_menu(element : @dom.Element) -> Bool =
+  #|(element) => Array.from(element.querySelectorAll('[role="menu"], [popover="manual"]:popover-open'))
+  #|  .some(menu => menu.checkVisibility())
+
+///|
 let escape_listener : @dom.Listener = event => {
   guard !event.get_default_prevented() &&
     event.to_keyboard_event() is Some(keyboard) &&
@@ -156,7 +172,9 @@ let escape_listener : @dom.Listener = event => {
   }
   // The browser closes an open auto popover on this Escape unless the event
   // is prevented.
-  guard open_auto_popover() is None else { return }
+  guard open_auto_popover() is None && native_dialog_for_back() is None else {
+    return
+  }
   if dismiss_top() {
     event.prevent_default()
   }
@@ -173,10 +191,18 @@ fn close_auto_popover() -> Bool {
 }
 
 ///|
-/// Close the browser's auto popover, or else the topmost layer. False when
-/// neither is open.
+fn request_native_dialog_close() -> Bool {
+  guard native_dialog_for_back() is Some(dialog) else { return false }
+  if dialog.get_attribute("closedby") != Some("none") {
+    dialog.request_close()
+  }
+  true
+}
+
+///|
+/// Route host Back through the native cancel event before considering page layers.
 fn back() -> Bool {
-  close_auto_popover() || dismiss_top()
+  close_auto_popover() || request_native_dialog_close() || dismiss_top()
 }
 
 ///|
@@ -244,10 +270,10 @@ fn watch_close_requests() -> Unit {
   stop_close_watch.val = Some(
     watch_close_request(from_escape => {
       stop_close_watch.val = None
-      // Escape belongs to the listener above. Only the auto popover the
-      // watcher covered, which that listener leaves to the browser, closes.
+      // A custom menu can leave this watcher above a native surface. Forward
+      // its request without dismissing another registered layer on Escape.
       if from_escape {
-        close_auto_popover() |> ignore
+        (close_auto_popover() || request_native_dialog_close()) |> ignore
       } else {
         back() |> ignore
       }

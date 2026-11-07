@@ -96,7 +96,7 @@ test('unreadable account storage does not fall through to another browser cookie
     };
   });
   await page.goto('/index.html?device=device-a');
-  await expect(page.getByText(/Could not read account storage:/)).toBeVisible();
+  await expect(page.getByRole('main').getByText(/Could not read account storage:/)).toBeVisible();
   expect(cookieChecks).toBe(0);
   expect(app.socketURLs).toEqual([]);
   expect(app.pageErrors).toEqual([]);

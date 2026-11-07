@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn approval_display_body(String, String?) -> String?
+
 pub fn composer_action(@composer.Action) -> Action?
 
 pub fn is_idle_event(@openseek_protocol.Event) -> Bool
@@ -117,6 +119,7 @@ pub fn Stream::empty() -> Self
 pub fn Stream::equal(Self, Self) -> Bool
 pub fn Stream::event(Self, @transcript.EngineEvent) -> Self
 pub fn Stream::not_equal(Self, Self) -> Bool
+pub fn Stream::visible_reasoning(Self, Array[@transcript.TranscriptItem], frontier~ : Int32) -> (String?, Bool)
 
 // Type aliases
 

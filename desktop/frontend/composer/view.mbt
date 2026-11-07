@@ -811,17 +811,24 @@ pub fn WorktreeArchiveDialog::render(
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
   ignore(locale)
-  @html.div(class="modal-backdrop", on_click=self.cancel, [
-    @html.div(class="modal", [
-      @html.div(
-        class="modal-title",
-        dynamic_text(
-          locale,
-          DArchiveQuestion(self.conversation_noun.to_string()),
+  @rui.dialog(
+    id="worktree-archive-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_cancel=self.cancel,
+    attrs=@html.Attrs::build().aria_labelledby("worktree-archive-title"),
+    [
+      @rui.dialog_header(
+        @rui.dialog_title(
+          id="worktree-archive-title",
+          dynamic_text(
+            locale,
+            DArchiveQuestion(self.conversation_noun.to_string()),
+          ),
         ),
       ),
-      @html.div(class="modal-body", self.message(locale~)),
-      @html.div(class="modal-actions", [
+      @html.div(self.message(locale~)),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=self.cancel,
@@ -833,8 +840,8 @@ pub fn WorktreeArchiveDialog::render(
           ui(locale, DiscardAndArchive),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|
@@ -919,16 +926,24 @@ priv struct View {
 ///|
 fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   ignore(locale)
-  let actions : Array[@html.Html] = [
-    @html.div(
-      class="composer-followup",
-      match self.followup_menu {
-        Some(menu) => [menu]
-        None => []
-      },
+  // Key the actions by id. Rabbita diffs array children by position, so Stop
+  // appearing ahead of Send would otherwise patch the Send button in place:
+  // a press already on that element would then cancel the run.
+  let actions : Map[String, @html.Html] = Map([
+    (
+      "followup",
+      @html.div(
+        class="composer-followup",
+        match self.followup_menu {
+          Some(menu) => [menu]
+          None => []
+        },
+      ),
     ),
-    ..self.actions.map(action => action.render(locale~)),
-  ]
+  ])
+  for action in self.actions {
+    actions[action.id] = action.render(locale~)
+  }
   let inner : Array[@html.Html] = [
     self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita

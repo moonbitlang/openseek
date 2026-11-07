@@ -1,4 +1,6 @@
 import {
+  "moonbit-community/rui",
+  "moonbitlang/core/immut/vector",
   "openseek_desktop/frontend/page_shell",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita",

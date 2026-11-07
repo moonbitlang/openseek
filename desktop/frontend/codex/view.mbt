@@ -476,8 +476,6 @@ pub(all) struct PageActions {
   // Codex and OpenSeek each instantiate the same composer component with
   // source-specific Input; the page only places the rendered component.
   composer : @html.Html
-  // The same global display preference and control serve both sources.
-  detail_toggle : @html.Html
 }
 
 ///|
@@ -522,17 +520,11 @@ pub fn State::header(
       ],
     ),
   )
-  // The narrow titlebar carries no conversation controls, matching OpenSeek.
-  if !narrow {
-    topbar.push(actions.detail_toggle)
-  }
   // These are OpenSeek's existing host panels, re-rooted by `file_ctx` and
   // `terminal_ctx` to the selected app-server thread. They stay in this one
   // topbar instead of creating a nested Codex application frame.
-  // A newly loaded workspace inserts a label before these controls, so
-  // Rabbita can reuse this button's DOM for the detail toggle. Use an
-  // attribute for disabled: removing the boolean DOM property is a no-op
-  // and would leave the detail toggle disabled after the slot changes.
+  // Header buttons explicitly write their disabled property because a newly
+  // loaded workspace can shift them into a neighboring button's DOM slot.
   if !narrow {
     topbar.push(
       @html.button(
@@ -541,7 +533,7 @@ pub fn State::header(
         } else {
           "panel-toggle terminal-toggle"
         },
-        attrs=@html.Attrs::build().disabled(!terminal_available),
+        disabled=!terminal_available,
         title=if terminal_open {
           ui(locale, HideTerminal)
         } else if terminal_available {

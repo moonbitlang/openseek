@@ -20,12 +20,8 @@ priv enum ShellMessage {
   ArchivedReadOnly
   RestoreBeforeContinue
   RestoreLabel
-  ShowDetailed
-  ShowMinimal
-  DetailedMode
   ConversationTransfer
   ExportConversation
-  ImportConversation
   HideTerminal
   ShowTerminal
   ShowPanel
@@ -79,7 +75,6 @@ priv enum ShellMessage {
   SetupEndpoint
   NotNow
   DismissLabel
-  BackToSkills
   CancelLabel
   DeleteChatQuestion
   DeletePermanently
@@ -228,36 +223,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, RestoreLabel) => "恢复"
     (TraditionalChinese, RestoreLabel) => "恢復"
     (Japanese, RestoreLabel) => "復元"
-    (English, ShowDetailed) => "Show detailed conversation"
-    (Spanish, ShowDetailed) => "Mostrar conversación detallada"
-    (SimplifiedChinese, ShowDetailed) => "显示完整对话"
-    (TraditionalChinese, ShowDetailed) => "顯示完整對話"
-    (Japanese, ShowDetailed) => "チャット全体を表示"
-    (English, ShowMinimal) => "Show minimal conversation"
-    (Spanish, ShowMinimal) => "Mostrar conversación mínima"
-    (SimplifiedChinese, ShowMinimal) => "显示精简对话"
-    (TraditionalChinese, ShowMinimal) => "顯示精簡對話"
-    (Japanese, ShowMinimal) => "簡易チャットを表示"
-    (English, DetailedMode) => "Detailed mode"
-    (Spanish, DetailedMode) => "Modo detallado"
-    (SimplifiedChinese, DetailedMode) => "详细模式"
-    (TraditionalChinese, DetailedMode) => "詳細模式"
-    (Japanese, DetailedMode) => "詳細モード"
-    (English, ConversationTransfer) => "Export and import"
-    (Spanish, ConversationTransfer) => "Compartir e importar"
-    (SimplifiedChinese, ConversationTransfer) => "导出与导入"
-    (TraditionalChinese, ConversationTransfer) => "匯出與匯入"
-    (Japanese, ConversationTransfer) => "共有とインポート"
+    (English, ConversationTransfer) => "Conversation actions"
+    (Spanish, ConversationTransfer) => "Acciones de conversación"
+    (SimplifiedChinese, ConversationTransfer) => "对话操作"
+    (TraditionalChinese, ConversationTransfer) => "對話操作"
+    (Japanese, ConversationTransfer) => "会話の操作"
     (English, ExportConversation) => "Export"
     (Spanish, ExportConversation) => "Exportar"
     (SimplifiedChinese, ExportConversation) => "导出"
     (TraditionalChinese, ExportConversation) => "匯出"
     (Japanese, ExportConversation) => "エクスポート"
-    (English, ImportConversation) => "Import"
-    (Spanish, ImportConversation) => "Importar"
-    (SimplifiedChinese, ImportConversation) => "导入"
-    (TraditionalChinese, ImportConversation) => "匯入"
-    (Japanese, ImportConversation) => "インポート"
     (English, HideTerminal) => "Hide terminal (Ctrl+`)"
     (Spanish, HideTerminal) => "Ocultar terminal (Ctrl+`)"
     (SimplifiedChinese, HideTerminal) => "隐藏终端（Ctrl+`）"
@@ -584,11 +559,6 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, DismissLabel) => "关闭"
     (TraditionalChinese, DismissLabel) => "關閉"
     (Japanese, DismissLabel) => "閉じる"
-    (English, BackToSkills) => "Back to skills"
-    (Spanish, BackToSkills) => "Volver a las habilidades"
-    (SimplifiedChinese, BackToSkills) => "返回技能列表"
-    (TraditionalChinese, BackToSkills) => "返回技能列表"
-    (Japanese, BackToSkills) => "スキル一覧に戻る"
     (English, CancelLabel) => "Cancel"
     (Spanish, CancelLabel) => "Cancelar"
     (SimplifiedChinese, CancelLabel) => "取消"

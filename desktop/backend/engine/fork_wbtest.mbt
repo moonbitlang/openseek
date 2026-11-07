@@ -241,7 +241,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
       fail("the fixture has a home directory")
     }
     @fsx.write_text(mcp_path.to_path(), "{\"mcpServers\": {}}")
-    let placements : Array[Array[WorktreeInfo]] = []
+    let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let created : Array[String] = []
     let reply = fork_session(
       manager,
@@ -309,7 +309,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
 async test "a later-message edit takes over its source's checkout" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     @fsx.write_text_atomic(session_prompt_path(store, SessionId("s-src")), "")
-    let placements : Array[Array[WorktreeInfo]] = []
+    let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let reply = prepare_session_edit(
       manager,
       {
@@ -354,7 +354,7 @@ async test "a later-message edit takes over its source's checkout" {
 #cfg(not(platform="windows"))
 async test "a fork is committed exactly when its record was written" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
-    let placements : Array[Array[WorktreeInfo]] = []
+    let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let created : Array[String] = []
     async fn fork_with(model : String) -> @protocol.SessionForkReply? {
       let payload : @protocol.SessionForkPayload = {
@@ -415,7 +415,7 @@ async test "a fork is committed exactly when its record was written" {
 #cfg(not(platform="windows"))
 async test "a fork cancelled after its record was written keeps its worktree and is announced" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
-    let placements : Array[Array[WorktreeInfo]] = []
+    let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let created : Array[String] = []
     let committed = @workspaces.store_root(repo).join("committed").to_path()
     @async.with_task_group(group => {
@@ -475,7 +475,7 @@ async test "a side chat is a numbered member of its conversation's family" {
       session_prompt_path(store, SessionId("s-src")),
       prompt,
     )
-    let placements : Array[Array[WorktreeInfo]] = []
+    let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let created : Array[String] = []
     async fn side_chat_of(session : String) -> @protocol.SessionForkReply {
       fork_session(

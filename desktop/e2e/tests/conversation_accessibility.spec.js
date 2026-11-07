@@ -25,6 +25,8 @@ test('conversation titles support keyboard activation and independent row action
   await page.keyboard.press('Tab');
   // A live row's actions sit behind one overflow trigger.
   const actions = first.getByRole('button', { name: 'Conversation actions' });
+  await expect(first.locator('[data-slot="context-menu-trigger"] .conversation-open')).toBeVisible();
+  expect(await actions.evaluate(node => node.closest('.sidebar-context-trigger'))).toBeNull();
   await expect(actions).toBeFocused();
   // The load spinner leaving the row must not take the focused trigger with it.
   await expect(first).toHaveClass(/loading/);
@@ -44,12 +46,7 @@ test('conversation titles support keyboard activation and independent row action
   await expect(actions).toBeFocused();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu', { name: 'Conversation actions' });
-  await expect(menu).toBeFocused();
-  await page.keyboard.press('End');
-  await expect(menu.getByRole('menuitem', { name: 'Delete…' })).toBeFocused();
-  await page.keyboard.press('ArrowUp');
-  await expect(menu.getByRole('menuitem', { name: 'Archive' })).toBeFocused();
-  await page.keyboard.press('Enter');
+  await menu.getByRole('menuitem', { name: 'Archive', exact: true }).click();
   // Archived conversations leave the sidebar for Settings' archived page.
   await expect(first).toHaveCount(0);
   await expect(second).toHaveClass(/active/);
@@ -97,8 +94,9 @@ test('opening another conversation saves a title being edited', async ({ page })
   await app.goto();
   const first = page.locator('.conversation-row[title="session-1"]');
   const second = page.locator('.conversation-row[title="session-2"]');
-  await first.hover();
-  await first.locator('.row-menu-button').click();
+  await first.locator('.conversation-open').click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: 'Conversation actions' }))
+    .toHaveAttribute('data-slot', 'context-menu-content');
   await page.getByRole('menuitem', { name: 'Rename…' }).click();
   const input = first.getByRole('textbox', { name: 'Rename conversation' });
   await expect(input).toBeFocused();

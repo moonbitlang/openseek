@@ -60,7 +60,7 @@ test "enablement-only refresh preserves an open preview and its pending read" {
   guard ready.preview is Ready(content="body", ..) else {
     fail("the read issued before the toggle must still settle")
   }
-  assert_true(ready.detail_open())
+  assert_true(ready.detail_open(@interop.ChannelId::Local))
 }
 
 ///|

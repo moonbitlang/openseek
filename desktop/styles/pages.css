@@ -52,9 +52,9 @@
     --button-color: var(--color-on-accent);
     --button-border-color: var(--color-accent);
     --button-background: var(--color-accent);
-    --button-hover-color: var(--color-on-accent-strong);
-    --button-hover-border-color: var(--color-accent-strong);
-    --button-hover-background: var(--color-accent-strong);
+    --button-hover-color: var(--color-on-accent);
+    --button-hover-border-color: var(--color-accent);
+    --button-hover-background: var(--color-accent);
     --button-disabled-opacity: 0.7;
   }
 
@@ -113,92 +113,28 @@ a:where(.setting-link) {
   font-size: var(--font-size-md);
 }
 
-/* ---------- management dialogs ---------- */
-dialog.management-dialog {
-  box-sizing: border-box;
-  width: min(84rem, 86vw);
-  height: min(64rem, 84dvh);
-  max-height: 84dvh;
-  padding: 0;
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px -4px light-dark(
-    rgba(20, 23, 26, 0.12),
-    rgba(0, 0, 0, 0.3)
-  );
-  color: var(--color-text-primary);
-  overflow: hidden;
-  flex-direction: column;
+#skill-detail-dialog {
+  --dialog-width: 54rem;
+  --dialog-max-height: min(52rem, 80dvh);
 }
-dialog.management-dialog[open] {
-  display: flex;
+
+.management-dialog-pane:not([hidden]) {
+  display: contents;
 }
-dialog.management-dialog::backdrop {
-  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
-}
-@media (prefers-reduced-motion: no-preference) {
-  dialog.management-dialog {
-    scale: 0.995;
-    transition:
-      scale 20ms linear,
-      display 20ms allow-discrete,
-      overlay 20ms allow-discrete;
-  }
-  dialog.management-dialog[open] {
-    scale: 1;
-  }
-  @starting-style {
-    dialog.management-dialog[open] {
-      scale: 0.995;
-    }
-  }
-}
-/* The header is the main topbar: same height, padding, divider and title
-   size, so a dialog does not read as a differently scaled surface. */
-.management-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--titlebar-control-gap);
-  height: var(--topbar-height);
-  padding-inline: var(--topbar-inline-padding);
-  border-bottom: 1px solid var(--color-separator);
-  flex-shrink: 0;
-}
-.management-dialog-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-.management-dialog-heading .topbar-title {
-  max-width: none;
-  margin-inline-end: 0;
-}
-.management-dialog > .management-page {
-  flex: 1;
+#management-dialog .management-dialog-pane > .management-page {
+  overflow: visible;
   width: 100%;
   box-sizing: border-box;
-  --management-content-padding: clamp(
-    var(--space-6),
-    3vw,
-    calc(var(--space-7) * 1.5)
-  );
-  padding: max(
-    var(--management-content-padding),
-    calc((100% - 72rem) / 2)
-  );
 }
-.management-dialog > .management-page > .management-page-content {
+#management-dialog .management-page > .management-page-content {
   width: 100%;
   max-width: none;
   margin-inline: 0;
 }
-/* ---------- shared management content ---------- */
 .management-page {
   grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-7) 2rem 2rem;
 }
 
 .management-page-content {
@@ -265,7 +201,7 @@ h2 {
 }
 
 .settings-group-card {
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-6);
@@ -283,7 +219,7 @@ h2 {
 .settings-group-card .skill-row + .skill-row,
 .settings-group-card .setup-guide + .setting-row,
 .setup-modal-form .setup-guide + .setting-row {
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
 }
 
 .setting-row.stack {
@@ -479,7 +415,7 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-#saveApiKey {
+.save-api-key {
   align-self: flex-end;
 }
 
@@ -528,7 +464,6 @@ button.archived-chat-open:hover .archived-chat-title {
   min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
@@ -889,8 +824,6 @@ button.archived-chat-open:hover .archived-chat-title {
 
 .skill-preview-markdown {
   min-width: 0;
-  max-height: min(62vh, 720px);
-  overflow: auto;
   white-space: normal;
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
@@ -929,7 +862,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-metadata-table th,
 .skill-metadata-table td {
   padding: var(--space-5) 1rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-divider);
   line-height: var(--line-height-normal);
   text-align: left;
   vertical-align: top;
@@ -951,17 +884,12 @@ button.archived-chat-open:hover .archived-chat-title {
   white-space: pre-wrap;
 }
 
-.skill-detail-page > .management-page-content {
-  max-width: 840px;
+.skill-detail-page > * + * {
+  margin-top: var(--space-7);
 }
 
-.skill-back {
-  justify-self: start;
-}
-
-.skill-detail-header {
-  display: grid;
-  gap: var(--space-4);
+.skill-detail-header > * + * {
+  margin-top: var(--space-4);
 }
 
 .skill-detail-header h2 {
@@ -977,24 +905,14 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-.skill-detail-card {
-  min-width: 0;
-  padding: var(--space-7) var(--space-7);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-}
-
 .skill-file-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
   min-height: 40px;
-  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-7)) var(--space-6);
-  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .skill-file-name {
@@ -1060,7 +978,7 @@ button.archived-chat-open:hover .archived-chat-title {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   white-space: pre;
 }
 
@@ -1073,7 +991,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-preview-markdown blockquote {
   margin: 0.55em 0;
   padding: var(--space-1) var(--space-5);
-  border-left: 3px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-divider);
   color: var(--color-text-secondary);
 }
 
@@ -1089,7 +1007,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-preview-markdown th,
 .skill-preview-markdown td {
   padding: var(--space-2) var(--space-5);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-divider);
 }
 
 .skill-preview-markdown th {
@@ -1122,7 +1040,7 @@ button.archived-chat-open:hover .archived-chat-title {
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-4);
   background: transparent;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   white-space: nowrap;
 }
@@ -1143,3 +1061,28 @@ button.archived-chat-open:hover .archived-chat-title {
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
 .schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }
+
+/* Use RUI's button variables so hover and focus retain the shared recipe. */
+.transcript-view-control {
+  padding: var(--space-1);
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+}
+.transcript-view-control > [data-slot="button"] {
+  --rui-control-radius-top-left: var(--radius-sm);
+  --rui-control-radius-top-right: var(--radius-sm);
+  --rui-control-radius-bottom-left: var(--radius-sm);
+  --rui-control-radius-bottom-right: var(--radius-sm);
+  --rui-button-fg: var(--color-text-secondary);
+  min-width: 5.5rem;
+}
+.transcript-view-control > [data-slot="button"][aria-pressed="true"] {
+  --rui-button-bg: var(--color-bg-surface);
+  --rui-button-fg: var(--color-text-primary);
+  --rui-button-border: var(--color-border);
+}
+
+.session-import-destination {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}

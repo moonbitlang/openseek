@@ -25,7 +25,7 @@ pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   fork_session_in(
     manager,
@@ -56,7 +56,7 @@ async fn fork_session_in(
   payload : @protocol.SessionForkPayload,
   placement : ForkPlacement,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   guard @session_store.safe_session_id(payload.session) && payload.through > 0 else {
     raise EngineError("invalid session fork boundary")
@@ -78,8 +78,8 @@ async fn fork_session_in(
   defer manager.workspace_lifecycle_lock.release()
   let lease = manager.begin_record_read(payload.session)
   defer manager.end_record_read(payload.session, lease)
-  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
   let root = @workspaces.store_root(workspace)

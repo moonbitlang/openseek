@@ -31,7 +31,7 @@ fn open_quick_open(
 ) -> (@cmd.Cmd, Model) {
   guard model.project_picker is None &&
     model.archive_confirm is None &&
-    model.delete_confirm is None &&
+    !(model.delete_confirm is Open(_)) &&
     !(model.update_ux is ConfirmingRestart(..)) &&
     !(model.bridge_state() is BridgeLost(_)) &&
     model.active_checkout() is Some(active) else {

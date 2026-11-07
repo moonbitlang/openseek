@@ -201,19 +201,11 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // which is the already-accepted `moon run` shape; what the prefix buys is
   // that only the review FORM of this program exists in a turn's vocabulary.
   ("codex", ["review"]),
-  // Compile documents and raster previews for read_image visual review.
-  ("typst", ["compile"]),
-  ("typst", ["watch"]),
-  ("typst", ["eval"]),
-  ("typst", ["fonts"]),
-  ("typst", ["help"]),
-  ("typst", ["--help"]),
-  ("typst", ["--version"]),
-  // The only two read-only utilities without a MoonBit equivalent worth using:
-  // `rg` searches a whole tree faster than a snippet can walk it, and `diff`
-  // produces a structured comparison. Their mutating counterparts (`rm`, `mv`,
-  // `cp`, `chmod`) are absent because file changes belong to the file tools and
-  // to `@fs`.
+  // The only read-only utility without a MoonBit equivalent worth using:
+  // `diff` produces a structured comparison. Its mutating counterparts (`rm`,
+  // `mv`, `cp`, `chmod`) are absent because file changes belong to the file
+  // tools and to `@fs`. Text search is `moonx cli/rg`, the MoonBit ripgrep
+  // port, so native `rg` is not listed either.
   //
   // `cat`, `ls`, `head`, `tail`, `wc`, `sort`, `uniq`, `grep`, `printf`,
   // `echo`, `pwd`, `date` and `which` were dropped rather than listed.
@@ -226,7 +218,6 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // unavailable on Windows.
   ("uname", ["-m"]),
   ("diff", []),
-  ("rg", []),
   // NOT listed: the general-purpose runners (`sh`, `bash`, `zsh`, `env`,
   // `xargs`, `python`, `node`, `perl`, `make`). Myshell exists so no shell sits
   // between the agent and a process; what the list buys is that going around
@@ -252,7 +243,6 @@ let spawn_notes : Map[String, String] = {
   "git": "Not `config`. A global option BEFORE the subcommand (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.",
   "codex": "(A read-only review of the current branch/diff; not `exec`, `install`, or a bare `codex`.)",
   "diff": "Structured comparison of two files.",
-  "rg": "Searches a whole tree faster than a snippet can walk it.",
   "moonx": "Runs other MoonBit binaries in wasm/sandbox mode.",
 }
 

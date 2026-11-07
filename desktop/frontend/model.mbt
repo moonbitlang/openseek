@@ -1434,7 +1434,9 @@ priv struct Model {
   archive_confirm : ArchiveConfirm?
   // Permanent chat deletion has its own explicit confirmation. It never
   // shares the worktree-discard dialog because the data at risk differs.
-  delete_confirm : DeletePrompt?
+  // Closed retains the displayed prompt for the native closing transition,
+  // without authorizing another deletion.
+  delete_confirm : DeleteDialogState
   // The live chat whose delete question is out with the host. Only the
   // answer about this chat may open the confirmation, and only once: an
   // answer overtaken by a later click must not put another chat's dialog
@@ -1840,9 +1842,9 @@ priv enum Msg {
   // startup.
   SidebarModeSelected(@sidebar.Mode)
   SidebarModeLoaded(@sidebar.Mode)
-  // The sidebar's device selector chose a device by id. A page owns its
-  // device for its lifetime, so the choice loads that device's page.
-  DeviceChosen(String)
+  // The sidebar's device selector chose a device by id, or Cloud with None.
+  // A page owns its device for its lifetime, so the choice loads that page.
+  DeviceChosen(String?)
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
   LanguageLoaded(@i18n.Preference?, Array[String])
@@ -1940,7 +1942,7 @@ priv enum Msg {
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
-  OpenSessionImport
+  OpenSessionImport(@interop.ChannelId, @common.Uri)
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
@@ -2767,7 +2769,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     project_picker: None,
     pending_project_adoption: None,
     archive_confirm: None,
-    delete_confirm: None,
+    delete_confirm: Empty,
     delete_pending: None,
     deletes_in_flight: [],
     conversation_rename: None,

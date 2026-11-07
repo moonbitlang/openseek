@@ -176,27 +176,6 @@ fn WorktreeEntry::serves_id(self : WorktreeEntry, id : String) -> Bool {
 }
 
 ///|
-/// One worktree as ops report it: the registry entry plus its derived
-/// checkout path and whether that directory still exists on disk.
-type WorktreeInfo = @protocol.WorktreeInfo
-
-///|
-type WorktreesReply = @protocol.WorktreesReply
-
-///|
-/// A create's reply names the worktree it made — the client sends no name
-/// and needs the generated one to start the bound conversation.
-type WorktreeCreateReply = @protocol.WorktreeCreateReply
-
-///|
-/// Archiving a conversation whose checkout still holds uncommitted work asks
-/// the user to confirm before the checkout goes away.
-type ArchiveNeedsForceReply = @protocol.ArchiveNeedsForceReply
-
-///|
-type CheckoutRemoval = @protocol.CheckoutRemoval
-
-///|
 /// One Codex thread's Desktop-owned placement. The API uses this snapshot to
 /// annotate app-server thread replies; it never infers ownership from a cwd,
 /// so worktrees created by Codex App or another Git client remain external.
@@ -204,7 +183,7 @@ type CheckoutRemoval = @protocol.CheckoutRemoval
 pub struct CodexWorktreeBinding {
   thread_id : String
   workspace : String
-  worktree : WorktreeInfo
+  worktree : @protocol.WorktreeInfo
 }
 
 ///|
@@ -334,22 +313,11 @@ async fn write_worktrees(
 }
 
 ///|
-/// A host-native absolute path at the protocol boundary. Resource URIs use
-/// their authority for the device, so UNC paths have no reversible encoding
-/// and are rejected explicitly instead of being published under a new host.
-fn resource_path(path : @pathx.Absolute) -> String raise WorktreeError {
-  guard path.to_uri_path() is Some(uri) else {
-    raise WorktreeError("UNC paths are not supported by frontend resources")
-  }
-  uri
-}
-
-///|
 async fn worktree_infos(
   workspace : @pathx.Absolute,
   entries : Array[WorktreeEntry],
-) -> Array[WorktreeInfo] {
-  let infos : Array[WorktreeInfo] = []
+) -> Array[@protocol.WorktreeInfo] {
+  let infos : Array[@protocol.WorktreeInfo] = []
   for entry in entries {
     let path = worktree_dir(workspace, entry.name)
     let present = @fsx.is_dir(path.to_path()) catch { _ => false }
@@ -359,7 +327,7 @@ async fn worktree_infos(
       base: entry.base,
       sessions: entry.sessions,
       codex_thread: entry.codex_thread,
-      path: resource_path(path),
+      path: path.resource_path(),
       present,
     })
   }
@@ -488,7 +456,7 @@ async fn WorktreeOwner::binding_unlocked(
 pub async fn WorktreeOwner::archive_check(
   self : WorktreeOwner,
   host : WorktreeHost,
-) -> ArchiveNeedsForceReply? {
+) -> @protocol.ArchiveNeedsForceReply? {
   match self.checkout_removal(host) {
     Some({ worktree, dirty_paths, dirty_path_count, }) if dirty_path_count > 0 =>
       Some({ worktree, dirty_paths, dirty_path_count, })
@@ -507,7 +475,7 @@ pub async fn WorktreeOwner::checkout_removal(
   host : WorktreeHost,
   workspace? : @pathx.Absolute,
   family~ : Array[String] = [],
-) -> CheckoutRemoval? {
+) -> @protocol.CheckoutRemoval? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   guard self.binding_unlocked(workspace?) is Some((workspace, _)) else {
@@ -603,8 +571,8 @@ pub async fn WorktreeOwner::archive_checkout(
   force : Bool,
   workspace? : @pathx.Absolute,
   family~ : Array[String] = [],
-  on_committed? : (String, Array[WorktreeInfo]) -> Unit,
-) -> ArchiveNeedsForceReply? {
+  on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   guard self.binding_unlocked(workspace?) is Some((workspace, _)) else {
@@ -648,7 +616,10 @@ pub async fn WorktreeOwner::archive_checkout(
   // the same row lets unarchive surface the existing Repair flow later.
   @async.protect_from_cancel(() => {
     if on_committed is Some(on_committed) {
-      on_committed(resource_path(workspace), worktree_infos(workspace, entries))
+      on_committed(
+        workspace.resource_path(),
+        worktree_infos(workspace, entries),
+      )
     }
   })
   None
@@ -669,7 +640,7 @@ pub async fn WorktreeOwner::archive_checkout(
 pub async fn drop_placements(
   workspace : @pathx.Absolute,
   sessions : Array[String],
-) -> Array[WorktreeInfo]? {
+) -> Array[@protocol.WorktreeInfo]? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   let shared = lock_worktrees_file(workspace)
@@ -728,7 +699,7 @@ pub async fn add_session_to_worktree(
   worktree_of~ : String,
   create_record : async (@pathx.Absolute) -> Unit,
   record_exists~ : async () -> Bool,
-  on_committed : (Array[WorktreeInfo]) -> Unit,
+  on_committed : (Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> Unit {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
@@ -817,7 +788,7 @@ pub async fn add_session_to_new_worktree(
   worktree_of~ : String,
   create_record : async (ForkCheckout) -> Unit,
   record_exists~ : async () -> Bool,
-  on_committed : (Array[WorktreeInfo]) -> Unit,
+  on_committed : (Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> Unit {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
@@ -844,7 +815,7 @@ pub async fn add_session_to_new_worktree(
     status,
     limit=ForkUncommittedListLimit,
   )
-  let workspace_settings = @workspaces.settings(resource_path(workspace))
+  let workspace_settings = @workspaces.settings(workspace.resource_path())
   let name = fresh_worktree_name(workspace, entries)
   guard @entropy.random_hex(16) is Some(salt) else {
     raise WorktreeError("no OS entropy available to identify a worktree")
@@ -1045,9 +1016,9 @@ async fn require_main_worktree(dir : @pathx.Absolute) -> Unit {
 /// The worktrees of a registered workspace. Read-only: a worktree whose
 /// directory was deleted outside the app reports `present: false` here and
 /// is cleaned up by `remove_worktree`, never by listing.
-pub async fn list(workspace : String) -> WorktreesReply {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+pub async fn list(workspace : String) -> @protocol.WorktreesReply {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   worktree_registry_lock.acquire()
@@ -1070,7 +1041,7 @@ pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding] {
       if info.codex_thread is Some(thread_id) {
         bindings.push({
           thread_id,
-          workspace: resource_path(workspace),
+          workspace: workspace.resource_path(),
           worktree: info,
         })
       }
@@ -1136,9 +1107,9 @@ pub async fn create(
   host : WorktreeHost,
   workspace : String,
   owner : WorktreeOwner,
-  on_committed : (Array[WorktreeInfo]) -> Unit,
+  on_committed : (Array[@protocol.WorktreeInfo]) -> Unit,
   name? : String,
-) -> WorktreeCreateReply {
+) -> @protocol.WorktreeCreateReply {
   let owner_id = owner.id()
   guard @session_store.safe_session_id(owner_id) else {
     let detail = match owner {
@@ -1164,8 +1135,8 @@ pub async fn create(
   // Registration is checked under the lifecycle lock, which detachment also
   // holds: a workspace can no longer slip out of the registry between this
   // check and the registry commit below.
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
@@ -1184,7 +1155,7 @@ pub async fn create(
   // Snapshot this workspace's setting once for the lifecycle operation. A
   // concurrent page edit applies to the next create or repair instead of
   // changing this checkout halfway through.
-  let workspace_settings = @workspaces.settings(resource_path(dir))
+  let workspace_settings = @workspaces.settings(dir.resource_path())
   let checkout_submodules = workspace_settings.checkout_submodules
   let submodule_checkout_timeout_seconds = workspace_settings.submodule_checkout_timeout_seconds
   worktree_registry_lock.acquire()
@@ -1300,7 +1271,7 @@ pub async fn create(
     codex_thread: owner.codex_thread(),
   }
   let lock_reason = "\{entry.lock_prefix()}\{salt}"
-  let mut infos : Array[WorktreeInfo] = []
+  let mut infos : Array[@protocol.WorktreeInfo] = []
   {
     errdefer @async.protect_from_cancel(() => {
       rollback_worktree_checkout(dir, name, lock_reason)
@@ -1455,8 +1426,8 @@ pub async fn remove(
   workspace : String,
   name : String,
   force : Bool,
-  on_committed : (Array[WorktreeInfo]) -> Unit,
-) -> WorktreesReply {
+  on_committed : (Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.WorktreesReply {
   let name = name.trim().to_owned()
   // The lifecycle lock excludes concurrent creates and workspace
   // detachments for the whole removal — the registration check below runs
@@ -1464,8 +1435,8 @@ pub async fn remove(
   // a checkout from an already-detached workspace.
   host.lifecycle_lock.acquire()
   defer host.lifecycle_lock.release()
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   let entry = {
@@ -1520,7 +1491,7 @@ pub async fn remove(
   let remaining = read_worktrees_unlocked(dir).filter(entry => {
     entry.name != name
   })
-  let mut infos : Array[WorktreeInfo] = []
+  let mut infos : Array[@protocol.WorktreeInfo] = []
   @async.protect_from_cancel(() => {
     write_worktrees(dir, remaining)
     infos = worktree_infos(dir, remaining)

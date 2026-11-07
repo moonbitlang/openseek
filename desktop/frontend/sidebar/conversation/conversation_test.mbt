@@ -58,13 +58,10 @@ test "a live row lists Delete only where its source offers one" {
     ("Rename…", true, false),
     ("Archive", true, false),
   ])
-  // A running conversation must be stopped before it can go either way.
-  let running = { ..deletable, running: true, }
-  assert_eq(menu_actions(running), [
-    ("Rename…", true, false),
-    ("Archive", false, false),
-    ("Delete…", false, true),
-  ])
+  assert_eq(
+    menu_actions({ ..deletable, running: true, }),
+    menu_actions(deletable),
+  )
   assert_eq(
     menu_actions({
       ..deletable,
@@ -84,8 +81,8 @@ test "a live row lists Delete only where its source offers one" {
     ("Restore", true, false),
     ("Delete…", true, true),
   ])
-  assert_eq(menu_actions({ ..archived, running: true, }), [
-    ("Restore", false, false),
-    ("Delete…", false, true),
-  ])
+  assert_eq(
+    menu_actions({ ..archived, running: true, }),
+    menu_actions(archived),
+  )
 }

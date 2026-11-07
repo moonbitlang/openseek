@@ -3,13 +3,13 @@ pub async fn import_session(
   manager : EngineManager,
   payload : @protocol.SessionImportPayload,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> String {
   let records = @session_import.prepare(payload.source)
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
-  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
   let root = @workspaces.store_root(workspace)

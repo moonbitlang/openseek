@@ -1119,7 +1119,8 @@ export class DesktopBrowserHarness {
   projectRow(root, channel = 'remote.device-a') {
     // Match project identity, including its host, independently of tooltip text.
     const key = `project:openseek.projects:${channel}:${root}`;
-    return this.page.locator(`.workspace-row[data-action-menu-context=${JSON.stringify(key)}]`);
+    const trigger = this.page.locator(`[id=${JSON.stringify(key + ':context-trigger')}]`);
+    return this.page.locator('.workspace-row').filter({ has: trigger });
   }
 
   async openSession() {

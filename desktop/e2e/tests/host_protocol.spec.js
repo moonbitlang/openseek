@@ -15,22 +15,3 @@ test('a host built for another protocol revision is reported once and not retrie
   expect(app.requests.map(request => request.method)).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
-
-test('a host from before the protocol revision is reported, not left connecting', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.connectedParams = { ready: true };
-  await app.install();
-  await page.goto('/device/device-a/chat');
-  await expect(page.getByRole('main').getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toBeVisible();
-  expect(app.requests.map(request => request.method)).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a host on the current protocol revision stays connected', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await expect(page.getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});

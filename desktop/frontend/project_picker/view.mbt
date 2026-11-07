@@ -111,80 +111,71 @@ pub fn view(
   } else {
     list_attrs
   }
-  @html.div(class="modal-backdrop picker-backdrop", on_click=emit(Close), [
-    @html.div(
-      class="modal picker-modal",
-      attrs=@html.Attrs::build()
-        .role("dialog")
-        .aria_modal("true")
-        .aria_labelledby("project-picker-title")
-        .on_click(event => {
-          event.stop_propagation()
-          @cmd.none
-        }),
-      [
-        @html.div(class="picker-header", [
-          @html.div(class="picker-header-leading", [
-            @html.span(
-              class="picker-header-icon",
-              @icons.icon(@icons.icon_folder_opened),
+  @rui.dialog(
+    id="project-picker-dialog",
+    class="dialog-size-medium dialog-scroll-layout",
+    close_label=ui(locale, ClosePicker),
+    on_close=_ => emit(Close),
+    on_cancel=emit(Close),
+    attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
+    [
+      @rui.dialog_header([
+        @html.div(class="picker-header-leading", [
+          @html.span(
+            class="picker-header-icon",
+            @icons.icon(@icons.icon_folder_opened),
+          ),
+          @html.div(class="picker-header-copy", [
+            @rui.dialog_title(
+              id="project-picker-title",
+              ui(locale, AddProjectTitle),
             ),
-            @html.div(class="picker-header-copy", [
-              @html.div(
-                id="project-picker-title",
-                class="modal-title",
-                ui(locale, AddProjectTitle),
-              ),
-              @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
-            ]),
+            @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
           ]),
-          @html.button(
-            class="picker-close",
-            type_="button",
-            title=ui(locale, CloseLabel),
-            on_click=emit(Close),
-            attrs=@html.Attrs::build().aria_label(ui(locale, ClosePicker)),
-            @icons.icon(@icons.icon_close),
-          ),
         ]),
-        ..match location {
-          Some(control) => [control]
-          None => []
-        },
-        @html.div(class="picker-location-bar", [
-          match picker.path_draft {
-            Some(value) =>
-              path_editor(locale~, emit, picker, value, suggestion_active)
-            None => picker_breadcrumbs(locale~, emit, picker)
+      ]),
+      @html.div(
+        class="picker-content dialog-scroll-body",
+        [
+          ..match location {
+            Some(control) => [control]
+            None => []
           },
-          @html.button(
-            class="picker-new-folder",
-            type_="button",
-            disabled=!can_create,
-            on_click=emit(BeginCreateFolder),
-            [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
-          ),
-        ]),
-        @html.div(class="picker-browser", [
-          @html.div(class="picker-list", attrs=list_attrs, [
-            @html.div(class="picker-list-heading", [
-              @html.span(ui(locale, NameLabel)),
-              @html.span(
-                class="picker-list-count",
-                if picker.loading {
-                  ui(locale, LoadingLabel)
-                } else {
-                  folder_count_label
-                },
-              ),
-            ]),
-            @html.div(class="picker-list-rows", rows),
+          @html.div(class="picker-location-bar", [
+            match picker.path_draft {
+              Some(value) =>
+                path_editor(locale~, emit, picker, value, suggestion_active)
+              None => picker_breadcrumbs(locale~, emit, picker)
+            },
+            @html.button(
+              class="picker-new-folder",
+              type_="button",
+              disabled=!can_create,
+              on_click=emit(BeginCreateFolder),
+              [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
+            ),
           ]),
-        ]),
-        picker_footer(locale~, emit, picker),
-      ],
-    ),
-  ])
+          @html.div(class="picker-browser", [
+            @html.div(class="picker-list", attrs=list_attrs, [
+              @html.div(class="picker-list-heading", [
+                @html.span(ui(locale, NameLabel)),
+                @html.span(
+                  class="picker-list-count",
+                  if picker.loading {
+                    ui(locale, LoadingLabel)
+                  } else {
+                    folder_count_label
+                  },
+                ),
+              ]),
+              @html.div(class="picker-list-rows", rows),
+            ]),
+          ]),
+        ],
+      ),
+      picker_footer(locale~, emit, picker),
+    ],
+  )
 }
 
 ///|
@@ -358,9 +349,9 @@ fn picker_footer(
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None &&
     picker.path_draft is None
-  @html.div(class="picker-footer", [
+  @rui.dialog_footer(class="picker-footer", [
     current_location(locale~, picker),
-    @html.div(class="modal-actions", [
+    @html.div(class="picker-actions", [
       @html.button(
         class="button secondary",
         type_="button",

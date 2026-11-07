@@ -150,6 +150,9 @@ pub(all) struct ApprovalPayload {
 }
 
 ///|
+/// One lifecycle identity the caller still needs the host to settle. Before
+/// `Started`, the submission id may be all the client knows; afterward, the
+/// run id is authoritative.
 #derive(Debug, Eq)
 pub(all) struct KnownRunPayload {
   session : String
@@ -268,6 +271,8 @@ pub(all) struct SessionDeletePayload {
 }
 
 ///|
+/// `settings.set`: every field optional (absent = unchanged); a present
+/// string field is trimmed, and empty clears the stored value.
 #derive(Debug, Eq)
 pub(all) struct SettingsSetPayload {
   provider : String?
@@ -407,6 +412,11 @@ pub(all) struct UninstallSkillPayload {
 }
 
 ///|
+/// Open a transcript-referenced path. Viewer-sized UTF-8 text returns an
+/// absolute built-in editor target; other existing paths use the
+/// system opener. A relative path is taken against the conversation's working
+/// directory — `cwd` when the frontend has it, otherwise derived from
+/// `session`.
 #derive(Debug, Eq)
 pub(all) struct OpenPathPayload {
   session : String
@@ -415,6 +425,10 @@ pub(all) struct OpenPathPayload {
 }
 
 ///|
+/// `git.branch` reports the git branch of the conversation's working
+/// directory — `cwd` when the frontend has it (a live run), otherwise derived
+/// from `session`, mirroring `host.open_path`.
+///
 /// `base_hint` is the branch the diffstat should measure from, when the client
 /// already knows it from the branch's pull request. Absent on the first probe,
 /// and whenever there is no pull request to ask — the host then falls back to
@@ -427,6 +441,11 @@ pub(all) struct GitBranchPayload {
 }
 
 ///|
+/// `git.pull_request` reports the GitHub pull request for the branch checked
+/// out in the conversation's working directory. It addresses that directory
+/// exactly like `git.branch`, and answers over the `gh` CLI, so it inherits
+/// the user's own GitHub authentication instead of storing a token.
+///
 /// Address the same working directory as `git.branch` — the pull request is
 /// looked up for whatever branch that directory has checked out, so the two
 /// chips can never describe different branches. Codex-managed worktrees are
@@ -464,14 +483,16 @@ pub impl ToJson for GitPullRequestPayload with fn to_json(self) {
 }
 
 ///|
-/// Address the Git working tree belonging to one conversation. The optional
-/// workspace hint follows the filesystem operations' trust boundary: the host
-/// accepts it only when it names a registered workspace and still routes a
-/// worktree-bound conversation into its own checkout.
+/// `git.changes` addresses the same session/workspace checkout as the file
+/// panel and returns its current `HEAD`-to-working-tree inventory.
+///
+/// Address the Git working tree in the explicitly supplied workspace. The host
+/// requires a registered workspace or an exact host-authorized directory and
+/// routes a worktree-bound conversation into its own checkout.
 #derive(Debug, Eq)
 pub(all) struct GitChangesPayload {
   session : String
-  workspace : String?
+  workspace : String
 }
 
 ///|
@@ -482,7 +503,7 @@ pub(all) struct GitChangesPayload {
 #derive(Debug, Eq)
 pub(all) struct GitHistoryPayload {
   session : String
-  workspace : String?
+  workspace : String
   snapshot : GitHistorySnapshot?
   skip : Int32
   limit : Int32
@@ -514,12 +535,16 @@ pub(all) struct GitOriginalFilePayload {
 }
 
 ///|
+/// `read_directory` lists the absolute resource path in `path`.
 #derive(Debug, Eq)
 pub(all) struct ReadDirPayload {
   path : String
 }
 
 ///|
+/// `search_files` queries an absolute root through a connection-owned
+/// VS Code-style cache session. Cache keys are populated once and explicitly
+/// retired with clearCache.
 #derive(Debug, Eq)
 pub(all) struct SearchFilesPayload {
   path : String
@@ -536,6 +561,7 @@ pub(all) struct SearchFilesPayload {
 }
 
 ///|
+/// Cancel one interactive query without retiring its cache session.
 #derive(Debug, Eq)
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
@@ -543,7 +569,8 @@ pub(all) struct CancelSearchFilesPayload {
 }
 
 ///|
-/// Search workspace text through the Host's bundled ripgrep. `session_key`
+/// Search workspace text through the Host's cli/rg (ripgrep ported to
+/// MoonBit, run by the selected toolchain's moonx). `session_key`
 /// names one panel/search lifetime; generations are monotonic inside it, so a
 /// newer request can cancel an older process without affecting another panel.
 #derive(Debug, Eq)
@@ -634,6 +661,7 @@ pub(all) struct SemanticSearchProgressPayload {
 }
 
 ///|
+/// Retire a cache session and all work still owned by it.
 #derive(Debug, Eq)
 pub(all) struct ClearFileSearchCachePayload {
   cache_key : String
@@ -681,12 +709,18 @@ pub(all) struct MaterializeSemanticSelectionPayload {
 }
 
 ///|
+/// `stat_files` asks for the mtime signatures of the absolute paths supplied
+/// by the caller. One op covers the whole tab set: the frontend calls it on
+/// every coarse "something changed" push to decide which files to re-read.
 #derive(Debug, Eq)
 pub(all) struct StatFilesPayload {
   paths : Array[String]
 }
 
 ///|
+/// `fs.watch` points this client connection's watcher at the absolute root in
+/// `path`. Other desktop or remote connections keep their own watchers.
+/// Stopping is its own method, `fs.unwatch`.
 #derive(Debug, Eq)
 pub(all) struct WatchWorkspacePayload {
   path : String
@@ -922,6 +956,11 @@ pub impl ToJson for MoonPackageGraphPayload with fn to_json(self) {
 }
 
 ///|
+/// `lsp_open` tells the host the editor is now showing `path` relative to the
+/// explicit absolute `root`, so it runs `moon check` over the file's module.
+/// The reply carries the file's diagnostics from that run; other files'
+/// changes from the same run — and later runs — arrive as `diagnostics`
+/// events.
 #derive(Debug, Eq)
 pub(all) struct LspOpenPayload {
   session : String
@@ -947,6 +986,9 @@ pub impl ToJson for LspOpenPayload with fn to_json(self) {
 }
 
 ///|
+/// `hover` asks for hover at a zero-based `line`/`character` in `path`, which
+/// is relative to the explicit absolute `root`. The host finds the deepest
+/// Moon module containing that file beneath the supplied root.
 #derive(Debug, Eq)
 pub(all) struct LspHoverPayload {
   session : String
@@ -982,6 +1024,8 @@ pub impl ToJson for LspHoverPayload with fn to_json(self) {
 }
 
 ///|
+/// `workspace_symbols` searches the explicit absolute `root` for `query`
+/// (fuzzy-matched by `moon ide workspace-symbols`).
 #derive(Debug, Eq)
 pub(all) struct WorkspaceSymbolsPayload {
   session : String
@@ -1007,6 +1051,9 @@ pub impl ToJson for WorkspaceSymbolsPayload with fn to_json(self) {
 }
 
 ///|
+/// A source position for Moon IDE navigation. `line` and `column` are positive,
+/// one-based numbers which the host passes to `moon ide --loc` unchanged.
+/// `path` is relative to the explicit editor `root`.
 #derive(Debug, Eq)
 pub(all) struct MoonIdeNavigationPayload {
   session : String
@@ -1328,6 +1375,13 @@ pub impl FromJson for FinishedPayload with fn from_json(json, path) {
 }
 
 ///|
+/// One durably committed session event, broadcast as `session.event`. The
+/// canonical transcript channel: a commit exists if and only if its item is
+/// in the session's store file, and `sequence` is the item's one-based
+/// position there — contiguous per session, so a client can apply commits
+/// with a plain watermark (drop ≤ W, apply W+1, anything later is a gap and
+/// means reload). `event` is the typed store event, exactly the value a
+/// `session.load` snapshot carries in its `events` array.
 #derive(Debug, Eq)
 pub(all) struct SessionCommitPayload {
   session : String
@@ -3194,26 +3248,14 @@ pub impl ToJson for GitBranchPayload with fn to_json(self) {
 pub impl FromJson for GitChangesPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "GitChangesPayload")
   {
-    session: @json.from_json(
-      object.required_json("session"),
-      path=path.add_key("session"),
-    ),
-    workspace: match object.optional_json("workspace") {
-      None => None
-      Some(value) =>
-        Some(@json.from_json(value, path=path.add_key("workspace")))
-    },
+    session: object.required_string("session"),
+    workspace: object.required_string("workspace"),
   }
 }
 
 ///|
 pub impl ToJson for GitChangesPayload with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  fields["session"] = Json(self.session)
-  if self.workspace is Some(value) {
-    fields["workspace"] = Json(value)
-  }
-  Json(fields)
+  { "session": self.session, "workspace": self.workspace }
 }
 
 ///|

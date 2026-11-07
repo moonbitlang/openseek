@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, settledResponse, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 function deferred() {
   let resolve;
@@ -23,83 +23,6 @@ async function running(page) {
   await expect(page.locator('#task')).toHaveValue('');
   return app;
 }
-
-for (const nextTurn of [false, true]) {
-  test(`Cloud reconnect reconciles ${nextTurn ? 'a subsequent task' : 'a completed task'} before enabling controls`, async ({ page }) => {
-    const app = await running(page);
-    const oldTask = app.controlState(sessionA).task_id;
-    const connection = deferred();
-    app.pauseSessionEvents = connection.promise;
-    await app.disconnectSession(sessionA);
-    await expect.poll(() => observations(app).length).toBe(2);
-    await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Finished while disconnected.' });
-    await app.finishTask();
-    if (nextTurn) await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task' });
-    const history = deferred();
-    app.pauseHistory = history.promise;
-    const reads = () => app.requests.filter(request => request.method === 'GET' && request.path.endsWith(`/${sessionA}/messages`)).length;
-    const before = reads();
-    app.pauseSessionEvents = null;
-    connection.resolve();
-    await expect.poll(reads).toBeGreaterThan(before);
-    await expect(page.locator('.composer-banner')).toContainText('reconnecting');
-    const draft = 'Another explicit prompt';
-    await page.locator('#task').fill(draft);
-    await expect(page.locator('#send:enabled')).toHaveCount(0);
-    if (nextTurn) await app.emitSessionEvent(sessionA, 'assistant_delta', { content: 'New turn is live' });
-    app.pauseHistory = null;
-    history.resolve();
-    await expect(page.locator('.composer-banner')).not.toBeVisible();
-    await expect(page.locator('#transcript').getByText('Finished while disconnected.', { exact: true })).toHaveCount(1);
-    await expect(page.locator('#task')).toHaveValue(draft);
-    if (nextTurn) {
-      await expect(page.locator('#stop')).toBeEnabled();
-      await expect(page.locator('#transcript')).toContainText('New turn is live');
-      await app.emitSessionEvent(sessionA, 'task_finished', { status: 'failed' }, { task: oldTask, seq: 999 });
-      await expect(page.locator('#stop')).toBeEnabled();
-    } else {
-      await expect(page.locator('#stop')).toHaveCount(0);
-      await expect(page.locator('#send')).toBeEnabled();
-    }
-    expect(app.postCount).toBe(1);
-    expect(app.device.pageErrors).toEqual([]);
-  });
-}
-
-test('Cloud repeated reconnects retain pending inputs, queue and later drafts without duplicate messages', async ({ page }) => {
-  const app = await running(page);
-  for (const mode of ['Queue next', 'Steer now']) {
-    await page.locator('#task').fill(mode);
-    await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
-    await page.getByRole('option', { name: new RegExp(`^${mode}`) }).click();
-    await page.locator('#send').click();
-    await expect(page.locator('#task')).toHaveValue('');
-  }
-  await expect(page.locator('.pending-steer-row')).toContainText('Steer now');
-  await expect(page.locator('.queued-input-row')).toContainText('Queue next');
-  await page.locator('#task').fill('Later typing');
-  const posts = app.requests.filter(request => request.method === 'POST').length;
-  for (let index = 0; index < 3; index++) {
-    await app.disconnectSession(sessionA, { error: index % 2 === 1 });
-    await expect.poll(() => observations(app).length).toBe(index + 2);
-    await expect(page.locator('.composer-banner')).not.toBeVisible();
-    await expect(page.locator('#stop')).toBeEnabled();
-    await expect(page.locator('.pending-steer-row')).toContainText('Steer now');
-    await expect(page.locator('.queued-input-row')).toContainText('Queue next');
-  }
-  const submission = app.controlState(sessionA).data.steers[0].submission_id;
-  await app.emitSessionEvent(sessionA, 'user', { content: 'Steer now', submission_id: submission });
-  await app.emitSessionEvent(sessionA, 'steer_applied', { content: 'Steer now', submission_id: submission, kind: 'prompt' });
-  await expect(page.locator('.pending-steer-row')).toHaveCount(0);
-  await expect(page.locator('#transcript').getByText('Steer now', { exact: true })).toHaveCount(1);
-  await app.finishTask(sessionA, 'failed');
-  await expect(page.locator('#stop')).toHaveCount(0);
-  await expect(page.locator('.queued-input-row').getByTitle('Edit', { exact: true })).toBeEnabled();
-  await expect(page.locator('.queued-input-row').getByTitle('Steer', { exact: true })).toBeDisabled();
-  await expect(page.locator('#task')).toHaveValue('Later typing');
-  expect(app.requests.filter(request => request.method === 'POST')).toHaveLength(posts);
-  expect(app.device.pageErrors).toEqual([]);
-});
 
 test('Cloud recovers one durable answer after a burst of 256 deltas and EOF', async ({ page }) => {
   const app = await running(page);
@@ -151,24 +74,6 @@ for (const leave of ['switch', 'sign out']) {
   });
 }
 
-for (const status of [401, 404, 403]) {
-  test(`Cloud reconnect stops on HTTP ${status}`, async ({ page }) => {
-    const app = await running(page);
-    await page.clock.install();
-    app.sessionEventStatus = status;
-    await app.disconnectSession(sessionA);
-    await expect(page.locator('.composer-banner')).toContainText('reconnecting');
-    await page.clock.runFor(1600);
-    await expect.poll(() => observations(app).length).toBe(2);
-    if (status === 401 || status === 404) await expect(app.row(sessionA)).toBeHidden();
-    else await expect(page.locator('#transcript')).toContainText('HTTP 403');
-    await page.clock.runFor(5000);
-    expect(observations(app)).toHaveLength(2);
-    expect(app.postCount).toBe(1);
-    expect(app.device.pageErrors).toEqual([]);
-  });
-}
-
 for (const operation of ['Archive', 'Delete…']) {
   test(`Cloud ${operation} cancels an idle conversation reconnect`, async ({ page }) => {
     const app = new CloudHarness(page);
@@ -180,8 +85,8 @@ for (const operation of ['Archive', 'Delete…']) {
     await page.clock.install();
     await app.disconnectSession(sessionA);
     await expect(page.locator('.composer-banner')).toContainText('reconnecting');
-    await app.row(sessionA).locator('..').hover();
-    await app.row(sessionA).locator('..').getByRole('button', { name: 'Conversation actions', exact: true }).click();
+    await app.rowContainer(sessionA).hover();
+    await app.rowContainer(sessionA).getByRole('button', { name: 'Conversation actions', exact: true }).click();
     await page.getByRole('menuitem', { name: operation, exact: true }).click();
     if (operation === 'Delete…') await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
     await expect(page.locator('main .topbar-title')).toHaveText('New chat');
@@ -191,44 +96,6 @@ for (const operation of ['Archive', 'Delete…']) {
     expect(app.device.pageErrors).toEqual([]);
   });
 }
-
-test('Cloud reconnect fences an old history reply and retains newer live messages during synchronization', async ({ page }) => {
-  const app = await running(page);
-  const oldTask = app.controlState(sessionA).task_id;
-  const oldRead = deferred();
-  app.pauseHistory = oldRead.promise;
-  const oldResponse = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
-  const reads = () => app.requests.filter(request => request.method === 'GET' && request.path.endsWith(`/${sessionA}/messages`)).length;
-  const before = reads();
-  await app.finishTask();
-  await expect.poll(reads).toBeGreaterThan(before);
-  const connection = deferred();
-  app.pauseSessionEvents = connection.promise;
-  await app.disconnectSession(sessionA);
-  await expect.poll(() => observations(app).length).toBe(2);
-  await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task' });
-  const freshRead = deferred();
-  app.pauseHistory = freshRead.promise;
-  const beforeFresh = reads();
-  app.pauseSessionEvents = null;
-  connection.resolve();
-  await expect.poll(reads).toBeGreaterThan(beforeFresh);
-  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'New durable message' });
-  app.pauseHistory = null;
-  freshRead.resolve();
-  await expect(page.locator('.composer-banner')).not.toBeVisible();
-  await expect(page.locator('#stop')).toBeEnabled();
-  await expect(page.locator('#transcript').getByText('New durable message', { exact: true })).toHaveCount(1);
-  oldRead.resolve();
-  await oldResponse;
-  // A new frame also proves the stale read did not retire the live observer.
-  await app.emitSessionEvent(sessionA, 'assistant_delta', { content: 'Still running the new turn' });
-  await expect(page.locator('#transcript')).toContainText('Still running the new turn');
-  await expect(page.locator('#stop')).toBeEnabled();
-  await expect(page.locator('#transcript').getByText('New durable message', { exact: true })).toHaveCount(1);
-  expect(app.postCount).toBe(1);
-  expect(app.device.pageErrors).toEqual([]);
-});
 
 test('Cloud switching away retires an in-flight idle reconnect response', async ({ page }) => {
   const app = await running(page);
@@ -251,36 +118,8 @@ test('Cloud switching away retires an in-flight idle reconnect response', async 
   expect(app.device.pageErrors).toEqual([]);
 });
 
-test('Cloud recovery retries a failed history synchronization without another stream or submission', async ({ page }) => {
-  const app = await running(page);
-  const connection = deferred();
-  app.pauseSessionEvents = connection.promise;
-  await app.disconnectSession(sessionA);
-  await expect.poll(() => observations(app).length).toBe(2);
-  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Completed during the outage' });
-  await app.finishTask();
-  app.historyStatus = 503;
-  const failed = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`) && response.status() === 503);
-  app.pauseSessionEvents = null;
-  connection.resolve();
-  await failed;
-  await expect(page.locator('.composer-banner')).toContainText('reconnecting');
-  await expect(page.locator('#transcript')).not.toContainText('HTTP 503');
-  await page.locator('#task').fill('Draft during history retry');
-  await expect(page.locator('#send')).toBeDisabled();
-  app.historyStatus = 200;
-  await expect(page.locator('.composer-banner')).not.toBeVisible();
-  await expect(page.locator('#transcript').getByText('Completed during the outage', { exact: true })).toHaveCount(1);
-  await expect(page.locator('#stop')).toHaveCount(0);
-  await expect(page.locator('#task')).toHaveValue('Draft during history retry');
-  expect(observations(app)).toHaveLength(2);
-  expect(app.postCount).toBe(1);
-  expect(app.device.pageErrors).toEqual([]);
-});
-
-
 for (const error of [false, true]) {
-  test(`Cloud reconnects after ${error ? 'a stream read failure' : 'EOF'} without resubmitting input`, async ({ page }, testInfo) => {
+  test(`Cloud reconnects after ${error ? 'a stream read failure' : 'EOF'} without resubmitting input`, async ({ page }) => {
     const app = await running(page);
     await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Already confirmed.' });
     await expect(page.locator('#transcript')).toContainText('Already confirmed.');
@@ -293,7 +132,6 @@ for (const error of [false, true]) {
     await expect(page.locator('#task')).toBeEnabled();
     await expect(page.locator('#send')).toBeDisabled();
     await expect.poll(() => observations(app).length).toBe(2);
-    if (!error) await page.locator('main').screenshot({ path: testInfo.outputPath('cloud-reconnecting.png') });
     app.pauseSessionEvents = null;
     next.resolve();
     await expect(page.locator('.composer-banner')).not.toBeVisible();

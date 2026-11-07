@@ -427,7 +427,7 @@ priv enum BlockContent {
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
   /// of an in-flight preview, so the preview stays visible as the provisional
-  /// next step; `Conversation::reasoning_for_render` suppresses only an
+  /// next step; `@engine_session.Stream::visible_reasoning` suppresses only an
   /// exact, completed duplicate after it has durably committed.
   Live(
     prose~ : String?,

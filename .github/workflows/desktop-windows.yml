@@ -1,15 +1,9 @@
 name: Desktop Windows
 
-# Windows minutes cost twice Linux minutes, and this package build is the
-# slowest Desktop job. Pull requests run it only when they change the
-# packaging path itself: the window host, the packager and release scripts,
-# the Proton manifest, or the toolchain and dependency pins. Backend and
-# frontend changes are covered on Linux by desktop.yml and reach Windows on
-# the push to main, which uses desktop.yml's full path list so every relevant
-# merged commit is still packaged.
+# Package relevant Desktop changes before merging, including frontend,
+# backend, shared dependencies, and the packaging path itself.
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
       - "desktop/**"
       - "editor/**"
@@ -23,20 +17,10 @@ on:
       - "moon.work"
       - ".github/workflows/desktop-windows.yml"
       - ".github/workflows/desktop-release.yml"
-  pull_request:
-    paths:
-      - "desktop/app/**"
-      - "desktop/package/**"
-      - "desktop/scripts/**"
-      - "desktop/proton.project.json"
-      - "desktop/moon.mod"
-      - "desktop/.moonbit-version"
-      - ".github/workflows/desktop-windows.yml"
-      - ".github/workflows/desktop-release.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   desktop-package-windows:

@@ -478,7 +478,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   // If the first repair's request was cancelled after restoring the checkout
   // but before broadcasting, its idempotent retry must publish the complete
   // host-derived list so clients leave MissingWorktree.
-  let replayed : Array[WorktreeInfo] = []
+  let replayed : Array[@protocol.WorktreeInfo] = []
   let replay = @worktree.create(
     manager.worktree_host(),
     repo.to_string(),
@@ -550,7 +550,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   // The confirmed dialog retries with force: the checkout goes away, while
   // the recovery ref, archived history, and placement row all survive. The retained
   // row broadcasts as missing before the conversation is archived.
-  let changes : Array[(String, Array[WorktreeInfo])] = []
+  let changes : Array[(String, Array[@protocol.WorktreeInfo])] = []
   guard archive_session(manager, "s-arc", (_, _) => (), force=true, on_worktree_changed=(
       workspace,
       rows,
@@ -819,7 +819,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
   let mut worktree_changed = false
-  let committed_infos : Array[WorktreeInfo] = []
+  let committed_infos : Array[@protocol.WorktreeInfo] = []
   delete_archived_session_commit(
     manager,
     "chat",

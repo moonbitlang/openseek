@@ -1231,7 +1231,7 @@ fn apply_engine_event(
             run_id: event_run_id,
             tool_name,
             detail,
-            body: approval_display_body(tool_name, body),
+            body: @engine_session.approval_display_body(tool_name, body),
             answered: false,
           }),
         },
@@ -1524,7 +1524,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
-  model.delete_confirm is Some(_) ||
+  model.delete_confirm is Open(_) ||
   model.quick_open.is_open() ||
   model.api_setup_open ||
   model.update_ux is ConfirmingRestart(_) ||
@@ -1739,14 +1739,35 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
-  let dialog_cmd = if previous.management_dialog == model.management_dialog {
+  let detail_was_open = previous.skills_detail_dialog_open()
+  let detail_open = model.skills_detail_dialog_open()
+  let dialog_cmd = if (previous.management_dialog is Some(_)) ==
+    (model.management_dialog is Some(_)) {
     @cmd.none
   } else if model.management_dialog is Some(_) {
     @dialog.show("management-dialog")
   } else {
     @dialog.close("management-dialog")
   }
-  let cmd = @cmd.batch([cmd, dialog_cmd])
+  let cmd = @cmd.batch([
+    cmd,
+    if detail_was_open && !detail_open {
+      @dialog.close("skill-detail-dialog")
+    } else {
+      @cmd.none
+    },
+    dialog_cmd,
+    if previous.delete_confirm is Open(_) && !(model.delete_confirm is Open(_)) {
+      @dialog.close("delete-chat-dialog")
+    } else {
+      @cmd.none
+    },
+    if !detail_was_open && detail_open {
+      @dialog.show("skill-detail-dialog")
+    } else {
+      @cmd.none
+    },
+  ])
   let (preferences_cmd, model) = sync_account_preferences(
     dispatch, previous, model,
   )
@@ -2247,10 +2268,10 @@ fn update_msg(
         return (@cmd.none, model)
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             CloudDelete(
               account~,
               session~,
@@ -2571,6 +2592,7 @@ fn update_msg(
             )
           }
           @composer.StopRequested(identity~)
+          | @composer.ApprovalAnswered(identity~, ..)
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
           | @composer.QueuedInputSteerRequested(identity~, ..)
@@ -2628,6 +2650,39 @@ fn update_msg(
               FileEditor(@fileeditor.EnsureFileIndex),
               model,
             )
+          }
+          // The session keeps the mode on the server; a running turn keeps
+          // the policy its engine started with, so the menu is locked then.
+          @composer.ApprovalMenuToggled(identity~) => {
+            guard model.screen is Chat &&
+              model.cloud_identity() == Some(identity.owner) &&
+              model.cloud.can_choose_approval(identity.owner.session()) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              ToggleSelectMenu(OpenSeekApprovalMenu),
+              model,
+            )
+          }
+          @composer.SelectMenuDismissed(identity~) => {
+            guard model.cloud_identity() == Some(identity.owner) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(dispatch, CloseSelectMenu, model)
+          }
+          @composer.ApprovalSelected(identity~, mode~) => {
+            guard model.cloud_identity() == Some(identity.owner) &&
+              identity.owner is @interop.Cloud(account~, session~) else {
+              return (@cmd.none, model)
+            }
+            let (close, closed) = update_msg(dispatch, CloseSelectMenu, model)
+            let (save, next) = update_cloud(
+              dispatch,
+              @cloud.Edit(account~, session~, edit=SetApproval(mode)),
+              closed,
+            )
+            return (@cmd.batch([close, save]), next)
           }
           _ => return (@cmd.none, model)
         }
@@ -4150,7 +4205,18 @@ fn update_msg(
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
       // opens the modal — it is the announcement now, not a toast.
-      (push, next.settle_api_setup())
+      let next = next.settle_api_setup()
+      (
+        @cmd.batch([
+          push,
+          if next.api_setup_open && !next.cloud_selected() {
+            @dialog.show("api-setup-dialog")
+          } else {
+            @cmd.none
+          },
+        ]),
+        next,
+      )
     }
     FollowupBehaviorChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -4381,7 +4447,10 @@ fn update_msg(
           )
         UpdateReady(version~) =>
           if model.any_conversation_busy() {
-            (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~), })
+            (
+              @dialog.show("update-restart-dialog"),
+              { ..model, update_ux: ConfirmingRestart(version~), },
+            )
           } else {
             (
               apply_update(dispatch),
@@ -4487,7 +4556,7 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         (
-          @cmd.none,
+          @dialog.show("api-setup-dialog"),
           { ..model, api_setup_open: true, api_setup_dismissed: false, },
         )
       }
@@ -4617,7 +4686,17 @@ fn update_msg(
           },
         },
       )
-    DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
+    DeviceChosen(device) =>
+      (
+        @nav.load(
+          if device is Some(id) {
+            @routes.device_entry_path(id)
+          } else {
+            "/cloud"
+          },
+        ),
+        model,
+      )
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
@@ -5302,18 +5381,24 @@ fn update_msg(
     CancelArchiveDiscard => (@cmd.none, { ..model, archive_confirm: None, })
     ConfirmDeleteSession =>
       match model.delete_confirm {
-        Some(CloudDelete(account~, session~, ..)) => {
+        Open(CloudDelete(account~, session~, ..)) => {
           guard model.cloud.user_id == Some(account) else {
-            return (@cmd.none, { ..model, delete_confirm: None, })
+            return (
+              @cmd.none,
+              { ..model, delete_confirm: model.delete_confirm.close(), },
+            )
           }
           update_cloud(dispatch, @cloud.Delete(session), {
             ..model,
-            delete_confirm: None,
+            delete_confirm: model.delete_confirm.close(),
           })
         }
-        Some(HostDelete(confirm)) => {
+        Open(HostDelete(confirm)) => {
           guard model.device_state(confirm.channel) is Some(dev) else {
-            return (@cmd.none, { ..model, delete_confirm: None, })
+            return (
+              @cmd.none,
+              { ..model, delete_confirm: model.delete_confirm.close(), },
+            )
           }
           let sessions = match confirm.target {
             LiveChat(checkout~) =>
@@ -5322,7 +5407,7 @@ fn update_msg(
                 delete_session(dispatch, confirm.channel, confirm.key, checkout),
                 {
                   ..model,
-                  delete_confirm: None,
+                  delete_confirm: model.delete_confirm.close(),
                   // The delete can still come back to be confirmed again.
                   delete_pending: Some((confirm.channel, confirm.key)),
                   deletes_in_flight: model.confirm_delete(
@@ -5347,7 +5432,7 @@ fn update_msg(
             ),
             {
               ..model.replace_device({ ..dev, archived_request_generation, }),
-              delete_confirm: None,
+              delete_confirm: model.delete_confirm.close(),
               // The host can announce the deletion before this reply, which
               // the announcement then makes stale.
               deletes_in_flight: model.confirm_delete(
@@ -5359,12 +5444,13 @@ fn update_msg(
             },
           )
         }
-        None => (@cmd.none, model)
+        Empty | Closed(_) => (@cmd.none, model)
       }
     // Closing the dialog leaves `delete_pending` alone. No question is out
     // while a dialog is open, and the confirm button's click also reaches the
     // backdrop: that second message must not drop the delete's own answer.
-    CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
+    CancelDeleteSession =>
+      (@cmd.none, { ..model, delete_confirm: model.delete_confirm.close(), })
     SessionRotated(owner) => {
       guard model.cloud_identity() is None &&
         (
@@ -5725,10 +5811,10 @@ fn update_msg(
         }
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             HostDelete({
               channel,
               key,
@@ -7017,8 +7103,8 @@ fn update_msg(
       )
       (command, { ..model, export_dialog, })
     }
-    OpenSessionImport => {
-      guard model.session_import_target() is Some(target) else {
+    OpenSessionImport(channel, workspace) => {
+      guard model.session_import_target(channel, workspace) is Some(target) else {
         return (@cmd.none, model)
       }
       let (cmd, session_import_dialog) = model.session_import_dialog.open(
@@ -7701,7 +7787,15 @@ fn update_device_msg(
         // The settled mirror decides the modal (`settle_api_setup`); the
         // dismissal flag — not the mirror, which a reconnect clears — is
         // what keeps a "Not now" quiet across snapshots.
-        (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
+        let next = model.apply_host_settings(settings).settle_api_setup()
+        (
+          if next.api_setup_open && !next.cloud_selected() {
+            @dialog.show("api-setup-dialog")
+          } else {
+            @cmd.none
+          },
+          next,
+        )
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
@@ -7720,13 +7814,18 @@ fn update_device_msg(
           0
         },
       }.defer_host_settings(settings)
+      let next = if next.settings_saves > 0 {
+        next
+      } else {
+        next.flush_host_settings()
+      }
       (
-        @cmd.none,
-        if next.settings_saves > 0 {
-          next
+        if next.api_setup_open && !next.cloud_selected() {
+          @dialog.show("api-setup-dialog")
         } else {
-          next.flush_host_settings()
+          @cmd.none
         },
+        next,
       )
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
@@ -7752,6 +7851,9 @@ fn update_device_msg(
         notice_text(model.locale, SaveSettings(message.to_string())),
       )
       let commands = [notice]
+      if next.api_setup_open && !next.cloud_selected() {
+        commands.push(@dialog.show("api-setup-dialog"))
+      }
       if next.settings_saves == 0 {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
@@ -8527,7 +8629,7 @@ fn update_device_msg(
       // changes; stage the discard-confirmation dialog, whose confirm
       // retries with force.
       (
-        @cmd.none,
+        @dialog.show("worktree-archive-dialog"),
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteStopped(key~, checkout~) =>
@@ -8547,10 +8649,10 @@ fn update_device_msg(
         return (@cmd.none, model)
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             HostDelete({
               channel,
               key,
@@ -8710,7 +8812,11 @@ fn update_device_msg(
           request_generation~,
           fresh_session~,
         ),
-        { ..tombstoned, conversations, delete_confirm: None, },
+        {
+          ..tombstoned,
+          conversations,
+          delete_confirm: tombstoned.delete_confirm.close(),
+        },
       )
     }
     ArchiveFailed(message) => {
@@ -8814,8 +8920,8 @@ fn update_device_msg(
           conv.project() != key.workspace
         })
         let confirm = match changed.delete_confirm {
-          Some(HostDelete(confirm)) if confirm.channel == channel &&
-            confirm.key == key => None
+          Open(HostDelete(confirm)) if confirm.channel == channel &&
+            confirm.key == key => changed.delete_confirm.close()
           other => other
         }
         let next = changed
@@ -18161,7 +18267,7 @@ test "archived deletion confirmation owns one visible conversation family" {
     ),
     model,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(
@@ -18180,11 +18286,11 @@ test "archived deletion confirmation owns one visible conversation family" {
   assert_true(sessions.contains("desktop-parent"))
   assert_true(sessions.contains("desktop-parent-sr-1"))
   let (_, cancelled) = update(dispatch, CancelDeleteSession, staged)
-  assert_true(cancelled.delete_confirm is None)
+  assert_true(cancelled.delete_confirm is Closed(_))
   let (_, cancelled_twice) = update(dispatch, CancelDeleteSession, cancelled)
-  assert_true(cancelled_twice.delete_confirm is None)
+  assert_true(cancelled_twice.delete_confirm is Closed(_))
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_confirm is None)
+  assert_true(confirmed.delete_confirm is Closed(_))
   assert_eq(confirmed.dev().archived_request_generation, 1)
   let (_, confirmed_twice) = update(dispatch, ConfirmDeleteSession, confirmed)
   assert_eq(confirmed_twice.dev().archived_request_generation, 1)
@@ -18212,7 +18318,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
     model,
   )
-  assert_true(asked.delete_confirm is None)
+  assert_true(asked.delete_confirm is Empty)
   let clean : @protocol.CheckoutRemoval = {
     worktree: "wt-1",
     dirty_paths: [],
@@ -18233,13 +18339,13 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     ),
     asked,
   )
-  assert_true(unlisted.delete_confirm is None)
+  assert_true(unlisted.delete_confirm is Empty)
   let (_, staged) = update_dev(
     dispatch,
     DeleteChecked(key~, checkout=Some(clean)),
     asked,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("the host's answer staged no confirmation")
   }
   assert_true(confirm.key == key)
@@ -18248,7 +18354,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
   // The row stays listed until the host announces the deletion, and the
   // archived list is not this request's to refresh.
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_confirm is None)
+  assert_true(confirmed.delete_confirm is Closed(_))
   assert_eq(confirmed.dev().sessions.length(), 2)
   assert_eq(confirmed.dev().archived_request_generation, 0)
   // A checkout that turned dirty after the check comes back from the delete
@@ -18261,7 +18367,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=Some(dirty)),
     bubbled,
   )
-  guard refused.delete_confirm is Some(HostDelete(again)) else {
+  guard refused.delete_confirm is Open(HostDelete(again)) else {
     fail("a refused delete staged no second confirmation")
   }
   assert_true(again.target == LiveChat(checkout=Some(dirty)))
@@ -18280,13 +18386,13 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=None),
     overtaken,
   )
-  assert_true(late.delete_confirm is None)
+  assert_true(!(late.delete_confirm is Open(_)))
   let (_, current) = update_dev(
     dispatch,
     DeleteChecked(key=other, checkout=None),
     late,
   )
-  guard current.delete_confirm is Some(HostDelete(latest)) else {
+  guard current.delete_confirm is Open(HostDelete(latest)) else {
     fail("the latest question staged no confirmation")
   }
   assert_true(latest.key == other)
@@ -18303,7 +18409,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key=other, checkout=None),
     cancelled,
   )
-  assert_true(reopened.delete_confirm is None)
+  assert_true(reopened.delete_confirm is Closed(_))
 }
 
 ///|
@@ -18419,7 +18525,7 @@ test "archived deletion keeps same-id rows in other stores" {
     DeleteSession(@interop.ChannelId::Local, key, ArchivedRecord),
     model,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(confirm.key == key)

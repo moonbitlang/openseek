@@ -114,14 +114,7 @@ async fn install(
   defer lock.close()
   @async.with_timeout(1200000, () => lock.lock(Exclusive))
   let cli_name = executable_name("openseek")
-  let rg_name = executable_name("rg")
   let needs_cli = !available(bin + "/" + cli_name, ["--help"])
-  // Validate the extracted distribution before changing the user's toolchain.
-  if !@fs.exists(source + "/bin/" + rg_name) {
-    fail(
-      "Extract the complete OpenSeek archive before running setup: missing rg",
-    )
-  }
   // The installed CLI can run setup too: preserve its source before removal.
   let stage = @fs.tmpdir(prefix="openseek-share-")
   defer @fs.rmdir(stage, recursive=true)
@@ -130,7 +123,6 @@ async fn install(
   if needs_moonbit {
     toolchain(home + "/.moon")
   }
-  copy_file(source + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
   @fs.rmdir(root + "/share", recursive=true) catch {
     @os_error.OSError(_) as error if error.is_ENOENT() => ()
     error => raise error

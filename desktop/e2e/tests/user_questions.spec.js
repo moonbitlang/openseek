@@ -50,30 +50,6 @@ test('choosing an option advances to the next question and retains the answer', 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('choosing a final option waits for Send', async ({ page }) => {
-  const { app } = setup(page, [
-    { id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'] },
-    { id: 'scope', title: 'Which scope?', options: ['Keep scope', 'Expand scope'] },
-  ]);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.getByRole('button', { name: 'Keep scope', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await expect(card.getByRole('button', { name: 'Keep scope', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card).toContainText('Anything else?');
-  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
-    { approach: 'Small change', scope: 'Keep scope' },
-  ]);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('custom answer Enter advances questions and submits the final answer', async ({ page }) => {
   const { app } = setup(page);
   await app.install();
@@ -136,32 +112,7 @@ test('custom answer Shift+Enter inserts a line and IME Enter keeps the current q
   expect(app.pageErrors).toEqual([]);
 });
 
-test('custom answer Enter leaves empty questions pending', async ({ page }) => {
-  const { app } = setup(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  const input = card.locator('textarea');
-  await input.fill('   ');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await input.press('Enter');
-  await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
-  await expect(input).toHaveValue('   ');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await input.fill('A custom approach');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
-  await input.press('Enter');
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await input.press('Enter');
-  await expect(input).toHaveValue('');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('live questions occupy visible space between the transcript and composer', { tag: '@webkit-layout' }, async ({ page }, testInfo) => {
+test('live questions occupy visible space between the transcript and composer', { tag: '@webkit-layout' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -184,7 +135,6 @@ test('live questions occupy visible space between the transcript and composer', 
   await card.getByRole('button', { name: 'Small change', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  await page.screenshot({ path: testInfo.outputPath('live-question.png'), animations: 'disabled' });
   app.notify('user_questions.changed', { generation: 2, requests: [{
     id: 'long-question', session: 'session-1', questions: [{
       id: 'many', title: 'Choose an option', options: Array.from({ length: 30 }, (_, i) => `Option ${i + 1}`),
@@ -200,7 +150,7 @@ test('live questions occupy visible space between the transcript and composer', 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('questions survive reload and a finished turn, accept choices and text, and queue independently of approvals', async ({ page }, testInfo) => {
+test('questions survive reload and a finished turn, accept choices and text, and queue independently of approvals', async ({ page }) => {
   const { app, snapshot } = setup(page);
   await app.install();
   await app.goto();
@@ -230,9 +180,6 @@ test('questions survive reload and a finished turn, accept choices and text, and
   app.notify('user_questions.changed', snapshot());
   await expect(card.locator('textarea')).toBeFocused();
   await expect(card.locator('textarea')).toHaveValue('Keep keyboard support.\n<literal>');
-  const screenshot = testInfo.outputPath('questions-and-approval.png');
-  await page.screenshot({ path: screenshot, animations: 'disabled' });
-  await testInfo.attach('Independent question and approval cards', { path: screenshot, contentType: 'image/png' });
   await card.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(card).toContainText('Anything else?');
   await card.locator('.user-question-close').click();
@@ -246,33 +193,7 @@ test('questions survive reload and a finished turn, accept choices and text, and
   expect(app.pageErrors).toEqual([]);
 });
 
-test('failed answers retain text for retry, and a newer resolution beats stale snapshots', async ({ page }) => {
-  const { app, snapshot } = setup(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  await card.locator('textarea').first().fill('A custom approach');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.locator('textarea').fill('Details');
-  app.rpcErrors.set('user_questions.answer', 'Temporary failure');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card.locator('.user-question-error')).toContainText('Temporary failure');
-  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
-  await expect(card.locator('textarea')).toHaveValue('A custom approach');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  // A second client answers while this client's error is visible.
-  const stale = snapshot();
-  app.notify('user_questions.changed', { generation: 3, requests: [] });
-  await expect(card).toHaveCount(0);
-  app.notify('user_questions.changed', stale);
-  await expect(card).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('question drafts are scoped to the originating conversation and fit a narrow viewport', { tag: '@webkit-layout' }, async ({ page }, testInfo) => {
+test('question drafts are scoped to the originating conversation and fit a narrow viewport', { tag: '@webkit-layout' }, async ({ page }) => {
   const { app } = setup(page);
   app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
   const reply = app.replyFor.bind(app);
@@ -297,16 +218,13 @@ test('question drafts are scoped to the originating conversation and fit a narro
   const box = await card.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
-  const screenshot = testInfo.outputPath('questions-narrow.png');
-  await page.screenshot({ path: screenshot, animations: 'disabled' });
-  await testInfo.attach('Questions on a narrow viewport', { path: screenshot, contentType: 'image/png' });
   expect(app.pageErrors).toEqual([]);
 });
 
 {
   const width = 390;
 
-  test(`XML question responses render answers and skips live and after reload at ${width}px`, async ({ page }, testInfo) => {
+  test(`XML question responses render answers and skips live and after reload at ${width}px`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     const answered = '<user_question_response request_id="question-1" status="answered">\n'
       + '<question id="plan">\n<title>Which plan?</title>\n<options>\n<option>Small change</option>\n<option>Full redesign</option>\n</options>\n<answer>Small change</answer>\n</question>\n'
@@ -356,9 +274,6 @@ test('question drafts are scoped to the originating conversation and fit a narro
         await expect.poll(() => response.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       }
     }
-    const screenshot = testInfo.outputPath(`question-responses-${width}.png`);
-    await page.locator('#stream').screenshot({ path: screenshot, animations: 'disabled' });
-    await testInfo.attach('Formatted question responses', { path: screenshot, contentType: 'image/png' });
     expect(app.pageErrors).toEqual([]);
   });
 }

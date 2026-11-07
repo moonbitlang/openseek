@@ -46,79 +46,13 @@ fn normalize_submission_id(submission_id : String?) -> String? {
 }
 
 ///|
-type StartReply = @protocol.StartReply
-
-///|
-type CancelReply = @protocol.CancelReply
-
-///|
-type SteerReply = @protocol.SteerReply
-
-///|
-type ApprovalReply = @protocol.ApprovalReply
-
-///|
-/// One sidebar group of `list_sessions`: the conversations stored under one
-/// session root. `workspace` is the project directory and `name` its display
-/// label (the folder's basename). A group whose listing failed carries the
-/// engine's message in `error` and an empty `sessions` — one broken workspace
-/// must not take the whole sidebar down.
-type SessionGroup = @protocol.SessionGroup
-
-///|
-type SessionsReply = @protocol.SessionsReply
-
-///|
-type WorktreeInfo = @protocol.WorktreeInfo
-
-///|
-type ArchiveReply = @protocol.ArchiveReply
-
-///|
-type SessionDeleteReply = @protocol.SessionDeleteReply
-
-///|
-type SessionDeleteCheckReply = @protocol.SessionDeleteCheckReply
-
-///|
-type ArchiveNeedsForceReply = @protocol.ArchiveNeedsForceReply
-
-///|
-type WorkspacesReply = @protocol.WorkspacesReply
-
-///|
-type LoadSessionReply = @protocol.LoadSessionReply
-
-///|
-type ConnectedPayload = @protocol.ConnectedPayload
-
-///|
-type StartedPayload = @protocol.StartedPayload
-
-///|
-type EventPayload = @protocol.AgentEventPayload
-
-///|
-type ErrorPayload = @protocol.AgentErrorPayload
-
-///|
-/// One durably committed session event, broadcast as `session.event`. The
-/// canonical transcript channel: a commit exists if and only if its item is
-/// in the session's store file, and `sequence` is the item's one-based
-/// position there — contiguous per session, so a client can apply commits
-/// with a plain watermark (drop ≤ W, apply W+1, anything later is a gap and
-/// means reload). `event` is the typed store event, exactly the value a
-/// `session.load` snapshot carries in its `events` array.
-type SessionCommitPayload = @protocol.SessionCommitPayload
-
-///|
 pub(all) enum EngineEvent {
-  Connected(ConnectedPayload)
-  Started(StartedPayload)
-  StreamEvent(EventPayload)
-  Error(ErrorPayload)
+  Connected(@protocol.ConnectedPayload)
+  Started(@protocol.StartedPayload)
+  StreamEvent(@protocol.AgentEventPayload)
+  Error(@protocol.AgentErrorPayload)
   Finished(@protocol.FinishedPayload)
-  SessionCommit(SessionCommitPayload)
+  SessionCommit(@protocol.SessionCommitPayload)
   PredictionReady(@protocol.PredictionReadyPayload)
   /// A running sub-run advanced. Not a lifecycle event and not durable: the
   /// brackets on the raw stream own the sub-run's start and end, and this

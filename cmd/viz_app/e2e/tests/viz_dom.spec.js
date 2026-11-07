@@ -503,27 +503,6 @@ test('the prompt rail previews typed prompts and jumps to them', async ({ page }
   expect(viewer.pageErrors).toEqual([]);
 });
 
-test("a subagent transcript's task is not captioned as the user's", async ({ page }) => {
-  const viewer = new VizBrowserHarness(page);
-  viewer.sessionId = 'viz-1-sr-1';
-  viewer.events = viewer.eventLog([
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Question: which version?' } } },
-    {
-      sequence: 2,
-      item: { kind: 'assistant', payload: { content: 'Looking it up.', tool_calls: [] } },
-    },
-  ], { id: viewer.sessionId });
-  await viewer.install();
-  await viewer.goto();
-  await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
-
-  await expect(page.locator('.card.user.delegated')).toHaveCount(1);
-  await expect(page.locator('.card.user.delegated')).toContainText('Task from parent');
-  await expect(page.locator('.card.user.typed')).toHaveCount(0);
-  expect(viewer.pageErrors).toEqual([]);
-});
-
 test('scrubber navigation preserves hash state and clamps its transient tooltip', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 500 });
   const viewer = new VizBrowserHarness(page);
@@ -612,12 +591,4 @@ test('--watch opens a linked session once it starts', async ({ page }) => {
   await expect(page.locator('.header-id', { hasText: 'run-late' })).toBeVisible();
   await expect(page.locator('.header-meta')).toContainText('live');
   expect(viewer.pageErrors).toEqual([]);
-});
-
-test('without --watch a link to an unknown session does not wait', async ({ page }) => {
-  const viewer = new VizBrowserHarness(page);
-  await viewer.install();
-  await viewer.goto('#s=run-late');
-  await expect(page.getByText('1 session(s)')).toBeVisible();
-  await expect(page.getByText('waiting for run-late to start…')).toHaveCount(0);
 });

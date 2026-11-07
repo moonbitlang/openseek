@@ -130,55 +130,55 @@ fn pdf_password_dialog(
   ctx : Ctx,
 ) -> @html.Html {
   let document = active_pdf_document(state, ctx).map(tuple => tuple.1)
-  let required = document
-    .map(document => document.status is PdfPasswordRequired(_))
-    .unwrap_or(false)
   let incorrect = document
     .map(document => document.status is PdfPasswordRequired(incorrect=true))
     .unwrap_or(false)
-  @html.div(
-    class=if required {
-      "pdf-password-overlay"
-    } else {
-      "pdf-password-overlay hidden"
-    },
+  @rui.dialog(
+    id="pdf-password-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_cancel=dispatch(PdfPasswordCancelled),
+    attrs=@html.Attrs::build().aria_labelledby("pdf-password-title"),
     [
+      @rui.dialog_header(
+        @rui.dialog_title(id="pdf-password-title", ui(locale, PdfUnlockTitle)),
+      ),
       @html.form(
-        class="pdf-password-dialog",
-        attrs=@html.Attrs::build()
-          .role("dialog")
-          .aria_modal("true")
-          .aria_label(ui(locale, PdfUnlockTitle))
-          .on_submit(event => {
-            event.prevent_default()
-            dispatch(PdfPasswordSubmitted)
-          }),
+        attrs=@html.Attrs::build().on_submit(event => {
+          event.prevent_default()
+          dispatch(PdfPasswordSubmitted)
+        }),
         [
-          @html.h2(ui(locale, PdfUnlockTitle)),
-          @html.input(
-            input_type=Password,
-            value=document.map(document => document.password).unwrap_or(""),
-            placeholder=ui(locale, PdfPassword),
-            on_input=dispatch.map(value => PdfPasswordChanged(value)),
-            attrs=@html.Attrs::build().aria_label(ui(locale, PdfPasswordLabel)),
-          ),
-          @html.div(
-            class=if incorrect {
-              "pdf-password-error"
-            } else {
-              "pdf-password-error hidden"
-            },
-            attrs=@html.Attrs::build().role("alert"),
-            ui(locale, PdfIncorrectPassword),
-          ),
-          @html.div(class="pdf-password-actions", [
+          @html.div([
+            @html.input(
+              input_type=Password,
+              value=document.map(document => document.password).unwrap_or(""),
+              placeholder=ui(locale, PdfPassword),
+              on_input=dispatch.map(value => PdfPasswordChanged(value)),
+              attrs=@html.Attrs::build().aria_label(
+                ui(locale, PdfPasswordLabel),
+              ),
+            ),
+            @html.div(
+              class=if incorrect {
+                "pdf-password-error"
+              } else {
+                "pdf-password-error hidden"
+              },
+              attrs=@html.Attrs::build().role("alert"),
+              ui(locale, PdfIncorrectPassword),
+            ),
+          ]),
+          @rui.dialog_footer([
             @html.button(
               type_="button",
+              class="button secondary",
               on_click=dispatch(PdfPasswordCancelled),
               ui(locale, CancelSelection),
             ),
             @html.button(
               type_="submit",
+              class="button primary",
               disabled=document
                 .map(document => document.password.is_empty())
                 .unwrap_or(true),

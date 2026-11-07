@@ -253,11 +253,7 @@ fn CodexWorkspaceBinding::decode_reply(value : Json) -> CodexWorkspaceBinding? {
 async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit {
   match self.workspace {
     Some(workspace) => {
-      guard @pathx.Absolute::from_uri_path(workspace) is Some(path) else {
-        raise @host.HostError(
-          "invalid Codex workspace resource path: " + workspace,
-        )
-      }
+      let path = @pathx.Absolute::parse_resource_path(workspace)
       @work_dir.authorize_host_workspace(self.session, path.to_string())
     }
     _ => @work_dir.revoke_host_workspace(self.session)
@@ -585,7 +581,7 @@ pub fn endpoints(
         start=start => {
           if !payload.attachment_paths.is_empty() {
             ignore(
-              @host.stage_attachments_op({
+              @files.stage_attachments({
                 session: start.session,
                 workspace: payload.workspace,
                 source_root: payload.workspace,
@@ -714,6 +710,7 @@ pub fn endpoints(
       // empty list it would take for a fresh install.
       let reply = @engine.list_workspaces() catch {
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        @pathx.UnsupportedResourcePath as error => WorkspaceError("\{error}")
         error => raise error
       }
       match reply {
@@ -730,6 +727,7 @@ pub fn endpoints(
       }) catch {
         @engine.EngineError(message) => WorkspaceError(message)
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        @pathx.UnsupportedResourcePath as error => WorkspaceError("\{error}")
         error => raise error
       }
     }),
@@ -740,6 +738,7 @@ pub fn endpoints(
       }) catch {
         @engine.EngineError(message) => WorkspaceError(message)
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        @pathx.UnsupportedResourcePath as error => WorkspaceError("\{error}")
         error => raise error
       }
     }),
@@ -798,6 +797,8 @@ pub fn endpoints(
       ) catch {
         @worktree.WorktreeError(message) => return WorktreeCreateError(message)
         @engine.EngineError(message) => return WorktreeCreateError(message)
+        @pathx.UnsupportedResourcePath as error =>
+          return WorktreeCreateError("\{error}")
         error => raise error
       }
       // A Codex worktree path is safe to authorize because this operation
@@ -1020,16 +1021,14 @@ async fn ApiState::open_codex_draft(
   payload : @protocol.CodexDraftOpenPayload,
 ) -> @protocol.CodexDraftOpenReply {
   let draft_id = payload.draft_id.trim().to_owned()
-  let registered = if @pathx.Absolute::from_uri_path(
-      payload.cwd.trim().to_owned(),
-    )
-    is Some(requested) {
-    // Resource URIs lowercase Windows drive letters; the registry owns the
-    // canonical filesystem spelling, including drive case and symlinks.
-    @workspaces.registered_dir(requested).map(root => root.to_string())
-  } else {
-    None
-  }
+  let requested = @pathx.Absolute::parse_resource_path(
+    payload.cwd.trim().to_owned(),
+  )
+  // Resource URIs lowercase Windows drive letters; the registry owns the
+  // canonical filesystem spelling, including drive case and symlinks.
+  let registered = @workspaces.registered_dir(requested).map(root => {
+    root.to_string()
+  })
   let project_root = match self.codex_projects.main_project(payload.cwd) {
     Some(project) => Some(project)
     None => registered

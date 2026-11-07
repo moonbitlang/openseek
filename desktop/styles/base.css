@@ -1,4 +1,9 @@
 
+* {
+  outline: none !important;
+  box-sizing: border-box;
+}
+
 html,
 body,
 #app {
@@ -103,21 +108,6 @@ samp,
   font-weight: 400;
 }
 
-/* A form field has exactly one focus-border owner. A plain input owns itself;
-   a composite field puts the owner on its bordered wrapper and marks the
-   nested text control as the target. Explicit data attributes keep this rule
-   out of the embedded Viewer even though it shares the document. */
-[data-focus-owner]:focus,
-[data-focus-owner]:has([data-focus-target]:focus) {
-  border-color: var(--color-focus-ring);
-  outline: none;
-}
-
-/* Composite targets leave all focus drawing to their owner. */
-[data-focus-target]:focus {
-  outline: none;
-}
-
 /* Every app-owned select uses the same popup surface and option semantics.
    Reusing one scoped anchor name gives each select a private positioning seam;
    its top-layer menu escapes pane clipping without exposing unique CSS names
@@ -168,6 +158,10 @@ samp,
   box-shadow: var(--shadow-surface);
 }
 
+[id="conversation-transfer:actions"] {
+  min-width: 140px;
+}
+
 .custom-select-menu:popover-open {
   display: grid;
 }
@@ -175,7 +169,7 @@ samp,
 .custom-select-group + .custom-select-group {
   margin-top: 4px;
   padding-top: 4px;
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
 }
 
 .custom-select-group-label,
@@ -189,7 +183,6 @@ samp,
 .menu-option,
 [id="conversation-transfer:actions"] .action-menu-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16px;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -206,16 +199,19 @@ samp,
   cursor: pointer;
 }
 
-.menu-option:hover,
-.menu-option.selected,
-[id="conversation-transfer:actions"] .action-menu-item:hover {
-  background: var(--color-bg-subtle);
+.menu-option {
+  grid-template-columns: minmax(0, 1fr) 16px;
 }
 
-.menu-option:focus-visible,
+[id="conversation-transfer:actions"] .action-menu-item {
+  grid-template-columns: 16px minmax(0, 1fr);
+}
+
+.menu-option:hover,
+.menu-option.selected,
+[id="conversation-transfer:actions"] .action-menu-item:hover,
 [id="conversation-transfer:actions"] .action-menu-item:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: -1px;
+  background: var(--color-bg-subtle);
 }
 
 .custom-select-option-label {
@@ -224,7 +220,7 @@ samp,
 }
 
 .custom-select-option-check {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-size: var(--font-size-md);
   line-height: 1;
   text-align: center;
@@ -241,14 +237,6 @@ samp,
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   overflow-wrap: anywhere;
-}
-
-/* The transcript's tab radios are visually clipped, so their visible labels
-   carry the keyboard focus indicator. Form-control focus remains centralized
-   here even though the labels' geometry belongs to transcript.css. */
-.tool-call-tab-input:focus-visible + .tool-call-tab-label {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: -1px;
 }
 
 ::selection {
@@ -545,13 +533,13 @@ html.native-titlebar-overlay .app
 
 
 /* SSH identity is separate from the executable command. */
-.ssh-host-row { display: flex; align-items: center; gap: 1rem; padding: var(--space-6) var(--space-7); border-bottom: 1px solid var(--color-border); }
+.ssh-host-row { display: flex; align-items: center; gap: 1rem; padding: var(--space-6) var(--space-7); border-bottom: 1px solid var(--color-divider); }
 .ssh-host-icon { display: flex; padding: var(--space-5); border-radius: 10px; background: var(--color-bg-subtle); color: var(--color-text-secondary); }
 .ssh-host-copy { flex: 1; min-width: 0; }
 .ssh-host-title { padding: 0; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ssh-host-address, .ssh-help, .ssh-subtitle, .ssh-settings-footer > span { color: var(--color-text-secondary); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
 .ssh-host-address { margin: var(--space-2) 0 var(--space-4); }
-.ssh-host-actions, .ssh-modal-actions, .ssh-settings-footer { display: flex; align-items: center; gap: var(--space-4); }
+.ssh-host-actions, .ssh-auth-actions, .ssh-settings-footer { display: flex; align-items: center; gap: var(--space-4); }
 .ssh-more { display: flex; padding: var(--space-3); }
 .ssh-settings-footer { justify-content: space-between; padding: var(--space-6) var(--space-7); gap: var(--space-6); }
 .ssh-settings-footer button { display: flex; align-items: center; gap: var(--space-3); }
@@ -562,7 +550,7 @@ html.native-titlebar-overlay .app
 .ssh-dot.pending { background: #bd8b36; animation: ssh-pulse 1.4s ease-in-out infinite; }
 @keyframes ssh-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .ssh-dot.pending { animation: none; } }
-.ssh-locations { display: flex; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-5) var(--space-7); border-bottom: 1px solid var(--color-border); }
+.ssh-locations { display: flex; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-5) var(--space-7); border-bottom: 1px solid var(--color-divider); }
 .ssh-location { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); min-width: 0; max-width: 100%; border: 1px solid var(--color-border); font-size: var(--font-size-xs); }
 .ssh-location > span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ssh-location small { color: var(--color-text-secondary); }
@@ -590,10 +578,6 @@ html.native-titlebar-overlay .app
   user-select: text;
 }
 .ssh-error { color: var(--color-danger, #c74949); }
-.modal-backdrop.ssh-backdrop { z-index: 140; }
-.modal.ssh-modal { width: min(640px, calc(100vw - 40px)); padding: var(--space-7); box-sizing: border-box; max-height: calc(100vh - 48px); overflow-y: auto; }
-.ssh-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-6); }
-.ssh-modal-header h2 { font-size: var(--font-size-lg); margin: 0; overflow-wrap: anywhere; }
 .ssh-subtitle { margin: var(--space-4) 0 var(--space-7); font-size: var(--font-size-sm); }
 .ssh-field { display: flex; flex-direction: column; gap: var(--space-4); margin: var(--space-6) 0; font-size: var(--font-size-xs); font-weight: 500; }
 .ssh-field input { width: 100%; box-sizing: border-box; font-weight: 400; }
@@ -604,12 +588,12 @@ html.native-titlebar-overlay .app
 .ssh-preview .ssh-host-address { margin: var(--space-1) 0 0; }
 .ssh-preview small { color: var(--color-text-secondary); font-size: var(--font-size-micro); }
 .ssh-help { line-height: 1.6; margin: var(--space-5) 0 var(--space-6); }
-.ssh-modal-actions { justify-content: flex-end; margin-top: var(--space-7); flex-wrap: wrap; }
+.ssh-auth-actions { justify-content: flex-end; margin-top: var(--space-6); flex-wrap: wrap; }
 .ssh-detail-identity { display: flex; gap: var(--space-4); align-items: center; margin: var(--space-6) 0 var(--space-5); overflow-wrap: anywhere; }
-.ssh-command-details { margin-top: var(--space-7); padding-top: var(--space-6); border-top: 1px solid var(--color-border); }
+.ssh-command-details { margin-top: var(--space-7); padding-top: var(--space-6); border-top: 1px solid var(--color-divider); }
 .ssh-command-details summary { cursor: pointer; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .ssh-command-details pre { font-size: var(--font-size-xs); padding: var(--space-5); background: var(--color-bg-subtle); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.ssh-context { display: inline-flex; align-items: center; gap: var(--space-4); padding-right: var(--space-5); border-right: 1px solid var(--color-border); min-width: 0; max-width: 100%; flex: 0 0 auto; }
+.ssh-context { display: inline-flex; align-items: center; gap: var(--space-4); padding-right: var(--space-5); border-right: 1px solid var(--color-divider); min-width: 0; max-width: 100%; flex: 0 0 auto; }
 .ssh-context-host { max-width: 100px; display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: var(--color-text-secondary); font-size: var(--font-size-xs); padding: 0; }
 .ssh-context-host > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ssh-context .button { flex: 0 0 auto; white-space: nowrap; margin-left: auto; font-size: var(--font-size-caption); padding: var(--space-2) var(--space-4); }
@@ -618,7 +602,7 @@ html.native-titlebar-overlay .app
 
 .ssh-settings-error { padding: 0 var(--space-7) var(--space-6); }
 
-.ssh-auth { border-top: 1px solid var(--color-border); margin-top: var(--space-6); padding-top: var(--space-4); }
+.ssh-auth { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-4); }
 .ssh-auth-heading { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .ssh-auth-prompt { font-family: var(--font-family-mono); }
 .ssh-field .ssh-auth-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -626,5 +610,4 @@ html.native-titlebar-overlay .app
 .ssh-secret input { min-width: 0; flex: 1; }
 .ssh-auth-keys { text-align: right; font-size: var(--font-size-caption); color: var(--color-text-secondary); margin: var(--space-4) 0 0; }
 .ssh-auth .ssh-field { margin: var(--space-5) 0 var(--space-4); }
-.ssh-auth .ssh-modal-actions { margin-top: var(--space-6); }
 .ssh-auth .ssh-auth-heading { margin: var(--space-4) 0 var(--space-5); }

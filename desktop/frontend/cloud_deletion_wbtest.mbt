@@ -18,10 +18,10 @@ test "Cloud delete captures its title and uses the shared confirmation" {
     model,
   )
   assert_true(
-    staged.delete_confirm is Some(CloudDelete(title="Cloud conversation", ..)),
+    staged.delete_confirm is Open(CloudDelete(title="Cloud conversation", ..)),
   )
   let (_, cancelled) = update(test_dispatch(), CancelDeleteSession, staged)
-  assert_true(cancelled.delete_confirm is None)
+  assert_true(cancelled.delete_confirm is Closed(_))
   assert_true(cancelled.cloud.deletions.is_empty())
 }
 

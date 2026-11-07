@@ -47,7 +47,7 @@ priv struct State {
 ///|
 priv enum Msg {
   Open(Open)
-  Close
+  Close(Open)
 }
 
 ///|
@@ -58,17 +58,12 @@ const TemporaryFocusAttribute : String = "data-action-menu-temporary-focus"
 
 ///|
 fn menu_id(target : String) -> String {
-  target + ":actions"
+  target + ":actions-content"
 }
 
 ///|
 fn trigger_id(target : String) -> String {
   target + ":actions-trigger"
-}
-
-///|
-fn item_id(target : String, index : Int32) -> String {
-  menu_id(target) + ":item:\{index}"
 }
 
 ///|
@@ -158,7 +153,7 @@ pub fn context_attrs(target : String) -> @html.Attrs {
   .id(target + ":context-trigger")
   .data_set("action-menu-context", target)
   .aria_haspopup("menu")
-  .aria_controls(menu_id(target))
+  .aria_controls(target + ":pointer-menu-content")
   .on_mousedown(event => remember_context_focus(event))
   .on_contextmenu(event => {
     event.prevent_default()
@@ -262,287 +257,6 @@ fn set_trigger_open(target : String, open : Bool) -> @cmd.Cmd {
 }
 
 ///|
-fn set_style(element : @dom.Element, key : String, value : String) -> Unit {
-  let style : @js.Value = @js.Value::cast_from(element).get_with_string("style")
-  let _ : @js.Value = style.apply_with_string("setProperty", [
-    @js.Value::cast_from(key),
-    @js.Value::cast_from(value),
-  ])
-}
-
-///|
-fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      guard @dom.document().get_element_by_id(menu_id(target)).to_option()
-        is Some(menu) else {
-        return
-      }
-      let window = @dom.window()
-      let mut viewport_left = 0.0
-      let mut viewport_top = 0.0
-      let mut viewport_width = window.inner_width()
-      let mut viewport_height = window.inner_height()
-      if window.get_visual_viewport() is Some(viewport) {
-        viewport_left = viewport.get_offset_left()
-        viewport_top = viewport.get_offset_top()
-        viewport_width = viewport.get_width()
-        viewport_height = viewport.get_height()
-      }
-      let menu_rect = menu.get_bounding_client_rect()
-      let menu_width = menu_rect.get_width()
-      let menu_height = menu_rect.get_height()
-      let gap = 2.0
-      let (wanted_left, wanted_top) = match anchor {
-        Pointer(x, y) => (x.to_double(), y.to_double())
-        Button => {
-          guard @dom.document()
-            .get_element_by_id(trigger_id(target))
-            .to_option()
-            is Some(trigger) else {
-            return
-          }
-          let trigger_rect = trigger.get_bounding_client_rect()
-          let below = viewport_top + viewport_height - trigger_rect.get_bottom()
-          let above = trigger_rect.get_top() - viewport_top
-          // The preferred side wins while the menu fits there or that side
-          // still has more room; otherwise the menu flips.
-          let open_upward = trigger.get_attribute("data-action-menu-side")
-            is Some("top")
-          let opens_below = if open_upward {
-            !(above >= menu_height || above >= below)
-          } else {
-            below >= menu_height || below >= above
-          }
-          let top = if opens_below {
-            trigger_rect.get_bottom() + gap
-          } else {
-            trigger_rect.get_top() - menu_height - gap
-          }
-          let left = if trigger.get_attribute("data-action-menu-align")
-            is Some("start") {
-            trigger_rect.get_left()
-          } else {
-            trigger_rect.get_right() - menu_width
-          }
-          (left, top)
-        }
-      }
-      let margin = 4.0
-      let min_left = viewport_left + margin
-      let min_top = viewport_top + margin
-      let max_left = viewport_left + viewport_width - menu_width - margin
-      let max_top = viewport_top + viewport_height - menu_height - margin
-      // A menu taller or wider than the viewport pins to the near edge: the
-      // `.max(min_*)` keeps the clamp window non-empty.
-      let left = wanted_left.clamp(min=min_left, max=max_left.max(min_left))
-      let top = wanted_top.clamp(min=min_top, max=max_top.max(min_top))
-      set_style(menu, "left", "\{left.to_int()}px")
-      set_style(menu, "top", "\{top.to_int()}px")
-      menu.set_attribute("data-positioned", "true")
-    },
-    kind=@cmd.after_render,
-  )
-}
-
-///|
-fn Definition::enabled_indices(self : Definition) -> Array[Int32] {
-  let result : Array[Int32] = []
-  for index, entry in self.entries {
-    if entry is Action(item) && item.enabled {
-      result.push(index)
-    }
-  }
-  result
-}
-
-///|
-fn Definition::has_actions(self : Definition) -> Bool {
-  self.entries.any(entry => entry is Action(_))
-}
-
-///|
-fn enabled_position(indices : Array[Int32], index : Int32) -> Int32? {
-  indices.search(index)
-}
-
-///|
-fn item_attrs(
-  open : Open,
-  enabled : Array[Int32],
-  index : Int32,
-  select : @cmd.Cmd,
-  dismiss : @cmd.Cmd,
-) -> @html.Attrs {
-  @html.Attrs::build()
-  .id(item_id(open.target, index))
-  .role("menuitem")
-  .on_click(event => {
-    event.stop_propagation()
-    @cmd.batch([dismiss, @cmd.delay(select, 0)])
-  })
-  .on_contextmenu(event => {
-    event.prevent_default()
-    event.stop_propagation()
-    @cmd.batch([dismiss, @cmd.delay(select, 0)])
-  })
-  .on_keydown(event => {
-    guard enabled_position(enabled, index) is Some(position) else {
-      return @cmd.none
-    }
-    let destination = match event.key() {
-      "ArrowDown" => Some(enabled[(position + 1) % enabled.length()])
-      "ArrowUp" =>
-        Some(
-          enabled[if position > 0 {
-            position - 1
-          } else {
-            enabled.length() - 1
-          }],
-        )
-      "Home" => Some(enabled[0])
-      "End" => Some(enabled[enabled.length() - 1])
-      _ => None
-    }
-    if destination is Some(destination) {
-      event.prevent_default()
-      focus_element(item_id(open.target, destination), false)
-    } else if event.key() == "Escape" {
-      event.prevent_default()
-      @cmd.batch([
-        dismiss,
-        match open.restore_focus_id {
-          Some(id) => focus_element(id, true)
-          None => @cmd.none
-        },
-      ])
-    } else if event.key() == "Tab" {
-      @cmd.delay(dismiss, 0)
-    } else if event.key() == "Enter" || event.key() == " " {
-      event.prevent_default()
-      @cmd.batch([dismiss, @cmd.delay(select, 0)])
-    } else {
-      @cmd.none
-    }
-  })
-}
-
-///|
-fn render_menu(
-  open : Open,
-  definition : Definition,
-  dismiss : @cmd.Cmd,
-) -> @html.Html {
-  let rows : Array[@html.Html] = []
-  let enabled = definition.enabled_indices()
-  for index, entry in definition.entries {
-    match entry {
-      Separator =>
-        rows.push(
-          @html.div(
-            class="action-menu-separator",
-            attrs=@html.Attrs::build().role("separator"),
-            "",
-          ),
-        )
-      Action(item) => {
-        let class = if item.destructive {
-          "action-menu-item destructive"
-        } else {
-          "action-menu-item"
-        }
-        let attrs = if item.enabled {
-          item_attrs(open, enabled, index, item.command, dismiss)
-        } else {
-          @html.Attrs::build()
-          .role("menuitem")
-          .aria_disabled("true")
-          .on_click(event => {
-            event.stop_propagation()
-            @cmd.none
-          })
-          .on_contextmenu(event => {
-            event.prevent_default()
-            event.stop_propagation()
-            @cmd.none
-          })
-        }
-        rows.push(
-          @html.button(
-            class~,
-            type_="button",
-            title=item.title,
-            disabled=!item.enabled,
-            attrs~,
-            [
-              match item.icon {
-                Some(icon) => icon
-                None => @html.span(class="action-menu-icon-placeholder", "")
-              },
-              @html.span(item.label),
-            ],
-          ),
-        )
-      }
-    }
-  }
-  @html.div(
-    class="action-menu",
-    attrs=@html.Attrs::build()
-      .id(menu_id(open.target))
-      .role("menu")
-      .aria_label(definition.label)
-      .tabindex(-1)
-      .data_set("action-menu-surface", open.target)
-      .data_set("positioned", "false")
-      .on_click(event => {
-        event.stop_propagation()
-        @cmd.none
-      })
-      .on_contextmenu(event => {
-        event.prevent_default()
-        event.stop_propagation()
-        @cmd.none
-      })
-      .on_keydown(event => {
-        guard focused_element_id() is Some(focused_id) &&
-          focused_id == menu_id(open.target) else {
-          return @cmd.none
-        }
-        if enabled.is_empty() &&
-          event.key()
-          is ("ArrowDown" | "ArrowUp" | "Home" | "End" | "Enter" | " ") {
-          event.prevent_default()
-          return @cmd.none
-        }
-        let destination = match event.key() {
-          "ArrowDown" | "Home" => enabled.get(0)
-          "ArrowUp" | "End" => enabled.get(enabled.length() - 1)
-          _ => None
-        }
-        if destination is Some(destination) {
-          event.prevent_default()
-          focus_element(item_id(open.target, destination), false)
-        } else if event.key() == "Escape" {
-          event.prevent_default()
-          @cmd.batch([
-            dismiss,
-            match open.restore_focus_id {
-              Some(id) => focus_element(id, true)
-              None => @cmd.none
-            },
-          ])
-        } else if event.key() == "Tab" {
-          @cmd.delay(dismiss, 0)
-        } else {
-          @cmd.none
-        }
-      }),
-    rows,
-  )
-}
-
-///|
 priv suberror OpenSubscription {
   OpenSubscription(@cmd.Emit[Open])
 }
@@ -573,267 +287,353 @@ fn open_subscription(emit : @cmd.Emit[Open]) -> @sub.Sub {
 }
 
 ///|
-priv suberror DismissSubscription {
-  DismissSubscription(String, @cmd.Emit[Unit])
+fn Definition::has_enabled_actions(self : Definition) -> Bool {
+  self.entries.any(entry => entry is Action(item) && item.enabled)
 }
 
 ///|
-fn dismiss_subscription(
-  target_key : String,
-  emit : @cmd.Emit[Unit],
-  dismiss_on_context~ : Bool = true,
-) -> @sub.Sub {
-  @sub.custom_sub(
-    "action-menu-dismiss",
-    Local,
-    DismissSubscription(target_key, emit),
-    (payload, scheduler) => {
-      guard payload is DismissSubscription(owner, emit) else { return None }
-      let mut emit = emit
-      let document = @dom.document().as_event_target()
-      let dom_window = @dom.window()
-      let window = dom_window.as_event_target()
-      let click_listener : @dom.Listener = event => {
-        if event.target().to_element() is Some(element) {
-          if element.closest("[data-action-menu-surface]") is Some(_) ||
-            element.closest("[data-action-menu-owner]") is Some(_) {
-            return
-          }
+fn Definition::has_actions(self : Definition) -> Bool {
+  self.entries.any(entry => entry is Action(_))
+}
+
+///|
+fn Definition::revision(self : Definition) -> String {
+  Repr::Repr(
+    (
+      self.label,
+      self.entries.map(entry => {
+        match entry {
+          Separator => None
+          Action(item) =>
+            Some((item.label, item.title, item.enabled, item.destructive))
         }
-        let _ = @dom.window().set_timeout(() => scheduler.add(emit(())), 0)
-      }
-      let context_listener : @dom.Listener = event => {
-        if event.target().to_element() is Some(element) {
-          if element.closest("[data-action-menu-surface]") is Some(_) ||
-            element.closest("[data-action-menu-context]") is Some(_) ||
-            element.closest("[data-action-menu-owner]") is Some(_) {
-            return
-          }
-        }
-        scheduler.add(emit(()))
-      }
-      document.add_event_listener_with_options(
-        "click",
-        click_listener,
-        capture=true,
-      )
-      if dismiss_on_context {
-        document.add_event_listener("contextmenu", context_listener)
-      }
-      let blur_listener : @dom.Listener = _ => scheduler.add(emit(()))
-      let resize_listener : @dom.Listener = _ => scheduler.add(emit(()))
-      window.add_event_listener("blur", blur_listener)
-      window.add_event_listener("resize", resize_listener)
-      let mut viewport_target : @dom.EventTarget? = None
-      if dom_window.get_visual_viewport() is Some(viewport) {
-        let target = viewport.as_event_target()
-        target.add_event_listener("resize", resize_listener)
-        viewport_target = Some(target)
-      }
-      let mut scroll_target : @dom.EventTarget? = None
-      let scroll_listener : @dom.Listener = _ => scheduler.add(emit(()))
-      if @dom.document().query_selector(".sidebar-main").to_option()
-        is Some(sidebar) {
-        let target = sidebar.as_event_target()
-        target.add_event_listener("scroll", scroll_listener)
-        scroll_target = Some(target)
-      }
-      Some({
-        unload: _ => {
-          document.remove_event_listener_with_options(
-            "click",
-            click_listener,
-            capture=true,
-          )
-          if dismiss_on_context {
-            document.remove_event_listener("contextmenu", context_listener)
-          }
-          window.remove_event_listener("blur", blur_listener)
-          window.remove_event_listener("resize", resize_listener)
-          if viewport_target is Some(target) {
-            target.remove_event_listener("resize", resize_listener)
-          }
-          if scroll_target is Some(target) {
-            target.remove_event_listener("scroll", scroll_listener)
-          }
-        },
-        update_tagger: payload => {
-          guard payload is DismissSubscription(next_owner, next_emit) &&
-            next_owner == owner else {
-            return
-          }
-          emit = next_emit
-        },
-      })
-    },
-  )
+      }),
+    ),
+  ).to_string()
 }
 
 ///|
-priv suberror FocusSubscription {
-  FocusSubscription(String, Array[Int32]?, @cmd.Emit[Unit])
+fn Open::key(self : Open) -> String {
+  let anchor = match self.anchor {
+    Button => self.target + ":button"
+    Pointer(x, y) => self.target + ":context:\{x}:\{y}"
+  }
+  anchor + ":" + self.restore_focus_id.unwrap_or("")
 }
 
 ///|
-/// Close when the open target disappears. Otherwise, if current
-/// input disables the focused entry, move to the next enabled entry and fall
-/// back to the previous one, or the menu itself when all entries are disabled.
-fn focus_subscription(
+fn surface_attrs(open : Open, close : @cmd.Cmd) -> @html.Attrs {
+  let attrs = @html.Attrs::build()
+    .data_set("action-menu-surface", open.target)
+    .on_keydown(event => {
+      guard event.key() == "Escape" &&
+        !event.repeat() &&
+        !event.is_composing() &&
+        !event.ctrl_key() &&
+        !event.meta_key() &&
+        !event.alt_key() &&
+        !event.shift_key() else {
+        return @cmd.none
+      }
+      event.prevent_default()
+      event.stop_propagation()
+      @cmd.batch([
+        close,
+        open.restore_focus_id.map_or(@cmd.none, id => focus_element(id, true)),
+      ])
+    })
+    .on_click(event => {
+      event.stop_propagation()
+      @cmd.none
+    })
+    .on_contextmenu(event => {
+      event.prevent_default()
+      event.stop_propagation()
+      @cmd.none
+    })
+  if open.restore_focus_id is Some(id) {
+    ignore(attrs.data_set("final-focus-id", id))
+  }
+  attrs
+}
+
+///|
+/// A row's button and menu share one scope; context menus remain owned by
+/// the sidebar overlay so right-click keeps its pointer anchor and focus.
+pub fn dropdown(
   target : String,
-  enabled : Array[Int32]?,
-  close : @cmd.Emit[Unit],
-) -> @sub.Sub {
-  @sub.custom_sub(
-    "action-menu-focus:\{target}",
-    Local,
-    FocusSubscription(target, enabled, close),
-    (payload, scheduler) => {
-      guard payload is FocusSubscription(target, enabled, close) else {
-        return None
+  definition : Definition,
+  class~ : String,
+  icon : @html.Html,
+) -> @rabbita.Val[@html.Html] {
+  @rui.dropdown_menu(id=target + ":actions", scope => {
+    @html.fragment([
+      @rui.dropdown_menu_trigger(
+        scope,
+        variant=Ghost,
+        size=IconXs,
+        class~,
+        title=definition.label,
+        aria_label=definition.label,
+        icon,
+      ),
+      @rui.dropdown_menu_content(
+        scope,
+        align=End,
+        aria_label=definition.label,
+        class="action-menu",
+        attrs=@html.Attrs::build().data_set("action-menu-surface", target),
+        definition.entries.map(entry => {
+          match entry {
+            Separator => @rui.dropdown_menu_separator()
+            Action(item) =>
+              @rui.dropdown_menu_item(
+                scope,
+                disabled=!item.enabled,
+                destructive=item.destructive,
+                on_select=item.command,
+                class="action-menu-item",
+                title=item.title,
+                item_children(item),
+              )
+          }
+        }),
+      ),
+    ])
+  })
+}
+
+///|
+fn item_children(item : Item) -> Array[@html.Html] {
+  [
+    item.icon.unwrap_or(@html.span(class="action-menu-icon-placeholder", "")),
+    @html.span(item.label),
+  ]
+}
+
+///|
+fn[Input : Eq] menu_component(
+  input : @rabbita.Val[Input],
+  open : Open,
+  resolve : (Input) -> Definition?,
+  close : @cmd.Cmd,
+) -> @rabbita.Val[@html.Html] {
+  input
+  .map(input => {
+    resolve(input).map_or(false, definition => definition.has_actions())
+  })
+  .switch_by(
+    available => {
+      if !available {
+        let (closed, _) = @rabbita.create_state_with_init(
+          init=_ => ((), close),
+          update=(state, _ : Unit, _) => (state, @cmd.none),
+        )
+        return closed.view(_ => @html.nothing)
       }
-      let mut previous = enabled.unwrap_or([])
-      let mut close = close
-      if enabled is None {
-        scheduler.add(close(()))
+      let changed = visible => if visible { @cmd.none } else { close }
+      match open.anchor {
+        Button => {
+          let trigger = @dom.document()
+            .get_element_by_id(trigger_id(open.target))
+            .to_option()
+          let side = if trigger.bind(element => {
+              element.get_attribute("data-action-menu-side")
+            }) ==
+            Some("top") {
+            @rui.Top
+          } else {
+            @rui.Bottom
+          }
+          let align = if trigger.bind(element => {
+              element.get_attribute("data-action-menu-align")
+            }) ==
+            Some("start") {
+            @rui.Start
+          } else {
+            @rui.End
+          }
+          input.switch_by(
+            input => {
+              @rui.dropdown_menu(
+                id=open.target + ":actions",
+                default_open=true,
+                on_open_change=changed,
+                scope => {
+                  guard resolve(input) is Some(definition) else {
+                    return @html.nothing
+                  }
+                  @rui.dropdown_menu_content(
+                    scope,
+                    side~,
+                    align~,
+                    aria_label=definition.label,
+                    class="action-menu",
+                    attrs=surface_attrs(open, close),
+                    definition.entries.map(entry => {
+                      match entry {
+                        Separator => @rui.dropdown_menu_separator()
+                        Action(item) =>
+                          @rui.dropdown_menu_item(
+                            scope,
+                            disabled=!item.enabled,
+                            destructive=item.destructive,
+                            on_select=item.command,
+                            class="action-menu-item",
+                            title=item.title,
+                            item_children(item),
+                          )
+                      }
+                    }),
+                  )
+                },
+              )
+            },
+            by=input => {
+              resolve(input).map_or("closed", definition => {
+                definition.revision()
+              })
+            },
+          )
+        }
+        Pointer(x, y) =>
+          input.switch_by(
+            input => {
+              @rui.dropdown_menu(
+                id=open.target + ":pointer-menu",
+                default_open=true,
+                on_open_change=changed,
+                scope => {
+                  guard resolve(input) is Some(definition) else {
+                    return @html.nothing
+                  }
+                  @html.fragment([
+                    @rui.popover_anchor(
+                      id=open.target + ":pointer-menu-trigger",
+                      style=[
+                        "position:fixed;left:\{x}px;top:\{y}px;width:0;height:0",
+                      ],
+                      @html.nothing,
+                    ),
+                    @rui.dropdown_menu_content(
+                      scope,
+                      align=Start,
+                      side_offset=0,
+                      aria_label=definition.label,
+                      class="action-menu",
+                      attrs=surface_attrs(open, close),
+                      definition.entries.map(entry => {
+                        match entry {
+                          Separator => @rui.dropdown_menu_separator()
+                          Action(item) =>
+                            @rui.dropdown_menu_item(
+                              scope,
+                              disabled=!item.enabled,
+                              destructive=item.destructive,
+                              on_select=item.command,
+                              class="action-menu-item",
+                              title=item.title,
+                              item_children(item),
+                            )
+                        }
+                      }),
+                    ),
+                  ])
+                },
+              )
+            },
+            by=input => {
+              resolve(input).map_or("closed", definition => {
+                definition.revision()
+              })
+            },
+          )
       }
-      Some({
-        unload: _ => (),
-        update_tagger: payload => {
-          guard payload
-            is FocusSubscription(next_target, next_enabled, next_close) &&
-            next_target == target else {
-            return
-          }
-          close = next_close
-          guard next_enabled is Some(next) else {
-            scheduler.add(close(()))
-            previous = []
-            return
-          }
-          if next.is_empty() {
-            if !previous.is_empty() {
-              scheduler.add(focus_element(menu_id(target), true))
-            }
-            previous = next
-            return
-          }
-          guard focused_element_id() is Some(focused) else {
-            previous = next
-            return
-          }
-          let old_index = previous
-            .iter()
-            .find_first(index => focused == item_id(target, index))
-          if old_index is Some(old_index) &&
-            enabled_position(next, old_index) is None {
-            let index = next
-              .iter()
-              .find_first(index => index > old_index)
-              .unwrap_or(next[next.length() - 1])
-            let _ = @dom.window().set_timeout(
-              () => scheduler.add(focus_element(item_id(target, index), false)),
-              0,
-            )
-          }
-          previous = next
-        },
-      })
     },
+    by=available => available.to_string(),
   )
 }
 
 ///|
-/// Own one WebView menu surface. Rows only dispatch stable targets; the
-/// resolver supplies current labels, enabled state, and commands. Hosts may
-/// observe visibility to coordinate overlays such as native browser views.
 pub fn[Input : Eq] component(
   input : @rabbita.Val[Input],
   resolve : (Input, String) -> Definition?,
   on_open_change? : @cmd.Emit[Bool],
 ) -> @rabbita.Val[@html.Html] {
-  let notify_open = on_open_change.unwrap_or(_ => @cmd.none)
+  let notify = on_open_change.unwrap_or(_ => @cmd.none)
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ menu: None, }, @cmd.none),
     update=(state, input, msg, _) => {
       match msg {
         Open(next) => {
-          if next.anchor is Button &&
-            state.menu is Some(current) &&
-            current.target == next.target {
-            return (
-              { menu: None, },
-              @cmd.batch([
-                set_trigger_open(next.target, false),
-                notify_open(false),
-              ]),
-            )
+          let previous = match state.menu {
+            Some(current) => set_trigger_open(current.target, false)
+            None => @cmd.none
           }
-          guard resolve(input, next.target) is Some(definition) &&
-            definition.has_actions() else {
-            // Another component may own this target. Only one shared menu
-            // surface should remain open across the sidebar and dock.
-            let command = match state.menu {
-              Some(current) => set_trigger_open(current.target, false)
-              None => @cmd.none
-            }
-            return ({ menu: None, }, @cmd.batch([command, notify_open(false)]))
-          }
-          let close_previous = match state.menu {
-            Some(current) if current.target != next.target =>
-              set_trigger_open(current.target, false)
-            _ => @cmd.none
+          if (
+              next.anchor is Button &&
+              state.menu is Some(current) &&
+              current.target == next.target
+            ) ||
+            !(resolve(input, next.target) is Some(definition) &&
+            definition.has_actions()) {
+            return ({ menu: None, }, @cmd.batch([previous, notify(false)]))
           }
           (
             { menu: Some(next), },
             @cmd.batch([
-              notify_open(true),
-              close_previous,
+              previous,
               set_trigger_open(next.target, true),
-              position(next.target, next.anchor),
-              focus_element(menu_id(next.target), true),
+              notify(true),
             ]),
           )
         }
-        Close => {
-          let command = match state.menu {
-            Some(current) => set_trigger_open(current.target, false)
-            None => @cmd.none
-          }
-          ({ menu: None, }, @cmd.batch([command, notify_open(false)]))
+        Close(open) => {
+          guard state.menu == Some(open) else { return (state, @cmd.none) }
+          (
+            { menu: None, },
+            @cmd.batch([set_trigger_open(open.target, false), notify(false)]),
+          )
         }
       }
     },
-    subscriptions=(state, input, emit) => {
-      let open = open_subscription(emit.map(open => Msg::Open(open)))
-      guard state.menu is Some(menu) else { return open }
-      let enabled = resolve(input, menu.target).bind(definition => {
-        if definition.has_actions() {
-          Some(definition.enabled_indices())
-        } else {
-          None
-        }
-      })
-      let focus = focus_subscription(
-        menu.target,
-        enabled,
-        emit.map((_ : Unit) => Msg::Close),
+    subscriptions=(state, _, emit) => {
+      @sub.batch(
+        [
+          open_subscription(emit.map(open => Msg::Open(open))),
+          ..state.menu.map_or([], open => {
+            [
+              @dismiss.on_back("action-menu-back", level=TopLayer, _ => {
+                emit(Close(open))
+              }),
+              @sub.on_resize(_ => emit(Close(open))),
+            ]
+          }),
+        ],
       )
-      guard enabled is Some(_) else { return @sub.batch([open, focus]) }
-      @sub.batch([
-        open,
-        dismiss_subscription(menu.target, emit.map((_ : Unit) => Msg::Close)),
-        @dismiss.on_back("action-menu-back", emit.map((_ : Unit) => Msg::Close)),
-        focus,
-      ])
     },
   )
-  state.map2(input, (state, input) => {
-    guard state.menu is Some(open) &&
-      resolve(input, open.target) is Some(definition) &&
-      definition.has_actions() else {
-      return @html.nothing
-    }
-    render_menu(open, definition, emit(Close))
-  })
+  state
+  .map(state => state.menu)
+  .switch_by(
+    current => {
+      match current {
+        None => @rabbita.Val::constant(@html.nothing)
+        Some(open) =>
+          menu_component(
+            input,
+            open,
+            input => resolve(input, open.target),
+            emit(Close(open)),
+          )
+      }
+    },
+    by=current => {
+      match current {
+        None => "closed"
+        Some(open) => open.key()
+      }
+    },
+  )
 }

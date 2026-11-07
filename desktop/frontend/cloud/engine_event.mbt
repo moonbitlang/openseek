@@ -57,7 +57,15 @@ fn State::engine_event(
     | @wire.CompactionFinished(..)
     | @wire.AutoCompactionFinished(..)
     | @wire.CompactionFailed(..)) {
-    conversation.live_progress(event, self.sequence + 1)
+    conversation.live_progress(
+      event,
+      if conversation.live_task is Some(_) &&
+        conversation.live_task == frame.task_id {
+        None
+      } else {
+        Some(self.sequence + 1)
+      },
+    )
   } else {
     conversation
   }

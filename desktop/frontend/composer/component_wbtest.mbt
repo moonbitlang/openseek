@@ -74,6 +74,46 @@ test "a running draft keeps Stop beside Steer" {
 }
 
 ///|
+test "a run that cannot take a follow-up yet keeps the submit action in Send's place" {
+  let base = Input::fixture("follow up as the run starts")
+  let buttons = (action : PrimaryAction) => {
+    let input = {
+      ..base,
+      presentation: { ..base.presentation, primary_action: action, },
+    }
+    Model(input)
+    .active(input)
+    .action_buttons(Msg::test_emit(), Action::test_emit(), input)
+    .map(button => (button.id, button.disabled))
+  }
+  assert_eq(buttons(Send(available=false)), [("send", true)])
+  // Stop is added before the submit action; it never takes the place a press
+  // aimed at Send lands on.
+  assert_eq(
+    buttons(
+      Running(
+        steer_available=false,
+        can_stop=true,
+        submit=Steer,
+        queue_available=false,
+      ),
+    ),
+    [("stop", false), ("send", true)],
+  )
+  assert_eq(
+    buttons(
+      Running(
+        steer_available=true,
+        can_stop=true,
+        submit=Steer,
+        queue_available=true,
+      ),
+    ),
+    [("stop", false), ("send", false)],
+  )
+}
+
+///|
 test "typing is local, pure, and idempotent" {
   let input = Input::fixture("")
   let initial = Model(input)

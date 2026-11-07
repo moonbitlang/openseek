@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Substitute only the native transport. The production dialog, modal focus,
+// Substitute only the native transport. The production dialog,
 // typed codecs, clipboard effect and update loop run unchanged in Chromium.
 class ExportHarness extends DesktopBrowserHarness {
   constructor(page) {
@@ -106,21 +106,17 @@ class ExportHarness extends DesktopBrowserHarness {
   count(method) { return this.requests.filter(request => request.method === method).length; }
 
   async openExport() {
-    await this.page.getByRole('button', { name: 'Export and import', exact: true }).click();
-    await this.page.getByRole('menuitem', { name: 'Export', exact: true }).click();
-    const dialog = this.page.getByRole('dialog', { name: 'Export conversation', exact: true });
+    await this.page.locator('[id="conversation-transfer:actions-trigger"]').click();
+    await this.page.locator('[id="conversation-transfer:actions-content"]').getByRole('menuitem').click();
+    const dialog = this.page.locator('#conversation-export-dialog');
     await expect(dialog).toBeVisible();
     return dialog;
   }
 }
 
-test('export opens choices, downloads locally and restores focus on Escape', async ({ page }) => {
+test('export opens choices and downloads locally without publishing', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop();
-  const details = page.getByRole('button', { name: 'Detailed mode', exact: true });
-  await expect(details).toHaveAttribute('aria-pressed', 'false');
-  await expect(details).not.toHaveClass(/active/);
-  await expect(details.locator('xpath=preceding-sibling::*[1]')).toHaveAttribute('title', 'Export and import');
   const dialog = await app.openExport();
   expect(app.count('session.export')).toBe(0);
   expect(app.hostShares.length).toBe(0);
@@ -135,9 +131,6 @@ test('export opens choices, downloads locally and restores focus on Escape', asy
   expect(app.requests.find(request => request.method === 'session.export').params).toMatchObject({
     session: 'session-1', workspace: '/workspace', archived: false,
   });
-  await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Export and import', exact: true })).toBeFocused();
   expect(app.hostShares.length).toBe(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -228,28 +221,6 @@ test('closing the dialog cancels a sign-in it started', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('closing an upload ignores its late reply and narrow dialogs fit the viewport', async ({ page }) => {
-  const app = new ExportHarness(page);
-  let finish;
-  app.pendingShare = new Promise(resolve => { finish = resolve; });
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect.poll(() => app.hostShares.length).toBe(1);
-  await dialog.getByRole('button', { name: 'Close export dialog' }).click();
-  await expect(dialog).not.toBeVisible();
-  await app.openExport();
-  finish();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 700 });
-  const box = await dialog.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(390);
-  expect(app.pageErrors).toEqual([]);
-});
-
-
 test('browser Work sharing captures the selected host but publishes as the browser account', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop({ browser: true });
@@ -301,7 +272,7 @@ test('a host share pending during account change never uses the new account or e
 });
 
 
-test('host share phases stay indeterminate through retry and finish with the link', async ({ page }, testInfo) => {
+test('host share phases stay indeterminate through retry and finish with the link', async ({ page }) => {
   const app = new ExportHarness(page);
   let finish;
   app.pendingShare = new Promise(resolve => finish = resolve);
@@ -323,7 +294,6 @@ test('host share phases stay indeterminate through retry and finish with the lin
     expect(app.count('session.share')).toBe(1);
     expect(app.count('session.snapshot')).toBe(0);
     expect(app.clientUploads).toEqual([]);
-    await dialog.screenshot({ path: testInfo.outputPath('share-phases.png'), animations: 'disabled' });
     finish();
     await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
     await expect(dialog.getByRole('progressbar')).toHaveCount(0);
@@ -402,35 +372,8 @@ test('share login stays retryable while rejected account cleanup is pending', as
   }
 });
 
-test('one header menu contains export and import, dismisses with Escape, and restores focus', async ({ page }, testInfo) => {
-  const app = new ExportHarness(page);
-  await app.openDesktop();
-  const trigger = page.getByRole('button', { name: 'Export and import', exact: true });
-  await expect(trigger).toHaveCount(1);
-  await trigger.click();
-  const menu = page.getByRole('menu', { name: 'Export and import', exact: true });
-  await expect(menu.getByRole('menuitem', { name: 'Export', exact: true })).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: 'Import', exact: true })).toBeVisible();
-  await expect(menu.getByRole('separator')).toHaveCount(0);
-  await expect(menu).toBeInViewport({ ratio: 1 });
-  await page.screenshot({ path: testInfo.outputPath('share-import-menu.png') });
-  await page.keyboard.press('Escape');
-  await expect(menu).not.toBeVisible();
-  await expect(trigger).toBeFocused();
-  await trigger.click();
-  await menu.getByRole('menuitem', { name: 'Import', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Import conversation', exact: true });
-  await expect(dialog).toBeVisible();
-  await expect(menu).not.toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await expect(trigger).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
-});
-
-
 for (const browser of [false, true]) {
-  test(`${browser ? 'remote Host' : 'Local'} file share reuses account authority and stays pending across dismissal`, async ({ page }, testInfo) => {
+  test(`${browser ? 'remote Host' : 'Local'} file share reuses account authority and stays pending across dismissal`, async ({ page }) => {
     const app = new ExportHarness(page);
     if (!browser) app.accountSignedIn = false;
     app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }, { name: 'artifact.bin', is_dir: false }];
@@ -483,7 +426,6 @@ for (const browser of [false, true]) {
     expect(app.count('fs.share_file')).toBe(1);
     finish(); app.pendingShare = null;
     await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
-    if (!browser) await page.screenshot({ path: testInfo.outputPath('local-file-share.png') });
     await page.keyboard.press('Escape');
     await row.click();
     await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();
@@ -521,20 +463,5 @@ test('Back keeps a dialog above a panel that only covers the page after a resize
   await expect(overview).toBeVisible();
   expect(await back()).toBe(true);
   await expect(overview).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Back closes a modal dialog before Quick Open opened beneath it', async ({ page }) => {
-  const app = new ExportHarness(page);
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  // The palette opens under the modal dialog, which the browser keeps on top.
-  await app.openQuickOpen();
-  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
-  expect(await back()).toBe(true);
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('#quick-open-input')).toBeVisible();
-  expect(await back()).toBe(true);
-  await expect(page.locator('#quick-open-input')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

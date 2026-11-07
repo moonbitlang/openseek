@@ -2,6 +2,7 @@
 // JSON replies so Proton does not redact their user-facing messages.
 
 ///|
+/// Reply to `skills_catalog`: the registry's installable skills.
 #derive(Debug, Eq)
 pub(all) enum SkillsCatalogReply {
   SkillsCatalog(Array[MarketSkill])
@@ -68,6 +69,8 @@ pub impl ToJson for BuiltinSkillError with fn to_json(self) {
 }
 
 ///|
+/// Reply to `skills_installed`: the global skills library's contents,
+/// registry installs and hand-written skills alike.
 #derive(Debug, Eq)
 pub(all) enum InstalledSkillsReply {
   InstalledSkills(

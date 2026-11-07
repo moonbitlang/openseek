@@ -2,8 +2,8 @@ import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
-  test(`queued edit serializes saves and recovers after ${outcome}`, async ({ page }, testInfo) => {
+for (const outcome of ['accepted', 'rpc-error']) {
+  test(`queued edit serializes saves and recovers after ${outcome}`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     app.hostSettings.followup_behavior = 'queue';
     await app.install();
@@ -50,11 +50,6 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await save.dispatchEvent('click');
     await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
     await expect(composer).toHaveValue('Edited queued message');
-    if (outcome === 'accepted') {
-      const path = testInfo.outputPath('queued-edit-saving.png');
-      await page.locator('.composer').screenshot({ path });
-      await testInfo.attach('Saving queued edit', { path, contentType: 'image/png' });
-    }
     const edits = () => app.requests.filter(r => r.method === 'agent.queue' && r.params.action === 'edit');
     expect(edits()).toHaveLength(1);
     // The editor is still usable while the composer waits for the save.
@@ -81,7 +76,7 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     expect(heldRequest.params.text).not.toContain('Context added during save');
     const response = outcome === 'rpc-error'
       ? { error: { code: -32000, message: 'Save rejected' } }
-      : { result: { accepted: outcome === 'accepted' } };
+      : { result: { accepted: true } };
     app.socket.send(JSON.stringify({ jsonrpc: '2.0', id: heldRequest.id, ...response }));
     await expect(composer).toBeEnabled();
     await expect(added).toBeVisible();

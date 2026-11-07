@@ -123,13 +123,14 @@ fn worker_write_profile_data(
 }
 
 ///|
-/// Prepare `command` under a worker write profile, or `None` when this
+/// Prepare `program args` under a worker write profile, or `None` when this
 /// process cannot enforce one (same availability contract as
 /// `create_if_available`). All paths must already be canonical: the caller
 /// (the worker controller) realpaths them at provision time, and the kernel
 /// matches rules against realpaths.
 pub async fn SandboxedCommand::create_worker_if_available(
-  command : Command,
+  program : String,
+  args : Array[String],
   deny_roots~ : Array[String],
   worker_root~ : String,
   worker_admin_dir? : String,
@@ -147,13 +148,9 @@ pub async fn SandboxedCommand::create_worker_if_available(
   // This profile has one rule per provisioned deny root, with no recursive
   // source scan. Keep its bounded inline form; source profiles use a file in
   // create_if_available because nested source trees can exceed ARG_MAX.
-  let args = match command {
-    Shell(cmd) => sandbox_exec_args(data.profile, cmd)
-    Exec(program, args) => ["-p", data.profile, program, ..args]
-  }
   Some({
     program: SandboxExecPath,
-    args,
+    args: ["-p", data.profile, program, ..args],
     denial_subjects: data.denial_subjects,
     denial_feedback: worker_write_denial_feedback,
   })

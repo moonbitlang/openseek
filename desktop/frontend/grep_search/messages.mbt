@@ -16,7 +16,7 @@ priv enum UiMessage {
   InvalidRegex
   InvalidGlob
   UnreadableWorkspace
-  RipgrepUnavailable
+  TextSearchUnavailable
   InvalidPattern
   SemanticUnavailable
   NothingToSearch
@@ -116,12 +116,13 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, UnreadableWorkspace) => "無法讀取工作區"
     (Japanese, UnreadableWorkspace) =>
       "ワークスペースを読み取れません"
-    (English, RipgrepUnavailable) => "Bundled ripgrep is unavailable"
-    (Spanish, RipgrepUnavailable) => "El ripgrep incluido no está disponible"
-    (SimplifiedChinese, RipgrepUnavailable) => "内置 ripgrep 不可用"
-    (TraditionalChinese, RipgrepUnavailable) => "內建 ripgrep 不可用"
-    (Japanese, RipgrepUnavailable) =>
-      "同梱の ripgrep が利用できません"
+    (English, TextSearchUnavailable) => "Text search is unavailable"
+    (Spanish, TextSearchUnavailable) =>
+      "La búsqueda de texto no está disponible"
+    (SimplifiedChinese, TextSearchUnavailable) => "文本搜索不可用"
+    (TraditionalChinese, TextSearchUnavailable) => "文字搜尋無法使用"
+    (Japanese, TextSearchUnavailable) =>
+      "テキスト検索を利用できません"
     (English, InvalidPattern) => "Invalid code pattern"
     (Spanish, InvalidPattern) => "Patrón de código no válido"
     (SimplifiedChinese, InvalidPattern) => "代码模式无效"
