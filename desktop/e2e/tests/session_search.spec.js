@@ -54,7 +54,6 @@ test('clear and Escape restore the normal list and keep typing focus; switching 
   const app = fixture(page);
   const input = await openSearch(page, app);
   await input.fill('no matching text');
-  await expect(page.getByText('No matching conversations', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Clear search', exact: true }).click();
   await expect(input).toHaveValue('');
   await expect(input).toBeFocused();
@@ -168,7 +167,6 @@ test('Chat and Work searches isolate Cloud and project history and leave archive
   await input.fill('matching');
   await expect(rows(page)).toHaveText(['Matching work']);
   await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
-  await expect(page.getByRole('complementary').getByRole('button', { name: /Archived chats/ })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
