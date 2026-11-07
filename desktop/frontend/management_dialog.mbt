@@ -25,7 +25,7 @@ fn management_dialog_view(
   }
   @rui.dialog(
     id="management-dialog",
-    class="dialog-size-large dialog-scroll-layout",
+    class="dialog-surface dialog-size-large dialog-scroll-layout",
     close_label=shell_text(model.locale, DismissLabel),
     on_close=_ => dispatch(CloseManagementDialog),
     attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
@@ -43,9 +43,9 @@ fn management_dialog_view(
       @html.div(
         class=if model.management_dialog is Some(Settings(_)) &&
           !model.host_incompatible() {
-          "dialog-scroll-body settings-dialog-body"
+          "dialog-scroll-body dialog-pane-container"
         } else {
-          "dialog-scroll-body"
+          "dialog-scroll-body dialog-content"
         },
         [
           // Stable panes retain their DOM while the shared dialog is closed.

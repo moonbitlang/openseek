@@ -161,7 +161,7 @@ pub fn Model::view(
                       @cmd.none
                     }
                   }),
-                class="user-question-answer",
+                class="user-question-answer field-surface",
                 rows=1,
                 value~,
                 disabled~,

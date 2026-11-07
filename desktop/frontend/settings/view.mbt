@@ -60,6 +60,6 @@ pub fn group(
       @icons.icon(icon_image),
       @html.h2(title),
     ]),
-    @html.div(class="settings-group-card", rows),
+    @html.div(class="settings-group-card card-surface", rows),
   ])
 }

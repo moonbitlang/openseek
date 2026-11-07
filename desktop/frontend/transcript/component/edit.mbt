@@ -258,7 +258,7 @@ fn MessageEditor::view(
       [
         @html.textarea(
           id="user-message-edit-\{action.sequence}",
-          class="message-edit-input composer-textarea",
+          class="message-edit-input composer-textarea field-surface",
           value=draft.task,
           rows=1,
           disabled=action.disabled,

@@ -393,7 +393,7 @@ fn list_page(
     _ => false
   }
   let sections : Array[@html.Html] = [
-    @html.div(class="skills-header", [
+    @html.div(class="page-header", [
       @html.div(class="skills-heading", [
         @html.div(class="page-eyebrow", ui(locale, Library)),
         @html.button(
@@ -407,10 +407,10 @@ fn list_page(
           },
         ),
       ]),
-      @html.div(class="skills-subtitle", ui(locale, Description)),
+      @html.div(class="page-subtitle", ui(locale, Description)),
     ]),
     @html.div(
-      class="skills-search",
+      class="search-field field-surface",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
         icon(icon_search),
@@ -501,7 +501,7 @@ fn list_page(
         icon(icon_package),
         @html.h2(ui(locale, Registry)),
       ]),
-      @html.div(class="settings-group-card", market_rows),
+      @html.div(class="settings-group-card card-surface", market_rows),
     ]),
   )
   @page_shell.body(

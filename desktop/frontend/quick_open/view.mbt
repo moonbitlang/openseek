@@ -237,6 +237,7 @@ fn dialog_view(
       @html.div(class="quick-open-input-wrap", [
         @icons.icon(@icons.icon_search),
         @html.input(
+          class="field-surface",
           input_type=@html.InputType::Text,
           value=open.value,
           placeholder~,

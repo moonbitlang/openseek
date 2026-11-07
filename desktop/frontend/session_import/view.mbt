@@ -45,6 +45,7 @@ pub fn Model::view(
             label(locale, "Import JSON file", "导入 JSON 文件"),
           ),
           @html.input(
+            class="field-surface",
             value=content.link,
             placeholder=label(
               locale, "OpenSeek share link", "OpenSeek 分享链接",

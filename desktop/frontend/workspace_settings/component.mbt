@@ -257,13 +257,13 @@ fn dialog_contents(
         ui(locale, WorkspaceSettingsLabel),
       ),
     ]),
-    @html.div(class="dialog-scroll-body", [
+    @html.div(class="dialog-scroll-body dialog-content", [
       @html.div(
         id="workspace-settings-description",
         class="workspace-settings-identity",
         [
           @html.div(class="workspace-settings-name", @resource.label(workspace)),
-          @html.div(class="settings-subtitle", workspace.path),
+          @html.div(class="page-subtitle", workspace.path),
         ],
       ),
       @html.div(class="settings", [

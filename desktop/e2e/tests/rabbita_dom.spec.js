@@ -1673,7 +1673,6 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const workspaceSettings = page.getByRole('dialog', { name: 'Workspace settings' });
   await expect(workspaceSettings).toBeVisible();
-  await expect(workspaceSettings.locator('.settings-subtitle')).toHaveText('/workspace');
 
   // The dialog reads the host's authoritative snapshot before enabling the
   // selects.

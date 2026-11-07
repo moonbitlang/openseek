@@ -147,12 +147,12 @@ fn view(
   actions : Actions,
 ) -> @html.Html {
   let content : Array[@html.Html] = [
-    @html.div(class="settings-header", [
+    @html.div(class="page-header", [
       @html.div(
-        class="settings-subtitle",
+        class="page-subtitle",
         text(locale, ArchivedCount(count(groups))),
       ),
-      @html.div(class="settings-subtitle", text(locale, Description)),
+      @html.div(class="page-subtitle", text(locale, Description)),
     ]),
   ]
   if groups.is_empty() {
@@ -161,7 +161,7 @@ fn view(
   }
   content.push(
     @html.div(
-      class="archived-chats-search",
+      class="search-field field-surface",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
         @icons.icon(@icons.icon_search),

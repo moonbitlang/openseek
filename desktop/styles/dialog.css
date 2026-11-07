@@ -18,7 +18,7 @@ dialog.dialog-size-large {
 }
 
 /* RUI paints dialogs inline; the management surface belongs here, not to panes. */
-#management-dialog {
+dialog.dialog-surface {
   background: var(--color-bg-canvas) !important;
   color: var(--color-text-primary) !important;
   font-size: var(--font-size-md);
@@ -26,18 +26,6 @@ dialog.dialog-size-large {
 
 .management-dialog-pane:not([hidden]) {
   display: contents;
-}
-
-#management-dialog .management-dialog-pane > .management-page {
-  overflow: visible;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-#management-dialog .management-page > .management-page-content {
-  width: 100%;
-  max-width: none;
-  margin-inline: 0;
 }
 
 dialog.dialog-scroll-layout {
@@ -73,8 +61,7 @@ dialog.dialog-scroll-layout[open] {
   border-bottom: 1px solid var(--color-border);
 }
 
-.dialog-scroll-layout > div > .dialog-scroll-body,
-#management-dialog .settings-tab-panel {
+.dialog-content {
   min-height: 0;
   padding: var(--space-7);
   overflow: auto;
@@ -82,10 +69,11 @@ dialog.dialog-scroll-layout[open] {
 
 .dialog-scroll-layout > div > .dialog-scroll-body {
   grid-area: body;
+  min-height: 0;
 }
 
-.dialog-scroll-layout > div > .settings-dialog-body {
-  padding: 0;
+.dialog-pane-container {
+  min-height: 0;
   overflow: hidden;
 }
 

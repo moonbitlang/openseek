@@ -1311,6 +1311,7 @@ fn api_settings_rows(
         @settings.text(model.locale, EndpointUrl),
         [
           @html.input(
+            class="setting-input field-surface",
             input_type=@html.InputType::Text,
             value=model.custom_api_url,
             placeholder="https://host/chat/completions",
@@ -1342,6 +1343,7 @@ fn api_settings_rows(
         key_label,
         [
           @html.input(
+            class="setting-input field-surface",
             input_type=@html.InputType::Password,
             value=model.setup_api_key,
             placeholder=if key_saved {
@@ -1410,6 +1412,7 @@ fn settings_runtime_groups(
       @settings.text(locale, MaxSteps),
       [
         @html.input(
+          class="setting-input field-surface",
           input_type=@html.InputType::Number,
           value=model.max_steps,
           placeholder="1000",

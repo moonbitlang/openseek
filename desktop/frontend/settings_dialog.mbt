@@ -112,7 +112,7 @@ fn settings_page(
           }
         }
         [
-          @html.div(class="settings-subtitle", subtitle),
+          @html.div(class="page-subtitle", subtitle),
           ..settings_runtime_groups(dispatch, model),
         ]
       }
@@ -128,7 +128,7 @@ fn settings_page(
         force_mount=true,
         id=panel_id,
         labelledby=trigger_id,
-        class="settings-tab-panel",
+        class="settings-tab-panel dialog-content",
         style=["font-size:var(--font-size-md)"],
         [
           @html.div(

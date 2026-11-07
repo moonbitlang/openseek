@@ -1354,6 +1354,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           [
             @html.span("SSH command"),
             @html.input(
+              class="field-surface",
               autofocus=true,
               value=ui.command,
               placeholder="ssh -p 22 user@host",
@@ -1381,6 +1382,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             },
           ),
           @html.input(
+            class="field-surface",
             autofocus=editing,
             value=ui.display_name,
             placeholder=draft.display_label(),
@@ -1735,6 +1737,7 @@ fn ssh_auth_region(
               @html.span(class="ssh-auth-prompt", label),
               @html.div(class="ssh-secret", [
                 @html.input(
+                  class="field-surface",
                   input_type=if ui.revealed { Text } else { Password },
                   auto_complete="off",
                   attrs=@html.Attrs::build()

@@ -56,6 +56,7 @@ pub fn Model::view(
           text(locale, CustomPrompt),
           [
             @html.textarea(
+              class="prompt-input field-surface",
               value=self.draft.unwrap_or(self.custom_text),
               disabled=!ready || saving,
               rows=6,
