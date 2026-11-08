@@ -284,15 +284,16 @@ extern "js" fn artifact_frame_listener(
   #|      } else if (data.version === 1 && typeof data.token === 'string' && data.token === frame.dataset.artifactToken) {
   #|        const node = frame.closest('[data-transcript-artifact]');
   #|        if (!node || frame.dataset.artifactLoaded !== node.dataset.artifactOwner || frame.dataset.artifactReference !== node.dataset.transcriptArtifact) return;
-  #|        const button = node.querySelector('.chat-artifact-context');
   #|        if (data.type === 'openseek-artifact-followup') {
-  #|          if (!button || button.disabled || document.activeElement !== frame || !navigator.userActivation?.isActive) return;
-  #|          if (typeof data.prompt !== 'string' || !data.prompt.trim() || new TextEncoder().encode(data.prompt).length > 12288) return;
-  #|          if (typeof data.title !== 'string' || data.title.length > 250) return;
-  #|          followup(node.dataset.artifactOwner, node.dataset.transcriptArtifact, frame.__artifactSnapshot ?? '', data.prompt.trim(), data.title.trim());
+  #|          if (document.activeElement !== frame || !navigator.userActivation?.isActive) return;
+  #|          if (typeof data.prompt !== 'string' || typeof data.title !== 'string') return;
+  #|          const prompt = data.prompt.trim();
+  #|          if (!prompt) return;
+  #|          followup(node.dataset.artifactOwner, node.dataset.transcriptArtifact, frame.__artifactSnapshot ?? '', prompt, data.title.trim());
   #|          return;
   #|        }
   #|        if (data.type !== 'openseek-artifact-state') return;
+  #|        const button = node.querySelector('.chat-artifact-context');
   #|        const clear = () => { delete frame.__artifactSnapshot; if (button && button.style.display !== 'none') button.style.display = 'none'; };
   #|        if (typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160) { clear(); return; }
   #|        let payload;

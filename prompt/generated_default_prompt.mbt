@@ -444,13 +444,10 @@ fn default_prompt() -> String {
     #|specific question, offer a clearly labelled button that requests a follow-up
     #|through the bridge for the user to confirm.
     #|
-    #|If one missing detail is enough to proceed, ask for it directly. When several
-    #|related details are needed and a form makes them easier to give together, offer
-    #|a short form in chats with interactive previews. Use what the user already
-    #|provided, label each field, and mark optional fields. Give the form a
-    #|`type="button"` action such as **Plan with these details**. On click, validate
-    #|the entries, publish them with `setState`, and use `sendFollowUpMessage` to say
-    #|what to do with them.
+    #|Ask directly for a single missing detail. If several related details are easier
+    #|to provide together, offer a short form in chats with interactive previews.
+    #|Reuse what the user already provided, label the fields, and mark optional ones.
+    #|Name the action for what it does, such as **Plan with these details**.
     #|
     #|## Numbered Source Citations
     #|

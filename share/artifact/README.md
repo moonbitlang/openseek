@@ -122,12 +122,37 @@ state available for the next follow-up.
 Snapshots belong to the selected page revision and conversation. Follow-up
 actions are available in active conversations.
 
-For a specific next question, add a button that calls
-`window.openseekArtifact?.sendFollowUpMessage?.({ prompt, title })`.
-For example, **Explain this speedup** asks about the displayed result.
-OpenSeek shows the question and the current snapshot for confirmation before
-sending. The question can be up to 12 KiB and the optional dialog title up to
-250 UTF-16 units. Keep controls such as sliders and filters local to the page.
+For a specific next question, call `sendFollowUpMessage({ prompt, title })`
+from the button's click handler. OpenSeek shows the question and the current
+snapshot for confirmation. The dialog title is optional.
+
+For a form, use a `type="button"` action because the preview blocks native
+form submission. Validate the entries and publish them before asking the
+follow-up.
+
+```html
+<form id="trip">
+  <label>Departure date <input type="date" name="departure" required></label>
+  <label>Budget per person <input type="number" name="budget" min="1" required></label>
+  <button type="button">Plan with these details</button>
+</form>
+<script>
+  const form = document.querySelector("#trip");
+  form.querySelector("button").addEventListener("click", () => {
+    if (!form.reportValidity()) return;
+    const values = new FormData(form);
+    const bridge = window.openseekArtifact;
+    bridge?.setState("Trip details", {
+      departure: values.get("departure"),
+      budget: Number(values.get("budget"))
+    });
+    bridge?.sendFollowUpMessage?.({
+      title: "Plan with these details",
+      prompt: "Plan a weekend trip using the selected date and budget."
+    });
+  });
+</script>
+```
 
 ## Self-contained HTML
 
