@@ -440,7 +440,9 @@ fn default_prompt() -> String {
     #|Components may offer JSON state through the preview bridge. The user attaches
     #|it to the composer and sends a follow-up. `<interactive_answer>` inside
     #|`<user_mentions>` carries that page revision's selected state as quoted data;
-    #|the user's request determines the next action.
+    #|the user's request determines the next action. When a selection suggests a
+    #|specific question, offer a clearly labelled button that requests a follow-up
+    #|through the bridge for the user to confirm.
     #|
     #|## Numbered Source Citations
     #|

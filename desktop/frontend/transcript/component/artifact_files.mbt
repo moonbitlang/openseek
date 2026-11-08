@@ -6,6 +6,18 @@ priv struct ArtifactOwner {
   workspace : @common.Uri?
   checkout : @common.Uri?
   archived : Bool
+  followup_enabled : Bool
+}
+
+///|
+/// An action requested from the preview of a particular artifact.
+pub(all) enum ArtifactInteraction {
+  AttachState(@mention_context.ArtifactSnapshot)
+  RequestFollowup(
+    prompt~ : String,
+    title~ : String,
+    snapshot~ : @mention_context.ArtifactSnapshot?
+  )
 }
 
 ///|
@@ -16,6 +28,7 @@ fn Input::artifact_owner(self : Input) -> ArtifactOwner {
     workspace: self.current_project,
     checkout: self.root,
     archived: self.archived,
+    followup_enabled: self.source is OpenSeek && !self.archived,
   }
 }
 
@@ -27,6 +40,7 @@ fn ArtifactOwner::key(self : ArtifactOwner) -> String {
     self.checkout.map(root => root.to_string()).unwrap_or(""),
     self.session,
     self.archived.to_string(),
+    self.followup_enabled.to_string(),
   ]).stringify()
 }
 
@@ -184,11 +198,25 @@ fn ArtifactFileCache::apply_after_render(
       for reference, state in self.0 {
         match state {
           ReadyArtifact(content) =>
-            settle_artifact_frame(reference, content, "", owner.key(), true)
+            settle_artifact_frame(
+              reference,
+              content,
+              "",
+              owner.key(),
+              true,
+              owner.followup_enabled,
+            )
           FailedArtifact(error) =>
-            settle_artifact_frame(reference, "", error, owner.key(), false)
+            settle_artifact_frame(
+              reference,
+              "",
+              error,
+              owner.key(),
+              false,
+              false,
+            )
           LoadingArtifact =>
-            settle_artifact_frame(reference, "", "", owner.key(), false)
+            settle_artifact_frame(reference, "", "", owner.key(), false, false)
         }
       }
     },
@@ -203,8 +231,9 @@ extern "js" fn settle_artifact_frame(
   error : String,
   owner : String,
   ready : Bool,
+  followup_enabled : Bool,
 ) =
-  #|(reference, content, error, owner, ready) => {
+  #|(reference, content, error, owner, ready, followupEnabled) => {
   #|  for (const node of document.querySelectorAll('[data-transcript-artifact]')) {
   #|    if (node.dataset.transcriptArtifact !== reference || node.dataset.artifactOwner !== owner) continue;
   #|    const frame = node.querySelector('iframe');
@@ -219,7 +248,10 @@ extern "js" fn settle_artifact_frame(
   #|    frame.dataset.artifactToken = token;
   #|    delete frame.__artifactSnapshot;
   #|    if (button) button.style.display = 'none';
-  #|    const bridge = '<script>(()=>{const token=' + JSON.stringify(token) + ';window.openseekArtifact={setState:(title,state)=>{const packet={type:"openseek-artifact-state",version:1,token,title,state};try{parent.postMessage(packet,"*")}catch{parent.postMessage({...packet,title:"",state:null},"*")}}};})();<\/script>';
+  #|    const setState = 'setState(title,state){const packet={type:"openseek-artifact-state",version:1,token,title,state};try{parent.postMessage(packet,"*")}catch{parent.postMessage({...packet,title:"",state:null},"*")}}';
+  #|    const sendFollowUpMessage = ',sendFollowUpMessage({prompt,title=""}){parent.postMessage({type:"openseek-artifact-followup",version:1,token,prompt,title},"*")}';
+  #|    const bridge = '<script>(()=>{const token=' + JSON.stringify(token) +
+  #|      ';window.openseekArtifact={' + setState + (followupEnabled ? sendFollowUpMessage : '') + '};})();<\/script>';
   #|    const resize = '<script>(()=>{const send=()=>parent.postMessage({type:"openseek-artifact-height",height:Math.ceil(document.body?.scrollHeight||420)},"*");addEventListener("load",()=>{new ResizeObserver(send).observe(document.body);send()})})();<\/script>';
   #|    frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="' + policy + '"><meta name="referrer" content="no-referrer">' + bridge + content + resize;
   #|    frame.dataset.artifactLoaded = owner;
@@ -233,8 +265,9 @@ extern "js" fn settle_artifact_frame(
 extern "js" fn artifact_frame_listener(
   changed : () -> Unit,
   selected : (String, String, String) -> Unit,
+  followup : (String, String, String, String, String) -> Unit,
 ) -> () -> Unit =
-  #|(changed, selected) => {
+  #|(changed, selected, followup) => {
   #|  const jsonValue = (_key, value) => {
   #|    const type = typeof value;
   #|    if (value === null || type === 'object' || type === 'string' || type === 'boolean' || (type === 'number' && Number.isFinite(value))) return value;
@@ -248,10 +281,18 @@ extern "js" fn artifact_frame_listener(
   #|      if (data.type === 'openseek-artifact-height' && Number.isFinite(data.height)) {
   #|        const height = Math.max(64, Math.min(2000, Math.ceil(data.height)));
   #|        if (frame.style.height !== height + 'px') { frame.style.height = height + 'px'; changed(); }
-  #|      } else if (data.type === 'openseek-artifact-state' && data.version === 1 && typeof data.token === 'string' && data.token === frame.dataset.artifactToken) {
+  #|      } else if (data.version === 1 && typeof data.token === 'string' && data.token === frame.dataset.artifactToken) {
   #|        const node = frame.closest('[data-transcript-artifact]');
   #|        if (!node || frame.dataset.artifactLoaded !== node.dataset.artifactOwner || frame.dataset.artifactReference !== node.dataset.transcriptArtifact) return;
-  #|        const button = frame.closest('[data-transcript-artifact]')?.querySelector('.chat-artifact-context');
+  #|        const button = node.querySelector('.chat-artifact-context');
+  #|        if (data.type === 'openseek-artifact-followup') {
+  #|          if (!button || button.disabled || document.activeElement !== frame || !navigator.userActivation?.isActive) return;
+  #|          if (typeof data.prompt !== 'string' || !data.prompt.trim() || new TextEncoder().encode(data.prompt).length > 12288) return;
+  #|          if (typeof data.title !== 'string' || data.title.length > 250) return;
+  #|          followup(node.dataset.artifactOwner, node.dataset.transcriptArtifact, frame.__artifactSnapshot ?? '', data.prompt.trim(), data.title.trim());
+  #|          return;
+  #|        }
+  #|        if (data.type !== 'openseek-artifact-state') return;
   #|        const clear = () => { delete frame.__artifactSnapshot; if (button && button.style.display !== 'none') button.style.display = 'none'; };
   #|        if (typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160) { clear(); return; }
   #|        let payload;

@@ -190,7 +190,7 @@ pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
-  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot]
+  artifact_context : @cmd.Emit[ArtifactInteraction]
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
@@ -753,7 +753,7 @@ priv suberror TranscriptSubscription {
     emit~ : @cmd.Emit[Msg],
     departed~ : @cmd.Emit[ScrollPosition],
     artifact_owner~ : String,
-    artifact_context~ : @cmd.Emit[@mention_context.ArtifactSnapshot],
+    artifact_context~ : @cmd.Emit[ArtifactInteraction],
     load_older~ : @cmd.Cmd?,
     // The Model's current reading, refreshed after every message. The scroll
     // listener reports only readings that differ from it, so the Model is the
@@ -771,7 +771,7 @@ fn transcript_subscription(
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
-  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot],
+  artifact_context : @cmd.Emit[ArtifactInteraction],
   load_older : @cmd.Cmd?,
 ) -> @sub.Sub {
   @sub.custom_sub(
@@ -902,7 +902,14 @@ fn transcript_sub_loader(
             is Some(snapshot) else {
             return
           }
-          scheduler.add(artifact_context(snapshot))
+          scheduler.add(artifact_context(AttachState(snapshot)))
+        },
+        (owner, reference, payload, prompt, title) => {
+          guard owner == artifact_owner else { return }
+          let snapshot = @mention_context.artifact_snapshot(reference, payload)
+          scheduler.add(
+            artifact_context(RequestFollowup(prompt~, title~, snapshot~)),
+          )
         },
       )
       Some({

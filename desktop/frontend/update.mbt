@@ -1740,6 +1740,12 @@ fn update(
     _ => model
   }
   let model = model.restore_message_approvals()
+  let model = if model.artifact_followup is Some(followup) &&
+    model.transcript_slot().map(slot => slot.key()) != Some(followup.slot) {
+    { ..model, artifact_followup: None, }
+  } else {
+    model
+  }
   let model = if navigates {
     { ..model, management_dialog: None, }
   } else {
@@ -3284,6 +3290,22 @@ fn update_msg(
       | ApplyAllFeedback
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
+    ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~) => {
+      guard model.artifact_followup is None &&
+        model.artifact_followup_target(slot) is Some(identity) else {
+        return (@cmd.none, model)
+      }
+      (
+        @dialog.show("artifact-followup-dialog"),
+        {
+          ..model,
+          artifact_followup: Some({ slot, identity, prompt, title, snapshot, }),
+        },
+      )
+    }
+    ArtifactFollowupConfirmed => confirm_artifact_followup(dispatch, model)
+    ArtifactFollowupDismissed =>
+      (@cmd.none, { ..model, artifact_followup: None, })
     // Delivered to the component by boot, alongside the other component inputs.
     ComposerReply(_)
     | ComposerCommandResult(_)

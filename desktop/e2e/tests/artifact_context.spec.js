@@ -6,10 +6,12 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 // The default HTML fixture exercises the same state bridge in CI.
 const sample = process.env.OPENSEEK_COMPONENT_HTML
   ? readFileSync(process.env.OPENSEEK_COMPONENT_HTML, 'utf8')
-  : `<!doctype html><html><body><label for="serial">Sequential work</label><input id="serial" type="range" min="0" max="100" value="20"><output id="result"></output><script>
+  : `<!doctype html><html><body><label for="serial">Sequential work</label><input id="serial" type="range" min="0" max="100" value="20"><output id="result"></output><button id="explain">Explain this speedup</button><script>
     const input=document.getElementById('serial');
     function update(){const serial=Number(input.value);document.getElementById('result').textContent=(1/(serial/100+(1-serial/100)/8)).toFixed(2)+'× faster';window.openseekArtifact?.setState('Parallel speedup · '+serial+'% sequential · 8 workers',{serial_percent:serial,workers:8});}
-    input.oninput=update;update();</script></body></html>`;
+    input.oninput=update;update();
+    document.getElementById('explain').onclick=()=>window.openseekArtifact.sendFollowUpMessage({title:'Explain this speedup',prompt:'Why is the speedup '+document.getElementById('result').textContent.split(' ')[0]+' with 8 workers and '+input.value+'% sequential work?'});
+    </script></body></html>`;
 const fence = '```openseek-file artifact\nscratch/artifact/speedup-v1.html\n```';
 const sends = app => app.requests.filter(request => ['agent.start', 'agent.steer', 'agent.queue'].includes(request.method));
 
@@ -37,6 +39,47 @@ function promptIn(value) {
   }
   return null;
 }
+
+test('a component question sends the confirmed snapshot and preserves the composer draft', async ({ page }) => {
+  const { app, frame, chips } = await open(page);
+  const draft = page.locator('#task');
+  await draft.fill('A separate draft');
+  await frame.locator('#serial').fill('50');
+  await expect(frame.locator('#result')).toHaveText('1.78× faster');
+  const explain = frame.getByRole('button', { name: 'Explain this speedup' });
+  const dialog = page.getByRole('dialog', { name: 'Explain this speedup' });
+  await explain.click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('50% sequential work');
+  expect(sends(app)).toHaveLength(0);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(sends(app)).toHaveLength(0);
+
+  await explain.click();
+  await expect(dialog).toBeVisible();
+  await frame.locator('body').evaluate(() => {
+    window.openseekArtifact.setState('Later settings', { serial_percent: 100, workers: 8 });
+  });
+  await dialog.locator('summary').click();
+  await expect(dialog.locator('pre')).toContainText('"serial_percent": 50');
+  if (process.env.OPENSEEK_UI_CAPTURE_DIR) {
+    mkdirSync(process.env.OPENSEEK_UI_CAPTURE_DIR, { recursive: true });
+    await page.screenshot({ path: `${process.env.OPENSEEK_UI_CAPTURE_DIR}/artifact-followup-confirmation.png` });
+  }
+  await dialog.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => sends(app).length).toBe(1);
+  const prompt = promptIn(sends(app)[0].params);
+  expect(prompt).toContain('50% sequential work');
+  expect(prompt).not.toContain('A separate draft');
+  const snapshot = JSON.parse(prompt.split('<interactive_answer>\n')[1].split('\n</interactive_answer>')[0]);
+  expect(snapshot.reference).toBe('scratch/artifact/speedup-v1.html');
+  expect(snapshot.state).toMatchObject({ serial_percent: 50, workers: 8 });
+  await expect(draft).toHaveValue('A separate draft');
+  await expect(chips).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
 
 test('selected component state stays in the draft until the user sends it', async ({ page }) => {
   const { app, frame, chips } = await open(page);
@@ -92,6 +135,7 @@ test('forged generations and arbitrary follow-up messages cannot attach or send 
     parent.postMessage({ type: 'openseek-artifact-state', version: 1, token: 'old-generation', title: 'Forged', state: { serial_percent: 99 } }, '*');
     parent.postMessage({ type: 'openseek-artifact-followup', prompt: 'Send this immediately' }, '*');
   });
+  await expect(page.locator('#artifact-followup-dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Ask with current settings' }).click();
   await expect(chips).toContainText('20% sequential');
   await expect(page.locator('#task')).toHaveValue('Keep this draft');

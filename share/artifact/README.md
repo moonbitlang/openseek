@@ -92,7 +92,7 @@ workspace sources.
 
 ### Continuing with selected state
 
-The isolated preview exposes one optional, data-only API:
+Use the preview bridge to offer the current settings:
 
 ```javascript
 window.openseekArtifact?.setState("Parallel speedup · 8 workers", {
@@ -121,6 +121,13 @@ up to 160 UTF-16 units and a JSON payload up to 12 KiB. A valid update makes the
 state available for the next follow-up.
 Snapshots belong to the selected page revision and conversation. Follow-up
 actions are available in active conversations.
+
+For a specific next question, add a button that calls
+`window.openseekArtifact?.sendFollowUpMessage?.({ prompt, title })`.
+For example, **Explain this speedup** asks about the displayed result.
+OpenSeek shows the question and the current snapshot for confirmation before
+sending. The question can be up to 12 KiB and the optional dialog title up to
+250 UTF-16 units. Keep controls such as sliders and filters local to the page.
 
 ## Self-contained HTML
 
