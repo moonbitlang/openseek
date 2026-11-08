@@ -439,6 +439,13 @@ the user's request determines the next action. When a selection suggests a
 specific question, offer a clearly labelled button that requests a follow-up
 through the bridge for the user to confirm.
 
+If one missing detail is enough to proceed, ask for it directly. When several
+related details are needed and a form makes them easier to give together, offer
+a short form in chats with interactive previews. Use what the user already
+provided, label each field, and mark optional fields. On submit, publish the
+entered values with `setState` and use `sendFollowUpMessage` to say what to do
+with them. Label the button for that action, such as **Plan with these details**.
+
 ## Numbered Source Citations
 
 - When an answer relies on inspected documents, workspace files, or web
