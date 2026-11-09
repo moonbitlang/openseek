@@ -1,14 +1,9 @@
 
 
-/* ---------- main column ---------- */
 main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  /* Constrain the single column too: without this it defaults to `auto`
-     and sizes to its widest content (a long code line), so the
-     transcript would grow past `main`'s track and slide under the files
-     panel. minmax(0, …) holds it to the track and lets inner content
-     wrap/scroll instead. */
+  /* Allow wide transcript content to scroll instead of widening the main track. */
   grid-template-columns: minmax(0, 1fr);
   /* Descendants use the live main-pane height to keep the composer inside the
      conversation row while the terminal is resized. */
@@ -20,7 +15,6 @@ main {
   background: var(--color-bg-canvas);
 }
 
-/* ---------- top bar ---------- */
 .topbar {
   grid-row: 1;
   display: flex;
@@ -62,7 +56,6 @@ main {
   color: var(--color-text-muted);
   cursor: pointer;
   position: fixed;
-  /* Center in the effective app header alongside the sidebar mode switch. */
   inset-block-start: max(
     0px,
     calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
@@ -183,7 +176,6 @@ main {
   display: none;
 }
 
-/* Loading and failed conversations keep the shared header visible. */
 main > .conversation-load-state {
   grid-row: 2 / -1;
 }

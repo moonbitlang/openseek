@@ -9,8 +9,6 @@ a:where(.setting-link) {
   text-decoration: none;
 }
 
-/* ---------- onboarding (no conversation on screen) ---------- */
-/* Empty states occupy the body beneath the shared header. */
 .onboarding {
   grid-row: 2 / -1;
   display: grid;
@@ -190,7 +188,6 @@ h2 {
   border-top: 1px solid var(--color-border-subtle);
 }
 
-/* The title opens the read-only transcript; it reads as text, not a button. */
 .archived-chat-open {
   display: flex;
   align-items: center;
@@ -227,9 +224,6 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: var(--space-3);
 }
 
-/* The bring-your-own-key guide inside the API group's card: prose plus
-   numbered steps, with its own padding since the card's default is
-   row-shaped. */
 .setup-guide {
   display: grid;
   gap: 1rem;
@@ -800,7 +794,6 @@ button.archived-chat-open:hover .archived-chat-title {
   white-space: nowrap;
 }
 
-/* Scheduled tasks share the Settings page's type scale and theme. */
 .schedule-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-5) 0; }
 .schedule-panel { padding: var(--space-6); margin: var(--space-6) 0; }
 .schedule-card :is(h2, h3) { margin: 0 0 var(--space-4); font-size: var(--font-size-emphasis); }

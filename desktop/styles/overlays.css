@@ -166,7 +166,6 @@
   background-color: var(--color-text-selection);
 }
 
-/* ---------- notifications ---------- */
 /* Match .button's vertical padding and line height; stretch the row so the
    field and icon button share their edges even as fonts or touch targets grow. */
 .export-link-row {
@@ -199,10 +198,6 @@
 .export-link-row .export-copy-success { --button-color: var(--color-success); }
 .export-error { color: var(--color-danger); }
 
-/* Transient error toasts, stacked in whichever window corner Settings
-   picked. Only rendered while something is up, so it never eats clicks
-   meant for the app. It survives the narrow editor and sidebar, while a
-   modal still stays above it and demands the answer first. */
 .notifications {
   position: fixed;
   z-index: var(--z-notification);
@@ -264,7 +259,6 @@
   }
 }
 
-/* Full-screen dead-end shown when the gateway connection is lost. */
 .bridge-lost-backdrop {
   position: fixed;
   inset: 0;
@@ -322,7 +316,6 @@
   font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
 }
-/* Inline outcome text in the Settings updates row. */
 .update-status {
   align-self: center;
   font-size: var(--font-size-md);
@@ -332,8 +325,6 @@
   color: var(--color-danger);
 }
 
-/* Real package byte progress. The status remains readable without the bar;
-   the indeterminate fill is used only until the server supplies a length. */
 .update-progress {
   flex: 1 1 150px;
   min-width: 0;
@@ -367,9 +358,6 @@
   }
 }
 /* ---------- portal (the relay sign-in shell) ---------- */
-/* Only the sign-in card survives here: the device-list portal was replaced
-   by the multi-device console, and its rules went with it. Full-screen on
-   its own — the console frame (sidebar | content) never renders here. */
 .portal {
   height: 100%;
   overflow: auto;
@@ -412,9 +400,6 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
 }
-/* The darker accent as fill: plain --color-accent under 13px text sits just below
-   the 4.5:1 contrast floor in both palettes. The paired foreground token
-   follows explicit data-theme overrides as well as the OS default. */
 .portal-button-link {
   display: inline-block;
   padding: var(--space-4) 1rem;
@@ -586,7 +571,6 @@
   content: "\eb63";
 }
 
-/* Import into the current workspace or a new chat. */
 .session-import-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -1,8 +1,4 @@
-/* openseek — calm, minimal coding agent.
-   Light mode primary, warm paper surfaces, hairline borders, blue accent.
-
-   Keep only app-wide visual decisions here. Component geometry, such as the
-   topbar height or editor resize handle width, stays with its component. */
+/* Shared semantic values only; component-specific geometry stays local. */
 /* xterm consumes these three tokens through getComputedStyle rather than a CSS
    declaration. Registering their color type makes the CSSOM expose the
    resolved light-dark() color instead of its unevaluated token stream. */
@@ -51,7 +47,6 @@
   --font-size-title: calc(1rem * 20 / 14);
   --font-size-page-title: calc(1rem * 26 / 14);
 
-  /* Recurring UI insets; one-off dimensions stay with their component. */
   --space-1: calc(1rem * 2 / 14);
   --space-2: calc(1rem * 4 / 14);
   --space-3: calc(1rem * 6 / 14);
@@ -68,16 +63,11 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.6;
 
-  /* Drawer-like layout surfaces share one restrained motion curve. Their
-     direction still belongs to each component's edge and layout axis. */
   --drawer-duration: 180ms;
   --drawer-easing: cubic-bezier(0.2, 0, 0, 1);
   --disclosure-duration: 350ms;
 
-  /* Icon sizes. A control declares `--icon-size` from this scale and `.icon`
-     reads it, so no rule reaches into another element to size its glyph.
-     Preserve the default 10/12/14/16px scale at the 14px body size, then
-     scale proportionally with the app's Font size setting. */
+  /* Controls pass this scale to .icon through --icon-size. */
   --icon-xs: calc(var(--font-size-base) * 10 / 14);
   --icon-sm: calc(var(--font-size-base) * 12 / 14);
   --icon-md: var(--font-size-base);
@@ -137,8 +127,6 @@
   );
   --color-warning: light-dark(var(--light-warning), var(--dark-warning));
 
-  /* Keyboard focus must be obvious without turning every interactive surface
-     into another accent claim. Blue remains for selection and primary action. */
   --color-focus-ring: color-mix(
     in srgb,
     var(--color-text-primary) 62%,
@@ -151,16 +139,10 @@
   );
   --color-backdrop: light-dark(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.5));
 
-  /* How much width a scrolling pane actually loses to its scrollbar,
-     measured once at startup by the frontend (dom_helpers.mbt) and rewritten
-     here. `0px` is the overlay case — macOS floats the bar above the content,
-     where `scrollbar-gutter` reserves nothing — and is the right fallback for
-     a page whose measurement never ran. Panels that want a fixed inset either
-     way subtract this from their own padding. */
+  /* dom_helpers.mbt sets the occupied scrollbar width. Zero covers overlay
+     scrollbars and pages where measurement has not run. */
   --scrollbar-lane: 0px;
 
-  /* The thumb color `scrollbar-color` sets. It has no hover or active
-     variant — the platform owns those. */
   --color-scrollbar-thumb: color-mix(
     in srgb,
     var(--color-text-primary) 32%,
@@ -199,8 +181,6 @@
   --z-connection-lost: 80;
 }
 
-/* Settings moves the base from 12px through 18px. The derived tokens shift as
-   one scale, preserving the hierarchy between labels, body text, and headings. */
 :root[data-font-size="12"] {
   --font-size-base: 12px;
 }
@@ -229,11 +209,8 @@
   --font-size-base: 18px;
 }
 
-/* The app stylesheet loads after the Viewer theme. Monospace glyphs look
-   larger than the surrounding system sans at the same nominal size, so the
-   dense editor surface uses the adjacent smaller step. The measured code view
-   also receives that concrete size through ViewerOptions so glyph widths and
-   wrapping remain correct. */
+/* Keep the editor chrome's type size aligned with the measured code view
+   supplied through ViewerOptions. This stylesheet loads after the Viewer theme. */
 .editor-shell,
 .moonbit-source,
 .composer-approval-body {

@@ -1,4 +1,3 @@
-/* SSH identity is separate from the executable command. */
 .ssh-host-row { display: flex; align-items: center; gap: 1rem; padding: var(--space-6) 0; border-bottom: 1px solid var(--color-divider); }
 .ssh-host-icon { display: flex; padding: var(--space-5); border-radius: 10px; background: var(--color-bg-subtle); color: var(--color-text-secondary); }
 .ssh-host-copy { flex: 1; min-width: 0; }

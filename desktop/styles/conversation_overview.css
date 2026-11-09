@@ -1,18 +1,11 @@
-/* ---------- conversation overview ----------
-   One element, two presentations, chosen by the main pane's width alone:
-   with room for a 600px conversation beside it, a rail of cards to the right
-   of the transcript and the composer; otherwise a panel over the
-   transcript's right edge, from under the titlebar to above the composer.
-   Showing and hiding is the root's single preference either way. */
+/* The same overview overlays the transcript in narrow panes and becomes a
+   right-hand rail in wide panes. Both layouts share one visibility preference. */
 
 main {
   --conv-overview-width: 300px;
 }
 
-/* The overview is positioned against its grid area instead of being placed
-   in the grid: an in-flow item would take the transcript's cell and push the
-   transcript into an auto-height row. Absolutely positioned, it leaves the
-   conversation's rows as they are and still lines up with them. */
+/* Position against the grid area without displacing the transcript's row. */
 main:has(> .conv-overview) {
   position: relative;
 }
@@ -254,9 +247,6 @@ main:has(> .conv-overview) {
   color: var(--color-text-muted);
 }
 
-/* Changes card: the checkout first, then what the agent attached. The icon
-   carries the pull request's state; a row with a page links to it, and an
-   attached row's remove button sits outside the link. */
 .conv-changes-row,
 .conv-changes-error {
   display: flex;
@@ -346,8 +336,6 @@ a.conv-changes-link:hover {
   color: var(--color-text-muted);
 }
 
-/* The remove button stays out of the way until the row is hovered or
-   focused, like the transcript's row actions. */
 .conv-changes-remove {
   opacity: 0;
 }
@@ -364,7 +352,6 @@ a.conv-changes-link:hover {
   margin-inline: var(--space-2);
 }
 
-/* An attached branch's repository gives way before its name does. */
 .conv-changes-text > .conv-overview-row-sub {
   flex: 0 1000 auto;
   min-width: 0;
@@ -372,8 +359,6 @@ a.conv-changes-link:hover {
   text-overflow: ellipsis;
 }
 
-/* The merged pull requests' fold row reads as a row, not a button: its
-   chevron points right while folded and down once unfolded, like a card's. */
 .conv-changes-fold {
   border: 0;
   background: transparent;

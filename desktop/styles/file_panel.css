@@ -1,5 +1,4 @@
 
-/* ---------- files panel ---------- */
 .file-image-preview {
   display: grid;
   place-items: center;
@@ -14,7 +13,6 @@
   object-fit: contain;
 }
 
-/* Shared icon button styling for panel controls. */
 .panel-toggle {
   --panel-toggle-size: calc(var(--font-size-base) * 2);
   display: grid;
@@ -60,8 +58,6 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-primary);
 }
 
-/* The editor part: a tab strip of open files over the viewer, with the
-   file tree as a toggleable pane on the viewer's right. */
 .editor {
   display: flex;
   flex-direction: column;
@@ -84,11 +80,8 @@ button.panel-toggle:not(:disabled):hover {
   transition-delay: var(--drawer-duration);
 }
 
-/* The editor's top bar, the same height as the topbar so the header
-   divider runs continuously across the window: the open-file tabs on
-   the left, with space reserved for the shell's fixed panel toggle
-   on the right. Always rendered — the editor's child order is
-   structural (see panel_view). */
+/* panel_view keeps the tab bar mounted so toggling modes cannot re-key the
+   imperative viewer host. Reserve the shell's fixed panel-toggle slot. */
 .editor-tabsbar {
   /* Keep the launcher attached to + as the panel and tab strip resize. */
   position: relative;
@@ -104,8 +97,6 @@ button.panel-toggle:not(:disabled):hover {
   background: var(--color-bg-surface);
 }
 
-/* The tabs scroll horizontally rather than wrapping; the scrollbar is
-   hidden — the chips themselves make the overflow discoverable. */
 .editor-tabs {
   display: flex;
   align-items: center;
@@ -119,9 +110,6 @@ button.panel-toggle:not(:disabled):hover {
   display: none;
 }
 
-/* One open file, styled like the app's other selectable chips
-   (tree rows, panel toggles): a quiet rounded chip, accent-tinted
-   when active. */
 .editor-tab {
   display: flex;
   align-items: center;
@@ -141,7 +129,6 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-primary);
 }
 .editor-tab.active {
-  /* Match the selected conversation in the left sidebar. */
   background: var(--color-accent-soft);
   color: var(--color-accent);
 }
@@ -156,9 +143,6 @@ button.panel-toggle:not(:disabled):hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The close affordance is a Codicon centered by this grid, not a text `×`:
-   the SVG box centers exactly, while a glyph's ink sits on the text baseline
-   and so reads about a pixel low. */
 .tab-close {
   --icon-size: var(--icon-sm);
   flex: 0 0 auto;
@@ -181,11 +165,7 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-muted);
 }
 
-/* The viewer and the toggleable file-tree panel split the column below
-   the breadcrumb, Emacs-style: the tree docks flat along the bottom
-   and takes real layout height, the viewer keeps the rest. Both stay
-   mounted (see panel_view) so the viewer host is never re-keyed; CSS
-   alone hides the panel. */
+/* Keep viewer and tree mounted across layout changes to preserve viewer state. */
 .editor-body {
   display: flex;
   flex-direction: column;
@@ -296,14 +276,6 @@ button.panel-toggle:not(:disabled):hover {
 .viewer-notice.hidden {
   display: none;
 }
-/* The file tree as a flat bottom panel, Emacs-window style: full
-   width, a 1px seam against the viewer, no chrome of its own. Non-modal —
-   the viewer above stays live when the tree is shown or hidden.
-   The height is `--tree-height`, set as the user drags the handle on
-   the top seam (see tree_resize.mbt); it defaults to a third and is
-   clamped so the panel floors at 96px while the viewer keeps at
-   least 120px. The clamp also re-fits the panel on window resize
-   without any script. */
 /* Animate the stored manual preference. The temporary picker uses full size
    independently, so selecting a document does not start a closing animation. */
 @property --tree-open-progress {
@@ -337,11 +309,6 @@ button.panel-toggle:not(:disabled):hover {
   pointer-events: none;
 }
 
-/* The right-sidebar layout (a Settings choice): same DOM, the body
-   flexes as a row and the tree becomes a column on the viewer's
-   right. The width is `--tree-width`, set by the same drag handle
-   (now on the pane's left seam), clamped so the tree floors at 180px
-   while the viewer keeps at least 240px. */
 .editor.tree-right .editor-body {
   flex-direction: row;
 }
@@ -365,9 +332,6 @@ button.panel-toggle:not(:disabled):hover {
   visibility: inherit;
 }
 
-/* Drag-to-resize handle on the panel's viewer-facing seam — the
-   row-resize twin of .editor-resize-handle in the bottom layout, a
-   col-resize strip on the left seam in the sidebar layout. */
 .tree-resize-handle {
   position: absolute;
   top: 0;
@@ -399,10 +363,6 @@ html.is-resizing-col {
   display: none;
 }
 
-/* Drag-to-resize handle on the editor's left edge. A thin strip floated
-   above the seam (z-index over the viewer) with a col-resize cursor; it
-   tints on hover and while dragging. Hidden when the panel is closed (the
-   editor column is then zero-width). */
 .editor-resize-handle {
   position: absolute;
   top: 0;
@@ -428,11 +388,9 @@ html.is-resizing {
   cursor: col-resize;
 }
 
-/* Like VS Code's SplitView, keep divider drags out of the editor's mouse
-   hit testing: a mousemove there reads geometry after the drag writes sizes.
-   Restrict this to viewer content so Desktop's divider handles remain usable.
-   Include descendants because viewer widgets can explicitly enable pointers.
-   Removing the existing drag class restores each widget's normal behavior. */
+/* Suppress viewer mouse hit testing during divider drags to avoid geometry
+   reads after size writes. Include descendants that re-enable pointer events,
+   but leave Desktop's divider handles interactive. */
 html:is(
   .is-resizing,
   .is-resizing-row,
@@ -536,7 +494,6 @@ html:is(
 .dock-menu .dock-launcher-name {
   font-weight: inherit;
 }
-/* The empty strip's centered launcher pane, same rows as the popup. */
 .dock-launcher {
   display: none;
 }
@@ -731,7 +688,6 @@ html:is(
   width: var(--icon-lg);
   height: var(--icon-lg);
 }
-/* Mode selector: text vs semantic, mirroring semgrep's search-mode split. */
 .search-mode {
   flex: 0 0 auto;
   display: flex;
@@ -768,7 +724,6 @@ html:is(
   align-items: center;
   gap: var(--space-2);
 }
-/* Semantic hits: one structural match per block, semgrep-style. */
 .search-semantic-pattern-group {
   min-width: 0;
 }
@@ -1279,8 +1234,6 @@ html:is(
   padding: var(--space-2) 0 var(--space-4);
 }
 
-/* Keep the tree directly beneath the existing Files tab. Its compact spacing
-   does not change the Search or Changes inventories. */
 .file-tree.workspace-file-list {
   --tree-step: 14px;
   --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
@@ -2134,12 +2087,6 @@ button.git-history-file.selected {
   text-overflow: ellipsis;
 }
 
-/* The slimmer second row under the tab bar: the active file's path,
-   with the tree-pane toggle at the right edge — the same padding as
-   the tab bar above, so it sits directly under the panel toggle.
-   Hidden while no file is open (the tree then shows unconditionally);
-   it stays in the DOM so the editor's child order never re-keys the
-   viewer host. */
 .viewer-breadcrumb.hidden {
   display: none;
 }
@@ -2200,7 +2147,6 @@ button.git-history-file.selected {
   display: none;
 }
 
-/* The path crumbs grow and ellipsize. */
 .crumb-path {
   display: flex;
   align-items: center;
@@ -2210,7 +2156,6 @@ button.git-history-file.selected {
   overflow: hidden;
 }
 
-/* Every crumb but the current one opens a directory picker. */
 .crumb {
   appearance: none;
   padding: 0;
@@ -2323,9 +2268,6 @@ button.git-history-file.selected {
   font-variant-numeric: tabular-nums;
 }
 
-/* VS Code-style breadcrumb picker: clicking a directory opens its immediate
-   children over the source viewer. It is deliberately independent from the
-   docked Explorer, but shares the Explorer's directory cache and ordering. */
 .breadcrumb-picker {
   position: absolute;
   top: calc(100% - 1px);
@@ -2605,7 +2547,6 @@ button.git-history-file.selected {
   opacity: 0.5;
 }
 
-/* Pending controls keep their settled appearance but remain non-interactive. */
 .review-layout-control:not(.pending) .review-layout-button:disabled {
   color: inherit;
 }
@@ -2956,9 +2897,6 @@ button.git-history-file.selected {
   display: none !important;
 }
 
-/* The workflows tab. Like the browser and launcher modes, the file chrome is
-   hidden while it is active and its own body is shown; the body is always
-   mounted, so the panel's child order stays structural. */
 .editor .workflow-panel {
   display: none;
 }
@@ -3013,7 +2951,6 @@ button.git-history-file.selected {
 .workflow-run-count {
   color: var(--color-text-muted);
 }
-/* Spend nobody could account for: not a failure, but not a zero either. */
 .workflow-run-unaccounted,
 .workflow-row-unaccounted {
   color: var(--color-warning, var(--color-text-secondary));
@@ -3022,8 +2959,6 @@ button.git-history-file.selected {
   display: flex;
   flex-direction: column;
 }
-/* A row is a button: clicking it opens the child's transcript. It shares the
-   lane dock's baseline grid so a child reads the same way in both places. */
 .workflow-row {
   display: grid;
   grid-template-columns: 6px auto 1fr auto;
@@ -3115,14 +3050,12 @@ button.git-history-file.selected {
   opacity: 0.5;
 }
 
-/* Background jobs share the dock's stable body slots. */
 .editor .jobs-panel { display: none; }
 .editor.mode-jobs .viewer-breadcrumb,
 .editor.mode-jobs .editor-body,
 .editor.mode-jobs .browser-chrome { display: none; }
 .editor.mode-jobs .jobs-panel { display: flex; }
 
-/* The GitHub inventory is its own dock body, independent of Review/Files. */
 .editor .github-panel { display: none; }
 .editor.mode-github .viewer-breadcrumb,
 .editor.mode-github .editor-body,
@@ -3648,7 +3581,6 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   /* The split-pane resize handle uses 20; expanded actions may cross it. */
   z-index: 21;
 }
-/* GitHub review threads share the existing Review shell and diff geometry. */
 .github-review-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
 .github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-seam); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
 .github-review-toggle svg { width: 1rem; height: 1rem; }

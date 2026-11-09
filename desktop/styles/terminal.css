@@ -1,5 +1,4 @@
 
-/* ---------- terminal panel ---------- */
 /* The emulator host remains mounted while hidden so each imperative xterm
    instance retains its screen and scrollback. */
 .terminal-panel {
