@@ -154,19 +154,15 @@ pub fn definition(
   AgentToolDefinition(
     name="mbtx",
     description=description(
-        background=bg_runtime is Some(_),
-        escalation=approval is Some(_),
-        delegation=subagents,
-        auto_background_after_ms~,
-        foreground_timeout_ms~,
-        build_timeout_ms~,
-        workspace_writes~,
-      ) +
-      (if scratch_dir is Some(_) {
-        "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
-      } else {
-        ""
-      }),
+      background=bg_runtime is Some(_),
+      escalation=approval is Some(_),
+      delegation=subagents,
+      auto_background_after_ms~,
+      foreground_timeout_ms~,
+      build_timeout_ms~,
+      workspace_writes~,
+      scratch_dir?,
+    ),
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),
@@ -1708,7 +1704,15 @@ fn description(
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
   workspace_writes~ : WorkspaceWrites,
+  scratch_dir? : String,
 ) -> String {
+  // File artifacts live under the session scratch directory, so the
+  // instructions for producing them exist only where that directory does.
+  let artifacts = if scratch_dir is Some(_) {
+    "File artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
+  } else {
+    ""
+  }
   // The one sentence here that depends on what this build can actually do.
   //
   // Without an approval channel a refusal really is the end of the road, and
@@ -1889,6 +1893,7 @@ fn description(
       $|
       $|This context has no background-job runtime. A run may stay in the foreground
       $|for up to \{foreground_bound}; at that deadline it is cancelled and reported as a timeout.
+      $|\{artifacts}
     )
   }
   // Delegation is described only where it can be granted: a session whose
@@ -1949,6 +1954,7 @@ fn description(
     $|completion or user input, without a timeout. Explicitly finish when your
     $|work is complete.
     $|\{delegation}
+    $|\{artifacts}
   )
 }
 
