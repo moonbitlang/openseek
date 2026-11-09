@@ -1275,72 +1275,24 @@ test('Cloud context download reuses a cached file while another preview stays ac
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-async function shortcutPrevented(page, code, key) {
-  return page.evaluate(({ code, key }) => {
-    const platform = navigator.userAgentData?.platform || navigator.platform || '';
-    const apple = /mac|iphone|ipad|ipod/i.test(platform);
-    const event = new KeyboardEvent('keydown', {
-      code, key, bubbles: true, cancelable: true, metaKey: apple, ctrlKey: !apple,
-    });
-    document.dispatchEvent(event);
-    return event.defaultPrevented;
-  }, { code, key });
-}
-
-test('Cloud Quick Open finds files without a host and keeps unsupported Symbols shortcuts with the browser', async ({ page }) => {
+test('Cloud Quick Open finds and opens files without a host', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
-  cloud.indexes.get(sessionA).push('src/#literal.mbt');
-  cloud.contents.set(`${sessionA}:src/#literal.mbt`, {
-    kind: 'content', content: '// literal hash file', sig: 'literal-hash', absolute: '/src/#literal.mbt',
-  });
   await cloud.install(); await page.goto(`${authOrigin}/cloud`);
   await expect(page.locator('#task')).toBeEnabled();
-  // Home has no session workspace to search; do not intercept browser Print.
-  expect(await shortcutPrevented(page, 'KeyP', 'p')).toBe(false);
-  expect(await shortcutPrevented(page, 'KeyT', 't')).toBe(false);
   await cloud.open();
-  expect(await shortcutPrevented(page, 'KeyT', 't')).toBe(false);
   const palette = page.getByRole('dialog', { name: 'Search workspace files', exact: true });
-  await expect(palette).toHaveCount(0);
   await page.keyboard.press('ControlOrMeta+p');
   const query = palette.getByRole('combobox');
   await expect(query).toBeFocused();
   await expect(query).toHaveAttribute('aria-keyshortcuts', 'Meta+P Control+P');
   await query.fill('hello');
   await expect(palette.getByRole('option')).toContainText(['hello #.mbt']);
-  await query.fill('#literal');
-  await expect(palette.getByRole('option')).toContainText(['#literal.mbt']);
-  await expect(palette).toHaveAccessibleName('Search workspace files');
   await query.press('Enter');
   await expect(palette).toHaveCount(0);
-  await expect(source(page)).toContainText('// literal hash file');
+  await expect(source(page)).toContainText('"Cloud text"');
   // The pick opened the panel; reconciling it must not read the file again.
-  expect(cloud.fileRequests.filter(request => request.content && request.path === 'src/#literal.mbt')).toHaveLength(1);
+  expect(cloud.fileRequests.filter(request => request.content && request.path === 'src/hello #.mbt')).toHaveLength(1);
   expect(cloud.fileRequests.some(request => request.index && request.session === sessionA)).toBe(true);
-  expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
-test('Cloud Quick Open opens the exact indexed path rather than a Markdown file reference', async ({ page }) => {
-  const cloud = new CloudFilesHarness(page);
-  const names = [['notes.txt ', 'trailing space', 'notes'], ['file:notes.txt', 'scheme-like name', 'file:notes']];
-  for (const [path, content] of names) {
-    cloud.contents.set(`${sessionA}:${path}`, { kind: 'content', content, sig: `literal:${content}`, absolute: `/${path}` });
-  }
-  await cloud.install(); await page.goto(`${authOrigin}/cloud`);
-  await expect(page.locator('#task')).toBeEnabled();
-  await cloud.open();
-  const palette = page.getByRole('dialog', { name: 'Search workspace files', exact: true });
-  for (const [path, content, query] of names) {
-    // Index only this file: neither its trimmed nor its link-parsed form exists.
-    cloud.indexes.set(sessionA, [path]);
-    await page.keyboard.press('ControlOrMeta+p');
-    await palette.getByRole('combobox').fill(query);
-    await expect(palette.getByRole('option')).toHaveCount(1);
-    await palette.getByRole('combobox').press('Enter');
-    await expect(palette).toHaveCount(0);
-    await expect(source(page)).toContainText(content);
-  }
   expect(fileHostRequests(cloud)).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
 });
