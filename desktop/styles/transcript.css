@@ -1,5 +1,4 @@
 
-/* ---------- transcript ---------- */
 .transcript {
   /* Shell animation values are unused here. Stop their changes from
      invalidating styles throughout a long streaming reply. */
@@ -16,10 +15,8 @@
   scrollbar-gutter: stable both-edges;
   padding: 24px 24px 22px;
   background: transparent;
-  /* The overview rail's container: its cq units measure this scroller's
-     own viewport, so the rail centers and bounds itself against the real
-     transcript height whatever the topbar, composer, or terminal do. Safe
-     to contain: the grid row sizes this element, not its content. */
+  /* Size the overview rail against this scroller. Containment is safe because
+     the parent grid, not transcript content, determines its dimensions. */
   container-type: size;
 }
 
@@ -41,16 +38,8 @@
 }
 
 .stream {
-  /* A column of rows, and deliberately not a one-column grid. A grid sizes
-     its tracks from every item, so each change to the reply being streamed
-     re-ran track sizing over the whole conversation: at a thousand rows that
-     was most of the layout time of every token. A flex column lays out only
-     the row that changed.
-
-     Rows stretch to the column's width whatever they hold: a flex item's
-     automatic minimum size applies along the main axis only, so a wide <pre>
-     or a long token cannot widen its row past max-width — the pre's own
-     `overflow: auto` scrolls and plain text wraps instead. */
+  /* Avoid grid track sizing across the full conversation on streaming updates.
+     Stretched flex rows also keep wide code blocks within the stream's width. */
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -58,14 +47,8 @@
   margin: 0 auto;
 }
 
-/* Rows outside the viewport skip style, layout and paint. A long transcript
-   otherwise re-lays out every row whenever the column width changes (the
-   editor panel animating open, a window resize), and every render walks
-   them for style. A skipped row keeps the height it had when last rendered
-   (`auto`); the component renders every row once when the transcript
-   mounts (see render_rows_once_after_mount), so the 120px guess never
-   stands in and scroll offsets stay exact. The empty state is always
-   on screen and does not need containment. */
+/* render_rows_once_after_mount primes remembered row heights before offscreen
+   content is skipped. The 120px fallback covers rows not yet measured. */
 .stream > :not(.empty) {
   content-visibility: var(--stream-rows-visibility, auto);
   contain-intrinsic-size: auto 120px;
@@ -123,9 +106,7 @@
      the viewport top; 50cqh is its middle. */
   top: 50cqh;
   transform: translateY(-50%);
-  /* Into the scroller's own 24px padding, flush with its left edge — the
-     rail must not depend on the centered stream leaving a gutter, because
-     at common window widths it leaves none. */
+  /* Use the scroller's padding; a narrow pane may leave no stream gutter. */
   left: -20px;
   display: flex;
   flex-direction: column;
@@ -188,23 +169,13 @@
   background: var(--color-accent);
   opacity: 1;
 }
-/* A turn that hit a tool error. Declared last so its color wins, and setting
-   no width so hover and active keep theirs: the two states occupy separate
-   channels, and a failed tick stays red while it is the one you are reading —
-   which is usually the one you clicked the mark to reach. The tick's
-   aria-label and its hover preview say the same thing in words; the color is
-   never the only carrier. */
+/* Failure color wins over hover/active color without changing tick width. */
 .overview-tick.failed .overview-tick-button::before {
   background: var(--color-danger);
   opacity: 1;
 }
-/* The hovered tick's preview: the prompt, its send time, and the answer it
-   got. Preview only — pointer events pass through, so it can never trap the
-   pointer or cover the text beneath from a click. The nav's child, hung
-   from the hovered tick's enter-time anchor (its inline CSS variable,
-   measured against the nav): the scrolling rail would clip a popover
-   nested in its ticks. 10px = the rail's -20px inset plus the old 30px
-   tick-to-preview gap. */
+/* Keep the preview outside the scrolling rail to avoid clipping. Its anchor
+   is measured relative to the nav; pointer events pass through to the transcript. */
 .overview-preview {
   position: absolute;
   left: 10px;
@@ -261,15 +232,12 @@
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
-/* The rail lives in the scroller's padding, so it survives any width the
-   desktop layout produces; only a phone-narrow column drops it. */
 @container (max-width: 700px) {
   .transcript-overview {
     display: none;
   }
 }
 
-/* empty state */
 .empty {
   display: grid;
   justify-items: center;
@@ -475,7 +443,6 @@
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-/* messages */
 .msg {
   display: flex;
   gap: 12px;
@@ -484,11 +451,6 @@
   animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-/* Nothing labels the speaker: the user's turn is a bubble pushed to the
-   right, the agent's prose and its work log are unbubbled and flush
-   left, so either side reads as one voice however many messages it
-   spans. Extra room above the bubble marks the turn boundary the labels
-   used to. */
 .msg.user {
   flex-direction: column;
   align-items: flex-end;
@@ -523,8 +485,7 @@
   overflow-wrap: anywhere;
 }
 
-/* In the accessibility tree, out of the layout: speaker names and the
-   like, which the redesign says visually through alignment and fill. */
+/* Keep semantic labels available to assistive technology without visible layout. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -537,7 +498,6 @@
   white-space: nowrap;
 }
 
-/* Keep time and actions together at the right edge, with time first. */
 .user-message-actions {
   display: flex;
   align-items: center;
@@ -555,10 +515,7 @@
   min-width: 0;
 }
 
-/* A completed assistant answer closes with a left-aligned metadata row: the
-   raw-Markdown action first, followed by the durable event's completion time.
-   The icon stays visible instead of relying on hover so touch and keyboard
-   users can discover it. */
+/* Keep the Markdown action discoverable without hover for touch and keyboard use. */
 .assistant-message-actions {
   display: flex;
   align-items: center;
@@ -819,7 +776,6 @@
   max-height: min(50vh, 456px);
   margin-inline: auto;
 }
-/* Plain-text fallback when the markdown parser rejects an input. */
 .msg-content.markdown pre.markdown-fallback {
   margin: 0;
   padding: 0;
@@ -1102,7 +1058,6 @@
   margin-bottom: 0;
 }
 
-/* live streaming bubble: a blinking caret after the latest text */
 .msg.streaming .msg-content::after {
   content: "▍";
   margin-left: 2px;
@@ -1242,9 +1197,7 @@
   font-size: var(--font-size-sm);
 }
 
-/* One provider response: its thought fold, its prose, and its tool rows, in
-   the order the model produced them. The same grid and gap as the stream, so
-   a response's parts space exactly as separate stream children would. */
+/* Match the outer stream's spacing within a provider response. */
 .step {
   min-width: 0;
   display: grid;
@@ -1252,12 +1205,6 @@
   gap: 20px;
 }
 
-/* One model step's work: a heading (or thought fold) carrying the ordinal
-   and commit instant, then every tool call on display as its own row. Flush
-   with the agent's prose, not indented: the work is the agent's, and an
-   indent under a user bubble would read as the user's. Only reasoning sits
-   behind a fold; a quiet guide line groups the call rows without turning
-   them into a card. */
 .activity-row {
   min-width: 0;
   display: grid;
@@ -1321,10 +1268,7 @@
   transform: rotate(90deg);
 }
 
-/* The model-step ordinal stays in the transcript's neutral hierarchy so step
-   status does not compete with selection, primary actions, or failures. Tabular
-   numerals in a fixed right-aligned column hold every `·` on the same x as the
-   count crosses #9 → #10. */
+/* Reserve a right-aligned ordinal slot so single- and double-digit steps align. */
 .activity-step {
   display: inline-block;
   min-width: 3ch;
@@ -1334,7 +1278,6 @@
   transition: color 0.15s ease;
 }
 
-/* Hover and disclosure raise contrast without introducing another blue state. */
 .activity-summary:hover .activity-step,
 .activity[open] > .activity-summary .activity-step {
   color: var(--color-text-secondary);
@@ -1343,12 +1286,7 @@
   border-left-color: var(--color-divider);
 }
 
-/* The step heading when the step went straight to tools: the same ordinal and
-   instant columns the thought fold's summary carries, on a plain line — there
-   is nothing to disclose, every call below is already on display. The hidden
-   marker reserves exactly the lead the summary's `▸ ` takes (same font, same
-   text), so `#N` and the instant line up in one column across both header
-   forms; the gap between them is the markup's real space, as in the summary. */
+/* Reserve the disclosure marker's width even when the step has no thought fold. */
 .activity-heading {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
@@ -1358,15 +1296,6 @@
   visibility: hidden;
 }
 
-/* When the step committed, in the summary's second fixed column, right after
-   the ordinal — which a real space in the markup separates it from, not a
-   margin here, so the gap survives being copied or read aloud. No color of its
-   own: it inherits the summary's, so it is exactly as legible as the line it
-   belongs to and brightens with it on hover. Setting one would only have
-   restated the same token, or made the row's least important item its highest
-   contrast. Tabular numerals so the seconds digits do not shift against the
-   rows above and below — reading the gaps between steps is the whole point of
-   showing them. */
 .activity-time {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
@@ -1380,8 +1309,6 @@
   border-left: 2px solid var(--color-divider);
 }
 
-/* compaction checkpoint between turns: a quiet labeled fold with the
-   summary prose behind it */
 .summary-card-label {
   cursor: pointer;
   list-style: none;
@@ -1428,11 +1355,6 @@
   overflow-wrap: anywhere;
 }
 
-/* A step's tool exchanges, always on display: one row per request and result,
-   with every request in a proven parallel burst preceding its result rows.
-   They hang behind
-   the same quiet guide line an expanded fold used to draw, so the step still
-   reads as one block under its heading or thought fold. */
 .activity-work {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1571,14 +1493,10 @@
 .tool-result.error.stage-build > .tool-result-summary {
   color: var(--color-warning);
 }
-/* The result row's own "build error" word (its label shows no brief). */
 .tool-call-failed.tool-stage-build {
   color: var(--color-warning);
 }
 
-/* Arguments and output grow the page instead of scrolling in place: the
-   transcript stays the only scroll area, so the wheel is never trapped by a
-   nested scrollbar. Long result dumps are clamped in the renderer. */
 .tool-call-section + .tool-call-section {
   margin-top: 8px;
 }
@@ -1590,13 +1508,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-/* The way out of a sub-run's tool card and into the child's own transcript.
-   This card holds the subagent's REPORT; the work behind it is a whole
-   transcript of its own, and until this link that transcript was reachable
-   only by matching an `sr-N` against a sidebar row by eye. Accent-soft rather
-   than a filled button: it is a way to go deeper, not the card's primary
-   action, and it sits above quoted output that must stay the loudest thing
-   in the card. */
 .subrun-chip {
   display: inline-flex;
   align-items: center;
@@ -1750,11 +1661,7 @@
   padding-left: 10px;
   border-left: 2px solid var(--color-divider);
 }
-/* ---------- custom tool cards ----------
-   One tool's arguments rendered in the shape a reader wants — an `mbtx`
-   call as its program, an `edit` as the change it describes — instead of the
-   escaped JSON the generic path shows. A chip row carries arguments the card
-   does not dramatize; the shared tab set carries the exact payload. */
+/* ---------- custom tool cards ---------- */
 .tool-card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1780,11 +1687,6 @@
   color: var(--color-text-secondary);
 }
 
-/* The `mbtx` program block needs no rule of its own: the shared
-   `.tool-call pre` already gives it the padding and background, and its
-   `pre-wrap` keeps the listing's indentation while wrapping the overflow — so
-   a long line grows the page rather than adding a nested scrollbar. Its
-   numbered lines are the shared `moonbit-line` gutter grid below. */
 
 /* Numbered MoonBit lines — a `read` result's protocol gutter and an `mbtx`
    program's generated one — keep the number muted while the source uses the
@@ -1815,8 +1717,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-/* The numbered renderer's elision row for a degenerate line count: no number
-   of its own, muted like the gutters whose sequence it interrupts. */
 .moonbit-skip {
   color: var(--color-text-muted);
 }
@@ -1850,8 +1750,6 @@
 .tool-diff .diff-ctx {
   color: var(--color-text-muted);
 }
-/* One edit of a batch: the anchoring chips sit with the diff they anchor,
-   with a quiet rule between entries so a long batch reads as a list. */
 .edit-entry + .edit-entry {
   margin-top: 10px;
   padding-top: 4px;
@@ -1862,11 +1760,7 @@
   font-size: var(--font-size-xs);
 }
 
-/* ---------- plan ----------
-   One checklist, rendered at three altitudes: a meter riding a folded run's
-   summary line, the full card inside an expanded `plan` call, and the
-   standing plan docked above the composer. The row and meter rules are shared
-   by all three so they cannot drift apart. */
+/* ---------- plan ---------- */
 .plan-steps {
   margin: 8px 0 0;
   padding: 0;
@@ -1920,9 +1814,6 @@
 .plan-step.in_progress .step-title {
   font-weight: 600;
 }
-/* The meter: the completed run, then one step's worth of lighter fill for the
-   step in progress — the only thing a per-step ribbon showed that a plain bar
-   does not. Fixed width, so a twenty-step plan does not stretch it. */
 .plan-progress {
   display: flex;
   align-items: center;
@@ -1984,7 +1875,6 @@
   margin: 0;
   min-width: 0;
 }
-/* Tool groups and singletons use only their parent's row gap for spacing. */
 .minimal-tools {
   margin: 0;
   min-width: 0;
@@ -1998,7 +1888,6 @@
   grid-template-columns: minmax(0, 1fr);
   gap: var(--minimal-row-gap);
 }
-/* Activity captions keep the same typography when a disclosure opens. */
 .minimal-activity-summary,
 .minimal-call,
 .minimal-note {
@@ -2008,7 +1897,6 @@
 }
 .minimal-activity-summary {
   display: flex;
-  /* SVG and text have different baselines; align their row centers. */
   align-items: center;
   gap: 8px;
   list-style: none;
@@ -2034,7 +1922,6 @@
 }
 .minimal-call-list,
 .minimal-process-body {
-  /* Titles and their first content row use the same internal separation. */
   margin-top: var(--minimal-row-gap);
 }
 .minimal-tool-icon {
@@ -2057,11 +1944,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-/* The notice's own row: its icon and the recorded text, which wraps. Flex, like
-   the activity summary — nothing here needs a third column or a spanning edit
-   preview, so the icon's own `flex: 0 0 14px` applies instead of being replaced
-   by a grid track. Both children align to the row's top, which is what keeps
-   the icon on the text's first line however many lines the text takes. */
 .minimal-runtime-note {
   display: flex;
   align-items: flex-start;
@@ -2071,11 +1953,7 @@
   flex: 1;
   min-width: 0;
 }
-/* A notice's text wraps, so its icon stays on the first line rather than
-   centering on the whole block. Give the icon cell that line's own height, as
-   the changes header does for its chevron: `1lh` is the row's line-height, so
-   the 14px SVG centers on the first line exactly as a call row's icon does
-   instead of sitting on the block's top edge. */
+/* Align the icon to the first text line, not the full wrapped notice. */
 .minimal-runtime-note > .minimal-tool-icon {
   height: 1lh;
 }
@@ -2101,7 +1979,6 @@
   grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 8px;
-  /* Separate an edit preview from its caption like other tool content rows. */
   row-gap: var(--minimal-row-gap);
   min-width: 0;
 }
@@ -2111,7 +1988,6 @@
   grid-row: 1;
   order: 0;
 }
-/* Tool descriptions keep one line; their full text is available on hover. */
 .minimal-call-caption {
   grid-column: 2;
   grid-row: 1;
@@ -2197,7 +2073,6 @@
   }
 }
 
-/* User attachments retain their aspect ratio without widening the transcript. */
 .user-images {
   display: flex;
   flex-wrap: wrap;
@@ -2284,8 +2159,6 @@
   }
 }
 
-/* A `!` command the user ran from the composer: its command line, how it
-   ended when that was not a clean exit, and its captured output. */
 .user-shell-command {
   display: grid;
   gap: 6px;
