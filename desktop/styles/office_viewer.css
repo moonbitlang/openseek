@@ -760,12 +760,12 @@
   cursor: crosshair;
   user-select: none;
   overflow: hidden;
-  outline: 2px solid var(--accent, #3578e5);
+  outline: 2px solid var(--color-region-selection);
   pointer-events: none;
 }
 .pdf-region-capture-box {
   position: absolute;
-  border: 1px solid #3578e5;
+  border: 1px solid var(--color-region-selection);
 
   pointer-events: none;
   box-sizing: border-box;
@@ -775,7 +775,7 @@
 .pdf-region-capturing { touch-action: none; }
 .pdf-capture-feedback .feedback-source-selection {
   background: transparent;
-  border: 1px solid var(--accent, #3578e5);
+  border: 1px solid var(--color-region-selection);
   box-sizing: border-box;
 }
 
@@ -783,7 +783,7 @@
    pixels, so its outline and hint cannot leak into the exported document. */
 .office-region-selecting, .office-region-selecting * { cursor: crosshair !important; user-select: none !important; }
 .office-region-capture { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
-.office-region-capture-box { position: fixed; box-sizing: border-box; border: 2px solid #1677ff; background: rgb(22 119 255 / 8%); }
+.office-region-capture-box { position: fixed; box-sizing: border-box; border: 2px solid var(--color-region-selection); background: color-mix(in srgb, var(--color-region-selection) 8%, transparent); }
 .office-region-capture-box[hidden] { display: none; }
 .office-region-capture-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-xs); white-space: nowrap; }
 .office-region-capture[aria-busy="true"] .office-region-capture-box { border-style: dashed; }
@@ -801,7 +801,7 @@
   display: grid;
   place-items: center;
   color: white;
-  background: #1677ff;
+  background: var(--color-region-selection);
   font-size: var(--font-size-xs);
   font-weight: 600;
 }

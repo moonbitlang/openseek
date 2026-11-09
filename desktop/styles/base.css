@@ -374,7 +374,7 @@ html.is-resizing :is(.sidebar-resize-handle, .editor-resize-handle),
 html:is(.is-resizing-row, .is-resizing-col) .tree-resize-handle,
 html.is-resizing-terminal .terminal-resize-handle,
 html.is-resizing-review .review-split-handle {
-  background: linear-gradient(#257de0, #257de0) center /
+  background: linear-gradient(var(--color-accent), var(--color-accent)) center /
     var(--resize-handle-line-size, 2px 100%) no-repeat;
 }
 

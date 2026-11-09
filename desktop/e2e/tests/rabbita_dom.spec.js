@@ -25,7 +25,7 @@ async function diagramViewportFillsHost(host) {
 async function sidebarAddProject(page) {
   const sidebar = page.getByRole('complementary');
   await expect(sidebar.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
-  return sidebar.getByRole('button', { name: 'Add a project', exact: true });
+  return sidebar.getByRole('button', { name: 'New Project', exact: true });
 }
 
 test('workspace search supports toggles and keyboard navigation', async ({ page }) => {

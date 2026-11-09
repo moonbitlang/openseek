@@ -31,8 +31,8 @@ main {
   background: var(--color-bg-canvas);
 }
 
-/* Both ends of the titlebar share one control grid. Panel buttons elsewhere
-   keep their own geometry. */
+/* Both ends of the titlebar share one control grid, overriding RUI's inline
+   dimensions. Panel buttons elsewhere keep their own geometry. */
 .sidebar-toggle,
 .topbar > .panel-toggle,
 .editor-tabsbar > .panel-toggle,
@@ -42,9 +42,9 @@ main {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  inline-size: var(--titlebar-control-size);
+  inline-size: var(--titlebar-control-size) !important;
   min-inline-size: var(--titlebar-control-size);
-  block-size: var(--titlebar-control-size);
+  block-size: var(--titlebar-control-size) !important;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
