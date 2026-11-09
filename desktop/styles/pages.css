@@ -744,15 +744,6 @@ button.archived-chat-open:hover .archived-chat-title {
   color: var(--color-text-secondary);
 }
 
-.skill-preview-markdown table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  overflow-x: auto;
-  margin: 0.55em 0;
-  border-collapse: collapse;
-}
-
 .skill-preview-markdown th,
 .skill-preview-markdown td {
   padding: var(--space-2) var(--space-5);
