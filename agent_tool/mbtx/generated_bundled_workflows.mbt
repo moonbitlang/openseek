@@ -9,7 +9,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/json",
           #|}
@@ -559,7 +559,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|// Arguments: --dry-run   plan only, write nothing
           #|//            --limit N   stop after N fixes (default 500)
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
           #|  "moonbitlang/core/async/shell",
@@ -1227,7 +1227,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
           #|  "moonbitlang/core/json",
@@ -1618,7 +1618,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
@@ -2611,7 +2611,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
           #|  "moonbitlang/core/async/shell",
