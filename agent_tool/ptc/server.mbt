@@ -281,7 +281,7 @@ pub async fn[X] Service::start(
     worker.cancel()
     @async.protect_from_cancel(() => worker.wait() catch { _ => () })
   })
-  group.add_defer(() => @async.protect_from_cancel(() => service.close()))
+  group.add_defer(() => service.close())
   service
 }
 
@@ -326,7 +326,7 @@ pub fn Service::register(
 
 ///|
 /// Revoke all capabilities and join their executors before closing the listener.
-pub async fn Service::close(self : Service) -> Unit {
+pub async fn Service::close(self : Service) -> Unit nocancel {
   self.closed = true
   @async.protect_from_cancel(() => {
     let programs = self.programs.values().to_array()
@@ -435,7 +435,7 @@ pub fn Program::interrupted(self : Program) -> Bool {
 pub async fn Program::close(
   self : Program,
   discard_images~ : Bool = false,
-) -> Unit {
+) -> Unit nocancel {
   self.stop()
   @async.protect_from_cancel(() => {
     let tasks = self.active.values().to_array()

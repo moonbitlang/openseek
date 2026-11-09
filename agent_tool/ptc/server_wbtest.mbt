@@ -8,7 +8,7 @@ async fn run(
   @async.with_task_group(group => {
     let service = Service::start(group, tools)
     let registration = service.register(on_trace~)
-    defer @async.protect_from_cancel(() => registration.close())
+    defer registration.close()
     let action = program(registration.env()) catch {
       error =>
         @agent_tool.respond("PTC program failed: \{error}", is_error=true)
@@ -452,7 +452,7 @@ async test "approval-capable calls outlive the ordinary deadline and advertise t
       )
       let service = Service::start(group, Tools([tool]), call_timeout_ms=10)
       let program = service.register()
-      defer @async.protect_from_cancel(() => program.close())
+      defer program.close()
       let env = program.env()
       assert_true(
         @json.parse(env["OPENSEEK_PTC"])

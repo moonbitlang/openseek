@@ -421,7 +421,7 @@ async fn multi_edit_files(
   // A checked batch interrupted while being written or checked must
   // not stay on disk unverified: put every original back before the
   // cancellation unwinds. Registered before the first write.
-  async fn restore_on_unwind() -> Unit {
+  async fn restore_on_unwind() -> Unit nocancel {
     if baseline is Some(_) {
       @async.protect_from_cancel(() => {
         restore_files(writes, write_scope?) |> ignore
@@ -429,7 +429,7 @@ async fn multi_edit_files(
     }
   }
 
-  errdefer @async.protect_from_cancel(() => restore_on_unwind())
+  errdefer restore_on_unwind()
   // A checked batch that fails mid-write restores the files touched so far.
   let written : Array[PreparedWrite] = []
   async fn write_failed(problem : String) -> @agent_tool.ToolAction {

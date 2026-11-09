@@ -128,8 +128,8 @@ pub async fn write_text_atomic(
   // file away itself — including a write that raised partway (a cancelled
   // task, a full disk), which would otherwise leave one abandoned file per
   // attempt, holding whatever the caller was saving. Cancellation is among
-  // those failures, hence the shield around the removal.
-  errdefer @async.protect_from_cancel(() => discard_temp_file(temp))
+  // those failures, which is why the removal cannot be cancelled.
+  errdefer discard_temp_file(temp)
   @fs.write_file(temp.to_string(), content, create_mode=CreateNew, permission~)
   // `rename` replaces a present target as one step on every platform. A
   // failure here is therefore a real one — the target is a directory, the
@@ -145,8 +145,10 @@ pub async fn write_text_atomic(
 ///|
 /// Best-effort removal of an abandoned temp file: the caller is already
 /// raising the failure that matters, and a cleanup error must not replace it.
-async fn discard_temp_file(temp : @pathx.Path) -> Unit {
-  @fs.remove(temp.to_string()) catch {
-    _ => ()
-  }
+async fn discard_temp_file(temp : @pathx.Path) -> Unit nocancel {
+  @async.protect_from_cancel(() => {
+    @fs.remove(temp.to_string()) catch {
+      _ => ()
+    }
+  })
 }
