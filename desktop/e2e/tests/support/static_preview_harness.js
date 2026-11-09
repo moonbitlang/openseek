@@ -2,16 +2,13 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repository = fileURLToPath(new URL('../../../../', import.meta.url));
 
 export class StaticPreviewHarness {
   async start() {
-    const wasm = process.env.OPENSEEK_DESKTOP_PREVIEW_WASM;
-    if (!wasm) throw new Error('Set OPENSEEK_DESKTOP_PREVIEW_WASM to the preview serve.wasm artifact');
-    const runtime = process.env.OPENSEEK_DESKTOP_PREVIEW_MOONRUN || 'moonrun';
     this.root = await mkdtemp(join(tmpdir(), 'seekmoon-static-preview-'));
     await mkdir(join(this.root, 'pages'));
     await mkdir(join(this.root, 'assets'));
@@ -32,7 +29,7 @@ export class StaticPreviewHarness {
     await writeFile(join(this.root, 'assets/data.json'), '{"value":"loaded"}');
     const executable = process.env.OPENSEEK_DESKTOP_PREVIEW_SERVER;
     const args = executable ? [] : ['run', '--target', 'native', 'desktop/backend/static_preview/test_server', '--'];
-    this.child = spawn(executable || 'moon', [...args, resolve(wasm), runtime], { cwd: repository, stdio: ['pipe', 'pipe', 'pipe'] });
+    this.child = spawn(executable || 'moon', args, { cwd: repository, stdio: ['pipe', 'pipe', 'pipe'] });
     this.errors = '';
     this.child.stderr.on('data', chunk => { this.errors += chunk; });
     this.pending = [];

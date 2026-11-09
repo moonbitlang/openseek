@@ -107,14 +107,7 @@ async fn main {
   }
   // The dock's browser tabs: native web contents views, owned by the
   // window and commanded over bridge-local `browser.*` ops.
-  let previews = match @moonbit.bundled_moonrun(engine) {
-    Some(command) =>
-      @static_preview.Server(
-        command~,
-        wasm=resources.dir.join("seekmoon/bin/serve.wasm").to_string(),
-      )
-    None => Server()
-  }
+  let previews = @static_preview.Server(engine~, runtime_dir?)
   let views = @extension.BrowserViews(previews~)
   // The server through which the agents this host runs reach its tools — the
   // browser tabs above, to begin with. It binds now so every engine can be

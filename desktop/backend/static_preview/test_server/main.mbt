@@ -2,10 +2,7 @@
 /// Browser-test fixture: control the real preview service over stdio, without
 /// needing a native window. EOF cancels its app-equivalent task group.
 async fn main {
-  guard @env.args()[1:] is [wasm, command] else {
-    fail("Expected serve.wasm and moonrun paths")
-  }
-  let server = @static_preview.Server(command~, wasm~)
+  let server = @static_preview.Server()
   @async.with_task_group(group => {
     server.start(group)
     @stdio.stdout.write("{\"ready\":true}\n")

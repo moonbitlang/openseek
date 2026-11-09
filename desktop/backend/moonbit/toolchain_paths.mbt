@@ -52,14 +52,6 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @pathx.Absolute? {
 }
 
 ///|
-/// A standalone Wasm command can use the sealed seed without preparing the SDK.
-pub async fn bundled_moonrun(engine_command : String) -> String? {
-  bundled_moonbit_seed_dir(engine_command).map(seed => {
-    seed.join("bin/moonrun" + ExecutableSuffix).to_string()
-  })
-}
-
-///|
 async fn prepared_moonbit_payload_dir(
   seed_dir~ : @pathx.Absolute,
   runtime_dir? : @pathx.Path,

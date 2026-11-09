@@ -55,11 +55,10 @@ the host network, so it needs no MoonBit or C toolchain installation.
 The Local HTML preview cases run a real native host fixture from
 `desktop/backend/static_preview/test_server`. CI builds it on the runner and
 passes its executable path into the browser container through
-`OPENSEEK_DESKTOP_PREVIEW_SERVER`, with the pinned `serve.wasm` and `moonrun`
-paths in `OPENSEEK_DESKTOP_PREVIEW_WASM` and `OPENSEEK_DESKTOP_PREVIEW_MOONRUN`.
-The fixture runs inside the container and launches the same sandboxed Wasm
-command as the app. Local runs require `OPENSEEK_DESKTOP_PREVIEW_WASM` and
-default to `moon` and `moonrun` on PATH.
+`OPENSEEK_DESKTOP_PREVIEW_SERVER`. The fixture runs inside the container with
+the runner's MoonBit installation mounted at `/root/.moon`, and launches
+`moonx cli/serve@0.1.1` with the same policy as the app. Local runs use the
+MoonBit toolchain on PATH. An uncached serve package requires network access.
 
 Prefer accessible roles, labels, and visible text. Use classes only for
 product DOM whose presentation contract is itself under test. Mock network

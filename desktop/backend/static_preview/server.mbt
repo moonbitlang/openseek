@@ -1,15 +1,18 @@
 ///|
 /// Owns one read-only loopback process per preview tab.
 pub struct Server {
-  priv command : String
-  priv wasm : String?
+  priv engine : String
+  priv runtime_dir : @pathx.Path?
   priv mut group : @async.TaskGroup[Unit]?
   priv tabs : Map[Int32, (@async.Queue[String], @async.Task[Unit])]
 }
 
 ///|
-pub fn Server::Server(command~ : String = "moonrun", wasm? : String) -> Server {
-  { command, wasm, group: None, tabs: Map([]), }
+pub fn Server::Server(
+  engine~ : String = "",
+  runtime_dir? : @pathx.Path,
+) -> Server {
+  { engine, runtime_dir, group: None, tabs: Map([]), }
 }
 
 ///|
@@ -24,7 +27,7 @@ pub async fn Server::open(
   path : String,
   root? : String,
 ) -> String {
-  guard self.group is Some(group) && self.wasm is Some(wasm) else {
+  guard self.group is Some(group) else {
     fail("Local HTML preview runtime is unavailable")
   }
   self.close(id)
@@ -34,7 +37,7 @@ pub async fn Server::open(
       physical_equal(current, ready) {
       self.tabs.remove(id)
     })
-    serve(self.command, wasm, path, root?, ready) catch {
+    serve(self.engine, self.runtime_dir, path, root?, ready) catch {
       error => ready.close(error~)
     }
     ready.close()
@@ -84,8 +87,8 @@ fn absolute(path : String) -> @pathx.Absolute raise {
 
 ///|
 async fn serve(
-  command : String,
-  wasm : String,
+  engine : String,
+  runtime_dir : @pathx.Path?,
   path : String,
   root? : String,
   ready : @async.Queue[String],
@@ -107,6 +110,13 @@ async fn serve(
   guard fixed.contains(resolved) && @fs.kind(resolved.to_string()) is Regular else {
     fail("Preview file is outside its root or is not a regular file")
   }
+  let toolchain = @moonbit.resolve_toolchain(engine, runtime_dir?)
+  let suffix = if toolchain.moon.to_string().has_suffix(".exe") {
+    ".exe"
+  } else {
+    ""
+  }
+  let command = toolchain.bin_dir.join("moonx" + suffix).to_string()
   let temp = @fs.tmpdir(prefix="seekmoon-preview-")
   defer (@fs.rmdir(temp, recursive=true) catch { _ => () })
   let policy_path = temp + "/policy.json"
@@ -128,9 +138,10 @@ async fn serve(
       group,
       command,
       [
-        "--policy",
+        "--experimental-policy",
         policy_path,
-        wasm,
+        "cli/serve@0.1.1",
+        "--",
         "--host",
         "127.0.0.1",
         "--port",
@@ -141,21 +152,38 @@ async fn serve(
       stdin~,
       stdout~,
       stderr~,
+      inherit_env=false,
+      extra_env=toolchain.tool_env(),
       no_console_window=true,
-      cancel_handler=@process.hard_cancel(),
+      cancel_handler=if @async.platform is Windows {
+        // moonx delegates to a child moonrun on Windows rather than exec.
+        CancellationHandler(pid => {
+          @processx.collect_output_no_stdin("taskkill", [
+            "/PID",
+            pid.to_string(),
+            "/T",
+            "/F",
+          ])
+          |> ignore
+        })
+      } else {
+        @process.hard_cancel()
+      },
     )
-    let port = @async.with_timeout(10000, () => {
-      // The pinned CLI reports its bound address on stderr after listening.
-      guard errors.read_until(" on http://127.0.0.1:") is Some(message) else {
-        fail("Local HTML preview exited before listening")
+    let port = @async.with_timeout(120000, () => {
+      // moonx may report a first-run download before serve starts listening.
+      for ;; {
+        guard errors.read_until("\n") is Some(line) else {
+          fail("Local HTML preview exited before listening")
+        }
+        guard line.has_prefix("Serving ") &&
+          line.split_once(" on http://127.0.0.1:") is Some((_, port_text)) else {
+          continue
+        }
+        let port = @string.parse_int(port_text.trim())
+        guard port > 0 && port <= 65535 else { fail("Invalid preview port") }
+        break port
       }
-      guard message.has_prefix("Serving ") &&
-        errors.read_until("\n") is Some(port_text) else {
-        fail("Local HTML preview could not start: " + message.trim().to_owned())
-      }
-      let port = @string.parse_int(port_text.trim())
-      guard port > 0 && port <= 65535 else { fail("Invalid preview port") }
-      port
     })
     @fs.rmdir(temp, recursive=true)
     let escaped = relative

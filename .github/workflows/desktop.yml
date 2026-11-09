@@ -166,13 +166,6 @@ jobs:
       - name: Build static preview test fixture
         run: |
           moon build --target native --release desktop/backend/static_preview/test_server
-          version="$(cat desktop/.cli-serve-version)"
-          mkdir -p desktop/target/vendor-preview
-          curl -fsSL --retry 3 "https://download.mooncakes.io/prebuild/cli/serve@$version/serve.wasm" \
-            -o desktop/target/vendor-preview/serve.wasm
-          cp "$(command -v moonrun)" desktop/target/vendor-preview/moonrun
-          echo "OPENSEEK_DESKTOP_PREVIEW_WASM=$GITHUB_WORKSPACE/desktop/target/vendor-preview/serve.wasm" >> "$GITHUB_ENV"
-          echo "OPENSEEK_DESKTOP_PREVIEW_MOONRUN=$GITHUB_WORKSPACE/desktop/target/vendor-preview/moonrun" >> "$GITHUB_ENV"
           echo "OPENSEEK_DESKTOP_PREVIEW_SERVER=$GITHUB_WORKSPACE/_build/native/release/build/openseek_desktop/backend/static_preview/test_server/test_server.exe" >> "$GITHUB_ENV"
 
       - name: Run Desktop E2E tests
@@ -191,8 +184,7 @@ jobs:
             --env CI=true \
             --env OPENSEEK_DESKTOP_BROWSER_BASE_URL \
             --env OPENSEEK_DESKTOP_PREVIEW_SERVER \
-            --env OPENSEEK_DESKTOP_PREVIEW_WASM \
-            --env OPENSEEK_DESKTOP_PREVIEW_MOONRUN \
+            --volume "$HOME/.moon:/root/.moon" \
             --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
             --workdir "$GITHUB_WORKSPACE/desktop/e2e" \
             "$PLAYWRIGHT_IMAGE" npm test

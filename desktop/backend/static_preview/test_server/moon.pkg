@@ -2,7 +2,6 @@ import {
   "openseek_desktop/backend/static_preview",
   "moonbitlang/async",
   "moonbitlang/async/stdio",
-  "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 

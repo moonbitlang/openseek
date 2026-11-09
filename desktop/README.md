@@ -180,9 +180,10 @@ without a workspace uses its parent directory. Relative CSS, scripts, modules,
 images, fonts and static fetches load directly from disk through an ephemeral
 loopback HTTP listener. Refresh reads the current files.
 
-Each tab owns a process running the bundled `cli/serve` on an OS-assigned
-loopback port. Files under the preview root are available to clients that can
-reach that local port. The server confines reads to the root, including symlink
+Each tab owns a process running `moonx cli/serve@0.1.1` through the app's
+MoonBit toolchain on an OS-assigned loopback port. The first use requires
+network access when the package is not cached. Files under the preview root
+are available to clients that can reach that local port. The server confines reads to the root, including symlink
 targets. Closing the tab stops its process. The app stops all preview processes
 on normal exit. Preview documents have no native bridge or command access.
 Pages requiring a backend service are outside this static preview feature.
