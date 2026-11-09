@@ -189,8 +189,10 @@ samp,
   min-width: 140px;
 }
 
-.custom-select-menu:popover-open {
+.custom-select-menu:popover-open,
+.custom-select-group {
   display: grid;
+  gap: var(--space-2);
 }
 
 .custom-select-group + .custom-select-group {
@@ -228,6 +230,7 @@ samp,
 
 .menu-option {
   grid-template-columns: minmax(0, 1fr) 16px;
+  padding-block: 0.7em;
 }
 
 [id="conversation-transfer:actions"] .action-menu-item {
@@ -255,7 +258,7 @@ samp,
 
 .custom-select-option-text {
   display: grid;
-  gap: 1px;
+  gap: var(--space-2);
   min-width: 0;
 }
 

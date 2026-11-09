@@ -384,7 +384,6 @@ html.is-resizing .sidebar-resize-handle {
    status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
   visibility: visible;
-  background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
 .conversation-row:not(.loading)
