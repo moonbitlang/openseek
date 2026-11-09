@@ -98,7 +98,7 @@ fn TextSearchCancellationFrontiers::record(
 ///|
 priv enum TextSearchRequest {
   Search(
-    command~ : MoonxProvider,
+    command~ : @moonbit.MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchTextPayload,
     reply~ : @async.Queue[@protocol.SearchTextReply]
@@ -147,7 +147,7 @@ fn empty_text_search_reply(
 ///|
 async fn TextSearchService::search(
   self : TextSearchService,
-  command : MoonxProvider,
+  command : @moonbit.MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,
 ) -> @protocol.SearchTextReply {
@@ -988,7 +988,7 @@ fn text_search_exit_is_fatal(
 
 ///|
 async fn run_text_search(
-  command : MoonxProvider,
+  command : @moonbit.MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,
 ) -> @protocol.SearchTextReply {
@@ -1132,7 +1132,7 @@ async fn run_text_search(
 
 ///|
 pub async fn search_text(
-  command : MoonxProvider,
+  command : @moonbit.MoonxProvider,
   service : TextSearchService,
   root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,

@@ -34,7 +34,7 @@ priv enum PatternRepairValidation {
 async fn validate_pattern_repair_candidate(
   root : @pathx.Absolute,
   pattern : String,
-  provider : @search.ResolvedMoonxProvider,
+  provider : @moonbit.ResolvedMoonxProvider,
 ) -> PatternRepairValidation {
   if !PatternRepairValidationEnabled {
     PatternRepairUnavailable

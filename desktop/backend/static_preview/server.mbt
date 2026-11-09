@@ -1,8 +1,7 @@
 ///|
 /// Owns one read-only loopback process per preview tab.
 pub struct Server {
-  priv engine : String
-  priv runtime_dir : @pathx.Path?
+  priv moonx : @moonbit.MoonxProvider
   priv mut group : @async.TaskGroup[Unit]?
   priv tabs : Map[Int32, (@async.Queue[String], @async.Task[Unit])]
 }
@@ -12,7 +11,11 @@ pub fn Server::Server(
   engine~ : String = "",
   runtime_dir? : @pathx.Path,
 ) -> Server {
-  { engine, runtime_dir, group: None, tabs: Map([]), }
+  {
+    moonx: @moonbit.MoonxProvider(engine~, runtime_dir~, source=DesktopBundle),
+    group: None,
+    tabs: Map([]),
+  }
 }
 
 ///|
@@ -37,7 +40,7 @@ pub async fn Server::open(
       physical_equal(current, ready) {
       self.tabs.remove(id)
     })
-    serve(self.engine, self.runtime_dir, path, root?, ready) catch {
+    serve(self.moonx, path, root?, ready) catch {
       error => ready.close(error~)
     }
     ready.close()
@@ -87,8 +90,7 @@ fn absolute(path : String) -> @pathx.Absolute raise {
 
 ///|
 async fn serve(
-  engine : String,
-  runtime_dir : @pathx.Path?,
+  moonx : @moonbit.MoonxProvider,
   path : String,
   root? : String,
   ready : @async.Queue[String],
@@ -110,13 +112,7 @@ async fn serve(
   guard fixed.contains(resolved) && @fs.kind(resolved.to_string()) is Regular else {
     fail("Preview file is outside its root or is not a regular file")
   }
-  let toolchain = @moonbit.resolve_toolchain(engine, runtime_dir?)
-  let suffix = if toolchain.moon.to_string().has_suffix(".exe") {
-    ".exe"
-  } else {
-    ""
-  }
-  let command = toolchain.bin_dir.join("moonx" + suffix).to_string()
+  let provider = moonx.resolve()
   let temp = @fs.tmpdir(prefix="seekmoon-preview-")
   defer (@fs.rmdir(temp, recursive=true) catch { _ => () })
   let policy_path = temp + "/policy.json"
@@ -136,7 +132,7 @@ async fn serve(
     defer errors.close()
     let child = @process.spawn(
       group,
-      command,
+      provider.command,
       [
         "--experimental-policy",
         policy_path,
@@ -153,7 +149,7 @@ async fn serve(
       stdout~,
       stderr~,
       inherit_env=false,
-      extra_env=toolchain.tool_env(),
+      extra_env=provider.environment,
       no_console_window=true,
       cancel_handler=if @async.platform is Windows {
         // moonx delegates to a child moonrun on Windows rather than exec.
