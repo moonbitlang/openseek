@@ -2,22 +2,31 @@
 /* The emulator host remains mounted while hidden so each imperative xterm
    instance retains its screen and scrollback. */
 .terminal-panel {
+  anchor-name: --terminal-edge;
   display: flex;
   position: relative;
   grid-row: 2;
   grid-column: 1;
   min-width: 0;
   min-height: 0;
+  flex-direction: column;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear var(--drawer-duration);
+}
+/* Transforms and clipping stay below the resize handle so its fixed hit area
+   can straddle the panel's boundary throughout the opening animation. */
+.terminal-surface {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   flex-direction: column;
   background: var(--color-bg-surface);
   border-top: 1px solid var(--color-seam);
-  visibility: hidden;
-  pointer-events: none;
   transform: translateY(100%);
-  transition:
-    transform var(--drawer-duration) var(--drawer-easing),
-    visibility 0s linear var(--drawer-duration);
+  transition: transform var(--drawer-duration) var(--drawer-easing);
 }
 /* The state remains open while Settings, Skills, or workspace settings are on
    screen. Require the root layout's page-aware class too, so those pages hide
@@ -25,16 +34,19 @@
 .content.terminal-open > .terminal-panel.open {
   visibility: visible;
   pointer-events: auto;
-  transform: translateY(0);
   transition-delay: 0s;
+}
+.content.terminal-open > .terminal-panel.open > .terminal-surface {
+  transform: translateY(0);
 }
 
 .terminal-resize-handle {
   --resize-handle-line-size: 100% 2px;
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
+  position: fixed;
+  position-anchor: --terminal-edge;
+  top: anchor(top);
+  right: anchor(right);
+  left: anchor(left);
   z-index: 3;
   height: var(--resize-handle-height);
   transform: translateY(-50%);

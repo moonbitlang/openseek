@@ -59,6 +59,7 @@ button.panel-toggle:not(:disabled):hover {
 }
 
 .editor {
+  anchor-name: --editor-edge;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -284,6 +285,7 @@ button.panel-toggle:not(:disabled):hover {
   initial-value: 0;
 }
 .file-tree-pane {
+  anchor-name: --tree-edge;
   --tree-open-progress: 0;
   --tree-visibility: hidden;
   --tree-size: clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
@@ -334,20 +336,23 @@ button.panel-toggle:not(:disabled):hover {
 
 .tree-resize-handle {
   --resize-handle-line-size: 100% 2px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: fixed;
+  position-anchor: --tree-edge;
+  top: anchor(top);
+  left: anchor(left);
+  right: anchor(right);
   height: var(--resize-handle-height);
+  transform: translateY(-50%);
   z-index: 2;
   cursor: row-resize;
 }
 .editor.tree-right .tree-resize-handle {
   --resize-handle-line-size: 2px 100%;
   right: auto;
-  bottom: 0;
+  bottom: anchor(bottom);
   width: var(--resize-handle-width);
   height: auto;
+  transform: translateX(-50%);
   cursor: col-resize;
 }
 html.is-resizing-row {
@@ -361,10 +366,12 @@ html.is-resizing-col {
 }
 
 .editor-resize-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  position: fixed;
+  position-anchor: --editor-edge;
+  top: anchor(top);
+  bottom: anchor(bottom);
+  left: anchor(left);
+  transform: translateX(-50%);
   width: var(--resize-handle-width);
   z-index: 3;
   cursor: col-resize;
@@ -1362,17 +1369,12 @@ button.review-section-header:hover,
 }
 
 .review-split-handle {
+  --resize-handle-line-size: 100% 2px;
   position: relative;
-  flex: 0 0 5px;
-  border-top: 1px solid var(--color-seam);
-  border-bottom: 1px solid transparent;
+  flex: 0 0 var(--resize-handle-height);
+  background: linear-gradient(var(--color-seam), var(--color-seam)) center /
+    100% 1px no-repeat;
   cursor: row-resize;
-}
-
-.review-split-handle:hover,
-.review-split-handle:focus-visible,
-html.is-resizing-review .review-split-handle {
-  background: var(--color-accent-soft);
 }
 
 .review-split-handle.hidden {

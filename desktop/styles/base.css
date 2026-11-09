@@ -366,11 +366,14 @@ html {
   .sidebar-resize-handle,
   .editor-resize-handle,
   .tree-resize-handle,
-  .terminal-resize-handle
+  .terminal-resize-handle,
+  .review-split-handle
 ):hover,
+.review-split-handle:focus-visible,
 html.is-resizing :is(.sidebar-resize-handle, .editor-resize-handle),
 html:is(.is-resizing-row, .is-resizing-col) .tree-resize-handle,
-html.is-resizing-terminal .terminal-resize-handle {
+html.is-resizing-terminal .terminal-resize-handle,
+html.is-resizing-review .review-split-handle {
   background: linear-gradient(#257de0, #257de0) center /
     var(--resize-handle-line-size, 2px 100%) no-repeat;
 }

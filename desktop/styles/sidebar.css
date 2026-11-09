@@ -4,6 +4,7 @@ aside {
   /* How far in from the aside's edges the sessions list and the footer sit.
      The header keeps its own, wider inset for the icon buttons. */
   --sidebar-inset: 12px;
+  anchor-name: --sidebar-edge;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0;
@@ -19,11 +20,15 @@ aside {
   transition: visibility 0s linear;
 }
 
+/* Fixed anchoring lets the hit area straddle the edge without being clipped
+   by the sidebar's overflow. */
 .sidebar-resize-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
+  position: fixed;
+  position-anchor: --sidebar-edge;
+  top: anchor(top);
+  bottom: anchor(bottom);
+  left: anchor(right);
+  transform: translateX(-50%);
   width: var(--resize-handle-width);
   z-index: 3;
   cursor: col-resize;
