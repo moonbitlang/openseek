@@ -27,7 +27,7 @@ fn Model::preview_local_file(
   let url = @uri.file_url(file.path)
   let (id, model) = self
     .begin_editor_navigation()
-    .add_browser_tab(ctx.owner, url~, resolve_picker=true)
+    .add_browser_tab(ctx.owner, resolve_picker=true)
   let dark = self.theme.is_dark(self.system_dark)
   let root = ctx.root().map(root => root.path)
   (
@@ -38,6 +38,12 @@ fn Model::preview_local_file(
       quiet=false,
       on_error=text => Preview(@preview.Msg::LoadFailed(id~, url~, text~)),
     ),
-    { ..model, browser_pane: { shown: None, rect: None, geo: None, }, },
+    {
+      ..model,
+      preview: @preview.update(LoadingChanged(id~, loading=true), model.preview),
+      browser_pane: { shown: None, rect: None, geo: None, },
+      right_panel_open: true,
+      right_panel_menu_open: false,
+    },
   )
 }

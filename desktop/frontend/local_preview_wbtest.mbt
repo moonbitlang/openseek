@@ -3,7 +3,11 @@ test "HTML preview opens a browser tab only for files on this Desktop" {
   let model = desktop_model()
   let path = "/workspace/demo.HTML"
   let (_, opened) = update(test_dispatch(), PreviewLocalFile(path), model)
-  assert_true(@dock.active_browser(opened.dock_state()) is Some(_))
+  let id = @dock.active_browser(opened.dock_state()).unwrap()
+  let page = @preview.page(opened.preview, id).unwrap()
+  assert_eq(page.url, None)
+  assert_true(page.loading)
+  assert_true(opened.preview.local_files().is_empty())
   assert_true(opened.right_panel_open)
   for path in ["/workspace/main.mbt", "/workspace/image.svg"] {
     let (_, ignored) = update(test_dispatch(), PreviewLocalFile(path), model)

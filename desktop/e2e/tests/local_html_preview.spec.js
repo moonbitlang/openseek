@@ -124,6 +124,32 @@ async function installLocalWindow(page, app, server) {
   await app.openSession();
 }
 
+test('a failed HTTP preview preserves its startup error without reloading the file placeholder', async ({ page }) => {
+  await page.clock.install();
+  const app = new DesktopBrowserHarness(page);
+  app.directoryEntries['/workspace'] = [{ name: 'index.html', is_dir: false }];
+  app.workingFiles['index.html'] = '<h1>Preview fixture</h1>';
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => {
+    if (request.method === 'fs.stat_files') return { stats: request.params.paths.map(path => ({
+      path, signature: { kind: 'present', sig: 'unchanged' },
+    })) };
+    if (request.method === 'browser.reload') throw new Error('op ext:openseek/browser.reload failed');
+    return replyFor(request);
+  };
+  await installLocalWindow(page, app, {
+    open: async () => { throw new Error('Local HTML preview runtime is unavailable'); },
+  });
+  await app.openReview();
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.getByRole('treeitem', { name: 'index.html', exact: true }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
+  await expect(page.locator('.browser-failure')).toContainText('Local HTML preview runtime is unavailable');
+  await page.clock.runFor(5000);
+  expect(app.requests.filter(request => request.method === 'browser.reload')).toHaveLength(0);
+  await expect(page.locator('.browser-failure')).toContainText('Local HTML preview runtime is unavailable');
+});
+
 for (const local of [true, false]) {
   test(`${local ? 'Local' : 'remote'} HTML file menu and editor expose the correct preview capability`, async ({ page }, testInfo) => {
     test.setTimeout(120_000);
