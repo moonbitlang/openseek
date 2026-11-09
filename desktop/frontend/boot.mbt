@@ -81,14 +81,16 @@ fn app_shortcut_sub_loader(
 /// sidebar, Shift+B toggles the right panel, and Shift+F opens Search.
 /// Period opens Settings.
 /// Plus/equal and minus adjust the app font size, including held-key repeats.
+/// Quick Open chords the palette cannot answer keep their browser meaning.
 fn app_shortcut_subscription(emit : @cmd.Emit[Msg], model : Model) -> @sub.Sub {
+  let target = model.quick_open_target()
   @sub.custom_sub(
     "app-shortcut-capture",
     Global,
     AppShortcutSubscription(
       emit,
-      files=model.quick_open_available(@quick_open.Files),
-      symbols=model.quick_open_available(@quick_open.Symbols),
+      files=target is Some(_),
+      symbols=target is Some(input) && input.supports(@quick_open.Symbols),
     ),
     app_shortcut_sub_loader,
   )

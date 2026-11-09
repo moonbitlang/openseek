@@ -38,32 +38,29 @@ fn Model::quick_open_input(self : Model) -> @quick_open.Input? {
 }
 
 ///|
-/// Unsupported shortcuts keep their browser meaning. Cloud exposes file
-/// browsing, while workspace symbols still require an engine host.
-fn Model::quick_open_available(
-  self : Model,
-  provider : @quick_open.Provider,
-) -> Bool {
-  self.project_picker is None &&
-  self.archive_confirm is None &&
-  !(self.delete_confirm is Open(_)) &&
-  !(self.update_ux is ConfirmingRestart(..)) &&
-  (self.cloud_selected() || !(self.bridge_state() is BridgeLost(_))) &&
-  !(self.cloud_selected() && provider is @quick_open.Symbols) &&
-  self.quick_open_input() is Some(_)
+/// The palette input when the shortcut may open it. Another modal or a lost
+/// bridge already owns the screen, and the palette would render over it with
+/// no way back; a device-less Cloud session has no bridge to lose. Callers
+/// still ask the input whether it `supports` the requested provider.
+fn Model::quick_open_target(self : Model) -> @quick_open.Input? {
+  guard self.project_picker is None &&
+    self.archive_confirm is None &&
+    !(self.delete_confirm is Open(_)) &&
+    !(self.update_ux is ConfirmingRestart(..)) &&
+    (self.cloud_selected() || !(self.bridge_state() is BridgeLost(_))) else {
+    return None
+  }
+  self.quick_open_input()
 }
 
 ///|
-/// Answer the shortcut. Whether the palette may appear is a shell question:
-/// another modal or a lost bridge already owns the screen, and the palette
-/// would render over it with no way back.
+/// Answer the shortcut.
 fn open_quick_open(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   provider : @quick_open.Provider,
 ) -> (@cmd.Cmd, Model) {
-  guard model.quick_open_available(provider) &&
-    model.quick_open_input() is Some(input) else {
+  guard model.quick_open_target() is Some(input) && input.supports(provider) else {
     return (@cmd.none, model)
   }
   let (cmd, quick_open) = model.quick_open.open(

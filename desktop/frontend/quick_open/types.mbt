@@ -52,21 +52,15 @@ priv enum Phase {
 priv struct Open {
   owner : @interop.ConversationIdentity
   cloud_access : @cloud_client.Access?
-  cloud_index : CloudIndex?
+  /// Cloud's complete file index once `phase` is `Ready`; empty for Host runs,
+  /// whose rows come from bounded Host queries.
+  cloud_files : Array[@pathx.Relative]
   root : @common.Uri?
   value : String
   items : Array[Item]
   selected : Int32
   phase : Phase
   generation : Int32
-}
-
-///|
-#derive(Eq)
-priv enum CloudIndex {
-  Loading(Int32)
-  Loaded(Array[@pathx.Relative])
-  Failed
 }
 
 ///|
@@ -153,6 +147,13 @@ pub fn Input::cloud(
     open_files,
     active_file,
   }
+}
+
+///|
+/// Cloud browses files but has no symbol provider; workspace symbols require
+/// an engine host.
+pub fn Input::supports(self : Input, provider : Provider) -> Bool {
+  !(provider is Symbols && self.owner is @interop.Cloud(..))
 }
 
 ///|

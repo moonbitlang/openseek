@@ -35,6 +35,7 @@ pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?, ope
 pub fn Input::cloud(owner~ : @interop.ConversationIdentity, root~ : @common.Uri, access~ : @cloud_client.Access, open_files~ : Array[@pathx.Relative], active_file~ : @pathx.Relative?) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::supports(Self, Provider) -> Bool
 
 pub(all) enum Msg {
   ValueChanged(String)

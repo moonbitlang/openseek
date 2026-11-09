@@ -22,9 +22,7 @@ pub fn State::open(
   input : Input,
   provider : Provider,
 ) -> (@cmd.Cmd, State) {
-  if provider is Symbols && input.owner is @interop.Cloud(..) {
-    return (@cmd.none, self)
-  }
+  guard input.supports(provider) else { return (@cmd.none, self) }
   if self.open is Some(current) &&
     current.owner == input.owner &&
     current.cloud_access == input.cloud_access &&
@@ -43,11 +41,7 @@ pub fn State::open(
   let open : Open = {
     owner: input.owner,
     cloud_access: input.cloud_access,
-    cloud_index: if input.owner is @interop.Cloud(..) {
-      Some(Loading(generation))
-    } else {
-      None
-    },
+    cloud_files: [],
     root: input.root,
     value: provider.prefix(),
     items: [],
@@ -201,11 +195,7 @@ pub fn State::reconcile(
   let restarted : Open = {
     ..open,
     root: input.root,
-    cloud_index: if input.owner is @interop.Cloud(..) {
-      Some(Loading(generation))
-    } else {
-      None
-    },
+    cloud_files: [],
     items: [],
     selected: 0,
     phase: Loading,
@@ -252,17 +242,16 @@ fn State::change_value(
     return (@cmd.none, self)
   }
   if open.owner is @interop.Cloud(..) {
-    let next_open = { ..open, value, selected: 0, }
-    let (files, phase) = match open.cloud_index {
-      Some(Loaded(files)) => (files, Phase::Ready)
-      Some(Failed) => ([], Phase::Failed)
-      _ => ([], Phase::Loading)
-    }
+    // Ranking is local and the index load keeps its generation, so typing
+    // re-ranks the same snapshot and leaves the phase alone.
+    let next_open = { ..open, value, }
     return (
       @cmd.none,
       {
         ..self,
-        open: Some(with_file_candidates(input, next_open, files, phase)),
+        open: Some(
+          with_file_candidates(input, next_open, open.cloud_files, open.phase),
+        ),
       },
     )
   }
@@ -713,23 +702,18 @@ fn State::apply_cloud_files(
     open.owner == owner &&
     input.owner == owner &&
     open.cloud_access == input.cloud_access &&
-    open.cloud_index is Some(Loading(request)) &&
-    request == generation else {
+    open.phase is Loading &&
+    open.generation == generation else {
     return self
   }
-  let (index, files, phase) = match files {
-    Some(files) => (CloudIndex::Loaded(files), files, Phase::Ready)
-    None => (CloudIndex::Failed, [], Phase::Failed)
+  let (files, phase) = match files {
+    Some(files) => (files, Phase::Ready)
+    None => ([], Phase::Failed)
   }
   {
     ..self,
     open: Some(
-      with_file_candidates(
-        input,
-        { ..open, cloud_index: Some(index), },
-        files,
-        phase,
-      ),
+      with_file_candidates(input, { ..open, cloud_files: files, }, files, phase),
     ),
   }
 }
