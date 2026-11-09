@@ -52,12 +52,14 @@ Chromium, WebKit, and their system dependencies. Keep `PLAYWRIGHT_IMAGE` in
 server stay on the Ubuntu runner; the container reuses that server through
 the host network, so it needs no MoonBit or C toolchain installation.
 
-The Local HTML preview cases run a real native fixture from
+The Local HTML preview cases run a real native host fixture from
 `desktop/backend/static_preview/test_server`. CI builds it on the runner and
 passes its executable path into the browser container through
-`OPENSEEK_DESKTOP_PREVIEW_SERVER`. The fixture runs inside the container, so
-it reads the same temporary files as the browser tests. Without that variable,
-local runs use `moon run` to build and start it on demand.
+`OPENSEEK_DESKTOP_PREVIEW_SERVER`, with the pinned `serve.wasm` and `moonrun`
+paths in `OPENSEEK_DESKTOP_PREVIEW_WASM` and `OPENSEEK_DESKTOP_PREVIEW_MOONRUN`.
+The fixture runs inside the container and launches the same sandboxed Wasm
+command as the app. Local runs require `OPENSEEK_DESKTOP_PREVIEW_WASM` and
+default to `moon` and `moonrun` on PATH.
 
 Prefer accessible roles, labels, and visible text. Use classes only for
 product DOM whose presentation contract is itself under test. Mock network

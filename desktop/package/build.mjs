@@ -402,6 +402,16 @@ class Build {
     await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
     const suffix = this.command === "windows" ? ".exe" : "";
     await cp(engine, join(root, `bin/openseek${suffix}`));
+    const previewOverride = process.env.OPENSEEK_DESKTOP_PREVIEW_WASM;
+    if (previewOverride && profile !== "debug") {
+      throw new Error("OPENSEEK_DESKTOP_PREVIEW_WASM is only supported for development packages");
+    }
+    const serveVersion = (await readFile(join(this.desktop, ".cli-serve-version"), "utf8")).trim();
+    const previewWasm = previewOverride || join(this.desktop, `target/vendor-preview/serve-${serveVersion}.wasm`);
+    if (!previewOverride) {
+      await this.download(`https://download.mooncakes.io/prebuild/cli/serve@${serveVersion}/serve.wasm`, previewWasm);
+    }
+    await cp(previewWasm, join(root, "bin/serve.wasm"));
     // OpenSeek locates resources relative to its own executable.
     await stageResources(join(this.repo, "share"), join(root, "share"));
     await cp(vendors.seed, join(root, `toolchains/moonbit/${this.host.platform}`), { recursive: true, dereference: true });

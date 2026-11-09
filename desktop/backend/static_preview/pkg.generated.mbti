@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/static_preview"
 
+import {
+  "moonbitlang/async",
+}
+
 // Values
 
 // Errors
@@ -9,11 +13,11 @@ package "openseek_desktop/backend/static_preview"
 pub struct Server {
   // private fields
 }
-pub fn Server::Server() -> Self
+pub fn Server::Server(command? : String, wasm? : String) -> Self
 pub fn Server::clear(Self) -> Unit
 pub fn Server::close(Self, Int32) -> Unit
 pub async fn Server::open(Self, Int32, String, root? : String) -> String
-pub async fn Server::run(Self) -> Unit
+pub fn Server::start(Self, @async.TaskGroup[Unit]) -> Unit
 
 // Type aliases
 

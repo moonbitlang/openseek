@@ -49,10 +49,12 @@ struct BrowserViews {
 ///|
 /// Configure remote debugging before CEF starts, then attach the native window
 /// through window_ready when Proton creates it.
-pub async fn BrowserViews::BrowserViews() -> BrowserViews {
+pub async fn BrowserViews::BrowserViews(
+  previews~ : @static_preview.Server = Server(),
+) -> BrowserViews {
   let debug_port = prepare_debugging()
   {
-    previews: Server(),
+    previews,
     window: None,
     debug_port,
     pick: None,
@@ -75,9 +77,12 @@ pub fn BrowserViews::window_ready(
 }
 
 ///|
-/// The listener stays dormant until a window-local preview command binds it.
-pub async fn BrowserViews::run_previews(self : BrowserViews) -> Unit {
-  self.previews.run()
+/// Attach previews to the application lifetime before the window opens.
+pub fn BrowserViews::start_previews(
+  self : BrowserViews,
+  group : @async.TaskGroup[Unit],
+) -> Unit {
+  self.previews.start(group)
 }
 
 ///|

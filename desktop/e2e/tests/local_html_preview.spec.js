@@ -1,8 +1,18 @@
 import { test, expect } from './support/test.js';
 import { writeFile, symlink } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import { join } from 'node:path';
 import { StaticPreviewHarness } from './support/static_preview_harness.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
+
+function probePreviewPort(url) {
+  return new Promise(resolve => {
+    const socket = createConnection({ host: '127.0.0.1', port: Number(new URL(url).port) });
+    socket.setTimeout(1000, () => { socket.destroy(); resolve('timeout'); });
+    socket.once('connect', () => { socket.destroy(); resolve('listening'); });
+    socket.once('error', error => resolve(error.code));
+  });
+}
 
 test('real HTTP preview resolves relative resources, dynamic imports, fetch and refreshed files', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
@@ -35,7 +45,7 @@ test('real HTTP preview resolves relative resources, dynamic imports, fetch and 
     await page.getByRole('button', { name: 'Run JavaScript' }).click();
     await expect(page.locator('#result')).toHaveText('Dynamic import + fetch: updated');
     await server.request({ close: 1 });
-    expect((await page.request.get(url)).status()).toBe(404);
+    await expect.poll(() => probePreviewPort(url)).toBe('ECONNREFUSED');
     expect(errors).toEqual([]);
   } finally { await server.close(); }
 });
@@ -47,15 +57,33 @@ test('real HTTP preview refuses symlink escapes, encoded traversal, foreign Host
     const { url } = await server.open();
     const base = url.slice(0, -'pages/index.html'.length);
     for (const path of ['%2e%2e/%2e%2e/etc/passwd', '%2fetc/passwd', '..%5csecret.txt', 'missing.json']) {
-      expect([403, 404]).toContain((await page.request.get(base + path)).status());
+      expect([400, 404]).toContain((await page.request.get(base + path)).status());
     }
     if (process.platform !== 'win32') {
       await symlink('/etc/passwd', join(server.root, 'assets/escape.txt'));
-      expect((await page.request.get(base + 'assets/escape.txt')).status()).toBe(403);
+      expect((await page.request.get(base + 'assets/escape.txt')).status()).toBe(404);
     }
     expect((await page.request.get(url, { headers: { Host: 'rebound.example' } })).status()).toBe(403);
     expect((await page.request.post(url, { data: 'write' })).status()).toBe(405);
+    expect((await page.request.get(new URL('/pages/index.html', url).href)).status()).toBe(404);
     expect((await page.request.get(new URL('/v1/devices', url).href)).status()).toBe(404);
+  } finally { await server.close(); }
+});
+
+test('preview tabs have independent origins and the processes follow their owner', async ({ page }) => {
+  const server = await new StaticPreviewHarness().start();
+  try {
+    const [{ url: first }, { url: second }] = await Promise.all([server.open(1), server.open(2)]);
+    expect(new URL(first).origin).not.toBe(new URL(second).origin);
+    await page.goto(first);
+    await page.evaluate(() => localStorage.setItem('preview', 'first'));
+    await page.goto(second);
+    expect(await page.evaluate(() => localStorage.getItem('preview'))).toBeNull();
+    await server.request({ close: 1 });
+    await expect.poll(() => probePreviewPort(first)).toBe('ECONNREFUSED');
+    expect((await page.request.get(second)).status()).toBe(200);
+    server.child.kill('SIGKILL');
+    await expect.poll(() => probePreviewPort(second)).toBe('ECONNREFUSED');
   } finally { await server.close(); }
 });
 
@@ -115,7 +143,7 @@ for (const local of [true, false]) {
         expect(request.params).toMatchObject({ root: '/workspace', path: '/workspace/index.HTML', session: 'session-1' });
         const url = await page.locator('#browser-address-input').inputValue();
         await page.locator('.editor-tab.active .tab-close').click();
-        await expect.poll(async () => (await page.request.get(url)).status()).toBe(404);
+        await expect.poll(() => probePreviewPort(url)).toBe('ECONNREFUSED');
         await app.openReview();
         await page.getByRole('tab', { name: 'Files', exact: true }).click();
       } else {

@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub async fn bundled_moonrun(String) -> String?
+
 pub async fn bundled_source(platform~ : String, seed_dir~ : String, host_platform~ : String) -> ToolchainSource?
 
 pub async fn resolve_toolchain(String, runtime_dir? : @pathx.Path, source? : ToolchainSource) -> ResolvedToolchain
