@@ -37,9 +37,7 @@ fn svg_circle(cx : String, cy : String, r : String) -> @svg.Svg {
 
 ///|
 pub fn icon_add() -> @html.Html {
-  codicon(
-    "M8 1.5C8 1.22386 7.77614 1 7.5 1C7.22386 1 7 1.22386 7 1.5V7H1.5C1.22386 7 1 7.22386 1 7.5C1 7.77614 1.22386 8 1.5 8H7V13.5C7 13.7761 7.22386 14 7.5 14C7.77614 14 8 13.7761 8 13.5V8H13.5C13.7761 8 14 7.77614 14 7.5C14 7.22386 13.7761 7 13.5 7H8V1.5Z",
-  )
+  @html.span(class="codicon codicon-add", "")
 }
 
 ///|

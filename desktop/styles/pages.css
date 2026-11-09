@@ -1,75 +1,3 @@
-
-/* ---------- shared action buttons ---------- */
-/* The base owns ordinary labeled-action geometry. Intent classes only paint a
-   recognized action, so an icon control may use `danger` without inheriting
-   this component's dimensions. */
-.button {
-  --button-color: var(--color-text-primary);
-  --button-border-color: transparent;
-  --button-background: transparent;
-  --button-hover-color: var(--button-color);
-  --button-hover-border-color: var(--button-border-color);
-  --button-hover-background: var(--button-background);
-  --button-disabled-opacity: 0.5;
-
-  padding: 0.5em 1em;
-  border: 1px solid var(--button-border-color);
-  border-radius: var(--radius-sm);
-  background: var(--button-background);
-  color: var(--button-color);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  cursor: pointer;
-
-  &:where(.compact) {
-    min-height: 2.25em;
-    padding: 0.25em 0.75em;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
-  &:not(:disabled):hover {
-    border-color: var(--button-hover-border-color);
-    background: var(--button-hover-background);
-    color: var(--button-hover-color);
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: var(--button-disabled-opacity);
-  }
-
-  &:where(.secondary) {
-    --button-border-color: var(--color-border);
-    --button-background: var(--color-bg-surface);
-    --button-hover-background: var(--color-bg-subtle);
-  }
-
-  &:where(.primary) {
-    --button-color: var(--color-on-accent);
-    --button-border-color: var(--color-accent);
-    --button-background: var(--color-accent);
-    --button-hover-color: var(--color-on-accent);
-    --button-hover-border-color: var(--color-accent);
-    --button-hover-background: var(--color-accent);
-    --button-disabled-opacity: 0.7;
-  }
-
-  &:where(.danger) {
-    --button-color: var(--color-danger);
-    --button-border-color: var(--color-danger-border);
-    --button-background: var(--color-danger-soft);
-    --button-hover-background: color-mix(
-      in srgb,
-      var(--color-danger-soft) 75%,
-      var(--color-bg-surface)
-    );
-  }
-}
-
 /* A Device page is navigation, so it remains an anchor while matching the
    secondary controls beside it. The desktop's delegated link handler opens it
    in the system browser instead of navigating the app frame. */
@@ -81,8 +9,6 @@ a:where(.setting-link) {
   text-decoration: none;
 }
 
-/* ---------- onboarding (no conversation on screen) ---------- */
-/* Empty states occupy the body beneath the shared header. */
 .onboarding {
   grid-row: 2 / -1;
   display: grid;
@@ -262,7 +188,6 @@ h2 {
   border-top: 1px solid var(--color-border-subtle);
 }
 
-/* The title opens the read-only transcript; it reads as text, not a button. */
 .archived-chat-open {
   display: flex;
   align-items: center;
@@ -299,9 +224,6 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: var(--space-3);
 }
 
-/* The bring-your-own-key guide inside the API group's card: prose plus
-   numbered steps, with its own padding since the card's default is
-   row-shaped. */
 .setup-guide {
   display: grid;
   gap: 1rem;
@@ -822,15 +744,6 @@ button.archived-chat-open:hover .archived-chat-title {
   color: var(--color-text-secondary);
 }
 
-.skill-preview-markdown table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  overflow-x: auto;
-  margin: 0.55em 0;
-  border-collapse: collapse;
-}
-
 .skill-preview-markdown th,
 .skill-preview-markdown td {
   padding: var(--space-2) var(--space-5);
@@ -872,7 +785,6 @@ button.archived-chat-open:hover .archived-chat-title {
   white-space: nowrap;
 }
 
-/* Scheduled tasks share the Settings page's type scale and theme. */
 .schedule-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-5) 0; }
 .schedule-panel { padding: var(--space-6); margin: var(--space-6) 0; }
 .schedule-card :is(h2, h3) { margin: 0 0 var(--space-4); font-size: var(--font-size-emphasis); }

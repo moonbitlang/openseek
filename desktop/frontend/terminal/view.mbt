@@ -213,6 +213,12 @@ fn panel_view(
         "terminal-panel"
       },
     ),
-    [resize_handle, @html.div(class="terminal-titlebar", items), host],
+    [
+      resize_handle,
+      @html.div(class="terminal-surface", [
+        @html.div(class="terminal-titlebar", items),
+        host,
+      ]),
+    ],
   )
 }

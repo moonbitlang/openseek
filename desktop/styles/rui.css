@@ -59,6 +59,12 @@
   --rui-button-fg: var(--color-text-primary);
 }
 
+/* RUI's inline background reads different tokens for hover and expanded states. */
+[data-slot="dropdown-menu-trigger"][data-variant="ghost"] {
+  --rui-ghost-hover-bg: #d5d5d5;
+  --rui-muted: #d5d5d5;
+}
+
 [data-slot="button-group"] > [data-slot="button"][aria-pressed] {
   --rui-control-radius-top-left: var(--radius-sm);
   --rui-control-radius-top-right: var(--radius-sm);
