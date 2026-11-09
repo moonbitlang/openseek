@@ -182,7 +182,7 @@ fn default_prompt() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+    #|  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
     #|  "moonbitlang/core/async",
     #|}
     #|---

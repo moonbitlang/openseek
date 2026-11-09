@@ -2,13 +2,13 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. SDK `moonbitlang/openseek_tools@0.4.0` uses
+implementation. SDK `moonbitlang/openseek_tools@0.4.1` uses
 `moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
 
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/openseek_tools@0.4.1" @tools,
   "moonbitlang/core/async",
 }
 ---
@@ -72,7 +72,7 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
   "moonbitlang/core/async",
 }
 ---
@@ -173,13 +173,12 @@ independent of the host PR.
 
 ## Development and releases
 
-SDK 0.4.0 is prepared here for the migration to `moonbitlang/core/async`;
-0.3.0 and earlier releases use the separate `moonbitlang/async` runtime.
-Use 0.4.0 with core/async scripts. The wire protocol remains v1.
-Publish 0.4.0 before distributing scripts pinned to it. SDK 0.4.1 pages an MCP
-catalog download through one host snapshot, so a server that connects or loses
-its connection mid-download cannot shift the pages; its API is unchanged.
-Publish it before pinning scripts and prompts to it. Keep SDK and wire
+SDK 0.4.0 and later use `moonbitlang/core/async`; 0.3.0 and earlier releases
+use the separate `moonbitlang/async` runtime. The wire protocol remains v1.
+SDK 0.4.1 pages an MCP catalog download through one host snapshot, so a server
+that connects or loses its connection mid-download cannot shift the pages; its
+API is unchanged from 0.4.0. Publish a release before pinning scripts and
+prompts to it. Keep SDK and wire
 versions separate. Documentation and host tool additions do not require
 changing the SDK API. For a future SDK release, check and test the independent module first:
 
