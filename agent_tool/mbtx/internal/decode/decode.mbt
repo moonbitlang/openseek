@@ -111,31 +111,17 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
           })
         Some(_) => fail("arguments.args to be an array of strings")
       }
-      let description = match arguments {
-        { "description": String(text), .. } => Some(text)
-        { "description": Null, .. } => None
-        { "description": _, .. } => fail("arguments.description to be a string")
-        _ => None
+      let description = optional_string(fields, "description")
+      let cwd = optional_string(fields, "cwd")
+      let warning = match fields.get("warning") {
+        Some(String("on")) => true
+        Some(String("off")) | Some(Null) | None => false
+        _ => fail("arguments.warning to be \"on\" or \"off\"")
       }
-      let cwd = match arguments {
-        { "cwd": String(c), .. } => Some(c)
-        { "cwd": Null, .. } => None
-        { "cwd": _, .. } => fail("arguments.cwd to be a string")
-        _ => None
-      }
-      let warning = match arguments {
-        { "warning": "on", .. } => true
-        { "warning": "off", .. } => false
-        { "warning": Null, .. } => false
-        { "warning": _, .. } =>
-          fail("arguments.warning to be \"on\" or \"off\"")
-        _ => false
-      }
-      let escalated = match arguments {
-        { "escalated": true, .. } => true
-        { "escalated": false, .. } | { "escalated": Null, .. } => false
-        { "escalated": _, .. } => fail("arguments.escalated to be a boolean")
-        _ => false
+      let escalated = match fields.get("escalated") {
+        Some(True) => true
+        Some(False) | Some(Null) | None => false
+        _ => fail("arguments.escalated to be a boolean")
       }
       let ptc = match fields.get("ptc") {
         Some(True) => Some(true)
@@ -147,6 +133,16 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
       { program, args, description, cwd, warning, escalated, ptc, }
     }
     _ => fail("object arguments")
+  }
+}
+
+///|
+/// An optional string argument; an explicit null is unset.
+fn optional_string(fields : Map[String, Json], name : String) -> String? raise {
+  match fields.get(name) {
+    Some(String(text)) => Some(text)
+    None | Some(Null) => None
+    _ => fail("arguments.\{name} to be a string")
   }
 }
 

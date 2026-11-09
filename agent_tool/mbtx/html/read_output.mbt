@@ -5,6 +5,11 @@
 /// so a batch needs no tool-specific argument decoding or result metadata.
 pub fn read_workflow_output(content : String) -> @rhtml.Html? {
   guard content.length() <= 48_000 else { return None }
+  // Every highlighted section starts at a `file_heading` line; without one
+  // there is nothing to render, so skip building the per-line spans.
+  guard content.has_prefix("=== ") || content.contains("\n=== ") else {
+    return None
+  }
   let lines = content.split("\n").map(line => line.to_owned()).collect()
   let children : Array[@rhtml.Html] = []
   let mut highlighted = false
