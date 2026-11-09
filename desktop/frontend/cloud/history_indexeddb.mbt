@@ -1,116 +1,88 @@
 ///|
-// Tokens never enter this adapter. Account epochs fence queued work before it
-// opens a transaction; deletion tombstones prevent a late write resurrecting it.
-let indexed_history_store : @js.Value = new_indexed_history_store()
+priv struct BrowserHistoryCache {
+  mutex : @async.Mutex
+  mut epoch : Int32
+  mut user : String?
+  mut unavailable : Bool
+  mut running : HistoryTransaction?
+  deleted : Map[String, Unit]
+}
 
 ///|
-extern "js" fn new_indexed_history_store() -> @js.Value =
-  #| () => {
-  #|   let account = null;
-  #|   let running = null;
-  #|   let unavailable = false;
-  #|   let tail = Promise.resolve();
-  #|   const deleted = new Set();
-  #|   const enqueue = work => (tail = tail.then(work).catch(() => null));
-  #|   const transact = (origin, user, action, session, page, scope) => new Promise(resolve => {
-  #|     if (unavailable && action !== 'clear' && action !== 'remove') { resolve(null); return; }
-  #|     let db, tx, result = null, settled = false;
-  #|     const finish = (value, failed = false) => {
-  #|       if (settled) return;
-  #|       settled = true;
-  #|       unavailable ||= failed;
-  #|       clearTimeout(timer);
-  #|       if (running?.tx === tx) running = null;
-  #|       if (db) db.close();
-  #|       resolve(value);
-  #|     };
-  #|     // A blocked or stalled database must not hold up the network history read.
-  #|     const timer = setTimeout(() => {
-  #|       if (tx) { try { tx.abort(); } catch (_) {} }
-  #|       finish(null, true);
-  #|     }, 1000);
-  #|     try {
-  #|       const request = indexedDB.open('seekmoon.cloud-history.v1', 1);
-  #|       request.onupgradeneeded = () => {
-  #|         request.result.createObjectStore('pages', { keyPath: ['origin', 'user', 'session'] })
-  #|           .createIndex('account', ['origin', 'user']);
-  #|       };
-  #|       request.onerror = request.onblocked = () => finish(null, true);
-  #|       request.onsuccess = () => {
-  #|         db = request.result;
-  #|         if (settled || (scope && account !== scope) ||
-  #|             (action !== 'remove' && deleted.has(session))) {
-  #|           db.close(); finish(null); return;
-  #|         }
-  #|         db.onversionchange = () => db.close();
-  #|         try {
-  #|           tx = db.transaction('pages', action === 'read' || action === 'list' ? 'readonly' : 'readwrite');
-  #|           running = { tx, scope };
-  #|           tx.oncomplete = () => finish(result);
-  #|           tx.onerror = tx.onabort = () => finish(null, !scope || account === scope);
-  #|           const store = tx.objectStore('pages');
-  #|           const key = [origin, user, session];
-  #|           if (action === 'read') {
-  #|             store.get(key).onsuccess = event => { result = event.target.result?.page ?? null; };
-  #|           } else if (action === 'write') {
-  #|             store.put({ origin, user, session, page });
-  #|           } else if (action === 'remove') {
-  #|             store.delete(key);
-  #|           } else {
-  #|             result = [];
-  #|             store.index('account').openCursor(IDBKeyRange.only([origin, user])).onsuccess = event => {
-  #|               const cursor = event.target.result;
-  #|               if (!cursor) return;
-  #|               if (action === 'clear') cursor.delete();
-  #|               else if (!deleted.has(cursor.value.session)) result.push(cursor.value);
-  #|               cursor.continue();
-  #|             };
-  #|           }
-  #|         } catch (_) { finish(null, true); }
-  #|       };
-  #|     } catch (_) { finish(null, true); }
-  #|   });
-  #|   return {
-  #|     activate(request) {
-  #|       if (running?.scope) { try { running.tx.abort(); } catch (_) {} }
-  #|       account = request;
-  #|       deleted.clear();
-  #|       if (request.clear !== null) {
-  #|         enqueue(() => transact(request.origin, request.clear, 'clear', null, null, null));
-  #|       }
-  #|     },
-  #|     request(request) {
-  #|       const scope = account;
-  #|       if (!scope || scope.epoch !== request.epoch || scope.origin !== request.origin || scope.user !== request.user) {
-  #|         return Promise.resolve(null);
-  #|       }
-  #|       if (request.action === 'remove') deleted.add(request.session);
-  #|       return enqueue(() => account === scope
-  #|         ? transact(request.origin, request.user, request.action, request.session, request.page, scope)
-  #|         : null);
-  #|     }
-  #|   };
-  #| }
+let indexed_history_store : BrowserHistoryCache = {
+  mutex: @async.Mutex(),
+  epoch: 0,
+  user: None,
+  unavailable: false,
+  running: None,
+  deleted: Map([]),
+}
+
+///|
+fn HistoryTransaction::try_abort(self : HistoryTransaction) -> Unit {
+  history_binding(() => self.abort()) catch {
+    _ => ()
+  }
+}
+
+///|
+/// Keep every transaction ordered with logout cleanup. The epoch and deletion
+/// checks run again after opening IndexedDB, before any pages can be written.
+async fn BrowserHistoryCache::access(
+  self : BrowserHistoryCache,
+  write~ : Bool,
+  valid~ : () -> Bool,
+  cleanup~ : Bool = false,
+  operation : (HistoryTransaction) -> HistoryRequest,
+) -> Json {
+  self.mutex.acquire()
+  defer self.mutex.release()
+  guard valid() && (!self.unavailable || cleanup) else { return Json::null() }
+  @async.with_timeout(1000, () => {
+    let db = @js_async.run_promise(open_history_database)
+    defer db.close()
+    guard valid() else { return Json::null() }
+    let tx = history_binding(() => db.transaction(write))
+    self.running = if cleanup { None } else { Some(tx) }
+    defer {
+      self.running = None
+    }
+    errdefer tx.try_abort()
+    let query = history_binding(() => operation(tx))
+    tx.completion().wait(abort_controller=@js_async.AbortController::new())
+    query.value().to_json() catch {
+      _ => Json::null()
+    }
+  }) catch {
+    _ => {
+      if valid() {
+        self.unavailable = true
+      }
+      Json::null()
+    }
+  }
+}
 
 ///|
 fn State::cache_account_changed(self : State, previous : String?) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    if !native_history_cache() {
-      let clear : String? = if self.user_id is None { previous } else { None }
-      let request : Json = {
-        "origin": @cloud_client.CloudOrigin,
-        "epoch": self.epoch,
-        "user": self.user_id.map_or(Json::null(), value => Json(value)),
-        "clear": clear.map_or(Json::null(), value => Json(value)),
-      }
-      try {
-        let _ : @js.Value = indexed_history_store.apply_with_string(
-          "activate",
-          [@js.Value::from_json(request)],
+    guard !native_history_cache() else { return }
+    let cache = indexed_history_store
+    if cache.running is Some(tx) {
+      tx.try_abort()
+    }
+    cache.epoch = self.epoch
+    cache.user = self.user_id
+    cache.deleted.clear()
+    if self.user_id is None && previous is Some(user) {
+      @js.Promise::from_async(() => {
+        ignore(
+          cache.access(write=true, valid=() => true, cleanup=true, store => {
+            store.clear_account(@cloud_client.CloudOrigin, user)
+          }),
         )
-      } catch {
-        _ => ()
-      }
+      })
+      |> ignore
     }
   })
 }
@@ -121,36 +93,56 @@ async fn State::indexed_history_cache(
   action : @protocol.CloudHistoryCacheAction,
 ) -> @protocol.CloudHistoryCacheReply {
   guard self.user_id is Some(user) else { return Done }
-  let fields : Map[String, Json] = {
-    "origin": @cloud_client.CloudOrigin,
-    "user": user,
-    "epoch": self.epoch,
+  let cache = indexed_history_store
+  fn current() {
+    cache.epoch == self.epoch && cache.user == Some(user)
   }
-  match action {
-    List => fields["action"] = Json("list")
-    Read(session~) => {
-      fields["action"] = Json("read")
-      fields["session"] = Json(session)
-    }
-    Write(session~, page~) => {
-      fields["action"] = Json("write")
-      fields["session"] = Json(session)
-      fields["page"] = page.to_json()
-    }
-    Remove(session~) => {
-      fields["action"] = Json("remove")
-      fields["session"] = Json(session)
-    }
+  guard current() else { return Done }
+  let session = match action {
+    List => None
+    Read(session~) | Write(session~, ..) | Remove(session~) => Some(session)
   }
-  let value = @interop.js_method_promise(
-      indexed_history_store,
-      "request",
-      @js.Value::from_json(Json(fields)),
-    )
-    .wait()
-    .to_json() catch {
-      _ => return Done
-    }
+  if action is Remove(session~) {
+    cache.deleted[session] = ()
+  }
+  let row = match action {
+    Write(session~, page~) =>
+      Some(
+        @js.Value::from_json({
+          "origin": @cloud_client.CloudOrigin,
+          "user": user,
+          "session": session,
+          "page": page.to_json(),
+        }),
+      )
+    _ => None
+  }
+  let value = cache.access(
+    write=action is (Write(..) | Remove(_)),
+    cleanup=action is Remove(_),
+    valid=() => {
+      current() &&
+      (
+        action is Remove(_) ||
+        !session.map_or(false, id => cache.deleted.contains(id))
+      )
+    },
+    store => {
+      let key : FixedArray[String] = [
+        @cloud_client.CloudOrigin,
+        user,
+        session.unwrap_or(""),
+      ]
+      match action {
+        List => store.list(@cloud_client.CloudOrigin, user)
+        Read(_) => store.read(key)
+        Write(..) => store.write(row.unwrap())
+        Remove(_) => store.remove(key)
+      }
+    },
+  ) catch {
+    _ => return Done
+  }
   match action {
     List => {
       let entries : Array[@protocol.CloudHistoryCacheEntry] = []
@@ -169,7 +161,16 @@ async fn State::indexed_history_cache(
       }
       Entries(entries)
     }
-    Read(_) => Page(Some(@json.from_json(value)) catch { _ => None })
+    Read(_) =>
+      Page(
+        match value {
+          { "page": page, .. } =>
+            Some(@json.from_json(page)) catch {
+              _ => None
+            }
+          _ => None
+        },
+      )
     _ => Done
   }
 }
