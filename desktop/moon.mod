@@ -6,7 +6,7 @@ import {
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/proton_contract@0.7.0",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.7",
 }
 
 readme = "README.md"
