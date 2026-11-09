@@ -155,7 +155,7 @@ test('a failed thread start keeps its original draft identity and project for re
   await page.locator('#send').click();
   await expect(page.getByText(/Reply lost/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeDisabled();
   await expect(page.locator('#task')).toHaveValue('Retry this prompt');
   await page.keyboard.press('ControlOrMeta+o');
   await expect(page.getByRole('dialog', { name: 'Add a project' })).toHaveCount(0);
@@ -166,7 +166,7 @@ test('a failed thread start keeps its original draft identity and project for re
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.thread.start').length).toBe(2);
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -178,11 +178,11 @@ test('the title cannot add or change projects until draft opening settles', asyn
   await choose(page, 'Codex test');
   await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeDisabled();
   const request = app.requests.find(r => r.method === 'codex.draft.open');
   app.replyFor = reply;
   pending.resolve(reply(request));
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
   await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
@@ -267,12 +267,12 @@ test('a failed hidden Codex draft does not block adding a project from OpenSeek'
   app.rpcErrors.set('codex.thread.start', 'Reply lost');
   await page.locator('#send').click();
   await expect(page.getByText(/Reply lost/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   await page.keyboard.press('ControlOrMeta+o');
   await expect(page.getByRole('dialog', { name: 'Add a project' })).toBeVisible();
   expect(app.pageErrors).toEqual([]);

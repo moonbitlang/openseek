@@ -3065,7 +3065,6 @@ button.git-history-file.selected {
   --gh-muted: light-dark(#59636e, #9198a1);
   --gh-border: light-dark(#d1d9e0, #3d444d);
   --gh-subtle: light-dark(#f6f8fa, #151b23);
-  --gh-link: light-dark(#0969da, #4493f8);
   --gh-green: light-dark(#1a7f37, #3fb950);
   --gh-red: light-dark(#cf222e, #f85149);
   display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0;
@@ -3078,9 +3077,9 @@ button.git-history-file.selected {
 .github-pr-header { margin-bottom: var(--space-3); }
 .github-detail-title { flex: 1; min-width: 0; margin: 0 0 var(--space-6); font-size: clamp(1.75rem, 3.8cqw, 2.5rem); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
 .github-detail-dismiss { flex: none; margin-left: auto; color: var(--gh-muted); }
-.github-detail-link { padding: 0; border: 0; background: transparent; color: var(--gh-link); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.github-detail-link { padding: 0; border: 0; background: transparent; color: var(--color-accent); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .github-detail-link:hover { text-decoration: underline; }
-.github-detail-link:focus-visible, .github-action-button:focus-visible, summary.github-checks-summary:focus-visible { outline: 2px solid var(--gh-link); outline-offset: 3px; }
+.github-detail-link:focus-visible, .github-action-button:focus-visible, summary.github-checks-summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
 .github-title-number { display: inline; white-space: nowrap; font-weight: 300; }
 .github-detail-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-5); color: var(--gh-muted); line-height: 1.8; }
 .github-merge-description { flex: 1; min-width: 180px; padding-top: var(--space-1); }
@@ -3115,7 +3114,7 @@ button.git-history-file.selected {
 .github-detail .msg-content code { background: light-dark(#eff1f3, #262c36); color: inherit; border-radius: 4px; padding: .15em .35em; font-size: 85%; }
 .github-detail .msg-content pre { background: var(--gh-subtle); padding: var(--space-6); border-radius: 6px; }
 .github-detail .msg-content pre code { padding: 0; background: transparent; }
-.github-detail .msg-content a { color: var(--gh-link); }
+.github-detail .msg-content a { color: var(--color-accent); }
 .github-detail .msg-content table { overflow-wrap: normal; }
 .github-detail .msg-content img { max-width: 100%; height: auto; }
 .github-detail-status { margin: var(--space-4) 0 var(--space-6); font-size: var(--font-size-md); line-height: 1.5; color: var(--gh-muted); }
@@ -3145,7 +3144,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-check-hide, .github-checks-details[open] .github-check-show { display: none; }
 .github-checks-details[open] .github-check-hide { display: inline; }
 .github-checks { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.github-checks:focus-visible { outline: 2px solid var(--gh-link); outline-offset: -2px; }
+.github-checks:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
 .github-check { display: flex; align-items: center; gap: var(--space-5); min-height: 3.5em; padding: var(--space-5) var(--space-6); font-size: var(--font-size-md); line-height: 1.5; }
 .github-check + .github-check { border-top: 1px solid var(--gh-border); }
 .github-check-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 16px; width: 16px; height: 20px; color: var(--gh-muted); }
@@ -3581,7 +3580,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-toggle svg { width: 1rem; height: 1rem; }
 .github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-muted); padding: 0.125em; box-sizing: border-box; }
 .github-review-switch::after { content: ''; display: block; width: 1em; height: 1em; border-radius: 50%; background: white; }
-.github-review-switch.on { background: #0969da; }
+.github-review-switch.on { background: var(--color-switch-on); }
 .github-review-switch.on::after { margin-left: 1em; }
 .github-review-refresh { font-size: var(--font-size-title); padding: 0 var(--space-2); cursor: pointer; }
 .github-review-status { font-size: var(--font-size-xs); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--color-seam); color: var(--color-text-muted); white-space: normal; }
@@ -3619,7 +3618,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
 .github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); border: 1px solid var(--color-seam); border-radius: 6px; font: inherit; line-height: 1.5; }
-.github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
+.github-review-input:focus { border-color: var(--color-focus-ring); outline: 1px solid var(--color-focus-ring); outline-offset: -1px; }
 .github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
 .github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-composer-actions .github-review-send { color: white; background: #1f883d; border-color: #1a7f37; font-weight: 600; }

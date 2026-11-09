@@ -75,7 +75,8 @@ pub(all) struct Action {
 #derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
-  label : String
+  // Unlabeled sections expose their action below the sidebar search instead.
+  label : String?
   // The active conversation's session id while this section holds the
   // focused chat; `None` otherwise. Same contract as
   // `@project.Input.activation`.
@@ -227,21 +228,26 @@ pub fn component(
     if input.activation is Some(_) {
       class += " active"
     }
-    let heading : Array[@html.Html] = [
-      @html.span(class="sidebar-label section-label", input.label),
-    ]
-    if input.action is Some(action) {
-      heading.push(
-        @html.button(
-          class="section-primary-action",
-          type_="button",
-          title=action.title,
-          disabled=action.disabled,
-          attrs=@html.Attrs::build().aria_label(action.title),
-          on_click=(actions.primary)(input.id),
-          @icons.icon(@icons.icon_add),
-        ),
-      )
+    let heading = if input.label is Some(label) {
+      let children : Array[@html.Html] = [
+        @html.span(class="sidebar-label section-label", label),
+      ]
+      if input.action is Some(action) {
+        children.push(
+          @html.button(
+            class="section-primary-action",
+            type_="button",
+            title=action.title,
+            disabled=action.disabled,
+            attrs=@html.Attrs::build().aria_label(action.title),
+            on_click=(actions.primary)(input.id),
+            @icons.icon(@icons.icon_add),
+          ),
+        )
+      }
+      @html.div(class~, children)
+    } else {
+      @html.nothing
     }
     let rows : Map[String, @html.Html] = Map([])
     for group in entry_rows {
@@ -253,7 +259,7 @@ pub fn component(
       (
         input.id.key(),
         @html.div(class="sidebar-group", [
-          @html.div(class~, heading),
+          heading,
           @html.div(
             id=input.id.key() + ":content",
             class="sidebar-group-content",

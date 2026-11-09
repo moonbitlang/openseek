@@ -43,7 +43,7 @@ test('language selection updates Settings and sidebar and persists across reload
   await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '技能', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '对话', exact: true })).toBeVisible();
-  await expect(page.locator('aside .section-label', { hasText: /^项目$/ })).toBeVisible();
+  await expect(page.getByRole('complementary').getByRole('button', { name: '新建项目', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '主题', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: '通用', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: '引擎', exact: true }).click();
