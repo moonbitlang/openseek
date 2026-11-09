@@ -1315,9 +1315,9 @@ test('Cloud Quick Open closes on a session switch and ignores the previous index
   cloud.holdIndex = null;
   await page.keyboard.press('ControlOrMeta+p');
   await expect(palette.getByRole('option')).toContainText(['second-only.txt']);
-  const lateReply = page.waitForResponse(response => response.url().includes(`/${sessionA}/files/index`));
+  const lateReply = settledResponse(page, response => response.url().includes(`/${sessionA}/files/index`));
   finish();
-  await (await lateReply).finished();
+  await lateReply;
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(palette.getByRole('option')).toHaveCount(1);
   await expect(palette.getByRole('option')).toContainText(['second-only.txt']);
