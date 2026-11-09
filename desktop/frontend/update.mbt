@@ -3721,14 +3721,7 @@ fn update_msg(
         guard file_ctx(model).root() is Some(root) else {
           return (@cmd.none, model)
         }
-        let model = model.begin_editor_navigation()
-        show_editor_resource(
-          dispatch,
-          model,
-          @resource.join_relative(root, path),
-          None,
-          file_link_generation=model.file_panel.file_link_generation,
-        )
+        open_cloud_relative(dispatch, model, root, path, None)
       } else {
         request_open_path(dispatch, model, path.0, None)
       }

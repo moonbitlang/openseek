@@ -50,24 +50,23 @@ pub fn State::open(
     generation,
   }
   let started = { ..self, open: Some(open), generation, }
-  if input.owner is @interop.Cloud(..) {
-    let projected = with_file_candidates(input, open, [], Loading)
-    return (
-      @cmd.batch([
-        cloud_file_request(emit, input, generation),
-        focus_after_render(),
-      ]),
-      { ..started, open: Some(projected), },
-    )
-  }
   match provider {
+    // A Host warms its search cache; Cloud loads its complete index once. Each
+    // request is a no-op for the other owner.
     Files => {
       let projected = with_file_candidates(input, open, [], Loading)
       let next = { ..started, open: Some(projected), }
       let (cache_cmd, next) = next.ensure_cache(
         emit, input, projected, true, true,
       )
-      (@cmd.batch([cache_cmd, focus_after_render()]), next)
+      (
+        @cmd.batch([
+          cache_cmd,
+          cloud_file_request(emit, input, generation),
+          focus_after_render(),
+        ]),
+        next,
+      )
     }
     Symbols =>
       (
@@ -202,15 +201,6 @@ pub fn State::reconcile(
     generation,
   }
   let next = { ..self, open: Some(restarted), generation, }
-  if input.owner is @interop.Cloud(..) {
-    return (
-      cloud_file_request(emit, input, generation),
-      {
-        ..next,
-        open: Some(with_file_candidates(input, restarted, [], Loading)),
-      },
-    )
-  }
   match restarted.provider() {
     Files => {
       // Keep only currently open relative paths as provisional rows; Host
@@ -220,7 +210,14 @@ pub fn State::reconcile(
       let (cache_cmd, next) = next.ensure_cache(
         emit, input, projected, true, true,
       )
-      (@cmd.batch([self.cancel_file_request(open), cache_cmd]), next)
+      (
+        @cmd.batch([
+          self.cancel_file_request(open),
+          cache_cmd,
+          cloud_file_request(emit, input, generation),
+        ]),
+        next,
+      )
     }
     Symbols =>
       (symbol_request(emit, input, restarted.query(), generation), next)
@@ -690,7 +687,8 @@ fn State::cancel_file_request(self : State, open : Open) -> @cmd.Cmd {
 
 ///|
 /// An index load remains useful while the reader types, but only for the
-/// account/session and opening generation that requested the complete index.
+/// opening generation that requested the complete index; `reconcile` retires
+/// the run when its session or access changes.
 fn State::apply_cloud_files(
   self : State,
   input : Input,
@@ -700,8 +698,6 @@ fn State::apply_cloud_files(
 ) -> State {
   guard self.open is Some(open) &&
     open.owner == owner &&
-    input.owner == owner &&
-    open.cloud_access == input.cloud_access &&
     open.phase is Loading &&
     open.generation == generation else {
     return self
