@@ -590,3 +590,81 @@ async test "the catalog lists an unavailable server with its error and no tools"
     )
   })
 }
+
+///|
+async test "start returns before a server settles and replaces its entry once it does" {
+  @async.with_task_group() <| group => {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
+      error if "\{error}".contains("Operation not permitted") => {
+        println("local TCP bind unavailable; skipping deferred connect test")
+        return
+      }
+      error => raise error
+    }
+    // The handshake waits here until the test lets it through.
+    let gate : @async.Queue[Unit] = Queue(kind=Unbounded)
+    group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
+      server.run_forever(
+        (_request, body, conn) => {
+          let message = @json.parse(body.read_all().text()) catch { _ => null }
+          let id = match message {
+            { "id": id, .. } => id
+            _ => null
+          }
+          match message {
+            { "method": "server/discover", .. } =>
+              conn.send_response(400, "Bad Request")
+            { "method": "initialize", .. } => {
+              gate.get()
+              respond_json(conn, id, { "protocolVersion": "2025-11-25" })
+            }
+            { "method": "tools/list", .. } =>
+              respond_json(conn, id, {
+                "tools": [
+                  { "name": "ping", "inputSchema": { "type": "object" } },
+                ],
+              })
+            { "method": "tools/call", .. } =>
+              respond_json(conn, id, {
+                "content": [{ "type": "text", "text": "pong" }],
+              })
+            _ => conn.send_response(202, "Accepted")
+          }
+        },
+        max_connections=8,
+      )
+    }
+    let (entries, settled) = @tools.start(
+      AgentTaskScope(group),
+      [
+        Http(
+          name="slow",
+          url="http://127.0.0.1:\{server.addr.port()}/mcp",
+          headers=Map([]),
+        ),
+      ],
+      client_name="openseek",
+      client_version="0.1",
+    )
+    assert_true(entries is [{ connection: Connecting, .. }])
+    let connecting : Json = {
+      "server": "slow",
+      "error": "still connecting; search again from a later script",
+    }
+    assert_eq(@tools.catalog_items(entries), [connecting])
+    guard entries[0].call("ping", {}) is Respond(early) else {
+      fail("expected a respond action")
+    }
+    assert_true(early.is_error)
+    assert_true(early.content.contains("still connecting"))
+    gate.put(())
+    settled.wait()
+    assert_true(entries is [{ connection: Live(_), .. }])
+    guard entries[0].call("ping", {}) is Respond(output) else {
+      fail("expected a respond action")
+    }
+    assert_false(output.is_error)
+    assert_eq(output.content, "pong")
+    group.return_immediately(())
+  }
+}

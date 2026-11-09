@@ -65,6 +65,7 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
             "- \{name} (\{label}): unavailable: \{@cli.terminal_safe_line(error, limit=200)}",
           )
         NoTools => println("- \{name} (\{label}): no tools")
+        Connecting => println("- \{name} (\{label}): still connecting")
         Live(_) => {
           println("- \{name} (\{label}): \{entry.tools.length()} tool(s)")
           for tool in entry.tools {

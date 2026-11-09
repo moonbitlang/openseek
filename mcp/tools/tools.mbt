@@ -41,6 +41,8 @@ const MaxServerTextChars : Int32 = 4000
 ///|
 /// What connecting one configured server came to.
 pub enum Connection {
+  /// Still being connected in the background (see `start`).
+  Connecting
   /// Connected and offering tools, through this client. The client stays open
   /// for as long as the scope lives, so it also says whether the connection
   /// has been lost since.
@@ -76,19 +78,68 @@ pub async fn[X] connect(
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
 ) -> Array[ServerEntry] {
-  let entries : Array[ServerEntry] = []
-  for server in servers {
-    let (connection, instructions, tools) = connect_server(
-      scope,
-      server,
-      client_name~,
-      client_version~,
-      workspace_root?,
-      discovery_timeout_ms~,
-    )
-    entries.push({ server, connection, instructions, tools, })
-  }
-  entries
+  [
+    for server in servers => {
+      connect_server(
+        scope,
+        server,
+        client_name~,
+        client_version~,
+        workspace_root?,
+        discovery_timeout_ms~,
+      )
+    }
+  ]
+}
+
+///|
+/// Start connecting every configured server at once in the background on
+/// `scope`'s group, and return their entries in config order right away, each
+/// `Connecting` until it settles: the element is then replaced with what
+/// connecting came to, so a holder reads an entry from the array each time
+/// rather than keeping one. As each server settles, `on_settled` runs with
+/// what it came to; it must not block. The task ends once every server has
+/// settled. A server that never settles (a stuck headers helper, say) holds
+/// back only its own entry and the task; the connecting ends with the group.
+/// Each failure is reported as the event `connect` reports.
+pub fn[X] start(
+  scope : @agent_runtime.AgentTaskScope[X],
+  servers : Array[@config.McpServer],
+  client_name~ : String,
+  client_version~ : String,
+  workspace_root? : String,
+  discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
+  on_settled? : (ServerEntry) -> Unit,
+) -> (Array[ServerEntry], @async.Task[Unit]) {
+  let entries : Array[ServerEntry] = servers.map(server => {
+    server,
+    connection: Connecting,
+    instructions: None,
+    tools: [],
+  })
+  let settled = scope
+    .group()
+    .spawn(no_wait=true, () => {
+      @async.with_task_group(group => {
+        for index, server in servers {
+          group.spawn_bg(() => {
+            let entry = connect_server(
+              scope,
+              server,
+              client_name~,
+              client_version~,
+              workspace_root?,
+              discovery_timeout_ms~,
+            )
+            entries[index] = entry
+            if on_settled is Some(on_settled) {
+              on_settled(entry)
+            }
+          })
+        }
+      })
+    })
+  (entries, settled)
 }
 
 ///|
@@ -116,6 +167,13 @@ pub async fn ServerEntry::call(
         "MCP server `\{server}` offers no tools",
         is_error=true,
       )
+    Connecting => {
+      let (message, _) = cap_serialized(
+        "MCP server `\{server}` is still connecting; try again later",
+        MaxToolOutputChars,
+      )
+      @agent_tool.respond(message, is_error=true)
+    }
     Failed(error) => {
       let (message, _) = cap_serialized(
         "MCP server `\{server}` is unavailable: \{error}",
@@ -135,13 +193,16 @@ pub async fn ServerEntry::call(
 /// an MCP host reply: descriptions, instructions, and errors are cut and marked, an
 /// arguments schema that is not an object or is oversized becomes the open
 /// object schema (the server still validates its arguments), and an oversized
-/// result schema is dropped, since it only helps whoever reads `data`.
+/// result schema is dropped, since it only helps whoever reads `data`. A
+/// server still connecting is listed as unavailable, saying so, until it
+/// settles.
 pub fn catalog_items(entries : Array[ServerEntry]) -> Array[Json] {
   let items : Array[Json] = []
   for entry in entries {
     let server = entry.server.name()
     let fields : Map[String, Json] = { "server": Json(server) }
     let error = match entry.connection {
+      Connecting => Some("still connecting; search again from a later script")
       Failed(error) => Some(error)
       Live(client) if client.is_closed() => Some("the connection was lost")
       Live(_) | NoTools => None
@@ -206,7 +267,7 @@ async fn[X] connect_server(
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32,
-) -> (Connection, String?, Array[@mcp.McpTool]) {
+) -> ServerEntry {
   let name = server.name()
   // A connected server, normalized across transports: the initialized client
   // and its initialization result; closing the client tears the transport
@@ -243,7 +304,12 @@ async fn[X] connect_server(
     error => {
       let error = "\{error}"
       @emit.emit(McpConnectFailed(server=name, error~))
-      return (Failed(error), None, [])
+      return {
+        server,
+        connection: Failed(error),
+        instructions: None,
+        tools: [],
+      }
     }
   }
   let discovered = try {
@@ -252,12 +318,22 @@ async fn[X] connect_server(
   } catch {
     @async.TimeoutError => {
       @emit.emit(McpListToolsTimeout(server=name))
-      return (Failed("timed out listing its tools"), None, [])
+      return {
+        server,
+        connection: Failed("timed out listing its tools"),
+        instructions: None,
+        tools: [],
+      }
     }
     error => {
       let error = "\{error}"
       @emit.emit(McpListToolsFailed(server=name, error~))
-      return (Failed("listing its tools failed: \{error}"), None, [])
+      return {
+        server,
+        connection: Failed("listing its tools failed: \{error}"),
+        instructions: None,
+        tools: [],
+      }
     }
   }
   // A server with nothing to offer is useless for the rest of the session:
@@ -265,9 +341,14 @@ async fn[X] connect_server(
   if discovered.is_empty() {
     @emit.emit(McpNoTools(server=name))
     client.close()
-    return (NoTools, None, [])
+    return { server, connection: NoTools, instructions: None, tools: [], }
   }
-  (Live(client), init.instructions, discovered)
+  {
+    server,
+    connection: Live(client),
+    instructions: init.instructions,
+    tools: discovered,
+  }
 }
 
 ///|

@@ -22,6 +22,11 @@ pub fn summary(
         status.configs.filter(config => config.state is Failed(_)).length()
       if failed > 0 {
         "\{text(locale, ConnectedCount(connected))} · \{text(locale, FailedCount(failed))}"
+      } else if connected == 0 &&
+        status.servers.any(server => server.state is Connecting) {
+        // Nothing has come of any server yet: "0 connected" would read as
+        // a failure.
+        text(locale, EngineConnecting)
       } else {
         text(locale, ConnectedCount(connected))
       }
@@ -145,6 +150,14 @@ fn server_row(
   }
   let reached = "\{transport} · \{server.target}"
   match server.state {
+    Connecting =>
+      item(
+        tone="",
+        name=server.name,
+        note=Some(text(locale, EngineConnecting)),
+        detail=None,
+        title=reached,
+      )
     Connected(tools) =>
       item(
         tone="ok",

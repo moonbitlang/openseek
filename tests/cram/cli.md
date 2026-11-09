@@ -506,24 +506,36 @@ $ printf '{"command":"steer","text":"too late","submission_id":"late-steer"}\n' 
 ```
 
 The engine reports what it holds of its MCP servers without being asked: an
-`mcp_status` event once connecting is over, and another each time that state
+`mcp_status` event as soon as it starts, and another each time that state
 changes. Every one carries the whole state, so a controller keeps the latest.
-With nothing configured there are no configs and no servers:
+Connecting runs in the background, so commands are read meanwhile, and a
+server that has not come to anything yet is `connecting`. With nothing
+configured there are no configs and no servers:
 
 ```mooncram
 $ env DEEPSEEK=test-key openseek.exe serve </dev/null 2>/dev/null | grep '"event":"mcp_status"'
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
-A server that cannot start is listed with its failure rather than left out (the `grep -o` stops before the error text, which
-is the operating system's):
+A server that cannot start is listed with its failure rather than left out:
+first as connecting, then as failed once that is known. The commands stay open
+until it is, so the engine is still running (the `grep -o` stops before the
+error text, which is the operating system's):
 
 ```mooncram
 $ sh <<'EOF'
 > printf '{"mcpServers":{"notes":{"command":"openseek-no-such-mcp-server"}}}' > mcp.json
-> env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json </dev/null 2>/dev/null | grep -o '"event":"mcp_status".*"state":"failed"'
-> rm -f mcp.json
+> mkfifo commands
+> env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json <commands >events 2>/dev/null &
+> exec 3>commands
+> i=0
+> until grep -q '"state":"failed"' events || [ "$i" -ge 300 ]; do sleep 0.1; i=$((i + 1)); done
+> exec 3>&-
+> wait
+> grep -o '"event":"mcp_status".*"state":"[a-z_]*"' events
+> rm -f mcp.json commands events
 > EOF
+"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"connecting"
 "event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
 ```
 

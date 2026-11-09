@@ -49,7 +49,7 @@ async fn run_task_turn(
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
-    let mcp = @execution.connect_mcp(
+    let (mcp, _) = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
       workspace_root~,

@@ -1,6 +1,6 @@
 // What a running engine holds of the MCP servers it was configured with: the
-// payload of the `mcp_status` event, which the engine sends on its own when
-// it has connected them and whenever that state changes. It is the engine's
+// payload of the `mcp_status` event, which the engine sends on its own once
+// it has started connecting them and whenever that state changes. It is the engine's
 // own state — the connections a conversation actually has, not what
 // connecting afresh would yield. An engine can be given several configuration
 // files; each is reported on its own, and the servers they contribute are
@@ -59,6 +59,8 @@ pub extend McpTransport with Debug::{to_repr}
 /// What the engine holds of one configured server.
 #derive(Eq, Debug)
 pub(all) enum McpServerState {
+  /// Still being connected: it has come to nothing yet.
+  Connecting
   /// Connected, with the tools it registered (never empty).
   Connected(Array[McpTool])
   /// It connected and registered these tools, and the connection has closed
@@ -109,6 +111,7 @@ pub impl ToJson for McpServerStatus with fn to_json(self) {
     "target": Json(self.target),
   }
   match self.state {
+    Connecting => fields["state"] = "connecting"
     Connected(tools) => {
       fields["state"] = "connected"
       fields["tools"] = Json(tools)
@@ -161,6 +164,7 @@ pub impl FromJson for McpServerStatus with fn from_json(json, path) {
   }
 
   let state : McpServerState = match state {
+    "connecting" => Connecting
     "connected" => Connected(held_tools())
     "lost" => Lost(held_tools())
     "no_tools" => NoTools

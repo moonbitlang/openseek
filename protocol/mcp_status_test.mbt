@@ -35,6 +35,12 @@ test "an mcp_status survives the wire with every config and server state" {
         state: Failed("connection refused"),
       },
       { name: "late", transport: Stdio, target: "late", state: Skipped, },
+      {
+        name: "auth",
+        transport: Http,
+        target: "https://example.com/auth",
+        state: Connecting,
+      },
     ],
   }
   let event : @openseek_protocol.Event = McpStatus(status~)
