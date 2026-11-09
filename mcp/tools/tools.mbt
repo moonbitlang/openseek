@@ -41,8 +41,6 @@ const MaxServerTextChars : Int32 = 4000
 ///|
 /// What connecting one configured server came to.
 pub enum Connection {
-  /// Still being connected in the background (see `start`).
-  Connecting
   /// Connected and offering tools, through this client. The client stays open
   /// for as long as the scope lives, so it also says whether the connection
   /// has been lost since.
@@ -93,15 +91,20 @@ pub async fn[X] connect(
 }
 
 ///|
-/// Start connecting every configured server at once in the background on
-/// `scope`'s group, and return their entries in config order right away, each
-/// `Connecting` until it settles: the element is then replaced with what
-/// connecting came to, so a holder reads an entry from the array each time
-/// rather than keeping one. As each server settles, `on_settled` runs with
-/// what it came to; it must not block. The task ends once every server has
-/// settled. A server that never settles (a stuck headers helper, say) holds
-/// back only its own entry and the task; the connecting ends with the group.
-/// Each failure is reported as the event `connect` reports.
+/// One configured server being connected in the background, with the task
+/// that connects it (see `start`). The task's result is what connecting came
+/// to.
+pub struct Server {
+  config : @config.McpServer
+  connecting : @async.Task[ServerEntry]
+}
+
+///|
+/// Start connecting every configured server at once, each in a task of its
+/// own on `scope`'s group, and return them in config order right away. A
+/// server that never settles (a stuck headers helper, say) holds back only its
+/// own task, which ends with the group. Each failure is reported as the event
+/// `connect` reports.
 pub fn[X] start(
   scope : @agent_runtime.AgentTaskScope[X],
   servers : Array[@config.McpServer],
@@ -109,37 +112,50 @@ pub fn[X] start(
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
-  on_settled? : (ServerEntry) -> Unit,
-) -> (Array[ServerEntry], @async.Task[Unit]) {
-  let entries : Array[ServerEntry] = servers.map(server => {
-    server,
-    connection: Connecting,
-    instructions: None,
-    tools: [],
-  })
-  let settled = scope
+) -> Array[Server] {
+  servers.map(server => {
+    config: server,
+    connecting: scope
     .group()
     .spawn(no_wait=true, () => {
-      @async.with_task_group(group => {
-        for index, server in servers {
-          group.spawn_bg(() => {
-            let entry = connect_server(
-              scope,
-              server,
-              client_name~,
-              client_version~,
-              workspace_root?,
-              discovery_timeout_ms~,
-            )
-            entries[index] = entry
-            if on_settled is Some(on_settled) {
-              on_settled(entry)
-            }
-          })
-        }
-      })
-    })
-  (entries, settled)
+      connect_server(
+        scope,
+        server,
+        client_name~,
+        client_version~,
+        workspace_root?,
+        discovery_timeout_ms~,
+      )
+    }),
+  })
+}
+
+///|
+/// What connecting this server came to, or `None` while it is still
+/// connecting.
+pub fn Server::settled(self : Server) -> ServerEntry? {
+  self.connecting.try_wait() catch {
+    // Cancelled with its group: it never came to anything.
+    _ => None
+  }
+}
+
+///|
+/// Call `tool` of this server, as `ServerEntry::call` does once it has
+/// settled; until then the call is an error result saying so.
+pub async fn Server::call(
+  self : Server,
+  tool : String,
+  arguments : Json,
+) -> @agent_tool.ToolAction {
+  guard self.settled() is Some(entry) else {
+    let (message, _) = cap_serialized(
+      "MCP server `\{self.config.name()}` is still connecting; try again later",
+      MaxToolOutputChars,
+    )
+    @agent_tool.respond(message, is_error=true)
+  }
+  entry.call(tool, arguments)
 }
 
 ///|
@@ -167,13 +183,6 @@ pub async fn ServerEntry::call(
         "MCP server `\{server}` offers no tools",
         is_error=true,
       )
-    Connecting => {
-      let (message, _) = cap_serialized(
-        "MCP server `\{server}` is still connecting; try again later",
-        MaxToolOutputChars,
-      )
-      @agent_tool.respond(message, is_error=true)
-    }
     Failed(error) => {
       let (message, _) = cap_serialized(
         "MCP server `\{server}` is unavailable: \{error}",
@@ -196,13 +205,19 @@ pub async fn ServerEntry::call(
 /// result schema is dropped, since it only helps whoever reads `data`. A
 /// server still connecting is listed as unavailable, saying so, until it
 /// settles.
-pub fn catalog_items(entries : Array[ServerEntry]) -> Array[Json] {
+pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
   let items : Array[Json] = []
-  for entry in entries {
-    let server = entry.server.name()
+  for configured in servers {
+    let server = configured.config.name()
+    guard configured.settled() is Some(entry) else {
+      items.push({
+        "server": Json(server),
+        "error": "still connecting; search again from a later script",
+      })
+      continue
+    }
     let fields : Map[String, Json] = { "server": Json(server) }
     let error = match entry.connection {
-      Connecting => Some("still connecting; search again from a later script")
       Failed(error) => Some(error)
       Live(client) if client.is_closed() => Some("the connection was lost")
       Live(_) | NoTools => None

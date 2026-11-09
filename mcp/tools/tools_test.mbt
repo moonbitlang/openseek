@@ -388,16 +388,17 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
         headers=Map([]),
       ),
     ]
-    let entries = @tools.connect(
+    let configured = @tools.start(
       scope,
       servers,
       client_name="openseek",
       client_version="0.1",
     )
-    guard entries is [remote] else { fail("expected one entry") }
+    guard configured is [connecting] else { fail("expected one server") }
+    let remote = connecting.connecting.wait()
     assert_eq([ for tool in remote.tools => tool.name ], ["ping", "big"])
     // The catalog caps what the server supplied, so any item fits a reply.
-    guard @tools.catalog_items(entries)
+    guard @tools.catalog_items(configured)
       is [
         { "server": "remote", .. } as server_item,
         { "server": "remote", "tool": { "name": "ping", .. }, .. },
@@ -434,7 +435,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
         }
         remote.call(tool, arguments)
       },
-      items=() => @tools.catalog_items(entries),
+      items=() => @tools.catalog_items(configured),
     )
     guard @json.parse(host.env()["OPENSEEK_MCP"])
       is { "url": String(url), "token": String(token), .. } else {
@@ -561,11 +562,11 @@ async test "connect keeps what each server came to, and a live one reports its l
 }
 
 ///|
-/// A configured server whose spawn fails, as a catalog entry.
+/// A configured server whose spawn fails, once it has settled.
 async fn[X] unavailable(
   scope : @agent_runtime.AgentTaskScope[X],
-) -> Array[@tools.ServerEntry] {
-  @tools.connect(
+) -> Array[@tools.Server] {
+  let servers = @tools.start(
     scope,
     [
       Stdio(
@@ -578,6 +579,10 @@ async fn[X] unavailable(
     client_name="openseek",
     client_version="0.1",
   )
+  for server in servers {
+    ignore(server.connecting.wait())
+  }
+  servers
 }
 
 ///|
@@ -592,7 +597,7 @@ async test "the catalog lists an unavailable server with its error and no tools"
 }
 
 ///|
-async test "start returns before a server settles and replaces its entry once it does" {
+async test "start returns before a server settles, which its task then tells" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
       error if "\{error}".contains("Operation not permitted") => {
@@ -634,7 +639,7 @@ async test "start returns before a server settles and replaces its entry once it
         max_connections=8,
       )
     }
-    let (entries, settled) = @tools.start(
+    let servers = @tools.start(
       AgentTaskScope(group),
       [
         Http(
@@ -646,21 +651,22 @@ async test "start returns before a server settles and replaces its entry once it
       client_name="openseek",
       client_version="0.1",
     )
-    assert_true(entries is [{ connection: Connecting, .. }])
+    guard servers is [slow] else { fail("expected one server") }
+    assert_true(slow.settled() is None)
     let connecting : Json = {
       "server": "slow",
       "error": "still connecting; search again from a later script",
     }
-    assert_eq(@tools.catalog_items(entries), [connecting])
-    guard entries[0].call("ping", {}) is Respond(early) else {
+    assert_eq(@tools.catalog_items(servers), [connecting])
+    guard slow.call("ping", {}) is Respond(early) else {
       fail("expected a respond action")
     }
     assert_true(early.is_error)
     assert_true(early.content.contains("still connecting"))
     gate.put(())
-    settled.wait()
-    assert_true(entries is [{ connection: Live(_), .. }])
-    guard entries[0].call("ping", {}) is Respond(output) else {
+    assert_true(slow.connecting.wait() is { connection: Live(_), .. })
+    assert_true(slow.settled() is Some({ connection: Live(_), .. }))
+    guard slow.call("ping", {}) is Respond(output) else {
       fail("expected a respond action")
     }
     assert_false(output.is_error)
