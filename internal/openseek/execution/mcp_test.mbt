@@ -19,18 +19,19 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
 
 ///|
 /// Start connecting the servers of `config_paths` and wait until every one
-/// has settled.
+/// has settled, as its owner hears.
 async fn[X] settled_mcp(
   scope : @agent_runtime.AgentTaskScope[X],
   config_paths : Array[String],
   workspace_root~ : String,
 ) -> @execution.McpRegistry {
-  let (registry, settled) = @execution.start_mcp(
-    scope,
-    config_paths,
-    workspace_root~,
-  )
-  settled.wait()
+  let changed : @async.Queue[Unit] = Queue(kind=Unbounded)
+  let registry = @execution.start_mcp(scope, config_paths, workspace_root~, on_change=() => {
+    ignore(changed.try_put(()) catch { _ => false })
+  })
+  while registry.status().servers.any(server => server.state is Connecting) {
+    changed.get()
+  }
   registry
 }
 
@@ -236,7 +237,7 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     let path = "\{dir}/mcp.json"
     @fs.write_file(path, config.stringify(), create_mode=CreateOrTruncate)
     let changed : @async.Queue[Unit] = Queue(kind=Unbounded)
-    let (registry, settled) = @execution.start_mcp(
+    let registry = @execution.start_mcp(
       AgentTaskScope(group),
       [path],
       workspace_root=dir,
@@ -244,7 +245,9 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     )
     // Listed from the start, before it has come to anything.
     assert_true(registry.status().servers is [{ state: Connecting, .. }])
-    settled.wait()
+    while registry.status().servers is [{ state: Connecting, .. }] {
+      changed.get()
+    }
     guard registry.status().servers is [server] else {
       fail("the configured server should be listed")
     }

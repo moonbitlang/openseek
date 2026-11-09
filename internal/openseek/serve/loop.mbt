@@ -162,7 +162,7 @@ async fn run_serve(
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     // Connecting runs in the background, so a slow server (or a headers
     // helper waiting on the user) never holds back reading commands.
-    let (mcp, _) = @execution.start_mcp(
+    let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
       workspace_root~,

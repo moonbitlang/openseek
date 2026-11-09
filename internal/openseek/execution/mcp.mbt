@@ -21,9 +21,9 @@ struct McpRegistry {
 /// any: a server that takes long to connect (or never does, like a headers
 /// helper waiting on the user) does not hold up the engine. `on_change` runs
 /// each time `status` may have changed since — a server settled, or a
-/// connected server's connection closed — and must not block. The returned
-/// task ends once every server has settled and `McpToolsRegistered` is
-/// reported (not reported when no file could be used). Nothing here
+/// connected server's connection closed — and must not block. Once every
+/// server has settled, `McpToolsRegistered` is reported, unless no file could
+/// be used. Nothing here
 /// fails the engine: a file that cannot be used and a server that cannot be
 /// reached are recorded in the registry and reported as the events they always
 /// were.
@@ -32,7 +32,7 @@ pub async fn[X] start_mcp(
   config_paths : Array[String],
   workspace_root~ : String,
   on_change? : () -> Unit,
-) -> (McpRegistry, @async.Task[Unit]) {
+) -> McpRegistry {
   let configs : Array[@protocol.McpConfigStatus] = []
   let loaded : Array[Array[@mcpconfig.McpServer]] = []
   for path in config_paths {
@@ -77,28 +77,24 @@ pub async fn[X] start_mcp(
       })
     }
   }
-  let settled = scope
-    .group()
-    .spawn(no_wait=true, () => {
-      let names : Array[String] = []
-      for server in servers {
-        for tool in server.connecting.wait().tools {
-          names.push("\{server.config.name()}/\{tool.name}")
-        }
+  scope
+  .group()
+  .spawn_bg(no_wait=true, () => {
+    let names : Array[String] = []
+    for server in servers {
+      for tool in server.connecting.wait().tools {
+        names.push("\{server.config.name()}/\{tool.name}")
       }
-      // Preserve the single-file failure contract: no registration event
-      // when every input failed to load. A valid empty config still
-      // registers normally.
-      guard !loaded.is_empty() else { return }
-      @emit.emit(
-        McpToolsRegistered(
-          servers=servers.length(),
-          tools=names.length(),
-          names~,
-        ),
-      )
-    })
-  ({ configs, servers, }, settled)
+    }
+    // Preserve the single-file failure contract: no registration event
+    // when every input failed to load. A valid empty config still
+    // registers normally.
+    guard !loaded.is_empty() else { return }
+    @emit.emit(
+      McpToolsRegistered(servers=servers.length(), tools=names.length(), names~),
+    )
+  })
+  { configs, servers, }
 }
 
 ///|
