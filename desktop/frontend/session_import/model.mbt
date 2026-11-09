@@ -10,11 +10,20 @@ struct Model {
 
 ///|
 #derive(Eq, Debug)
-pub(all) struct Target {
+pub(all) struct HostTarget {
   channel : @interop.ChannelId
   connection_generation : Int32
   workspace : String
   worktree_of : String?
+}
+
+///|
+/// Imports stay within their origin: a host imports into one of its
+/// workspaces, Cloud imports into the signed-in account's chats.
+#derive(Eq, Debug)
+pub(all) enum Target {
+  Host(HostTarget)
+  Cloud(account~ : String)
 }
 
 ///|
@@ -79,10 +88,12 @@ fn Msg::generation(self : Msg) -> Int32? {
 }
 
 ///|
+/// `account` is the current Cloud sign-in, used by Cloud targets only.
 pub fn Model::update(
   self : Model,
   emit : @cmd.Emit[Msg],
   msg : Msg,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, Model, (Target, String)?) {
   guard self.content is Some(content) else { return (@cmd.none, self, None) }
   if msg.generation() is Some(g) && g != self.generation {
@@ -100,10 +111,11 @@ pub fn Model::update(
         None,
       )
     ImportLink if !content.operation.busy() && !content.link.is_blank() =>
-      self.import_source(emit, @protocol.ShareLink(url=content.link))
+      self.import_source(emit, @protocol.ShareLink(url=content.link), account~)
     Picked(_, result) if content.operation is Reading =>
       match result {
-        Ok(Some(text)) => self.import_source(emit, @protocol.JsonFile(text~))
+        Ok(Some(text)) =>
+          self.import_source(emit, @protocol.JsonFile(text~), account~)
         Ok(None) =>
           (
             @cmd.none,
@@ -147,11 +159,12 @@ fn Model::import_source(
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionImportSource,
+  account~ : @protocol.AccountSession?,
 ) -> (@cmd.Cmd, Model, (Target, String)?) {
   guard self.content is Some(content) else { return (@cmd.none, self, None) }
   let generation = self.generation + 1
   (
-    import_source(content.target, source, generation, emit),
+    import_source(content.target, source, generation, emit, account~),
     { generation, content: Some({ ..content, operation: Importing, }), },
     None,
   )
@@ -162,6 +175,12 @@ pub extend Model with Eq::{equal, not_equal}
 
 ///|
 pub extend Model with @debug.Debug::{to_repr}
+
+///|
+pub extend HostTarget with Eq::{equal, not_equal}
+
+///|
+pub extend HostTarget with @debug.Debug::{to_repr}
 
 ///|
 pub extend Target with Eq::{equal, not_equal}

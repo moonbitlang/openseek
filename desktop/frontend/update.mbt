@@ -7204,7 +7204,16 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (cmd, session_import_dialog) = model.session_import_dialog.open(
-        target,
+        Host(target),
+      )
+      (cmd, { ..model, session_import_dialog, })
+    }
+    OpenCloudImport => {
+      guard model.cloud_account() is Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (cmd, session_import_dialog) = model.session_import_dialog.open(
+        Cloud(account~),
       )
       (cmd, { ..model, session_import_dialog, })
     }
@@ -7212,35 +7221,32 @@ fn update_msg(
       let (cmd, session_import_dialog, imported) = model.session_import_dialog.update(
         dispatch.map(msg => SessionImport(msg)),
         msg,
+        account?=model.account,
       )
       let model = { ..model, session_import_dialog, }
-      guard imported is Some((target, session_id)) &&
-        model.device_state(target.channel) is Some(dev) &&
-        dev.connection_generation == target.connection_generation &&
-        model.console.page_device is Some(device) else {
-        return (cmd, model)
+      match imported {
+        Some((Host(target), session_id)) =>
+          open_host_import(dispatch, cmd, model, target, session_id)
+        Some((Cloud(account~), session)) => {
+          // An import that finishes after a sign-out or account switch
+          // belongs to an account this page no longer shows.
+          guard model.cloud_account() == Some(account) else {
+            return (cmd, model)
+          }
+          let (refresh, model) = update_cloud(dispatch, @cloud.Refresh, model)
+          let (open, model) = update_msg(
+            dispatch,
+            OpenCloudConversation(account~, session~),
+            {
+              ..model,
+              management_dialog: None,
+              chat_navigation_generation: model.chat_navigation_generation + 1,
+            },
+          )
+          (@cmd.batch([cmd, refresh, open]), model)
+        }
+        None => (cmd, model)
       }
-      let (focus, model) = focus_channel(dispatch, model, target.channel)
-      let (sessions, model) = request_sessions_refresh(
-        dispatch,
-        target.channel,
-        model,
-      )
-      let (visit, model) = navigation_visit(
-        model,
-        { device: Some(device), target: Session(session_id), },
-        replace=false,
-      )
-      // The ordinary navigation resolver opens the session once its catalog
-      // row arrives. Workspace and worktree notifications use their existing
-      // handlers; the import reply carries no inventory snapshot.
-      (
-        @cmd.batch([cmd, focus, sessions, visit]),
-        {
-          ..model,
-          navigation: { ..model.navigation, phase: Waiting, sessions: None, },
-        },
-      )
     }
     ExportDialog(message) | FileShareDialog(message) => {
       let file = msg is FileShareDialog(_)
@@ -24468,4 +24474,40 @@ test "a subagent of an archived conversation opens from the archive" {
     is Some({ session: "desktop-parent-sr-1", record: ArchivedRecord, .. }) else {
     fail("expected the child to open from the archive")
   }
+}
+
+///|
+fn open_host_import(
+  dispatch : @cmd.Emit[Msg],
+  cmd : @cmd.Cmd,
+  model : Model,
+  target : @session_import.HostTarget,
+  session_id : String,
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(target.channel) is Some(dev) &&
+    dev.connection_generation == target.connection_generation &&
+    model.console.page_device is Some(device) else {
+    return (cmd, model)
+  }
+  let (focus, model) = focus_channel(dispatch, model, target.channel)
+  let (sessions, model) = request_sessions_refresh(
+    dispatch,
+    target.channel,
+    model,
+  )
+  let (visit, model) = navigation_visit(
+    model,
+    { device: Some(device), target: Session(session_id), },
+    replace=false,
+  )
+  // The ordinary navigation resolver opens the session once its catalog
+  // row arrives. Workspace and worktree notifications use their existing
+  // handlers; the import reply carries no inventory snapshot.
+  (
+    @cmd.batch([cmd, focus, sessions, visit]),
+    {
+      ..model,
+      navigation: { ..model.navigation, phase: Waiting, sessions: None, },
+    },
+  )
 }

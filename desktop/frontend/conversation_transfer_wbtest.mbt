@@ -5,7 +5,7 @@ test "import belongs to the project menu rather than the active conversation" {
     ..dev,
     projects: [..dev.projects, workspace],
   })
-  let expected : @session_import.Target = {
+  let expected : @session_import.HostTarget = {
     channel: Local,
     connection_generation: model.focused_connection_generation(),
     workspace: "/other",
@@ -14,7 +14,7 @@ test "import belongs to the project menu rather than the active conversation" {
   let msg = OpenSessionImport(Local, workspace)
   let (_, opened) = update(test_dispatch(), msg, model)
   let (_, repeated) = update(test_dispatch(), msg, model)
-  let (_, dialog) = model.session_import_dialog.open(expected)
+  let (_, dialog) = model.session_import_dialog.open(Host(expected))
   assert_eq(opened.session_import_dialog, dialog)
   assert_eq(opened.session_import_dialog, repeated.session_import_dialog)
   assert_eq(model.session_import_target(Local, workspace), Some(expected))
@@ -106,4 +106,54 @@ test "import waits for the normal catalog without patching inventory and ignores
   assert_true(
     listed.conversation_selection() is Some({ session: "imported", .. }),
   )
+}
+
+///|
+test "Cloud import belongs to the signed-in account's Chats section" {
+  let model = integrated_cloud_model()
+  let (_, opened) = update(test_dispatch(), OpenCloudImport, model)
+  let (_, dialog) = model.session_import_dialog.open(
+    Cloud(account="fixture-user"),
+  )
+  assert_eq(opened.session_import_dialog, dialog)
+  let chats = model.sidebar_component_sections(model.dev())[0]
+  assert_eq(chats.menu, [ImportConversation])
+  let signed_out = { ..model, account: None, }
+  let (_, refused) = update(test_dispatch(), OpenCloudImport, signed_out)
+  assert_false(refused.session_import_dialog.is_open())
+  let chats = signed_out.sidebar_component_sections(signed_out.dev())[0]
+  assert_eq(chats.menu, [])
+}
+
+///|
+test "a finished Cloud import refreshes the list and opens the new chat" {
+  let emit = test_dispatch()
+  let (_, opened) = update(emit, OpenCloudImport, integrated_cloud_model())
+  let (_, typed) = update(
+    emit,
+    SessionImport(LinkChanged("https://example/v1/shares/sh_a")),
+    opened,
+  )
+  let (_, pending) = update(emit, SessionImport(ImportLink), typed)
+  let completed = SessionImport(Imported(2, Success("cloud-imported")))
+  let (_, imported) = update(emit, completed, pending)
+  assert_false(imported.session_import_dialog.is_open())
+  assert_true(imported.screen is Chat)
+  assert_true(
+    imported.cloud_identity() ==
+    Some(@interop.Cloud(account="fixture-user", session="cloud-imported")),
+  )
+  assert_true(imported.cloud.list_request > pending.cloud.list_request)
+  assert_true(
+    imported.navigation.location
+    is Some({ target: CloudSession(session="cloud-imported", ..), .. }),
+  )
+  // A completion after switching accounts leaves the other account's page.
+  let switched = {
+    ..pending,
+    cloud: { ..pending.cloud, user_id: Some("other-user"), },
+  }
+  let (_, stale) = update(emit, completed, switched)
+  assert_false(stale.session_import_dialog.is_open())
+  assert_true(stale.cloud_identity() == switched.cloud_identity())
 }

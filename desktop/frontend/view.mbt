@@ -531,6 +531,7 @@ fn Model::sidebar_component_sections(
       title: @sidebar_messages.text(self.locale, AddProject),
       disabled: !self.can_pick_project(dev.channel),
     }),
+    menu: [],
     entries: projects,
   }
   sections.push(work)
@@ -2985,6 +2986,11 @@ fn Model::chat_sidebar_sections(
       title: @sidebar_messages.text(self.locale, NewChat),
       disabled: self.cloud.creating_session(),
     }),
+    menu: if self.cloud_account() is Some(_) {
+      [ImportConversation]
+    } else {
+      []
+    },
     entries,
   }
   [chats]

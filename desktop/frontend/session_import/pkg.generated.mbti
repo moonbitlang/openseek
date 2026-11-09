@@ -16,6 +16,17 @@ import {
 
 // Types and methods
 #derive(Eq, @debug.Debug)
+pub(all) struct HostTarget {
+  channel : @interop.ChannelId
+  connection_generation : Int32
+  workspace : String
+  worktree_of : String?
+}
+pub fn HostTarget::equal(Self, Self) -> Bool
+pub fn HostTarget::not_equal(Self, Self) -> Bool
+pub fn HostTarget::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
 type Model
 pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
@@ -23,7 +34,7 @@ pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, Target) -> (@cmd.Cmd, Self)
 pub fn Model::to_repr(Self) -> @debug.Repr
-pub fn Model::update(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self, (Target, String)?)
+pub fn Model::update(Self, @cmd.Emit[Msg], Msg, account? : @protocol.AccountSession) -> (@cmd.Cmd, Self, (Target, String)?)
 pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
 
 pub(all) enum Msg {
@@ -36,11 +47,9 @@ pub(all) enum Msg {
 }
 
 #derive(Eq, @debug.Debug)
-pub(all) struct Target {
-  channel : @interop.ChannelId
-  connection_generation : Int32
-  workspace : String
-  worktree_of : String?
+pub(all) enum Target {
+  Host(HostTarget)
+  Cloud(account~ : String)
 }
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool

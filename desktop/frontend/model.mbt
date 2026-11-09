@@ -1970,6 +1970,7 @@ priv enum Msg {
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
   OpenSessionImport(@interop.ChannelId, @common.Uri)
+  OpenCloudImport
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
