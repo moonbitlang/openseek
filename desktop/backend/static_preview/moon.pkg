@@ -1,5 +1,4 @@
 import {
-  "openseek_desktop/backend/entropy",
   "openseek_desktop/backend/pathx",
   "moonbitlang/async",
   "moonbitlang/async/fs",

@@ -107,9 +107,6 @@ async fn serve(
   guard fixed.contains(resolved) && @fs.kind(resolved.to_string()) is Regular else {
     fail("Preview file is outside its root or is not a regular file")
   }
-  guard @entropy.random_hex(32) is Some(token) else {
-    fail("No OS entropy available for the preview URL")
-  }
   let temp = @fs.tmpdir(prefix="seekmoon-preview-")
   defer (@fs.rmdir(temp, recursive=true) catch { _ => () })
   let policy_path = temp + "/policy.json"
@@ -119,8 +116,10 @@ async fn serve(
   }
   @fs.write_file(policy_path, policy.stringify())
   @async.with_task_group(group => {
-    let (stdin, lease) = @process.write_to_process()
-    defer lease.close()
+    // GUI launches on Windows need a valid stdin handle even for a CLI
+    // that does not read from it.
+    let (stdin, input) = @process.write_to_process()
+    input.close()
     let (output, stdout) = @process.read_from_process()
     defer output.close()
     let (errors, stderr) = @process.read_from_process()
@@ -136,8 +135,6 @@ async fn serve(
         "127.0.0.1",
         "--port",
         "0",
-        "--preview-token",
-        token,
         "--",
         fixed.to_string(),
       ],
@@ -147,15 +144,16 @@ async fn serve(
       no_console_window=true,
       cancel_handler=@process.hard_cancel(),
     )
-    let diagnostics = group.spawn(() => errors.read_all().text())
     let port = @async.with_timeout(10000, () => {
-      guard output.read_until("\n") is Some(line) else {
-        fail(
-          "Local HTML preview exited before listening: " +
-          diagnostics.wait().trim().to_owned(),
-        )
+      // The pinned CLI reports its bound address on stderr after listening.
+      guard errors.read_until(" on http://127.0.0.1:") is Some(message) else {
+        fail("Local HTML preview exited before listening")
       }
-      let port = @string.parse_int(line.trim())
+      guard message.has_prefix("Serving ") &&
+        errors.read_until("\n") is Some(port_text) else {
+        fail("Local HTML preview could not start: " + message.trim().to_owned())
+      }
+      let port = @string.parse_int(port_text.trim())
       guard port > 0 && port <= 65535 else { fail("Invalid preview port") }
       port
     })
@@ -165,7 +163,7 @@ async fn serve(
       .split("/")
       .map(part => @percent.encode(part))
       .join("/")
-    ready.put("http://127.0.0.1:\{port}/\{token}/\{escaped}")
+    ready.put("http://127.0.0.1:\{port}/\{escaped}")
     let _ = child.wait()
   })
 }

@@ -29,6 +29,7 @@ const Hosts = {
 };
 
 const EsbuildVersion = "0.28.1";
+const ServeWasmSha256 = "4dcebb58dfe5bd4fecc60438bb45b4ef0d1b1299d1e59d11f9720023722d268c";
 
 // A development build must not answer to the shipped application's identity.
 // Proton derives the macOS permission grants and the application data
@@ -402,15 +403,9 @@ class Build {
     await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
     const suffix = this.command === "windows" ? ".exe" : "";
     await cp(engine, join(root, `bin/openseek${suffix}`));
-    const previewOverride = process.env.OPENSEEK_DESKTOP_PREVIEW_WASM;
-    if (previewOverride && profile !== "debug") {
-      throw new Error("OPENSEEK_DESKTOP_PREVIEW_WASM is only supported for development packages");
-    }
     const serveVersion = (await readFile(join(this.desktop, ".cli-serve-version"), "utf8")).trim();
-    const previewWasm = previewOverride || join(this.desktop, `target/vendor-preview/serve-${serveVersion}.wasm`);
-    if (!previewOverride) {
-      await this.download(`https://download.mooncakes.io/prebuild/cli/serve@${serveVersion}/serve.wasm`, previewWasm);
-    }
+    const previewWasm = join(this.desktop, `target/vendor-preview/serve-${serveVersion}.wasm`);
+    await this.download(`https://download.mooncakes.io/prebuild/cli/serve@${serveVersion}/serve.wasm`, previewWasm, ServeWasmSha256);
     await cp(previewWasm, join(root, "bin/serve.wasm"));
     // OpenSeek locates resources relative to its own executable.
     await stageResources(join(this.repo, "share"), join(root, "share"));

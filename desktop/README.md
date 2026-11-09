@@ -180,13 +180,12 @@ without a workspace uses its parent directory. Relative CSS, scripts, modules,
 images, fonts and static fetches load directly from disk through an ephemeral
 loopback HTTP listener. Refresh reads the current files.
 
-Each tab owns a sandboxed `cli/serve` process and a separate loopback port.
-The command serves only reads, validates Host and confines resolved paths to
-the preview root, including symlink targets. It serves files under a random
-URL prefix. Closing the tab stops its process. All preview processes stop
-when the app exits. Preview documents
-have no native bridge or command access. Site-root paths beginning with `/` and
-pages requiring a backend service are outside this static preview feature.
+Each tab owns a process running the bundled `cli/serve` on an OS-assigned
+loopback port. Files under the preview root are available to clients that can
+reach that local port. The server confines reads to the root, including symlink
+targets. Closing the tab stops its process. The app stops all preview processes
+on normal exit. Preview documents have no native bridge or command access.
+Pages requiring a backend service are outside this static preview feature.
 Chat's embedded artifact previews keep their existing behavior.
 
 ## Skills

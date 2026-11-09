@@ -74,9 +74,11 @@ export class StaticPreviewHarness {
   }
 
   async close() {
-    this.child?.stdin.end();
-    if (this.child && this.child.exitCode === null && this.child.signalCode === null) {
-      await new Promise(resolve => this.child.once('exit', resolve));
+    const child = this.child;
+    this.child = null;
+    child?.stdin.end();
+    if (child && child.exitCode === null && child.signalCode === null) {
+      await new Promise(resolve => child.once('exit', resolve));
     }
     await rm(this.root, { recursive: true, force: true });
   }
