@@ -10624,11 +10624,27 @@ fn Model::with_host_settings(
 /// revision 0.
 fn Model::with_host_endpoint(
   self : Model,
-  f : (HostEndpoint) -> HostEndpoint,
+  provider? : ApiProvider,
+  custom_api_url? : String,
+  followup_behavior? : FollowupBehavior,
+  deepseek_key_saved? : Bool,
+  glm_key_saved? : Bool,
+  custom_key_saved? : Bool,
 ) -> Model {
   self.with_host_settings(mirror => {
     let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
-    { ..mirror, current: Some({ ..current, endpoint: f(current.endpoint), }), }
+    let endpoint = current.endpoint
+    let endpoint = {
+      provider: provider.unwrap_or(endpoint.provider),
+      custom_api_url: custom_api_url.unwrap_or(endpoint.custom_api_url),
+      followup_behavior: followup_behavior.unwrap_or(endpoint.followup_behavior),
+      deepseek_key_saved: deepseek_key_saved.unwrap_or(
+        endpoint.deepseek_key_saved,
+      ),
+      glm_key_saved: glm_key_saved.unwrap_or(endpoint.glm_key_saved),
+      custom_key_saved: custom_key_saved.unwrap_or(endpoint.custom_key_saved),
+    }
+    { ..mirror, current: Some({ ..current, endpoint, }), }
   })
 }
 
@@ -12842,12 +12858,11 @@ test "BridgeReady clears focused host settings until the refetch lands" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model()
-    .with_host_endpoint(endpoint => {
-      ..endpoint,
-      custom_api_url: "https://old.example/chat",
-      custom_key_saved: true,
-      provider: Custom,
-    })
+    .with_host_endpoint(
+      custom_api_url="https://old.example/chat",
+      custom_key_saved=true,
+      provider=Custom,
+    )
     .with_host_settings(mirror => { ..mirror, saves: 1, }),
     setup_api_key: "old-key",
   }
@@ -15906,59 +15921,43 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = test_model().with_host_endpoint(endpoint => {
-    ..endpoint,
-    deepseek_key_saved: false,
-    provider: Deepseek,
-  })
+  let official = test_model().with_host_endpoint(
+    deepseek_key_saved=false,
+    provider=Deepseek,
+  )
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
-  assert_true(
-    official
-    .with_host_endpoint(endpoint => { ..endpoint, deepseek_key_saved: true, })
-    .api_ready(),
-  )
+  assert_true(official.with_host_endpoint(deepseek_key_saved=true).api_ready())
   // The GLM provider is gated on its own key, never DeepSeek's.
-  let glm = test_model().with_host_endpoint(endpoint => {
-    ..endpoint,
-    deepseek_key_saved: true,
-    glm_key_saved: false,
-    provider: Glm,
-  })
+  let glm = test_model().with_host_endpoint(
+    deepseek_key_saved=true,
+    glm_key_saved=false,
+    provider=Glm,
+  )
   assert_false(glm.api_ready())
   assert_true(glm.display_status() is ApiKeyRequired)
-  assert_true(
-    glm
-    .with_host_endpoint(endpoint => { ..endpoint, glm_key_saved: true, })
-    .api_ready(),
+  assert_true(glm.with_host_endpoint(glm_key_saved=true).api_ready())
+  let custom = test_model().with_host_endpoint(
+    custom_api_url="",
+    provider=Custom,
   )
-  let custom = test_model().with_host_endpoint(endpoint => {
-    ..endpoint,
-    custom_api_url: "",
-    provider: Custom,
-  })
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
-  let configured = custom.with_host_endpoint(endpoint => {
-    ..endpoint,
-    custom_api_url: "https://proxy.example/chat/completions",
-  })
+  let configured = custom.with_host_endpoint(
+    custom_api_url="https://proxy.example/chat/completions",
+  )
   assert_true(configured.api_ready())
 }
 
 ///|
 test "OpenRouter setup requires only its stored custom key" {
-  let openrouter = test_model().with_host_endpoint(endpoint => {
-    ..endpoint,
-    deepseek_key_saved: true,
-    custom_key_saved: false,
-    provider: OpenRouter,
-  })
+  let openrouter = test_model().with_host_endpoint(
+    deepseek_key_saved=true,
+    custom_key_saved=false,
+    provider=OpenRouter,
+  )
   assert_false(openrouter.api_ready())
-  let keyed = openrouter.with_host_endpoint(endpoint => {
-    ..endpoint,
-    custom_key_saved: true,
-  })
+  let keyed = openrouter.with_host_endpoint(custom_key_saved=true)
   assert_true(keyed.api_ready())
   // Model choice belongs to the chat, just as with the official endpoint.
   assert_true({ ..keyed, default_model: Deepseek(V4Pro), }.api_ready())
@@ -16851,11 +16850,10 @@ test "the setup modal tracks endpoint usability without toasts" {
       host_settings(provider="custom", custom_api_url=""),
       connection_generation=None,
     ),
-    test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Custom,
-      custom_api_url: "https://ok.example/chat",
-    }),
+    test_model().with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    ),
   )
   assert_true(broken.api_setup_open)
   // "Not now" dismisses; an unrelated payload that leaves the endpoint
@@ -16890,11 +16888,10 @@ test "the setup modal tracks endpoint usability without toasts" {
       connection_generation=None,
     ),
     {
-      ..test_model().with_host_endpoint(endpoint => {
-        ..endpoint,
-        provider: Custom,
-        custom_api_url: "https://ok.example/chat",
-      }),
+      ..test_model().with_host_endpoint(
+        provider=Custom,
+        custom_api_url="https://ok.example/chat",
+      ),
       management_dialog: Some(Settings(Engine)),
     },
   )
@@ -16915,11 +16912,10 @@ test "switching to a provider missing its key or URL opens the setup modal" {
   let (_, kept) = update(
     dispatch,
     ProviderChanged("deepseek"),
-    test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Custom,
-      custom_api_url: "https://ok.example/chat",
-    }),
+    test_model().with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    ),
   )
   assert_true(!kept.api_setup_open)
   // Switching back to a provider the stored key makes usable retires the
@@ -16935,10 +16931,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   let (_, glm) = update(
     dispatch,
     ProviderChanged("glm"),
-    test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      glm_key_saved: true,
-    }),
+    test_model().with_host_endpoint(glm_key_saved=true),
   )
   assert_true(glm.api_provider() is Glm)
   assert_true(glm.default_model is Glm(G53))
@@ -17078,57 +17071,28 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
 
 ///|
 test "a custom endpoint reads as usable only from a plausible URL" {
-  let custom = test_model().with_host_endpoint(endpoint => {
-    ..endpoint,
-    provider: Custom,
-    deepseek_key_saved: false,
-  })
+  let custom = test_model().with_host_endpoint(
+    provider=Custom,
+    deepseek_key_saved=false,
+  )
   // A prefix mid-typing must not arm Send or retire the setup modal.
+  assert_true(!custom.with_host_endpoint(custom_api_url="").api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="h").api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="https://").api_ready())
   assert_true(
-    !custom
-    .with_host_endpoint(endpoint => { ..endpoint, custom_api_url: "", })
-    .api_ready(),
+    !custom.with_host_endpoint(custom_api_url="ftp://host").api_ready(),
   )
   assert_true(
-    !custom
-    .with_host_endpoint(endpoint => { ..endpoint, custom_api_url: "h", })
-    .api_ready(),
+    custom.with_host_endpoint(custom_api_url="https://host").api_ready(),
   )
   assert_true(
-    !custom
-    .with_host_endpoint(endpoint => { ..endpoint, custom_api_url: "https://", })
-    .api_ready(),
-  )
-  assert_true(
-    !custom
-    .with_host_endpoint(endpoint => {
-      ..endpoint,
-      custom_api_url: "ftp://host",
-    })
+    custom
+    .with_host_endpoint(custom_api_url=" https://host/chat/completions ")
     .api_ready(),
   )
   assert_true(
     custom
-    .with_host_endpoint(endpoint => {
-      ..endpoint,
-      custom_api_url: "https://host",
-    })
-    .api_ready(),
-  )
-  assert_true(
-    custom
-    .with_host_endpoint(endpoint => {
-      ..endpoint,
-      custom_api_url: " https://host/chat/completions ",
-    })
-    .api_ready(),
-  )
-  assert_true(
-    custom
-    .with_host_endpoint(endpoint => {
-      ..endpoint,
-      custom_api_url: "http://127.0.0.1:8080",
-    })
+    .with_host_endpoint(custom_api_url="http://127.0.0.1:8080")
     .api_ready(),
   )
 }
@@ -17139,10 +17103,7 @@ test "clearing the mirror never leaves an orphaned setup modal" {
   // every control disabled; close it with the mirror it was showing.
   let dispatch = test_dispatch()
   let open = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      deepseek_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     api_setup_open: true,
   }
   let (_, reconnected) = update_dev(dispatch, BridgeReady, open)
@@ -17155,10 +17116,7 @@ test "saving from the setup modal stays on the page it opened over" {
   // The modal renders over any screen; completing setup from it must not
   // yank the user to Chat.
   let over_skills = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      deepseek_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     management_dialog: Some(Skills),
     api_setup_open: true,
   }
@@ -17169,11 +17127,7 @@ test "saving from the setup modal stays on the page it opened over" {
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
   let custom_half = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Custom,
-      custom_api_url: "",
-    }),
+    ..test_model().with_host_endpoint(provider=Custom, custom_api_url=""),
     api_setup_open: true,
   }
   let (_, keyed) = update(
@@ -17190,10 +17144,7 @@ test "saving from the setup modal stays on the page it opened over" {
 test "saving the key from the setup modal retires it" {
   let dispatch = test_dispatch()
   let open = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      deepseek_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     api_setup_open: true,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
@@ -17210,11 +17161,10 @@ test "a settled host save that completes the setup closes the modal" {
   // applied confirmation is what retires the modal, not mid-typing.
   let typing = {
     ..test_model()
-    .with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Custom,
-      custom_api_url: "https://ok.example/chat",
-    })
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    )
     .with_host_settings(mirror => { ..mirror, saves: 1, }),
     api_setup_open: true,
     select_menu: Some(ApiProviderMenu),
@@ -17328,7 +17278,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
       ..mirror,
       current: mirror.current.map(current => { ..current, revision: 5, }),
     })
-    .with_host_endpoint(endpoint => { ..endpoint, provider: Custom, })
+    .with_host_endpoint(provider=Custom)
     .with_host_settings(mirror => { ..mirror, saves: 1, })
   let (_, broadcast) = update_dev(
     dispatch,
@@ -17522,10 +17472,7 @@ test "the tree-layout setting parses its wire names" {
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      deepseek_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     setup_api_key: "typed",
   }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
@@ -17544,11 +17491,10 @@ test "update is pure: a provider change is idempotent" {
 test "saving a key marks the active provider credential only" {
   let dispatch = test_dispatch()
   let deepseek = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Deepseek,
-      deepseek_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(
+      provider=Deepseek,
+      deepseek_key_saved=false,
+    ),
     setup_api_key: "  sk-new  ",
     management_dialog: Some(Settings(Engine)),
   }
@@ -17563,12 +17509,11 @@ test "saving a key marks the active provider credential only" {
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Custom,
-      deepseek_key_saved: false,
-      custom_api_url: "https://proxy.example/chat/completions",
-    }),
+    ..test_model().with_host_endpoint(
+      provider=Custom,
+      deepseek_key_saved=false,
+      custom_api_url="https://proxy.example/chat/completions",
+    ),
     setup_api_key: "  sk-custom-new  ",
     management_dialog: Some(Settings(Engine)),
   }
@@ -17578,12 +17523,11 @@ test "saving a key marks the active provider credential only" {
   assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: Glm,
-      deepseek_key_saved: false,
-      glm_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(
+      provider=Glm,
+      deepseek_key_saved=false,
+      glm_key_saved=false,
+    ),
     setup_api_key: "  glm-new  ",
     management_dialog: Some(Settings(Engine)),
   }
@@ -17593,12 +17537,11 @@ test "saving a key marks the active provider credential only" {
   assert_false(saved_glm.test_endpoint().custom_key_saved)
   assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
-    ..test_model().with_host_endpoint(endpoint => {
-      ..endpoint,
-      provider: OpenRouter,
-      deepseek_key_saved: false,
-      custom_key_saved: false,
-    }),
+    ..test_model().with_host_endpoint(
+      provider=OpenRouter,
+      deepseek_key_saved=false,
+      custom_key_saved=false,
+    ),
     setup_api_key: "  sk-openrouter-new  ",
     management_dialog: Some(Settings(Engine)),
   }
