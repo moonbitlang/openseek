@@ -72,6 +72,33 @@ pub(all) struct Action {
 }
 
 ///|
+/// A secondary section action, listed in the heading's menu.
+#derive(Debug, Eq)
+pub(all) enum MenuAction {
+  ImportConversation
+}
+
+///|
+fn MenuAction::entry(
+  self : MenuAction,
+  id : Id,
+  actions : Actions,
+  locale : @i18n.Locale,
+) -> @action_menu.Entry {
+  match self {
+    ImportConversation =>
+      Action({
+        label: @messages.text(locale, ImportConversation),
+        title: "",
+        icon: Some(@icons.icon(@icons.icon_chat_import)),
+        enabled: true,
+        destructive: false,
+        command: (actions.menu)(id, self),
+      })
+  }
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
@@ -81,6 +108,8 @@ pub(all) struct Input {
   // `@project.Input.activation`.
   activation : String?
   action : Action?
+  // Empty hides the heading's menu.
+  menu : Array[MenuAction]
   entries : Array[Entry]
 }
 
@@ -92,6 +121,7 @@ pub fn Input::id(self : Input) -> Id {
 ///|
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
+  menu : (Id, MenuAction) -> @cmd.Cmd
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
@@ -222,7 +252,30 @@ pub fn component(
     },
     by=entry => entry.1.key(),
   )
-  input.map2(entry_rows, (input, entry_rows) => {
+  let menu = input
+    .map2(locale, (input, locale) => (input, locale))
+    .switch_by(
+      pair => {
+        let (input, locale) = pair
+        if input.menu.is_empty() {
+          return @rabbita.Val::constant(@html.nothing)
+        }
+        let label = @messages.text(locale, MoreActions)
+        @action_menu.dropdown(
+          input.id.key(),
+          {
+            label,
+            entries: input.menu.map(action => {
+              action.entry(input.id, actions, locale)
+            }),
+          },
+          class="section-primary-action section-menu-button",
+          @icons.icon(@icons.icon_more),
+        )
+      },
+      by=pair => Repr::Repr((pair.0.id, pair.0.menu, pair.1)).to_string(),
+    )
+  input.map3(entry_rows, menu, (input, entry_rows, menu) => {
     let mut class = "sidebar-heading section-heading"
     if input.activation is Some(_) {
       class += " active"
@@ -230,6 +283,10 @@ pub fn component(
     let heading : Array[@html.Html] = [
       @html.span(class="sidebar-label section-label", input.label),
     ]
+    // Menu first, primary action last, matching project rows.
+    if !input.menu.is_empty() {
+      heading.push(menu)
+    }
     if input.action is Some(action) {
       heading.push(
         @html.button(
@@ -291,6 +348,12 @@ pub extend Input with Debug::{to_repr}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend MenuAction with Debug::{to_repr}
+
+///|
+pub extend MenuAction with Eq::{equal, not_equal}
 
 ///|
 pub extend Placeholder with Debug::{to_repr}

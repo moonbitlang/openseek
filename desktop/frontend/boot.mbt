@@ -454,6 +454,18 @@ fn SidebarDispatcher::section_primary(
 }
 
 ///|
+fn SidebarDispatcher::section_menu(
+  self : SidebarDispatcher,
+  id : @section.Id,
+  action : @section.MenuAction,
+) -> @cmd.Cmd {
+  match (id.source(), action) {
+    ("cloud.chats", ImportConversation) => self.emit(OpenCloudImport)
+    (source, _) => self.unroutable("section menu", "source \{source}")
+  }
+}
+
+///|
 fn SidebarDispatcher::placeholder_open(
   self : SidebarDispatcher,
   id : String,
@@ -494,6 +506,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   let section : @section.Actions = {
     primary: id => self.section_primary(id),
+    menu: (id, action) => self.section_menu(id, action),
     placeholder: id => self.placeholder_open(id),
     project,
     conversation,

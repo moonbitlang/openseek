@@ -6,7 +6,7 @@ fn Model::session_import_target(
   self : Model,
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-) -> @session_import.Target? {
+) -> @session_import.HostTarget? {
   guard self.device_state(channel) is Some(dev) &&
     dev.projects.contains(workspace) &&
     !dev.is_chat_workspace(workspace) else {
@@ -18,6 +18,16 @@ fn Model::session_import_target(
     workspace: workspace.path,
     worktree_of: None,
   })
+}
+
+///|
+/// The signed-in account whose Cloud chats this page shows.
+fn Model::cloud_account(self : Model) -> String? {
+  guard self.account is Some(account) &&
+    self.cloud.user_id == Some(account.user.user_id) else {
+    return None
+  }
+  self.cloud.user_id
 }
 
 ///|

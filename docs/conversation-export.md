@@ -43,6 +43,24 @@ must fit the server's 20 MiB limit. Share titles are trimmed and capped at 1024
 UTF-8 bytes on a Unicode character boundary; this metadata limit never
 truncates the HTML or JSON conversation.
 
+## Import
+
+**Import conversation** creates a new conversation from an export, chosen as
+its JSON file or given as a public share link. Imports stay within their
+origin: Local exports import only into Local workspaces (the project row's
+menu), and Cloud exports only into Cloud chats (the Chats section's menu while
+signed in). An export from the other origin is rejected with a message. The imported conversation's system prompt is rebuilt for its
+new location; original workspace files are not imported.
+
+Cloud import sends `POST /v1/sessions/import` with
+`{"source":{"kind":"json","text":...}}` or
+`{"source":{"kind":"share","url":...}}` and expects `201 {"id":...}`. The
+Cloud service downloads share links itself, from its account origin; the
+frontend never fetches the link. Rejections the user can act on (HTTP 400,
+404, 410 and 502) show the service's error text when it sends one. On success
+the dialog closes, the Cloud list refreshes, and the new chat opens. A result
+that arrives after the account changed opens nothing.
+
 ## Native commands
 
 `session.export` is the window-only local save operation and requires
@@ -63,7 +81,9 @@ suggests the native Dev app or hosted browser; downloads remain available.
 The automated checks are the `frontend/export_dialog` JS tests,
 `desktop/backend/api` and `desktop/backend/internal/shares` native HTTP tests, `protocol/session_share_test.mbt`,
 and `desktop/e2e/tests/export_conversation.spec.js` after building the browser
-package. Browser tests substitute the native transport, not the product UI.
+package. Import is covered by `frontend/session_import` tests,
+`frontend/conversation_transfer_wbtest.mbt`, and
+`desktop/e2e/tests/cloud_import.spec.js`. Browser tests substitute the native transport, not the product UI.
 
 The end-to-end check against a real deployment is manual: share a short
 non-sensitive conversation, open the link in another browser, and verify the

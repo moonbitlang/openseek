@@ -28,6 +28,7 @@ pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
+  menu : (Id, MenuAction) -> @cmd.Cmd
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
@@ -64,12 +65,21 @@ pub(all) struct Input {
   label : String
   activation : String?
   action : Action?
+  menu : Array[MenuAction]
   entries : Array[Entry]
 }
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum MenuAction {
+  ImportConversation
+}
+pub fn MenuAction::equal(Self, Self) -> Bool
+pub fn MenuAction::not_equal(Self, Self) -> Bool
+pub fn MenuAction::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 pub(all) struct Placeholder {

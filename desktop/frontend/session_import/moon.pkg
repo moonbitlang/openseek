@@ -2,6 +2,8 @@ import {
   "moonbit-community/rui",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/cloud",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
   "moonbitlang/core/debug",

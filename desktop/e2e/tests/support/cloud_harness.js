@@ -8,6 +8,7 @@ export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
+export const importedSession = '44444444-4444-4444-8444-444444444444';
 const bundle = new URL('../../../dist/browser/', import.meta.url);
 
 // Resolves with the first matching response once its request has ended, so the
@@ -46,6 +47,8 @@ export class CloudHarness {
     this.listStatus = 200;
     this.historyStatus = 200;
     this.createStatus = 201;
+    this.importStatus = 201;
+    this.importError = '';
     this.sendStatus = 202;
     this.shareStatus = 200;
     this.exportStatus = 200;
@@ -373,6 +376,13 @@ export class CloudHarness {
       return json({ accepted: true, task_id: body.task_id, action: body.action, id: body.id });
     }
     if (path === '/v1/me/preferences') return json({ allow_content_improvement: false });
+    if (path === '/v1/sessions/import' && request.method() === 'POST') {
+      if (this.importStatus !== 201) {
+        return route.fulfill({ status: this.importStatus, headers, contentType: 'text/plain', body: this.importError });
+      }
+      this.sessionIds = [importedSession, ...this.sessionIds.filter(id => id !== importedSession)];
+      return json({ id: importedSession }, 201);
+    }
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
         const finish = this.pauseCreate;

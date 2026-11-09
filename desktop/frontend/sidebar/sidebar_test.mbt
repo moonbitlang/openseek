@@ -12,6 +12,7 @@ test "the sidebar input keeps peer sections in one component value" {
         label: "Projects",
         activation: None,
         action: None,
+        menu: [],
         entries: [],
       },
       {
@@ -19,6 +20,7 @@ test "the sidebar input keeps peer sections in one component value" {
         label: "Archived chats",
         activation: Some("desktop-test"),
         action: None,
+        menu: [],
         entries: [],
       },
     ],
