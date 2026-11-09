@@ -61,7 +61,7 @@ pub fn Id::to_repr(Self) -> @debug.Repr
 #derive(Eq, @debug.Debug)
 pub(all) struct Input {
   id : Id
-  label : String
+  label : String?
   activation : String?
   action : Action?
   entries : Array[Entry]

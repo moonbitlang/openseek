@@ -1131,6 +1131,18 @@ button.row-twisty:hover {
   }
 }
 
+.sidebar-new-project {
+  --icon-size: var(--icon-md);
+  box-sizing: border-box;
+  width: calc(100% - 2 * var(--space-5));
+  min-height: 2rem;
+  margin: 0 var(--space-5) var(--space-5);
+}
+.sidebar-new-project:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 .sidebar-search {
   --icon-size: var(--icon-md);
   display: flex;
