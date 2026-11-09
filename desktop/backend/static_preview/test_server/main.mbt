@@ -17,14 +17,13 @@ async fn main {
           server.close(id.to_int())
           { "closed": true }
         }
-        { "id": Number(id, ..), "path": String(path), "root": String(root), .. } => {
+        { "id": Number(id, ..), "path": String(path), "root": String(root), .. } =>
           try {
             let url = server.open(id.to_int(), path, root~)
             { "url": url }
           } catch {
             error => { "error": error.to_string() }
           }
-        }
         _ => { "error": "Invalid fixture request" }
       }
       @stdio.stdout.write(reply.stringify() + "\n")

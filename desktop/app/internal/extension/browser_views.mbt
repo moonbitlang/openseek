@@ -489,14 +489,13 @@ fn browser_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
         root?=payload.root,
       )
       errdefer views.previews.close(payload.id)
-      let _ = views.open({
+      views.open({
         id: payload.id,
         url,
         dark: payload.dark,
         session: payload.session,
         request: None,
       })
-      { url, }
     }),
     WindowEndpoint(@commands.browser_pick_element, (_, payload) => {
       views.pick_element(payload)

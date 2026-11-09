@@ -25,51 +25,19 @@ fn Model::preview_local_file(
     return (@cmd.none, self)
   }
   let url = @uri.file_url(file.path)
-  let (preview, id) = @preview.open_page(self.preview, url~)
-  let current = self.dock_state_for(ctx.owner)
-  let dock = if current.active is Some(FilePicker) {
-    @dock.resolve_pick(current, Browser(id~))
-  } else {
-    @dock.open_browser(current, id)
-  }
+  let (id, model) = self
+    .begin_editor_navigation()
+    .add_browser_tab(ctx.owner, url~, resolve_picker=true)
   let dark = self.theme.is_dark(self.system_dark)
   let root = ctx.root().map(root => root.path)
-  let command = @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request_in_order(
-        Local,
-        @commands.browser_preview,
-        { id, path: file.path, root, dark, session: Some(owner.session), },
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              Preview(
-                @preview.Msg::LoadFailed(
-                  id~,
-                  url~,
-                  text=@interop.bridge_error_text(error),
-                ),
-              ),
-            ),
-          )
-          return
-        }
-      }
-      scheduler.add(
-        dispatch(Preview(@preview.Msg::Navigated(id~, url=reply.url))),
-      )
-    })
-    |> ignore
-  })
   (
-    command,
-    {
-      ..self.begin_editor_navigation().with_dock_state_for(ctx.owner, dock),
-      preview,
-      browser_pane: { shown: None, rect: None, geo: None, },
-      right_panel_open: true,
-      right_panel_menu_open: false,
-    },
+    browser_op(
+      dispatch,
+      @commands.browser_preview,
+      { id, path: file.path, root, dark, session: Some(owner.session), },
+      quiet=false,
+      on_error=text => Preview(@preview.Msg::LoadFailed(id~, url~, text~)),
+    ),
+    { ..model, browser_pane: { shown: None, rect: None, geo: None, }, },
   )
 }

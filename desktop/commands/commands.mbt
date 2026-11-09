@@ -786,7 +786,7 @@ pub let browser_open : Command[
 ///|
 pub let browser_preview : Command[
   @protocol.BrowserPreviewPayload,
-  @protocol.BrowserPreviewReply,
+  @protocol.EmptyReply,
 ] = Command("browser.preview")
 
 ///|

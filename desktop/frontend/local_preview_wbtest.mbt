@@ -15,7 +15,7 @@ test "HTML preview opens a browser tab only for files on this Desktop" {
 }
 
 ///|
-test "a late HTTP preview reply cannot resurrect a closed browser tab" {
+test "a late navigation event cannot resurrect a closed preview tab" {
   let (_, opened) = update(
     test_dispatch(),
     PreviewLocalFile("/workspace/demo.html"),
@@ -25,9 +25,7 @@ test "a late HTTP preview reply cannot resurrect a closed browser tab" {
   let closed = { ..opened, preview: @preview.close_page(opened.preview, id), }
   let (_, late) = update(
     test_dispatch(),
-    Preview(
-      @preview.Msg::Navigated(id~, url="http://127.0.0.1:1234/token/demo.html"),
-    ),
+    Preview(@preview.Msg::Navigated(id~, url="http://127.0.0.1:1234/demo.html")),
     closed,
   )
   assert_true(@preview.page(late.preview, id) is None)

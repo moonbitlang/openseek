@@ -89,7 +89,17 @@ async function installLocalWindow(page, app, server) {
   await page.exposeFunction('previewHostRequest', async request => {
     app.requests.push(request);
     if (request.method === 'app.system_appearance') return { dark: false };
-    if (request.method === 'browser.preview') return server.open(request.params.id);
+    if (request.method === 'browser.preview') {
+      const { id } = request.params;
+      const { url } = await server.open(id);
+      const redirected = `${url}?redirected=1`;
+      await page.evaluate(payload => window.desktopEvent('openseek.browser.event', payload), {
+        kind: 'navigated', id, url: redirected,
+      });
+      // Deliver the native navigation before the open command completes.
+      await expect(page.locator('#browser-address-input')).toHaveValue(redirected);
+      return {};
+    }
     if (request.method === 'browser.close') return server.request({ close: request.params.id }).then(() => ({}));
     return app.replyFor(request);
   });
@@ -100,9 +110,12 @@ async function installLocalWindow(page, app, server) {
       listeners.get(name).add(callback);
       return () => listeners.get(name).delete(callback);
     } };
+    window.desktopEvent = (name, payload) => {
+      for (const callback of listeners.get(name) || []) callback({ payload });
+    };
     window.__MoonBit__ = { getTitlebarArea: async () => null, app: events, events,
       openseek: new Proxy({}, { get: (_, method) => async params => {
-        if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 5 } });
+        if (method === 'host.connect') window.desktopEvent('openseek.agent.connected', { protocol: 5 });
         return window.previewHostRequest({ method, params });
       } }),
     };
@@ -135,7 +148,10 @@ for (const local of [true, false]) {
         await page.screenshot({ path });
         await testInfo.attach('Local HTML file context menu', { path, contentType: 'image/png' });
         await preview.click();
-        await expect(page.locator('#browser-address-input')).toHaveValue(/^http:\/\/127\.0\.0\.1:\d+\/pages\/index\.html$/);
+        // The event's theme update queues behind the open command, so this
+        // assertion observes the address after its reply has been processed.
+        await expect.poll(() => app.requests.some(request => request.method === 'browser.set_theme')).toBe(true);
+        await expect(page.locator('#browser-address-input')).toHaveValue(/^http:\/\/127\.0\.0\.1:\d+\/pages\/index\.html\?redirected=1$/);
         const request = app.requests.find(request => request.method === 'browser.preview');
         expect(request.params).toMatchObject({ root: '/workspace', path: '/workspace/index.HTML', session: 'session-1' });
         const url = await page.locator('#browser-address-input').inputValue();
@@ -156,6 +172,7 @@ for (const local of [true, false]) {
         await testInfo.attach('Local HTML editor Preview action', { path, contentType: 'image/png' });
         await toolbar.getByRole('button', { name: 'Preview', exact: true }).click();
         await expect.poll(() => app.requests.filter(request => request.method === 'browser.preview').length).toBe(2);
+        await expect(page.locator('#browser-address-input')).toHaveValue(/\?redirected=1$/);
       }
       expect(app.pageErrors).toEqual([]);
     } finally { await server.close(); }

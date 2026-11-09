@@ -39,23 +39,6 @@ pub impl FromJson for BrowserPreviewPayload with fn from_json(json, path) {
 }
 
 ///|
-#derive(Debug, Eq)
-pub(all) struct BrowserPreviewReply {
-  url : String
-}
-
-///|
-pub impl ToJson for BrowserPreviewReply with fn to_json(self) {
-  { "url": Json(self.url) }
-}
-
-///|
-pub impl FromJson for BrowserPreviewReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "BrowserPreviewReply")
-  { url: object.required_string("url"), }
-}
-
-///|
 pub extend BrowserPreviewPayload with Debug::{to_repr}
 
 ///|
@@ -66,15 +49,3 @@ pub extend BrowserPreviewPayload with ToJson::{to_json}
 
 ///|
 pub extend BrowserPreviewPayload with FromJson::{from_json}
-
-///|
-pub extend BrowserPreviewReply with Debug::{to_repr}
-
-///|
-pub extend BrowserPreviewReply with Eq::{equal, not_equal}
-
-///|
-pub extend BrowserPreviewReply with ToJson::{to_json}
-
-///|
-pub extend BrowserPreviewReply with FromJson::{from_json}

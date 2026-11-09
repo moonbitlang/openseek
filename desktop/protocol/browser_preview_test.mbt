@@ -33,8 +33,4 @@ test "local preview codecs retain source paths and distinguish absent optional f
     }
     assert_true(refused)
   }
-  let reply : @protocol.BrowserPreviewReply = {
-    url: "http://127.0.0.1:1234/token/index.html",
-  }
-  assert_eq(@json.from_json(reply.to_json()), reply)
 }
