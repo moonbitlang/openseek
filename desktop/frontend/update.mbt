@@ -7162,6 +7162,7 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    PreviewLocalFile(path) => model.preview_local_file(dispatch, path)
     DownloadFile(path) => {
       guard model.workspace_file(path) is Some(file) else {
         return (@cmd.none, model)

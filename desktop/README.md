@@ -171,6 +171,24 @@ does not — a narrow window, a wide sidebar, an open file panel — the same
 overview is a panel over the transcript's right edge that stops above the
 composer. The stylesheet decides between the two from the main pane's width.
 
+## Local HTML previews
+
+In the Desktop window, use **Preview** in an HTML/HTM file's context menu or
+editor toolbar to open its saved contents in a Browser tab. This is available
+only for Local files. Each preview retains its workspace root; a file opened
+without a workspace uses its parent directory. Relative CSS, scripts, modules,
+images, fonts and static fetches load directly from disk through an ephemeral
+loopback HTTP listener. Refresh reads the current files.
+
+Each tab owns a process running `moonx cli/serve@0.1.1` through the app's
+MoonBit toolchain on an OS-assigned loopback port. The first use requires
+network access when the package is not cached. Files under the preview root
+are available to clients that can reach that local port. The server confines reads to the root, including symlink
+targets. Closing the tab stops its process. The app stops all preview processes
+on normal exit. Preview documents have no native bridge or command access.
+Pages requiring a backend service are outside this static preview feature.
+Chat's embedded artifact previews keep their existing behavior.
+
 ## Skills
 
 The sidebar's **Skills** button opens a browser over the

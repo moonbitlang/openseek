@@ -60,7 +60,7 @@ async test "language and semantic tools execute the explicit host toolchain" {
   )
   assert_eq(code, 0)
   assert_eq(stdout.text(), "selected-toolchain")
-  let provider = @search.MoonxProvider(
+  let provider = @moonbit.MoonxProvider(
     engine="unbundled-engine",
     runtime_dir=Some(runtime.to_path()),
     source~,

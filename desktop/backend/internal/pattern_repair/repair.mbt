@@ -237,7 +237,7 @@ test "pattern repair trace remains bounded and retains recent events" {
 async fn request_pattern_repair_candidate(
   engine : String,
   agent_env : Map[String, String],
-  provider : @search.ResolvedMoonxProvider,
+  provider : @moonbit.ResolvedMoonxProvider,
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
@@ -350,7 +350,7 @@ fn pattern_repair_failure(
 /// provider preparation and the child's lifetime belong to this operation.
 pub async fn repair(
   engine : String,
-  provider : @search.MoonxProvider,
+  provider : @moonbit.MoonxProvider,
   environment : @engine.PatternRepairEnvironment,
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {

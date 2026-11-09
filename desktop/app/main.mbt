@@ -107,7 +107,8 @@ async fn main {
   }
   // The dock's browser tabs: native web contents views, owned by the
   // window and commanded over bridge-local `browser.*` ops.
-  let views = @extension.BrowserViews()
+  let previews = @static_preview.Server(engine~, runtime_dir?)
+  let views = @extension.BrowserViews(previews~)
   // The server through which the agents this host runs reach its tools — the
   // browser tabs above, to begin with. It binds now so every engine can be
   // granted its address from the first spawn; the backend serves it with its
@@ -251,6 +252,7 @@ async fn main {
     // Before the bridge: it prepares the workspace registry first, and
     // no page may attach to a host that has not.
     state.start_services(group)
+    views.start_previews(group)
     group.spawn_bg(allow_failure=true, () => bridge.run())
     // The relay actor registers this host only when remote access (or the
     // environment override) is enabled, and idles otherwise.

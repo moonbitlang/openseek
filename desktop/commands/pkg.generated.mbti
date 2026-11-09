@@ -69,6 +69,8 @@ pub let browser_open : Command[@protocol.BrowserOpenPayload, @protocol.EmptyRepl
 
 pub let browser_pick_element : Command[@protocol.BrowserPickPayload, @protocol.BrowserPickReply]
 
+pub let browser_preview : Command[@protocol.BrowserPreviewPayload, @protocol.EmptyReply]
+
 pub let browser_reload : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 
 pub let browser_set_bounds : Command[@protocol.BrowserBoundsPayload, @protocol.EmptyReply]

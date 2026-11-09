@@ -65,6 +65,11 @@ async test "native window ops are absent from the relay method catalog" {
     }),
   )
   let names : Set[String] = Set([])
+  assert_true(
+    window_only.any(endpoint => {
+      endpoint.name() == @commands.browser_preview.name()
+    }),
+  )
   for endpoint in window_only {
     let name = endpoint.name()
     assert_false(names.contains(name))

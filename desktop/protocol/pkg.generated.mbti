@@ -439,6 +439,22 @@ pub impl @json.FromJson for BrowserPickReply
 pub impl @json.ToJson for BrowserPickReply
 
 #derive(Eq, @debug.Debug)
+pub(all) struct BrowserPreviewPayload {
+  id : Int32
+  path : String
+  root : String?
+  dark : Bool
+  session : String?
+}
+pub fn BrowserPreviewPayload::equal(Self, Self) -> Bool
+pub fn BrowserPreviewPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserPreviewPayload::not_equal(Self, Self) -> Bool
+pub fn BrowserPreviewPayload::to_json(Self) -> @json.Json
+pub fn BrowserPreviewPayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for BrowserPreviewPayload
+pub impl @json.ToJson for BrowserPreviewPayload
+
+#derive(Eq, @debug.Debug)
 pub(all) struct BrowserThemePayload {
   id : Int32
   dark : Bool

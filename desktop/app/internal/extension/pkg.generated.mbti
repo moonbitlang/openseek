@@ -3,9 +3,11 @@ package "openseek_desktop/app/internal/extension"
 
 import {
   "moonbit-community/proton",
+  "moonbitlang/async",
   "openseek_desktop/app/internal/cdp",
   "openseek_desktop/backend/api",
   "openseek_desktop/backend/mcp",
+  "openseek_desktop/backend/static_preview",
   "openseek_desktop/protocol",
 }
 
@@ -28,8 +30,9 @@ pub fn view_event_payload(Int32, @proton.WebContentsEvent) -> @protocol.BrowserE
 
 // Types and methods
 type BrowserViews
-pub async fn BrowserViews::BrowserViews() -> Self
+pub async fn BrowserViews::BrowserViews(previews? : @static_preview.Server) -> Self
 pub fn BrowserViews::page_attached(Self, async (@protocol.BrowserEventPayload) -> Unit) -> Unit
+pub fn BrowserViews::start_previews(Self, @async.TaskGroup[Unit]) -> Unit
 pub fn BrowserViews::view_event(Self, Int32, @proton.WebContentsEvent) -> Unit
 pub fn BrowserViews::window_closed(Self) -> Unit
 pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit

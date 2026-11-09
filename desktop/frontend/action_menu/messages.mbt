@@ -2,6 +2,7 @@
 
 ///|
 priv enum UiMessage {
+  PreviewFile
   ShareFile
   DownloadToLocal
   ShowFinder
@@ -38,6 +39,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, PreviewFile) => "Preview"
+    (Spanish, PreviewFile) => "Vista previa"
+    (SimplifiedChinese, PreviewFile) => "预览"
+    (TraditionalChinese, PreviewFile) => "預覽"
+    (Japanese, PreviewFile) => "プレビュー"
     (English, DownloadToLocal) => "Download to local"
     (Spanish, DownloadToLocal) => "Descargar al equipo"
     (SimplifiedChinese, DownloadToLocal) => "下载到本地"
