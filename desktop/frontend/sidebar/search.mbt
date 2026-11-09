@@ -40,7 +40,7 @@ pub fn Input::filtered(self : Input) -> Input {
         @section.Placeholder(_) => None
       }
     })
-    if entries.is_empty() {
+    if entries.is_empty() && section.label is Some(_) {
       None
     } else {
       Some({ ..section, entries, })

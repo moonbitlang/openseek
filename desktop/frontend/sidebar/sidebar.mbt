@@ -377,6 +377,26 @@ pub fn component(
         footer.push(@html.div(class="console-notice", notice))
       }
     }
+    let tools : Array[@html.Html] = [
+      input.search.view(input.locale, actions.search),
+    ]
+    for section in input.sections {
+      if section.label is None && section.action is Some(action) {
+        tools.push(
+          @html.button(
+            class="sidebar-button sidebar-new-project",
+            type_="button",
+            title=action.title,
+            disabled=action.disabled,
+            on_click=(actions.section.primary)(section.id),
+            [
+              @html.span(class="sidebar-icon", @icons.icon(@icons.icon_add)),
+              @html.span(class="sidebar-label", action.title),
+            ],
+          ),
+        )
+      }
+    }
     @html.aside([
       // The leading edge stays clear for the shell-owned fixed toggle and
       // native controls; the mode switch sits at the trailing edge.
@@ -401,7 +421,7 @@ pub fn component(
           ],
         ),
       ]),
-      input.search.view(input.locale, actions.search),
+      @html.div(class="sidebar-tools", tools),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),
       ]),

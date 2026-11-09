@@ -9,14 +9,14 @@ test "the sidebar input keeps peer sections in one component value" {
     sections: [
       {
         id: @section.Id(source="openseek.projects", channel="local"),
-        label: "Projects",
+        label: None,
         activation: None,
         action: None,
         entries: [],
       },
       {
         id: @section.Id(source="archived", channel="local"),
-        label: "Archived chats",
+        label: Some("Archived chats"),
         activation: Some("desktop-test"),
         action: None,
         entries: [],
