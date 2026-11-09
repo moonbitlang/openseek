@@ -19,6 +19,11 @@ const SendTimeoutMs : Int32 = 5000
 const MaxReplyChars : Int32 = 65536
 
 ///|
+/// Catalog snapshots kept for listings in progress. A listing takes a few
+/// requests, so only the latest few catalogs are needed.
+const MaxSnapshots : Int32 = 4
+
+///|
 /// The script closed its connection before its reply.
 priv suberror ScriptGone
 
@@ -32,6 +37,11 @@ struct Service {
   call : async (String, String, Json) -> @agent_tool.ToolAction
   /// The catalog's items as they stand now.
   items : () -> Array[Json]
+  /// The catalogs recent listings started from, oldest first: every page of
+  /// a listing comes from the one it started from, so a catalog that changes
+  /// meanwhile cannot shift its pages.
+  snapshots : Array[Snapshot]
+  mut next_snapshot : Int32
   /// Where a result's images are saved, when there is anywhere.
   image_directory : String?
   mut stop : (async () -> Unit)?
@@ -59,6 +69,8 @@ pub async fn[X] Service::start(
     token: @crypto.bytes_to_hex_string(entropy),
     call,
     items,
+    snapshots: [],
+    next_snapshot: 0,
     image_directory,
     stop: None,
   }
@@ -157,12 +169,8 @@ pub fn Service::env(self : Service) -> Map[String, String] {
 async fn Service::answer(self : Service, input : Json) -> Json {
   match input {
     { "version": 1, "list": Object(fields), .. } =>
-      match fields.get("cursor") {
-        None | Some(Null) => list_reply((self.items)(), 0)
-        Some(Number(cursor, ..)) if cursor >= 0.0 && cursor == cursor.floor() =>
-          list_reply((self.items)(), cursor.to_int())
-        _ =>
-          error_result("MCP host list requires a non-negative integer cursor")
+      self.list(fields) catch {
+        InvalidList(message) => error_result(message)
       }
     {
       "version": 1,
@@ -194,11 +202,77 @@ async fn Service::answer(self : Service, input : Json) -> Json {
 }
 
 ///|
-/// The catalog items from `cursor`: as many whole items as fit one reply
-/// (always at least one), and the cursor of the rest while any remain.
-fn list_reply(items : Array[Json], cursor : Int32) -> Json {
+/// A `list` request the host cannot answer, with the reason.
+priv suberror InvalidList {
+  InvalidList(String)
+}
+
+///|
+/// The reply to a `list` request with these fields: a page of the snapshot
+/// it names, or of a new one when it names none.
+fn Service::list(
+  self : Service,
+  fields : Map[String, Json],
+) -> Json raise InvalidList {
+  let cursor = index(fields, "cursor").unwrap_or(0)
+  let snapshot = if index(fields, "snapshot") is Some(id) {
+    guard self.snapshots.iter().find_first(snapshot => snapshot.id == id)
+      is Some(snapshot) else {
+      raise InvalidList(
+        "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
+      )
+    }
+    snapshot
+  } else {
+    self.snapshot()
+  }
+  list_reply(snapshot, cursor)
+}
+
+///|
+/// The optional non-negative integer field `key` of a `list` request.
+fn index(fields : Map[String, Json], key : String) -> Int32? raise InvalidList {
+  match fields.get(key) {
+    None | Some(Null) => None
+    Some(Number(number, ..)) if number >= 0.0 && number == number.floor() =>
+      Some(number.to_int())
+    _ =>
+      raise InvalidList("MCP host list requires a non-negative integer \{key}")
+  }
+}
+
+///|
+/// The catalog as it stands now, as a snapshot a listing can page through:
+/// the latest one when the catalog has not changed since.
+fn Service::snapshot(self : Service) -> Snapshot {
+  let items = (self.items)()
+  if self.snapshots.last() is Some(latest) && latest.items == items {
+    return latest
+  }
+  let snapshot = { id: self.next_snapshot, items, }
+  self.next_snapshot += 1
+  self.snapshots.push(snapshot)
+  if self.snapshots.length() > MaxSnapshots {
+    ignore(self.snapshots.remove(0))
+  }
+  snapshot
+}
+
+///|
+/// The catalog's items at one moment, under the id a listing names it by.
+priv struct Snapshot {
+  id : Int32
+  items : Array[Json]
+}
+
+///|
+/// The snapshot's items from `cursor`: as many whole items as fit one reply
+/// (always at least one), the snapshot's id, and the cursor of the rest while
+/// any remain.
+fn list_reply(snapshot : Snapshot, cursor : Int32) -> Json raise InvalidList {
+  let items = snapshot.items
   guard cursor < items.length() || (cursor == 0 && items.is_empty()) else {
-    return error_result(
+    raise InvalidList(
       "MCP host list cursor \{cursor} is past the catalog's \{items.length()} items",
     )
   }
@@ -215,7 +289,10 @@ fn list_reply(items : Array[Json], cursor : Int32) -> Json {
     used += size
   }
   let next = cursor + listed.length()
-  let data : Map[String, Json] = { "items": Json::array(listed) }
+  let data : Map[String, Json] = {
+    "items": Json::array(listed),
+    "snapshot": Json(snapshot.id),
+  }
   if next < items.length() {
     data["next_cursor"] = Json(next)
   }

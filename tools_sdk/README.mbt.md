@@ -132,11 +132,15 @@ image to the model.
 Both use the v1 result envelope. `call` sends
 `{"version":1,"call":{"server","tool","arguments"}}`, answered with an added
 `"images"` when it saved any. The catalog download sends
-`{"version":1,"list":{"cursor"?}}` until a reply has no `next_cursor`; each
-reply's `data` is `{"items":[...],"next_cursor"?}`, with each server
+`{"version":1,"list":{"cursor"?,"snapshot"?}}` until a reply has no
+`next_cursor`; each reply's `data` is
+`{"items":[...],"snapshot","next_cursor"?}`, with each server
 (`{"server","instructions"?,"error"?}`) followed by its tools
 (`{"server","tool":{"name","description","input_schema","output_schema"?}}`) in
-configuration order.
+configuration order. The first request names no snapshot, and the host lists
+the catalog as it stands; every later one names the first reply's `snapshot`,
+so the pages all come from that catalog even when a server connects or loses
+its connection meanwhile.
 
 ## Standalone tests
 
@@ -172,7 +176,10 @@ independent of the host PR.
 SDK 0.4.0 is prepared here for the migration to `moonbitlang/core/async`;
 0.3.0 and earlier releases use the separate `moonbitlang/async` runtime.
 Use 0.4.0 with core/async scripts. The wire protocol remains v1.
-Publish 0.4.0 before distributing scripts pinned to it. Keep SDK and wire
+Publish 0.4.0 before distributing scripts pinned to it. SDK 0.4.1 pages an MCP
+catalog download through one host snapshot, so a server that connects or loses
+its connection mid-download cannot shift the pages; its API is unchanged.
+Publish it before pinning scripts and prompts to it. Keep SDK and wire
 versions separate. Documentation and host tool additions do not require
 changing the SDK API. For a future SDK release, check and test the independent module first:
 

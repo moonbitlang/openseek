@@ -84,12 +84,14 @@ async fn catalog() -> @catalog.Catalog raise SearchError {
 
 ///|
 /// Every catalog item, one `list` request per reply's worth, in the host's
-/// order.
+/// order. Every request after the first names the snapshot the first reply
+/// came from, so a catalog that changes meanwhile cannot shift the pages.
 async fn download() -> Array[Json] raise SearchError {
   let items : Array[Json] = []
   let mut cursor = None
+  let mut snapshot = None
   for ;; {
-    let reply = send(List(cursor~)) catch {
+    let reply = send(List(cursor~, snapshot~)) catch {
       TransportError(message) => raise SearchError(message)
     }
     // A cursor the host refuses arrives as an error result with the reason.
@@ -98,6 +100,11 @@ async fn download() -> Array[Json] raise SearchError {
       raise SearchError(INVALID_CATALOG)
     }
     items.append(page)
+    match data {
+      { "snapshot": Number(id, ..), .. } => snapshot = Some(id.to_int())
+      { "snapshot": _, .. } => raise SearchError(INVALID_CATALOG)
+      _ => ()
+    }
     match data {
       { "next_cursor": Number(next, ..), .. } => cursor = Some(next.to_int())
       { "next_cursor": _, .. } => raise SearchError(INVALID_CATALOG)

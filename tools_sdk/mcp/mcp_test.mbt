@@ -171,8 +171,8 @@ async test "MCP tool failures are results, transport failures raise" {
 }
 
 ///|
-/// A host whose catalog is `pages`, one `list` reply each. Cursors count
-/// items, as the host's do.
+/// A host whose catalog is `pages`, one `list` reply each, as snapshot 7.
+/// Cursors count items, as the host's do.
 fn catalog_host(pages : Array[Array[Json]]) -> (Json) -> (Int32, Json) {
   fn(input) {
     let cursor = match input {
@@ -183,7 +183,10 @@ fn catalog_host(pages : Array[Array[Json]]) -> (Json) -> (Int32, Json) {
     let mut start = 0
     for index, page in pages {
       if start == cursor {
-        let data : Map[String, Json] = { "items": Json::array(page) }
+        let data : Map[String, Json] = {
+          "items": Json::array(page),
+          "snapshot": 7,
+        }
         if index + 1 < pages.length() {
           data["next_cursor"] = Json(start + page.length())
         }
@@ -248,8 +251,8 @@ async test "the first search downloads every page of the catalog" {
   let received = with_host(catalog_host(paged), () => pages.push(@mcp.search()))
   assert_eq(received, [
     { "version": 1, "list": {} },
-    { "version": 1, "list": { "cursor": 2 } },
-    { "version": 1, "list": { "cursor": 4 } },
+    { "version": 1, "list": { "cursor": 2, "snapshot": 7 } },
+    { "version": 1, "list": { "cursor": 4, "snapshot": 7 } },
   ])
   let page = pages[0]
   assert_eq(page.tools.map(tool => "\{tool.server}/\{tool.name}"), [
