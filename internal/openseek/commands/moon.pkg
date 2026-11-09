@@ -8,11 +8,13 @@ import {
   "moonbitlang/openseek/internal/openseek/execution",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/openseek/mcp/config" @mcpconfig,
   "moonbitlang/openseek/mcp/tools" @mcptools,
   "moonbitlang/openseek/internal/openseek/options",
   "moonbitlang/openseek/internal/openseek/setup",
   "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_session/log",
   "moonbitlang/openseek_protocol/command_context",
   "moonbitlang/x/time",
   "moonbitlang/openseek/internal/workspace_path",
@@ -21,6 +23,7 @@ import {
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/internal/openseek/testkit",
+  "moonbitlang/openseek/viz_export",
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

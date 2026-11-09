@@ -1,5 +1,5 @@
 ///|
-/// `openseek sessions <list|show|compact|fork>` — durable-session management. Prints
+/// `openseek sessions <list|show|compact|fork|import>` — durable-session management. Prints
 /// for humans directly on stdout, so it never opens the event sink; an event a
 /// compaction reports is dropped.
 pub async fn run_sessions_command(matches : @argparse.Matches) -> Unit {
@@ -8,7 +8,8 @@ pub async fn run_sessions_command(matches : @argparse.Matches) -> Unit {
     Some(("show", m)) => sessions_show(m)
     Some(("compact", m)) => sessions_compact(m)
     Some(("fork", m)) => sessions_fork(m)
-    _ => fail("usage: openseek sessions <list|show|compact|fork>")
+    Some(("import", m)) => sessions_import(m)
+    _ => fail("usage: openseek sessions <list|show|compact|fork|import>")
   }
 }
 

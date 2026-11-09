@@ -57,7 +57,13 @@ async test "import loads through the normal session API and joins the selected w
     )
     let id : @agent_session.SessionId = SessionId(session_id)
     let saved = store.load(id)
-    assert_eq(saved.system_prompt(), "system")
+    // The engine built the prompt for the checkout the import works in, from
+    // the export the host staged for it.
+    assert_eq(saved.system_prompt(), "dir=\{checkout} origin=local")
+    assert_eq(
+      @fs.read_file("\{store.root()}/source-\{session_id}").text(),
+      exported.json,
+    )
     let continued = store.append(
       saved,
       User(UserMessage(Content([Text("Continue here")]))),

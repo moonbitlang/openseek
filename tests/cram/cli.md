@@ -365,6 +365,40 @@ $ sh <<'EOF'
 Configured MCP servers: `tracker`, `host`
 ```
 
+## `openseek sessions import` Recreates An Exported Conversation
+
+`sessions import --source <file> --origin <local|cloud>` recreates a
+conversation from its export JSON as a new session and prints its id and title.
+Like a fork's, its system prompt is built for the new session, with its own
+scratch directory, where the exported prompt named the place the conversation
+came from. An export from a local workspace imports only with `--origin local`
+and a Cloud export only with `--origin cloud`; an id that already exists is
+never replaced.
+
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> cat > "$tmp/export.json" <<'JSON'
+> {"/api/sessions":"[{\"key\":\"session-0\",\"id\":\"demo\",\"root\":\"/elsewhere/.openseek\",\"root_label\":\"elsewhere\",\"is_marker\":true,\"last_active\":null,\"first_prompt\":\"Demo chat\"}]","/api/sessions/session-0":"{\"found\":true,\"events\":\"{\\\"version\\\":1,\\\"id\\\":\\\"demo\\\",\\\"system_prompt\\\":\\\"Working directory: /elsewhere\\\"}\\n{\\\"sequence\\\":1,\\\"ts\\\":0,\\\"item\\\":{\\\"kind\\\":\\\"user\\\",\\\"payload\\\":{\\\"content\\\":\\\"hello\\\"}}}\\n{\\\"sequence\\\":2,\\\"ts\\\":0,\\\"item\\\":{\\\"kind\\\":\\\"terminal\\\",\\\"payload\\\":{\\\"kind\\\":\\\"finished\\\",\\\"message\\\":\\\"answer\\\"}}}\\n\"}"}
+> JSON
+> env -u DEEPSEEK openseek.exe sessions import --source "$tmp/export.json" --origin local --as copy --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe sessions show copy --session-root "$tmp" | grep -o 'sessions/[a-z]*/scratch'
+> env -u DEEPSEEK openseek.exe sessions show copy --session-root "$tmp" | grep -c elsewhere
+> env -u DEEPSEEK openseek.exe sessions import --source "$tmp/export.json" --origin local --as copy --session-root "$tmp" 2>&1 || echo exit-non-zero
+> env -u DEEPSEEK openseek.exe sessions import --source "$tmp/export.json" --origin cloud --as cloud --session-root "$tmp" 2>&1 || echo exit-non-zero
+> env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1,3
+> rm -rf "$tmp"
+> EOF
+{"session_id":"copy","title":"Demo chat"}
+sessions/copy/scratch
+0
+error: session copy already exists
+exit-non-zero
+error: This conversation was exported from a local workspace. Import it into a local workspace.
+exit-non-zero
+copy	Demo chat
+```
+
 ## `openseek run` Records A Session By Default
 
 `openseek run "task"` records its conversation to a generated

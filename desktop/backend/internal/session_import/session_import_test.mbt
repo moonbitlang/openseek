@@ -1,84 +1,16 @@
 ///|
-fn dataset(events? : String) -> String {
-  let session = @agent_session.Session(
-    SessionId("original"),
-    system_prompt="old workspace",
-  ).append(User(UserMessage(Content([Text("Hello from imported history")]))))
-  let header : @log.SessionFileHeader = {
-    id: "original",
-    system_prompt: "old workspace",
+async test "JSON files are passed through unchanged within the size limit" {
+  let text = "{\"exported\":true}"
+  assert_eq(@session_import.prepare(JsonFile(text~)), text)
+  let oversized = String::make(16 * 1024 * 1024 + 1, 'x')
+  let message = try {
+    ignore(@session_import.prepare(JsonFile(text=oversized)))
+    ""
+  } catch {
+    @session_import.SessionImportError(message) => message
+    error => raise error
   }
-  let text = StringBuilder()
-  text.write_string(ToJson::to_json(header).stringify() + "\n")
-  for event in session.events() {
-    text.write_string(ToJson::to_json(event).stringify() + "\n")
-  }
-  let events = events.unwrap_or(text.to_string())
-  @viz_export.StandaloneExport("", "").json([
-    @viz_export.Session(
-      key="session-0",
-      id="original",
-      root="/original/workspace/.openseek",
-      root_label="old",
-      is_marker=true,
-      last_active=None,
-      first_prompt="Imported test",
-      events~,
-    ),
-    @viz_export.Session(
-      key="session-1",
-      id="original-sr-1",
-      root="/original/workspace/.openseek",
-      root_label="old",
-      is_marker=true,
-      last_active=None,
-      first_prompt="Child",
-      events=events.replace_all(old="original", new="original-sr-1"),
-    ),
-  ])
-}
-
-///|
-async test "JSON import prepares independent ordinary sessions and their children" {
-  let source : @protocol.SessionImportSource = JsonFile(text=dataset())
-  let records = @session_import.prepare(source)
-  assert_eq(records.length(), 2)
-  assert_eq(records[0].title, "Imported test")
-  assert_true(
-    records[0].session.id() != @session_import.prepare(source)[0].session.id(),
-  )
-  assert_eq(records[0].session.system_prompt(), "old workspace")
-  assert_eq(records[0].session.last_sequence(), 1)
-  assert_eq(
-    records[1].session.id().value(),
-    records[0].session.id().value() + "-sr-1",
-  )
-}
-
-///|
-async test "invalid JSON and incomplete logs are rejected before writing" {
-  for
-    text in [
-      "not json",
-      "{}",
-      "[]",
-      dataset(events="{\"version\":2,\"id\":\"x\",\"system_prompt\":\"\"}\n"),
-      dataset(
-        events="{\"version\":1,\"id\":\"x\",\"system_prompt\":\"\"}\n{partial",
-      ),
-      dataset().replace_all(
-        old="original-sr-1",
-        new="original-sr-1/../../elsewhere",
-      ),
-    ] {
-    let refused = try {
-      ignore(@session_import.prepare(JsonFile(text~)))
-      false
-    } catch {
-      _ => true
-    }
-    assert_true(refused)
-  }
+  assert_true(message.contains("16 MiB"))
 }
 
 ///|
@@ -123,7 +55,7 @@ async test "share download is anonymous and expiry leaves no imported record" {
         connection.send_response(code, "Test")
         connection.write_string(
           if code == 200 {
-            dataset()
+            "{\"exported\":true}"
           } else {
             "unavailable"
           },
@@ -134,8 +66,7 @@ async test "share download is anonymous and expiry leaves no imported record" {
     let source : @protocol.SessionImportSource = ShareLink(
       url="http://127.0.0.1:\{server.addr.port()}/v1/shares/sh_test",
     )
-    let records = @session_import.prepare(source)
-    assert_eq(records[0].title, "Imported test")
+    assert_eq(@session_import.prepare(source), "{\"exported\":true}")
     for expected in ["expired", "HTTP 302"] {
       let message = try {
         ignore(@session_import.prepare(source))

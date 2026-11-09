@@ -97,6 +97,7 @@ moon run . -- sessions list --format=json --session-root .openseek
 moon run . -- sessions show parser-fix --session-root .openseek
 moon run . -- sessions compact parser-fix --file summary.txt --from 1 --to 120
 moon run . -- sessions fork parser-fix --as parser-fix-retry
+moon run . -- sessions import --source export.json --origin local
 ```
 
 `sessions list --format=json` is the machine-readable form of the listing,
@@ -139,6 +140,22 @@ caller that knows more about the fork's environment — the desktop app, which
 makes a new git worktree for a fork and knows what the source left
 uncommitted — passes it with `--notice <text>`, which the notice carries after
 its standard part as given.
+
+`sessions import --source <file> --origin <local|cloud> [--as <new-id>]`
+recreates a conversation from its export JSON (the dataset an exported
+visualizer HTML embeds) as a new session, with its direct sub-runs as
+`<new-id>-sr-N`, and prints `{"session_id","title"}` (`title` is `null` when the
+export has none). An export comes from a local workspace or from SeekMoon Cloud,
+which its listing records; `--origin` names where the importer keeps
+conversations, and an export from the other kind of place is refused. Every log
+must be complete and undamaged, with events numbered from one without gaps;
+nothing is written otherwise, and an id that already exists is refused.
+
+Like a fork's, the imported conversation's system prompt is the one a new
+session started by this command line would get, with its own scratch
+directory: an exported prompt names the workspace and scratch directory of the
+session it came from. Sub-runs keep their recorded prompts, which name no
+location.
 
 ## `openseek serve`
 

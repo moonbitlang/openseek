@@ -19,8 +19,8 @@ fn agent_options() -> Array[@argparse.OptionArg] {
 
 ///|
 /// What a system prompt is assembled from besides `--dir` and `--model`:
-/// shared by the commands that run an agent and by `sessions fork`, which
-/// writes the prompt of the session it creates.
+/// shared by the commands that run an agent and by `sessions fork` and
+/// `sessions import`, which write the prompt of the session they create.
 fn prompt_options() -> Array[@argparse.OptionArg] {
   [
     OptionArg(
@@ -229,6 +229,29 @@ pub fn root_command() -> @argparse.Command {
               ),
             ],
             positionals=[PositionArg("id", about="Session id.")],
+          ),
+          Command(
+            "import",
+            about="Recreate an exported conversation as a new session.",
+            options=[
+              dir_option(),
+              ..prompt_options(),
+              OptionArg(
+                "source",
+                long="source",
+                about="Conversation export JSON to import.",
+              ),
+              OptionArg(
+                "origin",
+                long="origin",
+                about="Where the importing client keeps conversations: local or cloud. Exports from elsewhere are refused.",
+              ),
+              OptionArg(
+                "as",
+                long="as",
+                about="Id of the new session; generated when omitted.",
+              ),
+            ],
           ),
         ],
       ),

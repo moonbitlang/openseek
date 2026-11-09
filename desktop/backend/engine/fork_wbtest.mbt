@@ -116,6 +116,27 @@ fn worktree_fork_engine_script() -> String {
   let newline = "\\n"
   let script =
     $|#!/bin/sh
+    $|if [ "$2" = import ]; then
+    $|  shift 2
+    $|  while [ "$#" -gt 0 ]; do
+    $|    case "$1" in
+    $|      --as) id="$2" ;;
+    $|      --origin) origin="$2" ;;
+    $|      --source) source="$2" ;;
+    $|      --session-root) root="$2" ;;
+    $|      --dir) dir="$2" ;;
+    $|    esac
+    $|    shift 2
+    $|  done
+    $|  to="$root/sessions/$id"
+    $|  mkdir -p "$to" || exit 1
+    $|  cp "$source" "$root/source-$id" || exit 1
+    $|  record="$to/openseek_session-$id.jsonl"
+    $|  printf '{"version":1,"id":"%s","system_prompt":"dir=%s origin=%s"}\{newline}' "$id" "$dir" "$origin" > "$record"
+    $|  tail -n +2 "$root/sessions/s-src/openseek_session-s-src.jsonl" >> "$record"
+    $|  printf '{"session_id":"%s","title":null}\{newline}' "$id"
+    $|  exit 0
+    $|fi
     $|if [ "$2" != fork ]; then
     $|  printf '[]'
     $|  exit 0
