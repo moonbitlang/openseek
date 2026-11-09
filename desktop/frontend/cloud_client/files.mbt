@@ -42,6 +42,26 @@ pub async fn read_directory(
 }
 
 ///|
+/// Create a browser preview of a saved workspace-relative HTML file.
+pub async fn create_preview(
+  token : String,
+  session : String,
+  path : String,
+) -> String {
+  let json = request(
+    CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/previews",
+    Post,
+    token~,
+    body={ "path": path },
+  )
+  guard json is { "url": String(url), .. } && !url.is_empty() else {
+    raise RequestError(Malformed)
+  }
+  url
+}
+
+///|
 fn file_content_path(
   session : String,
   path : String,

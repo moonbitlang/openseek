@@ -101,6 +101,85 @@ async function openText(page) {
   await expect(source(page)).toContainText('Cloud text');
 }
 
+for (const desktop of [false, true]) {
+  test(`Cloud HTML Preview uses account HTTP from both entry points on ${desktop ? 'Desktop' : 'Web'}`, async ({ page, context }, testInfo) => {
+    const cloud = new CloudFilesHarness(page, { desktop });
+    const name = desktop ? 'demo #.HTM' : 'demo #.HTML';
+    const path = `pages/${name}`;
+    cloud.directories.set(`${sessionA}:`, [{ name: 'pages', is_dir: true }]);
+    cloud.directories.set(`${sessionA}:pages`, [{ name, is_dir: false }]);
+    cloud.contents.set(`${sessionA}:${path}`, { kind: 'content', content: '<h1>Cloud HTML</h1>', sig: 'html-v1', absolute: `/${path}` });
+    await cloud.install();
+    const requests = [];
+    let status = 500;
+    let preview = 0;
+    await page.route(`${cloudOrigin}/v1/sessions/*/previews`, async route => {
+      const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      requests.push({ method: route.request().method(), url: route.request().url(), body: route.request().postDataJSON(), headers: await route.request().allHeaders() });
+      const url = `https://preview.example.test/token-${++preview}/pages/${encodeURIComponent(name)}`;
+      return route.fulfill({ status, headers, json: status === 201 ? { url } : { error: 'preview failed' } });
+    });
+    await context.route('https://preview.example.test/**', route => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/style.css')) return route.fulfill({ contentType: 'text/css', body: 'h1 { color: rgb(30, 64, 175) }' });
+      if (url.pathname.endsWith('/data.json')) return route.fulfill({ json: { value: 'Relative JSON loaded' } });
+      if (url.pathname.includes('/token-2/')) return route.fulfill({ status: 410, contentType: 'text/html', body: 'Preview expired' });
+      return route.fulfill({ contentType: 'text/html', body: '<link rel="stylesheet" href="../style.css"><h1>Cloud HTML</h1><button onclick="fetch(\'../data.json\').then(r=>r.json()).then(data=>document.querySelector(\'output\').textContent=data.value)">Load JSON</button><output></output>' });
+    });
+    await cloud.goto(); await openFiles(page, cloud);
+    await file(page, 'pages').click();
+    await file(page, name).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
+    await expect(page.locator('.notification')).toContainText('Cloud answered HTTP 500');
+    status = 201;
+    await page.locator('.notification').click();
+    await file(page, name).click({ button: 'right' });
+    const menuScreenshot = testInfo.outputPath('cloud-html-preview-menu.png');
+    await page.screenshot({ path: menuScreenshot });
+    await testInfo.attach('Cloud HTML Preview context menu', { path: menuScreenshot, contentType: 'image/png' });
+    const popup = desktop ? null : page.waitForEvent('popup');
+    await page.getByRole('menuitem', { name: 'Preview', exact: true }).click();
+    if (desktop) {
+      await expect(page.locator('#browser-address-input')).toHaveValue(/\/token-2\//);
+      await page.locator('.editor-tab.active .tab-close').click();
+    } else {
+      const expired = await popup;
+      await expect(expired.getByText('Preview expired', { exact: true })).toBeVisible();
+      await expired.close();
+    }
+    await file(page, name).click();
+    await expect(source(page)).toContainText('<h1>Cloud HTML</h1>');
+    const toolbar = page.locator('.viewer-breadcrumb');
+    await expect(toolbar.getByRole('button', { name: 'Preview', exact: true })).toBeVisible();
+    const toolbarScreenshot = testInfo.outputPath('cloud-html-preview-toolbar.png');
+    await page.screenshot({ path: toolbarScreenshot });
+    await testInfo.attach('Cloud HTML editor Preview action', { path: toolbarScreenshot, contentType: 'image/png' });
+    const nextPopup = desktop ? null : page.waitForEvent('popup');
+    await toolbar.getByRole('button', { name: 'Preview', exact: true }).click();
+    if (desktop) {
+      await expect(page.locator('#browser-address-input')).toHaveValue(/\/token-3\//);
+      expect(cloud.hostRequests.filter(request => request.method === 'browser.open')).toHaveLength(2);
+      expect(cloud.hostRequests.some(request => request.method === 'browser.preview')).toBe(false);
+    } else {
+      const opened = await nextPopup;
+      await expect(opened.getByRole('heading', { name: 'Cloud HTML', exact: true })).toHaveCSS('color', 'rgb(30, 64, 175)');
+      await opened.getByRole('button', { name: 'Load JSON', exact: true }).click();
+      await expect(opened.locator('output')).toHaveText('Relative JSON loaded');
+      await opened.close();
+    }
+    expect(requests).toHaveLength(3);
+    for (const request of requests) {
+      expect(request.method).toBe('POST');
+      expect(request.url).toBe(`${cloudOrigin}/v1/sessions/${sessionA}/previews`);
+      expect(request.headers.authorization).toBe('Bearer ts_fixture-123');
+      expect(request.body).toEqual({ path });
+    }
+    expect(fileHostRequests(cloud)).toEqual([]);
+    expect(cloud.device.pageErrors).toEqual([]);
+  });
+}
+
 async function showTree(page) {
   const toggle = page.getByRole('button', { name: 'Show file tree', exact: true });
   if (await toggle.isVisible()) await toggle.click();

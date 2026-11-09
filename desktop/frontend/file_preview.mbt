@@ -1,10 +1,37 @@
 ///|
-fn Model::preview_local_file(
+fn Model::preview_file(
   self : Model,
   dispatch : @cmd.Emit[Msg],
   path : String,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(self)
+  if ctx.owner is Cloud(session~, ..) {
+    guard ctx.cloud_files is Some(access) &&
+      ctx.root() is Some(root) &&
+      self.workspace_file(path) is Some(file) &&
+      @resource.relative_to(file, root) is Some(relative) &&
+      @fileeditor.is_html_file(file.path) else {
+      return (@cmd.none, self)
+    }
+    let owner = ctx.owner
+    let auth_epoch = access.epoch
+    let command = @cmd.custom_cmd(scheduler => {
+      @js.Promise::from_async(() => {
+        let result : Result[String, String] = Ok(
+          @cloud_client.create_preview(access.token, session, relative.0),
+        ) catch {
+          @cloud_client.RequestError::RequestError(failure) =>
+            Err(failure.label())
+          error => Err(@interop.bridge_error_text(error))
+        }
+        scheduler.add(
+          dispatch(CloudFilePreviewCreated(owner~, auth_epoch~, result~)),
+        )
+      })
+      |> ignore
+    })
+    return (command, self)
+  }
   guard self.is_desktop && ctx.owner is Host(owner) && owner.channel is Local else {
     return (@cmd.none, self)
   }

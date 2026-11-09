@@ -149,8 +149,7 @@ fn panel_view(
         actions.file_editor,
         input.file_panel,
         input.file_ctx,
-        preview=if input.is_desktop &&
-          input.file_ctx.owner is Host({ channel: Local, .. }) {
+        preview=if input.file_ctx.can_preview_html(desktop=input.is_desktop) {
           input.file_ctx.active_file.map(path => {
             (actions.preview_file)(path.to_string())
           })
