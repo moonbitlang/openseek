@@ -32,7 +32,7 @@ fn relaunch_marker_path(work_dir : String) -> String {
 async fn relaunch_marker_target(work_dir : String) -> String? {
   let marker = relaunch_marker_path(work_dir)
   guard @fs.exists(marker) else { return None }
-  let target = @fs.read_file(marker).text().trim().to_owned() catch {
+  let target = @fs.read_text(marker).trim().to_owned() catch {
       _ => return None
     }
   Some(target)
@@ -57,9 +57,10 @@ pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit {
   }
   // /bin/mv rather than rename: the staging directory may sit on another
   // volume than the bundle, and mv falls back to copying there.
-  let code = @process.run("mv", [staged_app, bundle_path]) catch {
+  let result = @process.run("mv", [staged_app, bundle_path]) catch {
     error => raise move_in_failure(aside, bundle_path, "\{error}")
   }
+  let code = result.exit_code
   guard code == 0 else {
     raise move_in_failure(aside, bundle_path, "mv exited \{code}")
   }
@@ -108,7 +109,7 @@ pub async fn write_relaunch_marker(
   work_dir~ : String,
   bundle_path~ : String,
 ) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     relaunch_marker_path(work_dir),
     bundle_path,
     create_mode=CreateOrTruncate,

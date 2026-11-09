@@ -130,7 +130,7 @@ async fn fetch_archive(
       entry,
       output="\{temporary}/skill.zip",
     )
-    let bytes = @fs.read_file(download.path).binary()
+    let bytes = @fs.read_binary(download.path)
     let archive = @zip.read(
       bytes,
       limits=archive_limits(bytes.length()),

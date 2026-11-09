@@ -23,9 +23,8 @@ async test "fork preserves checkout probe errors without creating a member" {
   let checkout = workspace.join(".worktrees/example").to_string()
   @fs.symlink(checkout, target=checkout)
   defer @fs.remove(checkout)
-  let expected = try @fs.kind(checkout) catch {
-    @os_error.OSError(_) as error => error.to_string()
-    error => raise error
+  let expected = try @fsx.is_dir(checkout |> @pathx.Path) catch {
+    error => "\{error}"
   } noraise {
     _ => fail("expected the checkout probe to fail")
   }
@@ -41,8 +40,8 @@ async test "fork preserves checkout probe errors without creating a member" {
       _ => published = true,
     )
   catch {
-    @os_error.OSError(_) as error => assert_eq(error.to_string(), expected)
-    error => raise error
+    @worktree.WorktreeError(_) as error => raise error
+    error => assert_eq("\{error}", expected)
   } noraise {
     _ => fail("a failed checkout probe must refuse the fork")
   }

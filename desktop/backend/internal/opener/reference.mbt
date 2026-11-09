@@ -94,7 +94,7 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
     return EditorPath(path=self.path, line=self.line, column=self.column)
   }
   let data = source.read_all()
-  match @filekind.classify(data.binary()) {
+  match @filekind.classify(data) {
     Utf8Text(_) =>
       EditorPath(path=self.path, line=self.line, column=self.column)
     Pdf => EditorPath(path=self.path, line=self.line, column=self.column)

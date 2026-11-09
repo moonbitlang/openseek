@@ -22,7 +22,7 @@ async fn with_toolchain_test_tree(
 /// A complete fake toolchain: the resolver only assembles one around the
 /// executable the desktop spawns — `moon`.
 async fn touch_fake_toolchain(bin_dir : @pathx.Absolute) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     bin_dir.join("moon" + ExecutableSuffix).to_string(),
     "",
     create_mode=CreateOrTruncate,
@@ -38,7 +38,7 @@ async test "a non-executable moon file does not count" {
     let home_bin = root.join("home").join(".moon").join("bin")
     @fs.mkdir(path_bin.to_string(), recursive=true)
     @fs.mkdir(home_bin.to_string(), recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       path_bin.join("moon").to_string(),
       "",
       create_mode=CreateOrTruncate,
@@ -76,7 +76,7 @@ async test "an executable moon is a usable toolchain" {
   with_toolchain_test_tree(root => {
     let bin_dir = root.join("bin")
     @fs.mkdir(bin_dir.to_string(), recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       bin_dir.join("moon" + ExecutableSuffix).to_string(),
       "",
       create_mode=CreateOrTruncate,
@@ -91,7 +91,7 @@ async test "a file-shaped path entry does not abort the scan" {
   with_toolchain_test_tree(root => {
     let not_a_dir = root.join("notdir")
     let home_bin = root.join("home").join(".moon").join("bin")
-    @fs.write_file(not_a_dir.to_string(), "", create_mode=CreateOrTruncate)
+    @fs.write_text(not_a_dir.to_string(), "", create_mode=CreateOrTruncate)
     @fs.mkdir(home_bin.to_string(), recursive=true)
     touch_fake_toolchain(home_bin)
     let toolchain = external_toolchain(
@@ -165,7 +165,7 @@ async test "explicit seed selection checks platform and fails without fallback" 
   with_toolchain_test_tree(root => {
     let seed = root.join("seed with spaces")
     @fs.mkdir(seed.to_string(), recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       seed.join(MoonbitSeedVersionFile).to_string(),
       "fixture",
       create_mode=CreateOrTruncate,
@@ -231,7 +231,7 @@ async test "explicit seed selection checks platform and fails without fallback" 
       is None,
     )
     for content in ["", " \n\t"] {
-      @fs.write_file(marker, content, create_mode=CreateOrTruncate)
+      @fs.write_text(marker, content, create_mode=CreateOrTruncate)
       assert_true(
         bundled_source(
           platform="linux-x64",

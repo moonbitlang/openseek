@@ -111,7 +111,7 @@ async fn download(
   on_progress(0, total_bytes)
   let mut downloaded_bytes = 0
   let mut reported_bytes = 0
-  while client.read_some(max_len=256 * 1024) is Some(chunk) {
+  while client.read() is Some(chunk) {
     output.write(chunk)
     downloaded_bytes += chunk.length()
     if downloaded_bytes - reported_bytes >= 1024 * 1024 {
@@ -129,11 +129,13 @@ async fn download(
 /// Follow the release host's redirects before opening the archive. Close each
 /// intermediate response without buffering its body; progress describes only
 /// the final package. Five hops bound a misconfigured redirect loop.
-async fn download_response(url : String) -> (@http.Response, @http.Client) {
+async fn download_response(
+  url : String,
+) -> (@http.ResponseHeader, @http.ClientConnection) {
   let mut current = url
   for hop in 0..<6 {
     // Content-Length must describe the bytes written to the archive.
-    let (response, client) = @http.get_stream(current, headers={
+    let (response, client) = @http.get(current, headers={
       "Accept-Encoding": "identity",
     }) catch {
       error => raise UpdateError("update download failed: \{error}")
@@ -191,7 +193,7 @@ fn download_redirect_target(
 
 ///|
 async fn verify_digest(archive : String, expected : String) -> Unit {
-  let bytes = @fs.read_file(archive).binary()
+  let bytes = @fs.read_binary(archive)
   let actual = @crypto.bytes_to_hex_string(@crypto.sha256(bytes)).to_lower()
   guard actual == expected else {
     raise UpdateError("update package digest mismatch")
@@ -212,15 +214,18 @@ async fn extracted_app(extract_dir : String) -> String {
 ///|
 /// Run a verification/extraction tool, failing loudly with its output.
 async fn run_tool(command : String, args : Array[String]) -> Unit {
-  let (code, output) = @process.collect_output_merged(
+  let result = @process.run(
     command,
     args,
     inherit_env=true,
+    stdout=Collect,
+    stderr=DuplicateStdout,
   ) catch {
     error => raise UpdateError("\{command} failed: \{error}")
   }
+  let code = result.exit_code
   guard code == 0 else {
-    raise UpdateError("\{command} failed: \{output.text().trim()}")
+    raise UpdateError("\{command} failed: \{result.stdout_text().trim()}")
   }
 }
 
@@ -260,14 +265,17 @@ priv enum SigningTeam {
 /// refusal that is itself an answer; any other failure — the tool missing,
 /// the path gone, a bundle it cannot parse — leaves the question open.
 async fn signing_team(app_path : String) -> SigningTeam {
-  let (code, output) = @process.collect_output_merged(
+  let result = @process.run(
     "codesign",
     ["-dv", app_path],
     inherit_env=true,
+    stdout=Collect,
+    stderr=DuplicateStdout,
   ) catch {
     error => return Unreadable("codesign could not run: \{error}")
   }
-  let text = output.text()
+  let code = result.exit_code
+  let text = result.stdout_text()
   guard code == 0 else {
     return if text.contains("code object is not signed at all") {
       NoTeam

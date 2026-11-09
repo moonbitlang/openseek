@@ -130,7 +130,7 @@ pub async fn write_text_atomic(
   // attempt, holding whatever the caller was saving. Cancellation is among
   // those failures, which is why the removal cannot be cancelled.
   errdefer discard_temp_file(temp)
-  @fs.write_file(temp.to_string(), content, create_mode=CreateNew, permission~)
+  @fs.write_text(temp.to_string(), content, create_mode=CreateNew, permission~)
   // `rename` replaces a present target as one step on every platform. A
   // failure here is therefore a real one — the target is a directory, the
   // volume is read-only — and leaves the target as it was: removing it to

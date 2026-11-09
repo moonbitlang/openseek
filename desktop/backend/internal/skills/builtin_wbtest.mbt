@@ -135,12 +135,12 @@ async test "standalone built-ins upgrade legacy entries in place and retain disa
           ("moonbitlang-office", "moonbitlang/office", ""),
         ] {
         @fs.mkdir("\{directory}/\{id}", recursive=true)
-        @fs.write_file(
+        @fs.write_text(
           "\{directory}/\{id}/SKILL.md",
           "legacy instructions",
           create_mode=CreateNew,
         )
-        @fs.write_file(
+        @fs.write_text(
           "\{directory}/\{id}/.mooncakes.json",
           (
             {
