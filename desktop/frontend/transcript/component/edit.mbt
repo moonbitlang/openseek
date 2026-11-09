@@ -137,6 +137,67 @@ fn MessageEditor::update(
 }
 
 ///|
+test "inline editing emits the revised text with the original image and mention chips" {
+  let original : @composer.Draft = {
+    task: "Explain this image.",
+    images: [{ name: "Image", url: "data:image/png;base64,aW1hZ2U=", }],
+    mentions: [{ ref_: File(path="src/main.mbt"), range: None, }],
+  }
+  let input = Input(
+    source=OpenSeek,
+    focused=Local,
+    active_session="edit-source",
+    can_fork=true,
+    editable_users=[4],
+    current_project=None,
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=None,
+    items=[
+      {
+        identity: "s4",
+        item: { kind: original.user_item(), sequence: Some(4), ts: None, },
+      },
+    ],
+    streaming_response=None,
+    streaming_identity="idle",
+  )
+  guard stream_blocks(input).get(0) is Some(block) else {
+    fail("missing user block")
+  }
+  let submitted : Array[(Int32, @composer.Draft)] = []
+  let send = @cmd.Emit(value => {
+    submitted.push(value)
+    @cmd.none
+  })
+  let (opened, _) = MessageEditor::EditorClosed.update(
+    block,
+    BeginEdit,
+    send,
+    unpin=@cmd.none,
+  )
+  assert_true(opened == EditorDraft(original))
+  let (typed, _) = opened.update(
+    block,
+    EditText("Explain the revised image request."),
+    send,
+    unpin=@cmd.none,
+  )
+  assert_true(submitted.is_empty())
+  let (sent, _) = typed.update(block, SendEdit, send, unpin=@cmd.none)
+  assert_true(sent == typed)
+  assert_true(
+    submitted
+    is [(4, { task: "Explain the revised image request.", images, mentions, })] &&
+    images == original.images &&
+    mentions == original.mentions,
+  )
+  assert_true(opened == EditorDraft(original))
+}
+
+///|
 #derive(Eq)
 priv struct MessageEditors(Map[String, MessageEditor])
 

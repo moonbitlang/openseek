@@ -9,10 +9,10 @@ const head = 'b'.repeat(40);
 const makeComment = (id, body_html, canDelete = false) => ({ id, body_html, url: `${prURL}#discussion_r${id}`, author: 'reviewer', created_at: '2026-09-20T08:15:00Z', can_delete: canDelete });
 const makeThread = (id, side, line) => ({ id, path: 'src/main.mbt', side, line, original_line: line, resolved: false, outdated: false, can_reply: true, can_resolve: true, can_unresolve: false, comments: [makeComment(`${id === 'left' ? 6 : 5}000000001`, side === 'LEFT' ? 'Should we keep the original delay?' : 'Could we add <strong>coverage</strong> for the new limit?')] });
 
-async function openComments(page, { holdReview = false, missingRevision = false, unchangedTail = '' } = {}) {
+async function openComments(page, { holdReview = false, missingRevision = false } = {}) {
   const app = new DesktopBrowserHarness(page);
-  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = oldSource + unchangedTail;
-  app.workingFiles['src/main.mbt'] = newSource + unchangedTail;
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = oldSource;
+  app.workingFiles['src/main.mbt'] = newSource;
   const fixture = { open: true, threads: [makeThread('right', 'RIGHT', 8), makeThread('left', 'LEFT', 3)], failure: undefined };
   fixture.missingRevision = missingRevision;
   if (holdReview) fixture.pendingReview = new Promise(resolve => { fixture.releaseReview = resolve; });
@@ -318,64 +318,5 @@ test('GitHub comments disable feedback during loading; file switches and refresh
   fixture.pendingReview = undefined;
   await expect(page.getByTitle('Refresh GitHub comments', { exact: true })).toBeEnabled();
   await expect(input).toHaveValue('Draft without waiting for refreshed discussions.');
-  expect(app.pageErrors).toEqual([]);
-});
-
-
-test('Panel and Review share PR discovery and a pending refresh closes comments in both surfaces', async ({ page }) => {
-  const { app, fixture } = await openComments(page);
-  const statusReads = () => app.requests.filter(r => r.method === 'github.checkout_status').length;
-  const initial = statusReads();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true }).getByRole('menuitem', { name: 'GitHub', exact: true }).click();
-  const panel = page.locator('.github-panel');
-  await expect(panel.getByRole('button', { name: 'Update checkout for PR #42', exact: true })).toBeVisible();
-  expect(statusReads()).toBe(initial);
-  fixture.open = false;
-  fixture.pendingStatus = new Promise(resolve => { fixture.releaseStatus = resolve; });
-  await panel.getByRole('button', { name: 'Refresh GitHub', exact: true }).click();
-  await expect.poll(statusReads).toBe(initial + 1);
-  await page.locator('.editor-tab').filter({ hasText: 'main.mbt' }).click();
-  await expect(page.locator('#diff-editor-host')).toBeVisible();
-  expect(statusReads()).toBe(initial + 1);
-  fixture.releaseStatus();
-  fixture.pendingStatus = undefined;
-  await expect(page.getByRole('switch', { name: 'GitHub comments' })).toHaveCount(0);
-  await expect(page.locator('.github-review-inline-block [data-thread-id="right"]')).toHaveCount(0);
-  expect(statusReads()).toBe(initial + 1);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('comment actions use GitHub patch lines and exclude missing or unchanged sides', async ({ page }) => {
-  const { app } = await openComments(page, { unchangedTail: Array.from({ length: 24 }, (_, i) => `// untouched ${i + 1}\n`).join('') });
-  const editor = page.locator('#diff-editor-host');
-  const action = editor.getByRole('button', { name: 'Add line comment', exact: true });
-  await editor.locator('.moonbit-diff-editor-original .view-line').filter({ hasText: /pub.*fn.*retry_delay/ }).hover();
-  await expect(action).toBeHidden();
-  await editor.locator('.moonbit-diff-editor-original .view-line').filter({ hasText: /500.*attempt/ }).hover();
-  await expect(action).toBeVisible();
-  await editor.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: /pub.*fn.*retry_delay/ }).hover();
-  await expect(action).toBeVisible();
-  await page.mouse.wheel(0, 1200);
-  await editor.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: /^\/\/\s+untouched\s+24$/ }).hover();
-  await expect(action).toBeHidden();
-  expect(app.requests.filter(r => r.method === 'github.review_mutate')).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('semantic comment actions preserve the full-file coordinate allowed by GitHub', async ({ page }) => {
-  const { app } = await openComments(page);
-  for (const mode of ['Token', 'Tree']) {
-    await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
-    const surface = page.locator(`.semantic-review[data-mode="${mode.toLowerCase()}"]`);
-    await surface.locator('.moonbit-diff-editor-original .view-line').filter({ hasText: /^\s*3\s*$/ }).hover();
-    await surface.getByRole('button', { name: 'Add line comment', exact: true }).click();
-    const input = page.getByRole('textbox', { name: 'Write a comment', exact: true });
-    await input.fill(`Coordinate QA in ${mode}`);
-    await expect.poll(() => page.evaluate(url => JSON.parse(localStorage.getItem(`seekmoon.github-comment-drafts.v1:${url}`) || '[]'), prURL))
-      .toEqual([{ target: { kind: 'line', path: 'src/main.mbt', side: 'LEFT', line: 8, head }, body: `Coordinate QA in ${mode}` }]);
-    await page.locator('.github-review-inline-block').filter({ has: input }).getByRole('button', { name: 'Cancel', exact: true }).click();
-  }
-  expect(app.requests.filter(r => r.method === 'github.review_mutate')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });

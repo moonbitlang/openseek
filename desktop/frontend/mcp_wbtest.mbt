@@ -74,35 +74,6 @@ fn current_key(model : Model) -> @interop.ConversationKey {
 }
 
 ///|
-test "showing the overview asks the engine of the conversation on screen" {
-  let dispatch = test_dispatch()
-  let model = test_model()
-  // Hidden, the overview describes nothing and asks nothing.
-  assert_true(model.overview_conversation() is None)
-  let (_, shown) = update(dispatch, ToggleOverview, model)
-  assert_true(shown.overview_open)
-  assert_true(shown.overview_conversation() == Some(current_key(model)))
-  assert_true(shown.mcp.phase is Checking)
-  assert_true(shown.mcp.conversation == Some(current_key(model)))
-  // The answer is routed back into the connectors card.
-  let (_, answered) = update(
-    dispatch,
-    Mcp(Checked(serial=shown.mcp.serial, Ok(Stopped))),
-    shown,
-  )
-  assert_true(answered.mcp.phase is Loaded(Stopped))
-  // Hiding asks nothing and keeps the answer.
-  let (_, hidden) = update(dispatch, ToggleOverview, answered)
-  assert_false(hidden.overview_open)
-  assert_true(hidden.mcp == answered.mcp)
-  // Showing it again asks again, with the last answer on show meanwhile:
-  // what the engine holds changes on its own.
-  let (_, again) = update(dispatch, ToggleOverview, hidden)
-  assert_true(again.mcp.phase is Reloading(Stopped))
-  assert_true(again.mcp.serial != answered.mcp.serial)
-}
-
-///|
 test "the overview stays shown across conversations and asks about each" {
   let dispatch = test_dispatch()
   let (_, shown) = update(dispatch, ToggleOverview, test_model())

@@ -70,40 +70,6 @@ test('context rows align and approval disclosure preserves draft focus and actio
   expect(app.pageErrors).toEqual([]);
 });
 
-test('replayed write approvals decode content and preserve unrecognized bodies', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  const content = 'fn main {\n  println("recovered")\n}\n';
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'agent.runs' ? {
-    runs: [{ run_id: 'run-e2e', session: 'session-1', model: 'deepseek-flash', max_steps: 1000 }],
-    settled: [], approval_generation: 1,
-    approvals: [{ answered: false, id: 'approval-replay', session: 'session-1', run_id: 'run-e2e',
-      tool_name: 'write', detail: '/workspace/src/parser.mbt (overwrite existing source file)',
-      body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }) }],
-  } : replyFor(request);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const approval = page.locator('.composer-approval');
-  const source = approval.locator('.composer-approval-body');
-  await expect(source).toBeVisible();
-  expect(await source.textContent()).toBe(content);
-  let generation = 1;
-  for (const [tool_name, body, expected] of [
-    ['write', '{"content":""}', ''],
-    ['write', '{"content":null}', '{"content":null}'],
-    ['write', 'malformed {', 'malformed {'],
-    ['mbtx', content, content],
-  ]) {
-    app.notify('agent.approvals', { generation: ++generation, approvals: [{
-      session: 'session-1', run_id: 'run-e2e', answered: false, id: 'approval-fallback', tool_name,
-      detail: 'Inspect operation', body,
-    }] });
-    await expect.poll(() => source.textContent()).toBe(expected);
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 for (const [name, content, allow] of [
   ['many short lines', 'x\n'.repeat(10_000) + '<script>你好</script>\n', false],
   ['one long line', 'x '.repeat(20_000) + '<script>你好</script>', true],

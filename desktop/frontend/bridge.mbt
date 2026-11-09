@@ -1054,30 +1054,36 @@ async fn refresh_sessions_into(
       return
     }
   }
-  // A failed store is not an empty store. Report the host's cause and keep
-  // the last successful inventory instead of replacing it with missing rows.
-  for group in reply.groups {
-    if !group.error.is_empty() {
-      scheduler.add(
-        dispatch(
-          SessionsFailed(
-            message="\{group.workspace}: \{group.error}",
-            connection_generation~,
-            request_generation~,
-          ),
-        ),
-      )
-      return
-    }
-  }
   scheduler.add(
     dispatch(
-      SessionsLoaded(
-        @transcript.sessions_from_reply(reply, channel),
-        connection_generation~,
-        request_generation~,
+      session_list_message(
+        channel, reply, connection_generation, request_generation,
       ),
     ),
+  )
+}
+
+///|
+fn session_list_message(
+  channel : @interop.ChannelId,
+  reply : @protocol.SessionsReply,
+  connection_generation : Int32,
+  request_generation : Int32,
+) -> DeviceMsg {
+  // A failed store is not an empty store. Keep its last successful inventory.
+  for group in reply.groups {
+    if !group.error.is_empty() {
+      return SessionsFailed(
+        message="\{group.workspace}: \{group.error}",
+        connection_generation~,
+        request_generation~,
+      )
+    }
+  }
+  SessionsLoaded(
+    @transcript.sessions_from_reply(reply, channel),
+    connection_generation~,
+    request_generation~,
   )
 }
 
@@ -1710,5 +1716,81 @@ fn bridge_notification(
       } else {
         @cmd.none
       }
+  }
+}
+
+///|
+test "a failed project inventory preserves rows on startup and refresh until a successful empty reply" {
+  let channel = @interop.ChannelId::Local
+  let failed_reply : @protocol.SessionsReply = @json.from_json({
+    "groups": [
+      {
+        "workspace": "/work",
+        "name": "work",
+        "session_root": "/work/.openseek",
+        "sessions": [],
+        "error": "failed to run engine: file not found",
+      },
+    ],
+  })
+  let listed_reply : @protocol.SessionsReply = @json.from_json({
+    "groups": [
+      {
+        "workspace": "/work",
+        "name": "work",
+        "session_root": "/work/.openseek",
+        "sessions": [
+          {
+            "id": "listed",
+            "title": "Keep this conversation",
+            "updated_at_ms": 1,
+          },
+        ],
+        "error": "",
+      },
+    ],
+  })
+  for have_inventory in [false, true] {
+    let initial = test_model()
+    let dev = initial.dev()
+    let (_, listed) = update_dev(
+      test_dispatch(),
+      session_list_message(
+        channel,
+        listed_reply,
+        dev.connection_generation,
+        dev.sessions_request_generation,
+      ),
+      initial,
+    )
+    let before = if have_inventory { listed } else { initial }
+    let (_, failed) = update_dev(
+      test_dispatch(),
+      session_list_message(
+        channel,
+        failed_reply,
+        dev.connection_generation,
+        dev.sessions_request_generation,
+      ),
+      before,
+    )
+    assert_eq(
+      failed.notifications.last().unwrap().message,
+      "Session list unavailable: /work: failed to run engine: file not found",
+    )
+    assert_true(failed.dev().sessions == before.dev().sessions)
+    assert_true(failed.conversations == before.conversations)
+    let empty_reply : @protocol.SessionsReply = @json.from_json({ "groups": [] })
+    let (_, empty) = update_dev(
+      test_dispatch(),
+      session_list_message(
+        channel,
+        empty_reply,
+        dev.connection_generation,
+        dev.sessions_request_generation,
+      ),
+      failed,
+    )
+    assert_true(empty.dev().sessions.is_empty())
   }
 }

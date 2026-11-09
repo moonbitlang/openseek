@@ -301,4 +301,64 @@ async test "Cloud workspace HTTP preserves request, content, and failure contrac
   check_file_failures()
   check_large_file_request()
   check_attachment_requests()
+  check_export_failure_contracts()
+}
+
+///|
+async fn check_export_failure_contracts() -> Unit {
+  let cases : Array[(Int32, String, String)] = [
+    (409, "", "This conversation has no complete original log to export."),
+    (503, "", "Cloud answered HTTP 503. Try again."),
+    (
+      200, "{\"html\":\"incomplete snapshot\"}", "Cloud returned an invalid response. Try again.",
+    ),
+    (-1, "", "Cloud is unreachable. Check your connection and try again."),
+  ]
+  for (status, body, expected) in cases {
+    let requests = []
+    let restore = mock_file_http(status, (url, method_, authorization) => {
+      requests.push((url, method_, authorization))
+      body
+    })
+    defer restore()
+    let failure = try {
+      ignore(@cloud.export_snapshot("test-token", "session/?"))
+      "unexpected snapshot"
+    } catch {
+      @cloud.RequestError::RequestError(failure) => failure.label()
+      _ => "unexpected error"
+    }
+    assert_eq(failure, expected)
+    if status >= 0 {
+      assert_eq(requests, [
+        (
+          @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/export",
+          "GET",
+          "Bearer test-token",
+        ),
+      ])
+    }
+    if status == 409 || status == 503 {
+      let failure = try {
+        ignore(@cloud.share("test-token", "session/?", "explicit-attempt"))
+        "unexpected publication"
+      } catch {
+        @cloud.RequestError::RequestError(failure) => failure.label()
+        _ => "unexpected error"
+      }
+      assert_eq(failure, expected)
+      assert_eq(requests, [
+        (
+          @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/export",
+          "GET",
+          "Bearer test-token",
+        ),
+        (
+          @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/share",
+          "POST",
+          "Bearer test-token",
+        ),
+      ])
+    }
+  }
 }

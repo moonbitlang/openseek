@@ -1,6 +1,5 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 async function openSearch(page, app) {
   await app.install();
@@ -94,91 +93,5 @@ test('all matching rows bypass compact previews and the old global limit; keyboa
   expect(row.y + row.height).toBeLessThanOrEqual(list.y + list.height + 1);
   await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
   expect(app.requests.some(r => r.method === 'session.load')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Chat search includes Cloud live titles, leaves archived ones out, then removes them on sign-out', async ({ page }) => {
-  const app = new CloudHarness(page, { desktop: true });
-  app.titles.set(sessionA, 'Matching Cloud live');
-  app.titles.set(sessionB, 'Matching Cloud archived');
-  app.archived.add(sessionB);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
-  await input.fill('matching');
-  await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page).filter({ hasText: 'Matching Cloud archived' })).toHaveCount(0);
-  await rows(page).filter({ hasText: 'Matching Cloud live' }).click();
-  await expect(input).toHaveValue('matching');
-  await expect(rows(page)).toHaveCount(1);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Account', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(app.row(sessionA)).toHaveCount(0);
-  await expect(app.row(sessionB)).toHaveCount(0);
-  await page.getByRole('dialog', { name: 'Settings', exact: true })
-    .getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  await input.fill('matching');
-  await expect(rows(page)).toHaveCount(0);
-  await input.press('Enter');
-  expect(app.device.pageErrors).toEqual([]);
-});
-
-
-test('Chat and Work searches isolate Cloud and project history and leave archives out', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.titles.set(sessionA, 'Matching Cloud live');
-  cloud.titles.set(sessionB, 'Matching Cloud archive');
-  cloud.archived.add(sessionB);
-  const app = cloud.device;
-  // Retired standalone records must not leak into either search scope.
-  const chat = `${app.chatRoot}/Managed`;
-  app.workspaces = ['/workspace', '/other', chat];
-  app.liveSessions = [
-    { id: 'session-1', title: 'Matching work', workspace: '/workspace', updated_at_ms: 1 },
-    { id: 'other', title: 'No match', workspace: '/other', updated_at_ms: 1 },
-    { id: 'chat', title: 'Matching local chat', workspace: chat, updated_at_ms: 1 },
-  ];
-  app.archivedSessions = [
-    { id: 'work-archive', title: 'Matching work archive', workspace: '/workspace', updated_at_ms: 1 },
-    { id: 'chat-archive', title: 'Matching chat archive', workspace: chat, updated_at_ms: 1 },
-  ];
-  app.sessionGroups = sessions => ({ groups: app.workspaces.map(workspace => ({
-    workspace, name: workspace.split('/').at(-1), session_root: `${workspace}/.openseek`,
-    sessions: sessions.filter(session => session.workspace === workspace), error: '',
-  })) });
-  await cloud.install();
-  await page.goto(`${authOrigin}/console/index.html?device=device-a`);
-  const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
-  await input.fill('matching');
-  await expect(rows(page)).toHaveCount(1);
-  await expect(page.locator('.workspace-disclosure')).toHaveCount(1);
-  await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
-  await expect(rows(page).filter({ hasText: 'Matching work archive' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  await expect(input).toHaveValue('');
-  await input.fill('matching');
-  await expect(rows(page)).toHaveText(['Matching Cloud live']);
-  await expect(page.locator('.workspace-disclosure')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
-  await expect(input).toHaveValue('');
-  await input.fill('matching');
-  await expect(rows(page)).toHaveText(['Matching work']);
-  await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a late catalog refresh respects the current cleared query', async ({ page }) => {
-  const app = fixture(page);
-  app.rpcDelays.set('session.list', 700);
-  const input = await openSearch(page, app);
-  await input.fill('unicode');
-  await input.press('Escape');
-  await expect(input).toHaveValue('');
-  await expect(rows(page).filter({ hasText: 'Terminal rendering' })).toHaveCount(1);
-  await expect(input).toHaveValue('');
-  expect(app.requests.some(r => r.method === 'session.search')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });

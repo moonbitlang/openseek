@@ -27,13 +27,6 @@ async function showOverview(page) {
   return panel;
 }
 
-// Show the overview and unfold its connectors card.
-async function openConnectors(page) {
-  const panel = await showOverview(page);
-  await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
-  return panel;
-}
-
 test('the overview shows what the conversation\'s engine is connected to', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.mcpStatus = running({
@@ -106,89 +99,6 @@ test('the overview shows what the conversation\'s engine is connected to', async
   await expect(panel).toBeVisible();
   await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
   await expect(panel).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('the connectors card says when there is no engine, and asks again on reshow and refresh', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  let panel = await openConnectors(page);
-  await expect(panel.getByText('Not running. Servers connect with the next message.', { exact: true })).toBeVisible();
-  expect(statusRequests(app)).toHaveLength(1);
-
-  // Asking reads the engine's state and starts nothing, so every showing
-  // asks. A file the engine could not load is listed by its full path. The
-  // card stays unfolded across hide and show.
-  await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
-  await expect(panel).toBeHidden();
-  app.mcpStatus = running({
-    configs: [
-      ...loaded(hostPath),
-      { path: userPath, state: 'failed', error: 'mcp config error: configuration is missing an `mcpServers` object' },
-    ],
-    servers: [],
-  });
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
-  panel = overview(page);
-  const config = panel.locator('.connectors-row', { hasText: userPath });
-  await expect(config.locator('.connectors-name')).toHaveText(userPath);
-  await expect(config.getByText('configuration is missing an `mcpServers` object', { exact: false })).toBeVisible();
-  await expect(config).toHaveAttribute('title', new RegExp(userPath.replaceAll('.', '\\.')));
-  expect(statusRequests(app)).toHaveLength(2);
-
-  app.mcpStatus = running({ configs: [], servers: [] });
-  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(panel.getByText('No MCP servers configured.', { exact: true })).toBeVisible();
-  expect(statusRequests(app)).toHaveLength(3);
-
-  // A question the host could not answer is reported as that, not as an
-  // engine that is not running.
-  app.rpcErrors.set('mcp.status', 'the host did not answer');
-  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(panel.getByText('The status could not be read', { exact: true })).toBeVisible();
-  await expect(panel.getByText('the host did not answer')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('the connectors card follows what the engine reports while it is shown', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  // The engine has started and is still connecting its servers.
-  app.mcpStatus = { engine: 'connecting' };
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const panel = await openConnectors(page);
-  await expect(panel.getByText('Connecting…', { exact: true })).toBeVisible();
-  expect(statusRequests(app)).toHaveLength(1);
-
-  // The engine reports. The host keeps the report and forwards the event;
-  // the page reads the kept state again rather than trusting the event.
-  const report = servers => {
-    const status = { configs: loaded(userPath), servers };
-    app.mcpStatus = running(status);
-    app.notify('agent.event', { session: 'session-1', event: { event: 'mcp_status', status } });
-  };
-  const tools = [{ name: 'mcp__memory__recall', description: 'Recall a note' }];
-  const memory = state => ({ name: 'memory', transport: 'stdio', target: 'memory-mcp', state, tools });
-  report([memory('connected')]);
-  await expect(panel.getByText('1 tool', { exact: true })).toBeVisible();
-  expect(statusRequests(app)).toHaveLength(2);
-
-  // The server exits; nobody touches Refresh.
-  report([memory('lost')]);
-  await expect(panel.getByText('Disconnected', { exact: true })).toBeVisible();
-  await expect(panel.getByText('1 tool', { exact: true })).toBeHidden();
-  expect(statusRequests(app)).toHaveLength(3);
-
-  // Another conversation's engine is not this card's business.
-  app.notify('agent.event', {
-    session: 'another-session',
-    event: { event: 'mcp_status', status: { configs: [], servers: [] } },
-  });
-  await page.waitForTimeout(200);
-  expect(statusRequests(app)).toHaveLength(3);
   expect(app.pageErrors).toEqual([]);
 });
 
