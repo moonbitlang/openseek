@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 5
+pub const HostProtocolRevision : Int32 = 6
 
 pub const SideChatTokenLength : Int32 = 8
 
