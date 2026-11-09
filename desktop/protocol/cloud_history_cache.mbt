@@ -177,3 +177,47 @@ pub extend CloudHistoryCacheReply with FromJson::{from_json}
 
 ///|
 pub extend CloudHistoryCacheReply with ToJson::{to_json}
+
+///|
+pub fn CloudHistoryCachePage::label(
+  page : CloudHistoryCachePage,
+  session : String,
+) -> String {
+  for message in page.messages {
+    guard message is { "kind": "user", .. } else { continue }
+    let text = match message {
+      { "engine_sequence": Number(sequence, ..), .. } if sequence > 0 &&
+        sequence == sequence.to_int().to_double() =>
+        page.session.events
+        .unwrap_or([])
+        .iter()
+        .find_first(event => {
+          event.sequence == sequence.to_int() && event.item is User(_)
+        })
+        .map_or("", event => {
+          match event.item {
+            User(user) => user.content.text()
+            _ => ""
+          }
+        })
+      { "data": { "content": String(text), .. }, .. } => text
+      { "data": { "content": Array(parts), .. }, .. } =>
+        parts
+        .iter()
+        .filter_map(part => {
+          match part {
+            { "type": "text", "text": String(text), .. } => Some(text)
+            _ => None
+          }
+        })
+        .head()
+        .unwrap_or("")
+      _ => ""
+    }
+    if !text.is_blank() {
+      let line = text.trim().to_owned().split("\n").head().unwrap_or("")
+      return String::from_iter(line.iter().take(80))
+    }
+  }
+  session
+}

@@ -1,3 +1,4 @@
+import { historyCacheRows } from './support/cloud_history_cache.js';
 import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
@@ -154,6 +155,11 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   expect((await unchanged).status()).toBe(304);
   expect(await requests.at(-1).headerValue('if-none-match')).toBe(firstTag);
   await expect(bubbles).toHaveCount(3);
+  // Older pages survive revisits in memory, while persistence keeps only the latest turn.
+  await expect.poll(async () => (await historyCacheRows(page)).find(row => row.session === sessionA)?.page.offset).toBe(2);
+  const saved = (await historyCacheRows(page)).find(row => row.session === sessionA).page;
+  expect(saved.session.events.map(event => event.sequence)).toEqual([7, 8, 9]);
+  expect(saved.etag).toBe(firstTag);
   const task = page.locator('#task');
   for (const prompt of ['Third question', 'Second question', 'First question']) {
     await task.press('Home');

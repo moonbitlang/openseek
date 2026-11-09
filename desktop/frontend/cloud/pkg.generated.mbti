@@ -36,7 +36,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, desktop_history? : Bool) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -153,7 +153,7 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
-  history_disk_request : Int32?
+  history_cache_request : Int32?
   history_window : HistoryWindow
   history_older_request : (Int32, Int32, Int32)?
   history_turn_request : (Int32, Int32)?
@@ -293,7 +293,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
-  DiskHistoryLoaded(Int32, String, Int32, History?)
+  CachedHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, @cloud_client.Failure)

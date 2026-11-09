@@ -90,7 +90,7 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
-  history_disk_request : Int32?
+  history_cache_request : Int32?
   history_window : HistoryWindow
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
@@ -161,7 +161,7 @@ fn Conversation::empty() -> Conversation {
     history_cached: false,
     history_etag: None,
     history_reading: false,
-    history_disk_request: None,
+    history_cache_request: None,
     history_window: HistoryWindow::empty(),
     history_older_request: None,
     history_turn_request: None,
@@ -354,7 +354,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
-  DiskHistoryLoaded(Int32, String, Int32, History?)
+  CachedHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, Failure)
