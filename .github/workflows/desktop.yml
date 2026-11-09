@@ -163,11 +163,6 @@ jobs:
         # production build instead of repeatedly transferring debug output.
         run: node package/build.mjs browser --release
 
-      - name: Build static preview test fixture
-        run: |
-          moon build --target native --release desktop/backend/static_preview/test_server
-          echo "OPENSEEK_DESKTOP_PREVIEW_SERVER=$GITHUB_WORKSPACE/_build/native/release/build/openseek_desktop/backend/static_preview/test_server/test_server.exe" >> "$GITHUB_ENV"
-
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e
         env:
@@ -183,8 +178,6 @@ jobs:
           docker run --rm --init --ipc=host --network host \
             --env CI=true \
             --env OPENSEEK_DESKTOP_BROWSER_BASE_URL \
-            --env OPENSEEK_DESKTOP_PREVIEW_SERVER \
-            --volume "$HOME/.moon:/root/.moon" \
             --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
             --workdir "$GITHUB_WORKSPACE/desktop/e2e" \
             "$PLAYWRIGHT_IMAGE" npm test
