@@ -665,7 +665,7 @@
 .msg-content.markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: 0.95em 0 0.45em;
   line-height: 1.35;
-  font-size: 1em;
+  font-size: 1.15em;
   font-weight: 600;
 }
 .msg-content.markdown ul,
@@ -1122,6 +1122,7 @@
   border-radius: var(--radius-xs);
   background: var(--color-bg-content);
   color: var(--color-text-inline-code);
+  box-decoration-break: clone;
   /* Tone alone marks code in prose; the transparent edge keeps the geometry
      a file link's accent border recolors. */
   border: 1px solid transparent;
