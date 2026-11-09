@@ -1083,7 +1083,8 @@ button.row-twisty:hover {
 }
 
 .sidebar-footer {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: calc(1em / 14);
   min-width: 0;
   border-top: 1px solid var(--color-border);
@@ -1131,49 +1132,51 @@ button.row-twisty:hover {
   }
 }
 
-.sidebar-new-project {
+.sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1em / 14);
+  min-width: 0;
+  padding: var(--space-3) var(--sidebar-inset);
+}
+
+.sidebar-search {
   --icon-size: var(--icon-md);
-  box-sizing: border-box;
-  width: calc(100% - 2 * var(--space-5));
-  min-height: 2rem;
-  margin: 0 var(--space-5) var(--space-5);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: 2em;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.sidebar-search > .icon {
+  justify-self: center;
+  color: var(--color-text-muted);
+}
+.sidebar-search:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 .sidebar-new-project:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
-
-.sidebar-search {
-  --icon-size: var(--icon-md);
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  box-sizing: border-box;
-  height: 2rem;
-  margin: var(--space-4) var(--space-5) var(--space-5);
-  width: calc(100% - 2 * var(--space-5));
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-seam);
-  border-radius: 7px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-md);
-}
-.sidebar-search:focus-within {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
 .sidebar-search input {
-  flex: 1;
   min-width: 0;
   width: 100%;
   padding: 0;
   border: 0;
   outline: none;
-  color: var(--color-text-primary);
+  background: transparent;
+  color: inherit;
   font: inherit;
 }
-.sidebar-search input::placeholder { color: var(--color-text-muted); }
+.sidebar-search input::placeholder { color: inherit; opacity: 1; }
 .sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
 .conversation-row.search-selected { background: var(--color-bg-subtle); }
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
