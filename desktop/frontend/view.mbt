@@ -2475,13 +2475,8 @@ fn view(
     file_ctx(model).cloud_files is Some(_)
   } else {
     file_panel_visible ||
-    (
-      !model.narrow &&
-      (
-        model.screen is Codex ||
-        (model.screen is Chat && model.active_conversation() is Some(_))
-      )
-    )
+    (model.screen is Chat && model.active_conversation() is Some(_)) ||
+    (!model.narrow && model.screen is Codex)
   }
   let panel_toggle_label = if file_panel_visible {
     shell_text(model.locale, HidePanel)
