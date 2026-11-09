@@ -50,7 +50,11 @@ priv enum Phase {
 /// successive queries even when their text is identical.
 #derive(Eq)
 priv struct Open {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
+  cloud_access : @cloud_client.Access?
+  /// Cloud's complete file index once `phase` is `Ready`; empty for Host runs,
+  /// whose rows come from bounded Host queries.
+  cloud_files : Array[@pathx.Relative]
   root : @common.Uri?
   value : String
   items : Array[Item]
@@ -107,7 +111,8 @@ pub fn State::is_open(self : State) -> Bool {
 /// package knowing how the application derives any of it.
 #derive(Eq)
 struct Input {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
+  cloud_access : @cloud_client.Access?
   root : @common.Uri?
   /// Open editor tabs that still name usable files, ranked ahead of the Host
   /// index. Deleted tabs remain bookmarks in the editor strip and must not
@@ -123,7 +128,32 @@ pub fn Input::Input(
   open_files~ : Array[@pathx.Relative],
   active_file~ : @pathx.Relative?,
 ) -> Input {
-  { owner, root, open_files, active_file, }
+  { owner: Host(owner), cloud_access: None, root, open_files, active_file, }
+}
+
+///|
+/// Cloud has a complete file index, independently of a connected engine host.
+pub fn Input::cloud(
+  owner~ : @interop.ConversationIdentity,
+  root~ : @common.Uri,
+  access~ : @cloud_client.Access,
+  open_files~ : Array[@pathx.Relative],
+  active_file~ : @pathx.Relative?,
+) -> Input {
+  {
+    owner,
+    cloud_access: Some(access),
+    root: Some(root),
+    open_files,
+    active_file,
+  }
+}
+
+///|
+/// Cloud browses files but has no symbol provider; workspace symbols require
+/// an engine host.
+pub fn Input::supports(self : Input, provider : Provider) -> Bool {
+  !(provider is Symbols && self.owner is @interop.Cloud(..))
 }
 
 ///|
@@ -139,6 +169,12 @@ pub(all) struct Accepted {
 ///|
 pub(all) enum Msg {
   ValueChanged(String)
+  CloudFilesLoaded(
+    owner~ : @interop.ConversationIdentity,
+    generation~ : Int32,
+    files~ : Array[@pathx.Relative]
+  )
+  CloudFilesFailed(owner~ : @interop.ConversationIdentity, generation~ : Int32)
   FilesDue(
     owner~ : @interop.ConversationKey,
     query~ : String,
@@ -194,7 +230,7 @@ pub(all) enum Msg {
 ///|
 /// Which provider the visible input currently selects.
 fn Open::provider(self : Open) -> Provider {
-  if self.value.has_prefix("#") {
+  if self.owner is Host(_) && self.value.has_prefix("#") {
     Symbols
   } else {
     Files

@@ -1,6 +1,7 @@
 import {
   "moonbit-community/rui",
   "moonbit-community/rabbita/dialog",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/fuzzy_match",
   "moonbit-community/rabbita",

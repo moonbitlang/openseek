@@ -23,12 +23,32 @@ fn open_cloud_file(
     is Some(reference) else {
     return (@cmd.none, model)
   }
-  let resource = @resource.join_relative(root, Relative(reference.path))
+  open_cloud_relative(
+    dispatch,
+    model,
+    root,
+    Relative(reference.path),
+    range,
+    annotation?,
+  )
+}
+
+///|
+/// Open an exact Cloud workspace path, as the file tree and Quick Open name
+/// indexed files rather than Markdown file references.
+fn open_cloud_relative(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  root : @common.Uri,
+  path : @pathx.Relative,
+  range : @common.Range?,
+  annotation? : String,
+) -> (@cmd.Cmd, Model) {
   let model = model.begin_editor_navigation()
   show_editor_resource(
     dispatch,
     model,
-    resource,
+    @resource.join_relative(root, path),
     range,
     annotation?,
     file_link_generation=model.file_panel.file_link_generation,

@@ -1893,12 +1893,9 @@ fn update(
   // many messages — device/session switches, background pushes, connection
   // metadata, restored session data, a worktree registry broadcast — so the
   // package fences the palette once here rather than in every branch.
-  let (quick_open_cmd, quick_open) = match model.active_checkout() {
-    Some(active) =>
-      model.quick_open.reconcile(
-        dispatch.map(msg => QuickOpen(msg)),
-        model.quick_open_input(active),
-      )
+  let (quick_open_cmd, quick_open) = match model.quick_open_input() {
+    Some(input) =>
+      model.quick_open.reconcile(dispatch.map(msg => QuickOpen(msg)), input)
     // No checkout on screen is no owner to fence against — the palette has
     // nothing left to search, so it closes here for the same reason it does
     // when its conversation is replaced.
@@ -1939,7 +1936,7 @@ fn update(
   // still take the generic path so an older active document is restored.
   let file_opened_with_panel = !previous.right_panel_open &&
     model.right_panel_open &&
-    msg.opens_file_before_panel_reconciliation() &&
+    msg.opens_file_before_panel_reconciliation(model) &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
@@ -2129,7 +2126,7 @@ fn update(
         model.dock_state().tabs != previous.dock_state().tabs ||
         model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
-        msg.opens_file_before_panel_reconciliation() ||
+        msg.opens_file_before_panel_reconciliation(model) ||
         msg is Dock(TabActivated(_)),
       ),
     ]),
@@ -2138,10 +2135,15 @@ fn update(
 }
 
 ///|
-/// Only the resolved editor reply opens a document during this transition.
-/// Every file selection first asks the host to classify the path.
-fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
-  self is OpenPathResolved(_, Editor(_))
+/// Host file selections first ask the host to classify the path, so only the
+/// resolved editor reply opens a document during this transition. A Cloud
+/// Quick Open pick names an indexed file and opens it synchronously.
+fn Msg::opens_file_before_panel_reconciliation(
+  self : Msg,
+  model : Model,
+) -> Bool {
+  self is OpenPathResolved(_, Editor(_)) ||
+  (model.cloud_selected() && self is QuickOpen(@quick_open.Pick(_)))
 }
 
 ///|
@@ -3719,14 +3721,7 @@ fn update_msg(
         guard file_ctx(model).root() is Some(root) else {
           return (@cmd.none, model)
         }
-        let model = model.begin_editor_navigation()
-        show_editor_resource(
-          dispatch,
-          model,
-          @resource.join_relative(root, path),
-          None,
-          file_link_generation=model.file_panel.file_link_generation,
-        )
+        open_cloud_relative(dispatch, model, root, path, None)
       } else {
         request_open_path(dispatch, model, path.0, None)
       }
@@ -19874,6 +19869,7 @@ test "file editor context reports the file body actual visibility" {
 
 ///|
 test "only synchronous file-open messages suppress panel reactivation" {
+  let host = test_model()
   let owner : @interop.ConversationKey = {
     channel: Local,
     session: "desktop-test",
@@ -19882,14 +19878,14 @@ test "only synchronous file-open messages suppress panel reactivation" {
     owner: @interop.Host(owner),
     archive_generation: 0,
   }
-  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation())
+  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation(host))
   assert_false(
     ComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
     CodexComposerAction(
@@ -19897,24 +19893,26 @@ test "only synchronous file-open messages suppress panel reactivation" {
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
-    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
+    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(
+      host,
+    ),
   )
   assert_false(
-    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(host),
   )
   assert_true(
     OpenPathResolved(
       FileOpenContext::new(owner, 1),
       Editor({ path: "a.mbt", line: Some(1), column: None, }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   // This only starts the asynchronous host lookup. The later OpenPathResolved is
   // the message that actually opens the document.
-  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation())
-  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation())
+  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation(host))
+  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation(host))
 }
 
 ///|

@@ -1,6 +1,7 @@
 import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { CloudHarness, settledResponse, authOrigin, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 class CloudFilesHarness extends CloudHarness {
@@ -13,6 +14,7 @@ class CloudFilesHarness extends CloudHarness {
     this.largePreviews = new Map();
     this.fileStatus = 200;
     this.holdRead = null;
+    this.holdIndex = null;
     this.holdHead = null;
     this.downloads = new Map();
     this.downloadStatus = 200;
@@ -59,6 +61,7 @@ class CloudFilesHarness extends CloudHarness {
     }
     let body;
     if (index) {
+      if (this.holdIndex) await this.holdIndex;
       body = { files: this.indexes.get(session) || [] };
     } else if (contentPath) {
       body = allowLarge === 'true' && this.largePreviews.has(`${session}:${path}`)
@@ -1270,4 +1273,73 @@ test('Cloud context download reuses a cached file while another preview stays ac
   await expect(source(page)).toContainText('Other preview');
   await expect(page.locator('.editor-tab.active .tab-name')).toHaveText('other.txt');
   expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud Quick Open finds and opens files without a host', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  await cloud.install(); await page.goto(`${authOrigin}/cloud`);
+  await expect(page.locator('#task')).toBeEnabled();
+  await cloud.open();
+  const palette = page.getByRole('dialog', { name: 'Search workspace files', exact: true });
+  await page.keyboard.press('ControlOrMeta+p');
+  const query = palette.getByRole('combobox');
+  await expect(query).toBeFocused();
+  await expect(query).toHaveAttribute('aria-keyshortcuts', 'Meta+P Control+P');
+  await query.fill('hello');
+  await expect(palette.getByRole('option')).toContainText(['hello #.mbt']);
+  await query.press('Enter');
+  await expect(palette).toHaveCount(0);
+  await expect(source(page)).toContainText('"Cloud text"');
+  // The pick opened the panel; reconciling it must not read the file again.
+  expect(cloud.fileRequests.filter(request => request.content && request.path === 'src/hello #.mbt')).toHaveLength(1);
+  expect(cloud.fileRequests.some(request => request.index && request.session === sessionA)).toBe(true);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud Quick Open closes on a session switch and ignores the previous index response', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.indexes.set(sessionB, ['second-only.txt']);
+  await cloud.install(); await page.goto(`${authOrigin}/cloud`);
+  await expect(page.locator('#task')).toBeEnabled();
+  await cloud.open(sessionB); await cloud.open(sessionA);
+  let finish;
+  cloud.holdIndex = new Promise(resolve => { finish = resolve; });
+  const palette = page.getByRole('dialog', { name: 'Search workspace files', exact: true });
+  await page.keyboard.press('ControlOrMeta+p');
+  await expect(palette).toBeVisible();
+  await expect.poll(() => cloud.fileRequests.filter(request => request.index && request.session === sessionA).length).toBeGreaterThan(0);
+  await page.goBack();
+  await expect(cloud.row(sessionB)).toHaveAttribute('aria-current', 'true');
+  await expect(palette).toHaveCount(0);
+  cloud.holdIndex = null;
+  await page.keyboard.press('ControlOrMeta+p');
+  await expect(palette.getByRole('option')).toContainText(['second-only.txt']);
+  const lateReply = settledResponse(page, response => response.url().includes(`/${sessionA}/files/index`));
+  finish();
+  await lateReply;
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(palette.getByRole('option')).toHaveCount(1);
+  await expect(palette.getByRole('option')).toContainText(['second-only.txt']);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Host Quick Open retains both file and workspace-symbol shortcuts', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const reply = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'lsp.workspace_symbols'
+    ? { symbols: [{ name: 'fixture_symbol', path: 'src/main.mbt', kind: 12, container: null, range: { start: { line: 1, col: 0 }, end: { line: 1, col: 14 } } }] }
+    : reply(request);
+  await app.install(); await app.goto(); await app.openSession();
+  await page.keyboard.press('ControlOrMeta+p');
+  await expect(page.getByRole('dialog', { name: 'Search workspace files', exact: true })).toBeVisible();
+  await page.locator('#quick-open-input').press('Escape');
+  await page.keyboard.press('ControlOrMeta+t');
+  const palette = page.getByRole('dialog', { name: 'Search workspace symbols', exact: true });
+  await expect(palette).toBeVisible();
+  await expect(palette.getByRole('option')).toContainText(['fixture_symbol']);
+  expect(app.requests.some(request => request.method === 'fs.search_files')).toBe(true);
+  expect(app.requests.some(request => request.method === 'lsp.workspace_symbols')).toBe(true);
+  expect(app.pageErrors).toEqual([]);
 });
