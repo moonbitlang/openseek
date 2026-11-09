@@ -113,38 +113,12 @@ fn Model::archived_chat_groups(self : Model) -> Array[@archived_chats.Group] {
 }
 
 ///|
-/// What the archived page asks the shell to do: rows route through the
-/// sidebar's dispatcher, and the way back is a visit to Settings.
+/// Archived rows route through the same dispatcher as sidebar conversations.
 fn archived_chats_actions(dispatch : @cmd.Emit[Msg]) -> @archived_chats.Actions {
   let sidebar = SidebarDispatcher::{ emit: dispatch, }
   {
-    back: dispatch(OpenSetup),
     open: id => sidebar.conversation_open(id),
     restore: id => sidebar.conversation_restore(id),
     delete: id => sidebar.conversation_delete(id),
   }
-}
-
-///|
-/// Settings' entry to the archived-conversations page.
-fn archived_chats_settings(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> @html.Html {
-  let locale = model.locale
-  let count = @archived_chats.count(model.archived_chat_groups())
-  @settings.group(@icons.icon_archive, @archived_chats.text(locale, Title), [
-    @settings.row(
-      @archived_chats.text(locale, ArchivedCount(count)),
-      [
-        @html.button(
-          class="button secondary",
-          type_="button",
-          on_click=dispatch(OpenArchivedChats),
-          @archived_chats.text(locale, Manage),
-        ),
-      ],
-      desc=@archived_chats.text(locale, Description),
-    ),
-  ])
 }

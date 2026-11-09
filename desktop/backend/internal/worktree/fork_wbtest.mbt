@@ -7,7 +7,7 @@ async test "a fork gets its own checkout at the source's HEAD, without its uncom
   with_recovery_fixture((repo, host) => {
     let created = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )
@@ -90,7 +90,7 @@ async test "a fork whose record was not written leaves no worktree behind" {
   with_recovery_fixture((repo, host) => {
     let created = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )
@@ -162,7 +162,7 @@ async test "a source whose checkout is gone is refused before anything is made" 
   with_recovery_fixture((repo, host) => {
     let created = create(
       host,
-      resource_path(repo),
+      repo.resource_path(),
       WorktreeOwner::openseek("first"),
       _ => (),
     )

@@ -144,8 +144,10 @@ fn moonbit_syntax_and_api() -> String {
     #|  // before rg sees it, so rg applies it as its own glob. A glob with no `/`
     #|  // matches the basename at any depth. rg ships no `moonbit` file type, so
     #|  // `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen it
-    #|  // to `*.mbt*` when those should count.
-    #|  let out = @shell.Cmd("rg", [
+    #|  // to `*.mbt*` when those should count. rg here is cli/rg, ripgrep ported to
+    #|  // MoonBit and run through moonx; `--` keeps moonx off rg's flags.
+    #|  let out = @shell.Cmd("moonx", [
+    #|    "cli/rg@0.1.1", "--",
     #|    // A regex needle is one ordinary string element, so double the
     #|    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
     #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",

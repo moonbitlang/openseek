@@ -92,3 +92,15 @@ extern "js" fn anchor_href(anchor : @dom.Element) -> String =
 ///|
 extern "js" fn anchor_protocol(anchor : @dom.Element) -> String =
   #| anchor => anchor.protocol
+
+///|
+extern "js" fn dispatch_context_at(
+  element : @dom.Element,
+  x : Int32,
+  y : Int32,
+) -> Unit =
+  #| (element, x, y) => {
+  #|   element.dispatchEvent(new MouseEvent("contextmenu", {
+  #|     bubbles: true, cancelable: true, button: 2, clientX: x, clientY: y,
+  #|   }));
+  #| }

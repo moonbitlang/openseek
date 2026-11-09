@@ -11,7 +11,7 @@ pub impl FromJson for GitHistoryPayload with fn from_json(json, path) {
   }
   {
     session: object.required_string("session"),
-    workspace: object.optional_string("workspace"),
+    workspace: object.required_string("workspace"),
     snapshot,
     skip: object.required_int("skip"),
     limit: object.required_int("limit"),
@@ -22,11 +22,9 @@ pub impl FromJson for GitHistoryPayload with fn from_json(json, path) {
 pub impl ToJson for GitHistoryPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
     "session": Json(self.session),
+    "workspace": Json(self.workspace),
     "skip": Json(self.skip),
     "limit": Json(self.limit),
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = Json(workspace)
   }
   if self.snapshot is Some(snapshot) {
     fields["snapshot"] = ToJson::to_json(snapshot)

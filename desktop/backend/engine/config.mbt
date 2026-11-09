@@ -241,9 +241,7 @@ async fn serve_config(
   // workspaces qualify — the registry, not the payload, decides which
   // directories a run may work in.
   let hinted : @pathx.Absolute? = if workspace is Some(path) {
-    guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-      raise EngineError("workspace is not a supported absolute resource path")
-    }
+    let absolute = @pathx.Absolute::parse_resource_path(path)
     match @workspaces.registered_dir(absolute) {
       Some(dir) => Some(dir)
       None => raise EngineError("\{path} is not a registered workspace")

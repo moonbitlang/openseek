@@ -16,50 +16,13 @@ async fn main {
       "Usage: moon run scripts/package-cli.mbtx <platform> <output-directory>",
     )
   }
-  let (target, digest) = match platform {
-    "linux-x64" =>
-      (
-        "x86_64-unknown-linux-musl", "1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599",
-      )
-    "linux-arm64" =>
-      (
-        "aarch64-unknown-linux-gnu", "2b661c6ef508e902f388e9098d9c4c5aca72c87b55922d94abdba830b4dc885e",
-      )
-    "macos-arm64" =>
-      (
-        "aarch64-apple-darwin", "378e973289176ca0c6054054ee7f631a065874a352bf43f0fa60ef079b6ba715",
-      )
-    "windows-x64" =>
-      (
-        "x86_64-pc-windows-msvc", "124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d87493a",
-      )
-    _ => fail("Unsupported platform: \{platform}")
+  guard platform is ("linux-x64" | "linux-arm64" | "macos-arm64" | "windows-x64") else {
+    fail("Unsupported platform: \{platform}")
   }
   let windows = platform == "windows-x64"
   let suffix = if windows { ".exe" } else { "" }
-  let extension = if windows { ".zip" } else { ".tar.gz" }
   let stage = @fs.tmpdir(prefix="openseek-package-")
   defer @fs.rmdir(stage, recursive=true)
-  let vendor = "\{stage}/ripgrep\{extension}"
-  @shell.Cmd("curl", [
-    "--fail",
-    "--location",
-    "--proto",
-    "=https",
-    "--proto-redir",
-    "=https",
-    "--retry",
-    "2",
-    "--output",
-    vendor,
-    "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-\{target}\{extension}",
-  ]).run()
-  guard sha256(vendor) == digest else {
-    fail("Downloaded rg checksum mismatch")
-  }
-  let rg = "\{stage}/ripgrep"
-  @fs.mkdir(rg)
-  @shell.Cmd("tar", ["-xf", vendor, "-C", rg, "--strip-components=1"]).run()
   let name = "openseek-\{platform}"
   let root = "\{stage}/\{name}"
   @fs.mkdir("\{root}/bin", recursive=true)
@@ -73,20 +36,12 @@ async fn main {
     "\{root}/bin/openseek-app-server\{suffix}",
     @fs.read_file("_build/native/release/build/openseek_desktop/backend/server/server.exe"),
   )
-  @fs.write_file("\{root}/bin/rg\{suffix}", @fs.read_file("\{rg}/rg\{suffix}"))
   if !windows {
     @fs.chmod("\{root}/bin/openseek", 0o755)
     @fs.chmod("\{root}/bin/openseek-app-server", 0o755)
-    @fs.chmod("\{root}/bin/rg", 0o755)
   }
   copy_tree("share", "\{root}/share")
-  @fs.mkdir("\{root}/share/licenses/ripgrep", recursive=true)
-  for license in ["LICENSE-MIT", "UNLICENSE"] {
-    @fs.write_file(
-      "\{root}/share/licenses/ripgrep/\{license}",
-      @fs.read_file("\{rg}/\{license}"),
-    )
-  }
+  @fs.mkdir("\{root}/share/licenses", allow_exist=true)
   @fs.write_file(
     "\{root}/share/licenses/OpenSeek-LICENSE",
     @fs.read_file("LICENSE"),

@@ -6,7 +6,7 @@ test "Cloud blank, expired and changed-account file contexts have no Host placem
   assert_true(ctx.placement is None)
   assert_true(ctx.cloud_files is Some(_))
   assert_true(
-    file_ctx({ ..model, management_dialog: Some(Settings), }).cloud_files ==
+    file_ctx({ ..model, management_dialog: Some(Settings(General)), }).cloud_files ==
     file_ctx(model).cloud_files,
   )
   let unavailable = file_ctx({ ..model, account: None, })
@@ -55,7 +55,7 @@ test "Explorer from Settings preserves Cloud files and the covered Host dock" {
     model = opened
   }
   let (_, settings) = update(dispatch, OpenSetup, model)
-  assert_true(settings.management_dialog is Some(Settings))
+  assert_true(settings.management_dialog is Some(Settings(General)))
   assert_true(settings.dock_owner() == cloud_owner)
   let input_ctx = file_ctx(settings)
   for _ in 0..<2 {
@@ -182,6 +182,7 @@ test "deleting an inactive Cloud session clears its documents and dock bookmarks
           updated_at: None,
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
       ],
     },

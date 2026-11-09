@@ -11,6 +11,7 @@ fn integrated_cloud_model() -> Model {
         updated_at: Some(100),
         generating: false,
         archived: false,
+        approval: ApprovalAsk,
       },
     ],
   }
@@ -83,7 +84,7 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   let dispatch = test_dispatch()
   let model = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, model)
-  assert_true(settings.management_dialog is Some(Settings))
+  assert_true(settings.management_dialog is Some(Settings(General)))
   let (_, cloud) = update(
     dispatch,
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
@@ -274,6 +275,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(100),
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
         {
           id: "cloud-b",
@@ -281,6 +283,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(300),
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
       ],
     },

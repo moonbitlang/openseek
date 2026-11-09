@@ -10,8 +10,7 @@
 const ResizeHandleId = "editor-resize-handle"
 
 ///|
-/// The class toggled on the document element for the duration of a drag, so CSS
-/// can show the resize cursor and suppress text selection everywhere.
+/// The drag class shared by the resize cursor and viewer mouse-event isolation.
 const ResizingClass = "is-resizing"
 
 ///|

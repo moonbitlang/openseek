@@ -30,9 +30,6 @@
     padding-inline-end: var(--panel-toggle-inline-inset);
   }
 
-  .quick-open-backdrop {
-    --quick-open-top: 16px;
-  }
   .quick-open-list {
     max-height: calc(100vh - 116px);
   }
@@ -134,18 +131,6 @@
      distinct action there. */
   .panel-expand {
     display: none;
-  }
-
-  /* Settings and Skills: one column — label and description above,
-     the control below at full width. */
-  .setting-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-4);
-  }
-  .setting-control {
-    width: 100%;
-    justify-content: flex-start;
   }
 
   /* Errors stay below the header so a failed send leaves its restored draft

@@ -82,7 +82,16 @@ pub(all) enum Message {
   System
   Settings
   Preferences
+  General
+  Connections
+  SystemSettings
+  RemoteAccessSignInRequired
+  SshHosts
   Interface
+  TranscriptView
+  TranscriptViewDescription
+  MinimalView
+  DetailView
   Engine
   MaxSteps
   MaxStepsDescription
@@ -135,6 +144,36 @@ pub(all) enum Message {
 /// ```
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, General) => "General"
+    (Spanish, General) => "General"
+    (SimplifiedChinese, General) => "通用"
+    (TraditionalChinese, General) => "一般"
+    (Japanese, General) => "一般"
+    (English, Connections) => "Connections"
+    (Spanish, Connections) => "Conexiones"
+    (SimplifiedChinese, Connections) => "连接"
+    (TraditionalChinese, Connections) => "連線"
+    (Japanese, Connections) => "接続"
+    (English, SystemSettings) => "System"
+    (Spanish, SystemSettings) => "Sistema"
+    (SimplifiedChinese, SystemSettings) => "系统"
+    (TraditionalChinese, SystemSettings) => "系統"
+    (Japanese, SystemSettings) => "システム"
+    (English, RemoteAccessSignInRequired) =>
+      "Sign in under Account to allow other devices to access this computer."
+    (Spanish, RemoteAccessSignInRequired) =>
+      "Inicia sesión en Cuenta para permitir que otros dispositivos accedan a este equipo."
+    (SimplifiedChinese, RemoteAccessSignInRequired) =>
+      "在“账户”中登录后，可允许其他设备访问这台电脑。"
+    (TraditionalChinese, RemoteAccessSignInRequired) =>
+      "在「帳戶」中登入後，可允許其他裝置存取這台電腦。"
+    (Japanese, RemoteAccessSignInRequired) =>
+      "他のデバイスからこのコンピューターへのアクセスを許可するには、「アカウント」でログインしてください。"
+    (English, SshHosts) => "SSH hosts"
+    (Spanish, SshHosts) => "Hosts SSH"
+    (SimplifiedChinese, SshHosts) => "SSH 主机"
+    (TraditionalChinese, SshHosts) => "SSH 主機"
+    (Japanese, SshHosts) => "SSH ホスト"
     (English, HelpImproveSeekMoon) => "Help improve SeekMoon"
     (Spanish, HelpImproveSeekMoon) => "Ayudar a mejorar SeekMoon"
     (SimplifiedChinese, HelpImproveSeekMoon) => "帮助改进 SeekMoon"
@@ -688,6 +727,31 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Preferences) => "偏好设置"
     (TraditionalChinese, Preferences) => "偏好設定"
     (Japanese, Preferences) => "環境設定"
+    (English, TranscriptView) => "Conversation view"
+    (Spanish, TranscriptView) => "Vista de conversación"
+    (SimplifiedChinese, TranscriptView) => "对话显示"
+    (TraditionalChinese, TranscriptView) => "對話顯示"
+    (Japanese, TranscriptView) => "会話の表示"
+    (English, TranscriptViewDescription) =>
+      "Choose how much detail conversations show. Narrow screens use Minimal."
+    (Spanish, TranscriptViewDescription) =>
+      "Elige cuánto detalle muestran las conversaciones. Las pantallas estrechas usan la vista mínima."
+    (SimplifiedChinese, TranscriptViewDescription) =>
+      "选择对话显示的详细程度。窄屏使用精简模式。"
+    (TraditionalChinese, TranscriptViewDescription) =>
+      "選擇對話顯示的詳細程度。窄螢幕使用精簡模式。"
+    (Japanese, TranscriptViewDescription) =>
+      "会話の詳しさを選択します。狭い画面では簡易表示になります。"
+    (English, MinimalView) => "Minimal"
+    (Spanish, MinimalView) => "Mínima"
+    (SimplifiedChinese, MinimalView) => "精简"
+    (TraditionalChinese, MinimalView) => "精簡"
+    (Japanese, MinimalView) => "簡易"
+    (English, DetailView) => "Detail"
+    (Spanish, DetailView) => "Detallada"
+    (SimplifiedChinese, DetailView) => "详细"
+    (TraditionalChinese, DetailView) => "詳細"
+    (Japanese, DetailView) => "詳細"
     (English, Interface) => "Interface"
     (Spanish, Interface) => "Interfaz"
     (SimplifiedChinese, Interface) => "界面"

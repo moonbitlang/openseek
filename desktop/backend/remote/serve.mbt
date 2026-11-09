@@ -144,13 +144,7 @@ const CodeMethodNotFound = -32601
 const CodeInvalidParams = -32602
 
 ///|
-const CodeInternalError = -32603
-
-///|
-const CodeEngineError = -32000
-
-///|
-const CodeHostError = -32001
+const CodeRequestFailed = -32000
 
 ///|
 /// Dial and serve one announced remote client. A client hanging up mid-run
@@ -381,7 +375,7 @@ fn notification_for_client(
 
 ///|
 /// Run one request through the dispatcher and shape the outcome as a
-/// JSON-RPC response, mapping each typed failure to its protocol code.
+/// JSON-RPC response.
 async fn run_request(
   endpoints : Array[@endpoint.Endpoint],
   id : Json,
@@ -397,12 +391,7 @@ async fn run_request(
       return error_envelope(id, CodeInvalidParams, "\{error}")
     @host.PayloadError(message) =>
       return error_envelope(id, CodeInvalidParams, message)
-    @engine.EngineError(message) =>
-      return error_envelope(id, CodeEngineError, message)
-    @host.HostError(message) =>
-      return error_envelope(id, CodeHostError, message)
-    error =>
-      return error_envelope(id, CodeInternalError, "internal error: \{error}")
+    error => return error_envelope(id, CodeRequestFailed, "\{error}")
   }
   { "jsonrpc": "2.0", "id": id, "result": result }
 }

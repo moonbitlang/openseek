@@ -9,8 +9,13 @@ for (const entry of ['sidebar', 'Settings', 'new chat']) {
     cloud.pauseAuthorizationCancel = cancellation.promise;
     await cloud.install();
     await cloud.goto();
-    if (entry === 'Settings') await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const scope = entry === 'Settings' ? page.getByRole('dialog') : page.locator('aside .cloud-sign-in');
+    const openAccount = async () => {
+      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await page.getByRole('tab', { name: 'Account', exact: true }).click();
+    };
+    const account = page.getByRole('region', { name: 'Account', exact: true });
+    if (entry === 'Settings') await openAccount();
+    const scope = entry === 'Settings' ? account : page.locator('aside .cloud-sign-in');
     const start = () => entry === 'new chat'
       ? page.getByRole('button', { name: 'New chat', exact: true }).click()
       : scope.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -42,8 +47,8 @@ for (const entry of ['sidebar', 'Settings', 'new chat']) {
     await expect(scope).toContainText('Finish signing in in your browser…');
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(2);
     cloud.authorization.resolve();
-    if (entry !== 'Settings') await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Sign out', exact: true }).first()).toBeVisible();
+    if (entry !== 'Settings') await openAccount();
+    await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   });
@@ -61,14 +66,16 @@ for (const locale of ['en', 'zh-Hans']) {
       await page.locator('#language-select').click();
       await page.getByRole('option', { name: '简体中文', exact: true }).click();
     }
-    const home = page.getByRole('dialog');
+    const accountName = chinese ? '账户' : 'Account';
+    await page.getByRole('tab', { name: accountName, exact: true }).click();
+    const home = page.getByRole('region', { name: accountName, exact: true });
     const signIn = home.getByRole('button', { name: chinese ? '登录' : 'Sign in', exact: true });
     await signIn.click();
     await expect(home).toContainText(chinese ? '登录未完成，请重试。' : "Sign-in wasn't completed. Try again.");
     await expect(signIn).toBeEnabled();
     cloud.authorizationError = null;
     await signIn.click();
-    await expect(page.getByRole('button', { name: chinese ? '退出登录' : 'Sign out', exact: true }).first()).toBeVisible();
+    await expect(home.getByRole('button', { name: chinese ? '退出登录' : 'Sign out', exact: true })).toBeVisible();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(2);
     expect(cloud.device.pageErrors).toEqual([]);
   });

@@ -36,16 +36,10 @@ async fn main {
   // the user's login-shell environment (PATH, custom variables) onto this
   // process before anything downstream — engine, LSP, mbtx snippets — spawns.
   @shellenv.apply_login_shell_env(executable)
-  // The user's login shell supplies the base environment, then installed
-  // tools take precedence. Both the OpenSeek engine and Codex app-server are
-  // created below and therefore pass this packaged `rg` to agent tool calls.
   // Proton knows where this host's files are; everything below is told.
   let resources : @resources.Resources = {
     dir: @proton.resource_dir(),
     packaged: @proton.is_packaged(),
-  }
-  if @host.PackagedTools::resolve(Some(resources)) is Some(tools) {
-    tools.apply_to_process_env()
   }
   let frontend_entry = @host.frontend_entry_path(resources)
   let engine = @engine.engine_command(resources)

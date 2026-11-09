@@ -34,7 +34,7 @@ async function openConnectors(page) {
   return panel;
 }
 
-test('the overview shows what the conversation\'s engine is connected to', async ({ page }, testInfo) => {
+test('the overview shows what the conversation\'s engine is connected to', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.mcpStatus = running({
     configs: loaded(hostPath, userPath),
@@ -96,7 +96,6 @@ test('the overview shows what the conversation\'s engine is connected to', async
   await expect(docs.getByText('JSON-RPC error -32000: MCP endpoint exchange failed')).toBeVisible();
   await expect(panel.getByText('Disconnected', { exact: true })).toBeVisible();
   await expect(panel.getByText('No tools', { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('connectors.png') });
 
   // The question names the conversation on screen, whose engine is asked.
   expect(statusRequests(app).map(request => request.params)).toEqual([{ session: 'session-1' }]);
@@ -110,14 +109,13 @@ test('the overview shows what the conversation\'s engine is connected to', async
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the connectors card says when there is no engine, and asks again on reshow and refresh', async ({ page }, testInfo) => {
+test('the connectors card says when there is no engine, and asks again on reshow and refresh', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
   await app.openSession();
   let panel = await openConnectors(page);
   await expect(panel.getByText('Not running. Servers connect with the next message.', { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('connectors-stopped.png') });
   expect(statusRequests(app)).toHaveLength(1);
 
   // Asking reads the engine's state and starts nothing, so every showing
@@ -138,7 +136,6 @@ test('the connectors card says when there is no engine, and asks again on reshow
   await expect(config.locator('.connectors-name')).toHaveText(userPath);
   await expect(config.getByText('configuration is missing an `mcpServers` object', { exact: false })).toBeVisible();
   await expect(config).toHaveAttribute('title', new RegExp(userPath.replaceAll('.', '\\.')));
-  await page.screenshot({ path: testInfo.outputPath('connectors-config-failed.png') });
   expect(statusRequests(app)).toHaveLength(2);
 
   app.mcpStatus = running({ configs: [], servers: [] });
@@ -195,7 +192,7 @@ test('the connectors card follows what the engine reports while it is shown', as
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the overview is a rail beside a wide conversation and a panel over a narrow one', async ({ page }, testInfo) => {
+test('the overview is a rail beside a wide conversation and a panel over a narrow one', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await app.install();
@@ -246,9 +243,7 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await page.mouse.wheel(0, -200);
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeLessThan(bottom);
   await scroller.evaluate((el) => { el.scrollTop = 0; });
-  await page.screenshot({ path: testInfo.outputPath('overview-rail-scrollbar.png') });
   await scroller.evaluate((el) => { el.querySelector('.stream').style.paddingBottom = ''; });
-  await page.screenshot({ path: testInfo.outputPath('overview-rail.png') });
 
   // Cards taller than the pane scroll inside the rail, which stops at the
   // pane's bottom edge and takes the pointer itself, its scrollbar included.
@@ -275,7 +270,6 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   const narrowComposer = await page.locator('.composer').first().boundingBox();
   expect(over.x).toBeLessThan(narrowTranscript.x + narrowTranscript.width);
   expect(over.y + over.height).toBeLessThanOrEqual(narrowComposer.y + 1);
-  await page.screenshot({ path: testInfo.outputPath('overview-panel.png') });
   await page.getByRole('textbox').first().click();
   await expect(page.getByRole('textbox').first()).toBeFocused();
 
@@ -298,6 +292,5 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await expect(panel).toBeHidden();
   await page.getByRole('button', { name: 'Show overview', exact: true }).click();
   await expect(panel).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('overview-phone.png') });
   expect(app.pageErrors).toEqual([]);
 });

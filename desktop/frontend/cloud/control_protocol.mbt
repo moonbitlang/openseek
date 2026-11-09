@@ -70,6 +70,44 @@ pub impl FromJson for SteerReceipt with fn from_json(json, path) {
 }
 
 ///|
+/// The permission question blocking the active task's tool. The snapshot is
+/// its only source: it is published when a question appears and when it
+/// settles, so a reconnecting client recovers the card from its baseline.
+#derive(Eq)
+pub struct ControlApproval {
+  id : String
+  tool_name : String
+  detail : String
+  // Display text, decoded once here: write arguments become their contents.
+  body : String?
+}
+
+///|
+pub impl FromJson for ControlApproval with fn from_json(json, path) {
+  guard json
+    is {
+      "id": String(id),
+      "tool_name": String(tool_name),
+      "detail": String(detail),
+      ..
+    } else {
+    raise @json.JsonDecodeError((path, "expected approval question"))
+  }
+  let body = match json {
+    { "body": String(body), .. } => Some(body)
+    { "body": Null, .. } => None
+    Object(fields) if !fields.contains("body") => None
+    _ => raise @json.JsonDecodeError((path.add_key("body"), "expected body"))
+  }
+  {
+    id,
+    tool_name,
+    detail,
+    body: @engine_session.approval_display_body(tool_name, body),
+  }
+}
+
+///|
 #derive(Eq)
 pub struct ControlState {
   active_task_id : String?
@@ -79,6 +117,7 @@ pub struct ControlState {
   steers : Array[SteerReceipt]
   compact_queued : Bool
   compacting : Bool
+  approval : ControlApproval?
 }
 
 ///|
@@ -127,6 +166,12 @@ pub impl FromJson for ControlState with fn from_json(json, path) {
         @json.from_json(fields["compacting"], path=path.add_key("compacting"))
       _ => false
     },
+    approval: match json {
+      { "approval": Null, .. } => None
+      { "approval": question, .. } =>
+        Some(@json.from_json(question, path=path.add_key("approval")))
+      _ => None
+    },
   }
 }
 
@@ -170,6 +215,8 @@ pub enum ControlOperation {
   QueueEdit(id~ : String, content~ : @wire.Content)
   QueueWithdraw(id~ : String)
   QueueSteer(id~ : String)
+  // Answers the active task's permission question `id`.
+  Approve(id~ : String, allow~ : Bool)
 }
 
 ///|
@@ -352,6 +399,12 @@ pub extend SteerReceipt with Eq::{equal, not_equal}
 
 ///|
 pub extend SteerReceipt with FromJson::{from_json}
+
+///|
+pub extend ControlApproval with Eq::{equal, not_equal}
+
+///|
+pub extend ControlApproval with FromJson::{from_json}
 
 ///|
 pub extend ControlState with Eq::{equal, not_equal}

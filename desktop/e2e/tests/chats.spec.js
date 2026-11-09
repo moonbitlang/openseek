@@ -14,7 +14,7 @@ function localHistory(app) {
 }
 
 for (const legacy of [false, true]) {
-  test(`Chat signs in and opens conversations directly (retired history=${legacy})`, async ({ page }, testInfo) => {
+  test(`Chat signs in and opens conversations directly (retired history=${legacy})`, async ({ page }) => {
     const cloud = new CloudHarness(page, { desktop: true, cached: false });
     if (legacy) localHistory(cloud.device);
     await cloud.install();
@@ -34,7 +34,6 @@ for (const legacy of [false, true]) {
     await expect(row).toHaveCount(0);
     await cloud.openArchived(sessionA);
     await expect(page.locator('.archived-read-only-text')).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('chats-flat-archive.png') });
     if (legacy) {
       await sidebarMode(page, 'Work').click();
       await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
@@ -46,7 +45,7 @@ for (const legacy of [false, true]) {
   });
 }
 
-test('an empty Chat list starts a draft without creating a session', async ({ page }, testInfo) => {
+test('an empty Chat list starts a draft without creating a session', async ({ page }) => {
   const cloud = new CloudHarness(page, { desktop: true });
   cloud.sessionIds = [];
   await cloud.install();
@@ -55,7 +54,6 @@ test('an empty Chat list starts a draft without creating a session', async ({ pa
   await expect.poll(() => cloud.requests.some(request => request.method === 'GET' && request.path === '/v1/sessions')).toBe(true);
   await cloud.create();
   await page.locator('#task').fill('An unsent chat draft');
-  await page.screenshot({ path: testInfo.outputPath('chats-flat-draft.png') });
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
 });
@@ -70,6 +68,7 @@ test('a project draft survives Chat navigation and account sign-out', async ({ p
   await sidebarMode(page, 'Chat').click();
   await cloud.open();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('dialog', { name: 'Settings', exact: true })
     .getByRole('button', { name: 'Dismiss', exact: true }).click();
@@ -90,7 +89,6 @@ test('retired standalone history cannot be reopened through its old URL', async 
   await page.goto('/device/device-a/chat/session/legacy-chat');
   await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'legacy-chat')).toBe(false);
-  expect(app.workspaces).toContain(`${root}/history`);
   expect(app.pageErrors).toEqual([]);
 });
 

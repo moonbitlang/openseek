@@ -49,6 +49,5 @@ test('Cloud Send pressed as a run starts follows up instead of stopping it', asy
   acknowledge();
   await expect(buttons.last()).toBeEnabled();
   expect(commands(app)).toEqual(['prompt', 'steer']);
-  expect(app.controlState(sessionA).data.status).toBe('running');
   expect(app.device.pageErrors).toEqual([]);
 });

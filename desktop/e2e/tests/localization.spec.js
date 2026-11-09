@@ -22,7 +22,6 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   const dismiss = skills.getByRole('button', { name: '关闭', exact: true });
   await expect(dismiss).toBeVisible();
   await expect(dismiss).toHaveText('');
-  await skills.locator('.management-dialog-header').screenshot({ path: test.info().outputPath('chinese-management-header.png') });
   await expect(page.getByPlaceholder('搜索技能…')).toBeVisible();
   await dismiss.click();
   await page.getByRole('button', { name: '定时任务', exact: true }).click();
@@ -46,6 +45,8 @@ test('language selection updates Settings and sidebar and persists across reload
   await expect(page.getByRole('button', { name: '对话', exact: true })).toBeVisible();
   await expect(page.locator('aside .section-label', { hasText: /^项目$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '主题', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '通用', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: '引擎', exact: true }).click();
   await expect(page.getByRole('button', { name: 'API 端点', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存 API 密钥', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '打开 config.toml', exact: true })).toBeVisible();

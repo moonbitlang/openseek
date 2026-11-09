@@ -313,17 +313,6 @@ async fn write_worktrees(
 }
 
 ///|
-/// A host-native absolute path at the protocol boundary. Resource URIs use
-/// their authority for the device, so UNC paths have no reversible encoding
-/// and are rejected explicitly instead of being published under a new host.
-fn resource_path(path : @pathx.Absolute) -> String raise WorktreeError {
-  guard path.to_uri_path() is Some(uri) else {
-    raise WorktreeError("UNC paths are not supported by frontend resources")
-  }
-  uri
-}
-
-///|
 async fn worktree_infos(
   workspace : @pathx.Absolute,
   entries : Array[WorktreeEntry],
@@ -338,7 +327,7 @@ async fn worktree_infos(
       base: entry.base,
       sessions: entry.sessions,
       codex_thread: entry.codex_thread,
-      path: resource_path(path),
+      path: path.resource_path(),
       present,
     })
   }
@@ -627,7 +616,10 @@ pub async fn WorktreeOwner::archive_checkout(
   // the same row lets unarchive surface the existing Repair flow later.
   @async.protect_from_cancel(() => {
     if on_committed is Some(on_committed) {
-      on_committed(resource_path(workspace), worktree_infos(workspace, entries))
+      on_committed(
+        workspace.resource_path(),
+        worktree_infos(workspace, entries),
+      )
     }
   })
   None
@@ -823,7 +815,7 @@ pub async fn add_session_to_new_worktree(
     status,
     limit=ForkUncommittedListLimit,
   )
-  let workspace_settings = @workspaces.settings(resource_path(workspace))
+  let workspace_settings = @workspaces.settings(workspace.resource_path())
   let name = fresh_worktree_name(workspace, entries)
   guard @entropy.random_hex(16) is Some(salt) else {
     raise WorktreeError("no OS entropy available to identify a worktree")
@@ -1025,8 +1017,8 @@ async fn require_main_worktree(dir : @pathx.Absolute) -> Unit {
 /// directory was deleted outside the app reports `present: false` here and
 /// is cleaned up by `remove_worktree`, never by listing.
 pub async fn list(workspace : String) -> @protocol.WorktreesReply {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   worktree_registry_lock.acquire()
@@ -1049,7 +1041,7 @@ pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding] {
       if info.codex_thread is Some(thread_id) {
         bindings.push({
           thread_id,
-          workspace: resource_path(workspace),
+          workspace: workspace.resource_path(),
           worktree: info,
         })
       }
@@ -1143,8 +1135,8 @@ pub async fn create(
   // Registration is checked under the lifecycle lock, which detachment also
   // holds: a workspace can no longer slip out of the registry between this
   // check and the registry commit below.
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
@@ -1163,7 +1155,7 @@ pub async fn create(
   // Snapshot this workspace's setting once for the lifecycle operation. A
   // concurrent page edit applies to the next create or repair instead of
   // changing this checkout halfway through.
-  let workspace_settings = @workspaces.settings(resource_path(dir))
+  let workspace_settings = @workspaces.settings(dir.resource_path())
   let checkout_submodules = workspace_settings.checkout_submodules
   let submodule_checkout_timeout_seconds = workspace_settings.submodule_checkout_timeout_seconds
   worktree_registry_lock.acquire()
@@ -1443,8 +1435,8 @@ pub async fn remove(
   // a checkout from an already-detached workspace.
   host.lifecycle_lock.acquire()
   defer host.lifecycle_lock.release()
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   let entry = {

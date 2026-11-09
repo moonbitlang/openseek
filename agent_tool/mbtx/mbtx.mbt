@@ -732,7 +732,8 @@ async fn execute(
       // of denying source writes as such.
       Some(scope) =>
         @sandbox.SandboxedCommand::create_worker_if_available(
-          Exec(program, command_argv),
+          program,
+          command_argv,
           deny_roots=scope.deny_roots,
           worker_root=scope.worker_root,
           worker_admin_dir?=scope.worker_admin_dir,
@@ -750,8 +751,9 @@ async fn execute(
       // the sandbox.
       None if read_only =>
         @sandbox.SandboxedCommand::create_if_available(
-          workspace_root,
-          Exec(program, command_argv),
+          workspace_root~,
+          program,
+          command_argv,
           // Per-call storage outlives both compilation and any background run.
           profile_path="\{build_dir}/source-write.sb",
           writable_subtree~,
@@ -1765,10 +1767,11 @@ fn description(
     #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
     #|  `path:start` or `path:start:end` (inclusive, 1-based). Output is bounded:
     #|  follow truncated or skipped files with narrower reads. A failing file fails the call; the others still return.
-    #|- `@builtin/rg.mbtx` searches text. `args` go to ripgrep unchanged, so they
-    #|  are rg flags and regex, not POSIX grep (`-E` is `--encoding`; alternation
-    #|  is `a|b`), e.g. args `["fn parse", "-g", "*.mbt"]`. Output is
-    #|  `path:line:text`; no match exits 0 with a note.
+    #|- `@builtin/rg.mbtx` searches text. `args` go to cli/rg (ripgrep ported to
+    #|  MoonBit) unchanged, so they are rg flags and regex, not POSIX grep (`-E`
+    #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
+    #|  `["fn parse", "-g", "*.mbt", "."]`. Output is `path:line:text`; no match
+    #|  exits 0 with a note.
     #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
     #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
     #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and

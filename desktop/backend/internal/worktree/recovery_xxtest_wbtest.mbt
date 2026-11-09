@@ -79,7 +79,7 @@ async fn with_recovery_fixture(
 async test "archive refuses to delete checkout when saving HEAD fails" {
   with_recovery_fixture((repo, host) => {
     let owner = WorktreeOwner::codex("save-failure")
-    let created = create(host, resource_path(repo), owner, _ => ())
+    let created = create(host, repo.resource_path(), owner, _ => ())
     guard read_worktrees_unlocked(repo) is [entry] else { fail("missing row") }
     let checkout = worktree_dir(repo, created.name)
     let head = commit_recovery_fixture(checkout, "must survive failed save")
@@ -103,8 +103,8 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
   with_recovery_fixture((repo, host) => {
     let archived = WorktreeOwner::codex("archived")
     let removed = WorktreeOwner::openseek("removed")
-    let a = create(host, resource_path(repo), archived, _ => ())
-    let b = create(host, resource_path(repo), removed, _ => ())
+    let a = create(host, repo.resource_path(), archived, _ => ())
+    let b = create(host, repo.resource_path(), removed, _ => ())
     let a_dir = worktree_dir(repo, a.name)
     let b_dir = worktree_dir(repo, b.name)
     let saved = @gitx.run(a_dir, ["rev-parse", "HEAD"])
@@ -122,7 +122,7 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
     assert_true(b_head_before is Some(_))
     assert_eq(archived.archive_checkout(host, false), None)
     assert_eq(@fsx.try_read_text(b_metadata.to_path()), b_head_before)
-    ignore(remove(host, resource_path(repo), b.name, false, _ => ()))
+    ignore(remove(host, repo.resource_path(), b.name, false, _ => ()))
     assert_eq(
       @gitx.run(repo, [
         "for-each-ref",
@@ -132,7 +132,7 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
       refs_before,
     )
     collect_recovery_fixture(repo)
-    ignore(create(host, resource_path(repo), archived, _ => ()))
+    ignore(create(host, repo.resource_path(), archived, _ => ()))
     assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), saved)
   })
 }
@@ -142,14 +142,14 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
 async test "detached archive survives GC and later user-created branches" {
   with_recovery_fixture((repo, host) => {
     let owner = WorktreeOwner::codex("archive")
-    let created = create(host, resource_path(repo), owner, _ => ())
+    let created = create(host, repo.resource_path(), owner, _ => ())
     guard created.worktrees is [info] else { fail("missing worktree") }
     let checkout = worktree_dir(repo, info.name)
     let head = commit_recovery_fixture(checkout, "detached work")
     assert_eq(owner.archive_checkout(host, false), None)
     assert_false(@fsx.exists(checkout.to_path()))
     collect_recovery_fixture(repo)
-    let restored = create(host, resource_path(repo), owner, _ => ())
+    let restored = create(host, repo.resource_path(), owner, _ => ())
     assert_eq(restored.name, created.name)
     assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), head)
     assert_eq(
@@ -163,7 +163,7 @@ async test "detached archive survives GC and later user-created branches" {
     assert_eq(owner.archive_checkout(host, false), None)
     assert_false(@fsx.exists(checkout.to_path()))
     collect_recovery_fixture(repo)
-    ignore(create(host, resource_path(repo), owner, _ => ()))
+    ignore(create(host, repo.resource_path(), owner, _ => ()))
     assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), published)
     assert_eq(
       @gitx.run(repo, ["rev-parse", "refs/heads/feature/publish"]),
@@ -202,7 +202,7 @@ async test "failed registry publication rolls back only its own locked checkout"
     // and refuses the rename that publishes a new one, so the create fails
     // at publication, after its checkout exists.
     @fsx.ensure_dir(worktrees_file(repo).to_path())
-    let refused = create_refusal(host, resource_path(repo), "failed", "failed")
+    let refused = create_refusal(host, repo.resource_path(), "failed", "failed")
     assert_true(refused.contains("could not save the worktree list"))
     assert_false(@fsx.exists(worktree_dir(repo, "failed").to_path()))
     assert_eq(
@@ -246,7 +246,7 @@ async test "legacy branch registry still archives and restores its branch" {
     assert_eq(owner.archive_checkout(host, false), None)
     assert_false(@fsx.exists(checkout.to_path()))
     collect_recovery_fixture(repo)
-    let restored = create(host, resource_path(repo), owner, _ => ())
+    let restored = create(host, repo.resource_path(), owner, _ => ())
     guard restored.worktrees is [info] else { fail("missing legacy row") }
     assert_eq(info.branch, Some("openseek/legacy"))
     assert_eq(
@@ -263,12 +263,12 @@ async test "legacy branch registry still archives and restores its branch" {
 async test "repair after external prune and GC restores the last archive save point" {
   with_recovery_fixture((repo, host) => {
     let owner = WorktreeOwner::codex("pruned")
-    let created = create(host, resource_path(repo), owner, _ => ())
+    let created = create(host, repo.resource_path(), owner, _ => ())
     let checkout = worktree_dir(repo, created.name)
     let base = @gitx.run(checkout, ["rev-parse", "HEAD"])
     let saved = commit_recovery_fixture(checkout, "saved by archive")
     assert_eq(owner.archive_checkout(host, false), None)
-    ignore(create(host, resource_path(repo), owner, _ => ()))
+    ignore(create(host, repo.resource_path(), owner, _ => ()))
     let external = commit_recovery_fixture(
       checkout, "external commit after save",
     )
@@ -276,7 +276,7 @@ async test "repair after external prune and GC restores the last archive save po
     @fs.rmdir(checkout.to_string(), recursive=true)
     ignore(@gitx.run(repo, ["worktree", "prune", "--expire=now"]))
     collect_recovery_fixture(repo)
-    ignore(create(host, resource_path(repo), owner, _ => ()))
+    ignore(create(host, repo.resource_path(), owner, _ => ()))
     assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), saved)
     assert_eq(tree_base(repo, "pruned"), Some(base))
   })
@@ -288,8 +288,8 @@ async test "repair restores the OpenSeek save point without touching other workt
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
     let second = WorktreeOwner::codex("second")
-    let a = create(host, resource_path(repo), first, _ => ())
-    let b = create(host, resource_path(repo), second, _ => ())
+    let a = create(host, repo.resource_path(), first, _ => ())
+    let b = create(host, repo.resource_path(), second, _ => ())
     let a_dir = worktree_dir(repo, a.name)
     let b_dir = worktree_dir(repo, b.name)
     let saved = @gitx.run(a_dir, ["rev-parse", "HEAD"])
@@ -306,7 +306,7 @@ async test "repair restores the OpenSeek save point without touching other workt
     let b_metadata = repo.join(".git/worktrees").join(b.name).join("HEAD")
     let b_head_before = @fsx.try_read_text(b_metadata.to_path())
     assert_true(b_head_before is Some(_))
-    ignore(create(host, resource_path(repo), first, _ => ()))
+    ignore(create(host, repo.resource_path(), first, _ => ()))
     assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), saved)
     assert_eq(@fsx.try_read_text(b_metadata.to_path()), b_head_before)
     assert_eq(
@@ -555,7 +555,7 @@ async test "unsupported Git worktree listing refuses creation before publication
     defer @sys.set_env_var("PATH", original_path)
     let error = try {
       ignore(
-        create(host, resource_path(repo), WorktreeOwner::openseek("old-git"), _ => {
+        create(host, repo.resource_path(), WorktreeOwner::openseek("old-git"), _ => {
           ()
         }),
       )

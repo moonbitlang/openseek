@@ -64,7 +64,7 @@ fn request_account_preferences(
 
 ///|
 /// Account changes invalidate every outstanding read/write, including A→B→A.
-/// Settings navigation (including browser history) refreshes server-owned state.
+/// Opening Settings refreshes server-owned state; changing its category does not.
 fn sync_account_preferences(
   dispatch : @cmd.Emit[Msg],
   previous : Model,
@@ -84,13 +84,13 @@ fn sync_account_preferences(
     model
   }
   let preferences = model.account_preferences
-  guard model.management_dialog is Some(Settings) &&
+  guard model.management_dialog is Some(Settings(_)) &&
     !model.remote_connecting &&
     !model.console.busy &&
     !preferences.pending &&
     (
       changed ||
-      previous.management_dialog != Some(Settings) ||
+      !(previous.management_dialog is Some(Settings(_))) ||
       (preferences.value is None && preferences.error is None)
     ) &&
     model.account is Some(account) else {

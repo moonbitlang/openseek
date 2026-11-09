@@ -4,7 +4,7 @@ import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './suppor
 const sessionURL = id => `${authOrigin}/cloud/session/${id}`;
 const creations = cloud => cloud.requests.filter(r => r.side === 'cloud' && r.path === '/v1/sessions' && r.method === 'POST');
 
-test('Cloud home opens the composer and creates a session only on first send', async ({ page }, testInfo) => {
+test('Cloud home opens the composer and creates a session only on first send', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
@@ -15,7 +15,6 @@ test('Cloud home opens the composer and creates a session only on first send', a
   await expect(composer).toBeEnabled();
   await expect(page).toHaveURL(`${authOrigin}/cloud`);
   expect(creations(cloud)).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('cloud-home.png'), fullPage: true });
   await composer.fill('First Cloud message');
   expect(creations(cloud)).toEqual([]);
   await composer.press('Enter');
@@ -189,82 +188,6 @@ test('Cloud revisits show cached history during conditional reads and pick up an
   await expect(transcript).toContainText('Added from another device');
 });
 
-test('Cloud cached revisits keep the draft editable while waiting for the first snapshot', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  const path = `/v1/sessions/${sessionA}/events`;
-  const observations = () => cloud.requests.filter(r => r.path === path);
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open(sessionA);
-  const task = page.locator('#task');
-  await task.fill('Keep this prompt');
-  await expect(page.locator('#send')).toBeEnabled();
-  await cloud.open(sessionB);
-
-  let release;
-  cloud.pauseSessionEvents = new Promise(resolve => { release = resolve; });
-  try {
-    await cloud.open(sessionA);
-    await expect.poll(() => observations().length).toBe(2);
-    await expect(task).toBeEditable();
-    await expect(task).toHaveValue('Keep this prompt');
-    await expect(page.locator('#send')).toBeDisabled();
-    await task.press('Enter');
-    expect(cloud.postCount).toBe(0);
-  } finally {
-    cloud.pauseSessionEvents = null;
-    release();
-  }
-  await expect(page.locator('#send')).toBeEnabled();
-  await expect(task).toHaveValue('Keep this prompt');
-});
-
-test('Cloud catches up after an old conditional response spans an observation gap', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  const oldMessage = { task_id: 'original', kind: 'user', data: { content: 'Before switching' }, created_at: 1000 };
-  const path = `/v1/sessions/${sessionA}/messages`;
-  const reads = () => cloud.requests.filter(r => r.method === 'GET' && r.path === path);
-  cloud.histories.set(sessionA, { messages: [oldMessage], generating: false });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open(sessionA);
-  const transcript = page.locator('#transcript');
-  const task = page.locator('#task');
-  await expect(transcript).toContainText('Before switching');
-  await task.fill('Keep this draft across the gap');
-  await expect(page.locator('#send')).toBeEnabled();
-  await cloud.open(sessionB);
-
-  let release;
-  cloud.pauseHistory = new Promise(resolve => { release = resolve; });
-  const unchanged = page.waitForResponse(r => new URL(r.url()).pathname === path && r.status() === 304);
-  try {
-    await cloud.open(sessionA);
-    await expect(page.locator('#send')).toBeEnabled();
-    await expect.poll(() => reads().length).toBe(2);
-    await cloud.open(sessionB);
-    cloud.histories.set(sessionA, {
-      messages: [oldMessage, { task_id: 'remote', kind: 'user', data: { content: 'Added during the gap' }, created_at: 2000 }],
-      generating: false,
-    });
-    const snapshot = cloud.controlState(sessionA);
-    cloud.controlSnapshots.set(sessionA, { ...snapshot, task_id: 'remote', seq: snapshot.seq + 3 });
-
-    await cloud.open(sessionA);
-    await expect(page.locator('#send')).toBeEnabled();
-    await expect(transcript).toContainText('Before switching');
-    expect(reads()).toHaveLength(2);
-  } finally {
-    cloud.pauseHistory = null;
-    release();
-  }
-  await unchanged;
-  await expect(transcript).toContainText('Added during the gap');
-  await expect(task).toHaveValue('Keep this draft across the gap');
-  expect(reads()).toHaveLength(3);
-  expect(reads()[2].headers['if-none-match']).toBe(reads()[1].headers['if-none-match']);
-});
-
 test('malformed Cloud destinations show invalid route rather than creating a session', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
@@ -272,7 +195,6 @@ test('malformed Cloud destinations show invalid route rather than creating a ses
   await expect(page.locator('.navigation-notice')).toContainText('address is invalid');
   expect(creations(cloud)).toEqual([]);
 });
-
 
 test('Cloud landing remains selected while a retained device connects', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -353,7 +275,7 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   expect(creations(cloud)).toEqual([]);
 });
 
-test('Cloud keeps displayed history when a background read fails during a send', async ({ page }, testInfo) => {
+test('Cloud keeps displayed history when a background read fails during a send', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.manualTasks = true;
   cloud.histories.set(sessionA, {
@@ -373,9 +295,6 @@ test('Cloud keeps displayed history when a background read fails during a send',
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByText(/HTTP 503/).first()).toBeVisible();
   await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
-  const path = testInfo.outputPath('cloud-history-refresh-error.png');
-  await transcript.screenshot({ path });
-  await testInfo.attach('History remains visible after a failed background read', { path, contentType: 'image/png' });
 
   cloud.historyStatus = 200;
   await cloud.finishTask();

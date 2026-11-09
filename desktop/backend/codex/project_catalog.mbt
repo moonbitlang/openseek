@@ -87,8 +87,8 @@ pub fn ProjectCatalog::main_project(
   self : ProjectCatalog,
   cwd : String,
 ) -> String? {
-  guard @pathx.Absolute::from_uri_path(cwd.trim().to_owned()) is Some(requested) else {
-    return None
+  let requested = @pathx.Absolute::parse_resource_path(cwd.trim().to_owned()) catch {
+    InvalidResourcePath => return None
   }
   for project, _ in self.known_projects {
     if @pathx.Path(project).to_absolute() is Some(root) &&

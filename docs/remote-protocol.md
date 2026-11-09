@@ -226,12 +226,13 @@ control-frame definitions in `desktop/backend/tunnel`.
 | `-32700` | unparsable frame | — |
 | `-32600` | not a valid JSON-RPC request | — |
 | `-32601` | unknown method | 404 unknown op |
-| `-32602` | params failed to decode | 400 `PayloadError` |
-| `-32000` | engine error (`EngineError` — busy conversation, spawn failure, …) | 409 |
-| `-32001` | host error (`HostError` — bad path, LSP failure, …) | 409 |
-| `-32603` | internal error | 500 |
+| `-32602` | params failed to decode, or a `PayloadError` | 400 `PayloadError` |
+| `-32000` | the method ran and failed (a busy conversation, a refused path, a git refusal, an unexpected failure, …) | 409 / 500 |
 
-`error.message` is the user-facing text. `error.data` is unused for now.
+`error.message` is the user-facing text: the failing error's own message.
+Clients show it and do not branch on the code, so failures of every kind
+share `-32000`; an error type a method raises needs only a message written
+for the person reading it. `error.data` is unused for now.
 
 ## Connection lifecycle: reconnect = resync
 
@@ -651,9 +652,9 @@ The protocol is intentionally single-root: `../`, `~/`, and absolute search
 locations are rejected instead of escaping `root`. Includes are emitted first
 and every default or request exclusion follows, so an exclusion wins when both
 match. The Host accepts at most 20,000 occurrences and sets `limit_hit` when the
-cap is reached. A connection teardown cancels every process it owns. Installed
-builds resolve only their packaged ripgrep; a `PATH` fallback is permitted
-solely for a detected development layout.
+cap is reached. A connection teardown cancels every process it owns. The Host runs the
+pinned `cli/rg` package (ripgrep ported to MoonBit) through the selected
+MoonBit toolchain's `moonx`; installed builds do not bundle a native ripgrep.
 
 ### terminal.* — connection-scoped PTYs
 

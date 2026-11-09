@@ -223,61 +223,18 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.pdf-password-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  padding: var(--space-7);
-  background: rgb(0 0 0 / 20%);
-}
-.pdf-password-dialog {
-  display: grid;
-  gap: var(--space-6);
-  width: min(23rem, 100%);
-  padding: var(--space-7);
-  color: var(--color-text-primary);
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
-}
-.pdf-password-dialog h2 {
-  margin: 0;
-  font-size: var(--font-size-emphasis);
-}
-.pdf-password-dialog input {
+#pdf-password-dialog input {
   width: 100%;
   padding: var(--space-4);
   color: inherit;
-  background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
 }
 .pdf-password-error {
-  color: #dc2626;
+  color: var(--color-danger);
 }
-.pdf-password-overlay.hidden,
 .pdf-password-error.hidden {
   display: none;
-}
-.pdf-password-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-4);
-}
-.pdf-password-actions button {
-  padding: var(--space-3) var(--space-5);
-  color: var(--color-text-primary);
-  background: var(--color-control-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.pdf-password-actions button:disabled {
-  opacity: .45;
-  cursor: default;
 }
 
 .office-selection-preview,
@@ -488,7 +445,7 @@
 }
 .office-viewer-surface .office-context-unplaced-heading[hidden] { display: none; }
 .office-viewer-surface .office-context-active {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 2px var(--color-accent-soft);
 }
 .office-viewer-surface .office-context-header {
@@ -523,13 +480,13 @@
   display: block;
   margin: var(--space-5) 0 0;
   padding: var(--space-5) 0 0;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
   background: transparent;
   color: inherit;
 }
 .office-viewer-surface .office-context-reply {
   padding-left: var(--space-5);
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 .office-viewer-surface .office-context-author { font-size: var(--font-size-sm); font-weight: 600; overflow-wrap: anywhere; }
 .office-viewer-surface .office-context-hint,
@@ -607,13 +564,13 @@
   border-left: 10px solid transparent;
 }
 .office-viewer-surface td.office-has-annotation { position: relative; }
-.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px var(--color-accent-strong); }
+.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px var(--color-accent); }
 .office-viewer-surface .office-context-heading:focus-visible,
 .office-viewer-surface .office-context-select:focus-visible,
 .office-viewer-surface .office-comment-marker:focus-visible,
 .office-viewer-surface .office-note-marker:focus-visible,
 .office-viewer-surface .office-annotation-body:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: var(--color-accent-strong); stroke-width: 4px; stroke-opacity: .5; }
+.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: var(--color-accent); stroke-width: 4px; stroke-opacity: .5; }
 .office-viewer-surface .office-context-entry.office-annotation-selected > .office-annotation-body {
   background: var(--color-accent-soft);
   box-shadow: 0 0 0 4px var(--color-accent-soft);
@@ -718,7 +675,7 @@
 .office-viewer-surface .excel-sheet-tab:hover { background: var(--color-bg-subtle); color: var(--color-text-primary); }
 .office-viewer-surface .excel-sheet-tab.is-active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-weight: 600;
 }
 .office-viewer-surface .excel-sheet-tab:focus-visible {

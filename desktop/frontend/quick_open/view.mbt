@@ -17,17 +17,20 @@ fn row_id(index : Int32) -> String {
 /// Move keyboard focus into the palette input once it exists. Opening renders
 /// the dialog for the first time, so the write waits for that render.
 fn focus_after_render() -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
-        let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
-      }
-    },
-    kind=@cmd.after_render,
-  )
+  @cmd.batch([
+    @dialog.show("quick-open-dialog"),
+    @cmd.custom_cmd(
+      _ => {
+        if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
+          let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
+            "focus",
+            ([] : FixedArray[@js.Value]),
+          )
+        }
+      },
+      kind=@cmd.after_render,
+    ),
+  ])
 }
 
 ///|
@@ -104,10 +107,6 @@ fn key_attrs(emit : @cmd.Emit[Msg], selected : Int32?) -> @html.Attrs {
           Some(index) => emit(Pick(index))
           None => @cmd.none
         }
-      }
-      "Escape" => {
-        event.prevent_default()
-        emit(Dismiss)
       }
       _ => @cmd.none
     }
@@ -228,43 +227,38 @@ fn dialog_view(
     Debouncing | Loading => "true"
     _ => "false"
   }
-  @html.div(class="quick-open-backdrop", on_click=emit(Dismiss), [
-    @html.div(
-      class="quick-open-dialog",
-      attrs=@html.Attrs::build()
-        .role("dialog")
-        .aria_modal("true")
-        .aria_label(dialog_label)
-        .on_click(event => {
-          event.stop_propagation()
-          @cmd.none
-        }),
-      [
-        @html.div(class="quick-open-input-wrap", [
-          @icons.icon(@icons.icon_search),
-          @html.input(
-            input_type=@html.InputType::Text,
-            value=open.value,
-            placeholder~,
-            on_input=emit.map(value => ValueChanged(value)),
-            attrs=input_attrs,
-          ),
-        ]),
-        @html.div(
-          class="quick-open-group-label",
-          attrs=@html.Attrs::build().id("quick-open-group-label"),
-          group_label,
+  @rui.dialog(
+    id="quick-open-dialog",
+    class="dialog-size-medium",
+    show_close=false,
+    on_cancel=emit(Dismiss),
+    attrs=@html.Attrs::build().aria_label(dialog_label),
+    @html.div([
+      @html.div(class="quick-open-input-wrap input-surface", [
+        @icons.icon(@icons.icon_search),
+        @html.input(
+          class="field-surface",
+          input_type=@html.InputType::Text,
+          value=open.value,
+          placeholder~,
+          on_input=emit.map(value => ValueChanged(value)),
+          attrs=input_attrs,
         ),
-        @html.div(
-          class="quick-open-list",
-          attrs=@html.Attrs::build()
-            .id(ListId)
-            .role("listbox")
-            .aria_labelledby("quick-open-group-label")
-            .aria_busy(list_busy),
-          list_children,
-        ),
-      ],
-    ),
-  ])
+      ]),
+      @html.div(
+        class="quick-open-group-label",
+        attrs=@html.Attrs::build().id("quick-open-group-label"),
+        group_label,
+      ),
+      @html.div(
+        class="quick-open-list",
+        attrs=@html.Attrs::build()
+          .id(ListId)
+          .role("listbox")
+          .aria_labelledby("quick-open-group-label")
+          .aria_busy(list_busy),
+        list_children,
+      ),
+    ]),
+  )
 }

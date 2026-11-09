@@ -253,12 +253,12 @@ fn MessageEditor::view(
   }
   Some(
     @html.div(
-      class="message-editor composer-surface",
+      class="message-editor composer-surface input-surface",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
         @html.textarea(
           id="user-message-edit-\{action.sequence}",
-          class="message-edit-input composer-textarea",
+          class="message-edit-input composer-textarea field-surface",
           value=draft.task,
           rows=1,
           disabled=action.disabled,

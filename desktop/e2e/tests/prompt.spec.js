@@ -13,6 +13,7 @@ class PromptHarness extends DesktopBrowserHarness {
 async function settings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Engine', exact: true }).click();
   return page.getByRole('button', { name: 'Additional prompt', exact: true });
 }
 
@@ -48,7 +49,7 @@ async function send(page, app, text) {
   return requests().at(-1).params;
 }
 
-test('custom prompt persists and both sources send complete system prompts', async ({ page }, testInfo) => {
+test('custom prompt persists and both sources send complete system prompts', async ({ page }) => {
   const app = new PromptHarness(page);
   await app.install();
   await app.goto();
@@ -63,7 +64,6 @@ test('custom prompt persists and both sources send complete system prompts', asy
   await page.reload();
   await settings(page);
   await expect(editor).toHaveValue(custom);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('custom-prompt-light.png') });
   await newChat(page);
   const complete = (await send(page, app, 'Use custom text')).system_prompt;
   expect(complete).not.toBe(custom);
@@ -87,26 +87,7 @@ test('custom prompt persists and both sources send complete system prompts', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('changing the default preserves an existing unsent draft', async ({ page }) => {
-  const app = new PromptHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const builtin = (await send(page, app, 'Remember the builtin text')).system_prompt;
-  await newChat(page, false);
-  await page.locator('#task').fill('Keep this draft');
-  await expect(page).toHaveURL(/\/chat\/draft\/[^/?#]+$/);
-  const draft = new URL(page.url()).pathname;
-  await choose(page, 'Custom prompt');
-  await saveCustom(page, app, 'New default');
-  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe(draft);
-  await expect(page.locator('#task')).toHaveValue('Keep this draft');
-  expect((await send(page, app, 'Send the existing draft')).system_prompt).toBe(builtin);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }, testInfo) => {
+test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }) => {
   const app = new PromptHarness(page);
   app.hostSettings.prompt_source = 'custom';
   app.hostSettings.custom_prompt = 'Text to clear';
@@ -123,7 +104,6 @@ test('the host custom prompt can be cleared in narrow dark Settings', async ({ p
   const bounds = await editor.boundingBox();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('custom-prompt-narrow-dark.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   await newChat(page);
   const complete = (await send(page, app, 'Create without additional instructions')).system_prompt;

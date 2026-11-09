@@ -444,7 +444,10 @@ export class CloudHarness {
       if (this.pauseHistory) await this.pauseHistory;
       if (status !== 200) return route.fulfill({ status, headers, contentType: 'application/json', body });
       const cacheHeaders = { ...headers, ETag: etag, 'Cache-Control': 'no-store' };
-      if ((await request.headerValue('If-None-Match')) === etag) {
+      // WebKit routing rejects all 3xx, including 304. Send the full history
+      // there; Chromium retains conditional-response coverage.
+      if (this.page.context().browser().browserType().name() !== 'webkit'
+          && (await request.headerValue('If-None-Match')) === etag) {
         return route.fulfill({ status: 304, headers: cacheHeaders });
       }
       return route.fulfill({ status, headers: cacheHeaders, contentType: 'application/json', body });
@@ -652,15 +655,18 @@ export class CloudHarness {
     return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
   }
 
+  rowContainer(id) {
+    return this.page.locator('.conversation-row').filter({ has: this.row(id) });
+  }
+
   // Archived conversations are managed within the Settings dialog.
   async openArchivedChats() {
     await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await this.page.getByRole('button', { name: 'Manage', exact: true }).click();
-    await expect(this.page.getByRole('dialog', { name: 'Archived chats', exact: true })).toBeVisible();
+    await this.page.getByRole('tab', { name: 'Archive', exact: true }).click();
   }
 
   archivedRow(id) {
-    return this.page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
+    return this.page.getByRole('tabpanel', { name: 'Archive', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
   }
 
   async openArchived(id) {
@@ -670,7 +676,9 @@ export class CloudHarness {
 
   async open(id = sessionA) {
     await this.row(id).click();
-    await expect(this.row(id)).toHaveAttribute('aria-current', 'true');
+    // Wait on the main pane, not the row's sidebar state: every Cloud spec
+    // opens through here, and a sidebar regression belongs to the specs that
+    // assert it rather than to all of them.
     await expect(this.page.locator('main .topbar-title')).toHaveText(this.titles.get(id) || 'New chat');
     await this.page.locator('#task').waitFor();
   }

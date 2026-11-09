@@ -13,16 +13,77 @@ pub fn component(
   state : @rabbita.Val[State],
   locale : @rabbita.Val[@i18n.Locale],
   emit : @cmd.Emit[Msg],
-) -> @rabbita.Val[@html.Html] {
+) -> @rabbita.Val[(@html.Html, @html.Html)] {
   let localized = state.map3(input, locale, (state, input, locale) => {
     (state, input, locale)
   })
-  let menu = @action_menu.component(localized, (localized, target) => {
+  let list = list_component(localized, emit)
+  let detail = detail_component(localized, emit)
+  list.map2(detail, (list, detail) => (list, detail))
+}
+
+///|
+fn list_component(
+  localized : @rabbita.Val[(State, Input, @i18n.Locale)],
+  emit : @cmd.Emit[Msg],
+) -> @rabbita.Val[@html.Html] {
+  let installed = localized.map(localized => {
     let (state, input, locale) = localized
-    installed_menu(locale, state, input, target, emit)
+    @vector.from_array(
+      input.installed
+      .filter(item => {
+        matches(state.query, [item.name, item.description, item.source])
+      })
+      .map(item => installed_menu_input(locale, state, input, item)),
+    )
   })
-  localized.view2(menu, (localized, menu) => {
+  let list_menus = installed.assoc_by(
+    (id, input) => {
+      installed_menu(
+        "skills-library:" + id,
+        input.map(input => Some(input)),
+        emit,
+        class="skill-action",
+      ).map2(input, (menu, input) => (input.item.id, menu))
+    },
+    by=input => "\{input.channel.uri_authority()}:\{input.item.id}",
+  )
+  localized.map2(list_menus, (localized, menus) => {
     let (state, input, locale) = localized
-    @html.fragment([page(locale~, state, input, emit), menu])
+    list_page(locale~, state, input, emit, Map::from_array(menus.to_array()))
+  })
+}
+
+///|
+fn detail_component(
+  localized : @rabbita.Val[(State, Input, @i18n.Locale)],
+  emit : @cmd.Emit[Msg],
+) -> @rabbita.Val[@html.Html] {
+  let detail_input = localized.map(localized => {
+    let (state, input, locale) = localized
+    guard state.detail_open(input.channel) else { return None }
+    let target = match state.preview {
+      Closed => return None
+      Loading(target~, ..) | Ready(target~, ..) | Failed(target~, ..) => target
+    }
+    match detail_action_target(target, state, input) {
+      Some(Installed(item)) =>
+        Some(installed_menu_input(locale, state, input, item))
+      _ => None
+    }
+  })
+  let detail_menu = installed_menu(
+    "skill-detail-menu",
+    detail_input,
+    emit,
+    class="skill-detail-action",
+  )
+  localized.map2(detail_menu, (localized, menu) => {
+    let (state, input, locale) = localized
+    if state.detail_open(input.channel) {
+      detail_page(locale~, state, input, emit, menu)
+    } else {
+      @html.nothing
+    }
   })
 }

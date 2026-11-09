@@ -47,11 +47,6 @@ pub fn Schedules::Schedules(
 }
 
 ///|
-fn schedule_now() -> Int64 {
-  @sys.now().reinterpret_as_int64()
-}
-
-///|
 fn schedule_next(timing : @protocol.ScheduleTiming, now : Int64) -> Int64? {
   match timing {
     Once(at) => if at > now { Some(at) } else { None }
@@ -152,7 +147,7 @@ async fn Schedules::load(self : Schedules) -> @protocol.SchedulesReply {
   if self.state is Some(state) {
     return state
   }
-  let recovered = recover_schedules(self.read(), schedule_now())
+  let recovered = recover_schedules(self.read(), @async.now())
   self.commit(recovered)
   recovered
 }
@@ -162,21 +157,12 @@ async fn Schedules::commit(
   self : Schedules,
   state : @protocol.SchedulesReply,
 ) -> Unit {
-  let dir = self.directory()
-  let temp = dir.join("schedules.tmp")
   let json : Json = { "version": 1, "state": state.to_json() }
-  @fs.write_file(
-    temp.to_string(),
+  @fsx.write_text_atomic(
+    self.directory().join("schedules.json"),
     json.stringify(),
-    create_mode=CreateOrTruncate,
     permission=0o600,
   )
-  {
-    let file = @fs.open(temp.to_string(), mode=ReadWrite)
-    defer file.close()
-    file.sync()
-  }
-  @fs.rename(temp.to_string(), dir.join("schedules.json").to_string())
   self.state = Some(state)
 }
 
@@ -206,12 +192,12 @@ pub async fn Schedules::save(
     // Validate typed callers too, and resolve only registered project paths.
     let spec : @protocol.ScheduleSpec = @json.from_json(payload.spec.to_json())
     if spec.workspace is Some(workspace) {
-      guard @pathx.Absolute::from_uri_path(workspace) is Some(path) &&
-        @workspaces.registered_dir(path) is Some(_) else {
+      let path = @pathx.Absolute::parse_resource_path(workspace)
+      guard @workspaces.registered_dir(path) is Some(_) else {
         raise EngineError("Choose an attached project for this schedule")
       }
     }
-    let next_at = schedule_next(spec.timing, schedule_now())
+    let next_at = schedule_next(spec.timing, @async.now())
     guard next_at is Some(_) else {
       raise EngineError("Choose a time in the future")
     }
@@ -276,7 +262,7 @@ pub async fn Schedules::action(
           next_at: None,
         }
       "resume" => {
-        let next_at = schedule_next(entry.spec.timing, schedule_now())
+        let next_at = schedule_next(entry.spec.timing, @async.now())
         guard next_at is Some(_) else {
           raise EngineError(
             "This one-time schedule has passed; edit its time or run it now",
@@ -361,7 +347,7 @@ async fn Schedules::take_due(
     // until the store is free.
     guard self.owns() else { return [] }
     let state = self.load()
-    let now = at.unwrap_or_else(schedule_now)
+    let now = at.unwrap_or_else(@async.now)
     let entries = state.entries.copy()
     let runs = state.runs.copy()
     let launches : Array[(@protocol.ScheduleEntry, @protocol.ScheduleRun)] = []

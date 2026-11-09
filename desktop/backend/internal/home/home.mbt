@@ -22,3 +22,16 @@ pub fn dir() -> @pathx.Path? {
     None
   }
 }
+
+///|
+/// Expand a leading `~` (the agent often writes paths home-relative) to the
+/// user's home directory; other paths pass through unchanged.
+pub fn expand(path : @pathx.Path) -> @pathx.Path {
+  if path.0 == "~" && dir() is Some(home) {
+    home
+  } else if path.0.strip_prefix("~/") is Some(rest) && dir() is Some(home) {
+    home.join(Relative(rest.to_owned()))
+  } else {
+    path
+  }
+}

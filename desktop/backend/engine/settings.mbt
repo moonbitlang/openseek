@@ -326,32 +326,12 @@ fn apply_text_patch(
 }
 
 ///|
-/// Atomic save: write a 0600 temp file, then rename over the target. The
-/// file holds a credential, so a crash mid-write must never leave a
-/// truncated store — the temp file keeps the full content until the rename
-/// lands. Windows may refuse to rename over an existing file; removing the
-/// target first narrows atomicity to that one platform's small window.
+/// Atomic 0600 save. The file holds a credential, so a crash mid-write must
+/// never leave a truncated store, and the contents must never be readable by
+/// other users.
 async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
-  let target = settings_file(runtime_dir)
-  let temp = runtime_dir.join(EngineSettingsFileName + ".tmp")
-  @fs.write_file(
-    temp.to_string(),
-    text,
-    create_mode=CreateOrTruncate,
-    permission=0o600,
-  ) catch {
-    error => raise EngineError("could not write engine settings: \{error}")
-  }
-  @fs.rename(temp.to_string(), target.to_string()) catch {
-    _ => {
-      @fsx.remove_if_exists(target) catch {
-        error =>
-          raise EngineError("could not replace engine settings: \{error}")
-      }
-      @fs.rename(temp.to_string(), target.to_string()) catch {
-        error => raise EngineError("could not save engine settings: \{error}")
-      }
-    }
+  @fsx.write_text_atomic(settings_file(runtime_dir), text, permission=0o600) catch {
+    error => raise EngineError("could not save engine settings: \{error}")
   }
 }
 

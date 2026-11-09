@@ -1,0 +1,104 @@
+///|
+async test "manual installation clears its startup failure before notifying clients" {
+  let root = @fs.tmpdir(prefix="openseek-builtin-skills-")
+  defer @fs.rmdir(root, recursive=true)
+  let previous = @sys.get_env_var("OPENSEEK_GLOBAL_SKILLS_DIR")
+  @sys.set_env_var("OPENSEEK_GLOBAL_SKILLS_DIR", root)
+  defer (match previous {
+    Some(value) => @sys.set_env_var("OPENSEEK_GLOBAL_SKILLS_DIR", value)
+    None => @sys.unset_env_var("OPENSEEK_GLOBAL_SKILLS_DIR")
+  })
+  let archive = @zip.Archive::Archive()
+  archive.add(
+    "SKILL.md", b"---\nname: office-cli\ndescription: Office documentation\n---\nOffice documentation\n",
+  )
+  let bytes = @zip.write(archive)
+  let digest = @crypto.bytes_to_hex_string(@crypto.sha256(bytes))
+  let registry = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer registry.close()
+  let base = "http://127.0.0.1:\{registry.addr.port()}"
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => {
+      registry.run_forever((request, body, conn) => {
+        ignore(body.read_all())
+        match request.path {
+          "/api/v0/skills" => conn.send_response(503, "Service Unavailable")
+          "/api/v0/skills/moonbitlang/office-cli%401.0.0" => {
+            conn.send_response(200, "OK")
+            conn.write_string(
+              (
+                {
+                  "owner": "moonbitlang",
+                  "name": "office-cli",
+                  "version": "1.0.0",
+                  "description": "Office documentation",
+                  "author_avatar": "",
+                  "detail_url": "/skills/moonbitlang/office-cli@1.0.0",
+                  "created_at": "2026-10-30T00:00:00Z",
+                  "readme": "Office documentation",
+                  "versions": ["1.0.0"],
+                  "archive_url": "\{base}/office.zip",
+                  "archive_digest": digest,
+                } : Json).stringify(),
+            )
+          }
+          "/office.zip" => {
+            conn.send_response(200, "OK")
+            conn.write(bytes)
+          }
+          _ => conn.send_response(404, "Not Found")
+        }
+      })
+    })
+    let builtins = BuiltinSkills()
+    builtins.sync(registry=base, () => ())
+    guard builtins.installed() is InstalledSkills([], builtin_errors=before) else {
+      fail("expected an empty library with startup errors")
+    }
+    assert_true(
+      before.any(error => error.registry.module_name == "moonbitlang/office-cli"),
+    )
+    let mut cleared_at_commit = false
+    let installed = builtins.install(
+      {
+        module_name: "moonbitlang/office-cli",
+        package_path: Some(""),
+        version: "1.0.0",
+      },
+      () => {
+        cleared_at_commit = builtins
+          .errors()
+          .all(error => error.registry.module_name != "moonbitlang/office-cli")
+      },
+      registry=base,
+    )
+    guard installed is SkillInstalled(skill) else {
+      fail("expected successful manual installation")
+    }
+    assert_true(cleared_at_commit)
+    assert_true(skill.builtin && skill.enabled)
+    guard builtins.installed() is InstalledSkills([_], builtin_errors=remaining) else {
+      fail("expected recovered library")
+    }
+    assert_eq(
+      remaining,
+      before.filter(error => {
+        error.registry.module_name != "moonbitlang/office-cli"
+      }),
+    )
+    for enabled in [true, false] {
+      assert_true(
+        set_enabled({ id: skill.id, enabled, }, () => ()) is SkillEnabledSet,
+      )
+      guard uninstall({ id: skill.id, }, () => ())
+        is SkillUninstallError(message) else {
+        fail("expected built-in uninstall refusal")
+      }
+      assert_true(message.contains("disable the skill instead"))
+      guard builtins.installed() is InstalledSkills([retained], ..) else {
+        fail("expected retained skill")
+      }
+      assert_eq(retained.enabled, enabled)
+    }
+  })
+}

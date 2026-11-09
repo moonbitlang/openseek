@@ -13,22 +13,16 @@ import { reportNotarizationFailure } from "./notarization.mjs";
 const Hosts = {
   darwin: {
     command: "macos", platform: "macos-arm64", moonbit: "darwin-aarch64",
-    ripgrep: "aarch64-apple-darwin",
-    sha: "378e973289176ca0c6054054ee7f631a065874a352bf43f0fa60ef079b6ba715",
     esbuild: { package: "darwin-arm64", binary: "bin/esbuild",
       sha: "5d64cc9bc527d598450b5f8d47ff293eb9f3aea38dd9eff67fd55d228c5ccb43" },
   },
   linux: {
     command: "linux", platform: "linux-x64", moonbit: "linux-x86_64",
-    ripgrep: "x86_64-unknown-linux-musl",
-    sha: "1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599",
     esbuild: { package: "linux-x64", binary: "bin/esbuild",
       sha: "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546" },
   },
   win32: {
     command: "windows", platform: "windows-x64", moonbit: "windows-x86_64",
-    ripgrep: "x86_64-pc-windows-msvc",
-    sha: "124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d87493a",
     esbuild: { package: "win32-x64", binary: "esbuild.exe",
       sha: "5c5d62da7572b57ddc1fa3caedc36c1218b5d8d02ce9c7ee70e3339fce4453c4" },
   },
@@ -368,15 +362,6 @@ class Build {
   }
 
   async vendors() {
-    const rgName = `ripgrep-15.1.0-${this.host.ripgrep}`;
-    const extension = this.command === "windows" ? "zip" : "tar.gz";
-    const rgArchive = join(this.desktop, `target/vendor-ripgrep/cache/${rgName}.${extension}`);
-    await this.download(`https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/${rgName}.${extension}`, rgArchive, this.host.sha);
-    const rg = join(this.desktop, `target/vendor-ripgrep/work/${this.host.ripgrep}`);
-    await rm(rg, { recursive: true, force: true });
-    await mkdir(rg, { recursive: true });
-    await this.commandRun("tar", ["-xf", rgArchive, "-C", rg, "--strip-components=1"]);
-
     const version = (await readFile(join(this.desktop, ".moonbit-version"), "utf8")).trim();
     const archiveExt = this.command === "windows" ? "zip" : "tar.gz";
     const cache = join(this.desktop, "target/moonbit/cache");
@@ -404,7 +389,7 @@ class Build {
       join(seed, ".openseek-moonbit-seed-version"),
       `${version}\n`,
     );
-    return { rg, seed };
+    return { seed };
   }
 
   async stage(profile, engine, vendors) {
@@ -412,7 +397,6 @@ class Build {
     await rm(root, { recursive: true, force: true });
     await mkdir(join(root, "web/viz"), { recursive: true });
     await mkdir(join(root, "bin"), { recursive: true });
-    await mkdir(join(root, "licenses/ripgrep"), { recursive: true });
     await this.stageFrontend(join(root, "web"), profile);
     await cp(join(this.repo, "web/index.html"), join(root, "web/viz/index.html"));
     await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
@@ -420,13 +404,9 @@ class Build {
     await cp(engine, join(root, `bin/openseek${suffix}`));
     // OpenSeek locates resources relative to its own executable.
     await stageResources(join(this.repo, "share"), join(root, "share"));
-    await cp(join(vendors.rg, `rg${suffix}`), join(root, `bin/rg${suffix}`));
-    await cp(join(vendors.rg, "LICENSE-MIT"), join(root, "licenses/ripgrep/LICENSE-MIT"));
-    await cp(join(vendors.rg, "UNLICENSE"), join(root, "licenses/ripgrep/UNLICENSE"));
     await cp(vendors.seed, join(root, `toolchains/moonbit/${this.host.platform}`), { recursive: true, dereference: true });
     if (this.command !== "windows") {
       await chmod(join(root, "bin/openseek"), 0o755);
-      await chmod(join(root, "bin/rg"), 0o755);
     } else {
       const path = join(root, "bin/openseek.exe");
       const bytes = Buffer.from(await readFile(path));

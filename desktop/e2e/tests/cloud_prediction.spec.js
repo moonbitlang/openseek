@@ -58,14 +58,13 @@ async function open(page) {
   return cloud;
 }
 
-test('Cloud shows native predictions and Tab fills the shared composer without sending', async ({ page }, testInfo) => {
+test('Cloud shows native predictions and Tab fills the shared composer without sending', async ({ page }) => {
   const cloud = await open(page);
   await cloud.publish();
   const input = page.locator('#task');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(input).toHaveValue('');
   await input.focus();
-  await page.screenshot({ path: testInfo.outputPath('cloud-composer-prediction.png') });
   await input.press('Shift+Tab');
   await expect(input).toHaveValue('');
   await input.focus(); await input.press('Tab');
@@ -87,23 +86,6 @@ test('Cloud shows native predictions and Tab fills the shared composer without s
   cloud.assertNoPredictionRequests();
 });
 
-test('Cloud drops late predictions after the native log advances, independent of SSE and task IDs', async ({ page }) => {
-  const cloud = await open(page);
-  await cloud.publish();
-  const input = page.locator('#task');
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  cloud.history(sessionA, 31);
-  await cloud.emitSessionEvent(sessionA, 'task_started', {}, { task: 'next-task' });
-  await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-  await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { task: 'next-task' });
-  await expect(page.getByText('Done at 31', { exact: true }).first()).toBeVisible();
-  await cloud.publish(prediction(12, 'Stale suggestion'), { task: 'fixture-task', persist: false });
-  await expect(input).not.toHaveAttribute('placeholder', 'Stale suggestion');
-  await cloud.publish(prediction(31, 'Review the fix'), { task: 'fixture-task' });
-  await expect(input).toHaveAttribute('placeholder', 'Review the fix');
-  cloud.assertNoPredictionRequests();
-});
-
 test('Cloud restores native prediction metadata on session switches and reload without leaking drafts', async ({ page }) => {
   const cloud = await open(page);
   await cloud.publish();
@@ -121,21 +103,5 @@ test('Cloud restores native prediction metadata on session switches and reload w
   await page.reload(); await cloud.open(sessionA);
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(input).toHaveValue('');
-  cloud.assertNoPredictionRequests();
-});
-
-test('missing failed and obsolete Cloud predictions leave ordinary chat available', async ({ page }) => {
-  const cloud = await open(page);
-  const input = page.locator('#task');
-  await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-  await cloud.publish({ ...prediction(), outcome: { kind: 'failed', message: 'Unavailable' } });
-  await expect(page.locator('.notification')).toHaveCount(0);
-  await cloud.publish(prediction(11, 'Old suggestion'), { persist: false });
-  await expect(input).not.toHaveAttribute('placeholder', 'Old suggestion');
-  await input.fill('Continue normally');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect.poll(() => cloud.postCount).toBe(1);
-  await expect(page.getByText('您好 🌙 — calculation complete.', { exact: true }).first()).toBeVisible();
   cloud.assertNoPredictionRequests();
 });

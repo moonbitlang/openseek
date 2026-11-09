@@ -12,7 +12,7 @@ async function openTerminal(page, app) {
   return input;
 }
 
-test('socket loss reconnects the terminal without replaying active or queued input', async ({ page }, testInfo) => {
+test('socket loss reconnects the terminal without replaying active or queued input', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const replyFor = app.replyFor.bind(app);
   let held = false;
@@ -31,7 +31,6 @@ test('socket loss reconnects the terminal without replaying active or queued inp
   const oldSocket = app.socket;
   await oldSocket.close({ code: 1011, reason: 'test network interruption' });
   await expect(page.locator('.terminal-status')).toContainText('Reconnecting');
-  await page.screenshot({ path: testInfo.outputPath('terminal-reconnecting.png') });
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(2);
   await expect(page.locator('.terminal-status')).toHaveText('Reconnected with a new shell; previous input was not replayed.');
   expect(app.socket).not.toBe(oldSocket);
@@ -39,7 +38,6 @@ test('socket loss reconnects the terminal without replaying active or queued inp
     { id: 'terminal-1', data: 'maybe-delivered' },
   ]);
   await expect(page.getByText('Close this terminal and open a new one.', { exact: false })).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('terminal-reconnected.png') });
   await page.locator('.terminal-instance:visible .xterm-helper-textarea').focus();
   await page.keyboard.insertText('fresh-input');
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.input').map(r => r.params)).toEqual([

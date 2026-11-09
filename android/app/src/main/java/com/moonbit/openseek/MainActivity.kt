@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.CookieManager
@@ -99,6 +100,7 @@ class MainActivity : ComponentActivity() {
             .addPathHandler(ConsoleOrigin.ASSET_PATH, bundled)
             .addPathHandler(ConsoleOrigin.FRONTEND_PATH) { path -> bundled.handle("assets/$path") }
             .build()
+        val downloads = BlobDownloads(this, webView)
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
@@ -126,6 +128,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 return true
+            }
+
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                downloads.documentReplaced()
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -161,6 +167,7 @@ class MainActivity : ComponentActivity() {
                 return true
             }
         }
+        downloads.install()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (ConsoleOrigin.contains(webView.url)) {
@@ -173,7 +180,17 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(ConsoleOrigin.ENTRY_URL)
         }
-        if (savedInstanceState == null) updater.start() else updater.restoreState(savedInstanceState)
+        updater.restoreState(savedInstanceState)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        updater.onStart()
+    }
+
+    override fun onStop() {
+        updater.onStop()
+        super.onStop()
     }
 
     override fun onResume() {

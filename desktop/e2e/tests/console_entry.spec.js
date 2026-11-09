@@ -15,7 +15,7 @@ async function assertFits(page) {
 
 test.use({ viewport: { width: 393, height: 851 }, isMobile: true, hasTouch: true });
 
-test('a signed-out device page offers login and preserves the page return path', async ({ page }, info) => {
+test('a signed-out device page offers login and preserves the page return path', async ({ page }) => {
   const app = await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/device/device-a/chat');
@@ -23,7 +23,6 @@ test('a signed-out device page offers login and preserves the page return path',
     '/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fdevice-a%2Fchat');
   expect(app.socket).toBeNull();
   await assertFits(page);
-  await page.screenshot({ path: info.outputPath('login.png') });
   await page.route('**/v2/auth/login?*', route => route.fulfill({ contentType: 'text/html', body: '<h1>OAuth fixture</h1>' }));
   await page.getByRole('link', { name: 'Sign in with GitHub' }).click();
   await expect(page.getByRole('heading', { name: 'OAuth fixture' })).toBeVisible();
@@ -31,20 +30,21 @@ test('a signed-out device page offers login and preserves the page return path',
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the sidebar selector lists only online devices and switches between them', async ({ page }, info) => {
+test('the sidebar selector lists Cloud and online devices and switches between them', async ({ page }) => {
   const app = await installConsole(page);
   await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [
     { id: 'device-a', name: 'Test Mac', online: true },
     { id: 'offline', name: 'Office computer', online: false },
     { id: 'device-b', name: 'Studio', online: true },
   ] } }));
-  // A Cloud page has no device yet; the selector says so and connects nothing.
+  // A Cloud page has no device; the selector names Cloud and connects nothing.
   await page.goto('/cloud');
   await page.locator('.sidebar-toggle').click();
   const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
-  await expect(selector).toContainText('Choose a device');
+  await expect(selector).toContainText('Cloud');
   expect(app.socket).toBeNull();
   await selector.click();
+  await expect(page.getByRole('menuitem', { name: 'Cloud', exact: true })).toBeDisabled();
   await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeEnabled();
   await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeEnabled();
   await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
@@ -55,14 +55,20 @@ test('the sidebar selector lists only online devices and switches between them',
   await page.locator('.sidebar-toggle').click();
   await expect(selector).toContainText('Test Mac');
   await expect.poll(async () => Math.abs((await page.locator('aside').boundingBox()).x)).toBeLessThan(1);
-  await page.screenshot({ path: info.outputPath('drawer.png'), animations: 'disabled' });
   await selector.click();
   await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeDisabled();
   await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
   await assertFits(page);
-  await page.screenshot({ path: info.outputPath('device-selector.png'), animations: 'disabled' });
   await page.getByRole('menuitem', { name: 'Studio', exact: true }).click();
   await expect(page).toHaveURL(/\/device\/device-b\/chat(\/new)?$/);
+  // A device page returns to Cloud through the same menu.
+  await page.locator('.sidebar-toggle').click();
+  await selector.click();
+  await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeDisabled();
+  await page.getByRole('menuitem', { name: 'Cloud', exact: true }).click();
+  await expect(page).toHaveURL(/\/cloud$/);
+  await page.locator('.sidebar-toggle').click();
+  await expect(selector).toContainText('Cloud');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -100,7 +106,7 @@ test('a device page whose roster failed can retry', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Chat is the signed-out launch page and a saved Work preference cannot replace it', async ({ page }, info) => {
+test('Chat is the signed-out launch page and a saved Work preference cannot replace it', async ({ page }) => {
   const app = await installConsole(page);
   await page.addInitScript(() => localStorage.setItem('openseek.sidebar_mode', 'work'));
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
@@ -113,6 +119,5 @@ test('Chat is the signed-out launch page and a saved Work preference cannot repl
   // The phone drawer starts closed, so query the mode switch by markup.
   await expect(page.locator('.sidebar-mode-option[aria-label="Chat"]')).toHaveAttribute('aria-pressed', 'true');
   expect(app.socket).toBeNull();
-  await page.screenshot({ path: info.outputPath('chat-home-signed-out.png') });
   expect(app.pageErrors).toEqual([]);
 });

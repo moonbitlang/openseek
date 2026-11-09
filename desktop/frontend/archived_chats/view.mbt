@@ -25,7 +25,6 @@ pub(all) struct Group {
 
 ///|
 pub(all) struct Actions {
-  back : @cmd.Cmd
   open : (@conversation.Id) -> @cmd.Cmd
   restore : (@conversation.Id) -> @cmd.Cmd
   delete : (@conversation.Id) -> @cmd.Cmd
@@ -139,8 +138,7 @@ fn row_view(
 }
 
 ///|
-/// The page body: a way back to Settings, the filter, then each group as a
-/// settings card.
+/// The filter and grouped conversation cards within Settings' archived tab.
 fn view(
   locale : @i18n.Locale,
   groups : Array[Group],
@@ -149,26 +147,21 @@ fn view(
   actions : Actions,
 ) -> @html.Html {
   let content : Array[@html.Html] = [
-    @html.div(class="settings-header", [
-      @html.button(
-        class="button compact archived-chats-back",
-        type_="button",
-        on_click=actions.back,
-        [
-          @icons.icon(@icons.icon_arrow_left),
-          @html.text(text(locale, BackToSettings)),
-        ],
+    @html.div(class="page-header", [
+      @html.div(
+        class="page-subtitle",
+        text(locale, ArchivedCount(count(groups))),
       ),
-      @html.div(class="settings-subtitle", text(locale, Description)),
+      @html.div(class="page-subtitle", text(locale, Description)),
     ]),
   ]
   if groups.is_empty() {
     content.push(@html.div(class="archived-chats-empty", text(locale, Empty)))
-    return @page_shell.body(class="archived-chats-page", content)
+    return @ui.dialog_page(class="archived-chats-page", content)
   }
   content.push(
     @html.div(
-      class="archived-chats-search",
+      class="search-field field-surface",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
         @icons.icon(@icons.icon_search),
@@ -196,14 +189,14 @@ fn view(
       Chats | Other => @icons.icon_archive
     }
     content.push(
-      @settings.group(
+      @ui.form_section(
         icon,
         group_label(locale, group.kind),
         group.rows.map(row => row_view(locale, row, actions)),
       ),
     )
   }
-  @page_shell.body(class="archived-chats-page", content)
+  @ui.dialog_page(class="archived-chats-page", content)
 }
 
 ///|

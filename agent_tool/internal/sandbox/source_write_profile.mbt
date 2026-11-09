@@ -2,11 +2,12 @@
 /// A source-write protection profile and the subjects used to diagnose its
 /// denials.
 ///
-/// `profile` is complete SBPL source suitable for `sandbox_exec_args`.
+/// `profile` is complete SBPL source, written to the file `sandbox-exec -f`
+/// loads.
 /// `denial_subjects` contains protected directory paths and basenames that
 /// `source_write_denied_in_text` can match in child-process output.
 priv struct SourceWriteProfileData {
-  /// Complete SBPL source passed to `sandbox_exec_args`.
+  /// Complete SBPL source written to the `sandbox-exec -f` profile file.
   profile : String
   /// Protected paths and basenames used to recognize denial diagnostics.
   denial_subjects : Array[String]

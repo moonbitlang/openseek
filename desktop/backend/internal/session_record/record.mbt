@@ -452,7 +452,11 @@ fn anchor_of(chunk : Bytes) -> Bytes {
 /// Whether the bytes ending at `offset` are still the ones read there. An
 /// empty anchor (nothing read yet) is vacuously true; a read that fails
 /// reports false, which costs one re-read from the head.
-async fn anchored_at(file : @fs.File, offset : Int64, anchor : Bytes) -> Bool {
+pub async fn anchored_at(
+  file : @fs.File,
+  offset : Int64,
+  anchor : Bytes,
+) -> Bool {
   if anchor.length() == 0 {
     return true
   }

@@ -29,6 +29,22 @@ priv enum DeletePrompt {
 }
 
 ///|
+#derive(Eq)
+priv enum DeleteDialogState {
+  Empty
+  Open(DeletePrompt)
+  Closed(DeletePrompt)
+}
+
+///|
+fn DeleteDialogState::close(self : DeleteDialogState) -> DeleteDialogState {
+  match self {
+    Open(prompt) => Closed(prompt)
+    Empty | Closed(_) => self
+  }
+}
+
+///|
 /// Which record a confirmation is about, with what only that kind carries.
 #derive(Eq)
 priv enum DeleteTarget {
@@ -468,24 +484,38 @@ fn DeleteConfirm::message(
 fn delete_modal(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
-  confirm : DeletePrompt,
+  confirm : DeleteDialogState,
   cloud : @cloud.State,
 ) -> @html.Html {
   let message = match confirm {
-    HostDelete(confirm) => confirm.message(locale~)
-    CloudDelete(title~, ..) =>
+    Open(HostDelete(confirm)) | Closed(HostDelete(confirm)) =>
+      confirm.message(locale~)
+    Open(CloudDelete(title~, ..)) | Closed(CloudDelete(title~, ..)) =>
       dynamic_text(locale, DDeleteCloudConversation(title))
+    Empty => ""
   }
   let enabled = match confirm {
-    HostDelete(_) => true
-    CloudDelete(account~, session~, ..) =>
+    Open(HostDelete(_)) | Closed(HostDelete(_)) => true
+    Open(CloudDelete(account~, session~, ..))
+    | Closed(CloudDelete(account~, session~, ..)) =>
       cloud.user_id == Some(account) && cloud.can_delete(session)
+    Empty => false
   }
-  @html.div(class="modal-backdrop", on_click=dispatch(CancelDeleteSession), [
-    @html.div(class="modal", [
-      @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
-      @html.div(class="modal-body", message),
-      @html.div(class="modal-actions", [
+  @rui.dialog(
+    id="delete-chat-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_cancel=dispatch(CancelDeleteSession),
+    attrs=@html.Attrs::build().aria_labelledby("delete-chat-title"),
+    [
+      @rui.dialog_header(
+        @rui.dialog_title(
+          id="delete-chat-title",
+          shell_text(locale, DeleteChatQuestion),
+        ),
+      ),
+      @html.div(message),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelDeleteSession),
@@ -498,8 +528,8 @@ fn delete_modal(
           shell_text(locale, DeletePermanently),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|

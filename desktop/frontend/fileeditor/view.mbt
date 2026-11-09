@@ -2204,6 +2204,7 @@ fn office_viewer_toolbar(
         [
           @icons.icon(@icons.icon_search),
           @html.input(
+            class="field-surface",
             input_type=@html.InputType::Search,
             value=state.office_query,
             placeholder=ui(locale, OfficeFind),
@@ -3803,6 +3804,7 @@ fn review_filter_controls(
     ),
     @html.div(class="review-path-filter", [
       @html.input(
+        class="field-surface",
         input_type=@html.InputType::Text,
         value=state.change_path_filter,
         placeholder=ui(locale, FilterFilesPath),

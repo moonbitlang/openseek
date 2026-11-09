@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test.use({ viewport: { width: 393, height: 851 }, isMobile: true, hasTouch: true });
 
-test('one connection notice replaces pending inventory failures and preserves the draft', async ({ page }, info) => {
+test('one connection notice replaces pending inventory failures and preserves the draft', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -33,7 +33,6 @@ test('one connection notice replaces pending inventory failures and preserves th
   app.socket.close({ code: 1001, reason: 'fixture offline' });
   await expect(page.locator('#task')).toHaveValue('Keep this unsent draft');
   await page.waitForTimeout(250);
-  await page.screenshot({ path: info.outputPath('disconnected.png') });
   await expect(page.locator('.notification')).toHaveCount(0);
   const banner = page.locator('.composer-banner:visible');
   await expect(banner).toHaveCount(1);

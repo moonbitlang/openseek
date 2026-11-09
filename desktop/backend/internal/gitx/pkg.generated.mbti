@@ -9,9 +9,17 @@ import {
 // Values
 pub async fn dir_pair(@pathx.Absolute) -> (String, String)?
 
+pub fn environment() -> Map[String, String]
+
 pub async fn is_linked_worktree(@pathx.Absolute) -> Bool
 
+pub async fn is_work_tree(@pathx.Absolute) -> Bool
+
 pub async fn output(@pathx.Absolute, Array[String]) -> String
+
+pub async fn output_bytes(@pathx.Absolute, Array[String]) -> Bytes
+
+pub async fn output_with_status(@pathx.Absolute, Array[String]) -> (Int32, String)
 
 pub async fn probe(@pathx.Absolute, Array[String]) -> String?
 

@@ -8,6 +8,8 @@ import {
 // Values
 pub fn dir() -> @pathx.Path?
 
+pub fn expand(@pathx.Path) -> @pathx.Path
+
 // Errors
 
 // Types and methods

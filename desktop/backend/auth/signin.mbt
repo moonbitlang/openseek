@@ -37,7 +37,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
   guard @entropy.random_hex(16) is Some(oauth_state) else {
     raise AuthError("no OS entropy available for sign-in")
   }
-  let challenge = pkce_challenge(verifier)
+  let challenge = @browser_signin.pkce_challenge(verifier)
 
   // The one-shot loopback listener, on an OS-assigned port.
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
@@ -225,7 +225,7 @@ const SignInPageStyle : String =
   #|    --color-text-primary: #16171a;
   #|    --color-text-secondary: #5c5f66;
   #|    --color-border: #e9e8e3;
-  #|    --color-accent-strong: #2a55cc;
+  #|    --color-accent: #315fd5;
   #|    --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco,
   #|      Consolas, "Liberation Mono", "Courier New", monospace;
   #|    --font-family-sans: ui-sans-serif, system-ui, -apple-system,
@@ -243,7 +243,7 @@ const SignInPageStyle : String =
   #|      --color-text-primary: #e9ebf0;
   #|      --color-text-secondary: #a3a8b4;
   #|      --color-border: #2c313b;
-  #|      --color-accent-strong: #9db8ff;
+  #|      --color-accent: #5b8cff;
   #|    }
   #|  }
   #|  html { background: var(--color-bg-canvas); }
@@ -265,7 +265,7 @@ const SignInPageStyle : String =
   #|    font-size: var(--font-size-md);
   #|    line-height: var(--line-height-relaxed);
   #|  }
-  #|  a { color: var(--color-accent-strong); }
+  #|  a { color: var(--color-accent); }
   #|</style>
 
 ///|

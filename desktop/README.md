@@ -509,8 +509,8 @@ What still needs preparing, beyond the MoonBit packages:
 - The native host links `libproton`, which in turn needs CEF. The Proton
   package ships `libproton` for each platform but not CEF, so the first native
   build assembles a runtime from the two — see "Run during development" below.
-- The shared build program stages web files, the engine, ripgrep, licenses,
-  and the MoonBit seed below `seekmoon/`. Packaged code asks Proton for its resource
+- The shared build program stages web files, the engine, licenses, and the
+  MoonBit seed below `seekmoon/`. Packaged code asks Proton for its resource
   directory and resolves only this fixed relative tree.
 
 ## Build

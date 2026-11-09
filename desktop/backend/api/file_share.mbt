@@ -10,7 +10,7 @@ async fn ApiState::share_file(
     Err(reply) => return reply
   }
   try {
-    let (name, bytes) = @host.capture_file(payload.source)
+    let (name, bytes) = @files.capture(payload.source)
     let token = match credential {
       Account(account) => account.token
       Grant(token) => token

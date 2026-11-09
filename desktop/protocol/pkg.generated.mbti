@@ -1348,7 +1348,7 @@ pub impl @json.ToJson for GitChange
 #derive(Eq, @debug.Debug)
 pub(all) struct GitChangesPayload {
   session : String
-  workspace : String?
+  workspace : String
 }
 pub fn GitChangesPayload::equal(Self, Self) -> Bool
 pub fn GitChangesPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1465,7 +1465,7 @@ pub impl @json.ToJson for GitHistoryCommit
 #derive(Eq, @debug.Debug)
 pub(all) struct GitHistoryPayload {
   session : String
-  workspace : String?
+  workspace : String
   snapshot : GitHistorySnapshot?
   skip : Int32
   limit : Int32

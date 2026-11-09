@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek_protocol" @wire,
+  "moonbitlang/core/json",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/transcript",
 }

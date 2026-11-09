@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('new-tab popup supports keyboard navigation and dismissal', async ({ page }, testInfo) => {
+test('new-tab popup supports keyboard navigation and dismissal', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -23,7 +23,6 @@ test('new-tab popup supports keyboard navigation and dismissal', async ({ page }
   await expect(menu.getByRole('menuitem', { name: 'Search', exact: true })).toBeFocused();
   for (const colorScheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme });
-    await menu.screenshot({ path: testInfo.outputPath('launcher-surface-' + colorScheme + '.png') });
   }
   await page.keyboard.press('End');
   await expect(menu.getByRole('menuitem', { name: 'Jobs', exact: true })).toBeFocused();

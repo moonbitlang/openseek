@@ -100,7 +100,7 @@
 }
 .jump-latest:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   border-color: var(--color-accent-border);
 }
 
@@ -250,7 +250,7 @@
 .overview-preview-reply {
   margin-top: 7px;
   padding-left: 8px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   color: var(--color-text-secondary);
@@ -288,7 +288,7 @@
   height: 52px;
   border-radius: var(--radius-lg);
   background: var(--color-control-surface);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
 }
 .empty-title {
@@ -338,7 +338,7 @@
 }
 .empty-project-trigger:hover,
 .empty-project-trigger.open {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .empty-project-trigger:focus-visible {
   outline: 2px solid var(--color-focus-ring);
@@ -385,14 +385,12 @@
   padding: 0 9px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
   color: var(--color-text-muted);
 }
 .empty-project-search input {
   width: 100%;
   padding: 8px 0;
   border: 0;
-  background: transparent;
   color: var(--color-text-primary);
   font-family: inherit;
   font-size: inherit;
@@ -465,7 +463,7 @@
   margin-top: 6px;
   padding: 9px;
   border: 0;
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary);
@@ -498,14 +496,11 @@
   margin-top: 8px;
 }
 .user-bubble {
-  /* Tune each theme independently: a pale wash on paper, a muted blue on
-     dark canvas. Local text also keeps inline code legible on the fill. */
-  --color-text-primary: light-dark(#132748, #f1f5fc);
   min-width: 0;
   max-width: 85%;
   padding: 13px 17px;
   border-radius: 20px;
-  background: light-dark(#eaf3fd, #1c3e70);
+  background: var(--color-bg-content);
 }
 .session-message-source {
   margin-bottom: 6px;
@@ -664,29 +659,14 @@
 .msg-content.markdown p {
   margin: 0.55em 0;
 }
-.msg-content.markdown h1,
-.msg-content.markdown h2,
-.msg-content.markdown h3,
-.msg-content.markdown h4,
-.msg-content.markdown h5,
-.msg-content.markdown h6 {
+/* A reply's headings mark sections inside prose, so they stay at body size
+   and are told apart by weight and the space above them rather than by size.
+   `1em` also overrides the browser's own h1-h6 sizes. */
+.msg-content.markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: 0.95em 0 0.45em;
   line-height: 1.35;
-  font-weight: 600;
-}
-.msg-content.markdown h1 {
-  font-size: 1.3em;
-}
-.msg-content.markdown h2 {
-  font-size: 1.18em;
-}
-.msg-content.markdown h3 {
-  font-size: 1.08em;
-}
-.msg-content.markdown h4,
-.msg-content.markdown h5,
-.msg-content.markdown h6 {
   font-size: 1em;
+  font-weight: 600;
 }
 .msg-content.markdown ul,
 .msg-content.markdown ol {
@@ -707,7 +687,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   white-space: pre;
@@ -858,7 +838,7 @@
 .msg-content.markdown blockquote {
   margin: 0.55em 0;
   padding: 2px 12px;
-  border-left: 3px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-divider);
   color: var(--color-text-secondary);
 }
 .msg-content.markdown .chat-table-scroll {
@@ -885,19 +865,32 @@
   padding: 4px 10px;
 }
 .msg-content.markdown td {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
+}
+.msg-content.markdown :is(th, td) + :is(th, td) {
+  border-left: 1px solid var(--color-divider);
 }
 .msg-content.markdown th {
-  background: var(--color-bg-subtle);
   font-weight: 600;
 }
 .msg-content.markdown hr {
   margin: 0.9em 0;
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
 }
-.msg-content a {
+.msg-content a,
+.file-link {
   color: var(--color-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.16em;
+  text-decoration-color: color-mix(in srgb, currentColor 38%, transparent);
+}
+.msg-content a:hover,
+.msg-content a:focus-visible,
+.file-link:hover,
+.file-link:focus-visible {
+  text-decoration-color: currentColor;
 }
 .msg-content.markdown img {
   max-width: 100%;
@@ -1127,8 +1120,8 @@
 
 .inline-code {
   border-radius: var(--radius-xs);
-  background: var(--color-bg-subtle);
-  color: inherit;
+  background: var(--color-bg-content);
+  color: var(--color-text-inline-code);
   /* Tone alone marks code in prose; the transparent edge keeps the geometry
      a file link's accent border recolors. */
   border: 1px solid transparent;
@@ -1148,17 +1141,14 @@
   border: none;
   background: none;
   font: inherit;
+  font-family: var(--font-family-mono);
+  font-size: 0.92em;
   text-align: left;
-  color: var(--color-accent);
   cursor: pointer;
   vertical-align: baseline;
 }
-.file-link:hover,
-.file-link:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 .file-link .inline-code {
+  font-size: inherit;
   color: var(--color-accent);
   border-color: var(--color-accent);
   text-decoration: none;
@@ -1166,7 +1156,7 @@
 .file-link:hover .inline-code,
 .file-link:focus-visible .inline-code {
   background: var(--color-accent);
-  color: var(--bg, var(--color-on-accent));
+  color: var(--color-on-accent);
 }
 
 /* A fenced `openseek-file` reference. The same markup is usable as a button
@@ -1350,7 +1340,7 @@
   color: var(--color-text-secondary);
 }
 .activity:has(> .activity-summary .activity-step) > .activity-body {
-  border-left-color: var(--color-border);
+  border-left-color: var(--color-divider);
 }
 
 /* The step heading when the step went straight to tools: the same ordinal and
@@ -1378,7 +1368,7 @@
    rows above and below — reading the gaps between steps is the whole point of
    showing them. */
 .activity-time {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }
@@ -1387,7 +1377,7 @@
   display: grid;
   gap: 14px;
   padding: 12px 0 4px 16px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 
 /* compaction checkpoint between turns: a quiet labeled fold with the
@@ -1448,7 +1438,7 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 2px 0 2px 16px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 
 .tool-exchange {
@@ -1472,7 +1462,7 @@
 }
 .tool-flow {
   flex: 0 0 1em;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   text-align: center;
 }
 /* Keep status at the far right, after the summary's ::after disclosure arrow.
@@ -1633,7 +1623,7 @@
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
@@ -1711,7 +1701,7 @@
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
 }
@@ -1750,7 +1740,7 @@
 .tool-argument-object {
   margin: 3px 0 3px 2px;
   padding-left: 10px;
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .tool-argument-array {
   margin: 3px 0 3px 2px;
@@ -1758,7 +1748,7 @@
 .tool-argument-item {
   margin: 4px 0;
   padding-left: 10px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 /* ---------- custom tool cards ----------
    One tool's arguments rendered in the shape a reader wants — an `mbtx`
@@ -1820,7 +1810,7 @@
 .read-moonbit-code,
 .moonbit-code {
   min-width: 0;
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font: inherit;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1865,7 +1855,7 @@
 .edit-entry + .edit-entry {
   margin-top: 10px;
   padding-top: 4px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
 }
 .edit-omitted {
   color: var(--color-text-muted);
@@ -2238,7 +2228,7 @@
   gap: 8px;
   min-width: 0;
   padding: 4px 4px 4px 13px;
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-divider);
   font-size: var(--font-size-sm);
 }
 .edit-path,

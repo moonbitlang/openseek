@@ -375,6 +375,7 @@ fn CodexRequestInput::render(
       body.push(@html.pre(class="codex-raw", self.params.stringify(indent=2)))
       body.push(
         @html.textarea(
+          class="field-surface",
           value=self.answers.get("__content").unwrap_or("{}"),
           placeholder=match locale {
             SimplifiedChinese => "工具要求的 JSON 内容"

@@ -494,7 +494,7 @@ fn search_message(
         "invalid_regex" => ui(locale, InvalidRegex)
         "invalid_glob" => ui(locale, InvalidGlob)
         "permission_denied" => ui(locale, UnreadableWorkspace)
-        "rg_unavailable" => ui(locale, RipgrepUnavailable)
+        "rg_unavailable" => ui(locale, TextSearchUnavailable)
         "invalid_pattern" => ui(locale, InvalidPattern)
         "moongrep_unavailable" => ui(locale, SemanticUnavailable)
         "invalid_request" => ui(locale, NothingToSearch)
@@ -856,6 +856,7 @@ fn page_view(
       @html.label([
         @html.span(ui(locale, IncludeFiles)),
         @html.input(
+          class="field-surface",
           input_type=@html.InputType::Text,
           value=page.include_glob,
           placeholder=ui(locale, IncludeExample),
@@ -868,6 +869,7 @@ fn page_view(
       @html.label([
         @html.span(ui(locale, ExcludeFiles)),
         @html.input(
+          class="field-surface",
           input_type=@html.InputType::Text,
           value=page.exclude_glob,
           placeholder=ui(locale, ExcludeExample),
@@ -891,6 +893,7 @@ fn page_view(
       },
       if page.mode is Text {
         @html.textarea(
+          class="field-surface",
           value=page.text.query,
           placeholder=ui(locale, SearchLabel),
           on_input=emit.map(value => QueryChanged(value)),
@@ -899,6 +902,7 @@ fn page_view(
         )
       } else {
         @html.textarea(
+          class="field-surface",
           value=page.semantic.patterns[0],
           placeholder="inspect($(x:arg))",
           on_input=emit.map(value => PatternChanged(0, value)),
@@ -935,6 +939,7 @@ fn page_view(
           patterns.push(
             @html.div(class="search-semantic-source", [
               @html.textarea(
+                class="field-surface",
                 value=pattern,
                 placeholder="inspect($(x:arg))",
                 on_input=emit.map(value => PatternChanged(index, value)),

@@ -151,7 +151,7 @@ async fn initialize_moonbit(
 ///
 /// It orders this process only. Every host process of one user prepares the
 /// same payload directory, so the check and the preparation also run under
-/// `with_payload_lock`.
+/// an `@fsx.FileLock` on it.
 let prepare_payload_lock : @semaphore.Semaphore = Semaphore(1, initial_value=1)
 
 ///|
@@ -171,36 +171,6 @@ async fn ensure_moonx_alias(moon_home : @pathx.Path) -> Unit {
 }
 
 ///|
-fn payload_lock_path(moon_home : @pathx.Path) -> @pathx.Path {
-  moon_home.dirname().join(moon_home.basename().to_owned() + ".lock")
-}
-
-///|
-/// Run `body` holding the payload directory's lock across host processes,
-/// waiting for whichever host holds it. Two hosts that start together on a
-/// fresh install would otherwise both find no stamp, and one would remove
-/// the directory the other is copying the seed into or running `moon bundle`
-/// in. Waiting is the point: the host that arrives second finds the stamp
-/// the first one wrote and reuses the payload.
-///
-/// The lock is a file beside the payload directory, not inside it:
-/// preparation removes that directory.
-async fn[T] with_payload_lock(
-  moon_home : @pathx.Path,
-  body : async () -> T,
-) -> T {
-  let lock = @fs.open(
-    payload_lock_path(moon_home).to_string(),
-    mode=ReadWrite,
-    create_mode=OpenOrCreate,
-  )
-  defer lock.close()
-  lock.lock(Exclusive)
-  defer lock.unlock()
-  body()
-}
-
-///|
 async fn prepared_bundled_moonbit_payload(
   seed_dir~ : @pathx.Absolute,
   runtime_dir? : @pathx.Path,
@@ -215,10 +185,17 @@ async fn prepared_bundled_moonbit_payload(
   guard bundled_moonbit_seed_version(seed_dir) is Some(version) else {
     return None
   }
-  with_payload_lock(moon_home, () => {
-    prepare_moonbit_payload(seed_dir~, moon_home~, version~, runtime_dir?)
-    Some(moon_home)
-  })
+  // Held across host processes, waiting for whichever host holds it. Two
+  // hosts that start together on a fresh install would otherwise both find no
+  // stamp, and one would remove the directory the other is copying the seed
+  // into or running `moon bundle` in. Waiting is the point: the host that
+  // arrives second finds the stamp the first one wrote and reuses the payload.
+  // The lock's sidecar sits beside the payload directory, not inside it:
+  // preparation removes that directory.
+  let shared = @fsx.FileLock::acquire(moon_home)
+  defer shared.release()
+  prepare_moonbit_payload(seed_dir~, moon_home~, version~, runtime_dir?)
+  Some(moon_home)
 }
 
 ///|
@@ -305,12 +282,7 @@ async test "a host waits for another host's preparation and reuses it" {
     is Some(moon_home) else {
     fail("no payload directory under the runtime directory")
   }
-  let held = @fs.open(
-    payload_lock_path(moon_home).to_string(),
-    mode=ReadWrite,
-    create_mode=OpenOrCreate,
-  )
-  held.lock(Exclusive)
+  let held = @fsx.FileLock::acquire(moon_home)
   let order : Array[String] = []
   @async.with_task_group(group => {
     group.spawn_bg(() => {
@@ -343,8 +315,7 @@ async test "a host waits for another host's preparation and reuses it" {
       create_mode=CreateOrTruncate,
     )
     order.push("the other host finished")
-    held.unlock()
-    held.close()
+    held.release()
   })
   assert_eq(order, ["the other host finished", "this host has its toolchain"])
   // Reused, not replaced: the other host's files are the ones still there.

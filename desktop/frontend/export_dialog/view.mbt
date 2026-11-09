@@ -7,76 +7,41 @@ pub fn Model::view(
   self : Model,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  let children : Array[@html.Html] = []
-  if self.content is Some(content) {
+  let children = if self.content is Some(content) {
     let file = content.source is File(_)
     let busy = content.operation.busy()
-    children.push(
-      @html.div(class="export-dialog-header", [
-        @html.div(
-          id=self.id_prefix + "-title",
-          class="modal-title",
-          ui(locale, if file { ShareFile } else { ExportConversation }),
-        ),
+    let header = @rui.dialog_header([
+      @rui.dialog_title(
+        id=self.id_prefix + "-title",
+        ui(locale, if file { ShareFile } else { ExportConversation }),
+      ),
+    ])
+    let actions = @rui.dialog_footer([
+      if file {
+        @html.nothing
+      } else {
         @html.button(
-          class="export-dialog-close",
-          title=ui(locale, CloseLabel),
-          on_click=emit(Close),
-          attrs=@html.Attrs::build().aria_label(
-            ui(locale, if file { CloseLabel } else { CloseDialog }),
-          ),
-          @icons.icon(@icons.icon_close),
-        ),
-      ]),
-    )
-    match content.source {
-      File(HostFile(_, payload)) =>
-        children.push(@html.p(class="modal-body", payload.path))
-      File(CloudFile(path~, ..)) =>
-        children.push(@html.p(class="modal-body", path))
-      _ => ()
-    }
-    // The source title stays in the export metadata; the dialog only presents
-    // the actions, without repeating the conversation heading behind it.
-    children.push(
-      @html.div(
-        id=self.id_prefix + "-description",
-        class="modal-body",
-        if file {
-          ui(locale, FileShareDescription)
+          class="button secondary export-download",
+          disabled=busy,
+          on_click=emit(Download),
+          if content.operation is Downloading {
+            ui(locale, SavingLabel)
+          } else {
+            ui(locale, DownloadLabel)
+          },
+        )
+      },
+      @html.button(
+        class="button primary",
+        disabled=busy || content.publication is Some(_),
+        on_click=emit(Share),
+        if content.operation is Sharing(_) {
+          ui(locale, SharingLabel)
         } else {
-          ui(locale, ExportDescription)
+          ui(locale, ShareLabel)
         },
       ),
-    )
-    children.push(
-      @html.div(class="modal-actions", [
-        if file {
-          @html.nothing
-        } else {
-          @html.button(
-            class="button secondary export-download",
-            disabled=busy,
-            on_click=emit(Download),
-            if content.operation is Downloading {
-              ui(locale, SavingLabel)
-            } else {
-              ui(locale, DownloadLabel)
-            },
-          )
-        },
-        @html.button(
-          class="button primary",
-          disabled=busy || content.publication is Some(_),
-          on_click=emit(Share),
-          if content.operation is Sharing(_) {
-            ui(locale, SharingLabel)
-          } else {
-            ui(locale, ShareLabel)
-          },
-        ),
-      ]),
-    )
+    ])
     let status = match content.operation {
       Ready => @html.nothing
       Downloading => @html.span(ui(locale, ChooseSavePath))
@@ -139,16 +104,9 @@ pub fn Model::view(
           },
         )
     }
-    children.push(
-      @html.div(
-        class="export-status",
-        attrs=@html.Attrs::build().aria_live("polite"),
-        status,
-      ),
-    )
-    if content.publication is Some(publication) {
+    let publication = if content.publication is Some(publication) {
       let { url, copy, } = publication
-      children.push(
+      [
         @html.div(
           class="export-status",
           attrs=@html.Attrs::build().aria_live("polite"),
@@ -221,12 +179,56 @@ pub fn Model::view(
             },
           ]),
         ),
-      )
+      ]
+    } else {
+      []
     }
+    [
+      header,
+      @html.div(
+        [
+          ..match content.source {
+            File(HostFile(_, payload)) =>
+              [@rui.dialog_description(payload.path)]
+            File(CloudFile(path~, ..)) => [@rui.dialog_description(path)]
+            _ => []
+          },
+          @rui.dialog_description(
+            id=self.id_prefix + "-description",
+            ui(
+              locale,
+              if file {
+                FileShareDescription
+              } else {
+                ExportDescription
+              },
+            ),
+          ),
+          @html.div(
+            class="export-status",
+            attrs=@html.Attrs::build().aria_live("polite"),
+            status,
+          ),
+          ..publication,
+        ],
+      ),
+      actions,
+    ]
+  } else {
+    []
   }
-  @html.dialog(
+  @rui.dialog(
     id=self.id_prefix + "-dialog",
-    class="modal export-dialog",
+    class="dialog-size-medium",
+    close_label=ui(
+      locale,
+      if self.content is Some({ source: File(_), .. }) {
+        CloseLabel
+      } else {
+        CloseDialog
+      },
+    ),
+    on_close=_ => emit(Close),
     on_cancel=emit(Close),
     attrs=@html.Attrs::build()
       .aria_labelledby(self.id_prefix + "-title")

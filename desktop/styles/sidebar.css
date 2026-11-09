@@ -15,7 +15,7 @@ aside {
   min-height: 0;
   overflow: hidden;
   padding-bottom: 1rem;
-  border-right: 1px solid var(--color-separator);
+  border-right: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   /* The width-resize grab strip on the right edge positions against the
@@ -34,13 +34,13 @@ aside {
   top: 0;
   bottom: 0;
   right: 0;
-  width: var(--resize-handle-width);
+  width: 4px;
   z-index: 3;
   cursor: col-resize;
 }
 .sidebar-resize-handle:hover,
 html.is-resizing .sidebar-resize-handle {
-  background: var(--color-accent-soft);
+  background: linear-gradient(to left, #257de0 50%, transparent 50%);
 }
 
 /* The fixed history controls and sidebar toggle share the shell header.
@@ -90,7 +90,7 @@ html.is-resizing .sidebar-resize-handle {
 .sidebar-mode-option.active {
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
-  box-shadow: 0 0 0 1px var(--color-separator);
+  box-shadow: 0 0 0 1px var(--color-seam);
 }
 .sidebar-mode-option:focus-visible {
   outline: 2px solid var(--color-focus-ring);
@@ -99,13 +99,12 @@ html.is-resizing .sidebar-resize-handle {
 
 .sidebar-main {
   display: grid;
-  /* One scroll lane holds every peer section. Independent folds keep a long
-     source manageable without turning Codex and OpenSeek into nested panes. */
   align-content: start;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  border-top: 1px solid var(--color-border);
   /* The scroll box spans to the sidebar's edge, and the rows inside it stop
      `--sidebar-inset` short of it however the platform draws its scrollbar. A
      classic bar (Windows, Linux) fills the stable gutter and holds the rows
@@ -113,6 +112,7 @@ html.is-resizing .sidebar-resize-handle {
      and reserves nothing, so there the whole inset has to be real padding.
      `--scrollbar-lane` is the measured width of the gutter the bar claims. */
   padding-top: 0;
+  padding-bottom: 0.8em;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
@@ -213,6 +213,21 @@ html.is-resizing .sidebar-resize-handle {
   content-visibility: auto;
   contain-intrinsic-block-size: auto 2em;
 }
+.sidebar-context-trigger {
+  display: flex;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conversation-content {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.conversation-content > .sidebar-label,
 .conversation-row > .sidebar-label {
   flex: 1 1 auto;
   overflow: hidden;
@@ -249,7 +264,6 @@ html.is-resizing .sidebar-resize-handle {
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font: inherit;
   outline: 1px solid var(--color-accent-border);
@@ -260,8 +274,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 
 .conversation-row.active {
-  background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  background: var(--color-conversation-selected);
 }
 
 .conversation-row.load-failed {
@@ -272,7 +285,7 @@ html.is-resizing .sidebar-resize-handle {
   width: 12px;
   height: 12px;
   border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent-strong);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: conversation-load-spin 0.8s linear infinite;
 }
@@ -487,11 +500,17 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  min-height: 2em;
+  min-height: 2.5rem;
   padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
+}
+.workspace-content {
+  display: flex;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .workspace-disclosure {
   flex: 1 1 auto;
@@ -524,11 +543,7 @@ html.is-resizing .sidebar-resize-handle {
   outline-offset: -2px;
   border-radius: var(--radius-sm);
 }
-.workspace-row:hover {
-  background: var(--color-bg-subtle);
-}
 .workspace-row.active {
-  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-weight: 500;
 }
@@ -540,8 +555,6 @@ html.is-resizing .sidebar-resize-handle {
    pointer moves into the floating surface. */
 .workspace-menu-button[aria-expanded="true"] {
   visibility: visible;
-}
-.workspace-menu-button[aria-expanded="true"] {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -578,7 +591,7 @@ button.composer-worktree:hover {
 }
 .composer-worktree.on {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 /* A conversation nested under its workspace row: the twisty cell and the row
@@ -590,7 +603,8 @@ button.composer-worktree:hover {
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  padding: 0 var(--space-4);
+  /* Align beneath titles: 2.5rem includes the leading twisty cell. */
+  padding: 0 var(--space-4) 0 2.5rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -599,12 +613,6 @@ button.composer-worktree:hover {
   font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
-}
-/* It sits under the titles of the rows it reveals. A top-level conversation
-   row indents its label 8 + 14 + 6 = 28px; a project's nested rows add their
-   own 16px pad on top, landing at 36px. */
-.project-show-more {
-  padding-left: 2.5rem;
 }
 .project-show-more:hover {
   background: var(--color-bg-subtle);
@@ -719,44 +727,29 @@ button.row-twisty:hover {
 .conversation-row.subrun.nested {
   padding-left: 2.5rem;
 }
-.conversation-row.subrun.active {
-  color: var(--color-accent-strong);
-}
 
-/* The host-backed project picker: a compact native-dialog treatment around
-   the location bar, directory browser, and inline folder creation. */
-.picker-backdrop {
-  /* Use a tint alone to separate the picker from the page on every platform. */
-  background: color-mix(
-    in srgb,
-    var(--color-text-primary) 20%,
-    transparent
-  );
+#project-picker-dialog {
+  --dialog-max-height: min(40rem, calc(100dvh - 2rem));
+  height: var(--dialog-max-height);
 }
-.modal.picker-modal {
+#project-picker-dialog[open] {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "header close"
+    "body body"
+    "footer footer";
+}
+#project-picker-dialog .picker-content {
   display: flex;
   flex-direction: column;
-  width: min(680px, calc(100vw - 48px));
-  height: min(560px, calc(100vh - 48px));
   padding: 0;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 80px -24px rgba(20, 23, 26, 0.42),
-    0 8px 28px -12px rgba(20, 23, 26, 0.28);
 }
-.picker-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  min-height: 4.5rem;
-  padding: var(--space-5) 1rem var(--space-5) var(--space-6);
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: color-mix(
-    in srgb,
-    var(--color-bg-surface) 94%,
-    var(--color-bg-subtle)
-  );
+#project-picker-dialog .picker-content > :not(.picker-browser) {
+  flex: none;
+}
+#project-picker-dialog .picker-footer {
+  grid-area: footer;
+  margin: 0 !important;
 }
 .picker-header-leading {
   display: flex;
@@ -774,15 +767,10 @@ button.row-twisty:hover {
   border: 1px solid var(--color-accent-border);
   border-radius: 10px;
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-header-copy {
   min-width: 0;
-}
-.picker-header .modal-title {
-  font-size: var(--font-size-md);
-  font-weight: 600;
-  line-height: 1.3;
 }
 .picker-subtitle {
   margin-top: var(--space-1);
@@ -790,33 +778,12 @@ button.row-twisty:hover {
   font-size: var(--font-size-xs);
   line-height: 1.35;
 }
-.picker-close {
-  --icon-size: var(--icon-md);
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.picker-close:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
-}
-.picker-close:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
-}
 .picker-location-bar {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   background: var(--color-bg-subtle);
 }
 .picker-crumbs {
@@ -847,7 +814,6 @@ button.row-twisty:hover {
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: 1px solid var(--color-focus-ring);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
   box-shadow: 0 0 0 2px
     color-mix(in srgb, var(--color-focus-ring) 16%, transparent);
 }
@@ -855,14 +821,13 @@ button.row-twisty:hover {
   --icon-size: var(--icon-sm);
   display: grid;
   place-items: center;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-path-editor input {
   width: 100%;
   height: 2rem;
   padding: 0 var(--space-2);
   border: 0;
-  background: transparent;
   font-size: var(--font-size-sm);
 }
 .picker-path-editor-cancel {
@@ -951,6 +916,7 @@ button.row-twisty:hover {
   flex: 1 1 23rem;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: none;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -965,7 +931,7 @@ button.row-twisty:hover {
   justify-content: space-between;
   min-height: 2.25rem;
   padding: 0 var(--space-5) 0 3rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   background: color-mix(
     in srgb,
     var(--color-bg-subtle) 88%,
@@ -991,7 +957,7 @@ button.row-twisty:hover {
   min-height: 2.75rem;
   padding: 0 var(--space-5) 0 var(--space-5);
   border: 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-divider);
   border-radius: 0;
   background: transparent;
   font: inherit;
@@ -1018,11 +984,11 @@ button.row-twisty:hover {
   place-items: center;
   flex: none;
   width: 20px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-row:not(:disabled):hover .picker-row-icon,
 .picker-row:not(:disabled):focus-visible .picker-row-icon {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-row-name {
   flex: 1 1 auto;
@@ -1063,13 +1029,12 @@ button.row-twisty:hover {
   place-items: center;
   width: 28px;
   height: 28px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-create-row input {
   width: 100%;
   height: 2.5rem;
   padding: 0 var(--space-4);
-  background: var(--color-bg-surface);
 }
 .picker-create-cancel,
 .picker-create-submit {
@@ -1092,9 +1057,9 @@ button.row-twisty:hover {
   color: var(--color-text-primary);
 }
 .picker-create-submit:not(:disabled):hover {
-  border-color: var(--color-accent-strong);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 .picker-empty {
   display: grid;
@@ -1117,17 +1082,11 @@ button.row-twisty:hover {
   line-height: var(--line-height-normal);
 }
 .picker-footer {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  min-height: 4.75rem;
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
 }
 .picker-current-location {
   --icon-size: var(--icon-md);
+  margin-inline-end: auto;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -1142,7 +1101,7 @@ button.row-twisty:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-current-copy {
   display: grid;
@@ -1162,26 +1121,17 @@ button.row-twisty:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.picker-footer .modal-actions {
+.picker-actions {
+  display: flex;
   flex: none;
-  margin-top: 0;
+  gap: var(--space-4);
 }
-.picker-footer .modal-actions .button:where(.primary) {
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent) 30%, transparent);
-}
-.picker-modal input:disabled {
+#project-picker-dialog input:disabled {
   cursor: default;
   opacity: 0.5;
 }
 
 @media (max-width: 600px) {
-  .modal.picker-modal {
-    width: calc(100vw - 1.75rem);
-    height: calc(100vh - 1.75rem);
-  }
-  .picker-header {
-    padding: var(--space-4) var(--space-5);
-  }
   .picker-location-bar {
     flex-wrap: wrap;
   }
@@ -1214,8 +1164,8 @@ button.row-twisty:hover {
   .picker-create-submit {
     grid-column: 3;
   }
-  .picker-footer .modal-actions,
-  .picker-footer .modal-actions button {
+  .picker-actions,
+  .picker-actions button {
     flex: 1 1 0;
   }
   .picker-current-location {
@@ -1283,8 +1233,8 @@ button.row-twisty:hover {
     }
 
     &:not(:disabled):hover {
-      background: var(--color-accent-strong);
-      color: var(--color-on-accent-strong);
+      background: var(--color-accent);
+      color: var(--color-on-accent);
     }
   }
 }
@@ -1299,9 +1249,8 @@ button.row-twisty:hover {
   margin: var(--space-4) var(--space-5) var(--space-5);
   width: calc(100% - 2 * var(--space-5));
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-separator);
+  border: 1px solid var(--color-seam);
   border-radius: 7px;
-  background: var(--color-bg-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
   color: var(--color-text-muted);
   font-size: var(--font-size-md);
@@ -1317,7 +1266,6 @@ button.row-twisty:hover {
   padding: 0;
   border: 0;
   outline: none;
-  background: transparent;
   color: var(--color-text-primary);
   font: inherit;
 }
@@ -1327,10 +1275,6 @@ button.row-twisty:hover {
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 /* Host identity and actions share the right edge without moving the title. */
-.workspace-row {
-  gap: var(--space-4);
-  min-height: 2.5rem;
-}
 .workspace-trailing {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

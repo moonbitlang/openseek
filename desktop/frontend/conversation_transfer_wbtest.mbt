@@ -1,46 +1,35 @@
 ///|
-test "import follows the selected project and worktree while its transcript loads or fails" {
-  let emit = test_dispatch()
-  let workspace = @resource.of_path(@interop.ChannelId::Local, "/other").unwrap()
-  let base = test_model().with_dev(dev => {
+test "import belongs to the project menu rather than the active conversation" {
+  let workspace = @interop.ChannelId::Local.test_resource("/other")
+  let model = test_model().with_dev(dev => {
     ..dev,
     projects: [..dev.projects, workspace],
-    sessions: [
-      {
-        id: "desktop-other",
-        title: Some("Other conversation"),
-        workspace,
-        workspace_name: "other",
-        updated_at_ms: None,
-      },
-    ],
   })
-  let (_, loading) = update(emit, OpenSession(Local, "desktop-other"), base)
-  let failure = SessionLoadFailed(
-    session="desktop-other",
-    message="unavailable",
-    generation=1,
-  )
-  let (_, retrying) = update_dev(emit, failure, loading)
-  let (_, retrying) = update_dev(emit, failure, retrying)
-  let (_, failed) = update_dev(emit, failure, retrying)
-  for model in [loading, failed] {
-    assert_eq(model.active_session, "desktop-test")
-    let (_, opened) = update(emit, OpenSessionImport, model)
-    let (_, expected) = model.session_import_dialog.open({
-      channel: Local,
-      connection_generation: model.focused_connection_generation(),
-      workspace: "/other",
-      worktree_of: Some("desktop-other"),
-    })
-    assert_eq(opened.session_import_dialog, expected)
+  let expected : @session_import.Target = {
+    channel: Local,
+    connection_generation: model.focused_connection_generation(),
+    workspace: "/other",
+    worktree_of: None,
   }
+  let msg = OpenSessionImport(Local, workspace)
+  let (_, opened) = update(test_dispatch(), msg, model)
+  let (_, repeated) = update(test_dispatch(), msg, model)
+  let (_, dialog) = model.session_import_dialog.open(expected)
+  assert_eq(opened.session_import_dialog, dialog)
+  assert_eq(opened.session_import_dialog, repeated.session_import_dialog)
+  assert_eq(model.session_import_target(Local, workspace), Some(expected))
+  let (_, detached) = update(test_dispatch(), msg, test_model())
+  assert_false(detached.session_import_dialog.is_open())
 }
 
 ///|
 test "import waits for the normal catalog without patching inventory and ignores stale lists" {
   let emit = test_dispatch()
-  let (_, opened) = update(emit, OpenSessionImport, test_model())
+  let (_, opened) = update(
+    emit,
+    OpenSessionImport(Local, @interop.ChannelId::Local.test_project()),
+    test_model(),
+  )
   let (_, typed) = update(
     emit,
     SessionImport(LinkChanged("https://example/v1/shares/sh_a")),
@@ -117,29 +106,4 @@ test "import waits for the normal catalog without patching inventory and ignores
   assert_true(
     listed.conversation_selection() is Some({ session: "imported", .. }),
   )
-}
-
-///|
-test "import requires a project and never allocates a standalone chat" {
-  let base = test_model().with_dev(dev => {
-    ..dev,
-    projects: [],
-    active_project: None,
-  })
-  assert_true(base.session_import_target() is None)
-  let (_, unchanged) = update(test_dispatch(), OpenSessionImport, base)
-  assert_false(unchanged.session_import_dialog.is_open())
-  let root = @interop.ChannelId::Local.test_resource("/app-data/workspaces")
-  let old = @interop.ChannelId::Local.test_resource("/app-data/workspaces/old")
-  let legacy = test_model()
-    .with_dev(dev => {
-      ..dev,
-      chat_root: Some(Ok(root)),
-      active_project: Some(old),
-    })
-    .replace_conversation({
-      ..test_model().active(),
-      workspace: Project(root=old),
-    })
-  assert_true(legacy.session_import_target() is None)
 }
