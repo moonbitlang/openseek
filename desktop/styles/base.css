@@ -362,6 +362,19 @@ html {
   initial-value: 0;
 }
 
+:is(
+  .sidebar-resize-handle,
+  .editor-resize-handle,
+  .tree-resize-handle,
+  .terminal-resize-handle
+):hover,
+html.is-resizing :is(.sidebar-resize-handle, .editor-resize-handle),
+html:is(.is-resizing-row, .is-resizing-col) .tree-resize-handle,
+html.is-resizing-terminal .terminal-resize-handle {
+  background: linear-gradient(#257de0, #257de0) center /
+    var(--resize-handle-line-size, 2px 100%) no-repeat;
+}
+
 .app {
   /* Vertical and horizontal resize handles share one hit-area size per axis.
      Component styles consume the dimension that matches their seam. */

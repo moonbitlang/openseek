@@ -333,6 +333,7 @@ button.panel-toggle:not(:disabled):hover {
 }
 
 .tree-resize-handle {
+  --resize-handle-line-size: 100% 2px;
   position: absolute;
   top: 0;
   left: 0;
@@ -342,16 +343,12 @@ button.panel-toggle:not(:disabled):hover {
   cursor: row-resize;
 }
 .editor.tree-right .tree-resize-handle {
+  --resize-handle-line-size: 2px 100%;
   right: auto;
   bottom: 0;
   width: var(--resize-handle-width);
   height: auto;
   cursor: col-resize;
-}
-.tree-resize-handle:hover,
-html.is-resizing-row .tree-resize-handle,
-html.is-resizing-col .tree-resize-handle {
-  background: var(--color-accent-soft);
 }
 html.is-resizing-row {
   cursor: row-resize;
@@ -371,10 +368,6 @@ html.is-resizing-col {
   width: var(--resize-handle-width);
   z-index: 3;
   cursor: col-resize;
-}
-.editor-resize-handle:hover,
-html.is-resizing .editor-resize-handle {
-  background: var(--color-accent-soft);
 }
 .content:not(.panel-open) .editor-resize-handle {
   display: none;

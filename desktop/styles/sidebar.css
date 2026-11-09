@@ -24,13 +24,9 @@ aside {
   top: 0;
   bottom: 0;
   right: 0;
-  width: 4px;
+  width: var(--resize-handle-width);
   z-index: 3;
   cursor: col-resize;
-}
-.sidebar-resize-handle:hover,
-html.is-resizing .sidebar-resize-handle {
-  background: linear-gradient(to left, #257de0 50%, transparent 50%);
 }
 
 /* The fixed history controls and sidebar toggle share the shell header.
