@@ -132,11 +132,15 @@ image to the model.
 Both use the v1 result envelope. `call` sends
 `{"version":1,"call":{"server","tool","arguments"}}`, answered with an added
 `"images"` when it saved any. The catalog download sends
-`{"version":1,"list":{"cursor"?}}` until a reply has no `next_cursor`; each
-reply's `data` is `{"items":[...],"next_cursor"?}`, with each server
+`{"version":1,"list":{"cursor"?,"snapshot"?}}` until a reply has no
+`next_cursor`; each reply's `data` is
+`{"items":[...],"snapshot","next_cursor"?}`, with each server
 (`{"server","instructions"?,"error"?}`) followed by its tools
 (`{"server","tool":{"name","description","input_schema","output_schema"?}}`) in
-configuration order.
+configuration order. The first request names no snapshot, and the host lists
+the catalog as it stands; every later one names the first reply's `snapshot`,
+so the pages all come from that catalog even when a server connects or loses
+its connection meanwhile.
 
 ## Standalone tests
 

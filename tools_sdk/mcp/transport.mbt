@@ -4,8 +4,9 @@
 priv enum Request {
   /// An MCP server's tool.
   Call(server~ : String, tool~ : String, arguments~ : Json)
-  /// One reply's worth of catalog items from `cursor`, the start when absent.
-  List(cursor~ : Int32?)
+  /// One reply's worth of catalog items from `cursor`, the start when absent,
+  /// of the catalog snapshot a listing started from, a new one when absent.
+  List(cursor~ : Int32?, snapshot~ : Int32?)
 }
 
 ///|
@@ -58,10 +59,13 @@ fn encode(request : Request) -> Json {
         "version": 1,
         "call": { "server": server, "tool": tool, "arguments": arguments },
       }
-    List(cursor~) => {
+    List(cursor~, snapshot~) => {
       let list = Map([])
       if cursor is Some(cursor) {
         list["cursor"] = Json(cursor)
+      }
+      if snapshot is Some(snapshot) {
+        list["snapshot"] = Json(snapshot)
       }
       { "version": 1, "list": Json::object(list) }
     }

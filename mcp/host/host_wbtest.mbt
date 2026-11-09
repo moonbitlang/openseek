@@ -153,7 +153,69 @@ async test "the MCP host lists an empty catalog as one empty reply" {
       "version": 1,
       "content": "The MCP catalog is empty",
       "is_error": false,
-      "data": { "items": [] },
+      "data": { "items": [], "snapshot": 0 },
+    })
+  })
+}
+
+///|
+async test "a listing pages through the catalog it started from" {
+  @async.with_task_group(group => {
+    // Five items of about 20,000 characters: three fit one reply.
+    let started : Array[Json] = [
+      for index in 0..<5 => {
+        { "server": "s", "blob": "\{index}" + "x".repeat(20000) }
+      }
+    ]
+    let items = Ref(started)
+    let service = Service::start(
+      group,
+      call=(server, tool, arguments) => echo(server, tool, arguments),
+      items=() => items.val,
+    )
+    let list = (fields : Json) => {
+      reply(service, { "version": 1, "list": fields })
+    }
+    guard list({})
+      is {
+        "data": {
+          "items": Array(first),
+          "snapshot": snapshot,
+          "next_cursor": cursor,
+          ..
+        },
+        ..
+      } else {
+      fail("expected a first page")
+    }
+    // A server comes first in the catalog now, shifting every later item.
+    items.val = [{ "server": "new" }, ..started]
+    guard list({ "cursor": cursor, "snapshot": snapshot })
+      is { "data": { "items": Array(rest), .. } as data, .. } else {
+      fail("expected the rest of the listing")
+    }
+    assert_eq([..first, ..rest], started)
+    assert_true(data is { "snapshot": same, .. } && same == snapshot)
+    assert_true(!(data is { "next_cursor": _, .. }))
+    // A new listing starts from the catalog as it stands now.
+    guard list({}) is { "data": { "items": [newest, ..], .. }, .. } else {
+      fail("expected a new listing")
+    }
+    assert_eq(newest, { "server": "new" })
+    // Once enough later catalogs have been listed, the first is gone.
+    for index in 0..<MaxSnapshots {
+      items.val = [{ "server": "\{index}" }]
+      ignore(list({}))
+    }
+    assert_eq(list({ "cursor": cursor, "snapshot": snapshot }), {
+      "version": 1,
+      "content": "MCP host no longer keeps catalog snapshot 0; list the catalog again",
+      "is_error": true,
+    })
+    assert_eq(list({ "snapshot": "0" }), {
+      "version": 1,
+      "content": "MCP host list requires a non-negative integer snapshot",
+      "is_error": true,
     })
   })
 }
