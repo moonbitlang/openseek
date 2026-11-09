@@ -15,6 +15,7 @@ priv enum UiMessage {
   LostReason
   Skipped
   SkippedReason
+  UnrecognizedState
   NotRunning
   ConnectedCount(Int32)
   FailedCount(Int32)
@@ -127,5 +128,10 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
       "未啟動：排在前面的伺服器已經用完了工具數量上限。"
     (Japanese, SkippedReason) =>
       "起動していません。先のサーバーでツール数の上限に達しました。"
+    (English, UnrecognizedState) => "Unknown state"
+    (Spanish, UnrecognizedState) => "Estado desconocido"
+    (SimplifiedChinese, UnrecognizedState) => "未知状态"
+    (TraditionalChinese, UnrecognizedState) => "未知狀態"
+    (Japanese, UnrecognizedState) => "不明な状態"
   }
 }

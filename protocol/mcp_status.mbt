@@ -71,6 +71,9 @@ pub(all) enum McpServerState {
   Failed(String)
   /// Never tried: earlier servers had already used up the tool budget.
   Skipped
+  /// A state this version does not know, under its wire name: a newer engine
+  /// reported it.
+  Unrecognized(String)
 }
 
 ///|
@@ -123,6 +126,7 @@ pub impl ToJson for McpServerStatus with fn to_json(self) {
       fields["error"] = Json(error)
     }
     Skipped => fields["state"] = "skipped"
+    Unrecognized(state) => fields["state"] = Json(state)
   }
   Json::object(fields)
 }
@@ -171,7 +175,9 @@ pub impl FromJson for McpServerStatus with fn from_json(json, path) {
       Failed(error)
     }
     "skipped" => Skipped
-    _ => raise JsonDecodeError((path.add_key("state"), "invalid state"))
+    // A newer engine may report states this version does not know; the rest
+    // of the status still reads.
+    state => Unrecognized(state)
   }
   { name, transport, target, state, }
 }

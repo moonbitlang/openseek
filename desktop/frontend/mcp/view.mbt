@@ -186,6 +186,16 @@ fn server_row(
         detail=None,
         title="\{reached}\n\{text(locale, SkippedReason)}",
       )
+    // A newer engine's state: named as it came, so it is not mistaken for
+    // one this page knows.
+    Unrecognized(state) =>
+      item(
+        tone="",
+        name=server.name,
+        note=Some(text(locale, UnrecognizedState)),
+        detail=None,
+        title="\{reached}\n\{state}",
+      )
   }
 }
 

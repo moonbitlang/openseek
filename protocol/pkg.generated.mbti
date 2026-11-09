@@ -291,6 +291,7 @@ pub(all) enum McpServerState {
   NoTools
   Failed(String)
   Skipped
+  Unrecognized(String)
 }
 pub fn McpServerState::equal(Self, Self) -> Bool
 pub fn McpServerState::not_equal(Self, Self) -> Bool

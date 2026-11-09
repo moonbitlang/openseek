@@ -311,7 +311,9 @@ configuration with its `transport`, its `target` (the command, or the URL
 without credentials), and a `state` — `connected` with the
 tools it registered, `lost` when it connected and the connection has closed
 since, `no_tools`, `failed` with the error, or `skipped` when earlier servers
-used up the tool budget. A controller keeps the latest one; it is this engine's
+used up the tool budget. Later engines may add states, so a controller reads a
+state it does not know as unrecognized rather than rejecting the whole report.
+A controller keeps the latest one; it is this engine's
 own connections, not what connecting again would yield.
 
 Resources and prompts (the other MCP capabilities) are not consumed: openseek's

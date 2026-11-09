@@ -35,6 +35,12 @@ test "an mcp_status survives the wire with every config and server state" {
         state: Failed("connection refused"),
       },
       { name: "late", transport: Stdio, target: "late", state: Skipped, },
+      {
+        name: "newer",
+        transport: Stdio,
+        target: "newer",
+        state: Unrecognized("warming_up"),
+      },
     ],
   }
   let event : @openseek_protocol.Event = McpStatus(status~)
@@ -108,7 +114,6 @@ test "a malformed MCP status is refused, not guessed" {
   assert_true(refused(server("stdio", { "state": "connected", "tools": [] })))
   assert_true(refused(server("stdio", { "state": "lost" })))
   assert_true(refused(server("stdio", { "state": "failed" })))
-  assert_true(refused(server("stdio", { "state": "up" })))
   assert_true(refused(server("pipe", { "state": "skipped" })))
   assert_false(refused(server("stdio", { "state": "skipped" })))
   // A failed config carries its error.
