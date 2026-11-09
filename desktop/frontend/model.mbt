@@ -1593,8 +1593,9 @@ priv struct Model {
   account_login_create : Int32?
   account_preferences : AccountPreferences
   remote_access : RemoteAccess?
-  // An `auth.connect` waiting on the user's browser round-trip.
+  // A pending account sign-in or sign-out.
   remote_connecting : Bool
+  account_login : AccountLogin?
   // The last connect/disconnect failure, shown inside the section.
   remote_error : String?
 }
@@ -1607,6 +1608,13 @@ priv struct RemoteAccess {
   connected : Bool
   managed_by_env : Bool
   device_url : String?
+}
+
+///|
+#derive(Eq)
+priv enum AccountLogin {
+  Waiting
+  Cancelling(connect_pending~ : Bool, cancel_pending~ : Bool)
 }
 
 ///|
@@ -1787,9 +1795,12 @@ priv enum Msg {
   // round-trip, so the section shows an in-progress state until a
   // finished/failed message settles it.
   RemoteConnectClicked
-  // The Cancel beside a waiting Connect: fires `auth.cancel`; the pending
-  // connect settles the section through its own failure reply.
+  // Cancel browser sign-in and wait for both host operations to settle.
   RemoteCancelClicked
+  AccountLoginCancelled(Int32)
+  AccountLoginTimedOut(Int32)
+  AccountCancelFailed(Int32, String)
+  AccountCancelFinished(Int32)
   // The Remote access Disconnect button and its failure (success arrives
   // as `RemoteStatusLoaded` via the op's reply).
   RemoteDisconnectClicked
@@ -2831,6 +2842,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     account_preferences: AccountPreferences::empty(),
     remote_access: None,
     remote_connecting: false,
+    account_login: None,
     remote_error: None,
   }
 }

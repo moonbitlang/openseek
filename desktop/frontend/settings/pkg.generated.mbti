@@ -50,6 +50,7 @@ pub(all) enum Message {
   DevicePage
   RegisterRelay
   WaitingBrowser
+  SignInTimedOut
   ConnectGitHub
   Cancel
   Problem

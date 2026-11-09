@@ -93,6 +93,7 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await expect(connect).toBeEnabled();
   await connect.click();
 
+  await expect(section.getByRole('status')).toHaveText('Finish signing in in your browser…');
   await expect(section.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 

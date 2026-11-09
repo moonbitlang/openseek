@@ -21,6 +21,7 @@ priv enum UiMessage {
   RetryingShare
   WaitingForShare
   CompleteBrowserSignIn
+  CancelSignIn
   SignInDescription
   SignInLabel
   RetrySignIn
@@ -34,6 +35,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, CancelSignIn) => "Cancel sign-in"
+    (Spanish, CancelSignIn) => "Cancelar inicio de sesión"
+    (SimplifiedChinese, CancelSignIn) => "取消登录"
+    (TraditionalChinese, CancelSignIn) => "取消登入"
+    (Japanese, CancelSignIn) => "ログインをキャンセル"
     (English, FileSignInDescription) => "Sign in to share this file."
     (Spanish, FileSignInDescription) =>
       "Inicia sesión para compartir este archivo."

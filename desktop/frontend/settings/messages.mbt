@@ -41,6 +41,7 @@ pub(all) enum Message {
   DevicePage
   RegisterRelay
   WaitingBrowser
+  SignInTimedOut
   ConnectGitHub
   Cancel
   Problem
@@ -438,11 +439,20 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "註冊此裝置，以便透過中繼服務在瀏覽器中遠端控制。"
     (Japanese, RegisterRelay) =>
       "このデバイスを登録し、リレーサービス経由でブラウザーからリモート操作します。"
-    (English, WaitingBrowser) => "Waiting for the browser…"
-    (Spanish, WaitingBrowser) => "Esperando al navegador…"
-    (SimplifiedChinese, WaitingBrowser) => "正在等待浏览器…"
-    (TraditionalChinese, WaitingBrowser) => "正在等待瀏覽器…"
-    (Japanese, WaitingBrowser) => "ブラウザーを待機中…"
+    (English, WaitingBrowser) => "Finish signing in in your browser…"
+    (Spanish, WaitingBrowser) =>
+      "Completa el inicio de sesión en tu navegador…"
+    (SimplifiedChinese, WaitingBrowser) => "请在浏览器中完成登录…"
+    (TraditionalChinese, WaitingBrowser) => "請在瀏覽器中完成登入…"
+    (Japanese, WaitingBrowser) =>
+      "ブラウザーでログインを完了してください…"
+    (English, SignInTimedOut) => "Sign-in wasn't completed. Try again."
+    (Spanish, SignInTimedOut) =>
+      "No se completó el inicio de sesión. Inténtalo de nuevo."
+    (SimplifiedChinese, SignInTimedOut) => "登录未完成，请重试。"
+    (TraditionalChinese, SignInTimedOut) => "登入未完成，請重試。"
+    (Japanese, SignInTimedOut) =>
+      "ログインが完了しませんでした。もう一度お試しください。"
     (English, ConnectGitHub) => "Connect with GitHub"
     (Spanish, ConnectGitHub) => "Conectar con GitHub"
     (SimplifiedChinese, ConnectGitHub) => "使用 GitHub 连接"

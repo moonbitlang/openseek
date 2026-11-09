@@ -201,6 +201,13 @@ h2 {
   border-top: 1px solid var(--color-divider);
 }
 
+.account-sign-in {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
 .prompt-input {
   width: 100%;
   min-height: 140px;
