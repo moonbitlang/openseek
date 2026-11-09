@@ -46,11 +46,11 @@ truncates the HTML or JSON conversation.
 ## Import
 
 **Import conversation** creates a new conversation from an export, chosen as
-its JSON file or given as a public share link. Imports stay within their
-origin: Local exports import only into Local workspaces (the project row's
-menu), and Cloud exports only into Cloud chats (the Chats section's menu while
-signed in). An export from the other origin is rejected with a message. The imported conversation's system prompt is rebuilt for its
-new location; original workspace files are not imported.
+its JSON file or given as a public share link: into a local workspace from the
+project row's menu, or into Cloud chats from the Chats section's menu while
+signed in. Cloud chats import only Cloud exports; a local export is rejected
+with a message. The imported conversation keeps its exported records,
+including its system prompt; workspace files are not part of an export.
 
 Cloud import sends `POST /v1/sessions/import` with
 `{"source":{"kind":"json","text":...}}` or
