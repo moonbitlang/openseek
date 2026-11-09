@@ -7162,7 +7162,19 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
-    PreviewLocalFile(path) => model.preview_local_file(dispatch, path)
+    PreviewFile(path) => model.preview_file(dispatch, path)
+    CloudFilePreviewCreated(owner~, auth_epoch~, result~) => {
+      let ctx = file_ctx(model)
+      guard ctx.owner == owner &&
+        ctx.cloud_files is Some({ epoch: current, .. }) &&
+        current == auth_epoch else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Ok(url) => update_msg(dispatch, ExternalLinkClicked(url), model)
+        Err(message) => model.notify_error(dispatch, message)
+      }
+    }
     DownloadFile(path) => {
       guard model.workspace_file(path) is Some(file) else {
         return (@cmd.none, model)

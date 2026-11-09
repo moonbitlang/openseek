@@ -177,6 +177,7 @@ pub(all) struct Ctx {
   active_history_diff : @dock.GitHistoryDiff?
   github : @github.State
 }
+pub fn Ctx::can_preview_html(Self, desktop~ : Bool) -> Bool
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
 pub fn Ctx::root(Self) -> @common.Uri?

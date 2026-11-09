@@ -189,6 +189,14 @@ on normal exit. Preview documents have no native bridge or command access.
 Pages requiring a backend service are outside this static preview feature.
 Chat's embedded artifact previews keep their existing behavior.
 
+## Cloud HTML previews
+
+Cloud Chat exposes the same **Preview** action for HTML/HTM files in the file
+tree and editor toolbar. It creates a preview using the signed-in account and
+opens the returned URL in the Desktop Browser tab or a new web browser tab.
+Relative resources load from that URL. Click **Preview** again to create a
+fresh URL when a preview expires.
+
 ## Skills
 
 The sidebar's **Skills** button opens a browser over the
