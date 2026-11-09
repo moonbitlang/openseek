@@ -132,8 +132,10 @@ pub fn[X] start(
 
 ///|
 /// What connecting this server came to, or `None` while it is still
-/// connecting.
-pub fn Server::settled(self : Server) -> ServerEntry? {
+/// connecting, as `Task::try_wait` reads its task — except that a task
+/// cancelled with its group, which only happens as the engine shuts down,
+/// reads as `None` rather than raising.
+pub fn Server::try_wait(self : Server) -> ServerEntry? {
   self.connecting.try_wait() catch {
     // Cancelled with its group: it never came to anything.
     _ => None
@@ -148,7 +150,7 @@ pub async fn Server::call(
   tool : String,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
-  guard self.settled() is Some(entry) else {
+  guard self.try_wait() is Some(entry) else {
     let (message, _) = cap_serialized(
       "MCP server `\{self.config.name()}` is still connecting; try again later",
       MaxToolOutputChars,
@@ -209,7 +211,7 @@ pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
   let items : Array[Json] = []
   for configured in servers {
     let server = configured.config.name()
-    guard configured.settled() is Some(entry) else {
+    guard configured.try_wait() is Some(entry) else {
       items.push({
         "server": Json(server),
         "error": "still connecting; search again from a later script",

@@ -35,7 +35,7 @@ pub struct Server {
   connecting : @async.Task[ServerEntry]
 }
 pub async fn Server::call(Self, String, @json.Json) -> @agent_tool.ToolAction
-pub fn Server::settled(Self) -> ServerEntry?
+pub fn Server::try_wait(Self) -> ServerEntry?
 
 pub struct ServerEntry {
   server : @config.McpServer

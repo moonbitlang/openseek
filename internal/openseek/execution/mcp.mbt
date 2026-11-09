@@ -140,7 +140,7 @@ pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
   let servers : Array[@protocol.McpServerStatus] = []
   for configured in self.servers {
     let server = configured.config
-    let state : @protocol.McpServerState = match configured.settled() {
+    let state : @protocol.McpServerState = match configured.try_wait() {
       None => Connecting
       Some(entry) => {
         let tools : Array[@protocol.McpTool] = entry.tools.map(tool => {

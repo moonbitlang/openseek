@@ -652,7 +652,7 @@ async test "start returns before a server settles, which its task then tells" {
       client_version="0.1",
     )
     guard servers is [slow] else { fail("expected one server") }
-    assert_true(slow.settled() is None)
+    assert_true(slow.try_wait() is None)
     let connecting : Json = {
       "server": "slow",
       "error": "still connecting; search again from a later script",
@@ -665,7 +665,7 @@ async test "start returns before a server settles, which its task then tells" {
     assert_true(early.content.contains("still connecting"))
     gate.put(())
     assert_true(slow.connecting.wait() is { connection: Live(_), .. })
-    assert_true(slow.settled() is Some({ connection: Live(_), .. }))
+    assert_true(slow.try_wait() is Some({ connection: Live(_), .. }))
     guard slow.call("ping", {}) is Respond(output) else {
       fail("expected a respond action")
     }
