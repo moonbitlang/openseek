@@ -10,5 +10,6 @@ import {
 supported_targets = "native"
 
 import {
+  "moonbitlang/async/io",
   "moonbitlang/async/socket",
 } for "wbtest"
