@@ -1459,31 +1459,7 @@ fn settings_runtime_groups(
       ],
       desc=@settings.text(locale, MaxStepsDescription),
     ),
-    @ui.form_row(
-      @settings.text(locale, Followup),
-      [
-        FollowupBehaviorMenu.setting_control(
-          dispatch,
-          model,
-          id="followup-behavior-select",
-          options=[
-            @select_control.ViewOption(
-              value="steer",
-              label=@settings.text(locale, Steer),
-            ),
-            @select_control.ViewOption(
-              value="queue",
-              label=@settings.text(locale, Queue),
-            ),
-          ],
-          selected=model.followup_behavior.wire(),
-          aria_label=@settings.text(locale, Followup),
-          change=dispatch.map(value => FollowupBehaviorChanged(value)),
-          disabled=!settings_loaded,
-        ),
-      ],
-      desc=@settings.text(locale, FollowupDescription),
-    ),
+    settings_followup_row(dispatch, model),
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(
     dispatch,
@@ -1502,12 +1478,47 @@ fn settings_runtime_groups(
 }
 
 ///|
+/// A host owns this preference once its settings load; device-less Cloud keeps
+/// it in the browser.
+fn settings_followup_row(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
+  let locale = model.locale
+  @ui.form_row(
+    @settings.text(locale, Followup),
+    [
+      FollowupBehaviorMenu.setting_control(
+        dispatch,
+        model,
+        id="followup-behavior-select",
+        options=[
+          @select_control.ViewOption(
+            value="steer",
+            label=@settings.text(locale, Steer),
+          ),
+          @select_control.ViewOption(
+            value="queue",
+            label=@settings.text(locale, Queue),
+          ),
+        ],
+        selected=model.followup_behavior.wire(),
+        aria_label=@settings.text(locale, Followup),
+        change=dispatch.map(value => FollowupBehaviorChanged(value)),
+        disabled=model.has_host() && !model.host_settings_loaded(),
+      ),
+    ],
+    desc=@settings.text(locale, FollowupDescription),
+  )
+}
+
+///|
 fn settings_general_group(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> @html.Html {
   let locale = model.locale
-  @ui.form_section(icon_layout, @settings.text(locale, General), [
+  let rows : Array[@html.Html] = [
     @ui.form_row(
       @settings.text(locale, TranscriptView),
       [
@@ -1565,6 +1576,13 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, LanguageDescription),
     ),
+    // Without a host the Engine section is absent, so the Cloud preference is
+    // offered here.
+    ..if model.has_host() {
+      []
+    } else {
+      [settings_followup_row(dispatch, model)]
+    },
     @ui.form_row(
       @settings.text(locale, Theme),
       [
@@ -1680,7 +1698,8 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, FileTreeDescription),
     ),
-  ])
+  ]
+  @ui.form_section(icon_layout, @settings.text(locale, General), rows)
 }
 
 ///|
