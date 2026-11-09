@@ -168,24 +168,10 @@ pub fn Service::env(self : Service) -> Map[String, String] {
 /// The reply to one request body.
 async fn Service::answer(self : Service, input : Json) -> Json {
   match input {
-    { "version": 1, "list": Object(fields), .. } => {
-      guard index(fields.get("cursor")) is Ok(cursor) else {
-        error_result("MCP host list requires a non-negative integer cursor")
+    { "version": 1, "list": Object(fields), .. } =>
+      self.list(fields) catch {
+        InvalidList(message) => error_result(message)
       }
-      match index(fields.get("snapshot")) {
-        Ok(None) => list_reply(self.snapshot(), cursor.unwrap_or(0))
-        Ok(Some(id)) =>
-          match self.snapshots.search_by(snapshot => snapshot.id == id) {
-            Some(at) => list_reply(self.snapshots[at], cursor.unwrap_or(0))
-            None =>
-              error_result(
-                "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
-              )
-          }
-        Err(_) =>
-          error_result("MCP host list requires a non-negative integer snapshot")
-      }
-    }
     {
       "version": 1,
       "call": {
@@ -216,13 +202,42 @@ async fn Service::answer(self : Service, input : Json) -> Json {
 }
 
 ///|
-/// An optional non-negative integer field of a request.
-fn index(value : Json?) -> Result[Int32?, Unit] {
-  match value {
-    None | Some(Null) => Ok(None)
+/// A `list` request the host cannot answer, with the reason.
+priv suberror InvalidList {
+  InvalidList(String)
+}
+
+///|
+/// The reply to a `list` request with these fields: a page of the snapshot
+/// it names, or of a new one when it names none.
+fn Service::list(
+  self : Service,
+  fields : Map[String, Json],
+) -> Json raise InvalidList {
+  let cursor = index(fields, "cursor").unwrap_or(0)
+  let snapshot = match index(fields, "snapshot") {
+    None => self.snapshot()
+    Some(id) =>
+      match self.snapshots.search_by(snapshot => snapshot.id == id) {
+        Some(at) => self.snapshots[at]
+        None =>
+          raise InvalidList(
+            "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
+          )
+      }
+  }
+  list_reply(snapshot, cursor)
+}
+
+///|
+/// The optional non-negative integer field `key` of a `list` request.
+fn index(fields : Map[String, Json], key : String) -> Int32? raise InvalidList {
+  match fields.get(key) {
+    None | Some(Null) => None
     Some(Number(number, ..)) if number >= 0.0 && number == number.floor() =>
-      Ok(Some(number.to_int()))
-    _ => Err(())
+      Some(number.to_int())
+    _ =>
+      raise InvalidList("MCP host list requires a non-negative integer \{key}")
   }
 }
 
@@ -254,10 +269,10 @@ priv struct Snapshot {
 /// The snapshot's items from `cursor`: as many whole items as fit one reply
 /// (always at least one), the snapshot's id, and the cursor of the rest while
 /// any remain.
-fn list_reply(snapshot : Snapshot, cursor : Int32) -> Json {
+fn list_reply(snapshot : Snapshot, cursor : Int32) -> Json raise InvalidList {
   let items = snapshot.items
   guard cursor < items.length() || (cursor == 0 && items.is_empty()) else {
-    return error_result(
+    raise InvalidList(
       "MCP host list cursor \{cursor} is past the catalog's \{items.length()} items",
     )
   }
