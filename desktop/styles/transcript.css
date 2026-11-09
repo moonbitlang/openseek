@@ -45,6 +45,7 @@
   gap: 20px;
   max-width: 820px;
   margin: 0 auto;
+  padding-inline: 2em;
 }
 
 /* render_rows_once_after_mount primes remembered row heights before offscreen
