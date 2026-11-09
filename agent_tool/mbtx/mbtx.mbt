@@ -220,9 +220,7 @@ pub fn definition(
             on_trace?=on_program_trace,
             on_image_output?=on_program_output,
           )
-          errdefer @async.protect_from_cancel(() => {
-            program.close(discard_images=!program.is_in_background())
-          })
+          errdefer program.close(discard_images=!program.is_in_background())
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
@@ -563,7 +561,7 @@ async fn execute(
   // has its own lifecycle. A non-standard caller that wires neither root has no
   // owner, so its fallback directory is reclaimed by the job at terminal status.
   let mut job_owns_cleanup = false
-  async fn cleanup() -> Unit {
+  async fn cleanup() -> Unit nocancel {
     if job_owns_cleanup {
       return
     }
@@ -577,7 +575,7 @@ async fn execute(
     })
   }
 
-  defer @async.protect_from_cancel(() => cleanup())
+  defer cleanup()
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
   // `dir` is one uniquely named call directory under `job_dir` or `scratch_dir`,

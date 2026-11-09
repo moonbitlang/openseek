@@ -879,7 +879,7 @@ async fn commit_edit(
   // not stay on disk unverified (or truncated): put the original back before
   // the cancellation unwinds. Registered before the write, since the write
   // itself truncates first and can be cancelled between that and its data.
-  async fn restore_on_unwind() -> Unit {
+  async fn restore_on_unwind() -> Unit nocancel {
     if baseline is Some(_) {
       let failure = @async.protect_from_cancel(() => {
         restore_content(
@@ -899,7 +899,7 @@ async fn commit_edit(
     }
   }
 
-  errdefer @async.protect_from_cancel(() => restore_on_unwind())
+  errdefer restore_on_unwind()
   // A guarded write runs to completion for the same reason: a truncated,
   // half-written file is neither the edit nor the original, and the rollback
   // restores only what it recognizes.

@@ -3,7 +3,7 @@ async test "current PR status skips GitHub for a local checkout without remotes"
   let dir = @fs.tmpdir(prefix="openseek-local-pr-status-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     let branch = @git.current_branch(repo).unwrap()
     let status = github_checkout_status(repo, _ => {
@@ -21,7 +21,7 @@ async test "current PR status verifies remote lifecycle even for saved branch as
   let dir = @fs.tmpdir(prefix="openseek-pr-status-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
@@ -131,7 +131,7 @@ async test "checkout choices preserve edits until chosen and stash retains index
   let dir = @fs.tmpdir(prefix="openseek-checkout-choices-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file(
       "\{dir}/tracked.txt",
@@ -218,12 +218,14 @@ test "checkout errors explain recovery and retain Git diagnostics" {
 }
 
 ///|
-/// Best-effort removal of a test repository. Cancellation stays observable;
-/// any other rmdir failure is the test's own tmpdir and is ignored.
-async fn git_test_cleanup(dir : String) -> Unit {
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
+/// Best-effort removal of a test repository; it runs to completion under
+/// cancellation, and an rmdir failure is the test's own tmpdir and is ignored.
+async fn git_test_cleanup(dir : String) -> Unit nocancel {
+  @async.protect_from_cancel(() => {
+    @fs.rmdir(dir, recursive=true) catch {
+      _ => ()
+    }
+  })
 }
 
 ///|

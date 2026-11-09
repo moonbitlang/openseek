@@ -1,8 +1,10 @@
 ///|
-async fn remove_toolchain_test_tree(root : @pathx.Absolute) -> Unit {
-  @fs.rmdir(root.to_string(), recursive=true) catch {
-    _ => ()
-  }
+async fn remove_toolchain_test_tree(root : @pathx.Absolute) -> Unit nocancel {
+  @async.protect_from_cancel(() => {
+    @fs.rmdir(root.to_string(), recursive=true) catch {
+      _ => ()
+    }
+  })
 }
 
 ///|
@@ -12,7 +14,7 @@ async fn with_toolchain_test_tree(
   body : async (@pathx.Absolute) -> Unit,
 ) -> Unit {
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-external-")).resolve()
-  defer @async.protect_from_cancel(() => remove_toolchain_test_tree(root))
+  defer remove_toolchain_test_tree(root)
   body(root)
 }
 

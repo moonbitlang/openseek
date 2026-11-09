@@ -134,14 +134,14 @@ pub async fn[X] Service::start(
     worker.cancel()
     @async.protect_from_cancel(() => worker.wait() catch { _ => () })
   })
-  group.add_defer(() => @async.protect_from_cancel(() => service.close()))
+  group.add_defer(() => service.close())
   service
 }
 
 ///|
 /// Stop serving and close the listener when the session's group ends. Calls
 /// in flight are cancelled.
-async fn Service::close(self : Service) -> Unit {
+async fn Service::close(self : Service) -> Unit nocancel {
   @async.protect_from_cancel(() => {
     if self.stop is Some(stop) {
       self.stop = None

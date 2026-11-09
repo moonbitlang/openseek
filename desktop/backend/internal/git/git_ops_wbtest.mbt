@@ -1,10 +1,12 @@
 ///|
-/// Best-effort removal of a test repository. Cancellation stays observable;
-/// any other rmdir failure is the test's own tmpdir and is ignored.
-async fn git_test_cleanup(dir : String) -> Unit {
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
+/// Best-effort removal of a test repository; it runs to completion under
+/// cancellation, and an rmdir failure is the test's own tmpdir and is ignored.
+async fn git_test_cleanup(dir : String) -> Unit nocancel {
+  @async.protect_from_cancel(() => {
+    @fs.rmdir(dir, recursive=true) catch {
+      _ => ()
+    }
+  })
 }
 
 ///|
@@ -33,7 +35,7 @@ async test "PR review uses its merge base and association follows the checked ou
   let dir = @fs.tmpdir(prefix="openseek-checkout-review-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file(
       "\{dir}/upstream.txt",
@@ -86,7 +88,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file("\{dir}/old.mbt", "first\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "old.mbt"])
@@ -243,7 +245,7 @@ async test "Git history paginates fifty commits and describes detached HEAD" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-page-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     let unborn = capture_git_history_snapshot(repo, None)
     assert_eq(unborn.head, None)
@@ -276,7 +278,7 @@ async test "Git history paginates fifty commits and describes detached HEAD" {
 async test "Git recognizes only origin HEAD's branch as the default" {
   let dir = @fs.tmpdir(prefix="openseek-git-default-branch-")
   let repo = git_test_repo(dir)
-  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "tracked.txt"])
@@ -300,7 +302,7 @@ async test "Git recognizes only origin HEAD's branch as the default" {
 async test "Git snapshots pair status with HEAD and supplied revisions stay pinned" {
   let dir = @fs.tmpdir(prefix="openseek-git-review-")
   let repo = git_test_repo(dir)
-  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   assert_eq(revision_commit(repo, "HEAD"), None)
   @fs.mkdir("\{dir}/desktop", recursive=true)
@@ -451,7 +453,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
 async test "checkout reviews retain committed changes and follow rebases" {
   let dir = @fs.tmpdir(prefix="openseek-git-root-review-")
   let repo = git_test_repo(dir)
-  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "review.txt"])
