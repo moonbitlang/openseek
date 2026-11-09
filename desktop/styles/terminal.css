@@ -30,6 +30,7 @@
 }
 
 .terminal-resize-handle {
+  --resize-handle-line-size: 100% 2px;
   position: absolute;
   top: 0;
   right: 0;
@@ -49,10 +50,6 @@
 }
 .content.terminal-maximized .terminal-resize-handle {
   display: none;
-}
-.terminal-resize-handle:hover,
-html.is-resizing-terminal .terminal-resize-handle {
-  background: var(--color-accent-soft);
 }
 html.is-resizing-terminal {
   cursor: row-resize;
