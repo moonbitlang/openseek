@@ -176,7 +176,10 @@ independent of the host PR.
 SDK 0.4.0 is prepared here for the migration to `moonbitlang/core/async`;
 0.3.0 and earlier releases use the separate `moonbitlang/async` runtime.
 Use 0.4.0 with core/async scripts. The wire protocol remains v1.
-Publish 0.4.0 before distributing scripts pinned to it. Keep SDK and wire
+Publish 0.4.0 before distributing scripts pinned to it. SDK 0.4.1 pages an MCP
+catalog download through one host snapshot, so a server that connects or loses
+its connection mid-download cannot shift the pages; its API is unchanged.
+Publish it before pinning scripts and prompts to it. Keep SDK and wire
 versions separate. Documentation and host tool additions do not require
 changing the SDK API. For a future SDK release, check and test the independent module first:
 
