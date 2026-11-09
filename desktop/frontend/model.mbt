@@ -3001,23 +3001,19 @@ fn Model::host_settings_loaded(self : Model) -> Bool {
 /// The focused host's provider. Until it reports, this is the host store's
 /// zero-config provider; the controls that edit it stay disabled meanwhile.
 fn Model::api_provider(self : Model) -> ApiProvider {
-  if self.host_settings() is Some(settings) {
-    settings.endpoint.provider
-  } else {
-    Deepseek
-  }
+  self.host_settings().map_or(Deepseek, settings => settings.endpoint.provider)
 }
 
 ///|
 /// The focused host's follow-up behavior, defaulting like `api_provider`;
 /// device-less Cloud uses its browser preference.
 fn Model::followup_behavior(self : Model) -> FollowupBehavior {
-  if !self.has_host() {
-    self.cloud_followup_behavior
-  } else if self.host_settings() is Some(settings) {
-    settings.endpoint.followup_behavior
+  if self.has_host() {
+    self
+    .host_settings()
+    .map_or(FollowupSteer, settings => settings.endpoint.followup_behavior)
   } else {
-    FollowupSteer
+    self.cloud_followup_behavior
   }
 }
 
@@ -3064,6 +3060,20 @@ fn Model::receive_default_prompt(self : Model) -> Model {
 /// Why the focused host's last settings read failed, until a status lands.
 fn Model::host_settings_error(self : Model) -> String? {
   self.focused_device().bind(dev => dev.host_settings.error)
+}
+
+///|
+/// Show the setup dialog when `channel`'s settings left it open for the
+/// focused host; a background host's reply never raises it.
+fn Model::api_setup_dialog(
+  self : Model,
+  channel : @interop.ChannelId,
+) -> @cmd.Cmd {
+  if channel == self.focused && self.api_setup_open && !self.cloud_selected() {
+    @dialog.show("api-setup-dialog")
+  } else {
+    @cmd.none
+  }
 }
 
 ///|
@@ -3280,9 +3290,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
 fn Model::api_ready(self : Model) -> Bool {
   guard self.host_settings() is Some({ endpoint, .. }) else { return false }
   match endpoint.provider {
-    Deepseek => endpoint.deepseek_key_saved
-    Glm => endpoint.glm_key_saved
-    OpenRouter => endpoint.custom_key_saved
+    Deepseek | Glm | OpenRouter => endpoint.key_saved()
     Custom => plausible_endpoint_url(endpoint.custom_api_url)
   }
 }

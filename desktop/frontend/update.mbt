@@ -7900,16 +7900,7 @@ fn update_device_msg(
         } else {
           next
         }
-        (
-          if channel == next.focused &&
-            next.api_setup_open &&
-            !next.cloud_selected() {
-            @dialog.show("api-setup-dialog")
-          } else {
-            @cmd.none
-          },
-          next,
-        )
+        (next.api_setup_dialog(channel), next)
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
@@ -7925,16 +7916,7 @@ fn update_device_msg(
       } else {
         next.flush_host_settings(channel)
       }
-      (
-        if channel == next.focused &&
-          next.api_setup_open &&
-          !next.cloud_selected() {
-          @dialog.show("api-setup-dialog")
-        } else {
-          @cmd.none
-        },
-        next,
-      )
+      (next.api_setup_dialog(channel), next)
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
@@ -7948,12 +7930,7 @@ fn update_device_msg(
         dispatch,
         notice_text(model.locale, SaveSettings(message.to_string())),
       )
-      let commands = [notice]
-      if channel == next.focused &&
-        next.api_setup_open &&
-        !next.cloud_selected() {
-        commands.push(@dialog.show("api-setup-dialog"))
-      }
+      let commands = [notice, next.api_setup_dialog(channel)]
       if settled {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores

@@ -45,6 +45,17 @@ fn HostSettings::prompt_text(
 }
 
 ///|
+/// Whether the host has a key saved for this endpoint's provider. OpenRouter
+/// and custom endpoints share the custom key.
+fn HostEndpoint::key_saved(self : HostEndpoint) -> Bool {
+  match self.provider {
+    Deepseek => self.deepseek_key_saved
+    Glm => self.glm_key_saved
+    OpenRouter | Custom => self.custom_key_saved
+  }
+}
+
+///|
 /// A connection's mirror before its first authoritative status.
 fn HostSettingsMirror::loading() -> HostSettingsMirror {
   { current: None, saves: 0, deferred: None, error: None, }

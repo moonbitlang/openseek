@@ -1368,11 +1368,7 @@ fn api_settings_rows(
   // knows one is saved; saving a new one overwrites it.
   {
     let key_saved = model.host_settings() is Some({ endpoint, .. }) &&
-      (match endpoint.provider {
-        Deepseek => endpoint.deepseek_key_saved
-        Glm => endpoint.glm_key_saved
-        OpenRouter | Custom => endpoint.custom_key_saved
-      })
+      endpoint.key_saved()
     let key_label = match model.api_provider() {
       Deepseek => @settings.text(model.locale, DeepseekApiKey)
       Glm => @settings.text(model.locale, GlmApiKey)
