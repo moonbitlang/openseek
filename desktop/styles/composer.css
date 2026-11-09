@@ -954,7 +954,7 @@ button.composer-worktree:hover {
   min-width: 2.25rem;
   height: 2.25rem;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: transparent;
   padding: 0;
   position: relative;
@@ -971,7 +971,6 @@ button.composer-worktree:hover {
 .composer-attach:focus-within {
   outline: 2px solid var(--color-text-primary);
   outline-offset: 3px;
-  border-radius: 3px;
 }
 .composer-image-notice {
   font-size: var(--font-size-sm);
