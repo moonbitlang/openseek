@@ -135,47 +135,6 @@ main {
   text-overflow: ellipsis;
 }
 
-/* The MCP rows of the conversation overview's connectors card. */
-.connectors-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 2px 0;
-  color: var(--color-text-secondary);
-}
-.connectors-row > .run-dot {
-  margin-top: 6px;
-}
-.connectors-text {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-.connectors-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text-primary);
-}
-/* Errors run long; two lines here, the rest on hover. */
-.connectors-detail {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  overflow-wrap: anywhere;
-}
-.connectors-state {
-  flex: none;
-  color: var(--color-text-muted);
-}
-.connectors-note {
-  padding: 2px 0;
-  color: var(--color-text-muted);
-}
-
 .run-dot {
   width: 7px;
   height: 7px;
@@ -205,27 +164,6 @@ main {
 .run-dot.pulse {
   animation: pulseDot 1.6s ease-out infinite;
 }
-
-/* Outcomes and requests stay distinguishable without color or animation.
-   The glyph occupies the conversation row's 20px slot, the same one the
-   row's action buttons beside it use, so every glyph in the row shares one
-   grid. Without the slot the box hugs the glyph and the 14px icon lands off
-   that grid. */
-.sidebar-run-status {
-  --icon-size: var(--icon-md);
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-}
-.sidebar-run-status.running { color: var(--color-text-secondary); }
-.sidebar-run-status.running .icon {
-  animation: spinRunDot 0.9s linear infinite;
-}
-.sidebar-run-status.needs-input { color: var(--color-warning); }
-.sidebar-run-status.completed { color: var(--color-text-secondary); }
-.sidebar-run-status.failed { color: var(--color-danger); }
 
 /* The shell owns one panel control across both headers. Reserve its space
    continuously while the editor track expands instead of adding/removing a

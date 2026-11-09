@@ -730,8 +730,7 @@
   pointer-events: auto;
 }
 /* Avoid an inline text baseline shifting either Codicon above the center. */
-.copy-button-symbol,
-.copy-button-check {
+.copy-button-symbol {
   display: flex;
 }
 .copy-button-check,

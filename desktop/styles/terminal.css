@@ -127,6 +127,14 @@ html.is-resizing-terminal {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
+.terminal-host-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
 .terminal-status {
   margin-left: auto;
   color: var(--color-text-muted);

@@ -214,6 +214,46 @@ main:has(> .conv-overview) {
   font-size: var(--font-size-xs);
 }
 
+.connectors-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--color-text-secondary);
+}
+.connectors-row > .run-dot {
+  margin-top: 6px;
+}
+.connectors-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.connectors-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+/* Errors run long; two lines here, the rest on hover. */
+.connectors-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+.connectors-state {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.connectors-note {
+  padding: 2px 0;
+  color: var(--color-text-muted);
+}
+
 /* Changes card: the checkout first, then what the agent attached. The icon
    carries the pull request's state; a row with a page links to it, and an
    attached row's remove button sits outside the link. */

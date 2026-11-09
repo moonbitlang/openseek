@@ -375,6 +375,23 @@ html.is-resizing .sidebar-resize-handle {
 .row-trailing > * {
   grid-area: 1 / 1;
 }
+
+.sidebar-run-status {
+  --icon-size: var(--icon-md);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.sidebar-run-status.running { color: var(--color-text-secondary); }
+.sidebar-run-status.running .icon {
+  animation: spinRunDot 0.9s linear infinite;
+}
+.sidebar-run-status.needs-input { color: var(--color-warning); }
+.sidebar-run-status.completed { color: var(--color-text-secondary); }
+.sidebar-run-status.failed { color: var(--color-danger); }
+
 .row-status,
 .row-actions {
   display: flex;
@@ -558,42 +575,6 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-/* Worktree affordances: the composer's launch-mode chip. A sidebar row names
-   its worktree in the row's own tooltip. The archive-discard confirmation
-   reuses the shared modal styles. */
-/* The composer's launch-mode chip: Local ⇄ Worktree while the conversation
-   can still choose; fixed to the worktree's name once bound. */
-.composer-worktree {
-  --icon-size: var(--icon-sm);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  box-sizing: border-box;
-  /* Same box as `.composer-model`, so the toolbar chips sit at one height. */
-  height: 2.25rem;
-  margin: 0;
-  padding: 0 var(--space-4);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-control-surface);
-  color: var(--color-text-secondary);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  white-space: nowrap;
-}
-button.composer-worktree {
-  cursor: pointer;
-}
-button.composer-worktree:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
-}
-.composer-worktree.on {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
 /* A conversation nested under its workspace row: the twisty cell and the row
    gap make up the rest of the indent, landing the title under its
    workspace's. */
@@ -624,59 +605,6 @@ button.composer-worktree:hover {
 }
 .conversation-row.placeholder:hover {
   background: transparent;
-}
-
-/* A sub-run in flight, docked above the composer: what is running, how far it
-   has gotten, and what it is doing right now. It is status, not content — no
-   durable event describes a child's progress — so it sits with the composer's
-   other live run state rather than in the scroller. Quiet by default, with a
-   pulsing dot so a stalled child still reads as attached rather than as a
-   frozen line. The dock collapses to nothing when no child is running. */
-.subrun-dock {
-  display: flex;
-  flex-direction: column;
-}
-.subrun-dock:empty {
-  display: none;
-}
-.subrun-lane {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-2) var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-.subrun-mark {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-secondary);
-  animation: lane-pulse 1.6s ease-in-out infinite;
-}
-/* `lane-pulse` is defined in base.css — shared with the composer's running
-   row. */
-.subrun-name {
-  flex: 0 0 auto;
-  color: var(--color-text-secondary);
-  font-weight: 600;
-}
-.subrun-detail {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  min-width: 0;
-}
-.subrun-step {
-  flex: 0 0 auto;
-}
-.subrun-activity {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Every conversation row leads with the twisty cell — a button when the
