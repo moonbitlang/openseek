@@ -215,16 +215,16 @@ fn Service::list(
   fields : Map[String, Json],
 ) -> Json raise InvalidList {
   let cursor = index(fields, "cursor").unwrap_or(0)
-  let snapshot = match index(fields, "snapshot") {
-    None => self.snapshot()
-    Some(id) =>
-      match self.snapshots.search_by(snapshot => snapshot.id == id) {
-        Some(at) => self.snapshots[at]
-        None =>
-          raise InvalidList(
-            "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
-          )
-      }
+  let snapshot = if index(fields, "snapshot") is Some(id) {
+    guard self.snapshots.iter().find_first(snapshot => snapshot.id == id)
+      is Some(snapshot) else {
+      raise InvalidList(
+        "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
+      )
+    }
+    snapshot
+  } else {
+    self.snapshot()
   }
   list_reply(snapshot, cursor)
 }
