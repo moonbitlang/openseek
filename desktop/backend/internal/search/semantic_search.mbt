@@ -650,23 +650,30 @@ async fn run_semantic_search(
   let mut error : @protocol.SemanticSearchError? = None
   let mut failure : @protocol.SemanticSearchError? = None
   @async.with_task_group(group => {
-    let process = @process.spawn(
-      group,
-      command,
-      semantic_search_args(payload),
-      inherit_env=false,
-      extra_env=provider.environment,
-      stdin=Shared(stdin_reader),
-      stdout=Shared(child_stdout),
-      stderr=Shared(child_stderr),
-      cwd=native_root,
-      no_console_window=true,
-      cancel_handler=@process.hard_cancel(),
-      no_wait=true,
-    ) catch {
+    let process = try {
+      // The child holds its own copies of these ends; the parent's must close
+      // so the readers see end-of-file once the child exits.
+      defer stdin_reader.close()
+      defer child_stdout.close()
+      defer child_stderr.close()
+      errdefer stdout_reader.close()
+      errdefer stderr_reader.close()
+      @process.spawn(
+        group,
+        command,
+        semantic_search_args(payload),
+        inherit_env=false,
+        extra_env=provider.environment,
+        stdin=Shared(stdin_reader),
+        stdout=Shared(child_stdout),
+        stderr=Shared(child_stderr),
+        cwd=native_root,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+        no_wait=true,
+      )
+    } catch {
       error => {
-        stdout_reader.close()
-        stderr_reader.close()
         failure = Some({
           code: "moongrep_unavailable",
           message: "Cannot start semantic search: \{error}",
