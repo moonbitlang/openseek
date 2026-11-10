@@ -81,6 +81,7 @@ fn promote_navigation(
           }
         }),
       },
+      mode_returns: model.mode_returns.promote(old, promoted),
     },
   )
 }

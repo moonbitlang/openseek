@@ -167,3 +167,35 @@ test "a stored Chat pick moves a blank Work start page to Chat" {
   assert_true(kept.navigation.location == named.navigation.location)
   assert_false(kept.reopen_in_chat)
 }
+
+///|
+test "a Cloud draft created while Work is on screen reopens as its conversation" {
+  let initial = integrated_cloud_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  let (_, blank) = update(test_dispatch(), CloudAction(@cloud.Create), initial)
+  let pending = submit_blank_cloud(blank)
+  let request = pending.cloud.creation.unwrap().request
+  let (_, work) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    pending,
+  )
+  let (_, created) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Created(3, request, "new-cloud")),
+    work,
+  )
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    created,
+  )
+  assert_true(
+    chat.navigation.location
+    is Some({ target: CloudSession(session="new-cloud", ..), .. }),
+  )
+  assert_true(
+    chat.cloud_identity() is Some(@interop.Cloud(session="new-cloud", ..)),
+  )
+}
