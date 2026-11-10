@@ -21,3 +21,6 @@ export const test = base.extend({
 });
 
 export { expect };
+
+// The Chat/Work switch in the sidebar header.
+export const sidebarMode = (page, name) => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });

@@ -1764,9 +1764,6 @@ fn update(
     | OpenCodex
     | NewChatRequested
     | ExplorerRequested(_) => true
-    // The switch navigates only when it moves the main column to the other
-    // mode's page; picking the mode already on screen only changes the list.
-    SidebarModeSelected(mode) => model.mode_switch_moves_column(mode)
     _ => false
   }
   let model = if navigates {
@@ -1803,7 +1800,6 @@ fn update(
     dispatch, msg, previous, model,
   )
   let (launch_mode_cmd, model) = settle_launch_mode(dispatch, model)
-  let navigation_cmd = @cmd.batch([navigation_cmd, launch_mode_cmd])
   let model = model.remember_mode_return()
   let detail_was_open = previous.skills_detail_dialog_open()
   let detail_open = model.skills_detail_dialog_open()
@@ -2165,6 +2161,7 @@ fn update(
     @cmd.batch([
       cmd,
       navigation_cmd,
+      launch_mode_cmd,
       preferences_cmd,
       notification_badge_cmd,
       sidebar_mode_cmd,
@@ -4968,7 +4965,7 @@ fn update_msg(
         return (@cmd.none, { ..model, sidebar_mode: ChatMode, })
       }
       // A manual pick supersedes the stored one still waiting for its page.
-      let model = { ..model, launch_mode: None, }
+      let model = { ..model, reopen_in_chat: false, }
       if model.mode_switch_moves_column(sidebar_mode) {
         switch_mode_column(dispatch, model, sidebar_mode, replace=false)
       } else {
@@ -4997,9 +4994,12 @@ fn update_msg(
       } else if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
         location.target.is_cloud()) {
-        (@cmd.none, { ..model, sidebar_mode, launch_mode: Some(sidebar_mode), })
+        (
+          @cmd.none,
+          { ..model, sidebar_mode, reopen_in_chat: sidebar_mode is ChatMode, },
+        )
       } else {
-        (@cmd.none, { ..model, launch_mode: Some(sidebar_mode), })
+        (@cmd.none, { ..model, reopen_in_chat: sidebar_mode is ChatMode, })
       }
     WindowFocusChanged(focused) => {
       // Returning to a visible transcript marks its completed turn read.

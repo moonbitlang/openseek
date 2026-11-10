@@ -1,9 +1,8 @@
-import { test, expect } from './support/test.js';
+import { test, expect, sidebarMode } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { CloudHarness } from './support/cloud_harness.js';
 
 const root = '/Users/test/Library/Application Support/SeekMoon/workspaces';
-const sidebarMode = (page, name) => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
 
 function localHistory(app) {
   app.workspaces = ['/workspace', `${root}/history`];

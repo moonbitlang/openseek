@@ -1,7 +1,7 @@
-import { test, expect } from './support/test.js';
+import { test, expect, sidebarMode } from './support/test.js';
 import { CloudHarness, authOrigin, sessionA } from './support/cloud_harness.js';
 
-const sidebarMode = (page, name) => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
+const localRow = page => page.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
 
 test('the Chat/Work switch moves the main column and restores each mode’s conversation', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -20,7 +20,7 @@ test('the Chat/Work switch moves the main column and restores each mode’s conv
   await sidebarMode(page, 'Work').click();
   await expect(page).toHaveURL(/\/device\/device-a\/chat\/new$/);
   await expect(title).not.toHaveText(cloud.titles.get(sessionA));
-  const local = page.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
+  const local = localRow(page);
   await local.click();
   await expect(page.locator('#transcript').getByText('Browser result', { exact: true })).toBeVisible();
   const workURL = page.url();
@@ -57,7 +57,7 @@ test('a blank device start page reopens in Chat when Chat was the last mode', as
 
   // A start page that names a conversation keeps it.
   await page.goto(`${authOrigin}/device/device-a/chat/session/session-1`);
-  await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(localRow(page)).toHaveAttribute('aria-current', 'true');
   await expect(page).toHaveURL(/\/device\/device-a\/chat\/session\/session-1$/);
   expect(cloud.device.pageErrors).toEqual([]);
 });
@@ -75,7 +75,7 @@ test('the phone drawer stays open on the list the switch picked', async ({ page 
   await expect(cloud.row(sessionA)).toBeVisible();
   await sidebarMode(page, 'Work').click();
   await expect(page).toHaveURL(/\/device\/device-a\/chat\/new$/);
-  await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
+  await expect(localRow(page)).toBeVisible();
   await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
   expect(cloud.device.pageErrors).toEqual([]);
 });

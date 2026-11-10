@@ -1345,9 +1345,9 @@ priv struct Model {
   // Each mode's list sits beside its own main column, so the switch reopens
   // the page that mode last showed (see `sidebar_mode_switch.mbt`).
   mode_returns : ModeReturns
-  // The stored pick from the last session, held until the start page is
-  // known so a blank start page can reopen in that mode.
-  launch_mode : @sidebar.Mode?
+  // The last session ended in Chat: held until the start page is known, so
+  // a blank start page can reopen there (`settle_launch_mode`).
+  reopen_in_chat : Bool
   // Right-panel visibility is shared by the shell grid, file-editor lifecycle,
   // and native Browser geometry, so the application root is its single owner.
   // The right-panel component receives these values as read-only input.
@@ -2790,7 +2790,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     },
     sidebar_revealed: None,
     mode_returns: ModeReturns::empty(),
-    launch_mode: None,
+    reopen_in_chat: false,
     right_panel_open: false,
     right_panel_menu_open: false,
     dock_tab_menu_open: false,

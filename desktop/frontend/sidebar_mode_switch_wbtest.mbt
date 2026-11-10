@@ -67,18 +67,18 @@ test "a mode with no page yet opens its fresh page" {
     ..integrated_cloud_model(),
     mode_returns: ModeReturns::empty(),
   }
-  let (_, work) = update(test_dispatch(), OpenSession(Local, "desktop-test"), {
-    ..model,
-    mode_returns: ModeReturns::empty(),
-  })
+  let (_, work) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    model,
+  )
   let work = { ..work, mode_returns: { ..work.mode_returns, chat: None, }, }
   let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
   assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
   assert_true(chat.cloud_selected() && chat.cloud_identity() is None)
   assert_true(chat.sidebar_mode is ChatMode)
   // Work: from a Cloud conversation, with no Work page shown before.
-  let cloud = { ..model, mode_returns: { ..model.mode_returns, work: None, }, }
-  let (_, fresh) = update(test_dispatch(), SidebarModeSelected(WorkMode), cloud)
+  let (_, fresh) = update(test_dispatch(), SidebarModeSelected(WorkMode), model)
   assert_true(fresh.navigation.location is Some({ target: ChatNew, .. }))
   assert_false(fresh.cloud_selected())
   assert_true(fresh.sidebar_mode is WorkMode)
@@ -94,14 +94,6 @@ test "a remembered Cloud conversation deleted since opens Cloud home" {
   let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
   assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
   assert_true(chat.cloud_identity() is None)
-}
-
-///|
-test "the narrow drawer stays open across a mode switch" {
-  let work = { ..work_after_cloud(), narrow: true, sidebar_open: true, }
-  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
-  assert_true(chat.cloud_identity() is Some(_))
-  assert_true(chat.sidebar_open)
 }
 
 ///|
@@ -140,7 +132,7 @@ test "a stored Chat pick moves a blank Work start page to Chat" {
   )
   assert_true(launched.navigation.location is Some({ target: Cloud, .. }))
   assert_true(launched.sidebar_mode is ChatMode)
-  assert_true(launched.launch_mode is None)
+  assert_false(launched.reopen_in_chat)
   // The start page can be learned after the stored pick: the pick waits.
   let (_, waiting) = update(test_dispatch(), SidebarModeLoaded(ChatMode), model)
   assert_true(waiting.navigation.location is None)
@@ -162,5 +154,5 @@ test "a stored Chat pick moves a blank Work start page to Chat" {
   }
   let (_, kept) = update(test_dispatch(), SidebarModeLoaded(ChatMode), named)
   assert_true(kept.navigation.location == named.navigation.location)
-  assert_true(kept.launch_mode is None)
+  assert_false(kept.reopen_in_chat)
 }
