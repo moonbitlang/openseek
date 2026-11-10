@@ -115,7 +115,7 @@
   }
   /* The panel already covers the viewport on phones, so expand/restore has no
      distinct action there. */
-  .panel-expand {
+  .editor-tabsbar > .panel-expand {
     display: none;
   }
 
