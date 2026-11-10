@@ -65,14 +65,14 @@ fn info_reply(identity : String) -> Reply {
 /// for a closed port, another program, or an `inspect` serving other sessions.
 async fn probe_inspect(host : String, port : Int32, identity : String) -> Bool {
   let reply = @async.with_timeout_opt(3000, () => {
-    @http.get("http://\{host}:\{port}/api/info")
+    @http.get_text("http://\{host}:\{port}/api/info")
   }) catch {
     _ => return false
   }
   guard reply is Some((response, body)) && response.code == 200 else {
     return false
   }
-  let info = @json.parse(body.text()) catch { _ => return false }
+  let info = @json.parse(body) catch { _ => return false }
   guard info is { "server": String(server), "identity": String(served), .. } else {
     return false
   }
@@ -121,7 +121,7 @@ fn record_path(session_root : String) -> String {
 
 ///|
 async fn read_record(path : String) -> ServerRecord? {
-  let text = @fs.read_file(path).text() catch { _ => return None }
+  let text = @fs.read_text(path) catch { _ => return None }
   let json = @json.parse(text) catch { _ => return None }
   Some(@json.from_json(json)) catch {
     _ => None
@@ -133,7 +133,7 @@ async fn read_record(path : String) -> ServerRecord? {
 /// the new one, never half of one, and other users never see the token.
 async fn write_record(path : String, record : ServerRecord) -> Unit {
   let tmp = "\{path}.\{record.port}.tmp"
-  @fs.write_file(
+  @fs.write_text(
     tmp,
     ToJson::to_json(record).stringify(),
     create_mode=CreateOrTruncate,

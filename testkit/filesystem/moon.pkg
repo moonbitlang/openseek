@@ -1,5 +1,5 @@
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 warnings = "+unnecessary_annotation"
@@ -7,5 +7,12 @@ warnings = "+unnecessary_annotation"
 supported_targets = "+wasm+native"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "test"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

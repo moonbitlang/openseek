@@ -52,7 +52,7 @@ async test "--dir rejects missing parents instead of creating recursively" {
 async test "--dir rejects existing non-directories" {
   @vfs.with_tmpdir(prefix="openseek-dir-file-", root => {
     let path = "\{root}/file"
-    @fs.write_file(path, "not a directory", create_mode=CreateOrTruncate)
+    @fs.write_text(path, "not a directory", create_mode=CreateOrTruncate)
     let parsed = @testkit.run_matches(
       argv=["--dir", path, "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },

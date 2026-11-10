@@ -37,7 +37,7 @@ async test "suite config parses relative task paths and flattens jobs" {
   @vfs.with_tmpdir(prefix="openseek-prompt-suite-config", root => {
     @fs.mkdir(root + "/suite", recursive=true)
     let suite_file = root + "/suite/suite.json"
-    @fs.write_file(
+    @fs.write_text(
       suite_file,
       suite_config_json().stringify(),
       create_mode=CreateOrTruncate,

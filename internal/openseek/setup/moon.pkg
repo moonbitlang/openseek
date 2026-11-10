@@ -3,15 +3,15 @@ import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_skill",
   "moonbitlang/core/argparse",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/async/os_error",
   "moonbitlang/x/path",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
   "moonbitlang/openseek/prompt",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/internal/workspace_path",
@@ -33,5 +33,10 @@ warnings = "+unnecessary_annotation"
 supported_targets = "+wasm+native"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async/os_error" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+  ],
 )

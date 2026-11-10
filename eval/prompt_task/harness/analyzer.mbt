@@ -264,11 +264,7 @@ async fn analyze_trial(
 ) -> EvalResult {
   let events_path = resolve_events_path(trial)
   let events_missing = !@fs.exists(events_path)
-  let events_text = if events_missing {
-    ""
-  } else {
-    @fs.read_file(events_path).text()
-  }
+  let events_text = if events_missing { "" } else { @fs.read_text(events_path) }
   let parsed = @session_log.parse_events(events_text)
   let session = @session_log.session_from_parse(
     parsed,
@@ -463,7 +459,7 @@ async fn run_validation_probe(
     return ProbeResult(name=spec.name, passed=false, reason="command is empty")
   }
   if spec.write_file != "" {
-    @fs.write_file(
+    @fs.write_text(
       workspace_path(workspace, spec.write_file),
       replace_workspace(spec.write_content, workspace),
       create_mode=CreateOrTruncate,
@@ -471,27 +467,34 @@ async fn run_validation_probe(
   }
   let command = replace_workspace(head, workspace)
   let args = [ for arg in rest => replace_workspace(arg, workspace) ]
-  let stdin_redirect : &@process.ProcessInput? = if spec.stdin == "" {
-    None
+  let stdin : @process.ProcessInput = if spec.stdin == "" {
+    Inherit
   } else {
     let stdin_path = workspace +
       "/.openseek-" +
       sanitize_artifact_name(spec.name) +
       "-stdin"
-    @fs.write_file(
+    @fs.write_text(
       stdin_path,
       replace_workspace(spec.stdin, workspace),
       create_mode=CreateOrTruncate,
     )
-    Some(@process.redirect_from_file(stdin_path))
+    FromFile(stdin_path)
   }
-  let (code, stdout, stderr) = @process.collect_output(
+  let result = @process.run(
     command,
     args,
-    stdin?=stdin_redirect,
+    stdin~,
+    stdout=Collect,
+    stderr=Collect,
     cwd=workspace,
   )
-  probe_output_result(spec, code, stdout.text(), stderr.text())
+  probe_output_result(
+    spec,
+    result.exit_code,
+    result.stdout_text(),
+    result.stderr_text(),
+  )
 }
 
 ///|

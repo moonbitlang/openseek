@@ -4,7 +4,6 @@ version = "0.1.0"
 
 import {
   "moonbitlang/openseek@0.7.5",
-  "moonbitlang/async@0.22.7",
 }
 
 readme = "README.md"

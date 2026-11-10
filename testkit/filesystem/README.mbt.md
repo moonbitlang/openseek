@@ -78,7 +78,7 @@ async test "write and read back under a temporary directory" {
   @filesystem.with_tmpdir(dir => {
     let path = "\{dir}/note.txt"
     @filesystem.FileSystem({ "note.txt": "hello" }).write_to(dir)
-    assert_eq(@fs.read_file(path).text(), "hello")
+    assert_eq(@fs.read_text(path), "hello")
   })
 }
 ```

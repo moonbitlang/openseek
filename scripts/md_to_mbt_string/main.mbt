@@ -30,7 +30,7 @@ async fn main {
   let base = @path.Path(input).basename()
   let function_name = function_name_from_base(base)
   let base_dir = parent_dir(input, base)
-  let markdown = expand_example_links(@fs.read_file(input).text(), base_dir)
+  let markdown = expand_example_links(@fs.read_text(input), base_dir)
   let source = generated_source(base~, function_name~, markdown~)
   if output_matches(output, source) {
     return
@@ -41,7 +41,7 @@ async fn main {
     )
   }
   let tmp = "\{output}.tmp"
-  @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
+  @fs.write_text(tmp, source, create_mode=CreateOrTruncate)
   @fs.rename(tmp, output, replace=true)
 }
 
@@ -87,7 +87,7 @@ async fn expand_example_links(markdown : String, base_dir : String) -> String {
         } else {
           "\{base_dir}/\{target}"
         }
-        let text = @fs.read_file(path).text()
+        let text = @fs.read_text(path)
         let body = text.strip_suffix("\n").unwrap_or(text[:])
         out.write_string("```mbtx\n\{body}\n```")
       }
@@ -111,7 +111,7 @@ fn example_link_target(line : StringView) -> String? {
 
 ///|
 async fn output_matches(output : StringView, source : StringView) -> Bool {
-  let current = @fs.read_file(output).text() catch { _ => return false }
+  let current = @fs.read_text(output) catch { _ => return false }
   current[:] == source
 }
 

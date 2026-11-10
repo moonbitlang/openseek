@@ -112,16 +112,19 @@ async fn run_trial(config : Config, index : Int32) -> TrialResult {
     args.push(@fs.realpath(config.system_prompt_addendum_file))
   }
   args.push(task)
-  let (exit_code, output) = @process.collect_output_merged(
+  let result = @process.run(
     "moon",
     args,
     extra_env=trial_extra_env(config, real_workspace),
     inherit_env=true,
     cwd=real_workspace,
+    stdout=Collect,
+    stderr=DuplicateStdout,
   )
-  let log_text = output.text()
+  let exit_code = result.exit_code
+  let log_text = result.stdout_text()
   let log_path = "\{config.out_dir}/logs/\{@runner.padded_index(index + 1)}-\{case.id}.log"
-  @fs.write_file(log_path, log_text, create_mode=CreateOrTruncate)
+  @fs.write_text(log_path, log_text, create_mode=CreateOrTruncate)
   evaluate_trial(
     config.prompt_label,
     index,
@@ -278,7 +281,7 @@ async fn check_expected_state(
       return "no initial fixture for unchanged file \{unchanged}"
     }
     let path = "\{workspace}/\{unchanged}"
-    let content = @fs.read_file(path).text() catch {
+    let content = @fs.read_text(path) catch {
       error => return "unchanged file missing \{unchanged}: \{error}"
     }
     if content != expected {
@@ -294,15 +297,18 @@ async fn run_validation(
   validation : Array[String],
 ) -> String {
   guard validation is [command, .. rest] else { return "" }
-  let (code, output) = @process.collect_output_merged(
+  let result = @process.run(
     command,
     rest.to_owned(),
     cwd=workspace,
+    stdout=Collect,
+    stderr=DuplicateStdout,
   )
+  let code = result.exit_code
   if code == 0 {
     ""
   } else {
-    "validation failed: \{validation.join(" ")} exited \{code}: \{output.text()}"
+    "validation failed: \{validation.join(" ")} exited \{code}: \{result.stdout_text()}"
   }
 }
 
@@ -317,7 +323,7 @@ async test "dry run exact replacement oracle" {
     @vfs.FileSystem({ "src/note.txt": "alpha\ndelta\ngamma\n" }).write_to(
       workspace,
     )
-    @fs.write_file(
+    @fs.write_text(
       log_path,
       (
         $|--- step 1 ---
@@ -334,7 +340,7 @@ async test "dry run exact replacement oracle" {
       workspace,
       log_path,
       0,
-      @fs.read_file(log_path).text(),
+      @fs.read_text(log_path),
     )
     assert_true(result.success)
     assert_eq(result.reason, "ok")
@@ -355,7 +361,7 @@ async test "dry run exact replacement oracle with jsonl agent log" {
     @vfs.FileSystem({ "src/note.txt": "alpha\ndelta\ngamma\n" }).write_to(
       workspace,
     )
-    @fs.write_file(
+    @fs.write_text(
       log_path,
       (
         $|not json
@@ -372,7 +378,7 @@ async test "dry run exact replacement oracle with jsonl agent log" {
       workspace,
       log_path,
       0,
-      @fs.read_file(log_path).text(),
+      @fs.read_text(log_path),
     )
     assert_true(result.success)
     assert_eq(result.steps, 1)
