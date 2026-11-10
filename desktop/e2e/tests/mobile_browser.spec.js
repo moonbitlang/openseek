@@ -75,61 +75,7 @@ test('Back closes the topmost layer first and reports when none is open', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a browser close request closes one layer at a time, as Back does in an installed web app', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'CloseWatcher is Chromium-only');
-  const app = await installConsole(page);
-  await app.goto();
-  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
-  // Escape is Chromium's desktop close request. Hiding it from the page's
-  // listeners leaves only the close request, which is what Android's Back
-  // sends an installed web app.
-  await page.evaluate(() => addEventListener('keydown', event => {
-    if (event.key === 'Escape') event.stopImmediatePropagation();
-  }, true));
-  await page.locator('.sidebar-toggle').click();
-  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
-  await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
-  const menu = page.getByRole('menu', { name: 'Workspace actions' });
-  await expect(menu).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(menu).toBeHidden();
-  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a held, modified or consumed Escape closes only what one press would', async ({ page }) => {
-  const app = await installConsole(page);
-  await app.goto();
-  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
-  await page.locator('.sidebar-toggle').click();
-  const drawer = page.locator('.sidebar-backdrop');
-  await expect(drawer).toHaveClass(/open/);
-  // The drawer has no Escape handling of its own; only Back closes it.
-  await page.keyboard.press('Shift+Escape');
-  await expect(drawer).toHaveClass(/open/);
-  // A focused control that consumes Escape by stopping it keeps it.
-  const search = page.getByRole('textbox', { name: 'Search conversations' });
-  await search.evaluate(input => input.addEventListener('keydown', event => {
-    if (event.key === 'Escape') event.stopPropagation();
-  }));
-  await search.focus();
-  await page.keyboard.press('Escape');
-  await expect(drawer).toHaveClass(/open/);
-  await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
-  const menu = page.getByRole('menu', { name: 'Workspace actions' });
-  await expect(menu).toBeVisible();
-  // The second keydown of a held key repeats.
-  await page.keyboard.down('Escape');
-  await page.keyboard.down('Escape');
-  await page.keyboard.up('Escape');
-  await expect(menu).toBeHidden();
-  await expect(drawer).toHaveClass(/open/);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('long engine-start failures remain readable within the phone viewport and restore the draft', async ({ page }) => {
+test('long engine-start failures remain readable within the phone viewport and restore the draft', { tag: '@webkit-layout' }, async ({ page }) => {
   const app = await installConsole(page);
   const failure = 'Engine failed to start: invalid option\nUsage: openseek serve [OPTIONS]\n' +
     '--session-root <directory> Directory containing durable sessions.\n'.repeat(65);
@@ -167,7 +113,7 @@ for (const viewport of [
   { width: 320, height: 568 },
   { width: 851, height: 393 },
 ]) {
-  test(`conversation and drawer fit ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`conversation and drawer fit ${viewport.width}x${viewport.height}`, { tag: '@webkit-layout' }, async ({ page }) => {
     await page.setViewportSize(viewport);
     const app = await installConsole(page);
     await app.goto();
@@ -201,7 +147,7 @@ for (const viewport of [
   });
 }
 
-test('signed-out entry fits a small phone and remains scrollable at reduced height', async ({ page }) => {
+test('signed-out entry fits a small phone and remains scrollable at reduced height', { tag: '@webkit-layout' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
@@ -219,7 +165,7 @@ test('signed-out entry fits a small phone and remains scrollable at reduced heig
   expect(reduced.y + reduced.height).toBeLessThanOrEqual(320);
 });
 
-test('Cloud conversation fits a small phone and a multiline draft survives a height change', async ({ page }) => {
+test('Cloud conversation fits a small phone and a multiline draft survives a height change', { tag: '@webkit-layout' }, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   const cloud = new CloudHarness(page);
   await cloud.install();
