@@ -219,7 +219,7 @@ async test "schedule sleep gap skips old ticks and corrupt persistence is never 
   assert_eq(service.take_due(at=200000).length(), 0)
   assert_eq(service.list().entries[0].next_at, Some(260000))
   let path = root.join("schedules/schedules.json")
-  @fs.write_file(path.to_string(), "broken", create_mode=CreateOrTruncate)
+  @fs.write_text(path.to_string(), "broken", create_mode=CreateOrTruncate)
   exit_host(service)
   let other = Schedules(new_engine_manager("unused"), Some(root))
   let failed = try {
@@ -245,7 +245,10 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   let workspace = attach_run_workspace(root)
   let engine = root.join("bin/engine.sh")
   let repository = root.join("repository")
-  assert_eq(@process.run("git", ["init", "--quiet", repository.to_string()]), 0)
+  assert_eq(
+    @process.run("git", ["init", "--quiet", repository.to_string()]).exit_code,
+    0,
+  )
   assert_eq(
     @process.run("git", [
       "-C",
@@ -259,7 +262,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
       "--allow-empty",
       "-m",
       "fixture",
-    ]),
+    ]).exit_code,
     0,
   )
   let checkout = root.join("checkout")
@@ -272,7 +275,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
       "--quiet",
       "--detach",
       checkout.to_string(),
-    ]),
+    ]).exit_code,
     0,
   )
   let runtime = checkout.join("runtime")
@@ -284,12 +287,12 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nprintf '%s\\n' \"$@\"\nprintf 'moon=%s\\n' \"$(command -v moon)\"\nprintf 'stderr marker\\n' >&2\nexit 0\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let selected_seed = root.join("explicit seed")
   let selected_home = runtime.join("toolchains/moonbit/linux-x64")
   prepare_fake_moonbit_seed(selected_seed, version="explicit-test")
@@ -406,12 +409,12 @@ async test "scheduled run Stop and timeout reap CLI processes" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nexec sleep 30\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let manager = new_engine_manager(engine.to_string(), runtime_dir=runtime)
   configure_custom_provider(manager)
   let service = Schedules(manager, Some(runtime))
@@ -491,7 +494,7 @@ async test "scheduled run Stop and timeout reap CLI processes" {
 
   // Simulate a CLI unwinding a tool's cleanup beyond the old one-second
   // outer deadline. Its cleanup must complete before the slot is released.
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\ntrap 'sleep 2; echo cleanup-finished; exit 0' TERM\necho ready\nwhile :; do sleep 0.1; done\n",
     create_mode=CreateOrTruncate,

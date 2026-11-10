@@ -63,7 +63,7 @@ async fn RelayActor::connect_once(
       Register(token=config.device_token, name=config.device_name) :
       @tunnel.Frame).encode(),
   )
-  guard @tunnel.Frame::decode(control.recv().read_all().text()) is Some(frame) else {
+  guard @tunnel.Frame::decode(control.recv().text.read_all()) is Some(frame) else {
     raise ConnectorError("relay sent an undecodable control frame")
   }
   let device = match frame {
@@ -81,8 +81,7 @@ async fn RelayActor::connect_once(
       }
     })
     for ;; {
-      guard @tunnel.Frame::decode(control.recv().read_all().text())
-        is Some(frame) else {
+      guard @tunnel.Frame::decode(control.recv().text.read_all()) is Some(frame) else {
         raise ConnectorError("relay sent an undecodable control frame")
       }
       match frame {

@@ -68,7 +68,7 @@ async fn checkout_states(dir : @pathx.Absolute) -> Map[String, CheckoutState] {
     .normalize()
     .to_string() catch {
       // Keep stale registrations discoverable if the whole directory was deleted.
-      @os_error.OSError(_) as error if error.is_ENOENT() => managed_root
+      @os_error.OsError(NotFound, ..) => managed_root
       error => raise error
     }
   let prefix = managed_root.trim_end(chars="/").to_owned() + "/"

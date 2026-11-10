@@ -21,12 +21,12 @@ fn event_line(sequence : Int32, content : String) -> String {
 
 ///|
 async fn write_record(path : @pathx.Path, text : String) -> Unit {
-  @fs.write_file(path.to_string(), text, create_mode=CreateOrTruncate)
+  @fs.write_text(path.to_string(), text, create_mode=CreateOrTruncate)
 }
 
 ///|
 async fn append_record(path : @pathx.Path, text : String) -> Unit {
-  @fs.write_file(path.to_string(), text, create_mode=OpenOrCreate, append=true)
+  @fs.write_text(path.to_string(), text, create_mode=OpenOrCreate, append=true)
 }
 
 ///|
@@ -211,7 +211,7 @@ async test "a lock that cannot be taken is a failure, not an unlocked read" {
   // ordering that makes a complete line a durable commit.
   let session_dir = @session_record.record_path(root, "s-14").dirname()
   @fsx.ensure_dir(session_dir.dirname())
-  @fs.write_file(session_dir.to_string(), "file", create_mode=CreateOrTruncate)
+  @fs.write_text(session_dir.to_string(), "file", create_mode=CreateOrTruncate)
   let refusal = unreadable_detail(root, "s-14")
   // The message carries the temp path, so assert its stable halves: that the
   // lock is what failed — not the record read behind it — and why.

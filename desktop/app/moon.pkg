@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/async" @core_async,
   "moonbitlang/async",
   "openseek_desktop/backend/ssh",
   "moonbit-community/proton",
@@ -31,5 +32,6 @@ supported_targets = "native"
 pkgtype(kind: "executable")
 
 options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
   targets: { "main.mbt": [ "native" ] },
 )

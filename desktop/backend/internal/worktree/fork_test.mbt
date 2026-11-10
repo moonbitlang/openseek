@@ -18,7 +18,7 @@ async test "fork preserves checkout probe errors without creating a member" {
         },
       ],
     } : Json).stringify()
-  @fs.write_file(registry, before)
+  @fs.write_text(registry, before)
   // A self-referencing symlink reliably fails stat even when run as root.
   let checkout = workspace.join(".worktrees/example").to_string()
   @fs.symlink(checkout, target=checkout)
@@ -47,5 +47,5 @@ async test "fork preserves checkout probe errors without creating a member" {
   }
   assert_false(created)
   assert_false(published)
-  assert_eq(@fs.read_file(registry).text(), before)
+  assert_eq(@fs.read_text(registry), before)
 }

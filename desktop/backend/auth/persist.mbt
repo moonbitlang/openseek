@@ -108,7 +108,7 @@ async fn save_session_file(
 /// instead of restoring the old account credential.
 async fn delete_session_file(runtime_dir : @pathx.Path) -> Unit {
   let target = auth_file(runtime_dir)
-  @fs.write_file(
+  @fs.write_text(
     target.to_string(),
     "{}",
     create_mode=CreateOrTruncate,

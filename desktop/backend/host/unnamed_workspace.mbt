@@ -27,8 +27,7 @@ async fn chat_workspace_root_in(
 ) -> @protocol.ChatWorkspaceRoot {
   try {
     let resolved = @fs.realpath(root.to_string()) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() =>
-        return Ready(root.resource_path())
+      @os_error.OsError(NotFound, ..) => return Ready(root.resource_path())
       error => raise error
     }
     guard @fs.kind(resolved) is Directory else {

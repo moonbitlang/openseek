@@ -937,7 +937,7 @@ async test "archive and restore move a subagent session family together" {
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-3", "chat-sr-2"]
   for session_id in family {
     @fsx.ensure_dir(Path(live + session_id + "/scratch"))
-    @fs.write_file(live + session_id + "/scratch/marker.txt", "retained")
+    @fs.write_text(live + session_id + "/scratch/marker.txt", "retained")
   }
   // Text that resembles the marker and an unrelated conversation must not be
   // swept into the family.
@@ -958,7 +958,7 @@ async test "archive and restore move a subagent session family together" {
   for session_id in family {
     assert_false(@fsx.is_dir(Path(live + session_id)))
     assert_eq(
-      @fs.read_file(archived + session_id + "/scratch/marker.txt").text(),
+      @fs.read_text(archived + session_id + "/scratch/marker.txt"),
       "retained",
     )
   }
@@ -973,7 +973,7 @@ async test "archive and restore move a subagent session family together" {
   }
   for session_id in family {
     assert_eq(
-      @fs.read_file(live + session_id + "/scratch/marker.txt").text(),
+      @fs.read_text(live + session_id + "/scratch/marker.txt"),
       "retained",
     )
     assert_false(@fsx.is_dir(Path(archived + session_id)))
@@ -995,7 +995,7 @@ async test "permanent deletion removes one archived session family only" {
   let workspace = dir + "/workspace"
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1005,7 +1005,7 @@ async test "permanent deletion removes one archived session family only" {
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-2", "chat-sr-4"]
   for session_id in family {
     @fsx.ensure_dir(Path(archived + session_id + "/scratch"))
-    @fs.write_file(archived + session_id + "/scratch/marker.txt", "retained")
+    @fs.write_text(archived + session_id + "/scratch/marker.txt", "retained")
   }
   @fsx.ensure_dir(Path(archived + "other"))
   let manager = new_engine_manager("unused")
@@ -1048,7 +1048,7 @@ async test "permanent deletion uses the selected archived store" {
   @fsx.ensure_dir(Path(global_root + "/sessions/chat"))
   @fsx.ensure_dir(Path(global_root + "/archived/sessions/chat"))
   @fsx.ensure_dir(Path(workspace + "/.openseek/archived/sessions/chat"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1086,7 +1086,7 @@ async test "permanent deletion refuses a live twin in the selected store" {
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/chat"))
   @fsx.ensure_dir(Path(workspace + "/.openseek/archived/sessions/chat"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1151,7 +1151,7 @@ async test "selected archived store is revalidated after detachment" {
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(workspace.join(".openseek/archived/sessions/chat").to_path())
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace.to_string()] } : Json).stringify(),
     create_mode=CreateOrTruncate,

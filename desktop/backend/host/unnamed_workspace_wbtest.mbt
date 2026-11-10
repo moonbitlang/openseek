@@ -14,7 +14,7 @@ async test "chat root metadata reports broken storage without raising into regis
   let dir = @fs.tmpdir(prefix="openseek-chat-root-error-")
   defer @fs.rmdir(dir, recursive=true)
   let parent = @pathx.Path(dir).resolve().join("file")
-  @fs.write_file(parent.to_string(), "keep", create_mode=CreateOrTruncate)
+  @fs.write_text(parent.to_string(), "keep", create_mode=CreateOrTruncate)
   assert_true(chat_workspace_root_in(parent.join("workspaces")) is Failed(_))
   assert_true(chat_workspace_root_in(parent) is Failed(_))
   let missing = @pathx.Path(dir).resolve().join("not-created-yet")
@@ -22,5 +22,5 @@ async test "chat root metadata reports broken storage without raising into regis
   let usable = @pathx.Path(dir).resolve().join("usable")
   @fs.mkdir(usable.to_string())
   assert_true(chat_workspace_root_in(usable) is Ready(_))
-  assert_eq(@fs.read_file(parent.to_string()).text(), "keep")
+  assert_eq(@fs.read_text(parent.to_string()), "keep")
 }

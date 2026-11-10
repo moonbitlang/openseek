@@ -291,7 +291,7 @@ async test "fork validates its request before spawning and releases its reader l
   @sys.set_env_var("HOME", dir + "/home")
   @fs.mkdir(dir + "/home/.openseek", recursive=true)
   @fs.mkdir(workspace + "/.openseek", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     dir + "/home/.openseek/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
   )
@@ -323,7 +323,7 @@ async test "fork validates its request before spawning and releases its reader l
   // A worktree conversation's fork starts from its checkout's HEAD, so one
   // whose checkout is gone is refused before anything is spawned or made.
   let registry = workspace + "/.openseek/worktrees.json"
-  @fs.write_file(
+  @fs.write_text(
     registry,
     (
       {
@@ -337,7 +337,7 @@ async test "fork validates its request before spawning and releases its reader l
         ],
       } : Json).stringify(),
   )
-  let unbound = @fs.read_file(registry).text()
+  let unbound = @fs.read_text(registry)
   let missing = try {
     ignore(
       fork_session(manager, payload, on_created=_ => (), on_worktree_changed=(
@@ -356,7 +356,7 @@ async test "fork validates its request before spawning and releases its reader l
       "worktree example for this conversation is gone; rebuild it or archive the conversation",
     ),
   )
-  assert_eq(@fs.read_file(registry).text(), unbound)
+  assert_eq(@fs.read_text(registry), unbound)
   assert_true(manager.record_guards.get("source") is None)
   for session in ["source-sr-1", "source-sr-1-sr-2"] {
     let child = try {

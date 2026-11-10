@@ -90,7 +90,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
     ),
   )
   let dirty = repo.join(".worktrees").join(created.name).join("unsaved.txt")
-  @fs.write_file(dirty.to_string(), b"keep me", create_mode=CreateOrTruncate)
+  @fs.write_text(dirty.to_string(), "keep me", create_mode=CreateOrTruncate)
   let prepared = prepare_session_edit(
     manager,
     {

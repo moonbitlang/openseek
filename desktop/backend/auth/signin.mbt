@@ -294,7 +294,7 @@ async fn exchange_code(
   }
   let body : Json = { "code": Json(code), "code_verifier": Json(verifier) }
   guard @async.with_timeout_opt(ExchangeTimeoutMs, () => {
-      @http.post("\{origin}/v2/auth/account/exchange", body, headers={
+      @http.post_text("\{origin}/v2/auth/account/exchange", body.stringify(), headers={
         "Content-Type": "application/json",
       }) catch {
         error => raise AuthError("the sign-in exchange failed: \{error}")
@@ -306,7 +306,7 @@ async fn exchange_code(
   guard response.code == 200 else {
     raise AuthError("the sign-in exchange answered HTTP \{response.code}")
   }
-  let json = data.json() catch {
+  let json = @json.parse(data) catch {
     _ => raise AuthError("the sign-in exchange answered malformed JSON")
   }
   let account : @protocol.AccountSession = @json.from_json(json) catch {
