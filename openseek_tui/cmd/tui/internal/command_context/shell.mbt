@@ -50,37 +50,41 @@ pub async fn collect_shell_output(
   cwd? : String,
   max_output_chars~ : Int32 = default_max_output_chars,
 ) -> ShellOutput {
-  let (reader, writer) = @process.read_from_process()
+  let mut output : ShellOutput = {
+    exit_code: None,
+    text: "",
+    output_limit_reached: false,
+  }
   @async.with_task_group() <| group => {
-    defer reader.close()
-    // A closed stdin pipe keeps the Windows spawn from falling back to a NULL
-    // console handle.
-    let (stdin_reader, stdin_writer) = @process.write_to_process()
-    stdin_writer.close()
+    // An empty stdin is still a valid handle, so the Windows spawn does not
+    // fall back to a NULL console handle.
     let process = @process.spawn(
       group,
       shell_program,
       shell_args(cmd),
-      stdin=stdin_reader,
-      stdout=writer,
-      stderr=writer,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=DuplicateStdout,
       cwd?=cwd.map(cwd => cwd.clamped_view()),
       cancel_handler=@process.hard_cancel(),
       no_wait=true,
       no_console_window=true,
     )
+    let reader = process.stdout
+    defer reader.close()
     let prefix = read_output_prefix(reader, max_output_chars)
     let exit_code = if prefix.output_limit_reached {
       None
     } else {
       Some(process.wait())
     }
-    {
+    output = {
       exit_code,
       text: prefix.text,
       output_limit_reached: prefix.output_limit_reached,
     }
   }
+  output
 }
 
 ///|
@@ -98,15 +102,17 @@ async fn read_output_prefix(
 ) -> OutputPrefix {
   let buffer = Buffer()
   let byte_budget = max_output_chars * 4 + 4
+  let chunk = FixedArray::make(1024, b'\x00')
   for ;; {
     let chunk_limit = (byte_budget - buffer.length()).clamp(min=1, max=1024)
-    guard reader.read_some(max_len=chunk_limit) is Some(chunk) else {
+    let read = reader.read_into(chunk, max_len=chunk_limit)
+    guard read > 0 else {
       return {
         text: decode_valid_utf8_prefix(buffer.to_bytes()),
         output_limit_reached: false,
       }
     }
-    buffer.write_bytes(chunk)
+    buffer.write_bytes(Bytes::from_array(chunk[:read]))
     let text = decode_valid_utf8_prefix(buffer.to_bytes())
     if text.offset_of_nth_char(max_output_chars) is Some(end) {
       return { text: text[:end].to_owned(), output_limit_reached: true, }

@@ -36,7 +36,7 @@ async test "-C rejects a missing directory and a file" {
       Failure(message) => {
         assert_true(message.contains("cannot change directory to \{missing}"))
         let file = "\{root}/file"
-        @fs.write_file(file, "")
+        @fs.write_text(file, "")
         let _ = in_directory(config, file) catch {
           Failure(message) => {
             assert_true(
