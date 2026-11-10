@@ -44,12 +44,13 @@ pub fn Database::create_store(
   name : String,
   key_path? : KeyPath,
 ) -> ObjectStore raise IndexedDBError {
-  call(() => {
+  (() => {
     self.create_store_ffi(
       name,
       key_path.map_or("null", key => key.json().stringify()),
     )
   })
+  |> catch_js_error
 }
 
 ///|
@@ -58,7 +59,8 @@ pub fn ObjectStore::create_index(
   name : String,
   key_path : KeyPath,
 ) -> Index raise IndexedDBError {
-  call(() => self.create_index_ffi(name, key_path.json().stringify()))
+  (() => self.create_index_ffi(name, key_path.json().stringify()))
+  |> catch_js_error
 }
 
 ///|
@@ -67,9 +69,9 @@ pub fn Database::transaction(
   stores : Array[String],
   mode : Mode,
 ) -> Transaction raise IndexedDBError {
-  transaction(
-    call(() => self.transaction_ffi(Json(stores).stringify(), mode is ReadWrite)),
-  )
+  (() => self.transaction_ffi(Json(stores).stringify(), mode is ReadWrite))
+  |> catch_js_error
+  |> transaction
 }
 
 ///|
@@ -87,12 +89,12 @@ pub fn Transaction::store(
   self : Transaction,
   name : String,
 ) -> ObjectStore raise IndexedDBError {
-  call(() => self.raw.store_ffi(name))
+  (() => self.raw.store_ffi(name)) |> catch_js_error
 }
 
 ///|
 pub fn Transaction::abort(self : Transaction) -> Unit raise IndexedDBError {
-  call(() => self.raw.abort_ffi())
+  (() => self.raw.abort_ffi()) |> catch_js_error
 }
 
 ///|
@@ -110,7 +112,7 @@ pub fn ObjectStore::get(
   self : ObjectStore,
   key : Key,
 ) -> Request raise IndexedDBError {
-  { raw: call(() => self.get_ffi(key.json().stringify())), }
+  { raw: (() => self.get_ffi(key.json().stringify())) |> catch_js_error, }
 }
 
 ///|
@@ -120,12 +122,13 @@ pub fn ObjectStore::put(
   key? : Key,
 ) -> Request raise IndexedDBError {
   {
-    raw: call(() => {
+    raw: (() => {
       self.put_ffi(
         value.stringify(),
         key.map_or("null", key => key.json().stringify()),
       )
-    }),
+    })
+    |> catch_js_error,
   }
 }
 
@@ -134,7 +137,7 @@ pub fn ObjectStore::delete(
   self : ObjectStore,
   key : Key,
 ) -> Request raise IndexedDBError {
-  { raw: call(() => self.delete_ffi(key.json().stringify())), }
+  { raw: (() => self.delete_ffi(key.json().stringify())) |> catch_js_error, }
 }
 
 ///|
@@ -142,15 +145,16 @@ pub fn ObjectStore::index(
   self : ObjectStore,
   name : String,
 ) -> Index raise IndexedDBError {
-  call(() => self.index_ffi(name))
+  (() => self.index_ffi(name)) |> catch_js_error
 }
 
 ///|
 pub fn Index::get_all(self : Index, key? : Key) -> Request raise IndexedDBError {
   {
-    raw: call(() => {
+    raw: (() => {
       self.get_all_ffi(key.map_or("null", key => key.json().stringify()))
-    }),
+    })
+    |> catch_js_error,
   }
 }
 
@@ -167,9 +171,10 @@ pub fn Index::delete_all(
     )
   }
   {
-    raw: call(() => {
+    raw: (() => {
       self.delete_all_ffi(key.map_or("null", key => key.json().stringify()))
-    }),
+    })
+    |> catch_js_error,
   }
 }
 
@@ -178,7 +183,7 @@ pub fn Index::delete_all(
 /// returns `Some(Json::null())`. An unfinished request raises `InvalidStateError`.
 pub fn Request::result(self : Request) -> Json? raise IndexedDBError {
   let mut value : String? = None
-  call(() => self.raw.result_ffi(text => value = Some(text)))
+  (() => self.raw.result_ffi(text => value = Some(text))) |> catch_js_error
   value.map(text => {
     @json.parse(text) catch {
       _ =>
@@ -191,7 +196,7 @@ pub fn Request::result(self : Request) -> Json? raise IndexedDBError {
 }
 
 ///|
-fn[T] call(body : () -> T) -> T raise IndexedDBError {
+fn[T] catch_js_error(body : () -> T) -> T raise IndexedDBError {
   let mut value : T? = None
   let mut error : IndexedDBError? = None
   catch_ffi(() => Value::from(body()), v => value = Some(v.cast()), (
