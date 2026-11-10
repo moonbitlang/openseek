@@ -82,10 +82,10 @@ fn Model::remember_mode_return(self : Model) -> Model {
 
 ///|
 /// Where switching to `mode` lands, with the channel a Work page needs
-/// focused. A remembered conversation deleted since falls back to the mode's
-/// fresh page: Cloud home for Chat, a new chat in the last project for Work.
-/// A missing Work draft needs no check here: activation replaces it with a
-/// new chat itself.
+/// focused. A remembered conversation deleted since, or a Cloud page of an
+/// account no longer signed in, falls back to the mode's fresh page: Cloud
+/// home for Chat, a new chat in the last project for Work. A missing Work
+/// draft needs no check here: activation replaces it with a new chat itself.
 fn Model::mode_destination(
   self : Model,
   mode : @sidebar.Mode,
@@ -93,6 +93,9 @@ fn Model::mode_destination(
   match mode {
     ChatMode => {
       let location = match self.mode_returns.chat {
+        Some({ target: CloudSession(account=Some(owner), ..), .. })
+        | Some({ target: CloudDraft(account=Some(owner), ..), .. }) if self.cloud.user_id !=
+          Some(owner) => None
         Some({ target: CloudSession(session~, ..), .. }) if self.cloud.retired.contains(
             session,
           ) => None

@@ -97,6 +97,26 @@ test "a remembered Cloud conversation deleted since opens Cloud home" {
 }
 
 ///|
+test "a remembered Cloud page of another account opens Cloud home" {
+  let work = work_after_cloud()
+  assert_true(
+    work.mode_returns.chat
+    is Some({ target: CloudSession(account=Some("fixture-user"), ..), .. }),
+  )
+  let switched = {
+    ..work,
+    cloud: { ..work.cloud, user_id: Some("other-user"), },
+  }
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    switched,
+  )
+  assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(chat.cloud_identity() is None)
+}
+
+///|
 test "the narrow drawer stays open across a mode switch" {
   let work = { ..work_after_cloud(), narrow: true, sidebar_open: true, }
   let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
