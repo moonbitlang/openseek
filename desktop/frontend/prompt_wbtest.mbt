@@ -1,8 +1,16 @@
 ///|
 test "host prompt snapshots resolve pending drafts once and leave captured drafts alone" {
   let host = @interop.ChannelId::Local
-  let pending = test_model()
-    .clear_host_settings()
+  let other = @interop.ChannelId::Remote("other-host")
+  let home = test_model()
+  let pending = {
+      ..home,
+      devices: [
+        home.devices[0],
+        { ..empty_device_state(other), bridge: Connected, },
+      ],
+    }
+    .with_host_settings(_ => HostSettingsMirror::loading())
     .activate(host, "pending-prompt", host.test_project())
   assert_true(pending.active().system_prompt is None)
   assert_false(pending.active().prompt_ready())
@@ -21,16 +29,15 @@ test "host prompt snapshots resolve pending drafts once and leave captured draft
   )
   let captured = loaded.active().system_prompt
   assert_true(captured is Some(text) && text.has_suffix(settings.custom_prompt))
-  let changed = loaded.apply_host_settings({
+  let changed = loaded.apply_host_settings(host, {
     ..settings,
     revision: 1,
     custom_prompt: "Changed by another client",
   })
   assert_eq(changed.active().system_prompt, captured)
-  let other = @interop.ChannelId::Remote("other-host")
-  let switched = changed
-    .clear_host_settings()
-    .activate(other, "other-draft", other.test_project())
+  // A draft on a host whose settings have not arrived waits for that host's
+  // own snapshot; another host's broadcast does not resolve it.
+  let switched = changed.activate(other, "other-draft", other.test_project())
   assert_true(switched.active().system_prompt is None)
   let (_, stale) = update(
     test_dispatch(),
@@ -38,7 +45,7 @@ test "host prompt snapshots resolve pending drafts once and leave captured draft
     switched,
   )
   assert_true(stale.active().system_prompt is None)
-  let ready = switched.apply_host_settings({
+  let ready = switched.apply_host_settings(other, {
     ..settings,
     custom_prompt: "Other host",
   })

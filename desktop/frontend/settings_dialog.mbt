@@ -104,7 +104,7 @@ fn settings_page(
         } else if model.api_ready() {
           @settings.text(model.locale, RuntimeSettings)
         } else {
-          match model.api_provider {
+          match model.api_provider() {
             Deepseek => @settings.text(model.locale, DeepseekKey)
             Glm => @settings.text(model.locale, GlmKey)
             OpenRouter => @settings.text(model.locale, OpenRouterKey)

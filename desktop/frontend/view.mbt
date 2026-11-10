@@ -1201,7 +1201,7 @@ fn provider_hint(model : Model, provider : ApiProvider) -> String {
 /// provider, so a key (official) or an endpoint URL (custom) must be
 /// configured first. The steps follow the selected provider.
 fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let provider = model.api_provider
+  let provider = model.api_provider()
   // Account setup belongs in the user's system browser, even while this
   // guide is displayed over Chat. Bypass Rabbita's dock URL routing.
   let provider_link = (url, label) => {
@@ -1332,16 +1332,16 @@ fn api_settings_rows(
               label=@settings.text(model.locale, CustomUrl),
             ),
           ],
-          selected=model.api_provider.wire(),
+          selected=model.api_provider().wire(),
           aria_label=@settings.text(model.locale, ApiEndpoint),
           change=dispatch.map(value => ProviderChanged(value)),
           disabled=!settings_loaded,
         ),
       ],
-      desc=provider_hint(model, model.api_provider),
+      desc=provider_hint(model, model.api_provider()),
     ),
   ]
-  if model.api_provider is Custom {
+  if model.api_provider() is Custom {
     rows.push(
       @ui.form_row(
         @settings.text(model.locale, EndpointUrl),
@@ -1349,7 +1349,10 @@ fn api_settings_rows(
           @html.input(
             class="setting-input field-surface",
             input_type=@html.InputType::Text,
-            value=model.custom_api_url,
+            value=model
+              .host_settings()
+              .map(settings => settings.endpoint.custom_api_url)
+              .unwrap_or(""),
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
             attrs=@html.Attrs::build()
@@ -1365,14 +1368,13 @@ fn api_settings_rows(
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
-    let (key_label, key_saved) = match model.api_provider {
-      Deepseek =>
-        (@settings.text(model.locale, DeepseekApiKey), model.deepseek_key_saved)
-      Glm => (@settings.text(model.locale, GlmApiKey), model.glm_key_saved)
-      OpenRouter =>
-        (@settings.text(model.locale, OpenRouterApiKey), model.custom_key_saved)
-      Custom =>
-        (@settings.text(model.locale, CustomApiKey), model.custom_key_saved)
+    let key_saved = model.host_settings() is Some({ endpoint, .. }) &&
+      endpoint.key_saved()
+    let key_label = match model.api_provider() {
+      Deepseek => @settings.text(model.locale, DeepseekApiKey)
+      Glm => @settings.text(model.locale, GlmApiKey)
+      OpenRouter => @settings.text(model.locale, OpenRouterApiKey)
+      Custom => @settings.text(model.locale, CustomApiKey)
     }
     rows.push(
       @ui.form_row(
@@ -1419,7 +1421,7 @@ fn settings_runtime_groups(
   // All providers use the composer's model selector; API setup only chooses
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
-    ..if model.host_settings_error is Some(error) {
+    ..if model.host_settings_error() is Some(error) {
       [
         @ui.form_row(
           @settings.text(locale, LoadingSettings),
@@ -1439,7 +1441,7 @@ fn settings_runtime_groups(
       locale,
       dispatch.map(msg => Prompt(msg)),
       ready=settings_loaded,
-      saving=model.settings_saves > 0,
+      saving=model.host_settings_saving(),
       open=model.select_menu is Some(PromptMenu),
       toggle=dispatch(ToggleSelectMenu(PromptMenu)),
       dismiss=dispatch(CloseSelectMenu),
@@ -1503,7 +1505,7 @@ fn settings_followup_row(
             label=@settings.text(locale, Queue),
           ),
         ],
-        selected=model.followup_behavior.wire(),
+        selected=model.followup_behavior().wire(),
         aria_label=@settings.text(locale, Followup),
         change=dispatch.map(value => FollowupBehaviorChanged(value)),
         disabled=model.has_host() && !model.host_settings_loaded(),
@@ -2721,7 +2723,7 @@ fn update_confirm_modal(
 /// the session; the composer's BYOK notice keeps the reminder — and the way
 /// back here — visible.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let title = match model.api_provider {
+  let title = match model.api_provider() {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
     Glm => shell_text(model.locale, SetupGlm)
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
