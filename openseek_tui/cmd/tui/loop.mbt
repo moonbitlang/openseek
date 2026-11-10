@@ -55,30 +55,31 @@ async fn drain_stderr_capped(reader : @process.ReadFromProcess) -> String {
   let buffer = Buffer()
   let mut truncated = false
   let mut read_error : String? = None
+  let chunk = FixedArray::make(
+    Int32::max(StderrCaptureLimitBytes, StderrDrainChunkBytes),
+    b'\x00',
+  )
   for ;; {
-    // While there is budget, bound the read by it so a single large `read_some`
+    // While there is budget, bound the read by it so a single large read
     // can never overshoot the cap; once full, read fixed blocks purely to drain.
     let remaining = StderrCaptureLimitBytes - buffer.length()
     let max_len = if remaining > 0 { remaining } else { StderrDrainChunkBytes }
-    let chunk = reader.read_some(max_len~) catch {
+    let read = reader.read_into(chunk, max_len~) catch {
       // Stop on a genuine read error, but keep the prefix already captured and
-      // record the failure so it is surfaced below. `None` ends the loop the
+      // record the failure so it is surfaced below. `0` ends the loop the
       // same way EOF does.
       error => {
         read_error = Some("\{error}")
-        None
+        0
       }
     }
-    match chunk {
-      None => break
-      // Under budget the chunk is `<= remaining`, so it fits exactly; once the
-      // buffer is full any further bytes are dropped and flag truncation.
-      Some(chunk) =>
-        if remaining > 0 {
-          buffer.write_bytes(chunk)
-        } else {
-          truncated = true
-        }
+    guard read > 0 else { break }
+    // Under budget the read is `<= remaining`, so it fits exactly; once the
+    // buffer is full any further bytes are dropped and flag truncation.
+    if remaining > 0 {
+      buffer.write_bytes(Bytes::from_array(chunk[:read]))
+    } else {
+      truncated = true
     }
   }
   let text = StringBuilder()
@@ -866,10 +867,10 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
 }
 
 ///|
-async fn[G] run_message_loop(
+async fn run_message_loop(
   state : State,
   ui : @ui.Ui,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup,
   messages : @async.Queue[Msg],
 ) -> Unit {
   // The persistent serve-mode engine connection: one process serves every

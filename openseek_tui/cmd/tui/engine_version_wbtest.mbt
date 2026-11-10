@@ -6,8 +6,7 @@
 /// own `version` moves in lockstep with it, so `openseek_tui@X` always runs
 /// `openseek@X`. Moon runs tests from the module root, where `moon.mod` lives.
 async test "EngineModuleVersion matches the moonbitlang/openseek import and the module version" {
-  let lines = @fs.read_file("moon.mod")
-    .text()
+  let lines = @fs.read_text("moon.mod")
     .split("\n")
     .map(line => line.trim())
     .to_array()
