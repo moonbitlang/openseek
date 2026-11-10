@@ -1345,6 +1345,9 @@ priv struct Model {
   // Each mode's list sits beside its own main column, so the switch reopens
   // the page that mode last showed (see `sidebar_mode_switch.mbt`).
   mode_returns : ModeReturns
+  // The navigation revision a switch left preparing a new chat: that chat's
+  // arrival completes the switch, so it keeps the narrow drawer open too.
+  mode_switch_revision : Int32?
   // The last session ended in Chat: held until the start page is known, so
   // a blank start page can reopen there (`settle_launch_mode`).
   reopen_in_chat : Bool
@@ -2790,6 +2793,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     },
     sidebar_revealed: None,
     mode_returns: ModeReturns::empty(),
+    mode_switch_revision: None,
     reopen_in_chat: false,
     right_panel_open: false,
     right_panel_menu_open: false,

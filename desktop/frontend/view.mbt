@@ -553,13 +553,12 @@ fn Model::codex_sidebar_context(
 ///|
 /// The list holding the conversation on screen, with that conversation's
 /// identity; `None` on a page that shows no conversation. Cloud conversations
-/// belong to Chats; registered project conversations belong to Work.
+/// belong to Chats; registered project conversations belong to Work. Cloud
+/// home and a Cloud draft claim no list, even while the host keeps its
+/// project's conversation behind them.
 fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
-  if self.cloud_draft_identity() is Some(_) {
-    return None
-  }
-  if self.cloud_identity() is Some(owner) && self.screen is Chat {
-    return Some((@sidebar.ChatMode, owner.session()))
+  if self.cloud_selected() {
+    return self.cloud_identity().map(owner => (ChatMode, owner.session()))
   }
   guard self.focused_device() is Some(dev) else { return None }
   match self.screen {

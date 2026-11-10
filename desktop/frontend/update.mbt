@@ -1907,10 +1907,12 @@ fn update(
   // conversation, opening Skills or Settings — closes it; centralizing the
   // rule here keeps every navigation handler drawer-agnostic. The Chat/Work
   // switch is the exception: it moves the column so the drawer can show the
-  // other list, and closing it would hide the list just picked.
+  // other list, and closing it would hide the list just picked, including
+  // when the new chat it opens arrives later.
   let model = if model.narrow &&
     model.sidebar_open &&
     !(msg is SidebarModeSelected(_)) &&
+    !previous.completes_mode_switch(msg) &&
     (
       model.active_session != previous.active_session ||
       model.focused != previous.focused ||
