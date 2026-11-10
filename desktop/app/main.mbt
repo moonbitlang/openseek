@@ -441,11 +441,11 @@ fn relay_settings(matches : @argparse.Matches) -> @auth.ConnectorConfig? {
 
 ///|
 /// Start the backend services and the HTML previews, and return once the
-/// services have started. They run on a core task group inside one task of
-/// Proton's application group, which still belongs to the old async library:
-/// cancelling that group at shutdown cancels the task and the core group in it.
+/// services have started. They run on their own task group inside one task of
+/// Proton's application group: cancelling that group at shutdown cancels the
+/// task and the group in it.
 async fn start_backend(
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
   state : @api.ApiState,
   views : @extension.BrowserViews,
 ) -> Unit {
