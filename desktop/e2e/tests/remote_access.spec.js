@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // The `auth.status` shape (docs/remote-protocol.md): absent fields, never
 // null, stand for a signed-out user and device.
-const relay = 'https://openseek-api.moonbitlang.cn';
+const relay = 'https://seekmoon.moonbitlang.com';
 const signedOut = { connected: false, server_url: relay };
 const signedIn = {
   connected: true,

@@ -29,7 +29,7 @@ const EngineSettingsFileName = "engine-settings.json"
 /// update manifest live here. The hosted chat proxy that used to live on
 /// this origin is retired — runs are bring-your-own-key only — so this
 /// origin no longer serves any chat-completions traffic.
-const RelayServerOrigin : String = "https://openseek-api.moonbitlang.cn"
+const RelayServerOrigin : String = "https://seekmoon.moonbitlang.com"
 
 ///|
 /// The chat endpoint selection: where runs send their requests. SeekMoon
@@ -652,7 +652,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
     // the chat provider, so it stays on the production origin.
     debug_inspect(
       remote_server_base(manager),
-      content="Some(\"https://openseek-api.moonbitlang.cn\")",
+      content="Some(\"https://seekmoon.moonbitlang.com\")",
     )
   })
 }

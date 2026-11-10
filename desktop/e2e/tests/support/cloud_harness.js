@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
-export const authOrigin = 'https://openseek-api.moonbitlang.cn';
+export const authOrigin = 'https://seekmoon.moonbitlang.com';
 export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';

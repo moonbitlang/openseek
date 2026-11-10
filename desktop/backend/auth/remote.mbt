@@ -1,6 +1,6 @@
 ///|
 /// Account authority is always issued by the canonical authentication origin.
-pub const AccountOrigin : String = "https://openseek-api.moonbitlang.cn"
+pub const AccountOrigin : String = "https://seekmoon.moonbitlang.com"
 
 ///|
 /// Enable or retire only this computer's device permission. Registration is

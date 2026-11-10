@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub const AccountOrigin : String = "https://openseek-api.moonbitlang.cn"
+pub const AccountOrigin : String = "https://seekmoon.moonbitlang.com"
 
 // Errors
 pub suberror AuthError {
