@@ -1,7 +1,7 @@
 ///|
 /// The one line the overview shows for `conversation`'s connectors while
-/// their card is folded: how many servers its engine reached, and how many
-/// it could not, or where the question stands.
+/// their card is folded: how many servers its engine is still connecting,
+/// could not reach, and reached, or where the question stands.
 pub fn summary(
   locale~ : @i18n.Locale = English,
   conversation : @interop.ConversationKey,
@@ -13,23 +13,27 @@ pub fn summary(
     Loaded(Stopped) | Reloading(Stopped) => text(locale, NotRunning)
     Loaded(Connecting) | Reloading(Connecting) => text(locale, EngineConnecting)
     Loaded(Running(status)) | Reloading(Running(status)) => {
-      let connected = status.servers
-        .filter(server => server.state is Connected(_))
+      let connecting = status.servers
+        .filter(server => server.state is Connecting)
         .length()
       let failed = status.servers
         .filter(server => server.state is (Failed(_) | Lost(_)))
         .length() +
         status.configs.filter(config => config.state is Failed(_)).length()
-      if failed > 0 {
-        "\{text(locale, ConnectedCount(connected))} · \{text(locale, FailedCount(failed))}"
-      } else if connected == 0 &&
-        status.servers.any(server => server.state is Connecting) {
-        // Nothing has come of any server yet: "0 connected" would read as
-        // a failure.
-        text(locale, EngineConnecting)
-      } else {
-        text(locale, ConnectedCount(connected))
+      let connected = status.servers
+        .filter(server => server.state is Connected(_))
+        .length()
+      let parts : Array[String] = []
+      if connecting > 0 {
+        parts.push(text(locale, ConnectingCount(connecting)))
       }
+      if failed > 0 {
+        parts.push(text(locale, FailedCount(failed)))
+      }
+      if connected > 0 || parts.is_empty() {
+        parts.push(text(locale, ConnectedCount(connected)))
+      }
+      parts.join(" · ")
     }
   }
 }

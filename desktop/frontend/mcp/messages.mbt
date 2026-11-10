@@ -16,6 +16,7 @@ priv enum UiMessage {
   Skipped
   SkippedReason
   NotRunning
+  ConnectingCount(Int32)
   ConnectedCount(Int32)
   FailedCount(Int32)
 }
@@ -46,6 +47,11 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ConnectedCount(count)) => "已连接 \{count} 个"
     (TraditionalChinese, ConnectedCount(count)) => "已連線 \{count} 個"
     (Japanese, ConnectedCount(count)) => "\{count} 件接続済み"
+    (English, ConnectingCount(count)) => "\{count} connecting"
+    (Spanish, ConnectingCount(count)) => "\{count} conectándose"
+    (SimplifiedChinese, ConnectingCount(count)) => "\{count} 个正在连接"
+    (TraditionalChinese, ConnectingCount(count)) => "\{count} 個正在連線"
+    (Japanese, ConnectingCount(count)) => "\{count} 件接続中"
     (English, FailedCount(count)) => "\{count} failed"
     (Spanish, FailedCount(1)) => "1 con error"
     (Spanish, FailedCount(count)) => "\{count} con error"
