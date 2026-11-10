@@ -131,7 +131,7 @@ fn set_remote_access(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @cmd.Cmd {
       }) catch {
         error => {
           scheduler.add(
-            dispatch(RemoteDisconnectFailed(@interop.bridge_error_text(error))),
+            dispatch(RemoteAccessSetFailed(@interop.bridge_error_text(error))),
           )
           return
         }

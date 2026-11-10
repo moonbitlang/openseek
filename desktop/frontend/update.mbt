@@ -4333,8 +4333,24 @@ fn update_msg(
         { ..model, remote_access: Some(status), },
       )
     RemoteAccessSet(enabled) =>
-      (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
+      (
+        set_remote_access(dispatch, enabled),
+        { ..model, remote_access_error: None, },
+      )
     RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
+    AccountRetryClicked => {
+      guard !model.remote_connecting else { return (@cmd.none, model) }
+      let epoch = model.account_epoch + 1
+      (
+        fetch_account(
+          dispatch,
+          model.is_desktop,
+          epoch,
+          local_console=model.is_local_console(),
+        ),
+        { ..model, account_epoch: epoch, account_error: None, },
+      )
+    }
     RemoteCancelClicked => {
       guard model.is_desktop && model.account_login is Some(Waiting) else {
         return (@cmd.none, model)
@@ -4346,7 +4362,7 @@ fn update_msg(
           account_login: Some(
             Cancelling(connect_pending=true, cancel_pending=true),
           ),
-          remote_error: None,
+          account_error: None,
         },
       )
     }
@@ -4378,7 +4394,7 @@ fn update_msg(
       }
       (
         @cmd.none,
-        { ..model, account_login: Some(Waiting), remote_error: Some(message), },
+        { ..model, account_login: Some(Waiting), account_error: Some(message), },
       )
     }
     AccountCancelFinished(epoch) => {
@@ -4403,8 +4419,8 @@ fn update_msg(
       )
     }
     RemoteDisconnectClicked => sign_out_account(dispatch, model)
-    RemoteDisconnectFailed(message) =>
-      (@cmd.none, { ..model, remote_error: Some(message), })
+    RemoteAccessSetFailed(message) =>
+      (@cmd.none, { ..model, remote_access_error: Some(message), })
     AppInfoLoaded(version~, console_url~) =>
       (@cmd.none, { ..model, app_version: version, console_url, })
     CheckForUpdates =>
@@ -22904,7 +22920,7 @@ test "remote access walks connect states and dedups clicks" {
     connecting,
   )
   assert_false(failed.remote_connecting)
-  assert_true(failed.remote_error is Some("nope"))
+  assert_true(failed.account_error is Some("nope"))
   let signed_in : RemoteAccess = { ..signed_out, connected: true, }
   let (_, done) = update(dispatch, RemoteStatusLoaded(signed_in), connecting)
   assert_true(done.remote_connecting)

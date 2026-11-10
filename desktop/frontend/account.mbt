@@ -97,7 +97,7 @@ fn begin_account_login(
       },
       remote_connecting: true,
       account_login: Some(Waiting),
-      remote_error: None,
+      account_error: None,
     },
   )
 }
@@ -144,7 +144,7 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
     )
     assert_false(cancelled.remote_connecting)
     assert_eq(cancelled.account_login_create, None)
-    assert_eq(cancelled.remote_error, None)
+    assert_eq(cancelled.account_error, None)
     let (_, retried) = begin_account_login(
       test_dispatch(),
       cancelled,
@@ -171,7 +171,7 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
       assert_true(late.remote_connecting)
       assert_true(late.account_login is Some(Waiting))
       assert_true(late.account is None)
-      assert_eq(late.remote_error, None)
+      assert_eq(late.account_error, None)
     }
   }
 }
@@ -199,7 +199,7 @@ test "account sign-in timeout is localized and restores the retry action" {
     assert_false(expired.remote_connecting)
     assert_true(expired.account_login is None)
     assert_eq(
-      expired.remote_error,
+      expired.account_error,
       Some(@settings.text(locale, SignInTimedOut)),
     )
     let (_, retried) = begin_account_login(
@@ -208,7 +208,7 @@ test "account sign-in timeout is localized and restores the retry action" {
       create=false,
     )
     assert_true(retried.remote_connecting)
-    assert_eq(retried.remote_error, None)
+    assert_eq(retried.account_error, None)
   }
 }
 
@@ -227,10 +227,10 @@ test "a failed account cancellation keeps the waiting sign-in cancellable" {
   )
   assert_true(failed.remote_connecting)
   assert_true(failed.account_login is Some(Waiting))
-  assert_eq(failed.remote_error, Some("bridge disconnected"))
+  assert_eq(failed.account_error, Some("bridge disconnected"))
   let (_, retried) = update(test_dispatch(), RemoteCancelClicked, failed)
   assert_true(retried.account_login is Some(Cancelling(..)))
-  assert_eq(retried.remote_error, None)
+  assert_eq(retried.account_error, None)
 }
 
 ///|
@@ -278,12 +278,8 @@ fn account_loaded(
           remote_connecting: false,
           account_login: None,
           account_login_create: None,
-          remote_error: Some(message),
-          console: if model.is_desktop || model.is_local_console() {
-            model.console
-          } else {
-            { ..model.console, notice: Some(message), }
-          },
+          account_checked: true,
+          account_error: Some(message),
         },
       )
     }
@@ -309,8 +305,9 @@ fn account_loaded(
     account_login_create: None,
     remote_connecting: false,
     account_login: None,
-    remote_error: None,
-    console: { ..model.console, busy: false, notice: None, },
+    account_checked: true,
+    account_error: None,
+    console: { ..model.console, busy: false, },
   }
   let (retire_command, next) = if changed &&
     !model.is_desktop &&
@@ -385,7 +382,8 @@ fn sign_out_account(
       sign_out(dispatch, token?=model.account.map(account => account.token)),
       {
         ..model,
-        console: { ..model.console, busy: true, notice: None, },
+        account_error: None,
+        console: { ..model.console, busy: true, access_error: None, },
         account_preferences: AccountPreferences::empty(
           request=model.account_preferences.request + 1,
         ),
