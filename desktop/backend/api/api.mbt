@@ -760,7 +760,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.worktree_list, payload => {
-      @worktree.list(payload.workspace)
+      @worktree.list(worktree_workspace(payload.workspace))
     }),
     Endpoint(@commands.worktree_create, payload => {
       let owner = match (payload.session, payload.codex_thread) {
@@ -789,7 +789,7 @@ pub fn endpoints(
       }
       let reply = @worktree.create(
         state.manager.worktree_host(),
-        payload.workspace,
+        worktree_workspace(payload.workspace),
         owner,
         worktrees => {
           publish_worktree_changed(state, payload.workspace, worktrees)
@@ -823,7 +823,7 @@ pub fn endpoints(
     Endpoint(@commands.worktree_remove, payload => {
       @worktree.remove(
         state.manager.worktree_host(),
-        payload.workspace,
+        worktree_workspace(payload.workspace),
         payload.name,
         payload.force is Some(true),
         worktrees => {
@@ -1409,6 +1409,19 @@ fn publish_session_changed(
   workspace : String,
 ) -> Unit {
   state.hub.publish(SessionChanged({ change, session, workspace, }))
+}
+
+///|
+/// Decode a worktree op's wire workspace into a path for this host. A spelling
+/// outside the resource-path contract cannot name a registered workspace, so
+/// it gets the same refusal as one that is not registered.
+fn worktree_workspace(
+  workspace : String,
+) -> @pathx.Absolute raise @worktree.WorktreeError {
+  @pathx.Absolute::parse_resource_path(workspace) catch {
+    InvalidResourcePath =>
+      raise WorktreeError("\{workspace} is not a registered workspace")
+  }
 }
 
 ///|

@@ -309,7 +309,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
     let committed : Ref[Bool] = Ref(false)
     let detail = try {
       ignore(
-        @worktree.remove(manager.worktree_host(), ws.to_string(), "wt", false, _ => {
+        @worktree.remove(manager.worktree_host(), ws, "wt", false, _ => {
           committed.val = true
         }),
       )
@@ -321,7 +321,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
     assert_true(detail.contains("still running"))
     assert_false(committed.val)
     assert_true(@fsx.is_dir(ws.join(".worktrees/wt").to_path()))
-    guard @worktree.list(ws.to_string()).worktrees is [info] else {
+    guard @worktree.list(ws).worktrees is [info] else {
       fail("expected the worktree to stay registered")
     }
     assert_eq(info.sessions, ["s-wt-run"])
@@ -363,7 +363,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   let manager = new_engine_manager("openseek")
   let created = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-vanish"),
     _ => (),
     name="wt",
@@ -387,7 +387,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   @fsx.ensure_dir(
     @workspaces.store_root(repo).join("sessions").join("s-vanish").to_path(),
   )
-  guard @worktree.list(repo.to_string()).worktrees is [gone] else {
+  guard @worktree.list(repo).worktrees is [gone] else {
     fail("the registry row must survive an external deletion")
   }
   assert_false(gone.present)
@@ -457,7 +457,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   // Recreating repairs the same detached environment at its saved commit.
   let repaired = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-vanish"),
     _ => (),
   )
@@ -481,7 +481,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   let replayed : Array[@protocol.WorktreeInfo] = []
   let replay = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-vanish"),
     infos => {
       for info in infos {
@@ -517,7 +517,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      repo.to_string(),
+      repo,
       @worktree.WorktreeOwner::openseek("s-arc"),
       _ => (),
     ),
@@ -581,7 +581,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
       .to_path(),
     ),
   )
-  guard @worktree.list(repo.to_string()).worktrees is [retained] else {
+  guard @worktree.list(repo).worktrees is [retained] else {
     fail("archived worktree placement was not retained")
   }
   assert_eq(retained.sessions, ["s-arc"])
@@ -601,7 +601,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   )
   let repaired = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-arc"),
     _ => (),
   )
@@ -611,7 +611,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      repo.to_string(),
+      repo,
       @worktree.WorktreeOwner::openseek("s-arc2"),
       _ => (),
     ),
@@ -621,7 +621,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   )
   assert_true(archive_session(manager, "s-arc2", (_, _) => ()) is Archived(_))
   assert_false(@fsx.exists(repo.join(".worktrees/wt-2").to_path()))
-  guard @worktree.list(repo.to_string()).worktrees is [first, second] else {
+  guard @worktree.list(repo).worktrees is [first, second] else {
     fail("both worktree placements must survive archive")
   }
   assert_true(first.present)
@@ -630,12 +630,9 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   // Codex archive uses the same dirty-check and retained-placement methods;
   // app-server fencing happens in the API immediately before this call.
   let codex_owner = @worktree.WorktreeOwner::codex("thread-archive")
-  let codex = @worktree.create(
-    manager.worktree_host(),
-    repo.to_string(),
-    codex_owner,
-    _ => (),
-  )
+  let codex = @worktree.create(manager.worktree_host(), repo, codex_owner, _ => {
+    ()
+  })
   @fs.write_text(
     repo.join(".worktrees/\{codex.name}/local.txt").to_string(),
     "dirty",
@@ -647,7 +644,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   }
   assert_eq(codex_refusal.worktree, codex.name)
   ignore(codex_owner.archive_checkout(manager.worktree_host(), true))
-  guard @worktree.list(repo.to_string()).worktrees
+  guard @worktree.list(repo).worktrees
     .iter()
     .find_first(info => info.codex_thread == Some("thread-archive"))
     is Some(codex_archived) else {
@@ -700,7 +697,7 @@ async test "conversations archived together take their shared checkout with them
   manager.pump = Serving(sessions=Map([]))
   let created = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-one"),
     _ => (),
   )
@@ -727,7 +724,7 @@ async test "conversations archived together take their shared checkout with them
     assert_false(@fsx.exists(sessions.join(session).to_path()))
   }
   // Both keep their placement, so either returns to the same worktree.
-  guard @worktree.list(repo.to_string()).worktrees is [row] else {
+  guard @worktree.list(repo).worktrees is [row] else {
     fail("the shared row must survive its members' archive")
   }
   assert_eq(row.sessions, ["s-one", "s-two"])
@@ -755,7 +752,7 @@ async test "an archive waits for another host's archive of a conversation sharin
   manager.pump = Serving(sessions=Map([]))
   let created = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-one"),
     _ => (),
   )
@@ -833,7 +830,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
       }
     },
   )
-  let entries = @worktree.list(workspace.to_string()).worktrees
+  let entries = @worktree.list(workspace).worktrees
   assert_eq(entries.length(), 1)
   assert_eq(entries[0].sessions, ["other"])
   assert_true(worktree_changed)
@@ -866,7 +863,7 @@ async test "deleting a live conversation skips the archive and drops its placeme
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      repo.to_string(),
+      repo,
       @worktree.WorktreeOwner::openseek("chat"),
       _ => (),
     ),
@@ -977,7 +974,7 @@ async test "deleting a live conversation skips the archive and drops its placeme
   }
   assert_true(@fsx.is_dir(live.join("other").to_path()))
   assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
-  assert_true(@worktree.list(repo.to_string()).worktrees.is_empty())
+  assert_true(@worktree.list(repo).worktrees.is_empty())
   assert_false(
     @gitx.run(repo, [
       "for-each-ref", "--format=%(refname)", "refs/openseek/worktrees/",
@@ -988,7 +985,7 @@ async test "deleting a live conversation skips the archive and drops its placeme
   // the last departing conversation must remove their checkout.
   let shared = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("one"),
     _ => (),
   )
@@ -1013,7 +1010,7 @@ async test "deleting a live conversation skips the archive and drops its placeme
     }
   })
   assert_false(@fsx.exists(repo.join(".worktrees").join(shared.name).to_path()))
-  assert_true(@worktree.list(repo.to_string()).worktrees.is_empty())
+  assert_true(@worktree.list(repo).worktrees.is_empty())
   assert_true(manager.record_guards.is_empty())
 }
 
@@ -1042,7 +1039,7 @@ async test "deleting a live conversation leaves a same-id checkout in another pr
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      first.to_string(),
+      first,
       @worktree.WorktreeOwner::openseek("chat"),
       _ => (),
     ),
@@ -1087,7 +1084,7 @@ async test "deleting a live conversation leaves a same-id checkout in another pr
       @workspaces.store_root(first).join("sessions").join("chat").to_path(),
     ),
   )
-  guard @worktree.list(first.to_string()).worktrees is [kept] else {
+  guard @worktree.list(first).worktrees is [kept] else {
     fail("the other project's placement must survive")
   }
   assert_true(kept.present)
@@ -1110,9 +1107,7 @@ async test "a worktree is not created or repaired while its conversation is movi
   let manager = new_engine_manager("openseek")
   manager.pump = Serving(sessions=Map([]))
   let owner = @worktree.WorktreeOwner::openseek("chat")
-  ignore(
-    @worktree.create(manager.worktree_host(), repo.to_string(), owner, _ => ()),
-  )
+  ignore(@worktree.create(manager.worktree_host(), repo, owner, _ => ()))
   @fsx.ensure_dir(
     @workspaces.store_root(repo).join("sessions").join("chat").to_path(),
   )
@@ -1122,9 +1117,7 @@ async test "a worktree is not created or repaired while its conversation is movi
   ignore(owner.archive_checkout(manager.worktree_host(), false))
   assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
   let detail = try {
-    ignore(
-      @worktree.create(manager.worktree_host(), repo.to_string(), owner, _ => ()),
-    )
+    ignore(@worktree.create(manager.worktree_host(), repo, owner, _ => ()))
     "no error"
   } catch {
     error => "\{error}"
@@ -1134,8 +1127,6 @@ async test "a worktree is not created or repaired while its conversation is movi
   // Once the operation lets go — an archive that kept the placement, say —
   // the same request repairs as before.
   manager.release_record_move("chat", claim)
-  ignore(
-    @worktree.create(manager.worktree_host(), repo.to_string(), owner, _ => ()),
-  )
+  ignore(@worktree.create(manager.worktree_host(), repo, owner, _ => ()))
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
 }

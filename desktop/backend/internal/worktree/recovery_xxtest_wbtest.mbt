@@ -24,7 +24,7 @@ async fn commit_recovery_fixture(
 #cfg(not(platform="windows"))
 async fn create_refusal(
   host : WorktreeHost,
-  workspace : String,
+  workspace : @pathx.Absolute,
   session : String,
   name : String,
 ) -> String {
@@ -43,7 +43,7 @@ async fn create_refusal(
 #cfg(not(platform="windows"))
 async fn remove_refusal(
   host : WorktreeHost,
-  workspace : String,
+  workspace : @pathx.Absolute,
   name : String,
   force : Bool,
 ) -> String {
@@ -79,7 +79,7 @@ async fn with_recovery_fixture(
 async test "archive refuses to delete checkout when saving HEAD fails" {
   with_recovery_fixture((repo, host) => {
     let owner = WorktreeOwner::codex("save-failure")
-    let created = create(host, repo.resource_path(), owner, _ => ())
+    let created = create(host, repo, owner, _ => ())
     guard read_worktrees_unlocked(repo) is [entry] else { fail("missing row") }
     let checkout = worktree_dir(repo, created.name)
     let head = commit_recovery_fixture(checkout, "must survive failed save")
@@ -103,8 +103,8 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
   with_recovery_fixture((repo, host) => {
     let archived = WorktreeOwner::codex("archived")
     let removed = WorktreeOwner::openseek("removed")
-    let a = create(host, repo.resource_path(), archived, _ => ())
-    let b = create(host, repo.resource_path(), removed, _ => ())
+    let a = create(host, repo, archived, _ => ())
+    let b = create(host, repo, removed, _ => ())
     let a_dir = worktree_dir(repo, a.name)
     let b_dir = worktree_dir(repo, b.name)
     let saved = @gitx.run(a_dir, ["rev-parse", "HEAD"])
@@ -122,7 +122,7 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
     assert_true(b_head_before is Some(_))
     assert_eq(archived.archive_checkout(host, false), None)
     assert_eq(@fsx.try_read_text(b_metadata.to_path()), b_head_before)
-    ignore(remove(host, repo.resource_path(), b.name, false, _ => ()))
+    ignore(remove(host, repo, b.name, false, _ => ()))
     assert_eq(
       @gitx.run(repo, [
         "for-each-ref",
@@ -132,7 +132,7 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
       refs_before,
     )
     collect_recovery_fixture(repo)
-    ignore(create(host, repo.resource_path(), archived, _ => ()))
+    ignore(create(host, repo, archived, _ => ()))
     assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), saved)
   })
 }
@@ -142,14 +142,14 @@ async test "archiving and removing missing checkouts retain their OpenSeek save 
 async test "detached archive survives GC and later user-created branches" {
   with_recovery_fixture((repo, host) => {
     let owner = WorktreeOwner::codex("archive")
-    let created = create(host, repo.resource_path(), owner, _ => ())
+    let created = create(host, repo, owner, _ => ())
     guard created.worktrees is [info] else { fail("missing worktree") }
     let checkout = worktree_dir(repo, info.name)
     let head = commit_recovery_fixture(checkout, "detached work")
     assert_eq(owner.archive_checkout(host, false), None)
     assert_false(@fsx.exists(checkout.to_path()))
     collect_recovery_fixture(repo)
-    let restored = create(host, repo.resource_path(), owner, _ => ())
+    let restored = create(host, repo, owner, _ => ())
     assert_eq(restored.name, created.name)
     assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), head)
     assert_eq(
@@ -163,7 +163,7 @@ async test "detached archive survives GC and later user-created branches" {
     assert_eq(owner.archive_checkout(host, false), None)
     assert_false(@fsx.exists(checkout.to_path()))
     collect_recovery_fixture(repo)
-    ignore(create(host, repo.resource_path(), owner, _ => ()))
+    ignore(create(host, repo, owner, _ => ()))
     assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), published)
     assert_eq(
       @gitx.run(repo, ["rev-parse", "refs/heads/feature/publish"]),
@@ -202,7 +202,7 @@ async test "failed registry publication rolls back only its own locked checkout"
     // and refuses the rename that publishes a new one, so the create fails
     // at publication, after its checkout exists.
     @fsx.ensure_dir(worktrees_file(repo).to_path())
-    let refused = create_refusal(host, repo.resource_path(), "failed", "failed")
+    let refused = create_refusal(host, repo, "failed", "failed")
     assert_true(refused.contains("could not save the worktree list"))
     assert_false(@fsx.exists(worktree_dir(repo, "failed").to_path()))
     assert_eq(
@@ -246,7 +246,7 @@ async test "legacy branch registry still archives and restores its branch" {
     assert_eq(owner.archive_checkout(host, false), None)
     assert_false(@fsx.exists(checkout.to_path()))
     collect_recovery_fixture(repo)
-    let restored = create(host, repo.resource_path(), owner, _ => ())
+    let restored = create(host, repo, owner, _ => ())
     guard restored.worktrees is [info] else { fail("missing legacy row") }
     assert_eq(info.branch, Some("openseek/legacy"))
     assert_eq(
@@ -263,12 +263,12 @@ async test "legacy branch registry still archives and restores its branch" {
 async test "repair after external prune and GC restores the last archive save point" {
   with_recovery_fixture((repo, host) => {
     let owner = WorktreeOwner::codex("pruned")
-    let created = create(host, repo.resource_path(), owner, _ => ())
+    let created = create(host, repo, owner, _ => ())
     let checkout = worktree_dir(repo, created.name)
     let base = @gitx.run(checkout, ["rev-parse", "HEAD"])
     let saved = commit_recovery_fixture(checkout, "saved by archive")
     assert_eq(owner.archive_checkout(host, false), None)
-    ignore(create(host, repo.resource_path(), owner, _ => ()))
+    ignore(create(host, repo, owner, _ => ()))
     let external = commit_recovery_fixture(
       checkout, "external commit after save",
     )
@@ -276,7 +276,7 @@ async test "repair after external prune and GC restores the last archive save po
     @fs.rmdir(checkout.to_string(), recursive=true)
     ignore(@gitx.run(repo, ["worktree", "prune", "--expire=now"]))
     collect_recovery_fixture(repo)
-    ignore(create(host, repo.resource_path(), owner, _ => ()))
+    ignore(create(host, repo, owner, _ => ()))
     assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), saved)
     assert_eq(tree_base(repo, "pruned"), Some(base))
   })
@@ -288,8 +288,8 @@ async test "repair restores the OpenSeek save point without touching other workt
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
     let second = WorktreeOwner::codex("second")
-    let a = create(host, repo.resource_path(), first, _ => ())
-    let b = create(host, repo.resource_path(), second, _ => ())
+    let a = create(host, repo, first, _ => ())
+    let b = create(host, repo, second, _ => ())
     let a_dir = worktree_dir(repo, a.name)
     let b_dir = worktree_dir(repo, b.name)
     let saved = @gitx.run(a_dir, ["rev-parse", "HEAD"])
@@ -306,7 +306,7 @@ async test "repair restores the OpenSeek save point without touching other workt
     let b_metadata = repo.join(".git/worktrees").join(b.name).join("HEAD")
     let b_head_before = @fsx.try_read_text(b_metadata.to_path())
     assert_true(b_head_before is Some(_))
-    ignore(create(host, repo.resource_path(), first, _ => ()))
+    ignore(create(host, repo, first, _ => ()))
     assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), saved)
     assert_eq(@fsx.try_read_text(b_metadata.to_path()), b_head_before)
     assert_eq(
@@ -336,17 +336,13 @@ async test "worktree create names the holder in every refusal" {
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   assert_true(
-    create_refusal(host, root.join("unregistered").to_string(), "s", "x").contains(
+    create_refusal(host, root.join("unregistered"), "s", "x").contains(
       "not a registered workspace",
     ),
   )
+  assert_true(create_refusal(host, repo, "s", "-x").contains("worktree names"))
   assert_true(
-    create_refusal(host, repo.to_string(), "s", "-x").contains("worktree names"),
-  )
-  assert_true(
-    create_refusal(host, repo.to_string(), "a/b", "x").contains(
-      "session id invalid",
-    ),
+    create_refusal(host, repo, "a/b", "x").contains("session id invalid"),
   )
   // Binding is for new conversations: one with durable history keeps the
   // tree it grew up in.
@@ -354,9 +350,7 @@ async test "worktree create names the holder in every refusal" {
     @workspaces.store_root(repo).join("sessions").join("s-old").to_path(),
   )
   assert_true(
-    create_refusal(host, repo.to_string(), "s-old", "x").contains(
-      "already has history",
-    ),
+    create_refusal(host, repo, "s-old", "x").contains("already has history"),
   )
   // The session must be new EVERYWHERE: history in the global store, a
   // binding in another workspace's registry, and an in-flight first turn
@@ -366,9 +360,7 @@ async test "worktree create names the holder in every refusal" {
   }
   @fsx.ensure_dir(global.join("sessions/s-global").to_path())
   assert_true(
-    create_refusal(host, repo.to_string(), "s-global", "x").contains(
-      "already has history",
-    ),
+    create_refusal(host, repo, "s-global", "x").contains("already has history"),
   )
   let elsewhere = root.join("elsewhere")
   @fsx.ensure_dir(elsewhere.to_path())
@@ -383,36 +375,26 @@ async test "worktree create names the holder in every refusal" {
     },
   ])
   assert_true(
-    create_refusal(host, repo.to_string(), "s-elsewhere", "x").contains(
+    create_refusal(host, repo, "s-elsewhere", "x").contains(
       "already runs in worktree wt-e",
     ),
   )
   // A conversation the host already holds a slot for is mid-first-turn; its
   // durable record has not landed yet, so only the host can say so.
   assert_true(
-    create_refusal(test_host(live=["s-live"]), repo.to_string(), "s-live", "x").contains(
+    create_refusal(test_host(live=["s-live"]), repo, "s-live", "x").contains(
       "already starting",
     ),
   )
   ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-dup"),
-      _ => (),
-      name="dup",
-    ),
+    create(host, repo, WorktreeOwner::openseek("s-dup"), _ => (), name="dup"),
   )
   assert_true(
-    create_refusal(host, repo.to_string(), "s-2", "dup").contains(
-      "already exists",
-    ),
+    create_refusal(host, repo, "s-2", "dup").contains("already exists"),
   )
   @fsx.ensure_dir(repo.join(".worktrees/held").to_path())
   assert_true(
-    create_refusal(host, repo.to_string(), "s-3", "held").contains(
-      "already exists on disk",
-    ),
+    create_refusal(host, repo, "s-3", "held").contains("already exists on disk"),
   )
   // A workspace that is not a git repository cannot host worktrees; a linked
   // worktree registered before the attach guard existed is refused too.
@@ -420,9 +402,7 @@ async test "worktree create names the holder in every refusal" {
   @fsx.ensure_dir(plain.to_path())
   ignore(@workspaces.add(plain.to_string(), _ => ()))
   assert_true(
-    create_refusal(host, plain.to_string(), "s", "x").contains(
-      "not a git repository",
-    ),
+    create_refusal(host, plain, "s", "x").contains("not a git repository"),
   )
   // A repository SUBDIRECTORY stays attachable but cannot host worktrees:
   // the checkout would land inside it as untracked noise at the wrong depth.
@@ -430,9 +410,7 @@ async test "worktree create names the holder in every refusal" {
   @fsx.ensure_dir(sub.to_path())
   ignore(@workspaces.add(sub.to_string(), _ => ()))
   assert_true(
-    create_refusal(host, sub.to_string(), "s-sub", "x").contains(
-      "repository subdirectory",
-    ),
+    create_refusal(host, sub, "s-sub", "x").contains("repository subdirectory"),
   )
 }
 
@@ -451,18 +429,10 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   assert_true(
-    remove_refusal(host, repo.to_string(), "nope", false).contains(
-      "no worktree named",
-    ),
+    remove_refusal(host, repo, "nope", false).contains("no worktree named"),
   )
   ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-w1"),
-      _ => (),
-      name="w1",
-    ),
+    create(host, repo, WorktreeOwner::openseek("s-w1"), _ => (), name="w1"),
   )
   @fs.write_text(
     repo.join(".worktrees/w1/junk.txt").to_string(),
@@ -470,16 +440,14 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
     create_mode=CreateOrTruncate,
   )
   assert_true(
-    remove_refusal(host, repo.to_string(), "w1", false).contains(
-      "uncommitted changes",
-    ),
+    remove_refusal(host, repo, "w1", false).contains("uncommitted changes"),
   )
-  assert_eq(list(repo.to_string()).worktrees.length(), 1)
+  assert_eq(list(repo).worktrees.length(), 1)
   guard read_worktrees_unlocked(repo) is [w1_entry] else {
     fail("missing first row")
   }
   let committed : Ref[Int32] = Ref(-1)
-  let forced = remove(host, repo.to_string(), "w1", true, infos => {
+  let forced = remove(host, repo, "w1", true, infos => {
     committed.val = infos.length()
   })
   assert_eq(committed.val, 0)
@@ -496,13 +464,7 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
     is Some(_),
   )
   ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-w2"),
-      _ => (),
-      name="w2",
-    ),
+    create(host, repo, WorktreeOwner::openseek("s-w2"), _ => (), name="w2"),
   )
   guard read_worktrees_unlocked(repo) is [w2_entry] else {
     fail("missing second row")
@@ -511,13 +473,13 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
     worktree_dir(repo, "w2"),
     "keep removed work",
   )
-  ignore(remove(host, repo.to_string(), "w2", false, _ => ()))
+  ignore(remove(host, repo, "w2", false, _ => ()))
   collect_recovery_fixture(repo)
   assert_eq(
     @gitx.run(repo, ["rev-parse", w2_entry.checkout.revision()]),
     committed_head,
   )
-  assert_eq(list(repo.to_string()).worktrees.length(), 0)
+  assert_eq(list(repo).worktrees.length(), 0)
   assert_true(
     @gitx.probe(repo, [
       "show-ref",
@@ -555,11 +517,7 @@ async test "unsupported Git worktree listing refuses creation before publication
     @sys.set_env_var("PATH", bin.to_string() + ":" + original_path)
     defer @sys.set_env_var("PATH", original_path)
     let error = try {
-      ignore(
-        create(host, repo.resource_path(), WorktreeOwner::openseek("old-git"), _ => {
-          ()
-        }),
-      )
+      ignore(create(host, repo, WorktreeOwner::openseek("old-git"), _ => ()))
       None
     } catch {
       WorktreeError(message) => Some(message)

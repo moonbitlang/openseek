@@ -44,7 +44,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      repo.to_string(),
+      repo,
       @worktree.WorktreeOwner::openseek("s-sub-dirty"),
       _ => (),
     ),
@@ -75,7 +75,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      repo.to_string(),
+      repo,
       @worktree.WorktreeOwner::openseek("s-sub-clean"),
       _ => (),
     ),
@@ -91,7 +91,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   assert_false(@fsx.exists(clean_checkout.to_path()))
   // Recovery references and placements survive, and git's worktree bookkeeping is
   // pruned rather than left stale.
-  guard @worktree.list(repo.to_string()).worktrees is [first, second] else {
+  guard @worktree.list(repo).worktrees is [first, second] else {
     fail("both worktree placements must survive archive")
   }
   assert_eq(first.branch, None)
@@ -126,7 +126,7 @@ async test "worktree deletion refuses a replaced checkout" {
   ignore(
     @worktree.create(
       manager.worktree_host(),
-      repo.to_string(),
+      repo,
       @worktree.WorktreeOwner::openseek("s-replaced"),
       _ => (),
     ),
@@ -154,13 +154,7 @@ async test "worktree deletion refuses a replaced checkout" {
   )
   let remove_detail = try {
     ignore(
-      @worktree.remove(
-        manager.worktree_host(),
-        repo.to_string(),
-        "wt-1",
-        true,
-        _ => (),
-      ),
+      @worktree.remove(manager.worktree_host(), repo, "wt-1", true, _ => ()),
     )
     "no error"
   } catch {
@@ -176,5 +170,5 @@ async test "worktree deletion refuses a replaced checkout" {
   assert_true(archive_detail != "no error")
   // The unrelated repository survives untouched, registry entry and all.
   assert_true(@fsx.is_dir(target.join(".git").to_path()))
-  assert_eq(@worktree.list(repo.to_string()).worktrees.length(), 1)
+  assert_eq(@worktree.list(repo).worktrees.length(), 1)
 }

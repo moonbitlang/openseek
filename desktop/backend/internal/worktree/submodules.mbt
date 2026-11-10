@@ -171,7 +171,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   let host = test_host()
   let created = create(
     host,
-    repo.to_string(),
+    repo,
     WorktreeOwner::openseek("s-submodules"),
     _ => (),
     name="with-submodules",
@@ -188,7 +188,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   ignore(
     create(
       host,
-      repo.to_string(),
+      repo,
       WorktreeOwner::openseek("s-submodules"),
       _ => (),
       name="with-submodules",
@@ -208,7 +208,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
     ]),
   )
   let locked_detail = try {
-    ignore(remove(host, repo.to_string(), "with-submodules", false, _ => ()))
+    ignore(remove(host, repo, "with-submodules", false, _ => ()))
     "no error"
   } catch {
     WorktreeError(detail) => detail
@@ -218,7 +218,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   assert_true(@fsx.is_dir(checkout.to_path()))
   ignore(@gitx.run(repo, ["worktree", "unlock", ".worktrees/with-submodules"]))
   // Once unlocked, clean removal unregisters and deletes the checkout.
-  let removed = remove(host, repo.to_string(), "with-submodules", false, _ => ())
+  let removed = remove(host, repo, "with-submodules", false, _ => ())
   assert_eq(removed.worktrees.length(), 0)
   assert_false(@fsx.exists(checkout.to_path()))
   // This workspace setting leaves even an initialized main-checkout
@@ -232,7 +232,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   )
   let skipped = create(
     host,
-    repo.to_string(),
+    repo,
     WorktreeOwner::openseek("s-without-submodules"),
     _ => (),
     name="without-submodules",
