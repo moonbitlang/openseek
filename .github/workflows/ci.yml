@@ -156,6 +156,11 @@ jobs:
       - name: App-server launch, turn lifecycle and subagents (offline CLI)
         if: matrix.target == 'native'
         run: |
+          # A native child that dies on a signal leaves a core here, named by
+          # its executable path (`/` spelled `!`), for the backtrace step.
+          mkdir -p "$RUNNER_TEMP/cores"
+          sudo sysctl -w kernel.core_pattern="$RUNNER_TEMP/cores/core.%E.%p"
+          ulimit -c unlimited
           moon build . desktop/backend/server --target native
           moon run tests/integration/app_server.mbtx _build/native/debug/build/openseek_desktop/backend/server/server.exe
           moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
@@ -166,6 +171,41 @@ jobs:
           moon run tests/integration/approval_review.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
           moon run tests/integration/directory_workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
           moon run tests/integration/directory_recovery.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+
+      - name: Backtraces of crashed native processes
+        id: cores
+        if: failure() && matrix.target == 'native'
+        run: |
+          shopt -s nullglob
+          cores=("$RUNNER_TEMP"/cores/core.*)
+          if [ "${#cores[@]}" -eq 0 ]; then
+            echo "No core dumps."
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          command -v gdb >/dev/null ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq gdb; }
+          mkdir -p "$RUNNER_TEMP/cores/bin"
+          for core in "${cores[@]}"; do
+            name="${core##*/core.}"
+            exe="${name%.*}"
+            exe="${exe//!//}"
+            echo "=== $core ($exe)"
+            if [ -f "$exe" ]; then
+              cp --update=none "$exe" "$RUNNER_TEMP/cores/bin/" || true
+              gdb -batch -nx -ex 'info threads' -ex 'thread apply all bt' "$exe" "$core" || true
+            else
+              echo "Executable $exe is gone; core kept without a backtrace."
+            fi
+          done
+
+      - name: Upload core dumps
+        if: failure() && steps.cores.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cores-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cores
+          retention-days: 3
 
   # The terminal UI kills the engine's whole process tree, which has its own
   # Windows implementation. Check and test only the openseek_tui packages:
