@@ -133,7 +133,7 @@ extern "js" fn cos(d : Double) -> Double =
 You can declare a foreign function by importing a function given the function name:
 
 ```moonbit
-extern "C" fn put_char(ch : UInt) -> Unit = "function_name"
+extern "C" fn put_char(ch : UInt32) -> Unit = "function_name"
 ```
 
 If a package needs to dynamically link with foreign C library, add `cc-link-flags` to `moon.pkg`. It would be passed to C compiler directly.
@@ -169,8 +169,8 @@ The table below shows the underlying representation of some MoonBit types:
 | MoonBit type                       | ABI         |
 |------------------------------------|-------------|
 | `Bool`                             | `i32`       |
-| `Int`                              | `i32`       |
-| `UInt`                             | `i32`       |
+| `Int32`                            | `i32`       |
+| `UInt32`                           | `i32`       |
 | `Int64`                            | `i64`       |
 | `UInt64`                           | `i64`       |
 | `Float`                            | `f32`       |
@@ -184,8 +184,8 @@ The table below shows the underlying representation of some MoonBit types:
 | MoonBit type                       | ABI                                     |
 |------------------------------------|-----------------------------------------|
 | `Bool`                             | `i32`                                   |
-| `Int`                              | `i32`                                   |
-| `UInt`                             | `i32`                                   |
+| `Int32`                            | `i32`                                   |
+| `UInt32`                           | `i32`                                   |
 | `Int64`                            | `i64`                                   |
 | `UInt64`                           | `i64`                                   |
 | `Float`                            | `f32`                                   |
@@ -200,8 +200,8 @@ The table below shows the underlying representation of some MoonBit types:
 | MoonBit type                       | ABI          |
 |------------------------------------|--------------|
 | `Bool`                             | `boolean`    |
-| `Int`                              | `number`     |
-| `UInt`                             | `number`     |
+| `Int32`                            | `number`     |
+| `UInt32`                           | `number`     |
 | `Float`                            | `number`     |
 | `Double`                           | `number`     |
 | constant `enum`                    | `number`     |
@@ -222,8 +222,8 @@ Using `Array[T]` in a JavaScript FFI signature is deprecated. Use
 | MoonBit type                       | ABI                                    |
 |------------------------------------|----------------------------------------|
 | `Bool`                             | `int32_t`                              |
-| `Int`                              | `int32_t`                              |
-| `UInt`                             | `uint32_t`                             |
+| `Int32`                            | `int32_t`                              |
+| `UInt32`                           | `uint32_t`                             |
 | `Int64`                            | `int64_t`                              |
 | `UInt64`                           | `uint64_t`                             |
 | `Float`                            | `float`                                |
@@ -328,18 +328,14 @@ pkgtype(kind: "foreign_library")
 
 ```moonbit
 #export_name("add")
-pub fn add_one(value : Int) -> Int {
+pub fn add_one(value : Int32) -> Int32 {
   value + 1
 }
 ```
 
-MoonBit currently requires the name to be unique within the package and to be a
-valid C symbol identifier, regardless of the selected backend.
-
-#### WARNING
-Known compiler issue: `#export_name` currently applies its C-symbol-identifier
-restriction to every backend. WebAssembly export names are UTF-8 strings and
-are not limited to C identifiers.
+Export names must be unique within the package. Name restrictions depend on
+the backend: native requires valid C symbol identifiers, while WebAssembly
+export names are UTF-8 strings and are not limited to C identifiers.
 
 The attribute is not available on generic functions, functions with optional
 arguments, methods, or declarations without a body.
@@ -347,10 +343,60 @@ arguments, methods, or declarations without a body.
 Prefer `#export_name` for new exports. It keeps the exported name next to the
 function and applies to every backend that supports foreign-library output.
 
-#### NOTE
-The native backend does not currently support exporting a `foreign_library`
-package as a linkable library artifact, including shared libraries such as a
+### Native Static Libraries
+
+The native backend builds a `foreign_library` package as a static archive:
+`.a`, or `.lib` on Windows. It does not produce a shared library such as a
 `.dll` or `.so`.
+
+```moonbit
+pkgtype(kind: "foreign_library")
+supported_targets = "native"
+```
+
+```moonbit
+///|
+let offset : Int32 = 2
+
+///|
+#export_name("add")
+pub fn add(a : Int32, b : Int32) -> Int32 {
+  a + b + offset
+}
+```
+
+Run `moon build --target native --release` and use the archive path printed in the
+artifact list. Before calling exported functions, the host must call
+`moonbit_init()` to initialize the runtime and top-level values:
+
+```c
+#include "moonbit.h"
+#include <stdio.h>
+
+extern int32_t add(int32_t a, int32_t b);
+
+int main(void) {
+  moonbit_init();
+  printf("%d\n", add(40, 2));
+  return 0;
+}
+```
+
+On Unix-like systems, compile the host with the toolchain's include directory
+and generated archive, for example:
+
+```bash
+cc -I "$MOON_HOME/include" host.c path/to/lib.a -lm -o host
+./host
+# 44
+```
+
+Here `MOON_HOME` is the MoonBit installation directory. On Windows, use MSVC
+or clang-cl with the generated `.lib` and the corresponding include directory.
+Debug archives may require additional backtrace-library dependencies; the
+command above uses a release archive.
+
+### Backend-specific Exports
 
 Use the backend-specific `exports` field in
 [link configuration](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#link-options) when the export
@@ -386,7 +432,7 @@ There's another `format` option to export as CommonJS module (`cjs`), ES Module 
 ### C
 
 #### NOTE
-Renaming the exported function is not supported for now
+Use `#export_name` to set the native symbol name.
 
 ## Lifetime management
 
@@ -451,7 +497,7 @@ By default, MoonBit uses an owned calling convention for reference counting. Tha
 For example, here's a lifetime-correct binding to the standard `open` function for opening a file:
 
 ```moonbit
-extern "C" fn open(filename : Bytes, flags : Int) -> Int = "open_ffi"
+extern "C" fn open(filename : Bytes, flags : Int32) -> Int32 = "open_ffi"
 ```
 
 ```c
@@ -466,7 +512,7 @@ int open_ffi(moonbit_bytes_t filename, int flags) {
 
 The following types are always unboxed, so there is no need to manage their lifetime:
 
-- builtin number types, such as `Int` and `Double`
+- builtin number types, such as `Int32` and `Double`
 - constant `enum` (`enum` where all constructors have no payload)
 
 The following types are always boxed and reference counted:
@@ -500,7 +546,7 @@ Parameters of `#borrow` will be passed using borrow based calling convention, th
 
 ```moonbit
 #borrow(filename)
-extern "C" fn open(filename : Bytes, flags : Int) -> Int = "open"
+extern "C" fn open(filename : Bytes, flags : Int32) -> Int32 = "open"
 ```
 
 There is no need for a stub function anymore: we are binding to the original version of `open` here. With the `#borrow` attribute, this version is still lifetime-correct.
