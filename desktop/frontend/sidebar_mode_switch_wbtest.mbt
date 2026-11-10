@@ -253,3 +253,69 @@ test "a Cloud home draft created while Work is on screen reopens as its conversa
     is Some({ target: CloudSession(session="new-cloud", ..), .. }),
   )
 }
+
+///|
+test "the drawer stays open until the new Work chat a switch opens arrives" {
+  let cloud = integrated_cloud_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  // The host's chat holds a typed draft, so Work needs a new chat.
+  let cloud = {
+    ..cloud,
+    conversations: cloud.conversations.map(conv => { ..conv, task: "typed", }),
+    narrow: true,
+    sidebar_open: true,
+  }
+  let (_, preparing) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    cloud,
+  )
+  assert_true(preparing.navigation.phase is PreparingNew)
+  let (_, ready) = update(
+    test_dispatch(),
+    Navigation(
+      SessionReady(
+        { channel: Local, session: "fresh-work", },
+        revision=preparing.navigation.revision,
+      ),
+    ),
+    preparing,
+  )
+  assert_eq(ready.active_session, "fresh-work")
+  assert_true(ready.sidebar_open)
+}
+
+///|
+test "signed-out Cloud home keeps Chat over the Codex thread it replaced" {
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-1",
+      "cwd": "/work",
+      "projectRoot": "/work",
+      "preview": "Codex task",
+      "updatedAt": 2000,
+      "turns": [],
+    },
+  })
+  let model = test_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  let thread = {
+    ..model,
+    codex,
+    screen: Codex,
+    navigation: {
+      ..model.navigation,
+      location: Some({
+        device: model.console.page_device,
+        target: Thread("codex-thread-1"),
+      }),
+    },
+    sidebar_revealed: Some((WorkMode, "codex-thread-1")),
+  }
+  assert_true(thread.account is None)
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), thread)
+  assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(chat.sidebar_mode is ChatMode)
+}

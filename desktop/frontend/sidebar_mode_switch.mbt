@@ -161,8 +161,27 @@ fn switch_mode_column(
   // so the list just picked stays in view.
   (
     @cmd.batch([focus, enter]),
-    { ..next, sidebar_mode: mode, sidebar_open: model.sidebar_open, },
+    {
+      ..next,
+      sidebar_mode: mode,
+      sidebar_open: model.sidebar_open,
+      mode_switch_revision: if next.navigation.phase is PreparingNew {
+        Some(next.navigation.revision)
+      } else {
+        None
+      },
+    },
   )
+}
+
+///|
+/// Whether `msg` brings the new chat a mode switch left preparing.
+fn Model::completes_mode_switch(self : Model, msg : Msg) -> Bool {
+  match msg {
+    Navigation(SessionReady(_, revision~) | CodexDraftReady(revision~, ..)) =>
+      self.mode_switch_revision == Some(revision)
+    _ => false
+  }
 }
 
 ///|
