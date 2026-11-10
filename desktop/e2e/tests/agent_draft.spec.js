@@ -107,7 +107,9 @@ test('a submitted Codex draft cannot switch agents while thread creation is pend
   await page.locator('#send').click();
   await expect.poll(() => app.requests.some(r => r.method === 'codex.thread.start')).toBe(true);
   await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await expect(page.getByRole('option', { name: 'DS Pro', exact: true })).toHaveCount(0);
+  const menu = page.getByRole('listbox', { name: 'Model', exact: true });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('group', { name: 'OpenSeek', exact: true })).toHaveCount(0);
   pending.resolve();
   expect(app.pageErrors).toEqual([]);
 });
@@ -155,8 +157,9 @@ test('a failed first Codex send keeps the agent fixed while retrying', async ({ 
   await page.locator('#send').click();
   await expect(page.getByText(/Reply lost/)).toBeVisible();
   await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await expect(page.getByRole('listbox', { name: 'Model' })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'DS Pro', exact: true })).toHaveCount(0);
+  const menu = page.getByRole('listbox', { name: 'Model', exact: true });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('group', { name: 'OpenSeek', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('listbox', { name: 'Model' })).toHaveCount(0);
   const first = app.requests.find(r => r.method === 'codex.thread.start');

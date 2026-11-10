@@ -14,8 +14,8 @@ fn parse_engine_model(value : StringView) -> @deepseek.Model? {
 /// The product-facing model name shown on the composer chip.
 fn @deepseek.Model::label(self : @deepseek.Model) -> String {
   match self {
-    Deepseek(V4Pro) => "DS Pro"
-    Deepseek(V4Flash) => "DS Flash"
+    Deepseek(V4Pro) => "DeepSeek Pro"
+    Deepseek(V4Flash) => "DeepSeek Flash"
     Glm(G53) => "GLM 5.3"
     Glm(G53Flash) => "GLM 5.3 Flash"
     Kimi(_) => self.to_string()

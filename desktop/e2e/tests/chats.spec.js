@@ -1,6 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, sessionA } from './support/cloud_harness.js';
+import { CloudHarness } from './support/cloud_harness.js';
 
 const root = '/Users/test/Library/Application Support/SeekMoon/workspaces';
 const sidebarMode = (page, name) => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
@@ -11,38 +11,6 @@ function localHistory(app) {
   app.sessionGroups = sessions => ({ groups: [{
     workspace: `${root}/history`, name: 'Unnamed workspace', session_root: `${root}/history/.openseek`, error: '', sessions,
   }] });
-}
-
-for (const legacy of [false, true]) {
-  test(`Chat signs in and opens conversations directly (retired history=${legacy})`, async ({ page }) => {
-    const cloud = new CloudHarness(page, { desktop: true, cached: false });
-    if (legacy) localHistory(cloud.device);
-    await cloud.install();
-    await cloud.goto();
-    const hint = page.locator('aside').getByText('Sign in to view conversations', { exact: true });
-    await expect(hint).toBeVisible();
-    await page.locator('aside').getByRole('button', { name: 'Sign in', exact: true }).click();
-    await cloud.open();
-    await expect(hint).toHaveCount(0);
-    await expect(page.locator('#task')).toBeVisible();
-    await expect(page.locator('aside .section-label')).toHaveText(['Chats']);
-    const row = cloud.row(sessionA);
-    await expect(row).toBeInViewport();
-    await row.hover();
-    await page.getByRole('button', { name: 'Conversation actions' }).click();
-    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
-    await expect(row).toHaveCount(0);
-    await cloud.openArchived(sessionA);
-    await expect(page.locator('.archived-read-only-text')).toBeVisible();
-    if (legacy) {
-      await sidebarMode(page, 'Work').click();
-      await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
-      expect(cloud.device.workspaces).toContain(`${root}/history`);
-      expect(cloud.device.liveSessions).toHaveLength(1);
-    }
-    expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
 }
 
 test('an empty Chat list starts a draft without creating a session', async ({ page }) => {

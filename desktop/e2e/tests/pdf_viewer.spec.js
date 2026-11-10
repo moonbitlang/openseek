@@ -274,11 +274,6 @@ test('PDF uses the shared annotation composer with pinned drafts, Batch, and app
   expect(app.pageErrors).toEqual([]);
 });
 
-async function enableImages(page) {
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
-}
-
 async function captureRegion(page, rect, { confirm = true } = {}) {
   await page.getByRole('button', { name: 'Capture region', exact: true }).click();
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
@@ -302,7 +297,6 @@ test.describe('PDF region screenshots', () => {
 
   test('crops real page pixels at display resolution and sends an image without losing typed text', async ({ page }) => {
     const app = await setup(page);
-    await enableImages(page);
     await openFile(app, 'report.pdf');
     await expectPdf(page);
     await page.locator('#task').fill('Explain this figure');
@@ -340,7 +334,6 @@ test.describe('PDF touch capture', () => {
 
   test('PDF touch drags capture a region and restore panning afterward', async ({ page }) => {
     const app = await setup(page);
-    await enableImages(page);
     await openFile(app, 'report.pdf');
     await expectPdf(page);
     const container = page.locator('.pdf-container');
@@ -377,7 +370,6 @@ test.describe('PDF touch capture', () => {
 
 test('PDF capture feedback sends the image and instruction with existing typing', async ({ page }) => {
     const app = await setup(page);
-    await enableImages(page);
     await openFile(app, 'report.pdf');
     await expectPdf(page);
     await page.locator('#task').fill('Keep my existing draft');
@@ -435,7 +427,6 @@ async function hoverPdfText(page, text) {
 
 test('PDF element hover and a slightly moving click attach text, page and screenshot', async ({ page }) => {
   const app = await setup(page);
-  await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
   await page.getByRole('button', { name: 'Capture region', exact: true }).click();
