@@ -1,19 +1,15 @@
 ///|
 /// Async tests in this package run concurrently, and every one of them sets
-/// the process-wide OPENSEEK_MCP; each holds this lock while it does.
+/// the process-wide OPENSEEK_MCP and the downloaded catalog; each holds this
+/// lock while it does.
 let environment : @async.Mutex = @async.Mutex()
-
-///|
-/// How many hosts `with_host` has started. Each gets its own token, so no host
-/// shares a capability, and with it a cached catalog, with an earlier one that
-/// happened to get the same port.
-let hosts : Ref[Int32] = Ref(0)
 
 ///|
 /// Runs `body` with OPENSEEK_MCP pointing at a loopback host that answers each
 /// request with `reply(input)` as `(status, envelope)`, and returns the request
-/// bodies the host received. Restores the process environment on success,
-/// assertion failure, or cancellation.
+/// bodies the host received. The body starts without a downloaded catalog, as
+/// a fresh script does. Restores the process environment on success, assertion
+/// failure, or cancellation.
 async fn with_host(
   reply : (Json) -> (Int32, Json),
   body : async () -> Unit,
@@ -25,8 +21,7 @@ async fn with_host(
     Some(value) => @env.set_env_var("OPENSEEK_MCP", value)
     None => @env.unset_env_var("OPENSEEK_MCP")
   })
-  hosts.val += 1
-  let token = "mcp-test-\{hosts.val}"
+  let token = "mcp-test"
   let received : Array[Json] = []
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
@@ -60,6 +55,7 @@ async fn with_host(
             "token": token,
           } : Json).stringify(),
       )
+      downloaded.val = None
       body()
     })
   })
@@ -93,8 +89,8 @@ async test "MCP calls send the server, tool, and arguments unchanged" {
   }
   let results = []
   let received = with_host(input => ok("issue list", data=input), () => {
-    results.push(@mcp.call("github", "search_issues", arguments))
-    results.push(@mcp.call("files", "remove", {}))
+    results.push(call("github", "search_issues", arguments))
+    results.push(call("files", "remove", {}))
   })
   let expected : Array[Json] = [
     {
@@ -136,7 +132,7 @@ async test "MCP calls return the files the host saved images in" {
           },
         )
       },
-      () => result = Some(@mcp.call("browser", "screenshot", {})),
+      () => result = Some(call("browser", "screenshot", {})),
     ),
   )
   guard result is Some(result) else { fail("no result") }
@@ -148,7 +144,7 @@ async test "MCP tool failures are results, transport failures raise" {
   let mut result = None
   ignore(
     with_host(_ => refused("rate limited"), () => {
-      result = Some(@mcp.call("github", "search_issues", {}))
+      result = Some(call("github", "search_issues", {}))
     }),
   )
   guard result is Some(result) else { fail("no result") }
@@ -158,10 +154,10 @@ async test "MCP tool failures are results, transport failures raise" {
   let mut failed = false
   let received = with_host(_ => (503, "Unavailable"), () => {
     failed = try {
-      ignore(@mcp.call("github", "create_issue", { "title": "t" }))
+      ignore(call("github", "create_issue", { "title": "t" }))
       false
     } catch {
-      @mcp.TransportError(_) => true
+      TransportError(_) => true
       error => raise error
     }
   })
@@ -248,7 +244,7 @@ let paged : Array[Array[Json]] = [
 ///|
 async test "the first search downloads every page of the catalog" {
   let pages = []
-  let received = with_host(catalog_host(paged), () => pages.push(@mcp.search()))
+  let received = with_host(catalog_host(paged), () => pages.push(search()))
   assert_eq(received, [
     { "version": 1, "list": {} },
     { "version": 1, "list": { "cursor": 2, "snapshot": 7 } },
@@ -284,9 +280,9 @@ async test "the first search downloads every page of the catalog" {
 async test "later searches reuse the downloaded catalog" {
   let pages = []
   let received = with_host(catalog_host(paged), () => {
-    pages.push(@mcp.search(server="github", limit=1))
-    pages.push(@mcp.search(query="events"))
-    pages.push(@mcp.search(server="github", offset=1))
+    pages.push(search(server="github", limit=1))
+    pages.push(search(query="events"))
+    pages.push(search(server="github", offset=1))
   })
   // One download, three requests for its three replies, for all three searches.
   assert_eq(received.length(), 3)
@@ -301,15 +297,13 @@ async test "later searches reuse the downloaded catalog" {
 ///|
 async test "an empty catalog and an unavailable server are ordinary pages" {
   let pages = []
-  ignore(with_host(catalog_host([[]]), () => pages.push(@mcp.search())))
+  ignore(with_host(catalog_host([[]]), () => pages.push(search())))
   assert_eq(pages[0].text, "No MCP servers are configured.")
   inspect(pages[0], content="No MCP servers are configured.")
   assert_true(pages[0].tools.is_empty())
   assert_eq(pages[0].total, 0)
   ignore(
-    with_host(catalog_host(paged), () => {
-      pages.push(@mcp.search(server="billing"))
-    }),
+    with_host(catalog_host(paged), () => pages.push(search(server="billing"))),
   )
   assert_eq(pages[1].text, "`billing` is unavailable: connection refused")
   inspect(pages[1], content="`billing` is unavailable: connection refused")
@@ -326,7 +320,7 @@ async fn search_error(
   ignore(
     with_host(reply, () => {
       try search() catch {
-        @mcp.SearchError(reason) => message = Some(reason)
+        SearchError(reason) => message = Some(reason)
         error => raise error
       } noraise {
         _ => ()
@@ -340,11 +334,11 @@ async fn search_error(
 ///|
 async test "searches the catalog refuses raise SearchError" {
   assert_eq(
-    search_error(catalog_host(paged), () => ignore(@mcp.search(server="nope"))),
+    search_error(catalog_host(paged), () => ignore(search(server="nope"))),
     "no MCP server `nope`; servers: `github`, `calendar`, `billing`",
   )
   assert_eq(
-    search_error(catalog_host(paged), () => ignore(@mcp.search(limit=0))),
+    search_error(catalog_host(paged), () => ignore(search(limit=0))),
     "`limit` must be a positive integer",
   )
 }
@@ -353,20 +347,18 @@ async test "searches the catalog refuses raise SearchError" {
 async test "every download failure is a SearchError" {
   // A listing the host refuses, with its reason.
   assert_eq(
-    search_error(_ => refused("listing refused"), () => ignore(@mcp.search())),
+    search_error(_ => refused("listing refused"), () => ignore(search())),
     "listing refused",
   )
   // Transport failure.
-  ignore(search_error(_ => (503, "Unavailable"), () => ignore(@mcp.search())))
+  ignore(search_error(_ => (503, "Unavailable"), () => ignore(search())))
   // A successful envelope without items, and a tool before its server.
   assert_eq(
-    search_error(_ => ok("no items"), () => ignore(@mcp.search())),
+    search_error(_ => ok("no items"), () => ignore(search())),
     "Invalid MCP catalog from the MCP host",
   )
   assert_eq(
-    search_error(catalog_host([[tool_item("s", "t")]]), () => {
-      ignore(@mcp.search())
-    }),
+    search_error(catalog_host([[tool_item("s", "t")]]), () => ignore(search())),
     "Invalid MCP catalog from the MCP host",
   )
 }
@@ -386,13 +378,13 @@ async test "a failed download is not kept" {
     },
     () => {
       let failed = try {
-        ignore(@mcp.search())
+        ignore(search())
         false
       } catch {
-        @mcp.SearchError(_) => true
+        SearchError(_) => true
       }
       assert_true(failed)
-      pages.push(@mcp.search())
+      pages.push(search())
     },
   )
   assert_eq(received.length(), 4)
@@ -410,22 +402,23 @@ async test "without an MCP host, a call raises and a search is a SearchError" {
   })
   // What an older host and a run without MCP servers both hand a script.
   @env.unset_env_var("OPENSEEK_MCP")
+  downloaded.val = None
   let missing = "No MCP host: this run has no MCP servers configured."
   // Each error shows its reason, which is what a script that lets it escape
   // prints.
   let raised = try {
-    ignore(@mcp.call("github", "search_issues", {}))
+    ignore(call("github", "search_issues", {}))
     None
   } catch {
-    @mcp.TransportError(message) as error => Some((message, "\{error}"))
+    TransportError(message) as error => Some((message, "\{error}"))
     error => raise error
   }
   assert_eq(raised, Some((missing, "TransportError: \{missing}")))
   let searched = try {
-    ignore(@mcp.search())
+    ignore(search())
     None
   } catch {
-    @mcp.SearchError(message) as error => Some((message, "\{error}"))
+    SearchError(message) as error => Some((message, "\{error}"))
   }
   assert_eq(searched, Some((missing, "SearchError: \{missing}")))
 }

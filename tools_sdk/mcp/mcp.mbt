@@ -61,24 +61,20 @@ pub async fn search(
 const INVALID_CATALOG = "Invalid MCP catalog from the MCP host"
 
 ///|
-/// The catalog this script downloaded, with the capability it came from. The
-/// host's catalog changes only when a connection is lost, and a call to a lost
-/// server says so, so one download serves the whole script. Keying it by the
-/// capability keeps a catalog from one host from answering for another.
-let downloaded : Ref[(String, @catalog.Catalog)?] = Ref(None)
+/// The catalog this script downloaded. The host's catalog changes only when a
+/// connection is lost, and a call to a lost server says so, so one download
+/// serves the whole script.
+let downloaded : Ref[@catalog.Catalog?] = Ref(None)
 
 ///|
 /// The host's catalog: the one this script already downloaded, or a fresh
 /// download. A failed download is not kept, so the next search tries again.
 async fn catalog() -> @catalog.Catalog raise SearchError {
-  let capability = @env.get_env_var("OPENSEEK_MCP")
-  if downloaded.val is Some((from, catalog)) && capability == Some(from) {
+  if downloaded.val is Some(catalog) {
     return catalog
   }
   let catalog = decode_catalog(download())
-  if capability is Some(capability) {
-    downloaded.val = Some((capability, catalog))
-  }
+  downloaded.val = Some(catalog)
   catalog
 }
 
