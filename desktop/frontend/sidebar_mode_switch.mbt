@@ -73,43 +73,32 @@ fn Model::remember_mode_return(self : Model) -> Model {
       { device: None, target: CloudDraft(account=Some(account), id~), }
     _ => location
   }
-  match location_mode(location) {
-    ChatMode if self.mode_returns.chat != Some(location) =>
-      { ..self, mode_returns: { ..self.mode_returns, chat: Some(location), }, }
-    WorkMode if self.mode_returns.work != Some((self.focused, location)) =>
-      {
-        ..self,
-        mode_returns: {
-          ..self.mode_returns,
-          work: Some((self.focused, location)),
-        },
-      }
-    _ => self
+  let returns = match location_mode(location) {
+    ChatMode => { ..self.mode_returns, chat: Some(location), }
+    WorkMode => { ..self.mode_returns, work: Some((self.focused, location)), }
+  }
+  if returns == self.mode_returns {
+    self
+  } else {
+    { ..self, mode_returns: returns, }
   }
 }
 
 ///|
 /// Where switching to `mode` lands, with the channel a Work page needs
-/// focused. A remembered conversation deleted since, a Cloud draft no longer
-/// pending, or a Cloud page of an account no longer signed in, falls back to the mode's fresh page: Cloud
-/// home for Chat, a new chat in the last project for Work. A missing Work
-/// draft needs no check here: activation replaces it with a new chat itself.
+/// focused. A remembered page that no longer exists falls back to the mode's
+/// fresh page: Cloud home for Chat, a new chat in the last project for Work.
+/// A missing Work draft needs no check here: activation replaces it with a
+/// new chat itself.
 fn Model::mode_destination(
   self : Model,
   mode : @sidebar.Mode,
 ) -> (@interop.ChannelId, @routes.Location) {
   match mode {
     ChatMode => {
-      let location = match self.mode_returns.chat {
-        Some({ target: CloudDraft(account=Some(owner), id~), .. }) if self.cloud.draft_identity() !=
-          Some(@interop.Cloud(account=owner, session=id)) => None
-        Some({ target: CloudSession(account=Some(owner), ..), .. }) if self.cloud.user_id !=
-          Some(owner) => None
-        Some({ target: CloudSession(session~, ..), .. }) if self.cloud.retired.contains(
-            session,
-          ) => None
-        other => other
-      }
+      let location = self.mode_returns.chat.filter(location => {
+        self.cloud_target_available(location.target)
+      })
       (self.focused, location.unwrap_or({ device: None, target: Cloud, }))
     }
     WorkMode => {
