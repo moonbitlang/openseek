@@ -400,7 +400,6 @@ async fn[T] BrowserViews::with_page(
       entered = true
       f(connection)
     }) catch {
-      error if @async.is_being_cancelled() => raise error
       // Only the search is retried: a failure of `f` itself is the caller's.
       error if entered || attempt >= 4 => raise error
       _ => continue

@@ -32,7 +32,6 @@ async fn SessionShare::publish(
     )
     self.upload(files, credential, server_url~, on_progress~)
   } catch {
-    error if @async.is_being_cancelled() => raise error
     @shares.EmptyTitle | @shares.Oversized as refusal =>
       Failed(message="\{refusal}")
     error => {
