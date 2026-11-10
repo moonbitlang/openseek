@@ -28,7 +28,7 @@ pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
-  menu : (Id, MenuAction) -> @cmd.Cmd
+  secondary : (Id, SecondaryAction) -> @cmd.Cmd
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
@@ -65,21 +65,13 @@ pub(all) struct Input {
   label : String?
   activation : String?
   action : Action?
-  menu : Array[MenuAction]
+  secondary_actions : Array[SecondaryAction]
   entries : Array[Entry]
 }
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
-
-#derive(Eq, @debug.Debug)
-pub(all) enum MenuAction {
-  ImportConversation
-}
-pub fn MenuAction::equal(Self, Self) -> Bool
-pub fn MenuAction::not_equal(Self, Self) -> Bool
-pub fn MenuAction::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 pub(all) struct Placeholder {
@@ -101,6 +93,14 @@ pub(all) struct RenderedSection {
 }
 pub fn RenderedSection::equal(Self, Self) -> Bool
 pub fn RenderedSection::not_equal(Self, Self) -> Bool
+
+#derive(Eq, @debug.Debug)
+pub(all) enum SecondaryAction {
+  ImportConversation
+}
+pub fn SecondaryAction::equal(Self, Self) -> Bool
+pub fn SecondaryAction::not_equal(Self, Self) -> Bool
+pub fn SecondaryAction::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

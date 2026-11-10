@@ -1162,16 +1162,7 @@ button.row-twisty:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.sidebar-create-row {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-.sidebar-create-button {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.sidebar-create-button:focus-visible {
+.sidebar-tool-button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
