@@ -219,3 +219,37 @@ test "a Cloud draft created while Work is on screen reopens as its conversation"
     chat.cloud_identity() is Some(@interop.Cloud(session="new-cloud", ..)),
   )
 }
+
+///|
+test "a Cloud home draft created while Work is on screen reopens as its conversation" {
+  let (_, work) = update(test_dispatch(), OpenSession(Local, "desktop-test"), {
+    ..integrated_cloud_model().with_active_project(
+      Some(@interop.ChannelId::Local.test_project()),
+    ),
+    mode_returns: ModeReturns::empty(),
+  })
+  let work = { ..work, mode_returns: { ..work.mode_returns, chat: None, }, }
+  let (_, home) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(home.navigation.location is Some({ target: Cloud, .. }))
+  let pending = submit_blank_cloud(home)
+  let request = pending.cloud.creation.unwrap().request
+  let (_, back) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    pending,
+  )
+  let (_, created) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Created(3, request, "new-cloud")),
+    back,
+  )
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    created,
+  )
+  assert_true(
+    chat.navigation.location
+    is Some({ target: CloudSession(session="new-cloud", ..), .. }),
+  )
+}
