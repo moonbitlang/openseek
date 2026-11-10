@@ -57,6 +57,11 @@ async fn run_task_turn(
     // A one-shot run has a single turn, so it waits for every server rather
     // than start without tools that are about to arrive.
     mcp.wait()
+    // What connecting each server came to reaches the model at the turn's
+    // first step.
+    for notice in mcp.take_notices(session) {
+      runtime.queue_steer(Notice(notice))
+    }
     let extra_tools = @execution.build_extra_tools(
       model~,
       api_key~,

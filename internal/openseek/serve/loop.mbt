@@ -748,7 +748,18 @@ async fn run_serve(
         // drains and applies the queued notice live; only drain here when idle,
         // so an idle engine still surfaces the completion.
         BackgroundNotice => if active_work is None { drain_idle_steers() }
-        McpChanged => report_mcp_status()
+        McpChanged => {
+          report_mcp_status()
+          // A server that settled is announced to the model: an active turn
+          // applies the notice at its next step, an idle engine records it at
+          // the session's boundary now, as a background completion is.
+          for notice in mcp.take_notices(session) {
+            runtime.queue_steer(Notice(notice))
+          }
+          if active_work is None {
+            drain_idle_steers()
+          }
+        }
         TurnDone(finished~) => {
           goal_promoted_this_boundary = false
           drain_idle_steers()

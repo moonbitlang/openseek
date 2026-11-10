@@ -275,3 +275,36 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     assert_eq(catalog(registry.serve(AgentTaskScope(group))), [lost])
   })
 }
+
+///|
+async test "a settled MCP server is announced once, and not again to a session that holds the same notice" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-mcp-notice-")
+    defer @fs.rmdir(dir, recursive=true)
+    // A command that does not exist settles at once as failed, whether or
+    // not the sandbox allows spawning.
+    let config : Json = {
+      "mcpServers": { "absent": { "command": "\{dir}/no-such-server" } },
+    }
+    let path = "\{dir}/mcp.json"
+    @fs.write_text(path, config.stringify(), create_mode=CreateOrTruncate)
+    let session = @agent_session.Session(
+      SessionId("mcp-notice"),
+      system_prompt="p",
+    )
+    let first = settled_mcp(AgentTaskScope(group), [path], workspace_root=dir)
+    guard first.take_notices(session) is [notice] else {
+      fail("a settled server should be announced")
+    }
+    assert_true(first.take_notices(session) is [])
+    // A later engine resuming a session that already holds the notice.
+    let resumed = session.append(Runtime(RuntimeNotice(notice)))
+    let again = settled_mcp(AgentTaskScope(group), [path], workspace_root=dir)
+    assert_true(again.take_notices(resumed) is [])
+    // The last notice about the server is what counts: one that came to
+    // something else since is announced again.
+    let changed = resumed.append(Runtime(RuntimeNotice("\{notice} (earlier)")))
+    let later = settled_mcp(AgentTaskScope(group), [path], workspace_root=dir)
+    assert_eq(later.take_notices(changed), [notice])
+  })
+}

@@ -58,6 +58,7 @@ type ApprovalReviewer
 type McpRegistry
 pub async fn McpRegistry::serve(Self, @agent_runtime.AgentTaskScope, image_directory? : String) -> @host.Service?
 pub fn McpRegistry::status(Self) -> @openseek_protocol.McpStatus
+pub fn McpRegistry::take_notices(Self, @agent_session.Session) -> Array[String]
 pub async fn McpRegistry::wait(Self) -> Unit
 
 // Type aliases

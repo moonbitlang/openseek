@@ -11,6 +11,8 @@ import {
 }
 
 // Values
+pub const NoticePrefix : String = "[mcp server]"
+
 pub async fn call_tool(@mcp.McpClient, String, @json.Json) -> @agent_tool.ToolAction
 
 pub fn catalog_items(Array[Server]) -> Array[@json.Json]
@@ -33,6 +35,7 @@ pub struct Server {
   connecting : @async.Task[ServerEntry]
 }
 pub async fn Server::call(Self, String, @json.Json) -> @agent_tool.ToolAction
+pub fn Server::notice(Self) -> String?
 pub fn Server::try_wait(Self) -> ServerEntry?
 
 pub struct ServerEntry {

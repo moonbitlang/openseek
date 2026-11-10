@@ -15,6 +15,8 @@ struct McpRegistry {
   /// The task that reports `McpToolsRegistered` once every server has
   /// settled; `None` when no configuration file loaded, which reports nothing.
   registered : @async.Task[Unit]?
+  /// The servers whose notice `take_notices` has already handed out.
+  announced : Set[String]
 }
 
 ///|
@@ -59,7 +61,7 @@ pub async fn start_mcp(
   // Preserve the single-file failure contract: no registration event when
   // every input failed to load. A valid empty config still registers normally.
   guard !loaded.is_empty() else {
-    return { configs, servers: [], registered: None, }
+    return { configs, servers: [], registered: None, announced: Set([]), }
   }
   let servers = @mcptools.start(
     scope,
@@ -100,7 +102,7 @@ pub async fn start_mcp(
         ),
       )
     })
-  { configs, servers, registered: Some(registered), }
+  { configs, servers, registered: Some(registered), announced: Set([]), }
 }
 
 ///|
@@ -111,6 +113,44 @@ pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
   if self.registered is Some(registered) {
     registered.wait()
   }
+}
+
+///|
+/// The runtime notices to give the agent now: one for each server that has
+/// settled since the last call, saying what connecting it came to and, once
+/// connected, the instructions it sent. Each server is announced once per
+/// engine. A notice identical to the last one `session` already holds about
+/// that server — a resumed or forked session whose server came to the same
+/// thing — is not repeated.
+pub fn McpRegistry::take_notices(
+  self : McpRegistry,
+  session : @agent_session.Session,
+) -> Array[String] {
+  let notices = []
+  for server in self.servers {
+    let name = server.config.name()
+    guard !self.announced.contains(name) && server.notice() is Some(notice) else {
+      continue
+    }
+    self.announced.add(name)
+    if last_notice(session, name) != Some(notice) {
+      notices.push(notice)
+    }
+  }
+  notices
+}
+
+///|
+/// The last notice `session`'s log holds about server `name`.
+fn last_notice(session : @agent_session.Session, name : String) -> String? {
+  let header = "\{@mcptools.NoticePrefix} \{name}\n"
+  let mut last = None
+  for event in session.events() {
+    if event.item() is Runtime(notice) && notice.content().has_prefix(header) {
+      last = Some(notice.content())
+    }
+  }
+  last
 }
 
 ///|

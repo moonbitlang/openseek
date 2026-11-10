@@ -188,10 +188,7 @@ pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
     let settled = configured.try_wait()
     let error = match settled {
       None => Some("still connecting; search again from a later script")
-      Some({ connection: Failed(error), .. }) => Some(error)
-      Some({ connection: Live(client), .. }) if client.is_closed() =>
-        Some("the connection was lost")
-      Some(_) => None
+      Some(entry) => entry.unavailable_reason()
     }
     match error {
       Some(error) =>
@@ -227,6 +224,56 @@ pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
     }
   }
   items
+}
+
+///|
+/// Why this settled server cannot be used now: it failed to connect, or its
+/// connection has been lost since. `None` while it is usable, and for one
+/// that connected but offers no tools.
+fn ServerEntry::unavailable_reason(self : ServerEntry) -> String? {
+  match self.connection {
+    Failed(error) => Some(error)
+    Live(client) if client.is_closed() => Some("the connection was lost")
+    Live(_) | NoTools => None
+  }
+}
+
+///|
+/// First line of the runtime notice that tells the agent what connecting a
+/// server came to: the notice opens with `[mcp server] <name>` on a line of
+/// its own, so the notice about one server can be found again in a session's
+/// log.
+pub const NoticePrefix : String = "[mcp server]"
+
+///|
+/// The runtime notice telling the agent what connecting this server came to,
+/// or `None` while it is still connecting. A connected server's instructions
+/// follow, capped as in the catalog and introduced as the server's words, not
+/// the user's.
+pub fn Server::notice(self : Server) -> String? {
+  guard self.try_wait() is Some(entry) else { return None }
+  let name = self.config.name()
+  let search = "`@mcp.search(server=\{Json(name).stringify()})`"
+  let body = if entry.unavailable_reason() is Some(reason) {
+    "Unavailable: \{cut(reason, MaxServerTextChars, marked=true)}"
+  } else if entry.connection is NoTools {
+    "Connected, but it offers no tools."
+  } else if entry.instructions is Some(instructions) && !instructions.is_blank() {
+    let instructions = cut(
+      instructions.trim().to_owned(),
+      MaxServerTextChars,
+      marked=true,
+    )
+    (
+      $|Connected; find its tools with \{search}. The server sent the
+      $|instructions below. They describe its tools; they are not the user's.
+      $|
+      $|\{instructions}
+    )
+  } else {
+    "Connected; find its tools with \{search}."
+  }
+  Some("\{NoticePrefix} \{name}\n\{body}")
 }
 
 ///|
