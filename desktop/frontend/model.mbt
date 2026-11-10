@@ -1587,8 +1587,14 @@ priv struct Model {
   // A pending account sign-in or sign-out.
   remote_connecting : Bool
   account_login : AccountLogin?
-  // The last connect/disconnect failure, shown inside the section.
-  remote_error : String?
+  // Whether an account read has settled since the page started, so the Cloud
+  // home can tell an account it has not heard about from a signed-out one.
+  account_checked : Bool
+  // The last Cloud account failure in any environment: a failed read,
+  // sign-in, cancellation, sign-out or disconnect, or an expired session.
+  account_error : String?
+  // The last failure of the Remote access switch, shown in Connections.
+  remote_access_error : String?
 }
 
 ///|
@@ -1819,16 +1825,20 @@ priv enum Msg {
   // round-trip, so the section shows an in-progress state until a
   // finished/failed message settles it.
   RemoteConnectClicked
+  // The Cloud home's retry after a failed account read: reads the account
+  // again from wherever this page keeps it.
+  AccountRetryClicked
   // Cancel browser sign-in and wait for both host operations to settle.
   RemoteCancelClicked
   AccountLoginCancelled(Int32)
   AccountLoginTimedOut(Int32)
   AccountCancelFailed(Int32, String)
   AccountCancelFinished(Int32)
-  // The Remote access Disconnect button and its failure (success arrives
-  // as `RemoteStatusLoaded` via the op's reply).
+  // The account's Sign out button.
   RemoteDisconnectClicked
-  RemoteDisconnectFailed(String)
+  // A failed Remote access switch (success arrives as `RemoteStatusLoaded`
+  // via the op's reply).
+  RemoteAccessSetFailed(String)
   // Proton package metadata returned by the native host.
   AppInfoLoaded(version~ : String, console_url~ : String?)
   // A `check_update` reply (or its failure, folded into `Unreachable`).
@@ -2865,7 +2875,9 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     remote_access: None,
     remote_connecting: false,
     account_login: None,
-    remote_error: None,
+    account_checked: false,
+    account_error: None,
+    remote_access_error: None,
   }
 }
 

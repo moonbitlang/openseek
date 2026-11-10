@@ -12,8 +12,8 @@
 /// Who the relay says we are (`/v2/auth/me`), or the local Dev host.
 #derive(Eq)
 priv enum ConsoleAuth {
-  // The check is in flight (or failed — `notice` carries the failure and
-  // the gate card offers a retry).
+  // The check is in flight (or failed — the gate card shows the failure and
+  // offers a retry).
   AuthChecking
   AuthSignedOut
   AuthSignedIn(login~ : String, avatar~ : String)
@@ -78,8 +78,10 @@ priv struct ConsoleState {
   booted : Bool
   // A sign-out on the wire; gates the account buttons.
   busy : Bool
-  // The last account-level failure, shown until the next action clears it.
-  notice : String?
+  // The last page-access failure: the local console's own `/v1/auth/me`
+  // check or host sign-out. The relay's page sign-in is the Cloud account,
+  // whose failures live in `Model.account_error`.
+  access_error : String?
 }
 
 ///|
@@ -98,7 +100,7 @@ fn empty_console_state(
     preselect_project,
     booted: false,
     busy: false,
-    notice: None,
+    access_error: None,
   }
 }
 
@@ -129,7 +131,7 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
     preselect_project: None,
     booted: true,
     busy: false,
-    notice: None,
+    access_error: None,
   }
 }
 
@@ -227,7 +229,7 @@ fn update_console_msg(
             auth: AuthSignedIn(login~, avatar~),
             roster_sync: RosterLoading,
             roster_request_generation: generation,
-            notice: None,
+            access_error: None,
           },
         },
       )
@@ -236,7 +238,7 @@ fn update_console_msg(
     MeFailed(message) =>
       (
         @cmd.none,
-        { ..model, console: { ..model.console, notice: Some(message), }, },
+        { ..model, console: { ..model.console, access_error: Some(message), }, },
       )
     RosterLoaded(metas, generation~) => {
       // A reply that outlived the session, or was overtaken by a later roster
@@ -292,8 +294,9 @@ fn update_console_msg(
           console: {
             ..model.console,
             roster_sync: RosterLoading,
-            notice: None,
+            access_error: None,
           },
+          account_error: None,
         },
       )
     }
@@ -301,18 +304,25 @@ fn update_console_msg(
       guard !model.console.busy else { return (@cmd.none, model) }
       (
         sign_out(dispatch),
-        { ..model, console: { ..model.console, busy: true, notice: None, }, },
+        {
+          ..model,
+          console: { ..model.console, busy: true, access_error: None, },
+        },
       )
     }
     SignOutFailed(message, token~) => {
       guard token == model.account.map(account => account.token) else {
         return (@cmd.none, model)
       }
+      let console = { ..model.console, busy: false, }
+      // A token names the Cloud account's sign-out; without one, the local
+      // console signed out of its own host.
       (
         @cmd.none,
-        {
-          ..model,
-          console: { ..model.console, busy: false, notice: Some(message), },
+        if token is Some(_) {
+          { ..model, console, account_error: Some(message), }
+        } else {
+          { ..model, console: { ..console, access_error: Some(message), }, }
         },
       )
     }
@@ -922,7 +932,7 @@ test "a failed sign-out re-enables the account actions" {
     signing_out,
   )
   assert_false(failed_once.console.busy)
-  assert_true(failed_once.console.notice == Some("boom"))
+  assert_true(failed_once.console.access_error == Some("boom"))
   assert_true(failed_once.console == failed_twice.console)
 }
 
@@ -980,7 +990,7 @@ fn console_signed_out(
         roster: [],
         roster_sync: RosterLoading,
         busy: false,
-        notice: None,
+        access_error: None,
       },
     },
   )
@@ -1146,5 +1156,6 @@ test "a late browser logout result cannot clear a newer account" {
     Console(SignOutFailed("old failure", token=Some("ts_A"))),
     model,
   )
-  assert_true(unchanged.console.notice is None)
+  assert_true(unchanged.console.access_error is None)
+  assert_eq(unchanged.account_error, None)
 }

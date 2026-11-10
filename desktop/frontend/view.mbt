@@ -672,7 +672,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     login: identity.0,
     avatar: identity.1,
     busy: self.console.busy,
-    notice: self.console.notice,
+    notice: self.account_error,
     page: if self.console.page_device is Some(id) {
       DevicePage(
         id~,
@@ -971,7 +971,7 @@ fn settings_account_rows(
       ),
     )
   }
-  if model.settings_section() == Account && model.remote_error is Some(message) {
+  if model.settings_section() == Account && model.account_error is Some(message) {
     rows.push(
       @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
     )
@@ -1071,7 +1071,7 @@ fn remote_access_rows(
     }
   }
   if model.settings_section() == Connections &&
-    model.remote_error is Some(message) {
+    model.remote_access_error is Some(message) {
     rows.push(
       @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
     )
@@ -2014,13 +2014,22 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// authentication gets its own progress/retry states, and a signed-in page
 /// stays here until its one query-selected device is available. A host built
 /// for another protocol revision stays here until the page is reloaded.
+/// `account_error` is the Cloud account's failure: on the relay that account
+/// is the page's sign-in, so the gate shows it where a page-access failure
+/// would go.
 fn console_gate_view(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
+  account_error~ : String?,
   host_incompatible~ : Bool = false,
 ) -> @html.Html {
   let card : Array[@html.Html] = []
+  let error = if console.access_error is Some(_) {
+    console.access_error
+  } else {
+    account_error
+  }
   if console.page_device is Some(_) &&
     console.auth is AuthSignedIn(..) &&
     host_incompatible {
@@ -2029,15 +2038,8 @@ fn console_gate_view(
   } else if console.page_device is Some(id) {
     match console.auth {
       AuthChecking => {
-        card.push(
-          @html.p(
-            match console.notice {
-              Some(notice) => notice
-              None => shell_text(locale, CheckingSignIn)
-            },
-          ),
-        )
-        if console.notice is Some(_) {
+        card.push(@html.p(error.unwrap_or(shell_text(locale, CheckingSignIn))))
+        if error is Some(_) {
           card.push(
             @html.button(
               class="button primary",
@@ -2124,8 +2126,8 @@ fn console_gate_view(
         },
       ),
     )
-    if console.notice is Some(notice) {
-      card.push(@html.p(notice))
+    if error is Some(message) {
+      card.push(@html.p(message))
     }
   }
   @html.section(class="portal", [
@@ -2339,6 +2341,7 @@ fn view(
             locale=model.locale,
             dispatch,
             model.console,
+            account_error=model.account_error,
             host_incompatible=model.host_incompatible(),
           ),
         ]
@@ -2446,6 +2449,7 @@ fn view(
         locale=model.locale,
         dispatch,
         model.console,
+        account_error=model.account_error,
         host_incompatible=true,
       ),
     ]
@@ -3010,27 +3014,20 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @sidebar_messages.text(locale, CloudSignInHint),
     ),
   ]
-  let try_again = () => {
-    @html.button(
-      class="button primary",
-      type_="button",
-      on_click=dispatch(Console(RefreshClicked)),
-      shell_text(locale, TryAgain),
-    )
-  }
-  if model.is_local_console() && model.remote_error is Some(message) {
+  if model.account_error is Some(message) {
     children.push(@html.p(class="empty-detail", message))
-    children.push(try_again())
-  } else if model.console.auth is AuthChecking {
     children.push(
-      @html.p(
-        class="empty-detail",
-        model.console.notice.unwrap_or(shell_text(locale, CheckingSignIn)),
+      @html.button(
+        class="button primary",
+        type_="button",
+        on_click=dispatch(AccountRetryClicked),
+        shell_text(locale, TryAgain),
       ),
     )
-    if model.console.notice is Some(_) {
-      children.push(try_again())
-    }
+  } else if !model.account_checked {
+    children.push(
+      @html.p(class="empty-detail", shell_text(locale, CheckingSignIn)),
+    )
   } else {
     children.push(
       @html.button(
