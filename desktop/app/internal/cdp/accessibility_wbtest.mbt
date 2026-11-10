@@ -104,7 +104,7 @@ async test "a page's tree may be larger than other replies" {
         let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         assert_eq(
-          @json.parse(ws.recv().read_all().text()),
+          @json.parse(ws.recv().text.read_all()),
           (
             { "id": 1, "method": "Accessibility.getFullAXTree", "params": {} } :
             Json),

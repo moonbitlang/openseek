@@ -10,7 +10,7 @@ async test "activating the inspected page preserves a selection arriving before 
         let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         assert_eq(
-          @json.parse(ws.recv().read_all().text()),
+          @json.parse(ws.recv().text.read_all()),
           ({ "id": 1, "method": "Page.bringToFront", "params": {} } : Json),
         )
         ws.send_text(
@@ -41,7 +41,7 @@ async test "typed commands preserve interleaved events and correlate replies" {
         defer conn.close()
         let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
-        let request = @json.parse(ws.recv().read_all().text())
+        let request = @json.parse(ws.recv().text.read_all())
         assert_eq(
           request,
           (
@@ -71,7 +71,7 @@ async test "typed commands preserve interleaved events and correlate replies" {
             #|{"id":1,"result":{"result":{"type":"number","value":2}}}
           ),
         )
-        let request = @json.parse(ws.recv().read_all().text())
+        let request = @json.parse(ws.recv().text.read_all())
         assert_eq(
           request,
           (
@@ -134,7 +134,7 @@ async test "interrupted CDP reads close the connection" {
           conn.write(b"\x81\x7e")
           conn.flush()
           partial_frame_sent = true
-          assert_true(conn.read_some() is None)
+          assert_true(conn.read() is None)
         })
         let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
         defer connection.close()

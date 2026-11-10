@@ -1,7 +1,7 @@
 import {
   "moonbitlang/core/json",
   "moonbit-community/rabbita/dom",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async/http",
   "openseek_desktop/uri",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/js",
@@ -11,3 +11,7 @@ import {
 }
 
 supported_targets = "js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/http" ],
+)

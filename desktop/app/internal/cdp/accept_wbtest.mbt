@@ -5,7 +5,7 @@
 /// anything (`@socket.Tcp::connect_to_host`); such a connection is skipped.
 async fn accept_request(
   server : @http.Server,
-) -> (@http.ServerConnection, @http.Request) {
+) -> (@http.ServerConnection, @http.RequestHeader) {
   for ;; {
     let (conn, _) = server.accept()
     let request = conn.read_request() catch {

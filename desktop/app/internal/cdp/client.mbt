@@ -30,7 +30,7 @@ async fn Connection::read(
 ) -> Incoming {
   let message = self.socket.recv()
   let buffer = @buffer.Buffer()
-  while message.read_some(max_len=65536) is Some(chunk) {
+  while message.read() is Some(chunk) {
     buffer.write_bytes(chunk)
     guard buffer.length() <= max_bytes else {
       raise Protocol("CDP response is too large")

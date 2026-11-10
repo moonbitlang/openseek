@@ -16,14 +16,14 @@ pub async fn run(command : String) -> Unit {
     [_, .. args] => args
     [] => []
   }
-  let code = @process.run(
+  let result = @process.run(
     "node",
     ["package/build.mjs", command, ..user_args],
     cwd=desktop,
     inherit_env=true,
     cancel_handler=@process.graceful_cancel(timeout=1000),
   )
-  if code != 0 {
-    fail("\{command} build failed with exit code \{code}")
+  if result.exit_code != 0 {
+    fail("\{command} build failed with exit code \{result.exit_code}")
   }
 }
