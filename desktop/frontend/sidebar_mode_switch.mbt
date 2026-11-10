@@ -16,6 +16,28 @@ fn ModeReturns::empty() -> ModeReturns {
 }
 
 ///|
+/// Follow a promoted identity, as the history entries do: a draft that became
+/// its conversation while the other mode was on screen reopens as that
+/// conversation.
+fn ModeReturns::promote(
+  self : ModeReturns,
+  old : @routes.Location,
+  promoted : @routes.Location,
+) -> ModeReturns {
+  {
+    chat: if self.chat == Some(old) {
+      Some(promoted)
+    } else {
+      self.chat
+    },
+    work: match self.work {
+      Some((channel, location)) if location == old => Some((channel, promoted))
+      other => other
+    },
+  }
+}
+
+///|
 fn location_mode(location : @routes.Location) -> @sidebar.Mode {
   if location.target.is_cloud() {
     ChatMode
