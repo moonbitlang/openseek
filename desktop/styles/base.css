@@ -391,13 +391,17 @@ html.is-resizing-review .review-split-handle {
       2 * var(--sidebar-mode-padding)
   );
   --sidebar-min-width: max(
-    220px,
+    calc(1rem * 220 / 15),
     calc(var(--sidebar-toggle-reserved-width) + var(--sidebar-mode-width) + 13px)
   );
   --sidebar-column-width: calc(
-    clamp(var(--sidebar-min-width), var(--sidebar-width, 264px), 480px) * var(--sidebar-open-progress)
+    clamp(
+      var(--sidebar-min-width),
+      var(--sidebar-width, calc(1rem * 264 / 15)),
+      calc(1rem * 480 / 15)
+    ) * var(--sidebar-open-progress)
   );
-  --sidebar-drawer-width: min(320px, 86vw);
+  --sidebar-drawer-width: min(calc(1rem * 320 / 15), 86vw);
   --titlebar-icon-size: var(--icon-md);
   --titlebar-control-size: calc(var(--titlebar-icon-size) * 24 / 14);
   --titlebar-control-gap: calc(var(--titlebar-icon-size) * 4 / 14);
