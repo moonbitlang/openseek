@@ -43,6 +43,9 @@ async fn main {
   }
   let frontend_entry = @host.frontend_entry_path(resources)
   let engine = @engine.engine_command(resources)
+  // Links the application page leaves through, opened once the application
+  // task group runs (below).
+  let external_links = @extension.ExternalLinkOpener()
   let app = @proton.App(
     WindowConfig(
       "SeekMoon",
@@ -54,7 +57,7 @@ async fn main {
       titlebar_style=Overlay,
       // Keep the traffic lights aligned with the 46px application header.
       traffic_light_position={ x: 16, y: 16, },
-      web_contents_policy=@extension.external_link_policy(),
+      web_contents_policy=external_links.app_page_policy(),
     ),
   )..config(@proton.load_config())
   let app_version = app.version() catch { _ => "development" }
@@ -259,6 +262,7 @@ async fn main {
     // The relay actor registers this host only when remote access (or the
     // environment override) is enabled, and idles otherwise.
     group.spawn_bg(allow_failure=true, () => relay.run())
+    group.spawn_bg(allow_failure=true, () => external_links.run())
     if console is Some(console) {
       // The same directory and document the window loads.
       let entry = @pathx.Path(frontend_entry)
