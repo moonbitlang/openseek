@@ -477,10 +477,7 @@ fn show_empty_project_menu_after_render() -> @cmd.Cmd {
       }
       if @dom.document().get_element_by_id(EmptyProjectSearchId).to_option()
         is Some(search) {
-        let _ : @js.Value = @js.Value::cast_from(search).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if search.to_html_element() is Some(element) { element.focus() }
       }
     },
     kind=@cmd.after_render,
@@ -493,10 +490,7 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
     _ => {
       if @dom.document().get_element_by_id(EmptyProjectTriggerId).to_option()
         is Some(trigger) {
-        let _ : @js.Value = @js.Value::cast_from(trigger).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if trigger.to_html_element() is Some(element) { element.focus() }
       }
     },
     kind=@cmd.after_render,

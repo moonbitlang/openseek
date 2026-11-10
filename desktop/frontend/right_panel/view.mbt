@@ -19,11 +19,7 @@ fn panel_view(
         { tab, label, title: path.path, missing, }
       }
       GitDiff(diff~) => {
-        let short = if diff.commit.length() <= 8 {
-          diff.commit
-        } else {
-          diff.commit.exact_view(end=8).to_owned()
-        }
+        let short = @fileeditor.short_commit(diff.commit)
         {
           tab,
           label: "\{@fileeditor.basename(diff.path)} (\{short})",

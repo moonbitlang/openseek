@@ -3029,15 +3029,7 @@ fn update_inner(
       select_review_view_mode(dispatch, state, ctx, view_mode)
     }
     ToggleReviewDiffLayout => {
-      let review_ready = ctx.active_file is Some(path) &&
-        state.docs.get(path) is Some(doc) &&
-        doc.review is Some({ view_mode: ReviewDiff, .. }) &&
-        doc.diff_content() is Some(_)
-      let history_ready = ctx.active_history_diff is Some(diff) &&
-        state.history_docs.get(history_diff_key(diff)) is Some(history) &&
-        history.original.text() is Some(_) &&
-        history.modified.text() is Some(_)
-      guard review_ready || history_ready else { return (@cmd.none, state) }
+      guard full_diff_ready(state, ctx) else { return (@cmd.none, state) }
       let review_diff_layout = match state.review_diff_layout {
         ReviewSideBySide => ReviewInline
         ReviewInline => ReviewSideBySide
@@ -3976,15 +3968,9 @@ fn update_inner(
     // a dock tab before the document loads.
     OpenNavigationLocation(..) => (@cmd.none, state)
     GitOriginalLoaded(owner~, path~, generation~, background~, original~) => {
-      let background_review_requests = if background &&
-        state.background_review_requests.get(path) is Some(requested) &&
-        requested == generation {
-        let requests = state.background_review_requests.copy()
-        requests.remove(path)
-        requests
-      } else {
-        state.background_review_requests
-      }
+      let background_review_requests = state.settled_background_review(
+        path, generation, background,
+      )
       guard state.owner is Some(state_owner) &&
         state_owner == @interop.Host(owner) &&
         state.docs.get(path) is Some(doc) &&
@@ -4025,15 +4011,9 @@ fn update_inner(
       (cmd, { ..state, docs, background_review_requests, })
     }
     GitOriginalFailed(owner~, path~, generation~, background~, message~) => {
-      let background_review_requests = if background &&
-        state.background_review_requests.get(path) is Some(requested) &&
-        requested == generation {
-        let requests = state.background_review_requests.copy()
-        requests.remove(path)
-        requests
-      } else {
-        state.background_review_requests
-      }
+      let background_review_requests = state.settled_background_review(
+        path, generation, background,
+      )
       guard state.owner is Some(state_owner) &&
         state_owner == @interop.Host(owner) &&
         state.docs.get(path) is Some(doc) &&

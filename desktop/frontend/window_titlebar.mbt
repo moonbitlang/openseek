@@ -143,9 +143,7 @@ async fn TitlebarGeometry::read(self : TitlebarGeometry) -> Unit {
 /// Own the query revision and subscription lifetime in MoonBit. Only a
 /// successful, current reply can publish geometry; null means no overlay.
 fn install_window_titlebar_geometry() -> () -> Unit {
-  let bridge : @js.Value = @js.globalThis.get_with_string("__MoonBit__")
-  guard !bridge.is_null() &&
-    !bridge.is_undefined() &&
+  guard @interop.moonbit_bridge_root() is Some(bridge) &&
     @interop.js_prop(bridge, "getTitlebarArea") is Some(_) &&
     @interop.js_prop(bridge, "events") is Some(events) &&
     @interop.js_prop(events, "on") is Some(_) else {

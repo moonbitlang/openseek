@@ -7,10 +7,7 @@ pub fn focus_query_after_render() -> @cmd.Cmd {
     _ => {
       if @dom.document().get_element_by_id(SearchInputId).to_option()
         is Some(input) {
-        let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if input.to_html_element() is Some(element) { element.focus() }
       }
     },
     kind=@cmd.after_render,

@@ -6,7 +6,8 @@ fn run(emit : @cmd.Emit[Msg], task : async () -> Msg) -> @cmd.Cmd {
 }
 
 ///|
-fn State::replace(
+/// Replace conversation `id` in a copy of the conversation map.
+pub fn State::replace(
   self : State,
   id : String,
   conversation : Conversation,

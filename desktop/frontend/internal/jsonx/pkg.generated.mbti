@@ -8,8 +8,6 @@ import {
 // Values
 pub fn json_bool(Map[String, @json.Json], String) -> Bool?
 
-pub fn json_first_text(Map[String, @json.Json], String, String) -> String?
-
 pub fn json_int(Map[String, @json.Json], String) -> Int32?
 
 pub fn json_text(Map[String, @json.Json], String) -> String?

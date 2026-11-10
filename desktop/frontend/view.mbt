@@ -389,11 +389,13 @@ fn Model::sidebar_component_sections(
       []
     }
   }
-  let listed = (id : String) => dev.sessions.any(item => item.id == id)
+  let listed_ids = Set::from_iter(dev.sessions.iter().map(item => item.id))
+  let listed = (id : String) => listed_ids.contains(id)
   // An archived record has moved out of the live store, so the live list
   // normally cannot contain it; the filter covers the moment between the
   // archive reply and the list refetch that follows it.
-  let archived = (id : String) => dev.archived.any(item => item.id == id)
+  let archived_ids = Set::from_iter(dev.archived.iter().map(item => item.id))
+  let archived = (id : String) => archived_ids.contains(id)
   let chat_selected = !self.cloud_selected() &&
     self.screen is Chat &&
     dev.channel == self.focused

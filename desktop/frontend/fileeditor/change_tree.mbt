@@ -163,10 +163,7 @@ fn focus_change_tree_after_render(
     _ => {
       if id is Some(id) &&
         @dom.document().get_element_by_id(id).to_option() is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if row.to_html_element() is Some(element) { element.focus() }
       }
     },
     kind=@cmd.after_render,

@@ -8626,22 +8626,12 @@ fn update_device_msg(
       // must reject branch and pull-request answers still in flight for the
       // checkout that no longer owns it.
       let (fence, next) = next.mint_git_request()
-      let conversations = next.conversations.map(conv => {
-        if conv.device == channel && conv.project() == workspace {
-          let placement = next_dev.conversation_workspace(
-            workspace,
-            conv.session_id,
-            conv.workspace,
-          )
-          if conv.workspace is Worktree(..) && placement is Project(..) {
-            { ..conv.forget_git(fence~), workspace: placement, }
-          } else {
-            { ..conv, workspace: placement, }
-          }
-        } else {
-          conv
-        }
-      })
+      let conversations = next.rebind_project_conversations(
+        channel,
+        workspace,
+        next_dev,
+        fence~,
+      )
       // The list reply is the reconnect catch-up path: live
       // `worktree.changed` notifications are not replayed after a gap, so the
       // accepted snapshot must also repair the selected Codex task's placement.
@@ -8691,26 +8681,12 @@ fn update_device_msg(
       // keeps the row with `present: false`, so it passes through unchanged and
       // later Unarchive still surfaces Repair. Stand down any staged confirm
       // only when the placement itself disappeared.
-      let conversations = next.conversations.map(conv => {
-        if conv.device == channel && conv.project() == workspace {
-          let placement = next_dev.conversation_workspace(
-            workspace,
-            conv.session_id,
-            conv.workspace,
-          )
-          if conv.workspace is Worktree(..) && placement is Project(..) {
-            // The checkout is gone, so every placement derived from it goes
-            // too. `forget_git` retires probes already in flight for the removed
-            // checkout; the enum transition simultaneously makes every file,
-            // LSP, terminal and launcher root re-project to the project.
-            { ..conv.forget_git(fence~), workspace: placement, }
-          } else {
-            { ..conv, workspace: placement, }
-          }
-        } else {
-          conv
-        }
-      })
+      let conversations = next.rebind_project_conversations(
+        channel,
+        workspace,
+        next_dev,
+        fence~,
+      )
       // An open discard dialog whose mapping just disappeared (a protocol
       // client explicitly removed the worktree) must close too:
       // confirming it later would fire a stale forced archive.

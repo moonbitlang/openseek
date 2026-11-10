@@ -56,7 +56,6 @@ pub(all) enum Failure {
   Malformed
   ExportUnavailable
   ServiceNotConfigured
-  CredentialServiceUnavailable
   SignInFailed(String)
   InvalidImage
 }

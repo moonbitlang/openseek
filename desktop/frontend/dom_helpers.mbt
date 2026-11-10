@@ -115,12 +115,11 @@ fn watch_color_scheme(dispatch : @cmd.Emit[Msg], is_desktop : Bool) -> @cmd.Cmd 
 /// it. Going through CSSOM rather than the `style` attribute preserves the
 /// properties other writers own (the sidebar's dragged width, the editor's).
 fn set_root_custom_property(name : String, value : String) -> Unit {
-  guard @dom.document().get_document_element() is Some(root) else { return }
-  let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
-  let _ : @js.Value = style.apply_with_string("setProperty", [
-    @js.Value::cast_from(name),
-    @js.Value::cast_from(value),
-  ])
+  guard @dom.document().get_document_element() is Some(root) &&
+    root.to_html_element() is Some(html) else {
+    return
+  }
+  html.get_style().set_property(name, value)
 }
 
 ///|

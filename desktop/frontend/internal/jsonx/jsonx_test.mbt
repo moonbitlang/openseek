@@ -17,14 +17,6 @@ test "json_text only accepts present strings" {
 }
 
 ///|
-test "json_first_text prefers the current name over the legacy one" {
-  let fields = fields_of({ "content": "now", "step": "old" })
-  assert_true(@jsonx.json_first_text(fields, "content", "step") is Some("now"))
-  assert_true(@jsonx.json_first_text(fields, "reason", "step") is Some("old"))
-  assert_true(@jsonx.json_first_text(fields, "reason", "error") is None)
-}
-
-///|
 test "json_int only accepts present numbers" {
   let fields = fields_of({ "n": 42, "s": "42" })
   assert_true(@jsonx.json_int(fields, "n") is Some(42))

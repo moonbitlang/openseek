@@ -320,12 +320,10 @@ fn focus_browser_address() -> @cmd.Cmd {
     _ => {
       match
         @dom.document().get_element_by_id(@preview.AddressInputId).to_option() {
-        Some(element) => {
-          let _ : @js.Value = @js.Cast::from(element).apply_with_string(
-            "focus",
-            ([] : FixedArray[@js.Value]),
-          )
-        }
+        Some(element) =>
+          if element.to_html_element() is Some(element) {
+            element.focus()
+          }
         None => ()
       }
     },
