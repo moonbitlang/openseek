@@ -7,7 +7,7 @@
 async fn main {
   run() catch {
     error => {
-      @stdio.stderr.write("error: \{@cli.failure_message("\{error}")}\n") catch {
+      @stdio.stderr.text.write("error: \{@cli.failure_message("\{error}")}\n") catch {
         _ => ()
       }
       @sys.exit(1)

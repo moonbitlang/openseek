@@ -103,8 +103,8 @@ fn stock_reply(tools_result : Json, call_result : Json) -> (Json) -> Json? {
 /// An MCP client wired to a fake server that answers with `reply`: the queue
 /// transport, the jsonrpc client with its message pump, and the server loop,
 /// all spawned on `group`.
-fn[X] fake_client(
-  group : @async.TaskGroup[X],
+fn fake_client(
+  group : @async.TaskGroup,
   reply : (Json) -> Json?,
 ) -> @mcp.McpClient {
   let transport = new_transport()

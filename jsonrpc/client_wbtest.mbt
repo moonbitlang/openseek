@@ -62,7 +62,7 @@ impl Transport for SendFailTransport with fn close(self) {
 
 ///|
 /// Spawn the two standing tasks the client needs: reader and writer.
-fn[X] spawn_client(group : @async.TaskGroup[X], client : Client) -> Unit {
+fn spawn_client(group : @async.TaskGroup, client : Client) -> Unit {
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
     client.run_message_pump()
   })
@@ -74,7 +74,7 @@ fn[X] spawn_client(group : @async.TaskGroup[X], client : Client) -> Unit {
 /// standing tasks (reader and writer) the client requires, spawned on `group`.
 /// Tests that must install a handler before the reader starts, or that own the
 /// pump handle themselves, build their client inline instead.
-fn[X] new_client(group : @async.TaskGroup[X]) -> (FakeTransport, Client) {
+fn new_client(group : @async.TaskGroup) -> (FakeTransport, Client) {
   let transport = new_transport()
   let client = Client::Client(transport)
   spawn_client(group, client)

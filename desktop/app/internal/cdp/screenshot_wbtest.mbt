@@ -10,7 +10,7 @@ async test "a screenshot asks for no clip, and may be larger than other replies"
         defer conn.close()
         let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
-        assert_eq(@json.parse(ws.recv().read_all().text()), {
+        assert_eq(@json.parse(ws.recv().text.read_all()), {
           "id": 1,
           "method": "Page.captureScreenshot",
           "params": { "format": "jpeg", "quality": 80 },
