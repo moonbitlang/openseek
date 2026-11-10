@@ -2,23 +2,51 @@
 const ARTIFACT_FRAME_POLICY = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
 
 ///|
-/// Serializes inside the frame, so the parent only receives a string and
-/// validates it as JSON. State that is not plain JSON data posts no payload.
+/// Runs inside the frame before the artifact, with `token` bound by
+/// `artifact_srcdoc`. Serializes inside the frame, so the parent only
+/// receives a string and validates it as JSON. State that is not plain JSON
+/// data posts no payload.
 let artifact_frame_bridge : String =
-  #|const plain=value=>{const type=typeof value;if(value===null||type==="string"||type==="boolean")return true;if(type==="number")return Number.isFinite(value);if(type!=="object")return false;const proto=Object.getPrototypeOf(value);return Array.isArray(value)||proto===Object.prototype||proto===null};
-  #|window.openseekArtifact={setState:(title,state)=>{let payload=null;try{payload=JSON.stringify({title,state},(_key,value)=>{if(plain(value))return value;throw new TypeError("Component state must be JSON data")})}catch{}parent.postMessage({type:"openseek-artifact-state",version:2,token,payload},"*")}};
+  #|const plain = value => {
+  #|  const type = typeof value;
+  #|  if (value === null || type === "string" || type === "boolean") return true;
+  #|  if (type === "number") return Number.isFinite(value);
+  #|  if (type !== "object") return false;
+  #|  const proto = Object.getPrototypeOf(value);
+  #|  return Array.isArray(value) || proto === Object.prototype || proto === null;
+  #|};
+  #|window.openseekArtifact = {
+  #|  setState: (title, state) => {
+  #|    let payload = null;
+  #|    try {
+  #|      payload = JSON.stringify({ title, state }, (_key, value) => {
+  #|        if (plain(value)) return value;
+  #|        throw new TypeError("Component state must be JSON data");
+  #|      });
+  #|    } catch {}
+  #|    parent.postMessage({ type: "openseek-artifact-state", version: 2, token, payload }, "*");
+  #|  },
+  #|};
 
 ///|
+/// Runs inside the frame after the artifact and reports its height.
 let artifact_frame_resize : String =
-  #|<script>(()=>{const send=()=>parent.postMessage({type:"openseek-artifact-height",height:Math.ceil(document.body?.scrollHeight||420)},"*");addEventListener("load",()=>{new ResizeObserver(send).observe(document.body);send()})})();</script>
+  #|const send = () => parent.postMessage({
+  #|  type: "openseek-artifact-height",
+  #|  height: Math.ceil(document.body?.scrollHeight || 420),
+  #|}, "*");
+  #|addEventListener("load", () => {
+  #|  new ResizeObserver(send).observe(document.body);
+  #|  send();
+  #|});
 
 ///|
 fn artifact_srcdoc(content : String, token : String) -> String {
   let token = Json::string(token).stringify()
   "<meta http-equiv=\"Content-Security-Policy\" content=\"\{ARTIFACT_FRAME_POLICY}\"><meta name=\"referrer\" content=\"no-referrer\">" +
-  "<script>(()=>{const token=\{token};\n\{artifact_frame_bridge}})();</script>" +
+  "<script>(() => {\nconst token = \{token};\n\{artifact_frame_bridge}\n})();</script>" +
   content +
-  artifact_frame_resize
+  "<script>(() => {\n\{artifact_frame_resize}\n})();</script>"
 }
 
 ///|
