@@ -900,6 +900,22 @@ fn main {
       (input, target) => conversation_transfer_menu(emit, input, target),
       on_open_change=emit.map(open => ConversationTransferMenuChanged(open)),
     )
+    let changes_menu_html = @action_menu.component(
+      state.map(model => model.changes_menu_input()),
+      (input, target) => {
+        let (locale, overview, changes) = input
+        guard overview is Some((key, checkout)) else { return None }
+        @session_changes.menu(
+          locale~,
+          key,
+          checkout,
+          changes,
+          emit.map(msg => Changes(msg)),
+          open_link=url => emit(ExternalLinkClicked(url)),
+          target,
+        )
+      },
+    )
     // The floating reply for selected text is a shell overlay like the
     // context menu; they share one slot. It is bound to the composer under
     // the transcript on screen, so a reply opened over one conversation can
@@ -1129,12 +1145,16 @@ fn main {
         (skills, workspace_settings, archived_chats)
       },
     )
+    let menus_html = @rabbita.Val::map2(transfer_menu_html, changes_menu_html, (
+      transfer_menu,
+      changes_menu,
+    ) => (transfer_menu, changes_menu))
     let shell_overlays = @rabbita.Val::map3(
       quick_open_html,
       selection_actions_html,
-      transfer_menu_html,
-      (quick_open, selection_actions, transfer_menu) => {
-        (quick_open, selection_actions, transfer_menu)
+      menus_html,
+      (quick_open, selection_actions, menus) => {
+        (quick_open, selection_actions, menus)
       },
     )
     let shell = state.view9(

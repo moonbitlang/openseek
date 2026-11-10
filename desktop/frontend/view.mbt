@@ -1867,6 +1867,24 @@ fn overview_view(
 }
 
 ///|
+/// What the changes card's row menus resolve against: the overview's
+/// conversation and checkout, while the overview is on screen.
+fn Model::changes_menu_input(
+  self : Model,
+) -> (
+  @i18n.Locale,
+  (@interop.ConversationKey, @session_changes.Checkout?)?,
+  @session_changes.State,
+) {
+  let overview = match self.chat_column() {
+    Transcript(conversation~, ..) if self.overview_conversation() is Some(key) =>
+      Some((key, conversation.overview_checkout()))
+    _ => None
+  }
+  (self.locale, overview, self.changes)
+}
+
+///|
 /// The workspace line appears once the host has reported it via `started`;
 /// before the conversation's first run only the session id is known.
 fn session_tooltip(model : Model, conv : Conversation) -> String {
@@ -2233,10 +2251,14 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  shell_overlays : (@html.Html, @html.Html, @html.Html),
+  shell_overlays : (@html.Html, @html.Html, (@html.Html, @html.Html)),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, selection_actions_html, transfer_menu_html) = shell_overlays
+  let (
+    quick_open_html,
+    selection_actions_html,
+    (transfer_menu_html, changes_menu_html),
+  ) = shell_overlays
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2646,6 +2668,7 @@ fn view(
   children.push(quick_open_html)
   children.push(selection_actions_html)
   children.push(transfer_menu_html)
+  children.push(changes_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last
