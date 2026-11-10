@@ -2986,7 +2986,7 @@ fn Model::chat_sidebar_sections(
   // Archived Cloud chats live on Settings' archived page.
   let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
-    label: Some(@sidebar_messages.text(self.locale, Chats)),
+    label: None,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
       title: @sidebar_messages.text(self.locale, NewChat),

@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale], @rabbita.Val[@conversation.Search]) -> @rabbita.Val[Array[(String, @html.Html)]]
+pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale], @rabbita.Val[@conversation.Search]) -> @rabbita.Val[RenderedSection]
 
 // Errors
 
@@ -93,6 +93,14 @@ pub(all) struct Placeholder {
 pub fn Placeholder::equal(Self, Self) -> Bool
 pub fn Placeholder::not_equal(Self, Self) -> Bool
 pub fn Placeholder::to_repr(Self) -> @debug.Repr
+
+#derive(Eq)
+pub(all) struct RenderedSection {
+  tools : @html.Html
+  rows : Array[(String, @html.Html)]
+}
+pub fn RenderedSection::equal(Self, Self) -> Bool
+pub fn RenderedSection::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

@@ -96,9 +96,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   border-top: 1px solid var(--color-border);
-  /* Subtract the measured scrollbar lane from the inset so overlay and
-     classic scrollbars leave the same space beside rows. */
-  padding-top: 0;
+  padding-top: var(--space-3);
   padding-bottom: 0.8em;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
@@ -1164,7 +1162,16 @@ button.row-twisty:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.sidebar-new-project:focus-visible {
+.sidebar-create-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.sidebar-create-button {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sidebar-create-button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }

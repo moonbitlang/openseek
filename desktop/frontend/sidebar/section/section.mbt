@@ -232,13 +232,20 @@ fn Actions::entry_component(
 }
 
 ///|
+#derive(Eq)
+pub(all) struct RenderedSection {
+  tools : @html.Html
+  rows : Array[(String, @html.Html)]
+}
+
+///|
 /// Keyed entries retain their component state across insertion and reorder.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[RenderedSection] {
   let entry_inputs = input.map3(locale, search, (input, locale, search) => {
     @vector.from_array(input.entries.map(entry => (locale, entry, search)))
   })
@@ -306,27 +313,52 @@ pub fn component(
     } else {
       @html.nothing
     }
+    let tools = if input.label is None && input.action is Some(action) {
+      @html.div(class="sidebar-create-row", [
+        @html.button(
+          class="sidebar-button sidebar-create-button",
+          type_="button",
+          title=action.title,
+          disabled=action.disabled,
+          attrs=@html.Attrs::build().aria_label(action.title),
+          on_click=(actions.primary)(input.id),
+          [
+            @html.span(class="sidebar-icon", @icons.icon(@icons.icon_add)),
+            @html.span(class="sidebar-label", action.title),
+          ],
+        ),
+        menu,
+      ])
+    } else {
+      @html.nothing
+    }
     let rows : Map[String, @html.Html] = Map([])
     for group in entry_rows {
       for row in group {
         rows[row.0] = row.1
       }
     }
-    [
-      (
-        input.id.key(),
-        @html.div(class="sidebar-group", [
-          heading,
-          @html.div(
-            id=input.id.key() + ":content",
-            class="sidebar-group-content",
-            rows,
-          ),
-        ]),
-      ),
-    ]
+    {
+      tools,
+      rows: [
+        (
+          input.id.key(),
+          @html.div(class="sidebar-group", [
+            heading,
+            @html.div(
+              id=input.id.key() + ":content",
+              class="sidebar-group-content",
+              rows,
+            ),
+          ]),
+        ),
+      ],
+    }
   })
 }
+
+///|
+pub extend RenderedSection with Eq::{equal, not_equal}
 
 ///|
 pub extend Action with Debug::{to_repr}
