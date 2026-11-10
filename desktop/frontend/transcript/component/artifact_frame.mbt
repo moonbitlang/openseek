@@ -98,7 +98,7 @@ fn settle_artifact_frames(
     }
     match state {
       ReadyArtifact(content) => {
-        let token = artifact_token()
+        let token = @uuid.mint()
         frame.set_attribute("data-artifact-token", token)
         if button is Some(button) {
           set_display(button, "none")
@@ -271,7 +271,3 @@ extern "js" fn message_from_frame(
 ///|
 extern "js" fn event_is_trusted(event : @dom.Event) -> Bool =
   #|(event) => event.isTrusted
-
-///|
-extern "js" fn artifact_token() -> String =
-  #|() => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
