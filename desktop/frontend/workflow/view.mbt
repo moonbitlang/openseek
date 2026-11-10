@@ -211,7 +211,10 @@ fn row_view(
   }
   if row.started_at is Some(started) && row.finished_at is Some(finished) {
     detail.push(
-      @html.span(class="workflow-row-duration", duration(finished - started)),
+      @html.span(
+        class="workflow-row-duration",
+        @labels.duration(finished - started),
+      ),
     )
   }
   let label = if row.label.is_empty() { row.child } else { row.label }
@@ -254,17 +257,4 @@ fn money(cost : Double) -> String {
   let rest = cents % 100
   let rest = if rest < 10 { "0\{rest}" } else { "\{rest}" }
   "$\{dollars}.\{rest}"
-}
-
-///|
-/// A wall-clock span in the unit a reader thinks in.
-fn duration(ms : Double) -> String {
-  let seconds = (ms / 1000.0).to_int()
-  if seconds < 60 {
-    "\{seconds}s"
-  } else if seconds < 3600 {
-    "\{seconds / 60}m \{seconds % 60}s"
-  } else {
-    "\{seconds / 3600}h \{seconds % 3600 / 60}m"
-  }
 }

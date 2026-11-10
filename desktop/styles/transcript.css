@@ -13,7 +13,9 @@
   /* Reserve both edges so the centered stream does not shift when overflow
      appears and the native scrollbar claims its lane. */
   scrollbar-gutter: stable both-edges;
-  padding: 24px 24px 22px;
+  /* The conversation overview's rail adds its width to this inset. */
+  --transcript-padding-inline: 24px;
+  padding: 24px var(--transcript-padding-inline) 22px;
   background: transparent;
   /* Size the overview rail against this scroller. Containment is safe because
      the parent grid, not transcript content, determines its dimensions. */

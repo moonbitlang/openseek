@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/labels",
   "openseek_desktop/frontend/workflow",
   "openseek_desktop/protocol",
   "moonbit-community/rabbita/cmd",

@@ -52,7 +52,9 @@ main:has(> .conv-overview) {
     margin-inline-end: var(--conv-overview-width);
   }
   main:has(> .conv-overview) > .transcript {
-    padding-inline-end: calc(var(--space-7) + var(--conv-overview-width));
+    padding-inline-end: calc(
+      var(--transcript-padding-inline) + var(--conv-overview-width)
+    );
   }
 
   /* The rail hangs from the transcript row, as tall as its cards and at
@@ -73,6 +75,8 @@ main:has(> .conv-overview) {
     gap: var(--space-5);
     max-width: none;
     padding: var(--space-5) 0 var(--space-6);
+    /* Explicit, not just unset: sidebar.css styles every `aside`, this one
+       included, with the sidebar's border and background. */
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -81,7 +85,7 @@ main:has(> .conv-overview) {
 
   .conv-overview-card,
   .conv-overview-card:last-child {
-    padding: var(--space-5) var(--space-5);
+    padding: var(--space-5);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     background: var(--color-bg-surface);
@@ -108,13 +112,18 @@ main:has(> .conv-overview) {
   font-weight: 600;
   cursor: pointer;
 }
-.conv-overview-card-title > .icon {
-  color: var(--color-text-muted);
+/* The disclosure chevrons of the cards and of the changes card's folds. */
+.conv-overview-card-title > .icon,
+.conv-changes-fold > .icon {
   transform: rotate(-90deg);
   transition: transform var(--drawer-duration) var(--drawer-easing);
 }
-.conv-overview-card-title.open > .icon {
+.conv-overview-card-title.open > .icon,
+.conv-changes-fold.open > .icon {
   transform: none;
+}
+.conv-overview-card-title > .icon {
+  color: var(--color-text-muted);
 }
 
 .conv-overview-card-aside {
@@ -195,7 +204,6 @@ main:has(> .conv-overview) {
 
 .conv-overview-command {
   font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
 }
 
 .conv-overview-tag {
@@ -280,9 +288,6 @@ a.conv-changes-link:hover {
 }
 .conv-changes-icon.open {
   color: var(--color-success);
-}
-.conv-changes-icon.draft {
-  color: var(--color-text-muted);
 }
 .conv-changes-icon.merged {
   color: light-dark(#8250df, #a371f7);
@@ -373,9 +378,4 @@ a.conv-changes-link:hover {
   --icon-size: var(--icon-sm);
   flex: none;
   color: var(--color-text-faint);
-  transform: rotate(-90deg);
-  transition: transform var(--drawer-duration) var(--drawer-easing);
-}
-.conv-changes-fold.open > .icon {
-  transform: none;
 }

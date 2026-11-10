@@ -1076,7 +1076,7 @@ fn RunHeartbeat::label(
   }
   let detail : Array[String] = []
   if self.started_ms is Some(started) && clock_ms > started {
-    detail.push(elapsed_label(clock_ms - started))
+    detail.push(@labels.duration(clock_ms - started))
   }
   if self.tokens > 0 {
     detail.push(
@@ -1088,23 +1088,6 @@ fn RunHeartbeat::label(
   } else {
     "\{stage} (\{detail.join(" · ")})"
   }
-}
-
-///|
-/// A running span, coarsened the way a person reads a wait: seconds under a
-/// minute, minutes and seconds under an hour, hours and minutes beyond. The
-/// units never go finer than the span's own scale — nobody waiting twenty
-/// minutes is reading the seconds column.
-fn elapsed_label(span_ms : Double) -> String {
-  let total_seconds = (span_ms / 1000.0).to_int()
-  if total_seconds < 60 {
-    return "\{total_seconds}s"
-  }
-  let minutes = total_seconds / 60
-  if minutes < 60 {
-    return "\{minutes}m \{total_seconds % 60}s"
-  }
-  "\{minutes / 60}h \{minutes % 60}m"
 }
 
 ///|

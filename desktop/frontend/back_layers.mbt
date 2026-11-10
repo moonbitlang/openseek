@@ -56,10 +56,8 @@ fn back_layers(model : Model, emit : @cmd.Emit[Msg]) -> Array[@sub.Sub] {
 
 ///|
 /// Whether the conversation overview is on screen: the conversation page
-/// renders it beside or over a transcript.
+/// renders it beside or over a transcript, unless the console gate covers
+/// the page.
 fn Model::overview_shown(self : Model) -> Bool {
-  self.overview_open &&
-  self.screen is Chat &&
-  !(self.is_console_gated() && !self.cloud_selected()) &&
-  self.chat_column() is Transcript(..)
+  self.overview_conversation() is Some(_) && !self.is_console_gated()
 }

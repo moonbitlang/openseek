@@ -1779,10 +1779,7 @@ fn Model::overview_environment(
     project: @resource.label(project),
     path: project.path,
     branch: conv.branch.filter(branch => !branch.is_empty()),
-    worktree: match conv.workspace {
-      Worktree(name~, ..) => Some(name)
-      Project(..) => None
-    },
+    worktree: conv.worktree_name(),
   }
 }
 
@@ -1845,17 +1842,19 @@ fn overview_view(
       model.changes,
     ).map(summary => {
       summary,
-      rows: @session_changes.rows(
-        locale=model.locale,
-        key,
-        checkout,
-        model.changes,
-        dispatch.map(msg => Changes(msg)),
-      ),
+      rows: () => {
+        @session_changes.rows(
+          locale=model.locale,
+          key,
+          checkout,
+          model.changes,
+          dispatch.map(msg => Changes(msg)),
+        )
+      },
     }),
     connectors={
       summary: @mcp.summary(locale=model.locale, key, model.mcp),
-      rows: @mcp.rows(locale=model.locale, key, model.mcp),
+      rows: () => @mcp.rows(locale=model.locale, key, model.mcp),
       refresh: if @mcp.checking(key, model.mcp) {
         None
       } else {
@@ -2420,7 +2419,6 @@ fn view(
               } else {
                 composer_html
               },
-              // Last, so showing it never shifts the composer's position.
               if model.overview_open {
                 overview_view(dispatch, model, conv)
               } else {

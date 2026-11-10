@@ -4,6 +4,8 @@ package "openseek_desktop/frontend/labels"
 // Values
 pub fn compact_count(Int32) -> String
 
+pub fn duration(Double) -> String
+
 // Errors
 
 // Types and methods
