@@ -33,8 +33,14 @@ fn session_to_json(session : AuthSession) -> Json {
 }
 
 ///|
+/// The account origin before `AccountOrigin`. It still serves the same API
+/// process, so a sign-in saved against it is the same account and device.
+const LegacyAccountOrigin = "https://openseek-api.moonbitlang.cn"
+
+///|
 /// Version one held a device credential, never an account. Require explicit
 /// account sign-in instead of guessing which old Cloud/device identity wins.
+/// A sign-in saved against `LegacyAccountOrigin` loads as `AccountOrigin`'s.
 fn session_from_json(json : Json) -> AuthSession? {
   guard json
     is {
@@ -43,9 +49,10 @@ fn session_from_json(json : Json) -> AuthSession? {
       "account": account,
       ..
     } &&
-    server_url == AccountOrigin else {
+    (server_url == AccountOrigin || server_url == LegacyAccountOrigin) else {
     return None
   }
+  let server_url = AccountOrigin
   let account : @protocol.AccountSession = @json.from_json(account) catch {
     _ => return None
   }

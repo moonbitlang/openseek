@@ -69,6 +69,26 @@ test "auth.json codec round-trips and reads corruption as signed out" {
 }
 
 ///|
+test "a sign-in saved against the legacy origin loads as the current one" {
+  let session = sample_session(avatar="")
+  guard session_to_json(session) is Object(fields) else {
+    fail("expected an object")
+  }
+  fields["server_url"] = Json(LegacyAccountOrigin)
+  guard session_from_json(Json::object(fields)) is Some(reloaded) else {
+    fail("a legacy-origin sign-in was dropped")
+  }
+  assert_true(reloaded.server_url == AccountOrigin)
+  assert_true(reloaded.account.token == "ts_secret")
+  assert_true(
+    reloaded.device.map(device => device.token) ==
+    session.device.map(device => device.token),
+  )
+  fields["server_url"] = Json("https://elsewhere.example")
+  assert_true(session_from_json(Json::object(fields)) is None)
+}
+
+///|
 async test "auth.json persists 0600 and deletes cleanly" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-auth-"))
   let body = () => {
@@ -144,7 +164,7 @@ test "store transitions dedup their auth.changed edges" {
   guard store.desired_connector() is Some(config) else {
     fail("signed-in store offered no connector config")
   }
-  assert_true(config.relay_url == "wss://openseek-api.moonbitlang.cn/v1/tunnel")
+  assert_true(config.relay_url == "wss://seekmoon.moonbitlang.com/v1/tunnel")
   // Registration flips once; a repeat is not a visible change.
   assert_true(store.mark_registered("d_abc"))
   assert_false(store.mark_registered("d_abc"))
@@ -210,7 +230,7 @@ test "status shapes" {
     Some({
       id: "d_abc",
       name: "My Mac",
-      url: "https://openseek-api.moonbitlang.cn/device/d_abc/chat",
+      url: "https://seekmoon.moonbitlang.com/device/d_abc/chat",
     }),
   )
   // The transport encoding must not accidentally disclose the stored token.
@@ -263,8 +283,8 @@ test "cancel only lands on a live sign-in" {
 ///|
 test "url derivations" {
   inspect(
-    tunnel_url("https://openseek-api.moonbitlang.cn"),
-    content="wss://openseek-api.moonbitlang.cn/v1/tunnel",
+    tunnel_url("https://seekmoon.moonbitlang.com"),
+    content="wss://seekmoon.moonbitlang.com/v1/tunnel",
   )
   inspect(
     tunnel_url("http://127.0.0.1:3000/"),

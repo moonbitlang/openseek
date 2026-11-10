@@ -156,7 +156,7 @@ credentials and is unchanged by it. Device ids are stable database ids,
 not secrets — the barrier is ownership:
 
 - **Accounts** use one `ts_` session for Cloud, shares, and account-level
-  device operations, issued by `https://openseek-api.moonbitlang.cn`.
+  device operations, issued by `https://seekmoon.moonbitlang.com`.
   `GET /v2/auth/me` and `POST /v2/auth/logout` select an explicit Bearer
   before cookies; an invalid Bearer never falls back to a cookie. Existing
   v1 endpoints retain their legacy contract for older clients. The configured
@@ -850,7 +850,7 @@ The status shape, also the params of every `auth.changed` notification:
 
 ```jsonc
 {
-  "server_url": "https://openseek-api.moonbitlang.cn",
+  "server_url": "https://seekmoon.moonbitlang.com",
                                  // signed in: the token's issuer; signed out: the
                                  // SeekMoon relay origin — always present now that
                                  // the relay no longer depends on the chat provider

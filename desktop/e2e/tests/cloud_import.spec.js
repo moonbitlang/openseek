@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness, importedSession } from './support/cloud_harness.js';
 
-const shareUrl = 'https://openseek-api.moonbitlang.cn/v1/shares/sh_fixture';
+const shareUrl = 'https://seekmoon.moonbitlang.com/v1/shares/sh_fixture';
 const exportJson = JSON.stringify({ '/api/sessions': '[]' });
 
 async function setup(page) {

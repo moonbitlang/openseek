@@ -566,7 +566,7 @@ test "remote toggle preserves Cloud while account sign-out clears it" {
       connected: true,
       managed_by_env: false,
       device_url: Some(
-        "https://openseek-api.moonbitlang.cn/console/?device=fixture",
+        "https://seekmoon.moonbitlang.com/console/?device=fixture",
       ),
     }),
   }

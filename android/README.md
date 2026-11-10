@@ -68,7 +68,7 @@ Older releases predating Android remain valid rollback targets.
 ## Self-update
 
 Release builds update themselves from the same manifest as Desktop
-(`https://openseek-api.moonbitlang.cn/desktop/releases/latest.json`). Each
+(`https://seekmoon.moonbitlang.com/desktop/releases/latest.json`). Each
 time the app comes to the foreground, at most once every six hours, it
 compares the manifest's `version` with its own `versionName`. When
 `platforms.android` names a newer APK, a dialog offers to update. The system

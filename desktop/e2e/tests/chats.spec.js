@@ -49,7 +49,7 @@ test('an empty Chat list starts a draft without creating a session', async ({ pa
   const cloud = new CloudHarness(page, { desktop: true });
   cloud.sessionIds = [];
   await cloud.install();
-  await page.goto('https://openseek-api.moonbitlang.cn/console/index.html?device=device-a');
+  await page.goto('https://seekmoon.moonbitlang.com/console/index.html?device=device-a');
   await sidebarMode(page, 'Chat').click();
   await expect.poll(() => cloud.requests.some(request => request.method === 'GET' && request.path === '/v1/sessions')).toBe(true);
   await cloud.create();

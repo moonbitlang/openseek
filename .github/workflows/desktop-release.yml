@@ -28,7 +28,7 @@ jobs:
     name: Check for updates
     runs-on: ubuntu-24.04
     env:
-      OPENSEEK_API_ORIGIN: https://openseek-api.moonbitlang.cn
+      OPENSEEK_API_ORIGIN: https://seekmoon.moonbitlang.com
     outputs:
       release: ${{ steps.check.outputs.release }}
       version: ${{ steps.release.outputs.version }}
@@ -506,7 +506,7 @@ jobs:
       actions: read
       contents: write
     env:
-      OPENSEEK_API_ORIGIN: https://openseek-api.moonbitlang.cn
+      OPENSEEK_API_ORIGIN: https://seekmoon.moonbitlang.com
       RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
 
     steps:
