@@ -126,7 +126,7 @@ const LoopEntry = "acme/loop@1.0.0"
 /// archives; the other entries cover each way an install must fail;
 /// everything else is not a skill.
 async fn fake_registry(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   probe? : RegistryProbe,
   archive_gate? : ArchiveGate,
   gate_entry~ : String = "acme/widget@2.0.0",
@@ -216,8 +216,8 @@ async fn fake_registry(
   group.spawn_bg(no_wait=true) <| () => {
     let json_headers : @http.Headers = { "Content-Type": "application/json" }
     server.run_forever(
-      (request, body, conn) => {
-        let _ = body.read_all()
+      (request, conn) => {
+        let _ = conn.read_all()
         if probe is Some(probe) {
           probe.enter()
           @async.sleep(20)
@@ -362,9 +362,9 @@ async test "install verifies the archive and writes every file it holds" {
     assert_eq(installed.source, "acme/widget@1.0.0")
     // The exact archive bytes landed on disk where the engine discovers them,
     // supporting files included.
-    assert_eq(@fs.read_file("\{lib}/acme-widget/SKILL.md").binary(), skill_body)
+    assert_eq(@fs.read_binary("\{lib}/acme-widget/SKILL.md"), skill_body)
     assert_eq(
-      @fs.read_file("\{lib}/acme-widget/reference/usage.md").binary(),
+      @fs.read_binary("\{lib}/acme-widget/reference/usage.md"),
       reference_body,
     )
     guard installed_skills(library_dir=lib) is [listed] else {
@@ -544,8 +544,8 @@ async test "concurrent upgrades of one slug are serialized" {
     // downloads may overlap. Only recovery, staging, and the live-directory
     // switch are serialized.
     assert_eq(probe.max_active, 2)
-    let content = @fs.read_file("\{lib}/acme-widget/SKILL.md").binary()
-    let sidecar = @fs.read_file("\{lib}/acme-widget/.mooncakes.json").text()
+    let content = @fs.read_binary("\{lib}/acme-widget/SKILL.md")
+    let sidecar = @fs.read_text("\{lib}/acme-widget/.mooncakes.json")
     guard @json.parse(sidecar) is { "version": String(version), .. } else {
       fail("installed provenance is malformed")
     }
@@ -565,29 +565,23 @@ async test "install never overwrites a hand-written skill" {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
     @fs.mkdir("\{lib}/acme-widget", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{lib}/acme-widget/SKILL.md",
       "my own playbook",
       create_mode=CreateOrTruncate,
     )
     let message = install_failure(base, lib, "acme/widget")
     assert_true(message.contains("already exists"))
-    assert_eq(
-      @fs.read_file("\{lib}/acme-widget/SKILL.md").text(),
-      "my own playbook",
-    )
+    assert_eq(@fs.read_text("\{lib}/acme-widget/SKILL.md"), "my own playbook")
     let flat_lib = @fs.tmpdir(prefix="skillmarket-")
-    @fs.write_file(
+    @fs.write_text(
       "\{flat_lib}/acme-widget.md",
       "my flat skill",
       create_mode=CreateOrTruncate,
     )
     let message = install_failure(base, flat_lib, "acme/widget")
     assert_true(message.contains("already exists"))
-    assert_eq(
-      @fs.read_file("\{flat_lib}/acme-widget.md").text(),
-      "my flat skill",
-    )
+    assert_eq(@fs.read_text("\{flat_lib}/acme-widget.md"), "my flat skill")
     assert_false(@fs.exists("\{flat_lib}/acme-widget"))
   }
 }
@@ -615,7 +609,7 @@ async test "uninstall removes registry installs and nothing else" {
     assert_true(message.contains("no skill named"))
     // A hand-written skill (no sidecar) is the user's file, not ours.
     @fs.mkdir("\{lib}/handmade", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{lib}/handmade/SKILL.md",
       "mine",
       create_mode=CreateOrTruncate,
@@ -633,12 +627,12 @@ async test "listing recovers interrupted local skill changes" {
   // its staged replacement live. Listing must restore the backup before it
   // takes a directory snapshot.
   @fs.mkdir("\{lib}/.backup/acme-widget", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.backup/acme-widget/SKILL.md",
     "---\nname: widget\ndescription: recovered\n---\nold",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.backup/acme-widget/.mooncakes.json",
     (
       {
@@ -650,13 +644,13 @@ async test "listing recovers interrupted local skill changes" {
     create_mode=CreateOrTruncate,
   )
   @fs.mkdir("\{lib}/.staging/acme-widget", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.staging/acme-widget/SKILL.md",
     "incomplete replacement",
     create_mode=CreateOrTruncate,
   )
   @fs.mkdir("\{lib}/.trash/removed-skill", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.trash/removed-skill/SKILL.md",
     "already uninstalled",
     create_mode=CreateOrTruncate,
@@ -675,7 +669,7 @@ async test "listing recovers interrupted local skill changes" {
   // If both target and backup exist, the new target was already activated;
   // recovery keeps it and only removes the obsolete backup.
   @fs.mkdir("\{lib}/.backup/acme-widget", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.backup/acme-widget/SKILL.md",
     "obsolete backup",
     create_mode=CreateOrTruncate,
@@ -759,13 +753,13 @@ async test "listing is name-sorted regardless of creation order" {
   let lib = @fs.tmpdir(prefix="skillmarket-")
   for name in ["ddd", "aaa", "eee", "ccc"] {
     @fs.mkdir("\{lib}/\{name}", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{lib}/\{name}/SKILL.md",
       "---\nname: \{name}\ndescription: d\n---\nbody",
       create_mode=CreateOrTruncate,
     )
   }
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/bbb.md",
     "---\nname: bbb\ndescription: d\n---\nbody",
     create_mode=CreateOrTruncate,
@@ -777,13 +771,13 @@ async test "listing is name-sorted regardless of creation order" {
 ///|
 async test "listing mirrors the engine's discovery for hand-written skills" {
   let lib = @fs.tmpdir(prefix="skillmarket-")
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/notes.md",
     "---\nname: notes\ndescription: My notes.\n---\nbody",
     create_mode=CreateOrTruncate,
   )
   @fs.mkdir("\{lib}/local", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/local/SKILL.md",
     "no frontmatter",
     create_mode=CreateOrTruncate,
@@ -827,7 +821,7 @@ async test "disabled registry skills retain their content, update state and unin
     assert_eq(changes, 1)
     assert_false(@fs.exists("\{lib}/acme-widget"))
     assert_eq(
-      @fs.read_file("\{lib}/.disabled/acme-widget/reference/usage.md").binary(),
+      @fs.read_binary("\{lib}/.disabled/acme-widget/reference/usage.md"),
       reference_body,
     )
     guard installed_skills(library_dir=lib) is [disabled] else {
@@ -849,15 +843,12 @@ async test "disabled registry skills retain their content, update state and unin
     assert_false(updated.enabled)
     assert_false(@fs.exists("\{lib}/acme-widget"))
     assert_eq(
-      @fs.read_file("\{lib}/.disabled/acme-widget/SKILL.md").binary(),
+      @fs.read_binary("\{lib}/.disabled/acme-widget/SKILL.md"),
       skill_body_v2,
     )
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget/reference/usage.md"))
     set_skill_enabled("acme-widget", enabled=true, library_dir=lib)
-    assert_eq(
-      @fs.read_file("\{lib}/acme-widget/SKILL.md").binary(),
-      skill_body_v2,
-    )
+    assert_eq(@fs.read_binary("\{lib}/acme-widget/SKILL.md"), skill_body_v2)
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget"))
     set_skill_enabled("acme-widget", enabled=false, library_dir=lib)
     uninstall_skill("acme-widget", library_dir=lib)
@@ -870,17 +861,17 @@ async test "disabled registry skills retain their content, update state and unin
 async test "hand-written directory and flat skills can move without rewriting their files" {
   let lib = @fs.tmpdir(prefix="skillmarket-handwritten-")
   @fs.mkdir("\{lib}/node.js/reference", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/node.js/SKILL.md",
     "Directory skill",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/node.js/reference/notes.txt",
     "Companion",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/My notes.md",
     "Flat skill",
     create_mode=CreateOrTruncate,
@@ -895,27 +886,27 @@ async test "hand-written directory and flat skills can move without rewriting th
     disabled.iter().all(skill => !skill.enabled && skill.registry is None),
   )
   assert_eq(
-    @fs.read_file("\{lib}/.disabled/node.js/reference/notes.txt").text(),
+    @fs.read_text("\{lib}/.disabled/node.js/reference/notes.txt"),
     "Companion",
   )
   for id in ["node.js", "My notes"] {
     set_skill_enabled(id, enabled=true, library_dir=lib)
   }
-  assert_eq(@fs.read_file("\{lib}/My notes.md").text(), "Flat skill")
-  assert_eq(@fs.read_file("\{lib}/node.js/SKILL.md").text(), "Directory skill")
+  assert_eq(@fs.read_text("\{lib}/My notes.md"), "Flat skill")
+  assert_eq(@fs.read_text("\{lib}/node.js/SKILL.md"), "Directory skill")
 }
 
 ///|
 async test "an interrupted disabled update recovers inside the disabled library" {
   let lib = @fs.tmpdir(prefix="skillmarket-recover-disabled-")
   @fs.mkdir("\{lib}/.disabled/.backup/widget", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.disabled/.backup/widget/SKILL.md",
     "Previous version",
     create_mode=CreateOrTruncate,
   )
   @fs.mkdir("\{lib}/.disabled/.staging/widget", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{lib}/.disabled/.staging/widget/SKILL.md",
     "Incomplete",
     create_mode=CreateOrTruncate,
@@ -926,7 +917,7 @@ async test "an interrupted disabled update recovers inside the disabled library"
   assert_false(skill.enabled)
   assert_false(@fs.exists("\{lib}/widget"))
   assert_eq(
-    @fs.read_file("\{lib}/.disabled/widget/SKILL.md").text(),
+    @fs.read_text("\{lib}/.disabled/widget/SKILL.md"),
     "Previous version",
   )
   assert_false(@fs.exists("\{lib}/.disabled/.backup/widget"))
@@ -987,7 +978,7 @@ async test "an update commits to the current location after an in-flight enablem
         guard expected_enabled else { (disabled, active) }
         (active, disabled)
       }
-      assert_eq(@fs.read_file("\{current}/SKILL.md").binary(), skill_body_v2)
+      assert_eq(@fs.read_binary("\{current}/SKILL.md"), skill_body_v2)
       assert_false(@fs.exists(other))
       assert_eq(installed_skills(library_dir=lib).length(), 1)
     }

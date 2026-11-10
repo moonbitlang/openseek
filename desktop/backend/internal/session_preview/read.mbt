@@ -16,9 +16,9 @@ pub async fn read_first_prompt(path : String) -> String? {
   let file = @fs.open(path, mode=ReadOnly)
   defer file.close()
   // The first line is the session header; the prompt scan starts after it.
-  let _ = file.read_until("\n")
+  let _ = file.text.read_until("\n")
   for _ in 0..<first_prompt_scan_limit {
-    let next = file.read_until("\n")
+    let next = file.text.read_until("\n")
     guard next is Some(line) else { break }
     if line.is_blank() {
       continue

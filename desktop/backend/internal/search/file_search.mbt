@@ -670,15 +670,15 @@ async test "native file scan uses the same ignore and DFS semantics" {
     @fs.mkdir("\{root}/a", recursive=true)
     @fs.mkdir("\{root}/.claude/session", recursive=true)
     @fs.mkdir("\{root}/node_modules/pkg", recursive=true)
-    @fs.write_file("\{root}/a/2.mbt", "", create_mode=CreateOrTruncate)
-    @fs.write_file("\{root}/a/1.mbt", "", create_mode=CreateOrTruncate)
-    @fs.write_file("\{root}/a.txt", "", create_mode=CreateOrTruncate)
-    @fs.write_file(
+    @fs.write_text("\{root}/a/2.mbt", "", create_mode=CreateOrTruncate)
+    @fs.write_text("\{root}/a/1.mbt", "", create_mode=CreateOrTruncate)
+    @fs.write_text("\{root}/a.txt", "", create_mode=CreateOrTruncate)
+    @fs.write_text(
       "\{root}/.claude/session/state.json",
       "",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/node_modules/pkg/hidden.mbt",
       "",
       create_mode=CreateOrTruncate,
@@ -737,7 +737,7 @@ async test "query cancellation keeps the cache-populating scan alive" {
     let cached = service.search(root, "cache-a", "target", 200, 2)
     assert_true(cached.from_cache)
     assert_eq(cached.files, ["target.mbt"])
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -768,7 +768,7 @@ async test "one connection serializes discovery across cache sessions" {
     assert_eq(starts.get(), second_root.to_string())
     releases.put(())
     ignore(second.wait())
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -795,7 +795,7 @@ async test "a failed cache population is not installed and can retry" {
     assert_false(recovered.from_cache)
     assert_eq(recovered.files, ["recovered.mbt"])
     assert_eq(attempts, 2)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -813,6 +813,6 @@ async test "a cache key cannot cross workspace roots" {
       error => raise error
     }
     assert_true(failed)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }

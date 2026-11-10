@@ -1032,6 +1032,11 @@ async fn run_text_search(
   // with "The handle is invalid".
   let (stdin_reader, stdin_writer) = @process.write_to_process()
   stdin_writer.close()
+  let matches : Array[@protocol.TextSearchMatch] = []
+  let files : Map[String, Bool] = Map([])
+  let mut match_count = 0
+  let mut limit_hit = false
+  let mut failure : @protocol.TextSearchError? = None
   @async.with_task_group(group => {
     let process = @process.spawn(
       group,
@@ -1039,9 +1044,9 @@ async fn run_text_search(
       rg_args(text_search_args(payload)),
       inherit_env=false,
       extra_env=provider.environment,
-      stdin=stdin_reader,
-      stdout=child_stdout,
-      stderr=child_stderr,
+      stdin=Shared(stdin_reader),
+      stdout=Shared(child_stdout),
+      stderr=Shared(child_stderr),
       cwd=native_root,
       no_console_window=true,
       cancel_handler=@process.hard_cancel(),
@@ -1050,10 +1055,11 @@ async fn run_text_search(
       error => {
         stdout_reader.close()
         stderr_reader.close()
-        return empty_text_search_reply(reply_root, payload.generation, error={
+        failure = Some({
           code: "rg_unavailable",
           message: "Cannot start text search: \{error}",
         })
+        return
       }
     }
     let stderr_task = group.spawn(() => {
@@ -1061,9 +1067,7 @@ async fn run_text_search(
       let retained = @buffer.Buffer(size_hint=4096)
       let mut retained_bytes = 0
       for ;; {
-        guard stderr_reader.read_some(max_len=4096) is Some(chunk) else {
-          break
-        }
+        guard stderr_reader.read() is Some(chunk) else { break }
         if retained_bytes < MaxTextSearchStderrBytes {
           let length = chunk
             .length()
@@ -1074,14 +1078,10 @@ async fn run_text_search(
       }
       @utf8.decode_lossy(retained.contents())
     })
-    let matches : Array[@protocol.TextSearchMatch] = []
-    let files : Map[String, Bool] = Map([])
-    let mut match_count = 0
-    let mut limit_hit = false
     let mut got_output = false
     defer stdout_reader.close()
     for ;; {
-      let line = stdout_reader.read_until("\n")
+      let line = stdout_reader.text.read_until("\n")
       guard line is Some(line) else { break }
       got_output = true
       guard parse_ripgrep_match(line) is Some(parsed) else { continue }
@@ -1112,22 +1112,22 @@ async fn run_text_search(
     // but reports a recoverable error for another one.
     if text_search_exit_is_fatal(exit_code, limit_hit, got_output) {
       let (code, message) = text_search_error(stderr)
-      return empty_text_search_reply(reply_root, payload.generation, error={
-        code,
-        message,
-      })
-    }
-    {
-      root: reply_root,
-      generation: payload.generation,
-      matches,
-      match_count,
-      file_count: files.length(),
-      limit_hit,
-      cancelled: false,
-      error: None,
+      failure = Some({ code, message, })
     }
   })
+  if failure is Some(error) {
+    return empty_text_search_reply(reply_root, payload.generation, error~)
+  }
+  {
+    root: reply_root,
+    generation: payload.generation,
+    matches,
+    match_count,
+    file_count: files.length(),
+    limit_hit,
+    cancelled: false,
+    error: None,
+  }
 }
 
 ///|
@@ -1529,7 +1529,7 @@ async test "cancel-before-search frontier rejects the stale generation" {
     assert_true(reply.cancelled)
     assert_eq(reply.generation, 7)
     assert_eq(reply.root, resource_root)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 

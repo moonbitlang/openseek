@@ -104,8 +104,7 @@ async fn read_registry_unlocked() -> Registry {
   let uninitialized : Registry = { workspaces: [], initialized: false, }
   guard workspaces_file() is Some(file) else { return uninitialized }
   let text = @fsx.read_text(file.to_path()) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() ||
-      os_error.is_ENOTDIR() => return uninitialized
+    @os_error.OsError(NotFound | NotDirectory, ..) => return uninitialized
     error =>
       raise WorkspaceError(
         "could not read the workspace list at \{file}: \{error}",

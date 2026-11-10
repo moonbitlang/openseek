@@ -15,20 +15,20 @@ async test "file scan respects Git ignores and keeps tracked files" {
       "toolchains/tracked.mbt", "toolchains/huge.bin", "src/keep.log", "src/drop.log",
       "src/main.mbt", "local.tmp", "space name.log",
     ] {
-    @fs.write_file("\{root}/\{path}", "", create_mode=CreateOrTruncate)
+    @fs.write_text("\{root}/\{path}", "", create_mode=CreateOrTruncate)
   }
   git_test_run(root, ["add", "toolchains/tracked.mbt"])
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/.gitignore",
     "toolchains/\n*.log\n",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/src/.gitignore",
     "!keep.log\n",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/.git/info/exclude",
     "local.tmp\n",
     create_mode=CreateOrTruncate,
@@ -60,7 +60,7 @@ async test "file scan prunes ignored trees before reading them" {
 async test "file scan supports ordinary folders without Git" {
   let root = @fs.tmpdir(prefix="openseek-search-no-git-")
   defer @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
-  @fs.write_file("\{root}/main.mbt", "", create_mode=CreateOrTruncate)
+  @fs.write_text("\{root}/main.mbt", "", create_mode=CreateOrTruncate)
   let snapshot = scan_workspace_files(@pathx.Path(root).resolve())
   assert_eq(snapshot.files, ["main.mbt"])
 }
@@ -99,7 +99,7 @@ async test "file scan skips a directory that cannot be opened" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     })
     @fs.mkdir("\{root}/b-readable")
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/b-readable/kept.mbt",
       "",
       create_mode=CreateOrTruncate,

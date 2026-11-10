@@ -108,7 +108,7 @@ async test "a registry without the marker still receives the default workspace" 
   let existing = root.join("project")
   @fsx.ensure_dir(existing)
   @fsx.ensure_dir(global_root)
-  @fs.write_file(
+  @fs.write_text(
     global_root.join("workspaces.json").to_string(),
     ({ "workspaces": [existing.to_string()] } : Json).stringify(),
     create_mode=CreateOrTruncate,

@@ -1,6 +1,6 @@
 import {
   "openseek_desktop/backend/entropy",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -10,3 +10,7 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unqualified_local_using"
 
 supported_targets = "+native+wasm"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/http" ],
+)

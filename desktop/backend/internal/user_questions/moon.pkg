@@ -1,6 +1,6 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/cond_var",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/cond_var",
   "openseek_desktop/backend/uuid",
   "openseek_desktop/protocol",
   "openseek_desktop/protocol/message_context",
@@ -8,3 +8,10 @@ import {
 }
 
 supported_targets = "+native+wasm"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/cond_var",
+  ],
+)
