@@ -1,4 +1,20 @@
 ///|
+/// Enter `location`: record it in history, then activate it.
+fn enter_location(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  location : @routes.Location,
+  replace~ : Bool,
+) -> (@cmd.Cmd, Model) {
+  let (write, next) = navigation_visit(model, location, replace~)
+  let (activate, next) = activate_navigation(dispatch, {
+    ..next,
+    navigation: { ..next.navigation, phase: Waiting, },
+  })
+  (@cmd.batch([write, activate]), next)
+}
+
+///|
 fn replace_with_new_navigation(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -7,16 +23,12 @@ fn replace_with_new_navigation(
   guard model.console.page_device is Some(device) else {
     return (@cmd.none, model)
   }
-  let (write, next) = navigation_visit(
+  enter_location(
+    dispatch,
     model,
     { device: Some(device), target, },
     replace=true,
   )
-  let (activate, next) = activate_navigation(dispatch, {
-    ..next,
-    navigation: { ..next.navigation, phase: Waiting, },
-  })
-  (@cmd.batch([write, activate]), next)
 }
 
 ///|
