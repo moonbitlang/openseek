@@ -1336,12 +1336,18 @@ priv struct Model {
   // On the narrow layout the sidebar is a full-screen drawer instead of a
   // column, and starts closed.
   sidebar_open : Bool
-  // Which list the sidebar shows. The switch in its header sets this, and it
-  // follows the conversation on screen: `sidebar_revealed` is the activation
-  // the mode last followed, so only a different one moves it again and a
-  // manual pick holds while the same conversation stays up.
+  // Which list the sidebar shows. The switch in its header sets this and
+  // moves the main column to that mode's page, and it follows the
+  // conversation on screen: `sidebar_revealed` is the activation the mode
+  // last followed, so only a different one moves it again.
   sidebar_mode : @sidebar.Mode
   sidebar_revealed : (@sidebar.Mode, String)?
+  // Each mode's list sits beside its own main column, so the switch reopens
+  // the page that mode last showed (see `sidebar_mode_switch.mbt`).
+  mode_returns : ModeReturns
+  // The stored pick from the last session, held until the start page is
+  // known so a blank start page can reopen in that mode.
+  launch_mode : @sidebar.Mode?
   // Right-panel visibility is shared by the shell grid, file-editor lifecycle,
   // and native Browser geometry, so the application root is its single owner.
   // The right-panel component receives these values as read-only input.
@@ -2783,6 +2789,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
       WorkMode
     },
     sidebar_revealed: None,
+    mode_returns: ModeReturns::empty(),
+    launch_mode: None,
     right_panel_open: false,
     right_panel_menu_open: false,
     dock_tab_menu_open: false,

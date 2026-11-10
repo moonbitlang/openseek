@@ -24,13 +24,11 @@ for (const entry of ['sidebar', 'Settings']) {
     await expect(cancel).toBeEnabled();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
     if (entry === 'sidebar') {
-      await expect(page.locator('.cloud-home')).toHaveCount(0);
-      await expect(page.locator('main h1')).toHaveText('New chat');
-      await expect(page.locator('#task')).toBeEnabled();
-      await expect(page.locator('main')).not.toContainText('Finish signing in in your browser…');
+      // The Chat list sits beside Cloud home, which stays while signing in.
+      await expect(page.locator('.cloud-home')).toBeVisible();
       const path = testInfo.outputPath('sidebar-cancellable-sign-in.png');
       await page.screenshot({ path });
-      await testInfo.attach('Sidebar sign-in stays cancellable while the local project remains visible', { path, contentType: 'image/png' });
+      await testInfo.attach('Sidebar sign-in stays cancellable beside Cloud home', { path, contentType: 'image/png' });
     }
     await cancel.click();
     await expect(scope).toContainText('Cancelling');
