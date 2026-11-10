@@ -1541,7 +1541,6 @@ fn covering_overlay(model : Model) -> Bool {
 /// custom select, the composer's Git popover, and every `covering_overlay` —
 /// must hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int32? {
-  guard !model.cloud_selected() else { return None }
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -1561,6 +1560,12 @@ fn desired_browser_view(model : Model) -> Int32? {
   guard @dock.active_browser(model.dock_state()) is Some(id) &&
     @preview.page(model.preview, id) is Some(page) &&
     page.url is Some(_) else {
+    return None
+  }
+  // In Cloud, only a file preview in the current conversation's pane can
+  // place a native view. Ordinary links keep their existing behavior.
+  guard !model.cloud_selected() ||
+    (page.cloud_preview && model.file_panel_visible()) else {
     return None
   }
   Some(id)
@@ -7171,7 +7176,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       match result {
-        Ok(url) => update_msg(dispatch, ExternalLinkClicked(url), model)
+        Ok(url) => open_user_link(dispatch, model, url, cloud_preview=true)
         Err(message) => model.notify_error(dispatch, message)
       }
     }
@@ -7299,76 +7304,96 @@ fn update_msg(
       }
       (cmd, next)
     }
-    ExternalLinkClicked(url) =>
-      // Web links open in the dock's Browser tabs by default — the
-      // toolbar's open-external button hands the page to the system
-      // browser when its chrome or logins are needed. Non-web schemes
-      // (mailto:, vscode:, …) and remote consoles (no native views) keep
-      // the external path. A same-URL tab already in this strip
-      // re-activates instead of duplicating.
-      //
-      // Only from conversation screens: the capture listener behind this
-      // message is document-wide, so it also reports anchors on screens where
-      // the dock is not rendered and a tab would be invisible. Chat and Codex
-      // deliberately share this route — their PR links must open in the same
-      // built-in Browser instead of changing behavior with the conversation
-      // provider. Settings' device-page link is the clearest external case:
-      // it wants the browser where the user is already signed in.
-      if !model.is_desktop {
-        (open_browser_link(url), model)
-      } else if model.management_dialog is None && @preview.is_web_url(url) {
-        // Opening or reusing a Browser tab is a newer dock navigation than a
-        // transcript text-file link still waiting on `host.open_path`. Spend the
-        // shared token before either branch so its delayed reply cannot put a
-        // file back over the URL the user chose later.
-        let model = model.begin_editor_navigation()
-        // The scan is over this strip's tabs, not the global page map: a
-        // parked conversation may hold the same URL, and matching its page
-        // first would shadow this strip's own tab forever.
-        let reuse = for tab in model.dock_state().tabs {
-          if tab is Browser(id~) &&
-            @preview.page(model.preview, id) is Some(page) &&
-            page.url is Some(page_url) &&
-            page_url == url {
-            break Some(id)
-          }
-        } nobreak {
-          None
-        }
-        match reuse {
-          Some(id) => {
-            let dock = @dock.open_browser(model.dock_state(), id)
-            // The reuse matched this page's optimistic URL mirror, which can
-            // drift from what the native view actually shows — a host op that
-            // failed, or a reload's `close_all` that swept the view. Focusing
-            // alone would present the stale page under the clicked URL, so a
-            // reuse re-navigates: `browser.navigate` rebuilds the view when
-            // it is gone, and dropping the pane placement makes the next sync
-            // measure and show whatever the host has now.
-            (
-              browser_navigate(
-                dispatch,
-                id,
-                url,
-                model.theme.is_dark(model.system_dark),
-                model.dock_owner().host(),
-              ),
-              {
-                ..model,
-                preview: @preview.navigate(model.preview, id, url),
-                browser_pane: { shown: None, rect: None, geo: None, },
-                right_panel_open: true,
-                right_panel_menu_open: false,
-              }.with_dock_state(dock),
-            )
-          }
-          None =>
-            open_browser_tab(dispatch, model, model.dock_owner().host(), url~)
-        }
-      } else {
-        (open_external_link(dispatch, url), model)
-      }
+    ExternalLinkClicked(url) => open_user_link(dispatch, model, url)
     FromDevice(channel, msg) => update_device_msg(dispatch, channel, msg, model)
+  }
+}
+
+///|
+fn open_user_link(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  url : String,
+  cloud_preview~ : Bool = false,
+) -> (@cmd.Cmd, Model) {
+  // Web links open in the dock's Browser tabs by default — the
+  // toolbar's open-external button hands the page to the system
+  // browser when its chrome or logins are needed. Non-web schemes
+  // (mailto:, vscode:, …) and remote consoles (no native views) keep
+  // the external path. A same-URL tab already in this strip
+  // re-activates instead of duplicating.
+  //
+  // Only from conversation screens: the capture listener behind this
+  // message is document-wide, so it also reports anchors on screens where
+  // the dock is not rendered and a tab would be invisible. Chat and Codex
+  // deliberately share this route — their PR links must open in the same
+  // built-in Browser instead of changing behavior with the conversation
+  // provider. Settings' device-page link is the clearest external case:
+  // it wants the browser where the user is already signed in.
+  if !model.is_desktop {
+    (open_browser_link(url), model)
+  } else if model.management_dialog is None && @preview.is_web_url(url) {
+    // Opening or reusing a Browser tab is a newer dock navigation than a
+    // transcript text-file link still waiting on `host.open_path`. Spend the
+    // shared token before either branch so its delayed reply cannot put a
+    // file back over the URL the user chose later.
+    let model = model.begin_editor_navigation()
+    // The scan is over this strip's tabs, not the global page map: a
+    // parked conversation may hold the same URL, and matching its page
+    // first would shadow this strip's own tab forever.
+    let reuse = for tab in model.dock_state().tabs {
+      if tab is Browser(id~) &&
+        @preview.page(model.preview, id) is Some(page) &&
+        page.url is Some(page_url) &&
+        page_url == url &&
+        page.cloud_preview == cloud_preview {
+        break Some(id)
+      }
+    } nobreak {
+      None
+    }
+    match reuse {
+      Some(id) => {
+        let dock = @dock.open_browser(model.dock_state(), id)
+        // The reuse matched this page's optimistic URL mirror, which can
+        // drift from what the native view actually shows — a host op that
+        // failed, or a reload's `close_all` that swept the view. Focusing
+        // alone would present the stale page under the clicked URL, so a
+        // reuse re-navigates: `browser.navigate` rebuilds the view when
+        // it is gone, and dropping the pane placement makes the next sync
+        // measure and show whatever the host has now.
+        (
+          browser_navigate(
+            dispatch,
+            id,
+            url,
+            model.theme.is_dark(model.system_dark),
+            model.dock_owner().host(),
+          ),
+          {
+            ..model,
+            preview: @preview.navigate(model.preview, id, url),
+            browser_pane: {
+              shown: model.browser_pane.shown.filter(shown => shown != id),
+              rect: None,
+              geo: None,
+            },
+            right_panel_open: true,
+            right_panel_menu_open: false,
+          }.with_dock_state(dock),
+        )
+      }
+      None =>
+        open_browser_tab(
+          dispatch,
+          model,
+          model.dock_owner().host(),
+          url~,
+          cloud_preview~,
+        )
+    }
+  } else {
+    (open_external_link(dispatch, url), model)
   }
 }
 
