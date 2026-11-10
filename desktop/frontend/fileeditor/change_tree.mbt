@@ -163,7 +163,9 @@ fn focus_change_tree_after_render(
     _ => {
       if id is Some(id) &&
         @dom.document().get_element_by_id(id).to_option() is Some(row) {
-        if row.to_html_element() is Some(element) { element.focus() }
+        if row.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,

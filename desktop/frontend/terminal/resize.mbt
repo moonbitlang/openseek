@@ -72,9 +72,7 @@ fn TerminalResizer::start(self : TerminalResizer, event : @dom.Event) -> Unit {
   }
   event.prevent_default()
   self.active.val = true
-  guard @dom.document().get_document_element() is Some(root) else {
-    return
-  }
+  guard @dom.document().get_document_element() is Some(root) else { return }
   let classes : @js.Value = @js.Value::cast_from(root).get_with_string(
     "classList",
   )
@@ -111,9 +109,7 @@ fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
 fn TerminalResizer::finish(self : TerminalResizer) -> Unit {
   guard self.active.val else { return }
   self.active.val = false
-  guard @dom.document().get_document_element() is Some(root) else {
-    return
-  }
+  guard @dom.document().get_document_element() is Some(root) else { return }
   let classes : @js.Value = @js.Value::cast_from(root).get_with_string(
     "classList",
   )

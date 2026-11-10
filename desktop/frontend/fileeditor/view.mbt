@@ -76,7 +76,9 @@ fn focus_breadcrumb_entry_after_render(index : Int32) -> @cmd.Cmd {
         .get_element_by_id(breadcrumb_entry_id(index))
         .to_option()
         is Some(row) {
-        if row.to_html_element() is Some(element) { element.focus() }
+        if row.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -88,7 +90,9 @@ fn focus_explorer_tab_after_render(id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document().get_element_by_id(id).to_option() is Some(tab) {
-        if tab.to_html_element() is Some(element) { element.focus() }
+        if tab.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -933,7 +937,10 @@ fn review_git_sections(
                 class="git-graph-context git-graph-branch",
                 title=git_graph_branch_label(locale~, state),
                 [
-                  @html.span(class="git-graph-context-icon", @icons.icon_git_branch()),
+                  @html.span(
+                    class="git-graph-context-icon",
+                    @icons.icon_git_branch(),
+                  ),
                   @html.span(
                     class="git-graph-context-label",
                     git_graph_branch_label(locale~, state),
@@ -1007,7 +1014,9 @@ fn focus_git_commit_after_render(index : Int32) -> @cmd.Cmd {
     _ => {
       if @dom.document().get_element_by_id(git_commit_row_id(index)).to_option()
         is Some(row) {
-        if row.to_html_element() is Some(element) { element.focus() }
+        if row.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -2653,9 +2662,9 @@ fn review_controls_pending(state : State, ctx : Ctx) -> Bool {
 /// Whether both sides of the active history comparison have loaded.
 fn history_diff_loaded(state : State, ctx : Ctx) -> Bool {
   ctx.active_history_diff is Some(diff) &&
-    state.history_docs.get(history_diff_key(diff)) is Some(history) &&
-    history.original.text() is Some(_) &&
-    history.modified.text() is Some(_)
+  state.history_docs.get(history_diff_key(diff)) is Some(history) &&
+  history.original.text() is Some(_) &&
+  history.modified.text() is Some(_)
 }
 
 ///|
@@ -3830,7 +3839,9 @@ fn focus_change_filter_after_render() -> @cmd.Cmd {
         .get_element_by_id("review-path-filter-input")
         .to_option()
         is Some(input) {
-        if input.to_html_element() is Some(element) { element.focus() }
+        if input.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,

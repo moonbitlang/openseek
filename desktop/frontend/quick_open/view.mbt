@@ -22,7 +22,9 @@ fn focus_after_render() -> @cmd.Cmd {
     @cmd.custom_cmd(
       _ => {
         if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
-          if input.to_html_element() is Some(element) { element.focus() }
+          if input.to_html_element() is Some(element) {
+            element.focus()
+          }
         }
       },
       kind=@cmd.after_render,

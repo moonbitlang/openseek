@@ -7,7 +7,9 @@ pub fn focus_query_after_render() -> @cmd.Cmd {
     _ => {
       if @dom.document().get_element_by_id(SearchInputId).to_option()
         is Some(input) {
-        if input.to_html_element() is Some(element) { element.focus() }
+        if input.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,

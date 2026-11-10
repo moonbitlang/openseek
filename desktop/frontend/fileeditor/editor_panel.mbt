@@ -1665,32 +1665,32 @@ fn clear_document() -> @cmd.Cmd {
 /// parked first so they survive the disposal.
 fn detach_viewer_models() -> Unit {
   park_cloud_view_state()
-    if viewer_state.viewer is Some(viewer) {
-      if viewer_state.point_range_highlight is Some(highlight) {
-        highlight.clear()
-      }
-      if viewer_state.search_match_highlights is Some(highlights) {
-        highlights.clear()
-      }
-      if viewer_state.services is Some(services) &&
-        viewer.get_model() is Some(model) {
-        services.quick_diff.set_original_content(model.uri, None)
-      }
-      let previous = viewer.get_model()
-      viewer.set_model(None)
-      dispose_source_model(previous)
+  if viewer_state.viewer is Some(viewer) {
+    if viewer_state.point_range_highlight is Some(highlight) {
+      highlight.clear()
     }
-    if viewer_state.markdown_viewer is Some(markdown_viewer) {
-      match markdown_viewer.set_model(None) {
-        Some(previous) => dispose_markdown_model(previous)
-        None => ()
-      }
+    if viewer_state.search_match_highlights is Some(highlights) {
+      highlights.clear()
     }
-    viewer_state.document = None
-    viewer_state.live = false
-    viewer_state.navigation = None
-    clear_mbti_diagram()
-    clear_package_graph()
+    if viewer_state.services is Some(services) &&
+      viewer.get_model() is Some(model) {
+      services.quick_diff.set_original_content(model.uri, None)
+    }
+    let previous = viewer.get_model()
+    viewer.set_model(None)
+    dispose_source_model(previous)
+  }
+  if viewer_state.markdown_viewer is Some(markdown_viewer) {
+    match markdown_viewer.set_model(None) {
+      Some(previous) => dispose_markdown_model(previous)
+      None => ()
+    }
+  }
+  viewer_state.document = None
+  viewer_state.live = false
+  viewer_state.navigation = None
+  clear_mbti_diagram()
+  clear_package_graph()
 }
 
 ///|
