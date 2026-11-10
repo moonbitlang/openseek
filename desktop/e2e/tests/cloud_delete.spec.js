@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, sessionA, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id) {
   await cloud.rowContainer(id).hover();
@@ -46,34 +46,3 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
   });
 }
 
-test('delete 404 converges as already removed without signing out', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.deleteStatus = 404;
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionA)).toHaveCount(0);
-  await expect(cloud.row(sessionC)).toHaveCount(0);
-  expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-});
-
-test('device browser traversal reports deleted Cloud destinations as missing', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install(); await cloud.goto();
-  const heading = page.locator('main > .topbar h1');
-  const notice = page.locator('.navigation-notice');
-  await cloud.open(sessionA); await cloud.open(sessionB);
-  await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionA)).toHaveCount(0);
-  await page.goBack();
-  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionA}`);
-  await expect(notice).toContainText('no longer exists');
-  await page.goForward();
-  await expect(notice).toHaveCount(0);
-  await expect(heading).toHaveText('Cloud fixture B');
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});

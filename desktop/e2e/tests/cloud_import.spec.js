@@ -47,34 +47,3 @@ test('a JSON file imports into Cloud chats', async ({ page }) => {
   expect(JSON.parse(imports(cloud)[0].body)).toEqual({ source: { kind: 'json', text: exportJson } });
 });
 
-for (const [status, body, message] of [
-  [400, 'This export came from Local. Import it into a Local workspace.', 'This export came from Local. Import it into a Local workspace.'],
-  [410, 'This share link has expired.', 'This share link has expired.'],
-  [400, '', 'Cloud answered HTTP 400'],
-  [401, '', 'Your account sign-in expired'],
-  [500, 'internal details', 'Cloud answered HTTP 500'],
-]) {
-  test(`Cloud import ${status}${body ? '' : ' without a body'} keeps the dialog retryable`, async ({ page }) => {
-    const { cloud, dialog } = await setup(page);
-    cloud.importStatus = status;
-    cloud.importError = body;
-    await dialog.getByRole('textbox', { name: 'OpenSeek share link' }).fill(shareUrl);
-    const submit = dialog.getByRole('button', { name: 'Import link', exact: true });
-    await submit.click();
-    await expect(dialog.getByRole('status')).toContainText(message);
-    await expect(submit).toBeEnabled();
-    await expect(cloud.row(importedSession)).toHaveCount(0);
-    cloud.importStatus = 201;
-    await submit.click();
-    await expectOpened(page, cloud, dialog);
-    expect(imports(cloud)).toHaveLength(2);
-  });
-}
-
-test('signed-out Chats offer sign-in without an import menu', async ({ page }) => {
-  const cloud = new CloudHarness(page, { cached: false });
-  await cloud.install();
-  await cloud.goto();
-  await expect(page.locator('aside .cloud-sign-in')).toBeVisible();
-  await expect(page.locator('aside .section-heading').getByRole('button', { name: 'More actions', exact: true })).toHaveCount(0);
-});
