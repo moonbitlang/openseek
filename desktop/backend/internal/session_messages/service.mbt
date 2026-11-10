@@ -46,34 +46,30 @@ priv enum MessageFeedback {
 /// The proposing conversation's system prompt and engine settings when it
 /// proposed, which the conversation it starts runs with however long the
 /// proposal waits.
-#derive(Eq)
 pub(all) struct StartSettings {
   system_prompt : String?
-  model : String?
-  thinking : @protocol.OpenSeekThinking?
-  approval : @protocol.OpenSeekApproval?
+  model : String
+  thinking : @protocol.OpenSeekThinking
+  approval : @protocol.OpenSeekApproval
 }
 
 ///|
-pub extend StartSettings with Eq::{equal, not_equal}
+/// A new conversation with this title and brief in a new worktree of
+/// `workspace`. Without `settings`, it runs with the host's defaults.
+pub struct StartRequest {
+  workspace : String
+  title : String
+  brief : String
+  settings : StartSettings?
+}
 
 ///|
 /// What the user approves: exactly this message to this conversation, or a
-/// new conversation with this title and brief in a new worktree of
-/// `workspace`.
-#derive(Eq)
+/// new conversation.
 pub enum Subject {
   Send(target~ : String, text~ : String)
-  Start(
-    workspace~ : String,
-    title~ : String,
-    brief~ : String,
-    settings~ : StartSettings
-  )
+  Start(StartRequest)
 }
-
-///|
-pub extend Subject with Eq::{equal, not_equal}
 
 ///|
 /// Whether two subjects are one request: what the caller asked for. A
@@ -81,14 +77,13 @@ pub extend Subject with Eq::{equal, not_equal}
 /// after the sender changed them recovers the proposal with its first ones.
 fn Subject::same_request(self : Subject, other : Subject) -> Bool {
   match (self, other) {
-    (
-      Start(workspace~, title~, brief~, ..),
-      Start(workspace=other_workspace, title=other_title, brief=other_brief, ..),
-    ) =>
-      workspace == other_workspace &&
-      title == other_title &&
-      brief == other_brief
-    _ => self == other
+    (Send(target~, text~), Send(target=other_target, text=other_text)) =>
+      target == other_target && text == other_text
+    (Start(request), Start(other)) =>
+      request.workspace == other.workspace &&
+      request.title == other.title &&
+      request.brief == other.brief
+    _ => false
   }
 }
 
@@ -153,7 +148,7 @@ fn Service::insert(
     phase: AwaitingApproval,
     // A proposal's tool result is the proposal itself. The user, not the
     // sender, decides it; only a start is delivered back (see `run`).
-    feedback: if subject is Start(..) {
+    feedback: if subject is Start(_) {
       Returned
     } else {
       Attached
@@ -190,8 +185,7 @@ pub fn Service::decide(self : Service, id : String, allow : Bool) -> Bool {
 /// Refuse the send that would close a wait cycle, allowing the other calls to
 /// finish, rather than parking every involved conversation indefinitely.
 fn Service::would_wait_cycle(self : Service, candidate : Message) -> Bool {
-  // A start waits on no existing conversation's input.
-  if !(candidate.feedback is Attached) || candidate.subject is Start(..) {
+  if !(candidate.feedback is Attached) {
     return false
   }
   let frontier = [candidate.target]
@@ -206,7 +200,6 @@ fn Service::would_wait_cycle(self : Service, candidate : Message) -> Bool {
     visited[sender] = ()
     for entry in self.entries.values() {
       if entry.sender == sender &&
-        entry.subject is Send(..) &&
         entry.feedback is Attached &&
         entry.phase is (Approved | Delivering) {
         frontier.push(entry.target)
@@ -232,9 +225,9 @@ fn MessagePhase::result(self : MessagePhase) -> (String, String?) {
 ///|
 pub fn Message::status(self : Message) -> Json {
   let (status, error) = match (self.subject, self.phase) {
-    (Start(..), AwaitingApproval) => ("proposed", None)
-    (Start(..), Approved | Delivering) => ("starting", None)
-    (Start(..), Completed(Rejected)) => ("dismissed", None)
+    (Start(_), AwaitingApproval) => ("proposed", None)
+    (Start(_), Approved | Delivering) => ("starting", None)
+    (Start(_), Completed(Rejected)) => ("dismissed", None)
     (_, phase) => phase.result()
   }
   let fields : Map[String, Json] = {
@@ -338,7 +331,7 @@ pub async fn Service::run(
   self : Service,
   deliver : async (String, String, String) -> Unit,
   report_error : (String, String) -> Unit,
-  start~ : async (Message) -> Unit,
+  start~ : async (Message, StartRequest) -> Unit,
 ) -> Unit {
   @async.with_task_group(group => {
     while true {
@@ -357,8 +350,8 @@ pub async fn Service::run(
                   deliver(target, text, entry.id)
                   Sent
                 }
-                Start(..) => {
-                  start(entry)
+                Start(request) => {
+                  start(entry, request)
                   Started
                 }
               }
@@ -370,11 +363,11 @@ pub async fn Service::run(
             // the sender's conversation, where the person who started it is
             // looking.
             match (entry.subject, outcome) {
-              (Start(..), Started) => entry.feedback = Detached
-              (Start(title~, ..), Failed(error)) =>
+              (Start(_), Started) => entry.feedback = Detached
+              (Start(request), Failed(error)) =>
                 report_error(
                   entry.sender,
-                  "Could not start “\{title}”: \{error}",
+                  "Could not start “\{request.title}”: \{error}",
                 )
               _ => ()
             }
@@ -423,7 +416,7 @@ pub impl Show for MessageError with fn output(self, logger) {
 ///|
 /// Create one immutable approval subject, or recover an identical retry.
 /// The boolean is true only when the caller must publish a new approval.
-pub fn Service::request(
+pub fn Service::request_send(
   self : Service,
   sender : String,
   target : String,
@@ -460,7 +453,7 @@ pub fn Service::request_start(
   title~ : String,
   brief~ : String,
   request_id~ : String,
-  settings~ : StartSettings,
+  settings? : StartSettings,
 ) -> (Message, Bool) raise {
   guard !sender.is_blank() &&
     !workspace.is_blank() &&
@@ -469,7 +462,7 @@ pub fn Service::request_start(
     !request_id.is_blank() else {
     raise MessageError("a workspace, title, brief, and request_id are required")
   }
-  let subject = Start(workspace~, title~, brief~, settings~)
+  let subject = Start({ workspace, title, brief, settings, })
   if self.existing(sender, request_id, subject) is Some(entry) {
     return (entry, false)
   }

@@ -1936,7 +1936,7 @@ priv enum Msg {
     id~ : String
   )
   // The person started (`allow`) or dismissed a conversation the active one
-  // proposed, from its card in the transcript.
+  // proposed, from its row above the composer.
   ProposalAnswered(id~ : String, allow~ : Bool)
   NewChat
   NewChatRequested

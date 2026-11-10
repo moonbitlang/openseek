@@ -53,7 +53,6 @@ priv enum UiMessage {
   SteerLabel
   DismissProposal
   StartProposal
-  StartingProposal
   QueuedLabel
   QueuedResume
   EditingLabel
@@ -425,11 +424,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, StartProposal) => "开始"
     (TraditionalChinese, StartProposal) => "開始"
     (Japanese, StartProposal) => "開始"
-    (English, StartingProposal) => "Starting…"
-    (Spanish, StartingProposal) => "Iniciando…"
-    (SimplifiedChinese, StartingProposal) => "正在启动…"
-    (TraditionalChinese, StartingProposal) => "正在啟動…"
-    (Japanese, StartingProposal) => "開始しています…"
     (English, SteerLabel) => "Steer"
     (Spanish, SteerLabel) => "Orientar"
     (SimplifiedChinese, SteerLabel) => "引导"

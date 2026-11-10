@@ -334,80 +334,114 @@ fn ApprovalNotice::render(
 ) -> @html.Html {
   ignore(locale)
   let is_message = self.tool_name == "session.send"
-  let actions : Array[@html.Html] = if self.answered {
-    [@html.span(class="composer-approval-state", ui(locale, SendingLabel))]
+  let actions = answer_actions(
+    answered?=if self.answered { Some(ui(locale, SendingLabel)) } else { None },
+    deny=ui(locale, if is_message { CancelLabel } else { DenyLabel }),
+    deny_title=ui(locale, if is_message { CancelLabel } else { RefuseHint }),
+    on_deny=action_emit(ApprovalAnswered(identity~, allow=false)),
+    allow=ui(locale, if is_message { SendLabel } else { AllowOnce }),
+    allow_title=ui(locale, if is_message { SendLabel } else { AllowOnceHint }),
+    on_allow=action_emit(ApprovalAnswered(identity~, allow=true)),
+  )
+  let text = if is_message {
+    let target = self.target_label.unwrap_or(self.detail)
+    let label = match locale {
+      English => "Send to “\{target}”"
+      SimplifiedChinese => "发送给「\{target}」"
+      TraditionalChinese => "傳送給「\{target}」"
+      Japanese => "「\{target}」に送信"
+      Spanish => "Enviar a «\{target}»"
+    }
+    @html.span(class="composer-notice-text", title=self.detail, label)
   } else {
-    [
-      @html.button(
-        class="composer-approval-action composer-approval-deny",
-        type_="button",
-        title=ui(locale, if is_message { CancelLabel } else { RefuseHint }),
-        on_click=action_emit(ApprovalAnswered(identity~, allow=false)),
-        ui(locale, if is_message { CancelLabel } else { DenyLabel }),
-      ),
-      @html.button(
-        class="composer-approval-action composer-approval-allow",
-        type_="button",
-        title=ui(locale, if is_message { SendLabel } else { AllowOnceHint }),
-        on_click=action_emit(ApprovalAnswered(identity~, allow=true)),
-        ui(locale, if is_message { SendLabel } else { AllowOnce }),
+    @html.span(class="composer-notice-text", [
+      @html.code(class="composer-approval-tool", self.tool_name),
+      @html.span(" \{self.detail}"),
+    ])
+  }
+  // Bound both tokenization and DOM growth before highlighting. Large
+  // approvals keep their exact text in one text node, including newlines.
+  // The length guard also bounds the work of counting source lines.
+  let detail = self.body.map(body => {
+    if is_message {
+      @html.div(class="composer-approval-body composer-approval-message", body)
+    } else {
+      @html.pre(class="composer-approval-body", [
+        if body.length() <= 32_768 && body.split("\n").take(501).count() <= 500 {
+          @syntax_html.moonbit_source_code(body)
+        } else {
+          @html.code(body)
+        },
+      ])
+    }
+  })
+  question_row(@icons.icon_key(), text, actions, detail?, open=true)
+}
+
+///|
+/// The answer controls of a context question: the decision once it is
+/// answered, otherwise its refusal and acceptance.
+fn answer_actions(
+  answered? : String,
+  deny~ : String,
+  deny_title? : String,
+  on_deny~ : @cmd.Cmd,
+  allow~ : String,
+  allow_title? : String,
+  on_allow~ : @cmd.Cmd,
+) -> Array[@html.Html] {
+  if answered is Some(state) {
+    return [
+      @html.span(
+        class="composer-approval-state",
+        attrs=@html.Attrs::build().role("status"),
+        state,
       ),
     ]
   }
+  [
+    @html.button(
+      class="composer-approval-action composer-approval-deny",
+      type_="button",
+      title?=deny_title,
+      on_click=on_deny,
+      deny,
+    ),
+    @html.button(
+      class="composer-approval-action composer-approval-allow",
+      type_="button",
+      title?=allow_title,
+      on_click=on_allow,
+      allow,
+    ),
+  ]
+}
+
+///|
+/// One question row above the composer: the question with its answer
+/// controls, opening to `detail` when there is one.
+fn question_row(
+  icon : @html.Html,
+  text : @html.Html,
+  actions : Array[@html.Html],
+  detail? : @html.Html,
+  open~ : Bool,
+) -> @html.Html {
   let question = @html.div(
     class="composer-approval-question",
+    [@html.span(class="composer-notice-icon", icon), text, ..actions],
+  )
+  guard detail is Some(detail) else {
+    return @html.div(class="composer-context-row composer-approval", [question])
+  }
+  @html.details(
+    class="composer-context-row composer-approval composer-context-disclosure",
+    open~,
     [
-      @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_key)),
-      if is_message {
-        let target = self.target_label.unwrap_or(self.detail)
-        let label = match locale {
-          English => "Send to “\{target}”"
-          SimplifiedChinese => "发送给「\{target}」"
-          TraditionalChinese => "傳送給「\{target}」"
-          Japanese => "「\{target}」に送信"
-          Spanish => "Enviar a «\{target}»"
-        }
-        @html.span(class="composer-notice-text", title=self.detail, label)
-      } else {
-        @html.span(class="composer-notice-text", [
-          @html.code(class="composer-approval-tool", self.tool_name),
-          @html.span(" \{self.detail}"),
-        ])
-      },
-      ..actions,
+      @html.summary(class="composer-context-summary", question),
+      @html.div(class="composer-context-detail", [detail]),
     ],
   )
-  if self.body is Some(body) {
-    @html.details(
-      class="composer-context-row composer-approval composer-context-disclosure",
-      open=true,
-      [
-        @html.summary(class="composer-context-summary", question),
-        // Bound both tokenization and DOM growth before highlighting. Large
-        // approvals keep their exact text in one text node, including newlines.
-        // The length guard also bounds the work of counting source lines.
-        @html.div(class="composer-context-detail", [
-          if is_message {
-            @html.div(
-              class="composer-approval-body composer-approval-message",
-              body,
-            )
-          } else {
-            @html.pre(class="composer-approval-body", [
-              if body.length() <= 32_768 &&
-                body.split("\n").take(501).count() <= 500 {
-                @syntax_html.moonbit_source_code(body)
-              } else {
-                @html.code(body)
-              },
-            ])
-          },
-        ]),
-      ],
-    )
-  } else {
-    @html.div(class="composer-context-row composer-approval", [question])
-  }
 }
 
 ///|
@@ -456,57 +490,30 @@ fn ContextComponent::render(
       // opening. The agent has gone on, so nothing here is a turn's question.
       let rows : Map[String, @html.Html] = Map([])
       for proposal in proposals {
-        let actions : Array[@html.Html] = if proposal.starting {
-          [
-            @html.span(
-              class="composer-approval-state",
-              attrs=@html.Attrs::build().role("status"),
-              ui(locale, StartingProposal),
-            ),
-          ]
-        } else {
-          [
-            @html.button(
-              class="composer-approval-action composer-approval-deny",
-              type_="button",
-              on_click=action_emit(
-                ProposalAnswered(identity~, id=proposal.id, allow=false),
-              ),
-              ui(locale, DismissProposal),
-            ),
-            @html.button(
-              class="composer-approval-action composer-approval-allow",
-              type_="button",
-              on_click=action_emit(
-                ProposalAnswered(identity~, id=proposal.id, allow=true),
-              ),
-              ui(locale, StartProposal),
-            ),
-          ]
-        }
-        rows[proposal.id] = @html.details(
-          class="composer-context-row composer-approval composer-context-disclosure",
-          [
-            @html.summary(class="composer-context-summary", [
-              @html.div(
-                class="composer-approval-question",
-                [
-                  @html.span(
-                    class="composer-notice-icon",
-                    @icons.icon(@icons.icon_worktree),
-                  ),
-                  @html.span(class="composer-notice-text", proposal.title),
-                  ..actions,
-                ],
-              ),
-            ]),
-            @html.div(class="composer-context-detail", [
-              @html.div(
-                class="composer-approval-body composer-approval-message",
-                proposal.brief,
-              ),
-            ]),
-          ],
+        let actions = answer_actions(
+          answered?=if proposal.starting {
+            Some(ui(locale, StartingLabel))
+          } else {
+            None
+          },
+          deny=ui(locale, DismissProposal),
+          on_deny=action_emit(
+            ProposalAnswered(identity~, id=proposal.id, allow=false),
+          ),
+          allow=ui(locale, StartProposal),
+          on_allow=action_emit(
+            ProposalAnswered(identity~, id=proposal.id, allow=true),
+          ),
+        )
+        rows[proposal.id] = question_row(
+          @icons.icon_worktree(),
+          @html.span(class="composer-notice-text", proposal.title),
+          actions,
+          detail=@html.div(
+            class="composer-approval-body composer-approval-message",
+            proposal.brief,
+          ),
+          open=false,
         )
       }
       if rows.is_empty() {

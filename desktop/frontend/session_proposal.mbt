@@ -26,14 +26,11 @@ fn Model::proposals(
   .filter(item => {
     item.session == conversation.session_id && item.approval.is_proposal()
   })
-  .map(item => {
-    let proposal : @composer.SessionProposal = {
-      id: item.approval.id,
-      title: item.approval.detail,
-      brief: item.approval.body.unwrap_or(""),
-      starting: item.approval.answered,
-    }
-    proposal
+  .map(item => @composer.SessionProposal::{
+    id: item.approval.id,
+    title: item.approval.detail,
+    brief: item.approval.body.unwrap_or(""),
+    starting: item.approval.answered,
   })
   .to_array()
 }

@@ -37,12 +37,12 @@ async fn ApiState::run_session_messages(self : ApiState) -> Unit {
         }),
       )
     },
-    start=entry => {
+    start=(entry, request) => {
       defer {
         self.hub.message_approvals.remove(entry.id)
         self.hub.publish_approvals()
       }
-      self.start_conversation(entry)
+      self.start_conversation(entry, request)
     },
   )
 }
@@ -58,10 +58,9 @@ async fn ApiState::run_session_messages(self : ApiState) -> Unit {
 async fn ApiState::start_conversation(
   self : ApiState,
   entry : @session_messages.Message,
+  request : @session_messages.StartRequest,
 ) -> Unit {
-  guard entry.subject is Start(workspace~, title~, brief~, settings~) else {
-    fail("only a start request starts a conversation")
-  }
+  let { workspace, title, brief, settings, } = request
   let session = entry.target
   let host = self.manager.worktree_host()
   let root = @pathx.Absolute::parse_resource_path(workspace)
@@ -96,13 +95,13 @@ async fn ApiState::start_conversation(
   )
   defer subscription.close()
   let payload : @protocol.StartPayload = {
-    system_prompt: settings.system_prompt,
+    system_prompt: settings.bind(settings => settings.system_prompt),
     images: [],
     task: brief,
     submission_id: Some(entry.id),
-    model: settings.model,
-    thinking: settings.thinking,
-    approval: settings.approval,
+    model: settings.map(settings => settings.model),
+    thinking: settings.map(settings => settings.thinking),
+    approval: settings.map(settings => settings.approval),
     max_steps: None,
     session,
     workspace: Some(workspace),
@@ -154,7 +153,7 @@ async fn ApiState::start_conversation(
 /// Remove the worktree a failed start created, then fail with `error`. A
 /// worktree that cannot be removed is logged and left in the list, where the
 /// person can remove it.
-async fn[T] ApiState::give_back_worktree(
+async fn ApiState::give_back_worktree(
   self : ApiState,
   host : @worktree.WorktreeHost,
   root : @pathx.Absolute,
@@ -162,7 +161,7 @@ async fn[T] ApiState::give_back_worktree(
   name : String,
   session : String,
   error : Error,
-) -> T {
+) -> Unit {
   ignore(
     @worktree.remove(host, root, name, false, worktrees => {
       publish_worktree_changed(self, workspace, worktrees)
@@ -382,7 +381,9 @@ async fn ApiState::send_session_message(
       raise @mcp.ToolError("conversation \{session} has no saved history")
     }
   }
-  let (entry, created) = self.messages.request(sender, target, text, request_id)
+  let (entry, created) = self.messages.request_send(
+    sender, target, text, request_id,
+  )
   if !created {
     return entry.status()
   }
@@ -423,12 +424,12 @@ async fn ApiState::propose_session(
     title~,
     brief~,
     request_id~,
-    settings={
-      system_prompt: engine.bind(engine => engine.system_prompt),
-      model: engine.map(engine => engine.model),
-      thinking: engine.map(engine => engine.thinking),
-      approval: engine.map(engine => engine.approval),
-    },
+    settings?=engine.map(engine => {
+      system_prompt: engine.system_prompt,
+      model: engine.model,
+      thinking: engine.thinking,
+      approval: engine.approval,
+    }),
   )
   if !created {
     return entry.status()
