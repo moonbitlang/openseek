@@ -52,17 +52,25 @@ test "Cloud HTML preview capability follows the signed-in file owner on both cli
 test "Cloud preview results belong to the requesting account epoch and selected session" {
   let model = integrated_cloud_model()
   let owner = file_ctx(model).owner
+  let url = "https://preview.example.test/page.html"
   let completed = CloudFilePreviewCreated(
     owner~,
     auth_epoch=model.cloud.epoch,
-    result=Ok("https://preview.example.test/page.html"),
+    result=Ok(url),
   )
   let (_, opened) = update(test_dispatch(), completed, model)
   let id = @dock.active_browser(opened.dock_state()).unwrap()
-  assert_eq(
-    @preview.page(opened.preview, id).unwrap().url,
-    Some("https://preview.example.test/page.html"),
+  assert_eq(@preview.page(opened.preview, id).unwrap().url, Some(url))
+  assert_eq(desired_browser_view(opened), Some(id))
+  let (_, ordinary_link) = update(
+    test_dispatch(),
+    ExternalLinkClicked(url),
+    opened,
   )
+  assert_true(@dock.active_browser(ordinary_link.dock_state()) != Some(id))
+  assert_eq(desired_browser_view(ordinary_link), None)
+  let (_, reopened) = update(test_dispatch(), completed, ordinary_link)
+  assert_eq(desired_browser_view(reopened), Some(id))
   let (_, switched) = update(
     test_dispatch(),
     OpenCloudConversation(account="fixture-user", session="cloud-b"),

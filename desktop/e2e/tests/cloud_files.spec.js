@@ -161,6 +161,29 @@ for (const desktop of [false, true]) {
       await expect(page.locator('#browser-address-input')).toHaveValue(/\/token-3\//);
       expect(cloud.hostRequests.filter(request => request.method === 'browser.open')).toHaveLength(2);
       expect(cloud.hostRequests.some(request => request.method === 'browser.preview')).toBe(false);
+      const id = cloud.hostRequests.filter(request => request.method === 'browser.open').at(-1).params.id;
+      const last = method => cloud.hostRequests.findLast(request => request.method === method && request.params.id === id);
+      const visible = () => last('browser.set_visible')?.params.visible;
+      await expect.poll(visible).toBe(true);
+      const pane = await page.locator('#browser-pane').boundingBox();
+      const bounds = last('browser.set_bounds');
+      expect(bounds.params).toEqual({
+        id, x: Math.trunc(pane.x), y: Math.trunc(pane.y),
+        width: Math.trunc(pane.width), height: Math.trunc(pane.height),
+      });
+      expect(cloud.hostRequests.indexOf(bounds)).toBeLessThan(cloud.hostRequests.indexOf(last('browser.set_visible')));
+      const tab = page.locator('.editor-tab.active');
+      await tab.click({ button: 'right' });
+      await expect(page.getByRole('menu', { name: 'Tab actions' })).toBeVisible();
+      await expect.poll(visible).toBe(false);
+      await page.keyboard.press('Escape');
+      await expect.poll(visible).toBe(true);
+      await cloud.open(sessionB);
+      await expect.poll(visible).toBe(false);
+      await cloud.open(sessionA);
+      await expect.poll(visible).toBe(true);
+      await tab.locator('.tab-close').click();
+      await expect.poll(() => last('browser.close')?.params.id).toBe(id);
     } else {
       const opened = await nextPopup;
       await expect(opened.getByRole('heading', { name: 'Cloud HTML', exact: true })).toHaveCSS('color', 'rgb(30, 64, 175)');
