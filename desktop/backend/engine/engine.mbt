@@ -1816,7 +1816,6 @@ async fn ServeEngine::consume(
 ) -> Int32 {
   let engine = self
   let sink = self.sink
-  let mcp_errors : Map[String, String] = Map([])
   // The read end belongs to this task for its whole life, so every way out —
   // EOF, a stream this host cannot read, cancellation — closes it here.
   defer reader.close()
@@ -1841,28 +1840,35 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
-          // Partial success still reports registration. Remember failures by
-          // source path until a later engine successfully loads that file.
+          // A configuration file's failure is forwarded once per distinct
+          // error, remembered by source path until a later engine reports
+          // that file again.
           Some(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
-            if manager.mcp.current_engine_id != Some(engine.id) {
-              continue
-            }
-            mcp_errors[path] = error
-            if manager.mcp.errors.get(path) == Some(error) {
+            if manager.mcp.current_engine_id != Some(engine.id) ||
+              manager.mcp.errors.get(path) == Some(error) {
               continue
             }
             manager.mcp.errors[path] = error
           }
-          Some(McpToolsRegistered(..)) =>
-            if manager.mcp.current_engine_id == Some(engine.id) {
-              manager.mcp.errors = mcp_errors
-            }
           // Kept for `mcp.status`, and still forwarded: a page showing this
-          // conversation's status reads it again when it sees one.
-          Some(McpStatus(status~)) => engine.mcp_status = Some(status)
+          // conversation's status reads it again when it sees one. Its
+          // configs are what this engine made of each file, which replace
+          // the failures earlier engines reported.
+          Some(McpStatus(status~)) => {
+            engine.mcp_status = Some(status)
+            if manager.mcp.current_engine_id == Some(engine.id) {
+              let errors : Map[String, String] = Map([])
+              for config in status.configs {
+                if config.state is Failed(error) {
+                  errors[config.path] = error
+                }
+              }
+              manager.mcp.errors = errors
+            }
+          }
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {
               emit(

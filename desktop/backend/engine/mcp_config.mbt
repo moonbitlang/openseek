@@ -227,7 +227,14 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
         #|  read -r resume
         #|  printf '{"event":"mcp_config_invalid","path":"%s.late","error":"late"}\n' "$3"
         #|fi
-        #|printf '{"event":"mcp_tools_registered","servers":1,"tools":0,"names":[]}\n'
+        #|configs=$(printf '{"path":"%s","state":"loaded"}' "$3")
+        #|if [ -n "$2" ]; then
+        #|  configs=$(printf '{"path":"%s","state":"failed","error":"%s"}' "$3" "$2")
+        #|fi
+        #|if [ -n "$4" ]; then
+        #|  configs=$(printf '%s,{"path":"%s.other","state":"failed","error":"%s"}' "$configs" "$3" "$4")
+        #|fi
+        #|printf '{"event":"mcp_status","status":{"configs":[%s],"servers":[]}}\n' "$configs"
         #|printf '{"event":"mcp_connect_failed","server":"%s","error":"marker"}\n' "$1"
         #|cat >/dev/null
       let (child_stdin, writer) = @process.write_to_process()
@@ -303,7 +310,7 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
     start("s-10", Some("worse"), "worse")
     @debug.assert_eq(reported(), ["bad", "worse", "worse", "worse", "worse"])
     // An older engine has read the broken file but is still connecting when
-    // a newer launch loads the repair. Its late errors and registration must
+    // a newer launch loads the repair. Its late errors and status must
     // neither notify again nor restore its obsolete error snapshot.
     let older = launch("s-old", Some("worse"), "worse", true)
     start("s-repaired", None, "")
