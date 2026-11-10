@@ -11,6 +11,7 @@ fn integrated_cloud_model() -> Model {
         updated_at: Some(100),
         generating: false,
         archived: false,
+        approval: ApprovalAsk,
       },
     ],
   }
@@ -22,8 +23,7 @@ fn integrated_cloud_model() -> Model {
       user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
     }),
     is_desktop: true,
-    deepseek_key_saved: false,
-  }
+  }.with_host_endpoint(deepseek_key_saved=false)
   let (_, model) = update(
     test_dispatch(),
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
@@ -83,7 +83,7 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   let dispatch = test_dispatch()
   let model = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, model)
-  assert_true(settings.management_dialog is Some(Settings))
+  assert_true(settings.management_dialog is Some(Settings(General)))
   let (_, cloud) = update(
     dispatch,
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
@@ -274,6 +274,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(100),
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
         {
           id: "cloud-b",
@@ -281,6 +282,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(300),
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
       ],
     },
@@ -294,7 +296,7 @@ test "Chats use the shared section with existing ordering and create action" {
       }
     })
   }
-  assert_eq(sections.map(section => section.label), ["Chats"])
+  assert_eq(sections.map(section => section.label), [Some("Chats")])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
   assert_true(sections[0].action is Some(_))
 }
@@ -563,7 +565,7 @@ test "remote toggle preserves Cloud while account sign-out clears it" {
       connected: true,
       managed_by_env: false,
       device_url: Some(
-        "https://openseek-api.moonbitlang.cn/console/?device=fixture",
+        "https://seekmoon.moonbitlang.com/console/?device=fixture",
       ),
     }),
   }
@@ -804,4 +806,16 @@ test "new-chat shortcuts create conversations in the selected Codex project" {
     }
   }
   assert_eq(actual, [project, project, project, project])
+}
+
+///|
+test "a Cloud Quick Open pick opens its file before panel reconciliation" {
+  let cloud = integrated_cloud_model()
+  assert_true(cloud.cloud_selected())
+  assert_true(
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(cloud),
+  )
+  assert_false(
+    QuickOpen(@quick_open.Move(1)).opens_file_before_panel_reconciliation(cloud),
+  )
 }

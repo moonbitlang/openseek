@@ -1,4 +1,5 @@
 import {
+  "moonbit-community/rui",
   "openseek_desktop/frontend/cloud",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",

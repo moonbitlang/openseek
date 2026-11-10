@@ -97,8 +97,8 @@ struct Launcher {
 /// and endpoint); `cwd` is where it runs, and `env` is added to the
 /// environment it inherits (a credential, kept off its command line). Result files are written in
 /// `result_dir`, which is created when needed.
-pub fn[X] Launcher::Launcher(
-  scope : @agent_runtime.AgentTaskScope[X],
+pub fn Launcher::Launcher(
+  scope : @agent_runtime.AgentTaskScope,
   runtime~ : @bgjobs.BgJobRuntime,
   children~ : @agent_subrun.ChildSession,
   program~ : String,
@@ -397,7 +397,7 @@ pub async fn Launcher::start(
       Directory(path~) => Some(path)
       InPlace => self.cwd
     },
-    stdin=child_stdin,
+    stdin=Shared(child_stdin),
     extra_env=self.env,
     cancel_handler=handler,
     on_end=end => {
@@ -420,12 +420,15 @@ pub async fn Launcher::start(
     reaped=false,
   ) catch {
     error => {
+      child_stdin.close()
       writer.close()
       abandon()
       release()
       return Unavailable("could not start child \{session}: \{error}")
     }
   }
+  // The child holds its own copy of the read end now.
+  child_stdin.close()
   registered.val = true
   // Its hand-off reaches the model through its own job from here on.
   if workplace is Some(Worktree(_)) {
@@ -442,7 +445,7 @@ pub async fn Launcher::start(
   }
   let line = request.to_json().stringify() + "\n"
   (self.spawn)(() => {
-    @async.with_timeout(self.delivery_timeout_ms, () => writer.write(line)) catch {
+    @async.with_timeout(self.delivery_timeout_ms, () => writer.text.write(line)) catch {
       _ =>
         // Failed because the child was already being ended: a stop, a
         // watchdog (recorded when requested) or teardown (its handler).
@@ -468,8 +471,8 @@ priv enum Left {
 
 ///|
 async fn read_result(path : String, request_id : String) -> Left? {
-  let text = @fs.read_file(path).text() catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+  let text = @fs.read_text(path) catch {
+    @os_error.OsError(NotFound, ..) => return None
     error => return Some(Unreadable("\{error}"))
   }
   let result = @protocol.parse_run_result(@json.parse(text)) catch {

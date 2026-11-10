@@ -13,15 +13,18 @@ fn BgJobRuntime::next_id(self : BgJobRuntime) -> String raise {
 ///|
 #cfg(not(platform="windows"))
 async test "previous runtime and legacy job IDs cannot read wait for or stop a new job" {
-  let old_id = @async.with_task_group(group => {
+  let old_ids : Array[String] = []
+  @async.with_task_group(group => {
     let old = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
-    old.start(program="sh", args=["-c", "printf old"], command="old")
+    old_ids.push(
+      old.start(program="sh", args=["-c", "printf old"], command="old"),
+    )
   })
   @async.with_task_group(group => {
     let current = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
     let new_id = current.start(program="sleep", args=["30"], command="new")
-    assert_true(old_id != new_id)
-    for stale_id in [old_id, "bg-1"] {
+    assert_false(old_ids.contains(new_id))
+    for stale_id in [..old_ids, "bg-1"] {
       assert_true(current.snapshot(stale_id) is None)
       assert_true(current.read_output(stale_id) is None)
       assert_false(current.stop(stale_id))

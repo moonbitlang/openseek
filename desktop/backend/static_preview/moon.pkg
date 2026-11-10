@@ -1,0 +1,20 @@
+import {
+  "openseek_desktop/backend/internal/processx",
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/backend/pathx",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/encoding/percent",
+  "moonbitlang/core/string",
+}
+
+supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/process",
+  ],
+)

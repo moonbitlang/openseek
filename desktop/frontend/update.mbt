@@ -108,8 +108,9 @@ fn session_snapshot_command(
 
 ///|
 /// Move the UI's focus to `channel`: refetch the focused-scoped mirrors
-/// that BridgeReady only loads for the then-focused device (host settings,
-/// installed skills) and reset their local bookkeeping, so
+/// that BridgeReady only loads for the then-focused device (installed
+/// skills), re-read the newly focused host's settings so its reply settles
+/// the setup modal for that host, and reset the focused form state, so
 /// nothing of the previous device's host bleeds through. The active
 /// conversation is the caller's to place afterwards (an activation or a
 /// rotation); until it does, nothing is selected. A no-op when focus is
@@ -146,25 +147,30 @@ fn focus_channel(
     dispatch.map(msg => FileEditor(msg)),
     file_ctx(model),
   )
+  let next = {
+    ..model.reset_api_setup(),
+    focused: channel,
+    active_session: "",
+    selected_conversation: None,
+    conversation_load_failure: None,
+    loading_conversation: None,
+    installed_skills: [],
+    // Codex is host-owned just like the other focused mirrors. Clear the
+    // previous device's account and conversation list before its replies
+    // can be mistaken for this device's sidebar section.
+    codex: model.codex.reset_for_channel(),
+    // The old HostConnection is already parked. Preserve the remaining
+    // owner/root state until the post-dispatch sync retires its file-index
+    // cache and re-roots against the newly focused host.
+    file_panel,
+  }
+  // A cached snapshot makes the new host ready at once, so its provider must
+  // own the default model before the caller places a fresh chat; the
+  // refetch reply arrives too late for a chat that was already sent. Its
+  // committed prompt default refills the Settings editor the same way.
   (
     @cmd.batch([focus_cmd, unwatch_cmd]),
-    {
-      ..model.clear_host_settings(),
-      focused: channel,
-      active_session: "",
-      selected_conversation: None,
-      conversation_load_failure: None,
-      loading_conversation: None,
-      installed_skills: [],
-      // Codex is host-owned just like the other focused mirrors. Clear the
-      // previous device's account and conversation list before its replies
-      // can be mistaken for this device's sidebar section.
-      codex: model.codex.reset_for_channel(),
-      // The old HostConnection is already parked. Preserve the remaining
-      // owner/root state until the post-dispatch sync retires its file-index
-      // cache and re-roots against the newly focused host.
-      file_panel,
-    },
+    next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }
 
@@ -1231,7 +1237,7 @@ fn apply_engine_event(
             run_id: event_run_id,
             tool_name,
             detail,
-            body: approval_display_body(tool_name, body),
+            body: @engine_session.approval_display_body(tool_name, body),
             answered: false,
           }),
         },
@@ -1524,7 +1530,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
-  model.delete_confirm is Some(_) ||
+  model.delete_confirm is Open(_) ||
   model.quick_open.is_open() ||
   model.api_setup_open ||
   model.update_ux is ConfirmingRestart(_) ||
@@ -1541,7 +1547,6 @@ fn covering_overlay(model : Model) -> Bool {
 /// custom select, the composer's Git popover, and every `covering_overlay` —
 /// must hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int32? {
-  guard !model.cloud_selected() else { return None }
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -1561,6 +1566,12 @@ fn desired_browser_view(model : Model) -> Int32? {
   guard @dock.active_browser(model.dock_state()) is Some(id) &&
     @preview.page(model.preview, id) is Some(page) &&
     page.url is Some(_) else {
+    return None
+  }
+  // In Cloud, only a file preview in the current conversation's pane can
+  // place a native view. Ordinary links keep their existing behavior.
+  guard !model.cloud_selected() ||
+    (page.cloud_preview && model.file_panel_visible()) else {
     return None
   }
   Some(id)
@@ -1730,6 +1741,15 @@ fn update(
     model
   }
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let model = match model.management_dialog {
+    Some(Settings(section)) if !section.available(model) =>
+      {
+        ..model,
+        management_dialog: Some(Settings(General)),
+        select_menu: None,
+      }
+    _ => model
+  }
   let model = model.restore_message_approvals()
   let model = if navigates {
     { ..model, management_dialog: None, }
@@ -1739,14 +1759,35 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
-  let dialog_cmd = if previous.management_dialog == model.management_dialog {
+  let detail_was_open = previous.skills_detail_dialog_open()
+  let detail_open = model.skills_detail_dialog_open()
+  let dialog_cmd = if (previous.management_dialog is Some(_)) ==
+    (model.management_dialog is Some(_)) {
     @cmd.none
   } else if model.management_dialog is Some(_) {
     @dialog.show("management-dialog")
   } else {
     @dialog.close("management-dialog")
   }
-  let cmd = @cmd.batch([cmd, dialog_cmd])
+  let cmd = @cmd.batch([
+    cmd,
+    if detail_was_open && !detail_open {
+      @dialog.close("skill-detail-dialog")
+    } else {
+      @cmd.none
+    },
+    dialog_cmd,
+    if previous.delete_confirm is Open(_) && !(model.delete_confirm is Open(_)) {
+      @dialog.close("delete-chat-dialog")
+    } else {
+      @cmd.none
+    },
+    if !detail_was_open && detail_open {
+      @dialog.show("skill-detail-dialog")
+    } else {
+      @cmd.none
+    },
+  ])
   let (preferences_cmd, model) = sync_account_preferences(
     dispatch, previous, model,
   )
@@ -1863,12 +1904,9 @@ fn update(
   // many messages — device/session switches, background pushes, connection
   // metadata, restored session data, a worktree registry broadcast — so the
   // package fences the palette once here rather than in every branch.
-  let (quick_open_cmd, quick_open) = match model.active_checkout() {
-    Some(active) =>
-      model.quick_open.reconcile(
-        dispatch.map(msg => QuickOpen(msg)),
-        model.quick_open_input(active),
-      )
+  let (quick_open_cmd, quick_open) = match model.quick_open_input() {
+    Some(input) =>
+      model.quick_open.reconcile(dispatch.map(msg => QuickOpen(msg)), input)
     // No checkout on screen is no owner to fence against — the palette has
     // nothing left to search, so it closes here for the same reason it does
     // when its conversation is replaced.
@@ -1909,7 +1947,7 @@ fn update(
   // still take the generic path so an older active document is restored.
   let file_opened_with_panel = !previous.right_panel_open &&
     model.right_panel_open &&
-    msg.opens_file_before_panel_reconciliation() &&
+    msg.opens_file_before_panel_reconciliation(model) &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
@@ -2099,7 +2137,7 @@ fn update(
         model.dock_state().tabs != previous.dock_state().tabs ||
         model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
-        msg.opens_file_before_panel_reconciliation() ||
+        msg.opens_file_before_panel_reconciliation(model) ||
         msg is Dock(TabActivated(_)),
       ),
     ]),
@@ -2108,10 +2146,15 @@ fn update(
 }
 
 ///|
-/// Only the resolved editor reply opens a document during this transition.
-/// Every file selection first asks the host to classify the path.
-fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
-  self is OpenPathResolved(_, Editor(_))
+/// Host file selections first ask the host to classify the path, so only the
+/// resolved editor reply opens a document during this transition. A Cloud
+/// Quick Open pick names an indexed file and opens it synchronously.
+fn Msg::opens_file_before_panel_reconciliation(
+  self : Msg,
+  model : Model,
+) -> Bool {
+  self is OpenPathResolved(_, Editor(_)) ||
+  (model.cloud_selected() && self is QuickOpen(@quick_open.Pick(_)))
 }
 
 ///|
@@ -2247,10 +2290,10 @@ fn update_msg(
         return (@cmd.none, model)
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             CloudDelete(
               account~,
               session~,
@@ -2320,6 +2363,15 @@ fn update_msg(
       (
         apply_language(is_desktop=model.is_desktop, dispatch, locale),
         { ..model, locale, },
+      )
+    }
+    CloudFollowupLoaded(value) => {
+      guard !model.has_host() && value is Some(value) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        { ..model, cloud_followup_behavior: FollowupBehavior::parse(value), },
       )
     }
     SettingsLoaded(
@@ -2416,11 +2468,7 @@ fn update_msg(
       // The localStorage read and the host settings request start together.
       // If the host won that race, reconcile the just-loaded model preference
       // now; otherwise `HostSettingsLoaded` performs the same fold later.
-      let next = if next.host_settings_loaded() {
-        next.align_fresh_conversation_with_provider()
-      } else {
-        next
-      }
+      let next = next.align_new_chats_with_provider(next.focused)
       (
         @cmd.batch([
           theme.apply(model.system_dark, model.is_desktop, dispatch),
@@ -2571,6 +2619,7 @@ fn update_msg(
             )
           }
           @composer.StopRequested(identity~)
+          | @composer.ApprovalAnswered(identity~, ..)
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
           | @composer.QueuedInputSteerRequested(identity~, ..)
@@ -2628,6 +2677,39 @@ fn update_msg(
               FileEditor(@fileeditor.EnsureFileIndex),
               model,
             )
+          }
+          // The session keeps the mode on the server; a running turn keeps
+          // the policy its engine started with, so the menu is locked then.
+          @composer.ApprovalMenuToggled(identity~) => {
+            guard model.screen is Chat &&
+              model.cloud_identity() == Some(identity.owner) &&
+              model.cloud.can_choose_approval(identity.owner.session()) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              ToggleSelectMenu(OpenSeekApprovalMenu),
+              model,
+            )
+          }
+          @composer.SelectMenuDismissed(identity~) => {
+            guard model.cloud_identity() == Some(identity.owner) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(dispatch, CloseSelectMenu, model)
+          }
+          @composer.ApprovalSelected(identity~, mode~) => {
+            guard model.cloud_identity() == Some(identity.owner) &&
+              identity.owner is @interop.Cloud(account~, session~) else {
+              return (@cmd.none, model)
+            }
+            let (close, closed) = update_msg(dispatch, CloseSelectMenu, model)
+            let (save, next) = update_cloud(
+              dispatch,
+              @cloud.Edit(account~, session~, edit=SetApproval(mode)),
+              closed,
+            )
+            return (@cmd.batch([close, save]), next)
           }
           _ => return (@cmd.none, model)
         }
@@ -2694,7 +2776,7 @@ fn update_msg(
                 if conv.prompt_ready() {
                   OpenApiSetup
                 } else {
-                  OpenSetup
+                  SettingsSectionSelected(Engine)
                 },
                 model,
               )
@@ -3655,14 +3737,7 @@ fn update_msg(
         guard file_ctx(model).root() is Some(root) else {
           return (@cmd.none, model)
         }
-        let model = model.begin_editor_navigation()
-        show_editor_resource(
-          dispatch,
-          model,
-          @resource.join_relative(root, path),
-          None,
-          file_link_generation=model.file_panel.file_link_generation,
-        )
+        open_cloud_relative(dispatch, model, root, path, None)
       } else {
         request_open_path(dispatch, model, path.0, None)
       }
@@ -4026,7 +4101,7 @@ fn update_msg(
           // The Codex group's placeholder row: not a model, a doorway.
           // Sign-in and connection state live in the Settings page's Codex
           // group.
-          update_msg(dispatch, OpenSetup, model)
+          update_msg(dispatch, SettingsSectionSelected(Engine), model)
       }
     }
     CodexEffortPicked(value) => {
@@ -4070,10 +4145,13 @@ fn update_msg(
           model.focused,
           model.focused_connection_generation(),
         ),
-        { ..model, host_settings_error: None, },
+        model.map_host_settings(model.focused, mirror => {
+          ..mirror,
+          error: None,
+        }),
       )
     Prompt(msg) => {
-      guard model.host_settings_loaded() && model.settings_saves == 0 else {
+      guard model.host_settings_loaded() && !model.host_settings_saving() else {
         return (@cmd.none, model)
       }
       if msg is @prompt.Edited(_) {
@@ -4109,8 +4187,7 @@ fn update_msg(
           model.focused_connection_generation(),
         ),
         {
-          ..model,
-          settings_saves: model.settings_saves + 1,
+          ..model.map_host_settings(model.focused, mirror => mirror.write_sent()),
           select_menu: None,
         },
       )
@@ -4121,7 +4198,9 @@ fn update_msg(
       (@cmd.none, { ..model, setup_api_key: value, })
     }
     ProviderChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let provider = ApiProvider::parse(value)
       // The update channel no longer derives from the chat provider (only
       // the hosted chat proxy was retired; self-update and the relay stay
@@ -4130,31 +4209,51 @@ fn update_msg(
       let push = push_host_settings(
         dispatch,
         model.focused,
-        provider_settings_patch(provider, model.custom_api_url),
+        provider_settings_patch(provider, endpoint.custom_api_url),
         model.focused_connection_generation(),
       )
       let next = {
-        ..model,
-        api_provider: provider,
-        custom_api_url: if provider is Custom &&
-          model.custom_api_url == OpenRouterChatCompletionsUrl {
-          ""
-        } else {
-          model.custom_api_url
-        },
+        ..model.edit_host_endpoint({
+          ..endpoint,
+          provider,
+          custom_api_url: if provider is Custom &&
+            endpoint.custom_api_url == OpenRouterChatCompletionsUrl {
+            ""
+          } else {
+            endpoint.custom_api_url
+          },
+        }),
         setup_api_key: "",
-        settings_saves: model.settings_saves + 1,
         select_menu: None,
-      }.align_fresh_conversation_with_provider()
+      }.align_new_chats_with_provider(model.focused)
       // The switch can move the endpoint between usable and not. Inside the
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
       // opens the modal — it is the announcement now, not a toast.
-      (push, next.settle_api_setup())
+      let next = next.settle_api_setup()
+      (
+        @cmd.batch([
+          push,
+          if next.api_setup_open && !next.cloud_selected() {
+            @dialog.show("api-setup-dialog")
+          } else {
+            @cmd.none
+          },
+        ]),
+        next,
+      )
     }
     FollowupBehaviorChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let behavior = FollowupBehavior::parse(value)
+      if !model.has_host() {
+        return (
+          save_cloud_followup_behavior(behavior),
+          { ..model, cloud_followup_behavior: behavior, select_menu: None, },
+        )
+      }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       (
         push_host_settings(
           dispatch,
@@ -4163,15 +4262,18 @@ fn update_msg(
           model.focused_connection_generation(),
         ),
         {
-          ..model,
-          followup_behavior: behavior,
-          settings_saves: model.settings_saves + 1,
+          ..model.edit_host_endpoint({
+            ..endpoint,
+            followup_behavior: behavior,
+          }),
           select_menu: None,
         },
       )
     }
     CustomApiUrlChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       (
         push_host_settings(
           dispatch,
@@ -4179,11 +4281,7 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        {
-          ..model,
-          custom_api_url: value,
-          settings_saves: model.settings_saves + 1,
-        },
+        model.edit_host_endpoint({ ..endpoint, custom_api_url: value, }),
       )
     }
     NotificationCornerChanged(value) => {
@@ -4237,7 +4335,73 @@ fn update_msg(
     RemoteAccessSet(enabled) =>
       (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
     RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
-    RemoteCancelClicked => (cancel_remote(dispatch), model)
+    RemoteCancelClicked => {
+      guard model.is_desktop && model.account_login is Some(Waiting) else {
+        return (@cmd.none, model)
+      }
+      (
+        cancel_remote(dispatch, model.account_epoch),
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=true, cancel_pending=true),
+          ),
+          remote_error: None,
+        },
+      )
+    }
+    AccountLoginCancelled(epoch) => {
+      guard model.account_login is Some(_) else { return (@cmd.none, model) }
+      account_loaded(dispatch, model, epoch, Ok(None))
+    }
+    AccountLoginTimedOut(epoch) => {
+      guard model.account_login is Some(_) else { return (@cmd.none, model) }
+      account_loaded(
+        dispatch,
+        model,
+        epoch,
+        Err(@settings.text(model.locale, SignInTimedOut)),
+      )
+    }
+    AccountCancelFailed(epoch, message) => {
+      guard epoch == model.account_epoch &&
+        model.account_login is Some(Cancelling(connect_pending~, ..)) else {
+        return (@cmd.none, model)
+      }
+      if !connect_pending {
+        return account_loaded(
+          dispatch,
+          { ..model, account_login: None, },
+          epoch,
+          Err(message),
+        )
+      }
+      (
+        @cmd.none,
+        { ..model, account_login: Some(Waiting), remote_error: Some(message), },
+      )
+    }
+    AccountCancelFinished(epoch) => {
+      guard epoch == model.account_epoch &&
+        model.account_login is Some(Cancelling(connect_pending~, ..)) else {
+        return (@cmd.none, model)
+      }
+      if !connect_pending {
+        return (
+          fetch_account(dispatch, true, epoch),
+          { ..model, account_login: None, account_login_create: None, },
+        )
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=true, cancel_pending=false),
+          ),
+        },
+      )
+    }
     RemoteDisconnectClicked => sign_out_account(dispatch, model)
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message), })
@@ -4381,7 +4545,10 @@ fn update_msg(
           )
         UpdateReady(version~) =>
           if model.any_conversation_busy() {
-            (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~), })
+            (
+              @dialog.show("update-restart-dialog"),
+              { ..model, update_ux: ConfirmingRestart(version~), },
+            )
           } else {
             (
               apply_update(dispatch),
@@ -4457,9 +4624,10 @@ fn update_msg(
         cmd,
         {
           ..focused,
-          management_dialog: Some(Settings),
+          management_dialog: Some(Settings(Engine)),
           setup_api_key: "",
           api_setup_open: false,
+          select_menu: None,
         },
       )
     }
@@ -4468,13 +4636,22 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          management_dialog: Some(Settings),
+          management_dialog: Some(Settings(General)),
           setup_api_key: "",
           api_setup_open: false,
+          select_menu: None,
         },
       )
-    OpenArchivedChats =>
-      (@cmd.none, { ..model, management_dialog: Some(ArchivedChats), })
+    SettingsSectionSelected(section) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          management_dialog: Some(Settings(section)),
+          api_setup_open: false,
+          select_menu: None,
+        },
+      )
     CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
@@ -4487,7 +4664,7 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         (
-          @cmd.none,
+          @dialog.show("api-setup-dialog"),
           { ..model, api_setup_open: true, api_setup_dismissed: false, },
         )
       }
@@ -4617,7 +4794,17 @@ fn update_msg(
           },
         },
       )
-    DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
+    DeviceChosen(device) =>
+      (
+        @nav.load(
+          if device is Some(id) {
+            @routes.device_entry_path(id)
+          } else {
+            "/cloud"
+          },
+        ),
+        model,
+      )
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
@@ -4677,12 +4864,14 @@ fn update_msg(
       }
     }
     SaveApiKey => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
         (@cmd.none, model)
       } else {
-        match model.api_provider {
+        match endpoint.provider {
           // The key goes straight to the host's store; the mirror keeps
           // only its presence. The save never navigates — it lands on
           // whatever page the form (Settings or the modal over any screen)
@@ -4692,14 +4881,15 @@ fn update_msg(
           // comes back as a toast.
           Deepseek | Glm | OpenRouter | Custom as provider => {
             let next = {
-              ..model,
-              deepseek_key_saved: model.deepseek_key_saved ||
-              provider is Deepseek,
-              glm_key_saved: model.glm_key_saved || provider is Glm,
-              custom_key_saved: model.custom_key_saved ||
-              provider is (OpenRouter | Custom),
+              ..model.edit_host_endpoint({
+                ..endpoint,
+                deepseek_key_saved: endpoint.deepseek_key_saved ||
+                provider is Deepseek,
+                glm_key_saved: endpoint.glm_key_saved || provider is Glm,
+                custom_key_saved: endpoint.custom_key_saved ||
+                provider is (OpenRouter | Custom),
+              }),
               setup_api_key: "",
-              settings_saves: model.settings_saves + 1,
             }
             (
               push_host_settings(
@@ -4763,7 +4953,7 @@ fn update_msg(
       let followup_behavior = match msg {
         SendFollowup(@composer.SteerNow) => FollowupSteer
         SendFollowup(@composer.QueueNext) => FollowupQueue
-        _ => model.followup_behavior
+        _ => model.followup_behavior()
       }
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
@@ -5302,18 +5492,24 @@ fn update_msg(
     CancelArchiveDiscard => (@cmd.none, { ..model, archive_confirm: None, })
     ConfirmDeleteSession =>
       match model.delete_confirm {
-        Some(CloudDelete(account~, session~, ..)) => {
+        Open(CloudDelete(account~, session~, ..)) => {
           guard model.cloud.user_id == Some(account) else {
-            return (@cmd.none, { ..model, delete_confirm: None, })
+            return (
+              @cmd.none,
+              { ..model, delete_confirm: model.delete_confirm.close(), },
+            )
           }
           update_cloud(dispatch, @cloud.Delete(session), {
             ..model,
-            delete_confirm: None,
+            delete_confirm: model.delete_confirm.close(),
           })
         }
-        Some(HostDelete(confirm)) => {
+        Open(HostDelete(confirm)) => {
           guard model.device_state(confirm.channel) is Some(dev) else {
-            return (@cmd.none, { ..model, delete_confirm: None, })
+            return (
+              @cmd.none,
+              { ..model, delete_confirm: model.delete_confirm.close(), },
+            )
           }
           let sessions = match confirm.target {
             LiveChat(checkout~) =>
@@ -5322,7 +5518,7 @@ fn update_msg(
                 delete_session(dispatch, confirm.channel, confirm.key, checkout),
                 {
                   ..model,
-                  delete_confirm: None,
+                  delete_confirm: model.delete_confirm.close(),
                   // The delete can still come back to be confirmed again.
                   delete_pending: Some((confirm.channel, confirm.key)),
                   deletes_in_flight: model.confirm_delete(
@@ -5347,7 +5543,7 @@ fn update_msg(
             ),
             {
               ..model.replace_device({ ..dev, archived_request_generation, }),
-              delete_confirm: None,
+              delete_confirm: model.delete_confirm.close(),
               // The host can announce the deletion before this reply, which
               // the announcement then makes stale.
               deletes_in_flight: model.confirm_delete(
@@ -5359,12 +5555,13 @@ fn update_msg(
             },
           )
         }
-        None => (@cmd.none, model)
+        Empty | Closed(_) => (@cmd.none, model)
       }
     // Closing the dialog leaves `delete_pending` alone. No question is out
     // while a dialog is open, and the confirm button's click also reaches the
     // backdrop: that second message must not drop the delete's own answer.
-    CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
+    CancelDeleteSession =>
+      (@cmd.none, { ..model, delete_confirm: model.delete_confirm.close(), })
     SessionRotated(owner) => {
       guard model.cloud_identity() is None &&
         (
@@ -5725,10 +5922,10 @@ fn update_msg(
         }
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             HostDelete({
               channel,
               key,
@@ -6981,6 +7178,19 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    PreviewFile(path) => model.preview_file(dispatch, path)
+    CloudFilePreviewCreated(owner~, auth_epoch~, result~) => {
+      let ctx = file_ctx(model)
+      guard ctx.owner == owner &&
+        ctx.cloud_files is Some({ epoch: current, .. }) &&
+        current == auth_epoch else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Ok(url) => open_user_link(dispatch, model, url, cloud_preview=true)
+        Err(message) => model.notify_error(dispatch, message)
+      }
+    }
     DownloadFile(path) => {
       guard model.workspace_file(path) is Some(file) else {
         return (@cmd.none, model)
@@ -7017,12 +7227,21 @@ fn update_msg(
       )
       (command, { ..model, export_dialog, })
     }
-    OpenSessionImport => {
-      guard model.session_import_target() is Some(target) else {
+    OpenSessionImport(channel, workspace) => {
+      guard model.session_import_target(channel, workspace) is Some(target) else {
         return (@cmd.none, model)
       }
       let (cmd, session_import_dialog) = model.session_import_dialog.open(
-        target,
+        Host(target),
+      )
+      (cmd, { ..model, session_import_dialog, })
+    }
+    OpenCloudImport => {
+      guard model.cloud_account() is Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (cmd, session_import_dialog) = model.session_import_dialog.open(
+        Cloud(account~),
       )
       (cmd, { ..model, session_import_dialog, })
     }
@@ -7030,35 +7249,32 @@ fn update_msg(
       let (cmd, session_import_dialog, imported) = model.session_import_dialog.update(
         dispatch.map(msg => SessionImport(msg)),
         msg,
+        account?=model.account,
       )
       let model = { ..model, session_import_dialog, }
-      guard imported is Some((target, session_id)) &&
-        model.device_state(target.channel) is Some(dev) &&
-        dev.connection_generation == target.connection_generation &&
-        model.console.page_device is Some(device) else {
-        return (cmd, model)
+      match imported {
+        Some((Host(target), session_id)) =>
+          open_host_import(dispatch, cmd, model, target, session_id)
+        Some((Cloud(account~), session)) => {
+          // An import that finishes after a sign-out or account switch
+          // belongs to an account this page no longer shows.
+          guard model.cloud_account() == Some(account) else {
+            return (cmd, model)
+          }
+          let (refresh, model) = update_cloud(dispatch, @cloud.Refresh, model)
+          let (open, model) = update_msg(
+            dispatch,
+            OpenCloudConversation(account~, session~),
+            {
+              ..model,
+              management_dialog: None,
+              chat_navigation_generation: model.chat_navigation_generation + 1,
+            },
+          )
+          (@cmd.batch([cmd, refresh, open]), model)
+        }
+        None => (cmd, model)
       }
-      let (focus, model) = focus_channel(dispatch, model, target.channel)
-      let (sessions, model) = request_sessions_refresh(
-        dispatch,
-        target.channel,
-        model,
-      )
-      let (visit, model) = navigation_visit(
-        model,
-        { device: Some(device), target: Session(session_id), },
-        replace=false,
-      )
-      // The ordinary navigation resolver opens the session once its catalog
-      // row arrives. Workspace and worktree notifications use their existing
-      // handlers; the import reply carries no inventory snapshot.
-      (
-        @cmd.batch([cmd, focus, sessions, visit]),
-        {
-          ..model,
-          navigation: { ..model.navigation, phase: Waiting, sessions: None, },
-        },
-      )
     }
     ExportDialog(message) | FileShareDialog(message) => {
       let file = msg is FileShareDialog(_)
@@ -7099,76 +7315,96 @@ fn update_msg(
       }
       (cmd, next)
     }
-    ExternalLinkClicked(url) =>
-      // Web links open in the dock's Browser tabs by default — the
-      // toolbar's open-external button hands the page to the system
-      // browser when its chrome or logins are needed. Non-web schemes
-      // (mailto:, vscode:, …) and remote consoles (no native views) keep
-      // the external path. A same-URL tab already in this strip
-      // re-activates instead of duplicating.
-      //
-      // Only from conversation screens: the capture listener behind this
-      // message is document-wide, so it also reports anchors on screens where
-      // the dock is not rendered and a tab would be invisible. Chat and Codex
-      // deliberately share this route — their PR links must open in the same
-      // built-in Browser instead of changing behavior with the conversation
-      // provider. Settings' device-page link is the clearest external case:
-      // it wants the browser where the user is already signed in.
-      if !model.is_desktop {
-        (open_browser_link(url), model)
-      } else if model.management_dialog is None && @preview.is_web_url(url) {
-        // Opening or reusing a Browser tab is a newer dock navigation than a
-        // transcript text-file link still waiting on `host.open_path`. Spend the
-        // shared token before either branch so its delayed reply cannot put a
-        // file back over the URL the user chose later.
-        let model = model.begin_editor_navigation()
-        // The scan is over this strip's tabs, not the global page map: a
-        // parked conversation may hold the same URL, and matching its page
-        // first would shadow this strip's own tab forever.
-        let reuse = for tab in model.dock_state().tabs {
-          if tab is Browser(id~) &&
-            @preview.page(model.preview, id) is Some(page) &&
-            page.url is Some(page_url) &&
-            page_url == url {
-            break Some(id)
-          }
-        } nobreak {
-          None
-        }
-        match reuse {
-          Some(id) => {
-            let dock = @dock.open_browser(model.dock_state(), id)
-            // The reuse matched this page's optimistic URL mirror, which can
-            // drift from what the native view actually shows — a host op that
-            // failed, or a reload's `close_all` that swept the view. Focusing
-            // alone would present the stale page under the clicked URL, so a
-            // reuse re-navigates: `browser.navigate` rebuilds the view when
-            // it is gone, and dropping the pane placement makes the next sync
-            // measure and show whatever the host has now.
-            (
-              browser_navigate(
-                dispatch,
-                id,
-                url,
-                model.theme.is_dark(model.system_dark),
-                model.dock_owner().host(),
-              ),
-              {
-                ..model,
-                preview: @preview.navigate(model.preview, id, url),
-                browser_pane: { shown: None, rect: None, geo: None, },
-                right_panel_open: true,
-                right_panel_menu_open: false,
-              }.with_dock_state(dock),
-            )
-          }
-          None =>
-            open_browser_tab(dispatch, model, model.dock_owner().host(), url~)
-        }
-      } else {
-        (open_external_link(dispatch, url), model)
-      }
+    ExternalLinkClicked(url) => open_user_link(dispatch, model, url)
     FromDevice(channel, msg) => update_device_msg(dispatch, channel, msg, model)
+  }
+}
+
+///|
+fn open_user_link(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  url : String,
+  cloud_preview~ : Bool = false,
+) -> (@cmd.Cmd, Model) {
+  // Web links open in the dock's Browser tabs by default — the
+  // toolbar's open-external button hands the page to the system
+  // browser when its chrome or logins are needed. Non-web schemes
+  // (mailto:, vscode:, …) and remote consoles (no native views) keep
+  // the external path. A same-URL tab already in this strip
+  // re-activates instead of duplicating.
+  //
+  // Only from conversation screens: the capture listener behind this
+  // message is document-wide, so it also reports anchors on screens where
+  // the dock is not rendered and a tab would be invisible. Chat and Codex
+  // deliberately share this route — their PR links must open in the same
+  // built-in Browser instead of changing behavior with the conversation
+  // provider. Settings' device-page link is the clearest external case:
+  // it wants the browser where the user is already signed in.
+  if !model.is_desktop {
+    (open_browser_link(url), model)
+  } else if model.management_dialog is None && @preview.is_web_url(url) {
+    // Opening or reusing a Browser tab is a newer dock navigation than a
+    // transcript text-file link still waiting on `host.open_path`. Spend the
+    // shared token before either branch so its delayed reply cannot put a
+    // file back over the URL the user chose later.
+    let model = model.begin_editor_navigation()
+    // The scan is over this strip's tabs, not the global page map: a
+    // parked conversation may hold the same URL, and matching its page
+    // first would shadow this strip's own tab forever.
+    let reuse = for tab in model.dock_state().tabs {
+      if tab is Browser(id~) &&
+        @preview.page(model.preview, id) is Some(page) &&
+        page.url is Some(page_url) &&
+        page_url == url &&
+        page.cloud_preview == cloud_preview {
+        break Some(id)
+      }
+    } nobreak {
+      None
+    }
+    match reuse {
+      Some(id) => {
+        let dock = @dock.open_browser(model.dock_state(), id)
+        // The reuse matched this page's optimistic URL mirror, which can
+        // drift from what the native view actually shows — a host op that
+        // failed, or a reload's `close_all` that swept the view. Focusing
+        // alone would present the stale page under the clicked URL, so a
+        // reuse re-navigates: `browser.navigate` rebuilds the view when
+        // it is gone, and dropping the pane placement makes the next sync
+        // measure and show whatever the host has now.
+        (
+          browser_navigate(
+            dispatch,
+            id,
+            url,
+            model.theme.is_dark(model.system_dark),
+            model.dock_owner().host(),
+          ),
+          {
+            ..model,
+            preview: @preview.navigate(model.preview, id, url),
+            browser_pane: {
+              shown: model.browser_pane.shown.filter(shown => shown != id),
+              rect: None,
+              geo: None,
+            },
+            right_panel_open: true,
+            right_panel_menu_open: false,
+          }.with_dock_state(dock),
+        )
+      }
+      None =>
+        open_browser_tab(
+          dispatch,
+          model,
+          model.dock_owner().host(),
+          url~,
+          cloud_preview~,
+        )
+    }
+  } else {
+    (open_external_link(dispatch, url), model)
   }
 }
 
@@ -7441,19 +7677,15 @@ fn update_device_msg(
         fetch_projects(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
+        fetch_host_settings(dispatch, channel, connection_generation),
       ]
       if channel == Local && model.is_desktop {
         commands.push(ssh_load(dispatch))
       }
-      // The focused-scoped half: the host-settings mirror and installed
-      // skills (they feed the composer's `$` completion, so
-      // they load on connect rather than when the Skills page opens) follow
-      // the device the UI acts on — always this one while the app runs a
-      // single channel.
+      // The focused-scoped half: installed skills (they feed the composer's
+      // `$` completion, so they load on connect rather than when the Skills
+      // page opens) follow the device the UI acts on.
       if channel == model.focused {
-        commands.push(
-          fetch_host_settings(dispatch, channel, connection_generation),
-        )
         commands.push(fetch_installed_skills(dispatch, channel))
         // Codex conversations are always visible in the global sidebar, so
         // populate that focused-host catalog on bridge readiness rather than
@@ -7516,14 +7748,14 @@ fn update_device_msg(
         // before this connection's re-read lands. Absent rows read as the
         // safe Local default.
         workspace_settings: [],
+        // Replies from writes issued on the dead bridge carry their captured
+        // generation and are ignored below. The new host may have restarted
+        // its in-memory settings revision, so its first authoritative status
+        // starts a fresh monotonic round.
+        host_settings: HostSettingsMirror::loading(),
       })
-      // Replies from writes issued on the dead bridge carry their captured
-      // generation and are ignored below. The new host may have restarted
-      // its in-memory settings revision, so its first authoritative status
-      // starts a fresh monotonic round. Focused-scoped, like the fetches
-      // that repopulate the mirror.
       let model = if channel == model.focused {
-        { ..model.clear_host_settings(), conversations, }
+        { ..model.reset_api_setup(), conversations, }
       } else {
         { ..model, conversations, }
       }
@@ -7676,83 +7908,74 @@ fn update_device_msg(
       update_msg(dispatch, FileEditor(msg), model)
     }
     HostSettingsLoadFailed(message, connection_generation~) => {
-      guard channel == model.focused &&
-        connection_generation == dev.connection_generation else {
+      guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      (@cmd.none, { ..model, host_settings_error: Some(message), })
+      (
+        @cmd.none,
+        model.map_host_settings(channel, mirror => {
+          ..mirror,
+          error: Some(message),
+        }),
+      )
     }
     HostSettingsLoaded(settings, connection_generation~) => {
       guard connection_generation is None ||
         (connection_generation is Some(gen) && gen == dev.connection_generation) else {
         return (@cmd.none, model)
       }
-      // The settings mirror is the focused host's. A generation-carrying
-      // reply is only ever requested for the focused channel, but the
-      // `settings.changed` broadcast (generation None) arrives from every
-      // connected device — a background device's edit must not clobber the
-      // form. A focus switch refetches, so nothing is lost.
-      guard channel == model.focused else { return (@cmd.none, model) }
-      if settings.revision < model.host_settings_revision {
+      // A `settings.changed` broadcast (generation None) arrives from every
+      // connected device; each lands on its own device's mirror.
+      let mirror = dev.host_settings
+      if !mirror.accepts(settings) {
         (@cmd.none, model)
-      } else if model.settings_saves > 0 {
-        (@cmd.none, model.defer_host_settings(settings))
+      } else if mirror.saves > 0 {
+        (
+          @cmd.none,
+          model.map_host_settings(channel, mirror => mirror.hold(settings)),
+        )
       } else {
         // The settled mirror decides the modal (`settle_api_setup`); the
         // dismissal flag — not the mirror, which a reconnect clears — is
         // what keeps a "Not now" quiet across snapshots.
-        (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
+        let next = model.apply_host_settings(channel, settings)
+        let next = if channel == next.focused {
+          next.settle_api_setup()
+        } else {
+          next
+        }
+        (next.api_setup_dialog(channel), next)
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      // A save issued on the old focus may settle after the user switches
-      // devices. Its revision and localStorage cleanup belong to that old
-      // host and must not alter the newly focused host's mirror.
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let next = {
-        ..model,
-        settings_saves: if model.settings_saves > 0 {
-          model.settings_saves - 1
-        } else {
-          0
-        },
-      }.defer_host_settings(settings)
-      (
-        @cmd.none,
-        if next.settings_saves > 0 {
-          next
-        } else {
-          next.flush_host_settings()
-        },
-      )
+      // A save may settle after the user switched devices; it settles on
+      // the device it was issued against.
+      let mirror = dev.host_settings.write_settled().hold(settings)
+      let next = model.map_host_settings(channel, _ => mirror)
+      let next = if mirror.saves > 0 {
+        next
+      } else {
+        next.flush_host_settings(channel)
+      }
+      (next.api_setup_dialog(channel), next)
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let next = {
-        ..model,
-        settings_saves: if model.settings_saves > 0 {
-          model.settings_saves - 1
-        } else {
-          0
-        },
-      }
-      let next = if next.settings_saves == 0 {
-        next.flush_host_settings()
-      } else {
-        next
-      }
+      let mirror = dev.host_settings.write_settled()
+      let settled = mirror.saves == 0
+      let next = model.map_host_settings(channel, _ => mirror)
+      let next = if settled { next.flush_host_settings(channel) } else { next }
       let (notice, notified) = next.notify_error(
         dispatch,
         notice_text(model.locale, SaveSettings(message.to_string())),
       )
-      let commands = [notice]
-      if next.settings_saves == 0 {
+      let commands = [notice, next.api_setup_dialog(channel)]
+      if settled {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
         // host truth after a definite or ambiguous write failure.
@@ -8527,7 +8750,7 @@ fn update_device_msg(
       // changes; stage the discard-confirmation dialog, whose confirm
       // retries with force.
       (
-        @cmd.none,
+        @dialog.show("worktree-archive-dialog"),
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteStopped(key~, checkout~) =>
@@ -8547,10 +8770,10 @@ fn update_device_msg(
         return (@cmd.none, model)
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             HostDelete({
               channel,
               key,
@@ -8710,7 +8933,11 @@ fn update_device_msg(
           request_generation~,
           fresh_session~,
         ),
-        { ..tombstoned, conversations, delete_confirm: None, },
+        {
+          ..tombstoned,
+          conversations,
+          delete_confirm: tombstoned.delete_confirm.close(),
+        },
       )
     }
     ArchiveFailed(message) => {
@@ -8814,8 +9041,8 @@ fn update_device_msg(
           conv.project() != key.workspace
         })
         let confirm = match changed.delete_confirm {
-          Some(HostDelete(confirm)) if confirm.channel == channel &&
-            confirm.key == key => None
+          Open(HostDelete(confirm)) if confirm.channel == channel &&
+            confirm.key == key => changed.delete_confirm.close()
           other => other
         }
         let next = changed
@@ -10397,22 +10624,81 @@ fn test_model() -> Model {
         projects: [@interop.ChannelId::Local.test_project()],
         project_catalog: Some(Ok(())),
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
+        // The shared fixture represents a connected desktop after its
+        // initial settings snapshot. Loading-state tests opt back into
+        // `HostSettingsMirror::loading()`. BYOK means a ready app has a key
+        // saved: without one, the composer's send gate stays shut and every
+        // submission test would first need to configure an endpoint.
+        // Setup-flow tests load their own keyless settings payloads instead.
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="deepseek", has_deepseek_key=true),
+        ),
       },
     ],
     focused: @interop.ChannelId::Local,
     console: local_console_state(login_return_to="/console/"),
     sidebar_mode: WorkMode,
-    // The shared fixture represents a connected desktop after its initial
-    // settings snapshot. Loading-state tests opt back into revision -1.
-    host_settings_revision: 0,
-    // BYOK means a ready app has a key saved: without one, the composer's
-    // send gate stays shut and every submission test would first need to
-    // configure an endpoint. Setup-flow tests load their own keyless
-    // settings payloads instead.
-    deepseek_key_saved: true,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
+}
+
+///|
+/// The focused host's settings state (snapshot, writes in flight, deferred
+/// status); a loading one when the page holds no device.
+fn Model::host_settings_mirror(self : Model) -> HostSettingsMirror {
+  self
+  .focused_device()
+  .map(dev => dev.host_settings)
+  .unwrap_or(HostSettingsMirror::loading())
+}
+
+///|
+/// Rewrite the focused host's settings state.
+fn Model::with_host_settings(
+  self : Model,
+  f : (HostSettingsMirror) -> HostSettingsMirror,
+) -> Model {
+  self.map_host_settings(self.focused, f)
+}
+
+///|
+/// Rewrite the focused host's loaded endpoint, keeping its revision; a
+/// fixture that is still loading starts from the zero-config endpoint at
+/// revision 0.
+fn Model::with_host_endpoint(
+  self : Model,
+  provider? : ApiProvider,
+  custom_api_url? : String,
+  followup_behavior? : FollowupBehavior,
+  deepseek_key_saved? : Bool,
+  glm_key_saved? : Bool,
+  custom_key_saved? : Bool,
+) -> Model {
+  self.with_host_settings(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
+    let endpoint = current.endpoint
+    let endpoint = {
+      provider: provider.unwrap_or(endpoint.provider),
+      custom_api_url: custom_api_url.unwrap_or(endpoint.custom_api_url),
+      followup_behavior: followup_behavior.unwrap_or(endpoint.followup_behavior),
+      deepseek_key_saved: deepseek_key_saved.unwrap_or(
+        endpoint.deepseek_key_saved,
+      ),
+      glm_key_saved: glm_key_saved.unwrap_or(endpoint.glm_key_saved),
+      custom_key_saved: custom_key_saved.unwrap_or(endpoint.custom_key_saved),
+    }
+    { ..mirror, current: Some({ ..current, endpoint, }), }
+  })
+}
+
+///|
+/// The focused host's loaded endpoint.
+fn Model::test_endpoint(self : Model) -> HostEndpoint raise {
+  guard self.host_settings() is Some(settings) else {
+    fail("the focused host has no settings snapshot")
+  }
+  settings.endpoint
 }
 
 ///|
@@ -10569,6 +10855,44 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
   let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
   assert_false(wide.narrow)
   assert_true(wide.sidebar_open)
+}
+
+///|
+test "Cloud preferences are local while device settings retain their owner" {
+  let emit = test_dispatch()
+  let host = test_model()
+  let cloud = {
+    ..host,
+    devices: [],
+    console: { ..host.console, page_device: None, },
+    cloud_followup_behavior: FollowupSteer,
+    select_menu: Some(FollowupBehaviorMenu),
+  }
+  for
+    msg in [
+      CloudFollowupLoaded(Some("queue")),
+      FollowupBehaviorChanged("queue"),
+    ] {
+    let (_, next) = update_msg(emit, msg, cloud)
+    let (_, repeated) = update_msg(emit, msg, cloud)
+    assert_true(next.followup_behavior() is FollowupQueue)
+    assert_true(next.followup_behavior() == repeated.followup_behavior())
+    assert_true(next.select_menu == repeated.select_menu)
+    if msg is FollowupBehaviorChanged(_) {
+      assert_true(next.select_menu is None)
+    }
+  }
+  let (_, missing) = update_msg(emit, CloudFollowupLoaded(None), cloud)
+  assert_true(missing.followup_behavior() == cloud.followup_behavior())
+  for
+    model in [host, host.with_host_settings(_ => HostSettingsMirror::loading())] {
+    let (_, loaded) = update_msg(
+      emit,
+      CloudFollowupLoaded(Some("queue")),
+      model,
+    )
+    assert_true(loaded == model)
+  }
 }
 
 ///|
@@ -11729,7 +12053,7 @@ test "a finish in an unfocused window still needs attention" {
 ///|
 test "a finish behind settings stays unread until the chat is reopened" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), management_dialog: Some(Settings), }
+  let model = { ..running_model(), management_dialog: Some(Settings(General)), }
   let (_, next) = update_dev(
     dispatch,
     Finished(run_id="r7", status="finished", answer=Some("done")),
@@ -12577,18 +12901,19 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
 test "BridgeReady clears focused host settings until the refetch lands" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://old.example/chat",
-    custom_key_saved: true,
+    ..test_model()
+    .with_host_endpoint(
+      custom_api_url="https://old.example/chat",
+      custom_key_saved=true,
+      provider=Custom,
+    )
+    .with_host_settings(mirror => { ..mirror, saves: 1, }),
     setup_api_key: "old-key",
-    host_settings_revision: 7,
   }
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   assert_false(next.host_settings_loaded())
-  assert_true(next.api_provider is Deepseek)
-  inspect(next.custom_api_url, content="")
-  assert_false(next.custom_key_saved)
+  assert_true(next.host_settings_mirror() == HostSettingsMirror::loading())
+  assert_true(next.api_provider() is Deepseek)
   inspect(next.setup_api_key, content="")
 }
 
@@ -15640,48 +15965,46 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = {
-    ..test_model(),
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
-  }
+  let official = test_model().with_host_endpoint(
+    deepseek_key_saved=false,
+    provider=Deepseek,
+  )
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
-  assert_true({ ..official, deepseek_key_saved: true, }.api_ready())
+  assert_true(official.with_host_endpoint(deepseek_key_saved=true).api_ready())
   // The GLM provider is gated on its own key, never DeepSeek's.
-  let glm = {
-    ..test_model(),
-    api_provider: Glm,
-    deepseek_key_saved: true,
-    glm_key_saved: false,
-  }
+  let glm = test_model().with_host_endpoint(
+    deepseek_key_saved=true,
+    glm_key_saved=false,
+    provider=Glm,
+  )
   assert_false(glm.api_ready())
   assert_true(glm.display_status() is ApiKeyRequired)
-  assert_true({ ..glm, glm_key_saved: true, }.api_ready())
-  let custom = { ..test_model(), api_provider: Custom, custom_api_url: "", }
+  assert_true(glm.with_host_endpoint(glm_key_saved=true).api_ready())
+  let custom = test_model().with_host_endpoint(
+    custom_api_url="",
+    provider=Custom,
+  )
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
-  let configured = {
-    ..custom,
-    custom_api_url: "https://proxy.example/chat/completions",
-  }
+  let configured = custom.with_host_endpoint(
+    custom_api_url="https://proxy.example/chat/completions",
+  )
   assert_true(configured.api_ready())
 }
 
 ///|
 test "OpenRouter setup requires only its stored custom key" {
-  let openrouter = {
-    ..test_model(),
-    api_provider: OpenRouter,
-    deepseek_key_saved: true,
-    custom_key_saved: false,
-  }
-  assert_false(openrouter.api_ready())
-  assert_true({ ..openrouter, custom_key_saved: true, }.api_ready())
-  // Model choice belongs to the chat, just as with the official endpoint.
-  assert_true(
-    { ..openrouter, custom_key_saved: true, default_model: Deepseek(V4Pro), }.api_ready(),
+  let openrouter = test_model().with_host_endpoint(
+    deepseek_key_saved=true,
+    custom_key_saved=false,
+    provider=OpenRouter,
   )
+  assert_false(openrouter.api_ready())
+  let keyed = openrouter.with_host_endpoint(custom_key_saved=true)
+  assert_true(keyed.api_ready())
+  // Model choice belongs to the chat, just as with the official endpoint.
+  assert_true({ ..keyed, default_model: Deepseek(V4Pro), }.api_ready())
 }
 
 ///|
@@ -16246,7 +16569,7 @@ test "the Codex group's placeholder row opens Settings" {
     test_model(),
   )
   // Sign-in and connection state live in the Settings page's Codex group.
-  assert_true(opened.management_dialog is Some(Settings))
+  assert_true(opened.management_dialog is Some(Settings(Engine)))
   // A placeholder pick is a doorway, not a model: nothing was selected.
   assert_true(opened.default_agent is OpenSeekAgent)
 }
@@ -16286,7 +16609,7 @@ test "Codex threads share the Projects section's project rows" {
   // Work shows Projects, shared across both agents; archived conversations
   // live on Settings' archived page.
   assert_eq(sections.length(), 1)
-  inspect(sections[0].label, content="Projects")
+  assert_true(sections[0].label is None)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
   }
@@ -16445,29 +16768,30 @@ fn host_settings(
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
 ) -> HostSettings {
-  {
+  HostSettings::from_status({
     revision,
     provider,
-    custom_api_url,
+    custom_api_url: Some(custom_api_url),
     has_deepseek_key,
     has_glm_key,
     has_custom_key,
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
-  }
+  })
 }
 
 ///|
 test "the OpenRouter custom preset restores as OpenRouter" {
   let restored = test_model().apply_host_settings(
+    Local,
     host_settings(
       provider="custom",
       custom_api_url=OpenRouterChatCompletionsUrl,
       has_custom_key=true,
     ),
   )
-  assert_true(restored.api_provider is OpenRouter)
+  assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
 }
 
@@ -16475,15 +16799,11 @@ test "the OpenRouter custom preset restores as OpenRouter" {
 test "host settings edits wait for the focused host snapshot" {
   let dispatch = test_dispatch()
   // Model a queued DOM message from the old Settings page after focus already
-  // moved. The negative revision is authoritative: none of these stale values
-  // or events may be applied to the replacement host.
+  // moved. The loading mirror is authoritative: none of these stale events
+  // may be applied to the replacement host.
   let loading = {
-    ..test_model(),
-    api_provider: Deepseek,
-    custom_api_url: "https://old.example/chat",
-    deepseek_key_saved: true,
+    ..test_model().with_host_settings(_ => HostSettingsMirror::loading()),
     setup_api_key: "old-device-key",
-    host_settings_revision: -1,
   }
   let messages : Array[Msg] = [
     SetupApiKeyChanged("queued-key"),
@@ -16494,14 +16814,10 @@ test "host settings edits wait for the focused host snapshot" {
   for message in messages {
     let (_, once) = update(dispatch, message, loading)
     let (_, twice) = update(dispatch, message, loading)
-    assert_true(once.api_provider == loading.api_provider)
-    assert_eq(once.custom_api_url, loading.custom_api_url)
+    assert_true(once.host_settings_mirror() == HostSettingsMirror::loading())
     assert_eq(once.setup_api_key, loading.setup_api_key)
-    assert_eq(once.settings_saves, 0)
-    assert_true(twice.api_provider == loading.api_provider)
-    assert_eq(twice.custom_api_url, loading.custom_api_url)
+    assert_true(twice.host_settings_mirror() == HostSettingsMirror::loading())
     assert_eq(twice.setup_api_key, loading.setup_api_key)
-    assert_eq(twice.settings_saves, 0)
   }
 }
 
@@ -16520,7 +16836,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(zero_config.screen is Chat)
   assert_true(zero_config.api_setup_open)
-  assert_true(zero_config.api_provider is Deepseek)
+  assert_true(zero_config.api_provider() is Deepseek)
   assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
     dispatch,
@@ -16543,7 +16859,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(restored.screen is Chat)
   assert_true(!restored.api_setup_open)
-  assert_true(restored.deepseek_key_saved)
+  assert_true(restored.test_endpoint().deepseek_key_saved)
 }
 
 ///|
@@ -16578,12 +16894,10 @@ test "the setup modal tracks endpoint usability without toasts" {
       host_settings(provider="custom", custom_api_url=""),
       connection_generation=None,
     ),
-    {
-      ..test_model(),
-      host_settings_revision: 0,
-      api_provider: Custom,
-      custom_api_url: "https://ok.example/chat",
-    },
+    test_model().with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    ),
   )
   assert_true(broken.api_setup_open)
   // "Not now" dismisses; an unrelated payload that leaves the endpoint
@@ -16607,7 +16921,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     ..broken,
     api_setup_open: true,
   })
-  assert_true(on_settings.management_dialog is Some(Settings))
+  assert_true(on_settings.management_dialog is Some(Settings(General)))
   assert_true(!on_settings.api_setup_open)
   // Breaking while the Settings page is open does not pop the modal over
   // the form; the guide there already explains it.
@@ -16618,11 +16932,11 @@ test "the setup modal tracks endpoint usability without toasts" {
       connection_generation=None,
     ),
     {
-      ..test_model(),
-      management_dialog: Some(Settings),
-      host_settings_revision: 0,
-      api_provider: Custom,
-      custom_api_url: "https://ok.example/chat",
+      ..test_model().with_host_endpoint(
+        provider=Custom,
+        custom_api_url="https://ok.example/chat",
+      ),
+      management_dialog: Some(Settings(Engine)),
     },
   )
   assert_true(!mid_edit.api_setup_open)
@@ -16635,31 +16949,35 @@ test "switching to a provider missing its key or URL opens the setup modal" {
   // no URL takes the endpoint from usable to not. Off the Settings page
   // the setup modal is the announcement — no toast underneath it.
   let (_, switched) = update(dispatch, ProviderChanged("custom"), test_model())
-  assert_true(switched.api_provider is Custom)
+  assert_true(switched.api_provider() is Custom)
   assert_true(switched.api_setup_open)
   assert_eq(switched.notifications.length(), 0)
   // A switch that stays usable stays quiet.
-  let (_, kept) = update(dispatch, ProviderChanged("deepseek"), {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://ok.example/chat",
-  })
+  let (_, kept) = update(
+    dispatch,
+    ProviderChanged("deepseek"),
+    test_model().with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    ),
+  )
   assert_true(!kept.api_setup_open)
   // Switching back to a provider the stored key makes usable retires the
   // modal that the break opened.
   let (_, back) = update(dispatch, ProviderChanged("deepseek"), switched)
-  assert_true(back.api_provider is Deepseek)
+  assert_true(back.api_provider() is Deepseek)
   assert_true(!back.api_setup_open)
 }
 
 ///|
 test "the GLM provider aligns only a fresh chat to its model family" {
   let dispatch = test_dispatch()
-  let (_, glm) = update(dispatch, ProviderChanged("glm"), {
-    ..test_model(),
-    glm_key_saved: true,
-  })
-  assert_true(glm.api_provider is Glm)
+  let (_, glm) = update(
+    dispatch,
+    ProviderChanged("glm"),
+    test_model().with_host_endpoint(glm_key_saved=true),
+  )
+  assert_true(glm.api_provider() is Glm)
   assert_true(glm.default_model is Glm(G53))
   assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
@@ -16706,7 +17024,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   // Once a conversation has begun, its pinned model remains explicit and
   // visible for the user to change rather than being rewritten by Settings.
   let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
-  assert_true(running.api_provider is Glm)
+  assert_true(running.api_provider() is Glm)
   assert_true(running.default_model is Glm(G53))
   assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
@@ -16724,10 +17042,10 @@ test "a dismissal survives the mirror reset a reconnect performs" {
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
-  // A reconnect (or focus switch) resets the mirror to the loading
-  // sentinel; the refetched snapshot must not re-pop the modal on every
-  // WS flap — dismissal is the user's answer for the session.
-  let cleared = dismissed.clear_host_settings()
+  // A reconnect resets the mirror to loading; the refetched snapshot must
+  // not re-pop the modal on every WS flap — dismissal is the user's answer
+  // for the session.
+  let (_, cleared) = update_dev(dispatch, BridgeReady, dismissed)
   assert_true(!cleared.api_setup_open)
   let (_, reconnected) = update_dev(
     dispatch,
@@ -16775,8 +17093,9 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   // Quiet must not mean lost: the notice stays while the endpoint is
   // unusable, dismissal or not.
   assert_true(dismissed.api_setup_banner_visible())
-  // The loading sentinel is not a verdict; a reconnect must not flash it.
-  assert_true(!dismissed.clear_host_settings().api_setup_banner_visible())
+  // A loading mirror is not a verdict; a reconnect must not flash it.
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, dismissed)
+  assert_true(!reconnected.api_setup_banner_visible())
   // A usable endpoint retires the notice with the modal.
   assert_true(!test_model().api_setup_banner_visible())
   // Its "Set up" reopens the modal, and reopening cancels the dismissal so
@@ -16796,35 +17115,43 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
 
 ///|
 test "a custom endpoint reads as usable only from a plausible URL" {
-  let custom = {
-    ..test_model(),
-    api_provider: Custom,
-    deepseek_key_saved: false,
-  }
+  let custom = test_model().with_host_endpoint(
+    provider=Custom,
+    deepseek_key_saved=false,
+  )
   // A prefix mid-typing must not arm Send or retire the setup modal.
-  assert_true(!{ ..custom, custom_api_url: "", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "h", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "https://", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "ftp://host", }.api_ready())
-  assert_true({ ..custom, custom_api_url: "https://host", }.api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="").api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="h").api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="https://").api_ready())
   assert_true(
-    { ..custom, custom_api_url: " https://host/chat/completions ", }.api_ready(),
+    !custom.with_host_endpoint(custom_api_url="ftp://host").api_ready(),
   )
   assert_true(
-    { ..custom, custom_api_url: "http://127.0.0.1:8080", }.api_ready(),
+    custom.with_host_endpoint(custom_api_url="https://host").api_ready(),
+  )
+  assert_true(
+    custom
+    .with_host_endpoint(custom_api_url=" https://host/chat/completions ")
+    .api_ready(),
+  )
+  assert_true(
+    custom
+    .with_host_endpoint(custom_api_url="http://127.0.0.1:8080")
+    .api_ready(),
   )
 }
 
 ///|
 test "clearing the mirror never leaves an orphaned setup modal" {
-  // A modal left up over the loading sentinel would render default data
-  // with every control disabled; close it with the mirror it was showing.
+  // A modal left up over a loading mirror would render default data with
+  // every control disabled; close it with the mirror it was showing.
+  let dispatch = test_dispatch()
   let open = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
-  assert_true(!open.clear_host_settings().api_setup_open)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, open)
+  assert_true(!reconnected.api_setup_open)
 }
 
 ///|
@@ -16833,10 +17160,9 @@ test "saving from the setup modal stays on the page it opened over" {
   // The modal renders over any screen; completing setup from it must not
   // yank the user to Chat.
   let over_skills = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     management_dialog: Some(Skills),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), over_skills)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
@@ -16845,9 +17171,7 @@ test "saving from the setup modal stays on the page it opened over" {
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
   let custom_half = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "",
+    ..test_model().with_host_endpoint(provider=Custom, custom_api_url=""),
     api_setup_open: true,
   }
   let (_, keyed) = update(
@@ -16864,13 +17188,12 @@ test "saving from the setup modal stays on the page it opened over" {
 test "saving the key from the setup modal retires it" {
   let dispatch = test_dispatch()
   let open = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.deepseek_key_saved)
+  assert_true(saved.test_endpoint().deepseek_key_saved)
   assert_true(saved.screen is Chat)
   assert_true(!saved.api_setup_open)
   assert_eq(saved.setup_api_key, "")
@@ -16881,69 +17204,77 @@ test "a settled host save that completes the setup closes the modal" {
   // A custom URL typed into the modal is saved optimistically; the host's
   // applied confirmation is what retires the modal, not mid-typing.
   let typing = {
-    ..test_model(),
+    ..test_model()
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    )
+    .with_host_settings(mirror => { ..mirror, saves: 1, }),
     api_setup_open: true,
-    api_provider: Custom,
-    custom_api_url: "https://ok.example/chat",
-    settings_saves: 1,
     select_menu: Some(ApiProviderMenu),
   }
-  let closed = typing.flush_host_settings()
+  let closed = typing.flush_host_settings(Local)
   assert_true(!closed.api_setup_open)
   assert_true(closed.select_menu is None)
   // The same host reconciliation must not close the API selector when it is
   // owned by the Settings page rather than an open setup modal.
   let page = {
     ..typing,
-    management_dialog: Some(Settings),
+    management_dialog: Some(Settings(Engine)),
     api_setup_open: false,
     select_menu: Some(ApiProviderMenu),
-  }.flush_host_settings()
+  }.flush_host_settings(Local)
   assert_true(page.select_menu == Some(ApiProviderMenu))
   // A flush that leaves the endpoint unusable keeps the modal up.
   let still = {
-    ..test_model(),
+    ..test_model().with_host_settings(_ => {
+      ..HostSettingsMirror::loading(),
+      deferred: Some(host_settings(provider="deepseek")),
+    }),
     api_setup_open: true,
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
-    deferred_host_settings: Some(host_settings(provider="deepseek")),
-    host_settings_revision: -1,
   }
-  assert_true(still.flush_host_settings().api_setup_open)
+  assert_true(still.flush_host_settings(Local).api_setup_open)
 }
 
 ///|
-test "a background device's pushes leave the focused mirrors alone" {
+test "a background device's settings broadcast lands on its own mirror" {
   let dispatch = test_dispatch()
   let background : @interop.ChannelId = Remote("d_bg")
+  let home = test_model()
   let model = {
-    ..test_model(),
+    ..home,
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      home.devices[0],
       { ..empty_device_state(background), bridge: Connected, },
     ],
   }
-  // A settings.changed broadcast from the background device: the form (and
-  // the incomplete-settings redirect) keeps the focused host's state.
   let (_, settled) = update(
     dispatch,
     FromDevice(
       background,
       HostSettingsLoaded(
-        host_settings(provider="deepseek"),
+        host_settings(provider="glm", revision=3),
         connection_generation=None,
       ),
     ),
     model,
   )
-  assert_true(settled.api_provider is Deepseek)
-  assert_true(settled.screen is Chat)
+  // The form (and the setup modal) keep the focused host's state.
+  assert_true(settled.host_settings_mirror() == model.host_settings_mirror())
+  assert_true(settled.api_ready())
+  assert_true(!settled.api_setup_open)
+  guard settled.device_state(background) is Some(dev) &&
+    dev.host_settings.current is Some(current) else {
+    fail("the background device keeps its own snapshot")
+  }
+  assert_true(current.endpoint.provider is Glm)
+  assert_eq(current.revision, 3)
 }
 
 ///|
 test "host settings are deferred while this client's writes are in flight" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), settings_saves: 1, }
+  let model = test_model().with_host_settings(mirror => { ..mirror, saves: 1, })
   // A broadcast (or a stale get reply) arriving mid-write must not clobber
   // the optimistic mirror.
   let (_, ignored) = update_dev(
@@ -16954,8 +17285,8 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  assert_true(ignored.api_provider is Deepseek)
-  inspect(ignored.settings_saves, content="1")
+  assert_true(ignored.api_provider() is Deepseek)
+  inspect(ignored.host_settings_mirror().saves, content="1")
   // The write's own reply reconciles once it is the last one out.
   let (_, settled) = update_dev(
     dispatch,
@@ -16965,12 +17296,12 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  inspect(settled.settings_saves, content="0")
-  assert_true(settled.api_provider is Deepseek)
-  assert_true(settled.deepseek_key_saved)
-  inspect(settled.host_settings_revision, content="2")
+  inspect(settled.host_settings_mirror().saves, content="0")
+  assert_true(settled.api_provider() is Deepseek)
+  assert_true(settled.test_endpoint().deepseek_key_saved)
+  assert_true(settled.host_settings() is Some({ revision: 2, .. }))
   // With more writes still out, even a reply only decrements.
-  let stacked = { ..model, settings_saves: 2, }
+  let stacked = model.with_host_settings(mirror => { ..mirror, saves: 2, })
   let (_, still_pending) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -16979,19 +17310,20 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     stacked,
   )
-  inspect(still_pending.settings_saves, content="1")
-  assert_true(still_pending.api_provider is Deepseek)
+  inspect(still_pending.host_settings_mirror().saves, content="1")
+  assert_true(still_pending.api_provider() is Deepseek)
 }
 
 ///|
 test "a newer peer broadcast beats a delayed local settings reply" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: Custom,
-    settings_saves: 1,
-    host_settings_revision: 5,
-  }
+  let model = test_model()
+    .with_host_settings(mirror => {
+      ..mirror,
+      current: mirror.current.map(current => { ..current, revision: 5, }),
+    })
+    .with_host_endpoint(provider=Custom)
+    .with_host_settings(mirror => { ..mirror, saves: 1, })
   let (_, broadcast) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -17001,7 +17333,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     model,
   )
   // Preserve the optimistic form until the local RPC settles.
-  assert_true(broadcast.api_provider is Custom)
+  assert_true(broadcast.api_provider() is Custom)
   let (_, settled) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -17010,38 +17342,125 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     ),
     broadcast,
   )
-  assert_true(settled.api_provider is Deepseek)
-  inspect(settled.host_settings_revision, content="7")
-  inspect(settled.settings_saves, content="0")
+  assert_true(settled.api_provider() is Deepseek)
+  assert_true(settled.host_settings() is Some({ revision: 7, .. }))
+  inspect(settled.host_settings_mirror().saves, content="0")
 }
 
 ///|
-test "background settings replies cannot alter the focused host mirror" {
+test "focusing a host with cached settings aligns the default model first" {
   let dispatch = test_dispatch()
   let home = test_model()
-  let focused = {
+  let remote : @interop.ChannelId = Remote("d_glm")
+  let model = {
     ..home,
     devices: [
       home.devices[0],
-      { ..empty_device_state(Remote("d_b")), bridge: Connected, },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="glm", has_glm_key=true),
+        ),
+      },
     ],
-    focused: Remote("d_b"),
-    api_provider: Custom,
-    settings_saves: 1,
+    default_model: Deepseek(V4Pro),
+  }
+  let (_, focused) = focus_channel(dispatch, model, remote)
+  assert_true(focused.api_ready())
+  assert_true(focused.default_model is Glm(G53))
+  // A host still loading leaves the preference for its reply to align.
+  let loading = model.map_host_settings(remote, _ => {
+    HostSettingsMirror::loading()
+  })
+  let (_, pending) = focus_channel(dispatch, loading, remote)
+  assert_true(pending.default_model is Deepseek(V4Pro))
+}
+
+///|
+test "a background host's provider change aligns its retained draft" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let remote : @interop.ChannelId = Remote("d_b")
+  // The fresh Local chat stays retained while the user works on `d_b`.
+  assert_true(home.composing_new_chat())
+  let model = {
+    ..home,
+    devices: [
+      home.devices[0],
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="deepseek", has_deepseek_key=true),
+        ),
+      },
+    ],
+    focused: remote,
+  }
+  let (_, changed) = update(
+    dispatch,
+    FromDevice(
+      Local,
+      HostSettingsLoaded(
+        host_settings(provider="glm", revision=1, has_glm_key=true),
+        connection_generation=None,
+      ),
+    ),
+    model,
+  )
+  guard changed.find_conversation(Local, "desktop-test") is Some(draft) else {
+    fail("the retained draft stays")
+  }
+  assert_true(draft.engine_model is Glm(G53))
+  // The default model follows the focused host, not the background one.
+  assert_true(changed.default_model == model.default_model)
+}
+
+///|
+test "a settings write settles on the device it was sent to" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let remote : @interop.ChannelId = Remote("d_b")
+  // The user saved on Local twice, then moved to `d_b` while the writes
+  // were out; `d_b` has a write of its own in flight.
+  let model = {
+    ..home,
+    devices: [
+      {
+        ..home.devices[0],
+        host_settings: { ..home.devices[0].host_settings, saves: 2, },
+      },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: {
+          ..HostSettingsMirror::loading().apply(
+            host_settings(provider="custom", custom_api_url="https://b.example"),
+          ),
+          saves: 1,
+        },
+      },
+    ],
+    focused: remote,
   }
   let (_, applied) = update(
     dispatch,
     FromDevice(
       Local,
       HostSettingsApplied(
-        host_settings(provider="deepseek", revision=7),
+        host_settings(provider="glm", revision=7),
         connection_generation=0,
       ),
     ),
-    focused,
+    model,
   )
-  assert_true(applied.api_provider is Custom)
-  assert_eq(applied.settings_saves, 1)
+  assert_true(applied.host_settings_mirror() == model.host_settings_mirror())
+  guard applied.device_state(Local) is Some(home_dev) else {
+    fail("Local stays connected")
+  }
+  assert_eq(home_dev.host_settings.saves, 1)
+  assert_true(home_dev.host_settings.deferred is Some({ revision: 7, .. }))
   let (_, failed) = update(
     dispatch,
     FromDevice(
@@ -17050,8 +17469,16 @@ test "background settings replies cannot alter the focused host mirror" {
     ),
     applied,
   )
-  assert_eq(failed.settings_saves, 1)
-  assert_eq(failed.notifications.length(), 0)
+  assert_true(failed.host_settings_mirror() == model.host_settings_mirror())
+  guard failed.device_state(Local) is Some(home_dev) &&
+    home_dev.host_settings.current is Some(current) else {
+    fail("Local keeps its snapshot")
+  }
+  // The last write out flushes the newest status held for that device, and
+  // the failure is still the user's to see.
+  assert_eq(home_dev.host_settings.saves, 0)
+  assert_true(current.endpoint.provider is Glm)
+  assert_eq(failed.notifications.length(), 1)
 }
 
 ///|
@@ -17089,18 +17516,17 @@ test "the tree-layout setting parses its wire names" {
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     setup_api_key: "typed",
-    deepseek_key_saved: false,
   }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
-  assert_true(once.api_provider is Deepseek)
-  assert_true(twice.api_provider is Deepseek)
+  assert_true(once.api_provider() is Deepseek)
+  assert_true(twice.api_provider() is Deepseek)
   inspect(once.setup_api_key, content="")
   inspect(twice.setup_api_key, content="")
-  inspect(once.settings_saves, content="1")
-  inspect(twice.settings_saves, content="1")
+  inspect(once.host_settings_mirror().saves, content="1")
+  inspect(twice.host_settings_mirror().saves, content="1")
   assert_true(once.display_status() is ApiKeyRequired)
   assert_true(twice.display_status() is ApiKeyRequired)
 }
@@ -17109,71 +17535,70 @@ test "update is pure: a provider change is idempotent" {
 test "saving a key marks the active provider credential only" {
   let dispatch = test_dispatch()
   let deepseek = {
-    ..test_model(),
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
+    ..test_model().with_host_endpoint(
+      provider=Deepseek,
+      deepseek_key_saved=false,
+    ),
     setup_api_key: "  sk-new  ",
-    management_dialog: Some(Settings),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
-  assert_true(saved_deepseek.deepseek_key_saved)
-  assert_false(saved_deepseek.custom_key_saved)
+  assert_true(saved_deepseek.test_endpoint().deepseek_key_saved)
+  assert_false(saved_deepseek.test_endpoint().custom_key_saved)
   inspect(saved_deepseek.setup_api_key, content="")
-  inspect(saved_deepseek.settings_saves, content="1")
+  inspect(saved_deepseek.host_settings_mirror().saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
-  assert_true(saved_deepseek.management_dialog is Some(Settings))
+  assert_true(saved_deepseek.management_dialog is Some(Settings(Engine)))
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
-    ..test_model(),
-    api_provider: Custom,
-    deepseek_key_saved: false,
-    custom_api_url: "https://proxy.example/chat/completions",
+    ..test_model().with_host_endpoint(
+      provider=Custom,
+      deepseek_key_saved=false,
+      custom_api_url="https://proxy.example/chat/completions",
+    ),
     setup_api_key: "  sk-custom-new  ",
-    management_dialog: Some(Settings),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
-  assert_false(saved_custom.deepseek_key_saved)
-  assert_true(saved_custom.custom_key_saved)
-  assert_true(saved_custom.management_dialog is Some(Settings))
+  assert_false(saved_custom.test_endpoint().deepseek_key_saved)
+  assert_true(saved_custom.test_endpoint().custom_key_saved)
+  assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
-    ..test_model(),
-    api_provider: Glm,
-    deepseek_key_saved: false,
-    glm_key_saved: false,
+    ..test_model().with_host_endpoint(
+      provider=Glm,
+      deepseek_key_saved=false,
+      glm_key_saved=false,
+    ),
     setup_api_key: "  glm-new  ",
-    management_dialog: Some(Settings),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
-  assert_true(saved_glm.glm_key_saved)
-  assert_false(saved_glm.deepseek_key_saved)
-  assert_false(saved_glm.custom_key_saved)
-  assert_true(saved_glm.management_dialog is Some(Settings))
+  assert_true(saved_glm.test_endpoint().glm_key_saved)
+  assert_false(saved_glm.test_endpoint().deepseek_key_saved)
+  assert_false(saved_glm.test_endpoint().custom_key_saved)
+  assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
-    ..test_model(),
-    api_provider: OpenRouter,
-    deepseek_key_saved: false,
-    custom_key_saved: false,
+    ..test_model().with_host_endpoint(
+      provider=OpenRouter,
+      deepseek_key_saved=false,
+      custom_key_saved=false,
+    ),
     setup_api_key: "  sk-openrouter-new  ",
-    management_dialog: Some(Settings),
+    management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
-  assert_true(saved_openrouter.custom_key_saved)
-  assert_false(saved_openrouter.deepseek_key_saved)
+  assert_true(saved_openrouter.test_endpoint().custom_key_saved)
+  assert_false(saved_openrouter.test_endpoint().deepseek_key_saved)
 }
 
 ///|
-/// The Settings page has no Done button — the sidebar is the only way out,
-/// even while the endpoint is unusable (the composer blocks sending then).
+/// Conversation navigation must still work beneath Settings.
 test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: Deepseek,
-    management_dialog: Some(Settings),
-  }
+  let model = { ..test_model(), management_dialog: Some(Settings(Engine)), }
   let (_, next) = update(
     dispatch,
     SessionRotated({ channel: Local, session: "s-fresh", }),
@@ -18161,7 +18586,7 @@ test "archived deletion confirmation owns one visible conversation family" {
     ),
     model,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(
@@ -18180,11 +18605,11 @@ test "archived deletion confirmation owns one visible conversation family" {
   assert_true(sessions.contains("desktop-parent"))
   assert_true(sessions.contains("desktop-parent-sr-1"))
   let (_, cancelled) = update(dispatch, CancelDeleteSession, staged)
-  assert_true(cancelled.delete_confirm is None)
+  assert_true(cancelled.delete_confirm is Closed(_))
   let (_, cancelled_twice) = update(dispatch, CancelDeleteSession, cancelled)
-  assert_true(cancelled_twice.delete_confirm is None)
+  assert_true(cancelled_twice.delete_confirm is Closed(_))
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_confirm is None)
+  assert_true(confirmed.delete_confirm is Closed(_))
   assert_eq(confirmed.dev().archived_request_generation, 1)
   let (_, confirmed_twice) = update(dispatch, ConfirmDeleteSession, confirmed)
   assert_eq(confirmed_twice.dev().archived_request_generation, 1)
@@ -18212,7 +18637,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
     model,
   )
-  assert_true(asked.delete_confirm is None)
+  assert_true(asked.delete_confirm is Empty)
   let clean : @protocol.CheckoutRemoval = {
     worktree: "wt-1",
     dirty_paths: [],
@@ -18233,13 +18658,13 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     ),
     asked,
   )
-  assert_true(unlisted.delete_confirm is None)
+  assert_true(unlisted.delete_confirm is Empty)
   let (_, staged) = update_dev(
     dispatch,
     DeleteChecked(key~, checkout=Some(clean)),
     asked,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("the host's answer staged no confirmation")
   }
   assert_true(confirm.key == key)
@@ -18248,7 +18673,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
   // The row stays listed until the host announces the deletion, and the
   // archived list is not this request's to refresh.
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_confirm is None)
+  assert_true(confirmed.delete_confirm is Closed(_))
   assert_eq(confirmed.dev().sessions.length(), 2)
   assert_eq(confirmed.dev().archived_request_generation, 0)
   // A checkout that turned dirty after the check comes back from the delete
@@ -18261,7 +18686,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=Some(dirty)),
     bubbled,
   )
-  guard refused.delete_confirm is Some(HostDelete(again)) else {
+  guard refused.delete_confirm is Open(HostDelete(again)) else {
     fail("a refused delete staged no second confirmation")
   }
   assert_true(again.target == LiveChat(checkout=Some(dirty)))
@@ -18280,13 +18705,13 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=None),
     overtaken,
   )
-  assert_true(late.delete_confirm is None)
+  assert_true(!(late.delete_confirm is Open(_)))
   let (_, current) = update_dev(
     dispatch,
     DeleteChecked(key=other, checkout=None),
     late,
   )
-  guard current.delete_confirm is Some(HostDelete(latest)) else {
+  guard current.delete_confirm is Open(HostDelete(latest)) else {
     fail("the latest question staged no confirmation")
   }
   assert_true(latest.key == other)
@@ -18303,7 +18728,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key=other, checkout=None),
     cancelled,
   )
-  assert_true(reopened.delete_confirm is None)
+  assert_true(reopened.delete_confirm is Closed(_))
 }
 
 ///|
@@ -18419,7 +18844,7 @@ test "archived deletion keeps same-id rows in other stores" {
     DeleteSession(@interop.ChannelId::Local, key, ArchivedRecord),
     model,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(confirm.key == key)
@@ -19518,7 +19943,11 @@ test "Codex sidebar actions close only the narrow drawer" {
       channel=narrow.focused,
       @codex.Msg::status_changed({ "status": "ready" }),
     ),
-    { ..narrow, management_dialog: Some(Settings), default_agent: CodexAgent, },
+    {
+      ..narrow,
+      management_dialog: Some(Settings(General)),
+      default_agent: CodexAgent,
+    },
   )
   let (_, creating) = update(dispatch, NewChat, ready)
   assert_true(creating.screen is Chat)
@@ -19674,12 +20103,13 @@ test "file editor context reports the file body actual visibility" {
     file_ctx({ ..file_model, management_dialog: Some(Skills), }).panel_open,
   )
   assert_true(
-    file_ctx({ ..file_model, management_dialog: Some(Settings), }).panel_open,
+    file_ctx({ ..file_model, management_dialog: Some(Settings(General)), }).panel_open,
   )
 }
 
 ///|
 test "only synchronous file-open messages suppress panel reactivation" {
+  let host = test_model()
   let owner : @interop.ConversationKey = {
     channel: Local,
     session: "desktop-test",
@@ -19688,14 +20118,14 @@ test "only synchronous file-open messages suppress panel reactivation" {
     owner: @interop.Host(owner),
     archive_generation: 0,
   }
-  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation())
+  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation(host))
   assert_false(
     ComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
     CodexComposerAction(
@@ -19703,24 +20133,26 @@ test "only synchronous file-open messages suppress panel reactivation" {
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
-    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
+    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(
+      host,
+    ),
   )
   assert_false(
-    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(host),
   )
   assert_true(
     OpenPathResolved(
       FileOpenContext::new(owner, 1),
       Editor({ path: "a.mbt", line: Some(1), column: None, }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   // This only starts the asynchronous host lookup. The later OpenPathResolved is
   // the message that actually opens the document.
-  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation())
-  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation())
+  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation(host))
+  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation(host))
 }
 
 ///|
@@ -21546,10 +21978,10 @@ test "switching the chat provider leaves the update answer alone" {
     ProviderChanged("openseek-staging"),
     available,
   )
-  assert_true(switched.api_provider is Deepseek)
+  assert_true(switched.api_provider() is Deepseek)
   assert_true(switched.update_ux is UpdateAvailable(..))
   let (_, kept) = update(dispatch, ProviderChanged("custom"), available)
-  assert_true(kept.api_provider is Custom)
+  assert_true(kept.api_provider() is Custom)
   assert_true(kept.update_ux is UpdateAvailable(..))
 }
 
@@ -22060,7 +22492,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
 ///|
 test "tool decode semantics wait for their durable error tool result" {
   let dispatch = test_dispatch()
-  let semantic = Engine(
+  let semantic = DeviceMsg::Engine(
     Some("r7"),
     @wire.ToolCallDecodeError(
       tool_call_id="call",
@@ -23102,7 +23534,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   let (_, settings) = update(
     dispatch,
     ExternalLinkClicked("https://openseek.test/d/abc"),
-    { ..model, management_dialog: Some(Settings), },
+    { ..model, management_dialog: Some(Settings(General)), },
   )
   assert_eq(settings.dock_state().tabs.length(), 3)
   assert_eq(settings.preview.pages.length(), 3)
@@ -24221,4 +24653,40 @@ test "a subagent of an archived conversation opens from the archive" {
     is Some({ session: "desktop-parent-sr-1", record: ArchivedRecord, .. }) else {
     fail("expected the child to open from the archive")
   }
+}
+
+///|
+fn open_host_import(
+  dispatch : @cmd.Emit[Msg],
+  cmd : @cmd.Cmd,
+  model : Model,
+  target : @session_import.HostTarget,
+  session_id : String,
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(target.channel) is Some(dev) &&
+    dev.connection_generation == target.connection_generation &&
+    model.console.page_device is Some(device) else {
+    return (cmd, model)
+  }
+  let (focus, model) = focus_channel(dispatch, model, target.channel)
+  let (sessions, model) = request_sessions_refresh(
+    dispatch,
+    target.channel,
+    model,
+  )
+  let (visit, model) = navigation_visit(
+    model,
+    { device: Some(device), target: Session(session_id), },
+    replace=false,
+  )
+  // The ordinary navigation resolver opens the session once its catalog
+  // row arrives. Workspace and worktree notifications use their existing
+  // handlers; the import reply carries no inventory snapshot.
+  (
+    @cmd.batch([cmd, focus, sessions, visit]),
+    {
+      ..model,
+      navigation: { ..model.navigation, phase: Waiting, sessions: None, },
+    },
+  )
 }

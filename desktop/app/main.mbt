@@ -36,16 +36,10 @@ async fn main {
   // the user's login-shell environment (PATH, custom variables) onto this
   // process before anything downstream — engine, LSP, mbtx snippets — spawns.
   @shellenv.apply_login_shell_env(executable)
-  // The user's login shell supplies the base environment, then installed
-  // tools take precedence. Both the OpenSeek engine and Codex app-server are
-  // created below and therefore pass this packaged `rg` to agent tool calls.
   // Proton knows where this host's files are; everything below is told.
   let resources : @resources.Resources = {
     dir: @proton.resource_dir(),
     packaged: @proton.is_packaged(),
-  }
-  if @host.PackagedTools::resolve(Some(resources)) is Some(tools) {
-    tools.apply_to_process_env()
   }
   let frontend_entry = @host.frontend_entry_path(resources)
   let engine = @engine.engine_command(resources)
@@ -113,7 +107,8 @@ async fn main {
   }
   // The dock's browser tabs: native web contents views, owned by the
   // window and commanded over bridge-local `browser.*` ops.
-  let views = @extension.BrowserViews()
+  let previews = @static_preview.Server(engine~, runtime_dir?)
+  let views = @extension.BrowserViews(previews~)
   // The server through which the agents this host runs reach its tools — the
   // browser tabs above, to begin with. It binds now so every engine can be
   // granted its address from the first spawn; the backend serves it with its
@@ -256,7 +251,7 @@ async fn main {
     is_primary = true
     // Before the bridge: it prepares the workspace registry first, and
     // no page may attach to a host that has not.
-    state.start_services(group)
+    start_backend(group, state, views)
     group.spawn_bg(allow_failure=true, () => bridge.run())
     // The relay actor registers this host only when remote access (or the
     // environment override) is enabled, and idles otherwise.
@@ -442,4 +437,31 @@ fn relay_settings(matches : @argparse.Matches) -> @auth.ConnectorConfig? {
     return None
   }
   Some({ relay_url, device_token, device_name, })
+}
+
+///|
+/// Start the backend services and the HTML previews, and return once the
+/// services have started. They run on a core task group inside one task of
+/// Proton's application group, which still belongs to the old async library:
+/// cancelling that group at shutdown cancels the task and the core group in it.
+async fn start_backend(
+  group : @async.TaskGroup[Unit],
+  state : @api.ApiState,
+  views : @extension.BrowserViews,
+) -> Unit {
+  let started : @core_async.Queue[Result[Unit, Error]] = Queue(kind=Unbounded)
+  group.spawn_bg(() => {
+    @core_async.with_task_group(services => {
+      let result : Result[Unit, Error] = try {
+        state.start_services(services)
+        views.start_previews(services)
+        Ok(())
+      } catch {
+        error => Err(error)
+      }
+      started.put(result)
+      result.unwrap_or_error()
+    })
+  })
+  started.get().unwrap_or_error()
 }

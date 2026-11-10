@@ -26,14 +26,14 @@ pub async fn open_path(path : String) -> Int32 {
     // Respect the file's app association, but fall back to the default text
     // editor for types with none. Oversized source files are deliberately
     // routed here, and extensions such as `.mbt` may have no association.
-    let code = @process.run("open", [path])
+    let code = @process.run("open", [path]).exit_code
     if code == 0 {
       code
     } else {
-      @process.run("open", ["-t", path])
+      @process.run("open", ["-t", path]).exit_code
     }
   } else {
-    @process.run("xdg-open", [path])
+    @process.run("xdg-open", [path]).exit_code
   }
 }
 
@@ -45,9 +45,9 @@ pub async fn open_url(url : String) -> Int32 {
   if @async.platform is Windows {
     windows_open(url)
   } else if @async.platform is MacOS {
-    @process.run("open", [url])
+    @process.run("open", [url]).exit_code
   } else {
-    @process.run("xdg-open", [url])
+    @process.run("xdg-open", [url]).exit_code
   }
 }
 
@@ -59,9 +59,9 @@ pub async fn reveal_path(path : String) -> Int32 {
   if @async.platform is Windows {
     windows_reveal(path)
   } else if @async.platform is MacOS {
-    @process.run("open", ["-R", path])
+    @process.run("open", ["-R", path]).exit_code
   } else {
-    @process.run("xdg-open", [@path.Path(path).dirname().to_string()])
+    @process.run("xdg-open", [@path.Path(path).dirname().to_string()]).exit_code
   }
 }
 
@@ -69,11 +69,12 @@ pub async fn reveal_path(path : String) -> Int32 {
 /// The machine's hostname, for labeling this device on a relay; `None` when
 /// the probe fails. `hostname` ships with macOS, Linux, and Windows alike.
 pub async fn machine_hostname() -> String? {
-  let (code, output, _) = @processx.collect_output_no_stdin("hostname", []) catch {
+  let result = @processx.collect_output_no_stdin("hostname", []) catch {
     _ => return None
   }
+  let code = result.exit_code
   guard code == 0 else { return None }
-  let name = output.text().trim().to_owned() catch { _ => return None }
+  let name = result.stdout_text().trim().to_owned() catch { _ => return None }
   guard !name.is_empty() else { return None }
   Some(name)
 }

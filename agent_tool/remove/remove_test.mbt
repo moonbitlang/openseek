@@ -4,7 +4,7 @@
 /// against. Returns `""` for a path that cannot be read (e.g. a missing-file
 /// test, where the gate is never reached).
 async fn recorded_digest(path : String) -> String {
-  @agent_tool.content_digest(@fs.read_file(path).text()) catch {
+  @agent_tool.content_digest(@fs.read_text(path)) catch {
     _ => ""
   }
 }

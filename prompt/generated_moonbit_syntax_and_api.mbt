@@ -144,8 +144,10 @@ fn moonbit_syntax_and_api() -> String {
     #|  // before rg sees it, so rg applies it as its own glob. A glob with no `/`
     #|  // matches the basename at any depth. rg ships no `moonbit` file type, so
     #|  // `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen it
-    #|  // to `*.mbt*` when those should count.
-    #|  let out = @shell.Cmd("rg", [
+    #|  // to `*.mbt*` when those should count. rg here is cli/rg, ripgrep ported to
+    #|  // MoonBit and run through moonx; `--` keeps moonx off rg's flags.
+    #|  let out = @shell.Cmd("moonx", [
+    #|    "cli/rg@0.1.1", "--",
     #|    // A regex needle is one ordinary string element, so double the
     #|    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
     #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
@@ -220,7 +222,7 @@ fn moonbit_syntax_and_api() -> String {
     #|// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
     #|// a host-backed test that runs it through the real sandbox and host.
     #|import {
-    #|  "moonbitlang/openseek_tools@0.4.0",
+    #|  "moonbitlang/openseek_tools@0.4.1",
     #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
@@ -285,7 +287,7 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+    #|  "moonbitlang/openseek_tools@0.4.1" @tools,
     #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/json",
     #|}
@@ -501,9 +503,6 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|## Syntax And API Discipline
     #|
-    #|- Prefer `Int32` over `Int` for 32-bit integers. They are aliases today, but
-    #|  the current toolchain names the type and its APIs `Int32`; use `Int32` in
-    #|  new annotations and when parsing integers.
     #|- Syntax the compiler rejects, each shown working in the verified example
     #|  below: parameters and `self` are never `mut`, a mutable local is
     #|  `let mut` (there is no `var`), and only a struct field you assign is

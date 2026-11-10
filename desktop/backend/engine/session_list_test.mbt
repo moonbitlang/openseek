@@ -13,7 +13,7 @@ async test "live and archived listings read stores without an engine executable"
   let broken = dir + "/broken"
   let empty = dir + "/empty"
   @fs.mkdir(dir + "/.openseek", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     dir + "/.openseek/workspaces.json",
     ({ "workspaces": [workspace, broken, empty] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -55,7 +55,7 @@ async test "live and archived listings read stores without an engine executable"
   archive.set_title(SessionId("archived"), "Archived title")
   let corrupt = @store.SessionStore(broken + "/.openseek")
   corrupt.create(Session(SessionId("bad"), system_prompt=""))
-  @fs.write_file(
+  @fs.write_text(
     broken + "/.openseek/sessions/bad/session-title",
     " ",
     create_mode=CreateOrTruncate,
@@ -73,11 +73,8 @@ async test "live and archived listings read stores without an engine executable"
   assert_eq(group.sessions[3].id, "husk")
   assert_eq(group.sessions[3].updated_at_ms, None)
   for row in group.sessions[:3] {
-    let (seconds, nanos) = @fs.mtime(store.session_file(SessionId(row.id)))
-    assert_eq(
-      row.updated_at_ms,
-      Some((seconds * 1000 + (nanos / 1000000).to_int64()).to_double()),
-    )
+    let modified = @fs.mtime(store.session_file(SessionId(row.id)))
+    assert_eq(row.updated_at_ms, Some(modified.msec().to_double()))
   }
   assert_true(reply.groups[1].error.contains("session title must not be blank"))
   assert_eq(reply.groups[1].sessions.length(), 0)

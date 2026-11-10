@@ -45,7 +45,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
   @sys.set_env_var("HOME", dir + "/home")
   @fs.mkdir(dir + "/home/.openseek", recursive=true)
   @fs.mkdir(workspace + "/.openseek", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     dir + "/home/.openseek/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
   )
@@ -67,8 +67,8 @@ async test "a committed fork succeeds even when its title cannot be saved" {
     $|mkdir -p "$target/session-title"
     $|printf '{"version":1,"id":"%s","system_prompt":"test"}\{newline}' "$fork" > "$target/openseek_session-$fork.jsonl"
     $|printf '%s\{newline}' "$fork"
-  @fs.write_file(engine, script)
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  @fs.write_text(engine, script)
+  assert_eq(@process.run("chmod", ["+x", engine]).exit_code, 0)
   let manager = new_engine_manager(engine)
   let reply = fork_session(
     manager,
@@ -204,8 +204,8 @@ async fn with_worktree_fork_fixture(
   prepare_git_repo(repo)
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let engine = root.join("engine.sh").to_string()
-  @fs.write_file(engine, worktree_fork_engine_script())
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  @fs.write_text(engine, worktree_fork_engine_script())
+  assert_eq(@process.run("chmod", ["+x", engine]).exit_code, 0)
   let manager = new_engine_manager(engine)
   manager.pump = Serving(sessions=Map([]))
   let created = @worktree.create(

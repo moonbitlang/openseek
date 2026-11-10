@@ -7,22 +7,22 @@ async test "generic file packaging retains editable sources without a UI library
     let output = scratch + "/artifact"
     @fs.mkdir(workspace)
     @fs.mkdir(project, recursive=true)
-    @fs.write_file(project + "/moon.mod", "name = \"test/file_artifact\"\n")
-    @fs.write_file(
+    @fs.write_text(project + "/moon.mod", "name = \"test/file_artifact\"\n")
+    @fs.write_text(
       project + "/moon.pkg",
       "pkgtype(kind: \"executable\")\noptions(link: { \"js\": { \"format\": \"iife\" } })\n",
     )
     let main = "fn main { println(\"The application has loaded\") }\n"
-    @fs.write_file(project + "/main.mbt", main)
-    @fs.write_file(
+    @fs.write_text(project + "/main.mbt", main)
+    @fs.write_text(
       project + "/index.html",
       "<!doctype html><div id=\"app\">A generated file</div><!-- openseek:script -->",
     )
     @fs.mkdir(project + "/_build")
-    @fs.write_file(project + "/_build/stale.js", "stale executable")
+    @fs.write_text(project + "/_build/stale.js", "stale executable")
     @fs.mkdir(project + "/assets")
-    @fs.write_file(project + "/assets/data.bin", b"\x00\xff")
-    @fs.write_file(project + "/.settings.json", "{}")
+    @fs.write_binary(project + "/assets/data.bin", b"\x00\xff")
+    @fs.write_text(project + "/.settings.json", "{}")
     let tool = @mbtx.definition(
       workspace_root=workspace,
       scratch_dir=scratch,
@@ -37,23 +37,20 @@ async test "generic file packaging retains editable sources without a UI library
     let result = dispatch(tool, arguments)
     assert_false(result.is_error, msg=result.content)
     assert_true(result.content.contains("scratch/artifact/answer-v1.html"))
-    let html = @fs.read_file(output + "/answer-v1.html").text()
+    let html = @fs.read_text(output + "/answer-v1.html")
     assert_true(html.contains("The application has loaded"))
     assert_true(html.contains("<script>"))
     assert_false(html.contains("<!-- openseek:script -->"))
     let retained = output + "/answer-v1.html.source"
-    assert_eq(@fs.read_file(retained + "/main.mbt").text(), main)
-    assert_eq(
-      @fs.read_file(retained + "/assets/data.bin").binary(),
-      b"\x00\xff",
-    )
-    assert_eq(@fs.read_file(retained + "/.settings.json").text(), "{}")
+    assert_eq(@fs.read_text(retained + "/main.mbt"), main)
+    assert_eq(@fs.read_binary(retained + "/assets/data.bin"), b"\x00\xff")
+    assert_eq(@fs.read_text(retained + "/.settings.json"), "{}")
     assert_false(@fs.exists(retained + "/_build"))
     assert_false(@fs.exists(retained + "/.mooncakes"))
     let duplicate = dispatch(tool, arguments)
     assert_true(duplicate.is_error)
     assert_true(duplicate.content.contains("already exists"))
-    assert_eq(@fs.read_file(output + "/answer-v1.html").text(), html)
+    assert_eq(@fs.read_text(output + "/answer-v1.html"), html)
     @fs.rmdir(project, recursive=true)
     let rebuilt = dispatch(tool, {
       "filename": recipe,
@@ -104,10 +101,10 @@ async test "component source links are rejected before publishing a revision" {
     let project = scratch + "/app"
     @fs.mkdir(workspace)
     @fs.mkdir(project, recursive=true)
-    @fs.write_file(project + "/moon.mod", "name = \"test/answer\"\n")
-    @fs.write_file(project + "/moon.pkg", "pkgtype(kind: \"executable\")\n")
-    @fs.write_file(project + "/main.mbt", "fn main { println(1) }\n")
-    @fs.write_file(root + "/external.bin", b"data")
+    @fs.write_text(project + "/moon.mod", "name = \"test/answer\"\n")
+    @fs.write_text(project + "/moon.pkg", "pkgtype(kind: \"executable\")\n")
+    @fs.write_text(project + "/main.mbt", "fn main { println(1) }\n")
+    @fs.write_binary(root + "/external.bin", b"data")
     @fs.symlink(target=root + "/external.bin", project + "/data.bin")
     let tool = @mbtx.definition(
       workspace_root=workspace,

@@ -2,7 +2,7 @@
 package "moonbitlang/openseek/agent_runtime"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "moonbitlang/openseek_protocol",
 }
@@ -28,9 +28,9 @@ pub fn AgentRuntime::take_external_input_failure(Self) -> String?
 pub async fn AgentRuntime::wait_for_user_input(Self) -> Unit
 pub fn AgentRuntime::workspace_root(Self) -> String
 
-type AgentTaskScope[X]
-pub fn[X] AgentTaskScope::AgentTaskScope(@async.TaskGroup[X]) -> Self[X]
-pub fn[X] AgentTaskScope::group(Self[X]) -> @async.TaskGroup[X]
+type AgentTaskScope
+pub fn AgentTaskScope::AgentTaskScope(@async.TaskGroup) -> Self
+pub fn AgentTaskScope::group(Self) -> @async.TaskGroup
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ApprovalAsk {

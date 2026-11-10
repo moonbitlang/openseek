@@ -9,7 +9,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/json",
           #|}
@@ -559,7 +559,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|// Arguments: --dry-run   plan only, write nothing
           #|//            --limit N   stop after N fixes (default 500)
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
           #|  "moonbitlang/core/async/shell",
@@ -1227,7 +1227,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
           #|  "moonbitlang/core/json",
@@ -1618,7 +1618,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
@@ -2530,6 +2530,11 @@ fn bundled_workflow(name : StringView) -> String? {
           #|const OutputBytes : Int32 = 40_000
           #|
           #|///|
+          #|/// cli/rg is the MoonBit port of ripgrep, run through moonx like any other
+          #|/// MoonBit command. The pin keeps the flags this script documents fixed.
+          #|const RgPackage : String = "cli/rg@0.1.1"
+          #|
+          #|///|
           #|/// Placed before the caller's arguments. rg lets a later flag override an
           #|/// earlier one, so a caller can still ask for `--heading`, `--color`, or a
           #|/// wider `--max-columns`; by default every match is `path:line:text`, the
@@ -2542,14 +2547,16 @@ fn bundled_workflow(name : StringView) -> String? {
           #|///|
           #|let usage : String =
           #|  #|Usage: mbtx(filename="@builtin/rg.mbtx", args=["PATTERN", "PATH", ...])
-          #|  #|Runs ripgrep with these arguments, unchanged: rg flags and Rust regex syntax,
-          #|  #|not POSIX grep (`-E` is --encoding, `-h` is help; alternation is `a|b`).
+          #|  #|Runs cli/rg (ripgrep ported to MoonBit) with these arguments, unchanged: rg
+          #|  #|flags and Rust regex syntax, not POSIX grep (`-E` is --encoding, `-h` is
+          #|  #|help; alternation is `a|b`). PATH is required: name `.` for the working
+          #|  #|directory. No PCRE2 (`-P`) and no `-z`.
           #|  #|Output is `path:line:text`; lines past 500 columns are previewed. Common
           #|  #|flags: -i (ignore case), -F (literal), -w (word), -g GLOB (filter paths),
           #|  #|-t TYPE, -C N (context), -l (paths only), -c (counts), -m N (per file).
           #|  #|Output is bounded to 40000 UTF-8 bytes; narrow the search when truncated.
           #|  #|No match exits 0 with a note. Relative paths use cwd (default workspace).
-          #|  #|args=["-h"] prints ripgrep's own flag summary.
+          #|  #|args=["-h"] prints rg's own flag summary.
           #|
           #|///|
           #|async fn main {
@@ -2561,14 +2568,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut remaining = OutputBytes - 256
           #|  let mut shown = 0
           #|  let mut total = 0
-          #|  // With no path, rg searches stdin whenever stdin is a pipe or a file, and a
-          #|  // child's default stdin is an empty pipe: every search would then report no
-          #|  // matches. The null device is neither, so rg searches the working directory.
-          #|  let null_device = if @async.platform is Windows { "NUL" } else { "/dev/null" }
+          #|  // `--` keeps moonx from reading rg's leading flags as its own options.
           #|  let rg = @shell.Cmd(
-          #|    "rg",
-          #|    [..defaults, ..args],
-          #|    stdin=FromFile(null_device),
+          #|    "moonx",
+          #|    [RgPackage, "--", ..defaults, ..args],
           #|    stderr=Inherit,
           #|  )
           #|  let exit_code = rg.each_line(line => {
@@ -2582,7 +2585,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  }) catch {
           #|    error => {
           #|      println(
-          #|        "error: could not run rg (\{error}); install ripgrep and put `rg` on PATH",
+          #|        "error: could not run moonx \{RgPackage} (\{error}); put the MoonBit toolchain on PATH",
           #|      )
           #|      @sys.exit(2)
           #|      return
@@ -4403,7 +4406,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.4.1" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
           #|  "moonbitlang/core/async/shell",

@@ -50,7 +50,8 @@ pub fn update(msg : Msg, state : State) -> State {
     // `loading` is driven by its own event, so the new load still ends.
     LoadFailed(id~, url~, text~) =>
       patch(id, page => {
-        if page.url is Some(page_url) && page_url == url {
+        // A preview awaiting its first native navigation has no URL yet.
+        if page.url is None || page.url == Some(url) {
           { ..page, loading: false, failure: Some("\{url}: \{text}"), }
         } else {
           page

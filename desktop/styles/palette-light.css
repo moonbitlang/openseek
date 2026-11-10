@@ -1,27 +1,24 @@
 /* SeekMoon light palette. Replace this file with Theme Lab's CSS copy.
  * Semantic mappings stay in tokens.css. */
 :root {
-  --light-bg-canvas: #fbfbf9;
-  --light-bg-surface: #ffffff;
-  --light-bg-subtle: #f6f6f3;
-  --light-text-primary: #121418;
-  /* Secondary labels and metadata remain readable on the light surfaces. */
+  --light-bg-canvas: #ffffff;
+  --light-bg-surface: #fafafa;
+  --light-bg-content: #f2f2f2;
+  --light-bg-subtle: color-mix(in srgb, var(--light-bg-surface) 94.8%, black);
+  --light-conversation-selected: color-mix(in srgb, var(--light-bg-subtle) 94.5%, black);
+  --light-text-primary: #191919;
   --light-text-secondary: #3f444d;
   --light-text-muted: #565d68;
-  --light-text-faint: #656971;
-  --light-border: #e9e8e3;
-  --light-border-subtle: #f0efea;
-  --light-accent: #315fd5;
-  --light-accent-strong: #2a55cc;
-  --light-on-accent: #ffffff;
-  --light-on-accent-strong: #ffffff;
+  --light-text-inline-code: var(--light-text-primary);
+  --light-border: #e5e5e5;
+  --light-seam: #f0efea;
+  --light-accent: #315fe5;
   --light-accent-soft: #eef2fe;
   --light-accent-border: #d6e0fd;
-  --light-text-selection: #a3c4f5;
+  --light-text-selection: #accff7;
   --light-success: #176b46;
   --light-danger: #c0453b;
   --light-danger-soft: #fcefed;
   --light-danger-border: #f2d4cf;
   --light-warning: #875a16;
-  --light-code: #20242b;
 }

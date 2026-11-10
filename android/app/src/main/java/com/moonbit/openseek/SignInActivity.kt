@@ -16,64 +16,55 @@ import java.util.concurrent.Executors
 /** Keeps the browser flow separate from the conversation WebView and its Back stack. */
 class SignInActivity : ComponentActivity() {
     private var flow: BrowserSignIn? = null
-    @Volatile private var outcome: Result<String>? = null
+    private lateinit var status: TextView
+
+    /** Set once the code is being redeemed; later returns change nothing. */
+    private var redeeming = false
     private val executor = Executors.newSingleThreadExecutor()
+    /** The browser closed without returning this flow's answer in its result. */
+    private var closed = false
     private val browser = AuthTabIntent.registerActivityResultLauncher(this) { result ->
-        val uri = result.resultUri
-        if (result.resultCode == AuthTabIntent.RESULT_OK && uri != null &&
-            flow?.acceptsReturn(uri.toString()) == true) {
-            deliver()
-        } else if (outcome != null) {
-            // Older browsers return CANCELED when their fallback Custom Tab closes.
-            deliver()
-        } else {
-            setResult(Activity.RESULT_CANCELED)
-            finish()
-        }
+        val answer = if (result.resultCode == AuthTabIntent.RESULT_OK) flow?.answer(result.resultUri?.toString()) else null
+        if (answer != null) deliver(answer) else closed = true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(TextView(this).apply {
+        status = TextView(this).apply {
             text = "Complete sign-in in your browser."
             setPadding(32, 64, 32, 32)
-        })
+        }
+        setContentView(status)
         if (savedInstanceState != null || intent.data != null) {
-            // The process no longer owns the old loopback listener/verifier.
+            // The process no longer holds the old flow's state and verifier.
             fail("Sign-in was interrupted. Please try again.")
             return
         }
-        executor.execute {
-            try {
-                val pending = BrowserSignIn(ConsoleOrigin.ORIGIN, packageName)
-                flow = pending
-                runOnUiThread {
-                    if (!isFinishing) {
-                        try {
-                            AuthTabIntent.Builder().build().launch(browser, pending.startUri.toUri(), packageName)
-                        } catch (_: ActivityNotFoundException) {
-                            fail("Install or enable a browser to sign in.")
-                        }
-                    }
-                }
-                pending.receive(::exchange) { result, returning ->
-                    outcome = result
-                    // A callback response redirects the Auth Tab first. Keep this
-                    // activity alive until that redirect delivers its result.
-                    if (!returning) runOnUiThread {
-                        if (!isFinishing) fail(result.exceptionOrNull()?.message ?: "Sign-in failed.")
-                    }
-                }
-            } catch (_: Exception) {
-                runOnUiThread { if (!isFinishing) fail("Unable to start sign-in. Please try again.") }
-            }
+        val pending = BrowserSignIn(ConsoleOrigin.ORIGIN, packageName)
+        flow = pending
+        try {
+            AuthTabIntent.Builder().build().launch(browser, pending.startUri.toUri(), packageName)
+        } catch (_: ActivityNotFoundException) {
+            fail("Install or enable a browser to sign in.")
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val uri = intent.data ?: return
-        if (flow?.acceptsReturn(uri.toString()) == true) deliver()
+        flow?.answer(intent.data?.toString())?.let(::deliver)
+    }
+
+    /**
+     * The Custom Tabs fallback closes with RESULT_CANCELED, and its return URL
+     * arrives through onNewIntent. A stopped activity starts, and so receives
+     * that result, before its new intent; both precede this resume.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (closed && !redeeming && !isFinishing) {
+            setResult(Activity.RESULT_CANCELED)
+            finish()
+        }
     }
 
     private fun exchange(code: String, verifier: String): String {
@@ -97,10 +88,24 @@ class SignInActivity : ComponentActivity() {
         } finally { connection.disconnect() }
     }
 
-    private fun deliver() {
-        val result = outcome ?: return
-        result.fold(
-            onSuccess = { setResult(Activity.RESULT_OK, Intent().putExtra("account", it)); finish() },
+    /** Runs once the browser has returned, with this activity in the foreground. */
+    private fun deliver(answer: Result<String>) {
+        if (redeeming) return
+        val pending = flow ?: return
+        answer.fold(
+            onSuccess = { code ->
+                redeeming = true
+                status.text = "Signing in…"
+                executor.execute {
+                    val account = runCatching { exchange(code, pending.verifier) }
+                    runOnUiThread {
+                        if (!isFinishing) account.fold(
+                            onSuccess = { setResult(Activity.RESULT_OK, Intent().putExtra("account", it)); finish() },
+                            onFailure = { fail(it.message ?: "Sign-in failed.") },
+                        )
+                    }
+                }
+            },
             onFailure = { fail(it.message ?: "Sign-in failed.") },
         )
     }
@@ -111,7 +116,6 @@ class SignInActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        flow?.close()
         executor.shutdownNow()
         super.onDestroy()
     }

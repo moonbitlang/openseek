@@ -2,7 +2,7 @@
 /// A one-request DeepSeek stand-in for steering tests: asserts the request
 /// carries both the original task and the steered text as user messages, then
 /// streams a plain content answer so the turn finishes without tool calls.
-async fn steer_test_server(group : @async.TaskGroup[Unit]) -> String? {
+async fn steer_test_server(group : @async.TaskGroup) -> String? {
   serve_chat_completions(
     group,
     "local TCP bind unavailable; skipping steer test",
@@ -17,8 +17,10 @@ async fn steer_test_server(group : @async.TaskGroup[Unit]) -> String? {
       conn.send_response(200, "OK", extra_headers={
         "Content-Type": "text/event-stream",
       })
-      conn.write("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
-      conn.write("data: [DONE]\n\n")
+      conn.write_string(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n",
+      )
+      conn.write_string("data: [DONE]\n\n")
     },
   )
 }
@@ -94,7 +96,7 @@ async test "queued steering is folded in at the next step boundary" {
 /// without the pending steer would have finished the turn. The second
 /// request must carry the steer and gets the real final answer.
 async fn override_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   runtime : @agent_runtime.AgentRuntime,
   skip_message : String,
   steer : @agent_runtime.SteerInput,
@@ -114,7 +116,7 @@ async fn override_test_server(
     if requests == 1 {
       // The steer arrives while this "final" call is in flight.
       runtime.queue_steer(steer)
-      conn.write(
+      conn.write_string(
         "data: {\"choices\":[{\"delta\":{\"content\":\"draft answer\"}}]}\n\n",
       )
     } else {
@@ -122,11 +124,11 @@ async fn override_test_server(
         assert_true(request_body.contains(fragment), msg=fragment)
       }
       assert_true(request_body.contains("draft answer"))
-      conn.write(
+      conn.write_string(
         "data: {\"choices\":[{\"delta\":{\"content\":\"\{final_answer}\"}}]}\n\n",
       )
     }
-    conn.write("data: [DONE]\n\n")
+    conn.write_string("data: [DONE]\n\n")
   })
 }
 
@@ -302,7 +304,7 @@ fn log_event(entry : Json) -> String {
 
 ///|
 async fn reasoning_log_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
 ) -> (String, Ref[Int32])? {
   let hits : Ref[Int32] = { val: 0, }
   let url = serve_chat_completions(
@@ -317,21 +319,21 @@ async fn reasoning_log_test_server(
       if hits.val == 1 {
         // The first attempt dies after visible output; the agent's retry
         // boundary must keep that fragment transient.
-        conn.write(
+        conn.write_string(
           "data: {\"choices\":[{\"delta\":{\"content\":\"discarded\"}}]}\n\n",
         )
         return
       }
-      conn.write(
+      conn.write_string(
         "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"stream-retry:\"}}]}\n\n",
       )
-      conn.write(
+      conn.write_string(
         "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoning-proof\"}}]}\n\n",
       )
-      conn.write(
+      conn.write_string(
         "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
       )
-      conn.write("data: [DONE]\n\n")
+      conn.write_string("data: [DONE]\n\n")
     },
   )
   url.map(url => (url, hits))
@@ -423,7 +425,7 @@ async test "streaming reasoning deltas survive a stream retry and stay transient
 
 ///|
 async fn notice_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   runtime : @agent_runtime.AgentRuntime,
   notice : String,
   finish_first~ : Bool = false,
@@ -442,22 +444,22 @@ async fn notice_test_server(
         // A background job finishes mid-turn and pushes a notice.
         runtime.queue_steer(Notice(notice))
         if finish_first {
-          conn.write(
+          conn.write_string(
             "data: \{sse_tool_call("call_finish", "finish_test", 100_000)}\n\n",
           )
         } else {
-          conn.write(
+          conn.write_string(
             "data: {\"choices\":[{\"delta\":{\"content\":\"draft\"}}]}\n\n",
           )
         }
       } else {
         // The notice was delivered to the model as user-role content.
         assert_true(request_body.contains(notice))
-        conn.write(
+        conn.write_string(
           "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
         )
       }
-      conn.write("data: [DONE]\n\n")
+      conn.write_string("data: [DONE]\n\n")
     },
   )
 }

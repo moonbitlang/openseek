@@ -241,9 +241,7 @@ async fn serve_config(
   // workspaces qualify — the registry, not the payload, decides which
   // directories a run may work in.
   let hinted : @pathx.Absolute? = if workspace is Some(path) {
-    guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-      raise EngineError("workspace is not a supported absolute resource path")
-    }
+    let absolute = @pathx.Absolute::parse_resource_path(path)
     match @workspaces.registered_dir(absolute) {
       Some(dir) => Some(dir)
       None => raise EngineError("\{path} is not a registered workspace")
@@ -551,7 +549,7 @@ async test "host chooses durable placement from workspace state" {
   })
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-workspace"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,

@@ -45,11 +45,7 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
   // The titlebar debug toggle is off while the minimal transcript is shown.
   async enableMinimal() {
     await this.openSession();
-    await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-tools-live, #stream .minimal-process, #stream .minimal-single-call').first()).toBeVisible();
-  }
-
-  detailedMode() {
-    return this.page.getByRole('button', { name: 'Detailed mode', exact: true });
+    await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-tools-live, #stream .minimal-single-call').first()).toBeVisible();
   }
 
   append(kind, payload, ts) {
@@ -118,21 +114,25 @@ test('minimal images open by default and preserve manual collapse across updates
   await expect(preview.locator('img').first()).toBeVisible();
   await expect(stream).not.toContainText('OUTPUT_SENTINEL');
   await expect(stream).not.toContainText('PARAMETER_SENTINEL');
-
-  app.append('terminal', { kind: 'finished', message: 'Images inspected.' });
-  await page.reload();
-  await app.openSession();
-  await expect(preview).toHaveAttribute('open', '');
-  const process = stream.locator('.minimal-process');
-  await process.locator(':scope > summary').click();
   for (const img of await preview.locator('img').all()) {
-    await expect(img).toBeVisible();
     await expect(img).toHaveAttribute('src', `data:image/png;base64,${png}`);
   }
   // Narrow layouts keep both the disclosure and the images inside the row.
   await page.setViewportSize({ width: 640, height: 900 });
   await expect(preview.locator('img').first()).toBeVisible();
   expect(await preview.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // The final answer stands alone, including after the history is replayed.
+  app.append('terminal', { kind: 'finished', message: 'Images inspected.' });
+  for (let pass = 0; pass < 2; pass++) {
+    await expect(stream.getByText('Images inspected.', { exact: true })).toBeVisible();
+    await expect(stream.locator('.minimal-call, .minimal-image-call')).toHaveCount(0);
+    if (pass === 0) {
+      await page.reload();
+      await app.openSession();
+    }
+  }
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -178,7 +178,7 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript groups live tools and folds completed work around user messages', { tag: '@motion' }, async ({ page }) => {
+test('minimal transcript groups live tools and leaves answered turns with their answer', { tag: '@motion' }, async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   const nextProse = app.sessionEvents.pop().item.payload;
   await app.install();
@@ -239,42 +239,25 @@ test('minimal transcript groups live tools and folds completed work around user 
   app.append('assistant', { content: 'Here is the **final summary**.' }, 1700000000000);
   app.append('terminal', { kind: 'finished', message: 'Here is the **final summary**.' });
 
-  const processes = stream.locator('.minimal-process');
-  await expect(processes).toHaveCount(2);
-  await expect(processes.nth(0).locator(':scope > summary > .minimal-summary-text')).toHaveText('Read the project manifest · Cannot read the second file · Check project details');
-  await expect(processes.nth(1).locator(':scope > summary > .minimal-summary-text')).toHaveText('mcp__example__inspect');
-  await expect(processes.nth(0).locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
-  await expect(processes.nth(1).locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
-  await expect(processes.nth(0).locator(':scope > summary')).not.toContainText(/tool calls? failed/);
-  await expect(processes.nth(1).locator(':scope > summary')).not.toContainText(/tool calls? failed/);
-  await expect(processes.nth(0).locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
-  await expect(processes.nth(1).locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
-  await expect(stream.getByText('I will explore this project.', { exact: true })).toBeHidden();
+  // An answered turn shows its answer alone. Work before and after the
+  // interleaved user message leaves the transcript with the interim prose.
   await expect(stream.getByText('Please focus on the architecture.', { exact: true })).toBeVisible();
   await expect(stream.locator('.msg-content strong')).toHaveText('final summary');
+  await expect(stream.locator('.minimal-tools, .minimal-tools-live, .minimal-call')).toHaveCount(0);
+  await expect(stream.getByText('I will explore this project.', { exact: true })).toHaveCount(0);
+  await expect(stream.getByText('Now I can check the remaining details.', { exact: true })).toHaveCount(0);
+  await expect(stream.getByText('I will focus on architecture.', { exact: true })).toHaveCount(0);
+  await expect(stream.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
   await expect(stream.getByRole('button', { name: 'Copy assistant message as Markdown', exact: true })).toHaveCount(1);
   // Minimal mode mirrors detailed mode's finish line: the confirmed final
   // answer carries its durable commit instant beside the copy action.
   await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);
-  for (const process of await processes.all()) {
-    await process.locator(':scope > summary').click();
-    for (const group of await process.locator('.minimal-tools').all()) {
-      await group.locator('summary').click();
-    }
-  }
-  await expect(processes.nth(0).locator('.minimal-tools > summary > .minimal-summary-text')).toHaveText(
-    'Read the project manifest · Cannot read the second file · Check project details',
-  );
-  // Prose keeps the outer process, but its single call needs no inner fold.
-  await expect(processes.nth(1).locator('.minimal-tools')).toHaveCount(0);
-  await expect(processes.nth(1).locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
-  await expect(stream.locator('.minimal-call-caption').filter({ hasText: /^mcp__example__inspect$/ })).toBeVisible();
   await expect(stream).not.toContainText(/REASONING_SENTINEL|PARAMETER_SENTINEL|OUTPUT_SENTINEL|SCRIPT_SENTINEL/);
   await expect(stream.locator('.tool-call-tabs, .activity-thinking')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const replayed of [false, true]) test(`minimal transcript clears jump to latest when folded content fits the viewport${replayed ? ' on first history expansion' : ''}`, async ({ page }) => {
+for (const replayed of [false, true]) test(`minimal transcript clears jump to latest when the answered turn fits the viewport${replayed ? ' on first history expansion' : ''}`, async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents[5].item.payload.content = Array.from(
     { length: 60 }, (_, index) => `Progress paragraph ${index}.`,
@@ -288,104 +271,29 @@ for (const replayed of [false, true]) test(`minimal transcript clears jump to la
   }
   await app.install();
   await app.goto();
-  await app.enableMinimal();
+  await app.openSession();
   const transcript = page.locator('#transcript');
   const jump = page.getByTitle('Jump to latest', { exact: true });
   if (!replayed) {
+    await expect(page.locator('#stream .minimal-tools')).toBeVisible();
     await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
       .toBeGreaterThan(1000);
     await transcript.evaluate(node => { node.scrollTop = 0; });
     await expect(jump).toBeVisible();
 
-    // Collapsing from scrollTop=0 changes the available range without a scroll
-    // event. The old unpinned state must not leave a button over the summary.
+    // Removing the process from scrollTop=0 changes the available range
+    // without a scroll event. The old unpinned state must not leave a button
+    // over the answer.
     app.append('terminal', terminal);
   }
-  await expect(page.locator('.minimal-process')).toHaveCount(1);
-  await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight)).toBe(0);
-  await expect(jump).toBeHidden();
-
-  const summary = page.locator('.minimal-process > summary');
-  await summary.click();
-  await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
-    .toBeGreaterThan(1000);
-  // The reader was pinned while everything fit, so it follows the expansion
-  // to the tail one render later. Scroll away only after that follow lands;
-  // an earlier scroll is overridden and leaves the reader pinned.
-  await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight))
-    .toBeLessThanOrEqual(4);
-  await transcript.evaluate(node => { node.scrollTop = 0; });
-  await expect(jump).toBeVisible();
-  await summary.click();
+  await expect(page.getByText('Finished checking.', { exact: true })).toBeVisible();
+  await expect(page.locator('#stream .minimal-call')).toHaveCount(0);
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight)).toBe(0);
   await expect(jump).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript is the default and detailed mode persists', async ({ page }) => {
-  const app = new MinimalTranscriptHarness(page);
-  await app.install();
-  await app.goto();
-  await app.enableMinimal();
-  await expect(page.locator('.minimal-tools')).toHaveCount(1);
-  await page.reload();
-  await app.openSession();
-  await expect(page.locator('.minimal-tools')).toHaveCount(1);
-  const toggle = app.detailedMode();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(toggle).not.toHaveClass(/active/);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(toggle).toHaveClass(/active/);
-  // A click must update the current transcript without reopening the task.
-  await expect(page.locator('#stream .minimal-tools')).toHaveCount(0);
-  await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
-  await app.openSession();
-  await expect(page.locator('.minimal-tools')).toHaveCount(0);
-  await expect(page.locator('#stream')).toContainText('REASONING_SENTINEL');
-  await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
-  await page.reload();
-  await app.openSession();
-  await expect(page.locator('.minimal-tools')).toHaveCount(0);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.focus();
-  await page.keyboard.press('Space');
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await app.openSession();
-  await expect(page.locator('.minimal-tools')).toHaveCount(1);
-  await page.reload();
-  await app.openSession();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('detail toggle stays enabled when a Codex draft gains its working directory', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.codexModels = [{
-    id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
-    defaultReasoningEffort: 'medium',
-    supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }],
-  }];
-  // Keep the initial directory-less header visible before the draft reply
-  // inserts its workspace label ahead of the buttons.
-  app.rpcDelays.set('codex.draft.open', 1000);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
-  const terminal = page.getByTitle('Terminal requires an available Codex task placement', { exact: true });
-  await expect(terminal).toBeDisabled();
-  await expect(page.locator('.codex-topbar .topbar-workspace')).toBeVisible();
-  const toggle = page.getByRole('button', { name: 'Detailed mode', exact: true });
-  await expect(toggle).toBeEnabled();
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('minimal edit previews share detailed-mode unified lines and preserve call state', async ({ page }) => {
+test('minimal edit previews render unified lines and preserve call state', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture requested edits' } } },
@@ -441,32 +349,11 @@ test('minimal edit previews share detailed-mode unified lines and preserve call 
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });
-  const minimalDiffs = await calls.locator('.editor-diff-source').allTextContents();
   app.append('assistant', { content: 'Finished reviewing the edits.' });
   app.append('terminal', { kind: 'finished', message: 'Finished reviewing the edits.' });
-  await expect(stream.locator('.editor-diff-preview').first()).toBeHidden();
   await expect(stream.getByText('Finished reviewing the edits.', { exact: true })).toBeVisible();
-  const completed = stream.locator('.minimal-process');
-  await expect(completed.locator('.minimal-tools')).toHaveCount(0);
-  await completed.locator(':scope > summary').click();
-  await expect(completed.locator('.editor-diff-preview').first()).toBeVisible();
-  await expect(completed.locator('.editor-diff-preview')).toHaveCount(3);
-  await expect(completed.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
-
-  // Detailed mode keeps the original diff prefixes, while minimal mode uses backgrounds; its
-  // Original JSON tabs remain available. Expand parents before tool rows.
-  await app.detailedMode().click();
-  await app.openSession();
-  await expect(stream.locator('details.tool-call')).toHaveCount(2);
-  for (const disclosure of await stream.locator('details.activity, details.activity-step-group').all()) {
-    if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
-  }
-  for (const disclosure of await stream.locator('details.tool-call').all()) {
-    if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
-  }
-  await expect(stream.locator('.tool-diff').first()).toBeVisible();
-  expect((await stream.locator('.tool-diff > div').allTextContents()).map(line => line.slice(2))).toEqual(minimalDiffs);
-  await expect(stream.getByText('Original JSON', { exact: true }).first()).toBeVisible();
+  await expect(stream.locator('.minimal-call, .editor-diff-preview')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
 });
 
 test('minimal diff pins line numbers and markers while source scrolls', async ({ page }) => {
@@ -581,10 +468,6 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(stream).not.toContainText('Wait for job bg-3 to complete');
   await expect(singleWait).toHaveCount(0);
 
-  // Full transcript still exposes all three wait calls for inspection.
-  await app.detailedMode().click();
-  await app.openSession();
-  await expect(stream.locator('details.tool-call')).toHaveCount(4);
   expect(app.pageErrors).toEqual([]);
 });
 

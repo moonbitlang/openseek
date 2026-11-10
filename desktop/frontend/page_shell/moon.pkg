@@ -1,5 +1,0 @@
-import {
-  "moonbit-community/rabbita/html",
-}
-
-supported_targets = "js"

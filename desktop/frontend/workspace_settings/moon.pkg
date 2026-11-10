@@ -1,4 +1,5 @@
 import {
+  "moonbit-community/rui",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
@@ -11,7 +12,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/select_control",
-  "openseek_desktop/frontend/settings",
+  "openseek_desktop/frontend/ui",
 }
 
 supported_targets = "js"

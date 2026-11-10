@@ -260,7 +260,7 @@ logs `workspace_created`.
 
 OpenSeek can use tools from [MCP](https://modelcontextprotocol.io) servers.
 Point `--mcp-config` (or `OPENSEEK_MCP_CONFIG`) at a JSON file in the de-facto
-standard shape — an existing Claude/Cursor-style `mcp.json` works as-is:
+standard shape for stdio and static HTTP entries:
 
 ```json
 {
@@ -270,6 +270,24 @@ standard shape — an existing Claude/Cursor-style `mcp.json` works as-is:
   }
 }
 ```
+
+For dynamic authentication, HTTP entries also accept an OpenSeek extension:
+`"headersHelper": ["executable", "argument", "..."]`. This is a nonempty
+argument array, never a shell string. The process runs in the agent workspace,
+inherits its environment, receives EOF on stdin, and must write one flat JSON
+object of string HTTP headers to stdout. These headers override static headers
+case-insensitively; transport-owned framing/protocol headers cannot be replaced.
+
+The helper runs before establishing each MCP client. Its
+output is merged with static headers and passed to the ordinary HTTP connector.
+The resulting client reuses that header map; creating a new client runs the
+helper again. The helper owns token expiry, refresh and persistence when invoked;
+the transport does not re-run it or refresh and retry on a 401. A failing helper's
+exit status and stderr are included in the error. Stderr is also forwarded while
+the helper runs so authorization prompts are visible immediately. The helper
+owns any authorization deadline; cancellation of the caller terminates it.
+The helper contract defines no login, status or logout commands; a helper can
+initiate authorization itself before returning headers.
 
 Repeat the option to load multiple files, for example
 `--mcp-config host.json --mcp-config user.json`. Files merge in argument order;
@@ -302,14 +320,19 @@ Validate a configuration without starting a session:
 moon run . -- mcp --mcp-config mcp.json
 ```
 
+A running engine connects those servers in the background, so a slow server
+does not hold up the session: until a server has finished connecting, a script
+that searches the catalog sees it as unavailable, still connecting, and a call
+to it is an error saying so.
+
 A running `serve` engine reports what it holds of those servers without being
-asked. It emits an `mcp_status` event once it has finished connecting them, and
-again each time that state changes — a connected server exiting, say. Each
-event carries the whole state: every configuration file in the order given,
-`loaded` or `failed` with the error, and each server of the merged
-configuration with its `transport`, its `target` (the command, or the URL
-without credentials), and a `state` — `connected` with the
-tools it registered, `lost` when it connected and the connection has closed
+asked. It emits an `mcp_status` event as soon as it starts, and again each time
+that state changes — a server finishing connecting, or a connected server
+exiting, say. Each event carries the whole state: every configuration file in
+the order given, `loaded` or `failed` with the error, and each server of the
+merged configuration with its `transport`, its `target` (the command, or the
+URL without credentials), and a `state` — `connecting` until it has come to
+anything, `connected` with the tools it registered, `lost` when it connected and the connection has closed
 since, `no_tools`, `failed` with the error, or `skipped` when earlier servers
 used up the tool budget. A controller keeps the latest one; it is this engine's
 own connections, not what connecting again would yield.

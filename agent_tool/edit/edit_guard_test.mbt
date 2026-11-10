@@ -66,7 +66,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       ) else {
       fail("unexpected data: \{shown(fixed.data)}")
     }
-    let after_fix = @fs.read_file(path).text()
+    let after_fix = @fs.read_text(path)
     assert_true(after_fix.contains("len([1, 2, 3]) + length([4])"))
     // A fix that leaves an unused binding behind introduces a warning: the
     // file goes back to what it was, and the data says which site did it.
@@ -86,7 +86,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
     )
     assert_true(reverted.content.contains("warning: "))
     assert_true(reverted.content.contains("Unused variable 'unused'"))
-    assert_eq(@fs.read_file(path).text(), after_fix)
+    assert_eq(@fs.read_text(path), after_fix)
     guard reverted.data
       is Some(
         {
@@ -124,7 +124,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       over.data
       is Some({ "introduced_count": { "warnings": Number(2, ..), .. }, .. }),
     )
-    assert_eq(@fs.read_file(path).text(), after_fix)
+    assert_eq(@fs.read_text(path), after_fix)
     // Threshold one allows an unchanged total: one introduced, one removed.
     let tolerated = run_edit({
       "path": path,
@@ -169,7 +169,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
 async test "the error guard reverts a type-breaking edit and reports the site" {
   @vfs.with_tmpdir(prefix="openseek-edit-guard-err-", dir => {
     let path = write_guard_module(dir)
-    let original = @fs.read_file(path).text()
+    let original = @fs.read_text(path)
     let reverted = run_edit({
       "path": path,
       "old_string": "  xs.length()",
@@ -185,7 +185,7 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
       msg=reverted.content,
     )
     assert_true(reverted.content.contains("error: "))
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     guard reverted.data
       is Some(
         {
@@ -235,8 +235,8 @@ async test "a guarded edit is not written when moon check cannot verify the tree
     let path = write_guard_module(dir)
     // A manifest moon cannot load: the check exits non-zero with no
     // diagnostic, which is not a clean tree.
-    @fs.write_file("\{dir}/moon.mod", "name = \n", create_mode=CreateOrTruncate)
-    let original = @fs.read_file(path).text()
+    @fs.write_text("\{dir}/moon.mod", "name = \n", create_mode=CreateOrTruncate)
+    let original = @fs.read_text(path)
     let out = run_edit({
       "path": path,
       "old_string": "length([1, 2, 3])",
@@ -257,7 +257,7 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       out.content.contains("repair the build plan first"),
       msg=out.content,
     )
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     assert_true(
       out.data is Some({ "outcome": "unverified", "reason": String(_), .. }),
     )
@@ -278,7 +278,7 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       plain.data is Some({ "outcome": "applied", "baseline"? : None, .. }),
     )
     assert_eq(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
       original.replace_all(old="length([1, 2, 3])", new="len([1, 2, 3])"),
     )
   })
@@ -295,7 +295,7 @@ async test "error guard uses an inclusive threshold" {
     ] {
     @vfs.with_tmpdir(dir => {
       let path = write_guard_module(dir)
-      let original = @fs.read_file(path).text()
+      let original = @fs.read_text(path)
       let output = run_edit({
         "path": path,
         "old_string": "  xs.length()",
@@ -305,10 +305,10 @@ async test "error guard uses an inclusive threshold" {
       })
       assert_eq(output.is_error, !kept, msg=output.content)
       if kept {
-        assert_true(@fs.read_file(path).text().contains(replacement))
+        assert_true(@fs.read_text(path).contains(replacement))
       } else {
         assert_true(output.data is Some({ "reason": "error_delta", .. }))
-        assert_eq(@fs.read_file(path).text(), original)
+        assert_eq(@fs.read_text(path), original)
       }
     })
   }
@@ -331,7 +331,7 @@ async test "error guard compares net counts even when diagnostic identity change
         "start_line": 9,
       })
       assert_false(broken.is_error, msg=broken.content)
-      let original = @fs.read_file(path).text()
+      let original = @fs.read_text(path)
       let output = run_edit({
         "path": path,
         "old_string": "  \"not an int\"",
@@ -354,9 +354,9 @@ async test "error guard compares net counts even when diagnostic identity change
         )
       }
       if kept {
-        assert_true(@fs.read_file(path).text().contains(replacement))
+        assert_true(@fs.read_text(path).contains(replacement))
       } else {
-        assert_eq(@fs.read_file(path).text(), original)
+        assert_eq(@fs.read_text(path), original)
       }
     })
   }
@@ -371,7 +371,7 @@ async test "warning guard at zero requires a net decrease" {
     ] {
     @vfs.with_tmpdir(dir => {
       let path = write_guard_module(dir)
-      let original = @fs.read_file(path).text()
+      let original = @fs.read_text(path)
       let output = run_edit({
         "path": path,
         "old_string": "  length([1, 2, 3]) + length([4])",
@@ -381,10 +381,10 @@ async test "warning guard at zero requires a net decrease" {
       })
       assert_eq(output.is_error, !kept, msg=output.content)
       if kept {
-        assert_true(@fs.read_file(path).text().contains(replacement))
+        assert_true(@fs.read_text(path).contains(replacement))
       } else {
         assert_true(output.data is Some({ "reason": "warning_delta", .. }))
-        assert_eq(@fs.read_file(path).text(), original)
+        assert_eq(@fs.read_text(path), original)
       }
     })
   }
@@ -394,7 +394,7 @@ async test "warning guard at zero requires a net decrease" {
 async test "guards are moot outside a MoonBit project and data still names the outcome" {
   @vfs.with_tmpdir(prefix="openseek-edit-guard-plain-", dir => {
     let path = "\{dir}/note.txt"
-    @fs.write_file(path, "old\n", create_mode=CreateOrTruncate)
+    @fs.write_text(path, "old\n", create_mode=CreateOrTruncate)
     let out = run_edit({
       "path": path,
       "old_string": "old",
@@ -464,7 +464,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
         msg=rejected.content,
       )
     }
-    assert_eq(@fs.read_file(path).text(), "new\n")
+    assert_eq(@fs.read_text(path), "new\n")
     let off = run_edit({
       "path": path,
       "old_string": "new",
@@ -492,7 +492,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       ),
       msg=shown(deleted.data),
     )
-    assert_eq(@fs.read_file(path).text(), "new\n")
+    assert_eq(@fs.read_text(path), "new\n")
   })
 }
 
@@ -500,7 +500,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
 async test "a rejected edit reports its parse errors in data" {
   @vfs.with_tmpdir(prefix="openseek-edit-guard-reject-", dir => {
     let path = "\{dir}/a.mbt"
-    @fs.write_file(
+    @fs.write_text(
       path,
       "///|\npub fn f() -> Int {\n  42\n}\n",
       create_mode=CreateOrTruncate,
@@ -541,7 +541,7 @@ async test "guards reach a MoonBit target through a link with another name" {
     let target = write_guard_module(dir)
     let link = "\{dir}/alias.txt"
     @fs.symlink(target~, link)
-    let original = @fs.read_file(target).text()
+    let original = @fs.read_text(target)
     let reverted = run_edit({
       "path": link,
       "old_string": "  xs.length()",
@@ -556,7 +556,7 @@ async test "guards reach a MoonBit target through a link with another name" {
       // Distinguish guard failures from check unavailability in CI.
       msg=reverted.content,
     )
-    assert_eq(@fs.read_file(target).text(), original)
+    assert_eq(@fs.read_text(target), original)
   })
 }
 
@@ -579,7 +579,7 @@ async test "guards check the module of a link's target as well as the link's own
     let target = "\{dir}/b/lib/lib.mbt"
     let link = "\{dir}/a/lib/alias.mbt"
     @fs.symlink(target~, link)
-    let original = @fs.read_file(target).text()
+    let original = @fs.read_text(target)
     // Valid on its own (module a has no caller), breaking in module b.
     let reverted = run_edit({
       "path": link,
@@ -601,6 +601,6 @@ async test "guards check the module of a link's target as well as the link's own
       fail("unexpected data: \{shown(reverted.data)}")
     }
     assert_true(site.contains("caller.mbt"), msg=site)
-    assert_eq(@fs.read_file(target).text(), original)
+    assert_eq(@fs.read_text(target), original)
   })
 }

@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/mcp/tools"
 
 import {
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool",
@@ -12,11 +13,11 @@ import {
 // Values
 pub async fn call_tool(@mcp.McpClient, String, @json.Json) -> @agent_tool.ToolAction
 
-pub fn catalog_items(Array[ServerEntry]) -> Array[@json.Json]
-
-pub async fn[X] connect(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[ServerEntry]
+pub fn catalog_items(Array[Server]) -> Array[@json.Json]
 
 pub async fn discover(String, @mcp.McpClient) -> Array[@mcp.McpTool]
+
+pub fn start(@agent_runtime.AgentTaskScope, Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[Server]
 
 // Errors
 
@@ -26,6 +27,13 @@ pub enum Connection {
   NoTools
   Failed(String)
 }
+
+pub struct Server {
+  config : @config.McpServer
+  connecting : @async.Task[ServerEntry]
+}
+pub async fn Server::call(Self, String, @json.Json) -> @agent_tool.ToolAction
+pub fn Server::try_wait(Self) -> ServerEntry?
 
 pub struct ServerEntry {
   server : @config.McpServer

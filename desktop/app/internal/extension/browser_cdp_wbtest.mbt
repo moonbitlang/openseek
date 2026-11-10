@@ -3,9 +3,9 @@ async fn serve_target_list(
   server : @http.Server,
   names : Array[String],
 ) -> Unit {
-  let (conn, _) = server.accept()
+  let (conn, request) = accept_request(server)
   defer conn.close()
-  assert_eq(conn.read_request().path, "/json/list")
+  assert_eq(request.path, "/json/list")
   let targets : Json = Json(
     names.map(name => {
       (
@@ -32,10 +32,9 @@ async test "a vanished candidate does not prevent finding the next target" {
       group.spawn_bg(() => {
         serve_target_list(server, ["closed", "valid"])
         for _ in 0..<2 {
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           group.spawn_bg(() => {
             defer conn.close()
-            let request = conn.read_request()
             if request.path == "/devtools/page/closed" {
               conn..send_response(404, "Not Found").end_response()
               vanished = true
@@ -77,10 +76,9 @@ async test "the first matching target wins past rejected and hung probes and clo
       group.spawn_bg(() => {
         serve_target_list(server, ["wrong", "hung-a", "hung-b", "valid"])
         for _ in 0..<4 {
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           group.spawn_bg(() => {
             defer conn.close()
-            let request = conn.read_request()
             let ws = @websocket.from_http_server(request, conn)
             defer ws.close()
             ignore(ws.recv().read_all())
@@ -140,9 +138,9 @@ async test "empty discovery and unmatched probes retry until the marker appears"
         serve_target_list(server, [])
         for matched in [false, true] {
           serve_target_list(server, ["page"])
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           defer conn.close()
-          let ws = @websocket.from_http_server(conn.read_request(), conn)
+          let ws = @websocket.from_http_server(request, conn)
           defer ws.close()
           ignore(ws.recv().read_all())
           ws.send_text(
@@ -173,10 +171,10 @@ async test "cancelling discovery closes all concurrent candidate readers" {
       group.spawn_bg(() => {
         serve_target_list(server, ["one", "two", "three"])
         for _ in 0..<3 {
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           group.spawn_bg(() => {
             defer conn.close()
-            let ws = @websocket.from_http_server(conn.read_request(), conn)
+            let ws = @websocket.from_http_server(request, conn)
             defer ws.close()
             ignore(ws.recv().read_all())
             evaluating += 1
@@ -234,9 +232,9 @@ async test "candidate connections close on rejection and transfer on a match" {
         let matched = reply.contains("true")
         let peer = group.spawn(() => {
           serve_target_list(server, ["valid"])
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           defer conn.close()
-          let ws = @websocket.from_http_server(conn.read_request(), conn)
+          let ws = @websocket.from_http_server(request, conn)
           defer ws.close()
           ignore(ws.recv().read_all())
           ws.send_text(reply)
@@ -279,9 +277,9 @@ async test "cancelling candidate evaluation closes the untransferred connection"
       let mut evaluating = false
       let peer = group.spawn(() => {
         serve_target_list(server, ["valid"])
-        let (conn, _) = server.accept()
+        let (conn, request) = accept_request(server)
         defer conn.close()
-        let ws = @websocket.from_http_server(conn.read_request(), conn)
+        let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         ignore(ws.recv().read_all())
         evaluating = true
@@ -319,9 +317,9 @@ async test "CDP scope closes its connection after return, error, or cancellation
         defer server.close()
         let peer = group.spawn(() => {
           serve_target_list(server, ["valid"])
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           defer conn.close()
-          let ws = @websocket.from_http_server(conn.read_request(), conn)
+          let ws = @websocket.from_http_server(request, conn)
           defer ws.close()
           ignore(ws.recv().read_all())
           ws.send_text(

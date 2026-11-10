@@ -407,7 +407,7 @@ pub fn update(
       if phase is Failed(_, _) {
         (@cmd.none, state)
       } else {
-        (focus_checkout_dialog(), state)
+        (@dialog.show("github-checkout-dialog"), state)
       }
     }
     CloseDetail =>

@@ -11,8 +11,7 @@ fn management_dialog_view(
   archived_chats_html : @html.Html,
 ) -> @html.Html {
   let title = match model.management_dialog {
-    Some(Settings) => @settings.text(model.locale, Settings)
-    Some(ArchivedChats) => @archived_chats.text(model.locale, Title)
+    Some(Settings(_)) => @settings.text(model.locale, Settings)
     Some(Skills) => @sidebar_messages.text(model.locale, Skills)
     Some(Schedules) => ui(model.locale, ScheduledTasks)
     None => ""
@@ -24,74 +23,50 @@ fn management_dialog_view(
       content,
     )
   }
-  @html.dialog(
+  @rui.dialog(
     id="management-dialog",
-    class="modal management-dialog",
+    class="dialog-surface dialog-size-large dialog-scroll-layout",
+    close_label=shell_text(model.locale, DismissLabel),
+    on_close=_ => dispatch(CloseManagementDialog),
+    attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
     on_cancel=dispatch(
-      if model.delete_confirm is Some(_) {
+      if model.delete_confirm is Open(_) {
         CancelDeleteSession
       } else {
         CloseManagementDialog
       },
     ),
-    attrs=@html.Attrs::build()
-      .aria_label(title)
-      .on_click(event => {
-        if event.target().to_element() is Some(element) &&
-          element.get_property("id").to_option() is Some("management-dialog") {
-          dispatch(CloseManagementDialog)
-        } else {
-          @cmd.none
-        }
-      }),
     [
-      @html.div(class="management-dialog-header", [
-        @html.div(class="management-dialog-heading", [
-          if model.management_dialog is Some(Skills) &&
-            model.skills.detail_open() {
-            @html.button(
-              class="icon-button",
-              attrs=@html.Attrs::build().aria_label(
-                shell_text(model.locale, BackToSkills),
-              ),
-              on_click=dispatch(Skills(@skills.BackToList)),
-              @icons.icon(@icons.icon_arrow_left),
+      @rui.dialog_header([
+        @rui.dialog_title(id="management-dialog-title", title),
+      ]),
+      @html.div(
+        class=if model.management_dialog is Some(Settings(_)) &&
+          !model.host_incompatible() {
+          "dialog-scroll-body dialog-pane-container"
+        } else {
+          "dialog-scroll-body dialog-content"
+        },
+        [
+          // Stable panes retain their DOM while the shared dialog is closed.
+          pane(
+            Settings(model.settings_section()),
+            settings_page(dispatch, model, archived_chats_html),
+          ),
+          pane(Skills, skills_html),
+          pane(Schedules, schedules_page(dispatch, model)),
+          if model.management_dialog is Some(_) && model.host_incompatible() {
+            console_gate_view(
+              locale=model.locale,
+              dispatch,
+              model.console,
+              host_incompatible=true,
             )
           } else {
             @html.nothing
           },
-          @html.h1(class="topbar-title", title),
-        ]),
-        @html.button(
-          class="icon-button",
-          attrs=@html.Attrs::build().aria_label(
-            shell_text(model.locale, DismissLabel),
-          ),
-          on_click=dispatch(CloseManagementDialog),
-          @icons.icon(@icons.icon_close),
-        ),
-      ]),
-      // Stable panes retain their DOM while the shared dialog is closed.
-      pane(Settings, settings_page(dispatch, model)),
-      pane(ArchivedChats, archived_chats_html),
-      pane(Skills, skills_html),
-      pane(Schedules, schedules_page(dispatch, model)),
-      if model.management_dialog is Some(_) && model.host_incompatible() {
-        console_gate_view(
-          locale=model.locale,
-          dispatch,
-          model.console,
-          host_incompatible=true,
-        )
-      } else {
-        @html.nothing
-      },
-      if model.management_dialog is Some(ArchivedChats) &&
-        model.delete_confirm is Some(confirm) {
-        delete_modal(locale=model.locale, dispatch, confirm, model.cloud)
-      } else {
-        @html.nothing
-      },
+        ],
+      ),
     ],
   )
 }

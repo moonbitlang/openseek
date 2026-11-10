@@ -129,8 +129,8 @@ fn call_entry(
 ///|
 /// Start a listener on the existing session task group. No agent-loop dispatch
 /// or file lock is held while the listener waits for requests.
-pub async fn[X] Service::start(
-  group : @async.TaskGroup[X],
+pub async fn Service::start(
+  group : @async.TaskGroup,
   tools : @agent_tool.Tools,
   call_timeout_ms~ : Int32 = 120000,
   trace_timeout_ms~ : Int32 = 5000,
@@ -236,23 +236,27 @@ pub async fn[X] Service::start(
         @async.protect_from_cancel(() => ignore(task.wait()) catch { _ => () })
       }
       errdefer abandon()
-      let result = @async.with_task_group(waiters => {
-        waiters.spawn_bg(no_wait=true, () => {
-          // Approval-capable tools use the same human-paced lifetime as
-          // direct calls. Session/program cancellation still revokes and joins
-          // them; their own validation/check deadlines remain in force.
-          if service.tools.find(name) is Some(tool) &&
-            tool.can_request_approval() {
-            return
-          }
-          @async.sleep(service.call_timeout_ms)
-          // Revoke at expiry, before the waiter unwinds and a granted
-          // executor gets a chance to resume.
-          program.cancel_call(index)
-          fail("PTC call deadline exceeded")
-        })
-        task.wait()
-      }) catch {
+      // Approval-capable tools use the same human-paced lifetime as direct
+      // calls. Session/program cancellation still revokes and joins them;
+      // their own validation/check deadlines remain in force.
+      let approval_paced = service.tools.find(name) is Some(tool) &&
+        tool.can_request_approval()
+      let result = try {
+        if approval_paced {
+          task.wait()
+        } else {
+          @async.any([
+            () => task.wait(),
+            () => {
+              @async.sleep(service.call_timeout_ms)
+              // Revoke at expiry, before the waiter unwinds and a granted
+              // executor gets a chance to resume.
+              program.cancel_call(index)
+              fail("PTC call deadline exceeded")
+            },
+          ])
+        }
+      } catch {
         error => {
           abandon()
           let response = error_result(
@@ -281,7 +285,7 @@ pub async fn[X] Service::start(
     worker.cancel()
     @async.protect_from_cancel(() => worker.wait() catch { _ => () })
   })
-  group.add_defer(() => @async.protect_from_cancel(() => service.close()))
+  group.add_defer(() => service.close())
   service
 }
 
@@ -326,7 +330,7 @@ pub fn Service::register(
 
 ///|
 /// Revoke all capabilities and join their executors before closing the listener.
-pub async fn Service::close(self : Service) -> Unit {
+pub async fn Service::close(self : Service) -> Unit nocancel {
   self.closed = true
   @async.protect_from_cancel(() => {
     let programs = self.programs.values().to_array()
@@ -435,7 +439,7 @@ pub fn Program::interrupted(self : Program) -> Bool {
 pub async fn Program::close(
   self : Program,
   discard_images~ : Bool = false,
-) -> Unit {
+) -> Unit nocancel {
   self.stop()
   @async.protect_from_cancel(() => {
     let tasks = self.active.values().to_array()
@@ -558,7 +562,7 @@ async fn Program::discard_image_files(self : Program) -> Unit {
     let snapshots = result.snapshots
     while snapshots.last() is Some(snapshot) {
       @fs.remove(snapshot.path) catch {
-        @os_error.OSError(_) as error if error.is_ENOENT() => ()
+        @os_error.OsError(NotFound, ..) => ()
         error => raise error
       }
       ignore(snapshots.pop())
@@ -711,7 +715,7 @@ async fn send(conn : @http.ServerConnection, result : Json) -> Unit {
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": "application/json",
     })
-    conn.write(result)
+    conn.write_string(result.stringify())
     conn.end_response()
   })
 }

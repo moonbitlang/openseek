@@ -23,7 +23,7 @@ async fn open_viewer(session_root : String, session : String) -> String {
     session_root,
     wait_ms=InspectWaitMs,
   ) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() =>
+    @os_error.OsError(NotFound, ..) =>
       start_viewer(
         ["moonx", InspectPackage],
         session_root,
@@ -47,18 +47,17 @@ async fn start_viewer(
   let dir = @fs.tmpdir(prefix="openseek-tui-inspect-")
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let out = "\{dir}/inspect.out"
-  // One handle for both streams, as `redirect_to_file` intends: opening the
-  // file twice gives two writers that Windows does not let share it.
-  let output = @process.redirect_to_file(out)
+  // One handle for both streams: opening the file twice gives two writers
+  // that Windows does not let share it.
   let _ = @process.spawn_orphan(
     command[0],
     [..command[1:], "--ensure", "--watch", "--session-root", session_root],
-    stdout=output,
-    stderr=output,
+    stdout=ToFile(out),
+    stderr=DuplicateStdout,
   )
   let result = @async.with_timeout_opt(wait_ms, () => {
     while true {
-      let text = @fs.read_file(out).text() catch { _ => "" }
+      let text = @fs.read_text(out) catch { _ => "" }
       match viewer_output(text) {
         Opened(url) => return Ok(url)
         Failed(message) => return Err(message)
@@ -72,7 +71,7 @@ async fn start_viewer(
     Some(Err(message)) => fail(message)
     None => {
       // Say what the viewer did print, if anything, so a hang is diagnosable.
-      let printed = (@fs.read_file(out).text() catch { _ => "" }).trim()
+      let printed = (@fs.read_text(out) catch { _ => "" }).trim()
       if printed.is_empty() {
         fail("no URL after \{wait_ms}ms (the viewer printed nothing)")
       } else {

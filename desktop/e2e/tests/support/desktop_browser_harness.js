@@ -11,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 5;
+    this.hostProtocol = 6;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -695,13 +695,14 @@ export class DesktopBrowserHarness {
           'deepseek_api_key',
           'glm_api_key',
           'custom_api_key',
+          'followup_behavior',
           'prompt_source',
           'custom_prompt',
         ]) {
           if (patch[key] === undefined) {
             continue;
           }
-          if (['provider', 'custom_api_url', 'prompt_source', 'custom_prompt'].includes(key)) {
+          if (['provider', 'custom_api_url', 'followup_behavior', 'prompt_source', 'custom_prompt'].includes(key)) {
             this.hostSettings[key] = patch[key];
           } else {
             const savedKey = `has_${key.replace('_api_key', '')}_key`;
@@ -1119,7 +1120,8 @@ export class DesktopBrowserHarness {
   projectRow(root, channel = 'remote.device-a') {
     // Match project identity, including its host, independently of tooltip text.
     const key = `project:openseek.projects:${channel}:${root}`;
-    return this.page.locator(`.workspace-row[data-action-menu-context=${JSON.stringify(key)}]`);
+    const trigger = this.page.locator(`[id=${JSON.stringify(key + ':context-trigger')}]`);
+    return this.page.locator('.workspace-row').filter({ has: trigger });
   }
 
   async openSession() {

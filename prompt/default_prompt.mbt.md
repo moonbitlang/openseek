@@ -177,7 +177,7 @@ something cannot be done, search the catalog and print the page:
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
   "moonbitlang/core/async",
 }
 ---
@@ -730,12 +730,6 @@ applications, `frontend-rabbita/README.md` covers browser UIs and full-stack web
 applications, and `moongrep/README.md` covers the structural-search tool.
 
 For slide tasks, read the file `<bundled-resources>/slides/README.md`.
-
-Directory layout relative to `Bundled resources`:
-
-```text
-{{BUNDLED_RESOURCES_LAYOUT}}
-```
 
 Read references outside the workspace on demand: locate the relevant page under
 `<bundled-resources>/doc/moonbit/`, then read a focused excerpt with the

@@ -5,8 +5,8 @@ import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/prompt",
   "moonbitlang/openseek_protocol" @protocol,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -14,3 +14,10 @@ import {
 supported_targets = "+native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

@@ -3,7 +3,7 @@ name = "openseek_desktop/app"
 version = "0.1.5"
 
 import {
-  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.7",
   "moonbit-community/proton@0.7.0",
   "moonbit-community/proton_ext@0.7.0",
   "tonyfettes/xlog@0.4.2",

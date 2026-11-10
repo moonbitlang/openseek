@@ -100,8 +100,10 @@ pub async fn resolve_host_workspace_authorization(
   session : String,
   workspace : String,
 ) -> @pathx.Absolute? {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(requested) &&
-    host_workspace_authorizations.resolve(session, requested)
+  let requested = @pathx.Absolute::parse_resource_path(workspace) catch {
+    InvalidResourcePath => return None
+  }
+  guard host_workspace_authorizations.resolve(session, requested)
     is Some(authorized) else {
     return None
   }
@@ -141,24 +143,16 @@ pub async fn session_cwd(session : String) -> @pathx.Absolute? {
 }
 
 ///|
-/// The recorded task base for a conversation-bound worktree. The optional
-/// workspace hint follows `resolve_in_workspace`'s trust boundary: only an
-/// attached workspace is considered, while a resumed conversation can recover
-/// its owner from the durable session record. `None` is a conversation working
-/// in the workspace root, which has no recorded base; the Git host may derive
-/// its branch fork point when committed work exists.
+/// The recorded task base for a conversation in an explicit workspace.
+/// Host-authorized directories outside the project registry and conversations
+/// without a recorded worktree base return `None`.
 pub async fn session_review_base(
   session : String,
-  workspace? : String,
+  workspace : @pathx.Absolute,
 ) -> String? {
-  let workspace = if workspace is Some(hint) &&
-    @pathx.Absolute::from_uri_path(hint) is Some(hint) &&
-    @workspaces.registered_dir(hint) is Some(workspace) {
-    Some(workspace)
-  } else {
-    @session_store.workspace_of(session)
+  guard @workspaces.registered_dir(workspace) is Some(workspace) else {
+    return None
   }
-  guard workspace is Some(workspace) else { return None }
   @worktree.tree_base(workspace, session)
 }
 
@@ -176,18 +170,19 @@ pub async fn resolve_in_workspace(
   relative : String,
   workspace? : String,
 ) -> @pathx.Absolute? {
-  let root = match workspace {
-    Some(hint) if @pathx.Absolute::from_uri_path(hint) is Some(hint) =>
-      match @workspaces.registered_dir(hint) {
-        // The hint names the workspace; a session bound to one of its
-        // worktrees still roots in that checkout. A Codex thread instead
-        // supplies an exact process-local cwd authorized by app-server.
-        Some(dir) =>
-          @worktree.tree_dir(dir, session).map(root => root.to_path())
-        None => host_workspace_authorizations.resolve(session, hint)
-      }
-    Some(_) => None
-    None => of_session(session)
+  let root = if workspace is Some(workspace) {
+    let workspace = @pathx.Absolute::parse_resource_path(workspace) catch {
+      InvalidResourcePath => return None
+    }
+    if @workspaces.registered_dir(workspace) is Some(dir) {
+      // A session bound to a worktree still roots in that checkout.
+      @worktree.tree_dir(dir, session).map(root => root.to_path())
+    } else {
+      // Codex can supply an exact process-local cwd authorized by app-server.
+      host_workspace_authorizations.resolve(session, workspace)
+    }
+  } else {
+    of_session(session)
   }
   guard root is Some(root) else { return None }
   guard root.to_absolute() is Some(root) else { return None }
@@ -310,9 +305,9 @@ async test "real_contains rejects a symlink escaping the boundary" {
   // A real file inside the boundary, and a symlink inside the boundary that
   // points at a file outside it (the escape the lexical check misses).
   let inside = "\{root}/inside.txt"
-  @fs.write_file(inside, b"x", create_mode=CreateOrTruncate)
+  @fs.write_text(inside, "x", create_mode=CreateOrTruncate)
   let secret = "\{outside}/secret.txt"
-  @fs.write_file(secret, b"s", create_mode=CreateOrTruncate)
+  @fs.write_text(secret, "s", create_mode=CreateOrTruncate)
   let link = "\{root}/link.txt"
   @fs.symlink(target=secret, link)
   guard @pathx.Path(root).to_absolute() is Some(root_path) &&

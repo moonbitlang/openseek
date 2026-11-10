@@ -253,17 +253,17 @@ inferred from warning-heavy prose.
 ///|
 async test "a real check tallies errors separately from warnings" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-readme-", dir => {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.mod",
       "name = \"tmp/auto_check_readme\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.pkg",
       "warnings = \"+unnecessary_annotation\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/main.mbt",
       "pub fn bad() -> Int { missing_name }\n",
       create_mode=CreateOrTruncate,
@@ -303,17 +303,17 @@ result. This is raw compiler output, deliberately not summarized.
 ///|
 async test "a check summary is appended after the tool's own result line" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-readme-summary-", dir => {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.mod",
       "name = \"tmp/auto_check_readme_summary\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.pkg",
       "warnings = \"+unnecessary_annotation\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/main.mbt",
       "pub fn bad() -> Int { missing_name }\n",
       create_mode=CreateOrTruncate,

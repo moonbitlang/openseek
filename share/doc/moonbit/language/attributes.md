@@ -17,9 +17,10 @@ attribute-arguments ::= attribute-argument (',' attribute-argument )*
 attribute-argument ::= expr | LIDENT '=' expr
 
 expr ::= LIDENT | UIDENT | STRING | 'true' | 'false'
-       | LIDENT '.' LIDENT
+       | '@' LIDENT '.' LIDENT | '@' LIDENT '.' UIDENT
+       | '[' (expr (',' expr)* ','?)? ']'
        | LIDENT '(' attribute-arguments ')'
-       | LIDENT '.' LIDENT '(' attribute-arguments ')'
+       | UIDENT '(' attribute-arguments ')'
 ```
 
 Attributes have two categories: the built-in attributes and user-defined attributes. For example:
@@ -37,6 +38,30 @@ The second attribute is a user-defined attribute; it has a namespace prefix `cus
 MoonBit is designed not to support runtime reflection. It's easy to abuse, making it impossible for toolchains (e.g., the compiler) to catch errors at compile time, which makes code harder to maintain. It also negatively impacts performance optimization.
 
 We prefer to use compile-time code generation, keeping the benefits of static typing and performance (should also be used judiciously to avoid unnecessary complexity).
+
+## Derive Attribute
+
+Use `#derive(...)` before a type definition to generate implementations of
+supported traits. Each field must satisfy the requirements of the derived
+trait.
+
+```moonbit
+#derive(Debug)
+struct DebugPoint {
+  x : Int32
+  y : Int32
+}
+
+pub extend DebugPoint with Debug::{to_repr}
+
+test "derive debug struct" {
+  let point = DebugPoint::{ x: 1, y: 2 }
+  debug_inspect(point, content="{ x: 1, y: 2 }")
+}
+```
+
+See [Deriving traits](https://docs.moonbitlang.com/en/latest/language/derive.html) for supported traits and their
+options. `moon fmt` migrates the older trailing `derive(...)` syntax.
 
 ## Deprecated Attribute
 
@@ -87,7 +112,7 @@ the API, MoonBit emits an alert warning.
 
 ```moonbit
 #alert(unsafe, "This function is unsafe.")
-fn[A] alert_unsafe_get(arr : Array[A], index : Int) -> A {
+fn[A] alert_unsafe_get(arr : Array[A], index : Int32) -> A {
   arr[index]
 }
 ```
@@ -117,6 +142,29 @@ Both forms allowed additional arguments:
 
   Marks the alias as deprecated. If a message is provided, it will be displayed as a warning when the alias is used.
 
+`#alias` cannot be applied to `declare fn` or `declare let`. Put the attribute
+on the corresponding definition instead.
+
+To expose an alias through a declaration-based interface, declare the alias
+name separately with `declare fn` or `declare let`. The declarations specify
+the names and their types, but do not require an alias relationship between
+them. Whether the implementation uses `#alias` or separate definitions is an
+implementation detail.
+
+```moonbit
+///|
+declare pub fn new_name() -> Int32
+
+///|
+declare pub fn old_name() -> Int32
+
+///|
+#alias(old_name)
+pub fn new_name() -> Int32 {
+  42
+}
+```
+
 To graceful migration from old API to new API, you can rename the old API directly, and create an alias with the old name, mark it as deprecated. For
 example:
 
@@ -145,7 +193,7 @@ It has three following forms:
   ```moonbit
   #label_migration(x, fill=true)
   #label_migration(y, fill=false)
-  fn label_migration_fill(x? : Int = 0, y? : Int = 1) -> Int {
+  fn label_migration_fill(x~ : Int32 = 0, y~ : Int32 = 1) -> Int32 {
     x + y
   }
   ```
@@ -159,7 +207,7 @@ It has three following forms:
   The `msg` argument is an string that provides additional information about the migration.
   ```moonbit
   #label_migration(x, allow_positional=true)
-  fn label_migration_allow_positional(x~ : Int) -> Int {
+  fn label_migration_allow_positional(x~ : Int32) -> Int32 {
     x
   }
   ```
@@ -174,7 +222,7 @@ It has three following forms:
   ```moonbit
   #label_migration(x, alias=xx)
   #label_migration(x, alias=y, msg="warning")
-  fn label_migration_alias(x~ : Int) -> Int {
+  fn label_migration_alias(x~ : Int32) -> Int32 {
     x
   }
   ```
@@ -191,8 +239,8 @@ For outside usages, if the usage will be invalidated by the visibility change in
 // in @util package
 #visibility(change_to="readonly", "Point will be readonly in the future.")
 pub(all) struct Point {
-  x : Int
-  y : Int
+  x : Int32
+  y : Int32
 }
 
 #visibility(change_to="abstract", "Use new_text and new_binary instead.")
@@ -233,6 +281,43 @@ optional `message` argument.
   | `"abstract"`  | Creating an instance of the type, mutating the fields of the instance, pattern matching, or accessing fields by label. |
 - The optional `message` argument is a string that provides additional information about the visibility change.
 
+## Non-exhaustive Enum Attribute
+
+The `#non_exhaustive` attribute marks an `enum` whose defining package may add
+constructors in a future release. It is valid only on enum declarations.
+
+```moonbit
+///|
+#non_exhaustive
+pub(all) enum Response {
+  Ok(String)
+  NotFound
+}
+```
+
+Code outside the defining package must handle potential future constructors
+with a `Type::..` pattern:
+
+```moonbit
+///|
+pub fn render(response : @base.Response) -> String {
+  match response {
+    @base.Ok(body) => body
+    @base.NotFound => "not found"
+    @base.Response::.. => "unsupported response"
+  }
+}
+```
+
+The `Type::..` pattern is specifically for forward compatibility. It does not
+replace the enum's currently known constructors: match those constructors
+explicitly before this pattern. A wildcard pattern (`_`) is not a substitute
+for `Type::..` when handling constructors added by a future version of the
+defining package.
+
+Adding a constructor to a `#non_exhaustive` enum is therefore compatible with
+downstream matches that use `Type::..`.
+
 ## Internal Attribute
 
 The `#internal` attribute is used to mark a function, type, or trait as internal.
@@ -240,7 +325,7 @@ Any usage of the internal function or type in other modules will emit an alert w
 
 ```moonbit
 #internal(unsafe, "This is an unsafe function")
-fn[A] internal_unsafe_get(arr : Array[A], index : Int) -> A {
+fn[A] internal_unsafe_get(arr : Array[A], index : Int32) -> A {
   arr[index]
 }
 ```
@@ -354,7 +439,7 @@ compiler to inline the function when possible:
 
 ```moonbit
 #inline
-fn add_one(x : Int) -> Int {
+fn add_one(x : Int32) -> Int32 {
   x + 1
 }
 ```
@@ -363,13 +448,32 @@ Use `#inline(never)` to ask the compiler not to inline a function:
 
 ```moonbit
 #inline(never)
-fn keep_stack_frame(x : Int) -> Int {
+fn keep_stack_frame(x : Int32) -> Int32 {
   x + 1
 }
 ```
 
 These attributes are hints. They do not change the source-level behavior of the
 function.
+
+## Intrinsic Attribute
+
+`#intrinsic("name")` associates a function with a compiler intrinsic while
+retaining an ordinary function body.
+
+#### WARNING
+Intrinsics are not a stable API. They may change without notice and are not
+recommended for application code. Prefer ordinary functions and public
+standard-library APIs.
+
+If the compiler does not recognize the name, it reports
+[E0094](https://docs.moonbitlang.com/en/latest/language/error_codes/E0094.html), ignores the attribute, and uses the
+ordinary function body. This is different from a direct intrinsic declaration
+(`fn f(x : Int32) -> Int32 = "name"`), which has no ordinary body and reports
+[E4070](https://docs.moonbitlang.com/en/latest/language/error_codes/E4070.html) for an unknown name.
+
+Specifying multiple intrinsics for one function is not supported; see
+[E4071](https://docs.moonbitlang.com/en/latest/language/error_codes/E4071.html).
 
 ## External Attribute
 
@@ -403,7 +507,7 @@ be released by the foreign side when it is no longer needed.
 
 ```moonbit
 #borrow(filename)
-extern "C" fn open(filename : Bytes, flags : Int) -> Int = "open"
+extern "C" fn open(filename : Bytes, flags : Int32) -> Int32 = "open"
 ```
 
 For the full calling-convention rules, see
@@ -429,9 +533,9 @@ The `#as_free_fn` attribute is used to mark a method that it is declared as a fr
 It can also change the visibility of the free function, the name of the free function, and provide separate deprecation warning.
 
 ```moonbit
-#as_free_fn(dec, visibility="pub", deprecated="use `Int::decrement` instead")
+#as_free_fn(dec, visibility="pub", deprecated="use `Int32::decrement` instead")
 #as_free_fn(visibility="pub")
-fn Int::decrement(i : Self) -> Self {
+fn Int32::decrement(i : Self) -> Self {
   i - 1
 }
 
@@ -472,7 +576,24 @@ from coverage measurement. For more detail, see
 
 ## Configuration attribute
 
-The `#cfg` attribute is used to perform conditional compilation. Examples are:
+The `#cfg` attribute controls whether a declaration is included in compilation.
+Conditions are evaluated at compile time and can use:
+
+- `true` or `false` to always include or exclude a declaration.
+- `target` to select a compilation backend, such as `target="wasm"`.
+- `platform` to select an operating system for the native backend, such as
+  `platform="windows"`.
+- `not(...)`, `all(...)`, or `any(...)` to negate a condition, require all
+  conditions, or require at least one condition.
+
+#### WARNING
+A `platform` condition currently also restricts the target to `native`. For
+example, `platform="windows"` is equivalent to
+`all(target="native", platform="windows")`.
+
+This matters under negation: `not(platform="windows")` also matches every
+non-native target. To select native builds other than Windows, use
+`all(target="native", not(platform="windows"))`.
 
 <!-- MANUAL CHECK -->
 ```moonbit
@@ -491,13 +612,18 @@ fn cfg_wasm() -> Unit {
   ()
 }
 
-#cfg(not(target="wasm"))
-fn cfg_not_wasm() -> Unit {
+#cfg(platform="windows")
+fn cfg_native_windows() -> Unit {
   ()
 }
 
-#cfg(all(target="wasm", true))
-fn cfg_all() -> Unit {
+#cfg(not(platform="windows"))
+fn cfg_except_native_windows() -> Unit {
+  ()
+}
+
+#cfg(all(target="native", not(platform="windows")))
+fn cfg_native_non_windows() -> Unit {
   ()
 }
 
@@ -516,7 +642,7 @@ In `cjs` format, it is interpreted as `require`, and in `esm` format, it is inte
 <!-- MANUAL CHECK -->
 ```moonbit
 #module("math-utils")
-pub extern "js" fn add_from_module(x : Int, y : Int) -> Int = "add"
+pub extern "js" fn add_from_module(x : Int32, y : Int32) -> Int32 = "add"
 ```
 
 ## Export Name Attribute
@@ -527,18 +653,14 @@ name is used in generated Wasm, JavaScript, or C output:
 
 ```moonbit
 #export_name("add")
-pub fn add_one(value : Int) -> Int {
+pub fn add_one(value : Int32) -> Int32 {
   value + 1
 }
 ```
 
-MoonBit currently requires the exported name to be unique within the package
-and to be a valid C symbol identifier, regardless of the selected backend.
-
-#### WARNING
-Known compiler issue: `#export_name` currently applies its C-symbol-identifier
-restriction to every backend. WebAssembly export names are UTF-8 strings and
-are not limited to C identifiers.
+Export names must be unique within the package. Name restrictions depend on
+the backend: native requires valid C symbol identifiers, while WebAssembly
+export names are UTF-8 strings and are not limited to C identifiers.
 
 The attribute cannot be used on generic functions, functions with optional
 arguments, methods, or declarations without a body.
@@ -556,9 +678,9 @@ expose dependency functionality, define and export a wrapper in the exporting
 package.
 
 #### NOTE
-The native backend does not currently support exporting a `foreign_library`
-package as a linkable library artifact, including shared libraries such as a
-`.dll` or `.so`. Use Wasm or JavaScript if you need an exported library.
+The native backend produces a static archive (`.a`, or `.lib` on Windows),
+not a shared library such as a `.dll` or `.so`. The host must call
+`moonbit_init()` before calling exported functions.
 
 See [Export Functions](https://docs.moonbitlang.com/en/latest/language/ffi.html#export-functions) for backend-specific
 alternatives.
@@ -570,7 +692,7 @@ executable code and proof-oriented logic.
 
 ```moonbit
 #proof_pure
-fn height(t : Tree) -> Int {
+fn height(t : Tree) -> Int32 {
   match t {
     Empty => 0
     Node(_, _, _, h) => h
@@ -612,15 +734,15 @@ the Why3 symbol; it is not an executable MoonBit expression.
 
 ```moonbit
 #proof_import("set.Fset")
-fn proof_set_mem(x : Int, set : ProofSet[Int]) -> Bool = "mem"
+fn proof_set_mem(x : Int32, set : ProofSet[Int32]) -> Bool = "mem"
 
 #proof_import("set.Fset")
-fn proof_set_empty() -> ProofSet[Int] = "empty"
+fn proof_set_empty() -> ProofSet[Int32] = "empty"
 
 #proof_import("set.Fset")
-fn proof_set_add(x : Int, set : ProofSet[Int]) -> ProofSet[Int] = "add"
+fn proof_set_add(x : Int32, set : ProofSet[Int32]) -> ProofSet[Int32] = "add"
 
-lemma proof_set_add_contains(x : Int) where {
+lemma proof_set_add_contains(x : Int32) where {
   proof_ensure: proof_set_mem(
     x,
     proof_set_add(x, proof_set_empty()),

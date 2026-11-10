@@ -43,10 +43,10 @@ impl Show for PayloadError with fn output(self, logger) {
 struct HostState {
   engine : String
   runtime_dir : @pathx.Path?
-  moon : MoonCliState
+  moon : @language.MoonCliState
   updates : SelfUpdate
   resources : HostResources
-  skills : @skillmarket.BuiltinSkills
+  skills : @skills.BuiltinSkills
 }
 
 ///|
@@ -54,21 +54,21 @@ struct HostState {
 /// WebSocket create separate values, so filesystem watches and PTY sessions
 /// cannot leak into another client.
 struct HostConnection {
-  fs_watch : FsWatchActor
-  file_search : FileSearchService
-  text_search : TextSearchService
-  semantic_search : SemanticSearchService
+  fs_watch : @files.Watcher
+  file_search : @search.FileSearchService
+  text_search : @search.TextSearchService
+  semantic_search : @search.SemanticSearchService
   terminal : @terminal.TerminalState
 }
 
 ///|
 pub fn HostConnection::HostConnection() -> HostConnection {
   {
-    fs_watch: FsWatchActor(),
+    fs_watch: Watcher(),
     file_search: FileSearchService(),
     text_search: TextSearchService(),
     semantic_search: SemanticSearchService(),
-    terminal: @terminal.new_terminal_state(),
+    terminal: TerminalState(),
   }
 }
 
@@ -92,8 +92,18 @@ pub fn new_host_state(
     moon: MoonCliState(engine, runtime_dir?, source=resources.moonbit),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
-    skills: @skillmarket.BuiltinSkills::new(),
+    skills: BuiltinSkills(),
   }
+}
+
+///|
+/// Install or update the built-in skills once for this host, reporting each
+/// library change through `on_changed`.
+pub async fn HostState::sync_builtin_skills(
+  self : HostState,
+  on_changed : () -> Unit,
+) -> Unit {
+  self.skills.sync(on_changed)
 }
 
 ///|
@@ -104,8 +114,8 @@ pub fn new_host_state(
 /// connection-owned filesystem watcher tasks start in `HostConnection::run`.
 /// Every background task is best-effort: a language-service hiccup degrades
 /// that feature, never the connection.
-pub fn[G] spawn_host_pumps(
-  group : @async.TaskGroup[G],
+pub fn spawn_host_pumps(
+  group : @async.TaskGroup,
   state : HostState,
   emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
@@ -137,57 +147,18 @@ pub async fn HostConnection::run(
     // signal. It must not be tied to the page-reload session sweep below.
     defer self.terminal.shutdown()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(self.terminal, push => {
+      self.terminal.run_pump(push => {
         match push {
-          Output(id~, sequence~, data~) => {
-            let payload : TerminalOutputPayload = {
-              id,
-              sequence,
-              data: @base64.encode(data),
-            }
-            emit(
-              TerminalOutput({
-                id: payload.id,
-                sequence: payload.sequence,
-                data: payload.data,
-              }),
-            )
-          }
-          Exited(id~, code~) => {
-            let payload : TerminalExitPayload = { id, code, }
-            emit(TerminalExit({ id: payload.id, code: payload.code, }))
-          }
+          Output(id~, sequence~, data~) =>
+            emit(TerminalOutput({ id, sequence, data: @base64.encode(data), }))
+          Exited(id~, code~) => emit(TerminalExit({ id, code, }))
         }
       })
     })
     group.spawn_bg(() => self.file_search.run())
     group.spawn_bg(() => self.text_search.run())
     group.spawn_bg(() => self.semantic_search.run(emit_progress))
-    self.fs_watch.run(
-      push => {
-        emit(
-          FsChanged({
-            root: push.root,
-            baseline: push.baseline,
-            events: push.events.map(event => {
-              kind_: event.kind_,
-              path: event.path,
-              old_path: event.old_path,
-            }),
-            generation: push.generation,
-          }),
-        )
-      },
-      failure => {
-        emit(
-          FsWatchFailed({
-            root: failure.root,
-            message: failure.message,
-            generation: failure.generation,
-          }),
-        )
-      },
-    )
+    self.fs_watch.run(emit)
   })
 }
 
@@ -204,10 +175,13 @@ pub fn endpoints(
 ) -> Array[@endpoint.Endpoint] {
   [
     Endpoint(@commands.github_drafts_get, payload => {
-      read_github_drafts(state.runtime_dir.map(dir => dir.to_string()), payload)
+      @github.read_drafts(
+        state.runtime_dir.map(dir => dir.to_string()),
+        payload,
+      )
     }),
     Endpoint(@commands.github_drafts_set, payload => {
-      write_github_drafts(
+      @github.write_drafts(
         state.runtime_dir.map(dir => dir.to_string()),
         payload,
       )
@@ -218,61 +192,66 @@ pub fn endpoints(
     Endpoint(@commands.app_language_set, payload => {
       write_ui_language(state.runtime_dir.map(dir => dir.to_string()), payload)
     }),
-    Endpoint(@commands.fs_read_file, payload => read_file_op(payload)),
+    Endpoint(@commands.fs_read_file, payload => @files.read_file(payload)),
     Endpoint(@commands.fs_prepare_attachment, payload => {
-      prepare_attachment_op(payload)
+      @files.prepare_attachment(payload)
     }),
     Endpoint(@commands.fs_import_attachment, payload => {
-      import_attachment_op(payload)
+      @files.import_attachment(payload)
     }),
     Endpoint(@commands.fs_stage_attachments, payload => {
-      stage_attachments_op(payload)
+      @files.stage_attachments(payload)
     }),
     Endpoint(@commands.fs_materialize_semantic_selection, payload => {
-      materialize_semantic_selection_op(payload)
+      @files.materialize_semantic_selection(payload)
     }),
-    Endpoint(@commands.fs_read_directory, payload => read_directory_op(payload)),
+    Endpoint(@commands.fs_read_directory, payload => {
+      @files.read_directory(payload)
+    }),
     Endpoint(@commands.fs_search_files, payload => {
-      search_files_op(connection.file_search, payload)
+      @search.search_files(
+        connection.file_search,
+        @pathx.Absolute::parse_resource_path(payload.path),
+        payload,
+      )
     }),
     Endpoint(@commands.fs_cancel_search_files, payload => {
-      cancel_search_files_op(connection.file_search, payload)
+      @search.cancel_search_files(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_search_text, payload => {
-      search_text_op(state.resources.ripgrep, connection.text_search, payload)
+      @search.search_text(
+        state.moonx_provider(),
+        connection.text_search,
+        @pathx.Absolute::parse_resource_path(payload.root),
+        payload,
+      )
     }),
     Endpoint(@commands.fs_cancel_search_text, payload => {
-      cancel_search_text_op(connection.text_search, payload)
+      @search.cancel_search_text(connection.text_search, payload)
     }),
     Endpoint(@commands.fs_search_semantic, payload => {
-      search_semantic_op(
+      @search.search_semantic(
         connection.semantic_search,
+        @pathx.Absolute::parse_resource_path(payload.root),
         payload,
-        state.semantic_provider(),
+        state.moonx_provider(),
       )
     }),
     Endpoint(@commands.fs_cancel_search_semantic, payload => {
-      cancel_search_semantic_op(connection.semantic_search, payload)
+      @search.cancel_search_semantic(connection.semantic_search, payload)
     }),
     Endpoint(@commands.pattern_repair, payload => {
-      match @engine.pattern_repair_environment(manager, model=payload.model) {
-        Ready(env) => pattern_repair_op(state, env, payload)
-        Configuration(message) =>
-          pattern_repair_failure(payload, Unavailable, None, message, [])
-        Unavailable =>
-          pattern_repair_failure(
-            payload,
-            Unavailable,
-            None,
-            "Pattern Repair settings are unavailable.",
-            [],
-          )
-      }
+      @pattern_repair.repair(
+        state.engine,
+        state.moonx_provider(),
+        @engine.pattern_repair_environment(manager, model=payload.model),
+        payload,
+      )
     }),
     Endpoint(@commands.fs_clear_file_search_cache, payload => {
-      clear_file_search_cache_op(connection.file_search, payload)
+      @search.clear_file_search_cache(connection.file_search, payload)
     }),
-    Endpoint(@commands.fs_stat_files, payload => stat_files_op(payload)),
+    Endpoint(@commands.fs_stat_files, payload => @files.stat_files(payload)),
     Endpoint(@commands.fs_watch, payload => {
       connection.fs_watch.watch(payload)
       Acknowledged
@@ -281,96 +260,109 @@ pub fn endpoints(
       connection.fs_watch.unwatch()
       Acknowledged
     }),
-    Endpoint(@commands.fs_browse, payload => browse_directory_op(payload)),
+    Endpoint(@commands.fs_browse, payload => @files.browse(payload)),
     Endpoint(@commands.fs_create_directory, payload => {
-      create_directory_op(payload)
+      @files.create_directory(payload)
     }),
     Endpoint(@commands.terminal_open, payload => {
-      terminal_open_op(state, connection.terminal, payload)
+      connection.terminal.open(
+        payload,
+        engine=state.engine,
+        runtime_dir?=state.runtime_dir,
+        source=state.resources.moonbit,
+      )
     }),
     Endpoint(@commands.terminal_input, payload => {
-      terminal_input_op(connection.terminal, payload)
+      connection.terminal.input(payload)
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {
-      terminal_resize_op(connection.terminal, payload)
+      connection.terminal.resize(
+        id=payload.id,
+        cols=payload.cols,
+        rows=payload.rows,
+      )
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_ack, payload => {
-      terminal_ack_op(connection.terminal, payload)
+      connection.terminal.ack(id=payload.id, sequence=payload.sequence)
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_close, payload => {
-      terminal_close_op(connection.terminal, payload)
+      connection.terminal.close(id=payload.id)
       Acknowledged
     }),
     Endpoint(@commands.moon_package_graph, payload => {
-      moon_package_graph_op(state.moon, payload)
+      @language.moon_package_graph(state.moon, payload)
     }),
-    Endpoint(@commands.lsp_open, payload => lsp_open_op(state.moon, payload)),
-    Endpoint(@commands.lsp_hover, payload => lsp_hover_op(state.moon, payload)),
+    Endpoint(@commands.lsp_open, payload => {
+      @language.lsp_open(state.moon, payload)
+    }),
+    Endpoint(@commands.lsp_hover, payload => {
+      @language.lsp_hover(state.moon, payload)
+    }),
     Endpoint(@commands.lsp_workspace_symbols, payload => {
-      workspace_symbols_op(state.moon, payload)
+      @language.workspace_symbols(state.moon, payload)
     }),
     Endpoint(@commands.moonide_definition, payload => {
-      moonide_definition_op(state, payload)
+      @language.moonide_definition(state.moon, payload)
     }),
     Endpoint(@commands.moonide_references, payload => {
-      moonide_references_op(state, payload)
+      @language.moonide_references(state.moon, payload)
     }),
     Endpoint(@commands.moonide_codelens, payload => {
-      moonide_codelens_op(state, payload)
+      @language.moonide_codelens(state.moon, payload)
     }),
-    Endpoint(@commands.skills_catalog, _ => skills_catalog_op()),
-    Endpoint(@commands.skills_content, payload => skills_content_op(payload)),
+    Endpoint(@commands.skills_catalog, _ => @skills.catalog()),
+    Endpoint(@commands.skills_content, payload => @skills.content(payload)),
     Endpoint(@commands.skills_installed_content, payload => {
-      installed_skill_content_op(payload)
+      @skills.installed_content(payload)
     }),
-    Endpoint(@commands.skills_installed, _ => installed_skills_op(state)),
+    Endpoint(@commands.skills_installed, _ => state.skills.installed()),
     Endpoint(@commands.skills_install, payload => {
-      install_skill_op(state, payload, on_skills_changed)
+      state.skills.install(payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_uninstall, payload => {
-      uninstall_skill_op(payload, on_skills_changed)
+      @skills.uninstall(payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_set_enabled, payload => {
-      set_skill_enabled_op(payload, on_skills_changed)
+      @skills.set_enabled(payload, on_skills_changed)
     }),
     Endpoint(@commands.update_check, _ => state.updates.check()),
     @endpoint.Endpoint::sync(@commands.update_download, _ => {
       state.updates.start_download()
     }),
     Endpoint(@commands.update_apply, _ => state.updates.apply()),
-    Endpoint(@commands.git_branch, payload => git_branch_op(payload)),
-    Endpoint(@commands.git_pull_request, payload => git_pull_request_op(payload)),
-    Endpoint(@commands.github_list, payload => github_list_op(payload)),
-    Endpoint(@commands.github_review, payload => github_review_op(payload)),
+    Endpoint(@commands.git_branch, payload => @git.branch(payload)),
+    Endpoint(@commands.git_pull_request, payload => {
+      @github.current_pull_request(payload)
+    }),
+    Endpoint(@commands.github_list, payload => @github.list(payload)),
+    Endpoint(@commands.github_review, payload => @github.review(payload)),
     Endpoint(@commands.github_review_file, payload => {
-      github_review_file_op(payload)
+      @github.review_file(payload)
     }),
     Endpoint(@commands.github_review_mutate, payload => {
-      github_review_mutate_op(payload)
+      @github.mutate_review(payload)
     }),
     Endpoint(@commands.github_pull_request, payload => {
-      github_pull_request_op(payload)
+      @github.pull_request(payload)
     }),
     Endpoint(@commands.github_pull_request_summary, payload => {
-      github_pull_request_summary_op(payload)
+      @github.pull_request_summary(payload)
     }),
-    Endpoint(@commands.github_checkout, payload => github_checkout_op(payload)),
+    Endpoint(@commands.github_checkout, payload => @github.checkout(payload)),
     Endpoint(@commands.github_checkout_status, payload => {
-      github_checkout_status_op(payload)
+      @github.checkout_status(payload)
     }),
-    Endpoint(@commands.git_changes, payload => git_changes_op(payload)),
-    Endpoint(@commands.git_history, payload => git_history_op(payload)),
+    Endpoint(@commands.git_changes, payload => @git.changes(payload)),
+    Endpoint(@commands.git_history, payload => @git.history(payload)),
     Endpoint(@commands.git_commit_changes, payload => {
-      git_commit_changes_op(payload)
+      @git.commit_changes(payload)
     }),
-    Endpoint(@commands.git_original_file, payload => {
-      git_original_file_op(payload)
-    }),
-    Endpoint(@commands.host_open_path, payload => open_path_op(payload)),
-    Endpoint(@commands.host_reveal_path, payload => reveal_path_op(payload)),
+    Endpoint(@commands.git_original_file, payload => @git.original_file(payload)),
+    Endpoint(@commands.host_open_path, payload => @opener.open_path(payload)),
+    Endpoint(@commands.host_reveal_path, payload => @opener.reveal_path(payload)),
   ]
 }
 

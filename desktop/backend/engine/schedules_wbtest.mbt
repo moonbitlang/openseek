@@ -207,6 +207,72 @@ async test "schedule Run now preserves a paused plan and its future interval" {
 }
 
 ///|
+async test "editing a schedule keeps its deadline unless its timing changes" {
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-edit-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let service = Schedules(new_engine_manager("unused"), Some(root))
+  ignore(service.list())
+  // Five minutes away on an hourly plan: no recomputed deadline lands there.
+  let deadline = @async.now() + 5 * 60000
+  let entry = schedule_fixture("hourly", deadline, Every(60))
+  let entry = { ..entry, spec: { ..entry.spec, workspace: None, }, }
+  service.commit({ entries: [entry], runs: [], })
+  let renamed = service.save({
+    id: Some("hourly"),
+    spec: { ..entry.spec, name: "renamed", task: "inspect again", },
+    run_now: false,
+  })
+  assert_eq(renamed.entries[0].next_at, Some(deadline))
+  assert_eq(renamed.entries[0].spec.name, "renamed")
+  let retimed = service.save({
+    id: Some("hourly"),
+    spec: { ..entry.spec, timing: Every(30), },
+    run_now: false,
+  })
+  guard retimed.entries[0].next_at is Some(next_at) else {
+    fail("a retimed interval schedule has a deadline")
+  }
+  assert_true(next_at > deadline)
+}
+
+///|
+async test "a schedule that cannot start does not hold back the others" {
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-isolated-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  // Without a home directory no automatic folder can be named.
+  let previous_home = @sys.get_env_var("HOME")
+  let previous_profile = @sys.get_env_var("USERPROFILE")
+  @sys.unset_env_var("HOME")
+  @sys.unset_env_var("USERPROFILE")
+  defer {
+    if previous_home is Some(value) {
+      @sys.set_env_var("HOME", value)
+    }
+    if previous_profile is Some(value) {
+      @sys.set_env_var("USERPROFILE", value)
+    }
+  }
+  let service = Schedules(new_engine_manager("unused"), Some(root))
+  ignore(service.list())
+  let automatic = schedule_fixture("automatic", 100000, Every(10))
+  let automatic = { ..automatic, spec: { ..automatic.spec, workspace: None, }, }
+  let project = schedule_fixture("project", 100000, Every(10))
+  service.commit({ entries: [automatic, project], runs: [], })
+  let launches = service.take_due(at=100000)
+  assert_eq(launches.length(), 1)
+  assert_eq(launches[0].0.id, "project")
+  let entries = service.list().entries
+  assert_eq(
+    entries[0].notice,
+    Some("Skipped: Automatic tasks need an available home directory"),
+  )
+  assert_eq(entries[0].next_at, Some(100000L + 10 * 60000))
+  assert_eq(entries[1].notice, None)
+}
+
+///|
 async test "schedule sleep gap skips old ticks and corrupt persistence is never erased" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-recovery-"))
   defer @fs.rmdir(root.to_string(), recursive=true)
@@ -219,7 +285,7 @@ async test "schedule sleep gap skips old ticks and corrupt persistence is never 
   assert_eq(service.take_due(at=200000).length(), 0)
   assert_eq(service.list().entries[0].next_at, Some(260000))
   let path = root.join("schedules/schedules.json")
-  @fs.write_file(path.to_string(), "broken", create_mode=CreateOrTruncate)
+  @fs.write_text(path.to_string(), "broken", create_mode=CreateOrTruncate)
   exit_host(service)
   let other = Schedules(new_engine_manager("unused"), Some(root))
   let failed = try {
@@ -245,7 +311,10 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   let workspace = attach_run_workspace(root)
   let engine = root.join("bin/engine.sh")
   let repository = root.join("repository")
-  assert_eq(@process.run("git", ["init", "--quiet", repository.to_string()]), 0)
+  assert_eq(
+    @process.run("git", ["init", "--quiet", repository.to_string()]).exit_code,
+    0,
+  )
   assert_eq(
     @process.run("git", [
       "-C",
@@ -259,7 +328,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
       "--allow-empty",
       "-m",
       "fixture",
-    ]),
+    ]).exit_code,
     0,
   )
   let checkout = root.join("checkout")
@@ -272,7 +341,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
       "--quiet",
       "--detach",
       checkout.to_string(),
-    ]),
+    ]).exit_code,
     0,
   )
   let runtime = checkout.join("runtime")
@@ -284,12 +353,12 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nprintf '%s\\n' \"$@\"\nprintf 'moon=%s\\n' \"$(command -v moon)\"\nprintf 'stderr marker\\n' >&2\nexit 0\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let selected_seed = root.join("explicit seed")
   let selected_home = runtime.join("toolchains/moonbit/linux-x64")
   prepare_fake_moonbit_seed(selected_seed, version="explicit-test")
@@ -334,7 +403,10 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   assert_true(run.status is Succeeded)
   assert_true(run.finished_at is Some(_))
   let log = @fsx.read_text(Path(run.log_path))
-  assert_true(log.contains("run\n--session=scheduled-"))
+  // The CLI's output follows the run's header instead of replacing it.
+  assert_true(
+    log.has_prefix("Starting scheduled task\nrun\n--session=scheduled-"),
+  )
   assert_true(log.contains("--approval=never\n"))
   assert_true(log.contains("--literal prompt\nsecond line"))
   assert_true(log.contains("stderr marker"))
@@ -355,7 +427,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   assert_true(automatic.run_requested)
   let first = service.take_due()[0]
   assert_eq(service.list().entries[1].next_at, automatic.next_at)
-  let folder = @pathx.Absolute::from_uri_path(first.1.workspace).unwrap()
+  let folder = @pathx.Absolute::parse_resource_path(first.1.workspace)
   assert_false(@fsx.is_dir(folder.to_path()))
   assert_false(folder.to_string().has_prefix(checkout.to_string()))
   assert_true(@gitx.is_linked_worktree(runtime.resolve()))
@@ -406,12 +478,12 @@ async test "scheduled run Stop and timeout reap CLI processes" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nexec sleep 30\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let manager = new_engine_manager(engine.to_string(), runtime_dir=runtime)
   configure_custom_provider(manager)
   let service = Schedules(manager, Some(runtime))
@@ -491,7 +563,7 @@ async test "scheduled run Stop and timeout reap CLI processes" {
 
   // Simulate a CLI unwinding a tool's cleanup beyond the old one-second
   // outer deadline. Its cleanup must complete before the slot is released.
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\ntrap 'sleep 2; echo cleanup-finished; exit 0' TERM\necho ready\nwhile :; do sleep 0.1; done\n",
     create_mode=CreateOrTruncate,

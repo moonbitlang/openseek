@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/git"
+
+import {
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn branch(@protocol.GitBranchPayload) -> @protocol.GitBranchReply
+
+pub async fn branch_on_remote(@pathx.Absolute, String) -> Bool
+
+pub async fn changes(@protocol.GitChangesPayload) -> @protocol.GitChangesReply
+
+pub async fn commit_changes(@protocol.GitCommitChangesPayload) -> @protocol.GitCommitChangesReply
+
+pub async fn current_branch(@pathx.Absolute) -> String?
+
+pub async fn head_branch(@pathx.Absolute) -> String?
+
+pub async fn history(@protocol.GitHistoryPayload) -> @protocol.GitHistoryReply
+
+pub async fn is_default_branch(@pathx.Absolute, branch~ : String) -> Bool
+
+pub async fn original_file(@protocol.GitOriginalFilePayload) -> @protocol.GitOriginalFileReply
+
+pub fn parse_diff_name_status_z(String) -> Array[@protocol.GitChange]
+
+pub async fn pr_association(@pathx.Absolute) -> PullRequestAssociation?
+
+pub async fn revision_commit(@pathx.Absolute, String) -> String?
+
+pub async fn save_pr_association(@pathx.Absolute, branch~ : String, PullRequestAssociation) -> Unit
+
+pub fn single_line(String) -> String
+
+pub async fn symbolic_branch(@pathx.Absolute) -> String?
+
+pub fn valid_commit_identity(String) -> Bool
+
+// Errors
+pub suberror GitError {
+  InvalidRequest(String)
+  Failed(String)
+  Stale(String)
+}
+pub fn GitError::output(Self, &Logger) -> Unit
+pub fn GitError::to_string(Self) -> String
+pub impl Show for GitError
+
+// Types and methods
+pub struct PullRequestAssociation {
+  url : String
+  base : String
+}
+pub fn PullRequestAssociation::PullRequestAssociation(url~ : String, base~ : String) -> Self
+
+// Type aliases
+
+// Traits

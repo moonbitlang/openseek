@@ -73,6 +73,7 @@ fn installed_row(
   channel : @interop.ChannelId,
   skill : InstalledItem,
   emit : @cmd.Emit[Msg],
+  menu : @html.Html,
 ) -> @html.Html {
   let info : Array[@html.Html] = [
     @html.div(class="skill-meta-line", [
@@ -103,7 +104,7 @@ fn installed_row(
     ),
   ]
   header.push(
-    installed_actions(locale, state, channel, skill, emit, "skill-action"),
+    installed_actions(locale, state, channel, skill, emit, "skill-action", menu),
   )
   @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
     @html.div(class="skill-header", header),
@@ -128,7 +129,7 @@ fn market_row(
   }
   let action = @html.div(class="skill-actions", [
     @html.button(
-      class="button secondary skill-action",
+      class="button primary skill-action",
       disabled=pending is Some(_),
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
@@ -169,9 +170,10 @@ fn detail_page(
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],
+  menu : @html.Html,
 ) -> @html.Html {
   match state.preview {
-    Closed => list_page(locale~, state, input, emit)
+    Closed => @html.nothing
     Loading(target~, ..) =>
       detail_shell(
         locale~,
@@ -180,6 +182,7 @@ fn detail_page(
         input,
         state,
         emit,
+        menu,
       )
     Ready(target~, content~, ..) =>
       detail_shell(
@@ -189,6 +192,7 @@ fn detail_page(
         input,
         state,
         emit,
+        menu,
       )
     Failed(target~, message~, ..) =>
       detail_shell(
@@ -198,6 +202,7 @@ fn detail_page(
         input,
         state,
         emit,
+        menu,
       )
   }
 }
@@ -240,10 +245,10 @@ fn detail_shell(
   input : Input,
   state : State,
   emit : @cmd.Emit[Msg],
+  menu : @html.Html,
 ) -> @html.Html {
-  @page_shell.body(class="skills-page skill-detail-page", [
+  @html.div(class="skill-detail-page", [
     @html.div(class="skill-detail-header", [
-      @html.div(class="page-eyebrow", ui(locale, Details)),
       @html.div(class="skill-header", [
         @html.div(class="skill-title", [
           @html.h2(preview_name(target)),
@@ -253,27 +258,25 @@ fn detail_shell(
             @html.nothing
           },
         ]),
-        detail_action(locale~, target, state, input, emit),
+        detail_action(locale~, target, state, input, emit, menu),
       ]),
       @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
       @html.div(notice_views(state, input, Some(target))),
     ]),
-    @html.div(class="skill-detail-card", [
-      @html.div(class="skill-file-bar", [
-        @html.span(class="skill-file-name", "SKILL.md"),
-        match state.preview {
-          Ready(content~, ..) =>
-            @html.button(
-              class="button secondary skill-copy-button",
-              attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
-              on_click=copy_content(content),
-              ui(locale, Copy),
-            )
-          _ => @html.span(class="skill-file-status", ui(locale, Loading))
-        },
-      ]),
-      content,
+    @html.div(class="skill-file-bar", [
+      @html.span(class="skill-file-name", "SKILL.md"),
+      match state.preview {
+        Ready(content~, ..) =>
+          @html.button(
+            class="button secondary skill-copy-button",
+            attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
+            on_click=copy_content(content),
+            ui(locale, Copy),
+          )
+        _ => @html.span(class="skill-file-status", ui(locale, Loading))
+      },
     ]),
+    content,
   ])
 }
 
@@ -308,6 +311,7 @@ fn detail_action(
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],
+  menu : @html.Html,
 ) -> @html.Html {
   // The preview target records where the document came from. Resolve actions
   // against the live library instead of treating that snapshot as an install.
@@ -318,13 +322,13 @@ fn detail_action(
     Market(item) => {
       let pending = state.pending_action(input.channel, item.identity())
       @html.button(
-        class="button primary skill-detail-action",
+        class="button primary skill-action",
         disabled=pending is Some(_),
         on_click=emit(Install(item)),
         if pending is Some(action) {
           ui(locale, action.label())
         } else {
-          ui(locale, InstallSkill)
+          ui(locale, Install)
         },
       )
     }
@@ -336,6 +340,7 @@ fn detail_action(
         item,
         emit,
         "skill-detail-action",
+        menu,
       )
   }
 }
@@ -375,20 +380,20 @@ fn matches(query : String, fields : Array[String]) -> Bool {
 }
 
 ///|
-/// The Skills page, shown in the main area in place of the conversation:
-/// header, search, the local library, then the mooncakes.io catalog.
+/// The library dialog retains its search, rows, and menus beneath a detail.
 fn list_page(
   locale~ : @i18n.Locale = English,
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],
+  menus : Map[String, @html.Html],
 ) -> @html.Html {
   let catalog_loading = match state.catalog {
     Loading(channel~) => channel == input.channel
     _ => false
   }
   let sections : Array[@html.Html] = [
-    @html.div(class="skills-header", [
+    @html.div(class="page-header", [
       @html.div(class="skills-heading", [
         @html.div(class="page-eyebrow", ui(locale, Library)),
         @html.button(
@@ -402,10 +407,10 @@ fn list_page(
           },
         ),
       ]),
-      @html.div(class="skills-subtitle", ui(locale, Description)),
+      @html.div(class="page-subtitle", ui(locale, Description)),
     ]),
     @html.div(
-      class="skills-search",
+      class="search-field field-surface",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
         icon(icon_search),
@@ -422,29 +427,35 @@ fn list_page(
   for notice in notice_views(state, input, None) {
     sections.push(notice)
   }
-  let installed_rows : Array[@html.Html] = []
+  let installed_rows : Map[String, @html.Html] = Map([])
   for skill in input.installed {
     guard matches(state.query, [skill.name, skill.description, skill.source]) else {
       continue
     }
-    installed_rows.push(
-      installed_row(locale~, state, input.channel, skill, emit),
+    installed_rows["\{input.channel.uri_authority()}:\{skill.id}"] = installed_row(
+      locale~,
+      state,
+      input.channel,
+      skill,
+      emit,
+      menus.get(skill.id).unwrap(),
     )
   }
   if installed_rows.is_empty() {
-    installed_rows.push(
-      @html.div(
-        class="skills-empty",
-        if input.installed.is_empty() {
-          ui(locale, EmptyInstalled)
-        } else {
-          ui(locale, NoInstalledMatch)
-        },
-      ),
+    installed_rows["empty"] = @html.div(
+      class="skills-empty",
+      if input.installed.is_empty() {
+        ui(locale, EmptyInstalled)
+      } else {
+        ui(locale, NoInstalledMatch)
+      },
     )
   }
   sections.push(
-    @settings.group(icon_extensions, ui(locale, InstalledLabel), installed_rows),
+    @ui.form_section(icon_extensions, ui(locale, InstalledLabel), [
+      // Filtering must not reuse another skill's stateful menu DOM.
+      @html.div(style=["display:contents"], installed_rows),
+    ]),
   )
   let market_rows : Array[@html.Html] = []
   match state.catalog {
@@ -485,15 +496,9 @@ fn list_page(
     }
   }
   sections.push(
-    @html.div(class="settings-group", [
-      @html.div(class="settings-group-head", [
-        icon(icon_package),
-        @html.h2(ui(locale, Registry)),
-      ]),
-      @html.div(class="settings-group-card", market_rows),
-    ]),
+    @ui.form_section(icon_package, ui(locale, Registry), market_rows),
   )
-  @page_shell.body(
+  @ui.dialog_page(
     class="skills-page",
     attrs=@html.Attrs::build().on_scroll(event => {
       guard event.target().to_element() is Some(element) else {
@@ -506,22 +511,6 @@ fn list_page(
 }
 
 ///|
-fn page(
-  locale~ : @i18n.Locale = English,
-  state : State,
-  input : Input,
-  emit : @cmd.Emit[Msg],
-) -> @html.Html {
-  guard state.preview_channel == Some(input.channel) else {
-    return list_page(locale~, state, input, emit)
-  }
-  match state.preview {
-    Closed => list_page(locale~, state, input, emit)
-    _ => detail_page(locale~, state, input, emit)
-  }
-}
-
-///|
 fn installed_actions(
   locale : @i18n.Locale,
   state : State,
@@ -529,6 +518,7 @@ fn installed_actions(
   item : InstalledItem,
   emit : @cmd.Emit[Msg],
   button_class : String,
+  menu : @html.Html,
 ) -> @html.Html {
   let enabled = item.enabled
   let label = ui(locale, if enabled { Enabled } else { Disabled })
@@ -539,7 +529,7 @@ fn installed_actions(
   let enablement_locked = state.pending_enabled(channel, item.id) ||
     pending.map_or(false, action => action.blocks_enablement())
   let buttons : Array[@html.Html] = [
-    @settings.switch_control(
+    @ui.switch_control(
       enabled~,
       label="\{item.name}: \{label}",
       title=label,
@@ -553,20 +543,20 @@ fn installed_actions(
       state.update_candidate(item) is Some(_) ||
       pending is Some(_)
     ) {
-    let label = pending
-      .map(action => ui(locale, action.label()))
-      .unwrap_or(ui(locale, ManageSkill))
     buttons.push(
-      @html.button(
-        class="skill-menu-trigger \{button_class}",
-        type_="button",
-        title=label,
-        disabled=pending is Some(_),
-        attrs=@action_menu.button_attrs(installed_menu_target(channel, item)).aria_label(
-          label,
-        ),
-        icon(@icons.icon_more),
-      ),
+      if pending is Some(action) {
+        @rui.button(
+          variant=Ghost,
+          size=IconXs,
+          class="skill-menu-trigger \{button_class}",
+          title=ui(locale, action.label()),
+          disabled=true,
+          attrs=@html.Attrs::build().aria_label(ui(locale, action.label())),
+          icon(@icons.icon_more),
+        )
+      } else {
+        menu
+      },
     )
   }
   @html.div(

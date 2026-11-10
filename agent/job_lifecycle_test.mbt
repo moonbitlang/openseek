@@ -27,12 +27,12 @@ async test "job lifecycle publishes ordered durable start and failure with retai
       assert_true(events[1].1.finished_at_ms is Some(_))
       let saved : @protocol.JobRecord = @json.from_json(
         @json.parse(
-          @fs.read_file("\{root}/\{@protocol.job_storage_name(id)}.json").text(),
+          @fs.read_text("\{root}/\{@protocol.job_storage_name(id)}.json"),
         ),
       )
       assert_eq(saved, events[1].1)
       assert_eq(
-        @fs.read_file("\{root}/\{@protocol.job_storage_name(id)}.out").text(),
+        @fs.read_text("\{root}/\{@protocol.job_storage_name(id)}.out"),
         "你好",
       )
       jobs.finalize()
@@ -69,7 +69,8 @@ async test "stop emits stopping before one settled terminal event" {
 async test "session cleanup persists a terminal record after cancellation" {
   let root = @fs.tmpdir(prefix="openseek-job-finalize-")
   defer @fs.rmdir(root, recursive=true)
-  let path = @async.with_timeout(5000, () => {
+  let mut path = ""
+  @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let tools = @agent.build_tools(
         AgentRuntime(),
@@ -80,11 +81,11 @@ async test "session cleanup persists a terminal record after cancellation" {
         fail("missing jobs")
       }
       let id = jobs.start(program="/bin/sleep", args=["30"], command="sleep")
-      "\{root}/\{jobs.generation()}/\{@protocol.job_storage_name(id)}.json"
+      path = "\{root}/\{jobs.generation()}/\{@protocol.job_storage_name(id)}.json"
     })
   })
   let saved : @protocol.JobRecord = @json.from_json(
-    @json.parse(@fs.read_file(path).text()),
+    @json.parse(@fs.read_text(path)),
   )
   assert_true(saved.state is Stopped("session_ended"))
   assert_eq(saved.revision, 2)

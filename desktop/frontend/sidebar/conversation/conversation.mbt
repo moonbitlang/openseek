@@ -260,21 +260,13 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
 }
 
 ///|
-fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
-  (
-    self.trailing.any(action => action is Archive(..)) && !self.running,
-    self.trailing.any(action => action is Delete(..)) && !self.running,
-  )
-}
-
-///|
 fn Input::menu_entries_for_kind(
   locale~ : @i18n.Locale = English,
   self : Input,
   actions : Actions,
   kind : MenuKind,
 ) -> Array[@action_menu.Entry] {
-  let (archive_enabled, delete_enabled) = self.menu_enabled()
+  let delete_enabled = self.trailing.any(action => action is Delete(..))
   match kind {
     LiveMenu => {
       let entries : Array[@action_menu.Entry] = [
@@ -291,16 +283,7 @@ fn Input::menu_entries_for_kind(
           label: ui(locale, ArchiveLabel),
           // The menu is the row's only Archive control, so it carries the
           // source's own hint about what archiving keeps.
-          title: if !archive_enabled {
-            ui(
-              locale,
-              if self.id.source() is CloudLive {
-                FinishBeforeArchive
-              } else {
-                StopBeforeArchive
-              },
-            )
-          } else if self.id.source() is CloudLive {
+          title: if self.id.source() is CloudLive {
             ui(locale, ArchiveConversation)
           } else if self.trailing is [Archive(title~), ..] {
             title
@@ -308,7 +291,7 @@ fn Input::menu_entries_for_kind(
             ui(locale, ArchiveConversation)
           },
           icon: Some(@icons.icon(@icons.icon_archive)),
-          enabled: archive_enabled,
+          enabled: true,
           destructive: false,
           command: (actions.archive)(self.id),
         }),
@@ -319,13 +302,7 @@ fn Input::menu_entries_for_kind(
         entries.push(
           Action({
             label: ui(locale, DeleteLabel),
-            title: if delete_enabled {
-              title
-            } else if self.id.source() is CloudLive {
-              ui(locale, FinishBeforeDelete)
-            } else {
-              ui(locale, StopBeforeDelete)
-            },
+            title,
             icon: Some(@icons.icon(@icons.icon_close)),
             enabled: delete_enabled,
             destructive: true,
@@ -341,7 +318,7 @@ fn Input::menu_entries_for_kind(
           label: ui(locale, RestoreLabel),
           title: ui(locale, RestoreConversation),
           icon: Some(@icons.icon(@icons.icon_arrow_up)),
-          enabled: !(self.id.source() is CloudArchived && self.running),
+          enabled: true,
           destructive: false,
           command: (actions.restore)(self.id),
         }),
@@ -513,13 +490,35 @@ pub fn component(
     },
     by=child => child.1.id(),
   )
-  state.map5(input, child_rows, locale, search, (
+  let menu = input
+    .map2(locale, (input, locale) => (input, locale))
+    .switch_by(
+      pair => {
+        let (input, locale) = pair
+        guard input.menu_kind() is Some(LiveMenu) &&
+          input.menu_entries(locale~, actions) is Some(entries) else {
+          return @rabbita.Val::constant(@html.nothing)
+        }
+        @action_menu.dropdown(
+          input.id.key(),
+          { label: @messages.text(locale, ConversationActions), entries, },
+          class="row-archive row-menu-button",
+          @icons.icon(@icons.icon_more),
+        )
+      },
+      by=pair => {
+        Repr::Repr((pair.0.id, pair.0.label, pair.0.trailing, pair.1)).to_string()
+      },
+    )
+  let input = input.map2(menu, (input, menu) => (input, menu))
+  let rendered = state.map5(input, child_rows, locale, search, (
     state,
-    input,
+    pair,
     child_rows,
     locale,
     search,
   ) => {
+    let (input, menu) = pair
     // Opening a workflow child must keep its selected row visible under the parent.
     let children_open = !search.query.is_blank() ||
       state.children_open ||
@@ -574,8 +573,8 @@ pub fn component(
       if input.rename is Some(rename) {
         rename_field(locale, input.id, rename, actions)
       } else if input.openable {
-        // Native keyboard activation bubbles to the row's existing open
-        // handler, just like a pointer click on the title.
+        // Keyboard activation and title clicks share the content area's
+        // open handler; trailing actions are outside that area.
         @html.button(
           id=open_id(input.id),
           type_="button",
@@ -694,25 +693,14 @@ pub fn component(
     // Archived rows keep their direct Restore and Delete buttons.
     let buttons : Array[@html.Html] = []
     if menu_kind is Some(LiveMenu) {
-      buttons.push(
-        @html.button(
-          class="row-archive row-menu-button",
-          type_="button",
-          // Named for its row kind: a project row's trigger sits right above
-          // and opens a different menu.
-          title=@messages.text(locale, ConversationActions),
-          attrs=@action_menu.button_attrs(input.id.key()).aria_label(
-            @messages.text(locale, ConversationActions),
-          ),
-          @icons.icon(@icons.icon_more),
-        ),
-      )
+      buttons.push(menu)
     }
     let trailing_actions = if menu_kind is Some(LiveMenu) {
       []
     } else {
       input.trailing
     }
+    let trailing_slot : Array[@html.Html] = []
     // The title field takes the whole row while it is edited.
     if !renaming &&
       (
@@ -727,11 +715,6 @@ pub fn component(
         @html.span(class="row-status", status),
       ]
       for action in trailing_actions {
-        let enabled = if input.id.source() is CloudArchived {
-          !input.running
-        } else {
-          !(action is Archive(..) && input.running)
-        }
         let (title, button_class, image, id_suffix) = match action {
           Archive(title~) =>
             (title, "row-archive", @icons.icon_archive, "archive")
@@ -740,31 +723,13 @@ pub fn component(
           Delete(title~) =>
             (title, "row-archive row-delete", @icons.icon_close, "delete")
         }
-        let command = if enabled {
-          actions.command(action, input.id)
-        } else {
-          @cmd.none
-        }
         buttons.push(
           @html.button(
             id=input.id.key() + ":direct:" + id_suffix,
-            class=if enabled {
-              button_class
-            } else {
-              button_class + " disabled"
-            },
+            class=button_class,
             type_="button",
-            title=if enabled || input.id.source() is CloudArchived {
-              title
-            } else {
-              ui(locale, StopBeforeArchive)
-            },
-            attrs=@html.Attrs::build()
-              .aria_disabled((!enabled).to_string())
-              .on_click(event => {
-                event.stop_propagation()
-                command
-              }),
+            title~,
+            on_click=actions.command(action, input.id),
             @icons.icon(image),
           ),
         )
@@ -774,25 +739,48 @@ pub fn component(
         // children occupy the same CSS grid area and overlap each other.
         trailing.push(@html.span(class="row-actions", buttons))
       }
-      children.push(@html.span(class="row-trailing", trailing))
+      trailing_slot.push(@html.span(class="row-trailing", trailing))
     }
     // A row being renamed is a text field: no row menu over the field's own
     // context menu, and a click places the caret instead of opening the row.
-    let row_attrs = match menu_kind {
-      Some(_) if !renaming => @action_menu.context_attrs(input.id.key())
-      _ => @html.Attrs::build()
-    }
-    let row = @html.div(
-      class~,
-      title=input.title,
+    let content = @html.div(
+      class="conversation-content",
       on_click=if input.openable && !renaming {
         (actions.open)(input.id)
       } else {
         @cmd.none
       },
-      attrs=row_attrs,
       children,
     )
+    let context : @action_menu.RowContext = {
+      target: input.id.key(),
+      revision: Repr::Repr(
+        (
+          input.id,
+          input.label,
+          input.title,
+          input.rename,
+          input.openable,
+          input.active,
+          input.children.length(),
+          children_open,
+          input.trailing,
+          locale,
+          search.query,
+        ),
+      ).to_string(),
+      content,
+      definition: if renaming {
+        None
+      } else {
+        input
+        .menu_entries(locale~, actions)
+        .map(entries => {
+          label: @messages.text(locale, ConversationActions),
+          entries,
+        })
+      },
+    }
     let rows : Map[String, @html.Html] = Map([])
     for group in child_rows {
       for child in group {
@@ -800,26 +788,36 @@ pub fn component(
       }
     }
     let collapsed = !children_open || input.children.is_empty()
+    (
+      input.id.key(),
+      class,
+      input.title,
+      context,
+      trailing_slot,
+      @html.div(
+        id=input.id.key() + ":children",
+        class="conversation-children sidebar-branch-content",
+        attrs=@html.Attrs::build()
+          .aria_hidden(collapsed.to_string())
+          .inert(collapsed),
+        rows,
+      ),
+      collapsed,
+    )
+  })
+  let context = @action_menu.row_context(rendered.map(row => row.3))
+  rendered.map2(context, (row, context) => {
+    let (id, class, title, _, trailing, children, collapsed) = row
     [
       (
-        input.id.key(),
+        id,
         @html.div(
           class=if collapsed {
             "sidebar-conversation sidebar-branch collapsed"
           } else {
             "sidebar-conversation sidebar-branch"
           },
-          [
-            row,
-            @html.div(
-              id=input.id.key() + ":children",
-              class="conversation-children sidebar-branch-content",
-              attrs=@html.Attrs::build()
-                .aria_hidden(collapsed.to_string())
-                .inert(collapsed),
-              rows,
-            ),
-          ],
+          [@html.div(class~, title~, [context, ..trailing]), children],
         ),
       ),
     ]

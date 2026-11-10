@@ -81,6 +81,10 @@
   max-width: var(--markdown-figure-measure);
 }
 
+.moonbit-viewer-markdown-document-article table {
+  width: 100%;
+}
+
 /* Use one predictable vertical cadence instead of the browser's element-by-
  * element defaults: sections get a clear pause, headings stay attached to
  * their content, and ordinary blocks retain a comfortable reading beat. */

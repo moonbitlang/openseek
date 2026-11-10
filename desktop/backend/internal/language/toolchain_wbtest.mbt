@@ -1,0 +1,106 @@
+///|
+#cfg(not(platform="windows"))
+async test "language and semantic tools execute the explicit host toolchain" {
+  let root = @pathx.Path(@fs.tmpdir(prefix="host-toolchain-")).resolve()
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let seed = root.join("explicit seed")
+  let runtime = root.join("runtime")
+  let payload = runtime.join("toolchains/moonbit/linux-x64")
+  @fs.mkdir(seed.to_string(), recursive=true)
+  @fs.write_text(
+    seed.join(".openseek-moonbit-seed-version").to_string(),
+    "fixture",
+    create_mode=CreateOrTruncate,
+  )
+  for
+    name in [
+      "bin/moon", "bin/moonc", "lib/core/_build/native/release/bundle/prelude/prelude.mi",
+      "lib/core/_build/wasm-gc/release/bundle/prelude/prelude.mi",
+    ] {
+    let file = payload.join(name)
+    @fsx.ensure_dir(file.to_path().dirname())
+    @fs.write_text(
+      file.to_string(),
+      "#!/bin/sh\nprintf 'selected-toolchain'\n",
+      create_mode=CreateOrTruncate,
+      permission=0o755,
+    )
+  }
+  @fs.write_text(
+    payload.join(".openseek-moonbit-bundle-version").to_string(),
+    "version=fixture",
+    create_mode=CreateOrTruncate,
+  )
+  guard @moonbit.bundled_source(
+      platform="linux-x64",
+      host_platform="Linux-x86_64",
+      seed_dir=seed.to_string(),
+    )
+    is Some(source) else {
+    fail("test fixture seed marker is missing")
+  }
+  let state = MoonCliState(
+    "unbundled-engine",
+    runtime_dir=runtime.to_path(),
+    source~,
+  )
+  guard state.resolve_command() is Some(cli) else {
+    fail("explicit language toolchain was lost")
+  }
+  let expected = payload.join("bin/moon").to_string()
+  assert_eq(cli.command, expected)
+  assert_eq(state.run_moon([], root), Some((0, "selected-toolchain", "")))
+  let ide = moonide_spawn_config(state)
+  assert_eq(ide.executable, expected)
+  let result = @processx.collect_output_no_stdin(
+    ide.executable,
+    [],
+    inherit_env=false,
+    extra_env?=ide.extra_env,
+  )
+  let code = result.exit_code
+  assert_eq(code, 0)
+  assert_eq(result.stdout_text(), "selected-toolchain")
+  let provider = @moonbit.MoonxProvider(
+    engine="unbundled-engine",
+    runtime_dir=Some(runtime.to_path()),
+    source~,
+  )
+  let env : Map[String, String] = {
+    "MOON_HOME": "registry-home",
+    "PATH": "/unrelated",
+  }
+  let selected = provider.resolve(env~)
+  assert_eq(selected.command, payload.join("bin/moonx").to_string())
+  assert_eq(selected.environment["MOON_HOME"], "registry-home")
+  let result = @processx.collect_output_no_stdin(
+    selected.command,
+    @search.moongrep_args([]),
+    inherit_env=false,
+    extra_env=selected.environment,
+  )
+  let code = result.exit_code
+  assert_eq(code, 0)
+  assert_eq(result.stdout_text(), "selected-toolchain")
+  // Reuse the prepared payload and the moonx alias without replacing either.
+  let again = provider.resolve(env~)
+  assert_eq(again.command, selected.command)
+  // A selected seed that disappears must not fall back to this machine's moon.
+  @fs.remove(seed.join(".openseek-moonbit-seed-version").to_string())
+  let fresh = MoonCliState(
+    "unbundled-engine",
+    runtime_dir=runtime.to_path(),
+    source~,
+  )
+  assert_true(fresh.resolve_command() is None)
+  try moonide_spawn_config(fresh) catch {
+    _ => ()
+  } noraise {
+    _ => fail("IDE fell back after losing the selected seed")
+  }
+  try provider.resolve() catch {
+    _ => ()
+  } noraise {
+    _ => fail("semantic provider fell back after losing the selected seed")
+  }
+}

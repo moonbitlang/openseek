@@ -23,7 +23,8 @@ The key is `supported_targets`:
 ```bash
 moon new fullstack_one_project
 cd fullstack_one_project
-moon add moonbit-community/rabbita
+moon add moonbitlang/async@0.22.4
+moon add moonbit-community/rabbita@0.16.4
 ```
 
 Project layout:
@@ -53,7 +54,8 @@ name = "moonbit-community/fullstack-one-project-doc"
 version = "0.1.0"
 
 import {
-  "moonbit-community/rabbita@0.11.6",
+  "moonbitlang/async@0.22.4",
+  "moonbit-community/rabbita@0.16.4",
 }
 
 preferred_target = "native"
@@ -62,33 +64,63 @@ supported_targets = "+wasm+wasm-gc+js+native"
 
 ## Step 2: Implement shared domain validation
 
-Define request/response types with `derive(ToJson, FromJson)` and one `suberror`-based validator in `shared/`.
+Define request/response types with `#derive(ToJson, FromJson)` and one `suberror`-based validator in `shared/`.
 Both frontend and backend import this package.
 
 ```moonbit
 import {
-  "moonbitlang/core/json" @json,
+  "moonbitlang/core/json",
 }
 ```
 
 ```moonbit
+#derive(Eq, ToJson, FromJson)
 pub(all) struct SubmitTitleRequest {
   title : String
-} derive(Eq, ToJson, FromJson)
+}
 
 ///|
+pub extend SubmitTitleRequest with Eq::{not_equal, equal}
+
+///|
+pub extend SubmitTitleRequest with ToJson::{to_json}
+
+///|
+pub extend SubmitTitleRequest with @moonbitlang/core/json.FromJson::{from_json}
+
+///|
+#derive(Eq, ToJson, FromJson)
 pub(all) suberror TitleValidationError {
   EmptyTitle
-  TooLong(Int)
+  TooLong(Int32)
   ForbiddenHash
-} derive(Eq, ToJson, FromJson)
+}
 
 ///|
+pub extend TitleValidationError with Eq::{not_equal, equal}
+
+///|
+pub extend TitleValidationError with ToJson::{to_json}
+
+///|
+pub extend TitleValidationError with @moonbitlang/core/json.FromJson::{from_json}
+
+///|
+#derive(Eq, ToJson, FromJson)
 pub(all) enum SubmitTitleResponse {
   Accepted(String)
   ValidationError(TitleValidationError)
   InvalidJson
-} derive(Eq, ToJson, FromJson)
+}
+
+///|
+pub extend SubmitTitleResponse with Eq::{not_equal, equal}
+
+///|
+pub extend SubmitTitleResponse with ToJson::{to_json}
+
+///|
+pub extend SubmitTitleResponse with @moonbitlang/core/json.FromJson::{from_json}
 
 ///|
 pub fn validate_request(
@@ -122,6 +154,9 @@ pub impl Show for SubmitTitleResponse with output(self, logger) {
   }
   logger.write_string(text)
 }
+
+///|
+pub extend SubmitTitleResponse with Show::{to_string, output}
 ```
 
 ## Step 3: Implement the frontend (`js`)
@@ -134,10 +169,10 @@ Frontend behavior:
 
 ```moonbit
 import {
-  "moonbit-community/fullstack-one-project-doc/shared" @shared,
-  "moonbitlang/core/json" @json,
-  "moonbit-community/rabbita" @rabbita,
-  "moonbit-community/rabbita/html" @html,
+  "moonbit-community/fullstack-one-project-doc/shared",
+  "moonbitlang/core/json",
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/http" @rhttp,
 }
 
@@ -148,36 +183,32 @@ pkgtype(kind: "executable")
 
 ```moonbit
 fn main {
-  let app = @rabbita.cell(
+  let app = @rabbita.elmish(
     model={ title: "", warning: None, server_message: None },
-    update=(dispatch, msg, model) => {
+    update=(model, msg, dispatch) => {
       match msg {
         Edit(title) => {
           let warning = local_warning(title)
-          (@rabbita.none, { title, warning, server_message: None })
+          ({ title, warning, server_message: None }, @rabbita.none)
         }
         Submit =>
           match model.warning {
             Some(message) =>
               (
-                @rabbita.none,
                 { ..model, server_message: Some("not sent: \{message}") },
+                @rabbita.none,
               )
             None => {
               let request = @shared.SubmitTitleRequest::{ title: model.title }
               let request_json = request.to_json().stringify()
-              let expect : @rhttp.Expecting[@rabbita.Cmd, Unit] = @rhttp.Expecting::Text(result => {
-                  dispatch(ServerReplied(result))
-                },
-              )
-              let cmd = @rhttp.post(
-                "http://127.0.0.1:8080/submit",
-                @rhttp.Body::Text(request_json),
-                expect~,
-              )
+              let cmd = @rhttp.post("http://127.0.0.1:8080/submit")
+                .with_text(request_json)
+                .expect_text(result => dispatch(ServerReplied(
+                  result.map_err(err => err.to_string()),
+                )))
               (
-                cmd,
                 { ..model, server_message: Some("sending json request...") },
+                cmd,
               )
             }
           }
@@ -194,11 +225,11 @@ fn main {
               }
             Err(err) => Some("request failed: \{err}")
           }
-          (@rabbita.none, { ..model, server_message, })
+          ({ ..model, server_message, }, @rabbita.none)
         }
       }
     },
-    view=(dispatch, model) => {
+    view=(model, dispatch) => {
       let warning_line = match model.warning {
         Some(message) => p("warning: \{message}")
         None => p("local validation passed")
@@ -214,7 +245,6 @@ fn main {
           input_type=Text,
           value~,
           on_input=text => dispatch(Edit(text)),
-          nothing,
         ),
         button(on_click=dispatch(Submit), "Submit as JSON"),
         warning_line,
@@ -222,7 +252,7 @@ fn main {
       ])
     },
   )
-  @rabbita.new(app).mount("app")
+  app.mount("app")
 }
 ```
 
@@ -236,13 +266,13 @@ Backend behavior:
 
 ```moonbit
 import {
-  "moonbit-community/fullstack-one-project-doc/shared" @shared,
-  "moonbitlang/core/json" @json,
-  "moonbitlang/core/async",
-  "moonbitlang/core/async/fs" @fs,
-  "moonbitlang/core/async/http" @http,
-  "moonbitlang/core/async/socket" @socket,
-  "moonbitlang/core/async/stdio",
+  "moonbit-community/fullstack-one-project-doc/shared",
+  "moonbitlang/core/json",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/stdio",
 }
 
 supported_targets = "native"
@@ -269,15 +299,15 @@ pkgtype(kind: "executable")
 
 ```moonbit
 async fn main {
-  @stdio.stdout.text.write("starting backend on http://127.0.0.1:8080\n")
+  @stdio.stdout.write("starting backend on http://127.0.0.1:8080\n")
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:8080")) catch {
     err => {
-      @stdio.stdout.text.write("failed to start backend: \{err}\n")
+      @stdio.stdout.write("failed to start backend: \{err}\n")
       return
     }
   }
 
-  server.run_forever((request, conn) => {
+  server.run_forever((request, body, conn) => {
     match (request.meth, request.path) {
       (Get, "/") =>
         send_file(
@@ -288,7 +318,7 @@ async fn main {
           conn, frontend_js_path, js_headers, "missing frontend bundle; run `moon build frontend --target js`",
         )
       (Post, "/submit") => {
-        let raw_body = conn.text.read_all() catch { _ => "" }
+        let raw_body = body.read_all().text() catch { _ => "" }
         let response : @shared.SubmitTitleResponse = try {
           let request : @shared.SubmitTitleRequest = @json.from_json(
             @json.parse(raw_body),
@@ -311,13 +341,13 @@ async fn main {
         let reason = if code == 200 { "OK" } else { "BadRequest" }
         conn
         ..send_response(code, reason, extra_headers=json_headers)
-        ..write_string(response.to_json().stringify())
+        ..write(response.to_json().stringify())
         .end_response()
       }
       _ =>
         conn
         ..send_response(404, "NotFound", extra_headers=text_headers)
-        ..write_string("Not Found")
+        ..write("Not Found")
         .end_response()
     }
   })

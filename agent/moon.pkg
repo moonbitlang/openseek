@@ -2,7 +2,7 @@ import {
   "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/mcp/host" @mcphost,
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/core/int",
   "moonbitlang/openseek/agent_session/compact",
@@ -26,23 +26,23 @@ import {
   "moonbitlang/openseek/deepseek/client",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/openseek_protocol/emit",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 }
 
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/agent_tool/job_wait",
   "moonbitlang/openseek/agent_tool/job_output",
   "moonbitlang/openseek/agent_tool/finish",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
-  "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/agent_tool/write_scope",
@@ -55,3 +55,14 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+    "moonbitlang/core/async/socket",
+  ],
+)

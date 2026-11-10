@@ -10,31 +10,34 @@ async fn root_kill_closes_stdout(
   contain_after_child_started~ : Bool,
   grace_ms~ : Int32,
 ) -> Bool {
+  let mut closed = false
   @async.with_task_group(group => {
-    let (reader, child_stdout) = @process.read_from_process()
-    defer reader.close()
     let proc = @process.spawn(
       group,
       "cmd.exe",
       ["/c", "ping", "-n", "30", "127.0.0.1"],
-      stdout=child_stdout,
+      stdout=Collect,
       cancel_handler=@process.hard_cancel(),
       no_wait=true,
     )
+    let reader = proc.stdout
+    defer reader.close()
     if contain && !contain_after_child_started {
       @process_tree.contain(group, proc)
     }
     // Output means `ping` is running, so the kill below cannot win a race
     // against its creation.
-    guard reader.read_until("\n") is Some(_) else {
+    guard reader.text.read_until("\n") is Some(_) else {
       fail("ping produced no output")
     }
     if contain && contain_after_child_started {
       @process_tree.contain(group, proc)
     }
     proc.cancel()
-    @async.with_timeout_opt(grace_ms, () => reader.read_all()) is Some(_)
+    closed = @async.with_timeout_opt(grace_ms, () => reader.read_all())
+      is Some(_)
   })
+  closed
 }
 
 ///|

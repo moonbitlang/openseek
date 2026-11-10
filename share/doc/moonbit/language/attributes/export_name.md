@@ -6,18 +6,14 @@ name is used in generated Wasm, JavaScript, or C output:
 
 ```moonbit
 #export_name("add")
-pub fn add_one(value : Int) -> Int {
+pub fn add_one(value : Int32) -> Int32 {
   value + 1
 }
 ```
 
-MoonBit currently requires the exported name to be unique within the package
-and to be a valid C symbol identifier, regardless of the selected backend.
-
-#### WARNING
-Known compiler issue: `#export_name` currently applies its C-symbol-identifier
-restriction to every backend. WebAssembly export names are UTF-8 strings and
-are not limited to C identifiers.
+Export names must be unique within the package. Name restrictions depend on
+the backend: native requires valid C symbol identifiers, while WebAssembly
+export names are UTF-8 strings and are not limited to C identifiers.
 
 The attribute cannot be used on generic functions, functions with optional
 arguments, methods, or declarations without a body.
@@ -35,9 +31,9 @@ expose dependency functionality, define and export a wrapper in the exporting
 package.
 
 #### NOTE
-The native backend does not currently support exporting a `foreign_library`
-package as a linkable library artifact, including shared libraries such as a
-`.dll` or `.so`. Use Wasm or JavaScript if you need an exported library.
+The native backend produces a static archive (`.a`, or `.lib` on Windows),
+not a shared library such as a `.dll` or `.so`. The host must call
+`moonbit_init()` before calling exported functions.
 
 See [Export Functions](https://docs.moonbitlang.com/en/latest/language/ffi.html#export-functions) for backend-specific
 alternatives.

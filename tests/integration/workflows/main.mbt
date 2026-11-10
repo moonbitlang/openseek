@@ -29,12 +29,12 @@ async fn main {
 
 ///|
 async fn write(path : String, text : String) -> Unit {
-  @fs.write_file(path, text, create_mode=CreateOrTruncate)
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
 }
 
 ///|
 async fn append(path : String, text : String) -> Unit {
-  @fs.write_file(path, text + "\n", append=true, create_mode=OpenOrCreate)
+  @fs.write_text(path, text + "\n", append=true, create_mode=OpenOrCreate)
 }
 
 ///|
@@ -43,7 +43,7 @@ async fn read_calls(path : String) -> Array[Json] {
     return []
   }
   let calls : Array[Json] = []
-  for line in @fs.read_file(path).text().split("\n") {
+  for line in @fs.read_text(path).split("\n") {
     if !line.is_empty() {
       calls.push(@json.parse(line))
     }
@@ -61,10 +61,7 @@ async fn compile(root : String, temp : String, name : String) -> String {
   let dir = temp + "/" + name
   @fs.mkdir(dir)
   let source = dir + "/" + name + ".mbtx"
-  write(
-    source,
-    @fs.read_file(root + "/share/workflow/" + name + ".mbtx").text(),
-  )
+  write(source, @fs.read_text(root + "/share/workflow/" + name + ".mbtx"))
   let build = @shell.Cmd(
     "moon",
     ["run", "--build-only", "--deny-warn", "--target", "wasm", source],

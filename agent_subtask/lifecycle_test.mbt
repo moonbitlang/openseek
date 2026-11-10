@@ -78,7 +78,7 @@ async test "provision, worker edit, capture, integrate — the happy path" {
     )
     assert_eq(integrated.result, "integrated")
     // The change landed in origin history and the worktree is gone.
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "ALPHA\n")
     assert_false(@fs.exists(entry.worker_root))
     // The registry records the terminal state.
     let (entries, skipped) = @agent_subtask.load_entries(
@@ -111,7 +111,7 @@ async test "out-of-scope worker changes are captured as defects, not merged" {
     let refused = @agent_subtask.integrate(provisioned.geometry, captured.entry)
     assert_eq(refused.result, "refused")
     // Origin untouched either way.
-    assert_eq(@fs.read_file("\{repo}/other/b.txt").text(), "beta\n")
+    assert_eq(@fs.read_text("\{repo}/other/b.txt"), "beta\n")
   })
 }
 
@@ -231,7 +231,7 @@ async test "a conflicting merge hands off, continues after resolution" {
       conflicted.entry,
     )
     assert_eq(continued.result, "integrated")
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "MERGED\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "MERGED\n")
     assert_false(@fs.exists(entry.worker_root))
   })
 }
@@ -274,7 +274,7 @@ async test "continue stages the resolved conflict set, but not while markers rem
       conflicted.entry,
     )
     assert_eq(continued.result, "integrated")
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "MERGED\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "MERGED\n")
   })
 }
 
@@ -312,7 +312,7 @@ async test "continue stages an add/add conflict, and Markdown underlines are not
       conflicted.entry,
     )
     assert_eq(continued.result, "integrated")
-    assert_eq(@fs.read_file("\{repo}/lib/notes.md").text(), "Notes\n=======\n")
+    assert_eq(@fs.read_text("\{repo}/lib/notes.md"), "Notes\n=======\n")
   })
 }
 
@@ -390,7 +390,7 @@ async test "integrate refuses a dirty tracked origin; abort restores state" {
     )
     assert_eq(aborted.result, "aborted")
     assert_true(aborted.entry.state is Committed)
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ORIGIN\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "ORIGIN\n")
     // The branch and worktree survive an abort for a later retry.
     assert_true(@fs.exists(provisioned.entry.worker_root))
     // Discard releases everything.
@@ -452,7 +452,7 @@ async test "linked worktree provisions and integrates into itself" {
     let wrong_target = @agent_subtask.integrate(main_geometry, captured.entry)
     assert_eq(wrong_target.result, "refused")
     assert_true(wrong_target.detail[0].contains("different worktree"))
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "alpha\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "alpha\n")
     assert_true(@fs.exists(provisioned.entry.worker_root))
 
     let integrated = @agent_subtask.integrate(
@@ -460,8 +460,8 @@ async test "linked worktree provisions and integrates into itself" {
       captured.entry,
     )
     assert_eq(integrated.result, "integrated")
-    assert_eq(@fs.read_file("\{linked_root}/lib/a.txt").text(), "LINKED\n")
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "alpha\n")
+    assert_eq(@fs.read_text("\{linked_root}/lib/a.txt"), "LINKED\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "alpha\n")
     assert_false(@fs.exists(provisioned.entry.worker_root))
   })
 }
@@ -523,8 +523,8 @@ async test "capture is re-entrant: resumed work stacks on the same branch" {
       second.entry,
     )
     assert_eq(integrated.result, "integrated")
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
-    assert_eq(@fs.read_file("\{repo}/lib/c.txt").text(), "GAMMA\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "ALPHA\n")
+    assert_eq(@fs.read_text("\{repo}/lib/c.txt"), "GAMMA\n")
   })
 }
 
@@ -601,8 +601,8 @@ async test "captured defects repair through resume and re-capture" {
       repaired.entry,
     )
     assert_eq(integrated.result, "integrated")
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
-    assert_eq(@fs.read_file("\{repo}/other/b.txt").text(), "beta\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "ALPHA\n")
+    assert_eq(@fs.read_text("\{repo}/other/b.txt"), "beta\n")
   })
 }
 

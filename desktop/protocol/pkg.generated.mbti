@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 5
+pub const HostProtocolRevision : Int32 = 6
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -439,6 +439,22 @@ pub impl @json.FromJson for BrowserPickReply
 pub impl @json.ToJson for BrowserPickReply
 
 #derive(Eq, @debug.Debug)
+pub(all) struct BrowserPreviewPayload {
+  id : Int32
+  path : String
+  root : String?
+  dark : Bool
+  session : String?
+}
+pub fn BrowserPreviewPayload::equal(Self, Self) -> Bool
+pub fn BrowserPreviewPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserPreviewPayload::not_equal(Self, Self) -> Bool
+pub fn BrowserPreviewPayload::to_json(Self) -> @json.Json
+pub fn BrowserPreviewPayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for BrowserPreviewPayload
+pub impl @json.ToJson for BrowserPreviewPayload
+
+#derive(Eq, @debug.Debug)
 pub(all) struct BrowserThemePayload {
   id : Int32
   dark : Bool
@@ -655,10 +671,12 @@ pub impl @json.ToJson for CloudHistoryCacheEntry
 pub(all) struct CloudHistoryCachePage {
   session : SessionDocument
   messages : Array[@json.Json]
+  prediction : @openseek_protocol.PredictionRecord?
   offset : Int32?
   etag : String?
 }
 pub fn CloudHistoryCachePage::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCachePage::label(Self, String) -> String
 pub fn CloudHistoryCachePage::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCachePage
 pub impl @json.ToJson for CloudHistoryCachePage
@@ -1348,7 +1366,7 @@ pub impl @json.ToJson for GitChange
 #derive(Eq, @debug.Debug)
 pub(all) struct GitChangesPayload {
   session : String
-  workspace : String?
+  workspace : String
 }
 pub fn GitChangesPayload::equal(Self, Self) -> Bool
 pub fn GitChangesPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1465,7 +1483,7 @@ pub impl @json.ToJson for GitHistoryCommit
 #derive(Eq, @debug.Debug)
 pub(all) struct GitHistoryPayload {
   session : String
-  workspace : String?
+  workspace : String
   snapshot : GitHistorySnapshot?
   skip : Int32
   limit : Int32

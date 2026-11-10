@@ -21,6 +21,13 @@ async fn control(
       { task_id, action: "edit", id, content: Some(content), }
     QueueWithdraw(id~) => { task_id, action: "withdraw", id, content: None, }
     QueueSteer(id~) => { task_id, action: "steer", id, content: None, }
+    Approve(id~, allow~) =>
+      return send_command(
+        token,
+        session,
+        @protocol.approval(id, allow~),
+        task_id~,
+      )
   }
   let (response, data) = @http.request(
     CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/queue",

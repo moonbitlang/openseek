@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/pattern_repair"
+
+import {
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn repair(String, @moonbit.MoonxProvider, @engine.PatternRepairEnvironment, @protocol.PatternRepairPayload) -> @protocol.PatternRepairReply
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

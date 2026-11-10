@@ -17,6 +17,15 @@ pub fn ToolchainUnavailable::to_string(Self) -> String
 pub impl Show for ToolchainUnavailable
 
 // Types and methods
+type MoonxProvider
+pub fn MoonxProvider::MoonxProvider(engine~ : String, runtime_dir~ : @pathx.Path?, source~ : ToolchainSource) -> Self
+pub async fn MoonxProvider::resolve(Self, env? : Map[String, String]) -> ResolvedMoonxProvider
+
+pub struct ResolvedMoonxProvider {
+  command : String
+  environment : Map[String, String]
+}
+
 pub struct ResolvedToolchain {
   bin_dir : @pathx.Absolute
   moon : @pathx.Absolute

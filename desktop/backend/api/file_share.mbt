@@ -10,7 +10,7 @@ async fn ApiState::share_file(
     Err(reply) => return reply
   }
   try {
-    let (name, bytes) = @host.capture_file(payload.source)
+    let (name, bytes) = @files.capture(payload.source)
     let token = match credential {
       Account(account) => account.token
       Grant(token) => token
@@ -22,7 +22,6 @@ async fn ApiState::share_file(
     ).publish(server_url~, token~)
     credential.settle(self, reply)
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => Failed(message="Could not share the file: \{error}")
   }
 }

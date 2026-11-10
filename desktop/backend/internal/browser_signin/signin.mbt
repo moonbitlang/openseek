@@ -70,7 +70,7 @@ const AccountStorageKey : String = "seekmoon.account.v1"
 /// The S256 challenge (RFC 7636): the unpadded base64url of the verifier's
 /// SHA-256. Core's encoder speaks only the standard alphabet, so its two
 /// URL-unsafe characters are swapped after the fact.
-fn pkce_challenge(verifier : String) -> String {
+pub fn pkce_challenge(verifier : String) -> String {
   let digest = Bytes::from_array(@crypto.sha256(@utf8.encode(verifier)))
   let standard = @base64.encode(digest, padding=false)
   let builder = StringBuilder()
@@ -114,15 +114,14 @@ fn return_path(requested : String?) -> String {
 /// Trade the one-time code for the account, returned as the relay's JSON.
 async fn exchange(relay : String, code~ : String, verifier~ : String) -> String {
   let request : Json = { "code": code, "code_verifier": verifier }
-  let (response, body) = @http.post(
+  let (response, text) = @http.post_text(
     "\{relay}/v2/auth/account/exchange",
-    request,
+    request.stringify(),
     headers={ "Content-Type": "application/json" },
   )
   guard response.code == 200 else {
     fail("the relay answered HTTP \{response.code}")
   }
-  let text = body.text()
   guard @json.parse(text)
     is { "token": String(token), "user": { "user_id": String(_), .. }, .. } &&
     !token.is_empty() else {

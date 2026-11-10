@@ -1,5 +1,37 @@
-/* One surface for every persistent row above the draft. Content-specific
-   classes retain their behavior; geometry and tone belong to this column. */
+.composer-goal.hidden {
+  display: none;
+}
+.composer-goal-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-goal-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.composer-goal-action:hover {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+.composer-goal.editing .composer-goal-action {
+  color: var(--color-accent);
+}
+.composer-goal.editing .composer-goal-action:hover {
+  background: var(--color-bg-surface);
+}
+
 .composer-context {
   display: grid;
   width: 100%;
@@ -8,8 +40,6 @@
   margin-inline: auto;
 }
 
-/* The column is empty unless a state renders something, so this spacing
-   appears exactly when a row does. */
 .composer-context:not(:empty) {
   gap: var(--space-4);
   margin-bottom: var(--space-5);
@@ -69,9 +99,28 @@
   color: inherit;
 }
 
+.subrun-mark {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+  animation: lane-pulse 1.6s ease-in-out infinite;
+}
+
+.subrun-detail {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
 .composer-context .subrun-detail {
   flex: 1;
   min-width: 0;
+}
+
+.subrun-name {
+  color: var(--color-text-secondary);
 }
 
 .composer-context .subrun-name {
@@ -83,6 +132,17 @@
   font-weight: 500;
 }
 
+.subrun-step {
+  flex: 0 0 auto;
+}
+
+.subrun-activity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .composer-context :is(.pending-steer-state, .queued-input-state) {
   font-size: var(--font-size-sm);
 }
@@ -90,7 +150,7 @@
 .composer-context :is(.composer-notice-btn, .composer-approval-action,
   .composer-goal-action, .codex-request-action) {
   min-height: 2rem;
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-4);
   background: var(--color-bg-surface);
@@ -107,7 +167,7 @@
 
 .button.composer-context-action {
   --button-color: var(--color-text-primary);
-  --button-border-color: var(--color-border-subtle);
+  --button-border-color: var(--color-border);
   --button-background: var(--color-bg-surface);
   --button-hover-background: var(--color-hover-subtle);
   box-shadow: 0 1px 2px #0000000a;
@@ -168,7 +228,7 @@
   display: grid;
   gap: var(--space-5);
   min-width: 0;
-  padding: 0 1rem 1rem;
+  padding: 0 2rem 2rem;
   max-height: 360px;
   overflow: auto;
   overscroll-behavior: contain;
@@ -237,7 +297,6 @@
   }
 }
 
-/* Information requests are independent from permission approval notices. */
 .user-question-region {
   flex: 0 0 auto;
   /* WebKit can collapse a stretched, scrollable auto grid row to zero.
@@ -351,7 +410,7 @@
   flex-shrink: 0;
   color: var(--color-text-muted);
   background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
 }
@@ -380,8 +439,7 @@
   min-width: 0;
   gap: var(--space-4);
   padding: 0 var(--space-4);
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
 }
@@ -394,7 +452,6 @@
   field-sizing: content;
   min-height: 2.5rem;
   max-height: 120px;
-  background: transparent;
   border: 0;
   border-radius: var(--radius-sm);
   line-height: var(--line-height-normal);

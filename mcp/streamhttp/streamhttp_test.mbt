@@ -35,9 +35,7 @@ struct SeenHeaders {
 /// `Mcp-Session-Id` header; notifications answered 202; `tools/list` answered as
 /// an SSE stream (one notification event, then the reply). Returns the endpoint
 /// URL and the headers seen on the `tools/list` request.
-async fn mock_mcp_endpoint(
-  group : @async.TaskGroup[Unit],
-) -> (String, SeenHeaders)? {
+async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
   guard bind_test_server("local TCP bind unavailable; skipping http mcp test")
     is Some(server) else {
     return None
@@ -52,8 +50,8 @@ async fn mock_mcp_endpoint(
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
-      (request, body, conn) => {
-        let text = body.read_all().text()
+      (request, conn) => {
+        let text = conn.text.read_all()
         if request.meth is Delete {
           for key, value in request.headers {
             if key == "mcp-session-id" {
@@ -83,7 +81,7 @@ async fn mock_mcp_endpoint(
               "Content-Type": "application/json",
               "Mcp-Session-Id": "session-123",
             })
-            conn.write(reply.stringify())
+            conn.write_string(reply.stringify())
           }
           { "method": "tools/list", "id": id, .. } => {
             for key, value in request.headers {
@@ -101,7 +99,7 @@ async fn mock_mcp_endpoint(
             // A notification event before the reply, framed with lone CRs (the
             // third terminator SSE permits), then the reply as a CRLF-framed
             // multi-line data event.
-            conn.write(
+            conn.write_string(
               "event: message\rdata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\r\r",
             )
             conn.flush()
@@ -109,7 +107,7 @@ async fn mock_mcp_endpoint(
             // which JSON tolerates only between tokens. The reply is spelled
             // out here rather than built and stringified, because the split is
             // the point of the test.
-            conn.write(
+            conn.write_string(
               "data: {\"jsonrpc\":\"2.0\",\"id\":\{id.stringify()},\r\ndata: \"result\":{\"tools\":[{\"name\":\"fetch\",\"description\":\"Fetch a URL\",\"inputSchema\":{\"type\":\"object\"}}]}}\r\n\r\n",
             )
             conn.flush()
@@ -203,8 +201,8 @@ async test "a server ping mid-stream is answered while the stream is open" {
     let pongs : @async.Queue[Json] = Queue(kind=Unbounded)
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch { _ => null }
+        (_request, conn) => {
+          let message = @json.parse(conn.text.read_all()) catch { _ => null }
           match message {
             { "method": "server/discover", .. } =>
               conn.send_response(400, "Bad Request")
@@ -217,7 +215,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
               // Ask the client for a ping mid-stream and WAIT for its pong
               // before answering the request — the old inline-SSE design
               // deadlocked exactly here.
-              conn.write(
+              conn.write_string(
                 "data: {\"jsonrpc\":\"2.0\",\"id\":\"srv-ping\",\"method\":\"ping\"}\n\n",
               )
               conn.flush()
@@ -228,7 +226,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
                 "id": id,
                 "result": { "tools": [{ "name": "late" }] },
               }
-              conn.write("data: \{reply.stringify()}\n\n")
+              conn.write_string("data: \{reply.stringify()}\n\n")
             }
             // The pong (a response, no method) — route it to the stream handler.
             { "id": "srv-ping", .. } => {
@@ -265,8 +263,8 @@ async test "an http error fails the request fast" {
     }
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch { _ => null }
+        (_request, conn) => {
+          let message = @json.parse(conn.text.read_all()) catch { _ => null }
           match message {
             { "method": "server/discover", .. } =>
               conn.send_response(400, "Bad Request")
@@ -276,7 +274,7 @@ async test "an http error fails the request fast" {
               conn.send_response(500, "Internal Server Error", extra_headers={
                 "Content-Type": "text/plain",
               })
-              conn.write("boom")
+              conn.write_string("boom")
             }
             _ => conn.send_response(202, "Accepted")
           }
@@ -319,13 +317,13 @@ async test "an expired legacy session fails the request and ends the connection"
     let mut deleted = false
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
-        (request, body, conn) => {
+        (request, conn) => {
           if request.meth is Delete {
             deleted = true
             conn.send_response(200, "OK")
             return
           }
-          let message = @json.parse(body.read_all().text()) catch { _ => null }
+          let message = @json.parse(conn.text.read_all()) catch { _ => null }
           match message {
             { "method": "server/discover", .. } =>
               conn.send_response(400, "Bad Request")
@@ -339,7 +337,7 @@ async test "an expired legacy session fails the request and ends the connection"
                 "Content-Type": "application/json",
                 "Mcp-Session-Id": "session-123",
               })
-              conn.write(reply.stringify())
+              conn.write_string(reply.stringify())
             }
             { "method": "tools/list", .. } =>
               conn.send_response(404, "Not Found")
@@ -391,8 +389,8 @@ async test "tools/list waits for the initialized notification to complete" {
     let mut list_saw_initialized : Bool = false
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch { _ => null }
+        (_request, conn) => {
+          let message = @json.parse(conn.text.read_all()) catch { _ => null }
           match message {
             { "method": "server/discover", .. } =>
               conn.send_response(400, "Bad Request")
@@ -415,7 +413,7 @@ async test "tools/list waits for the initialized notification to complete" {
               conn.send_response(200, "OK", extra_headers={
                 "Content-Type": "application/json",
               })
-              conn.write(reply.stringify())
+              conn.write_string(reply.stringify())
             }
             _ => conn.send_response(202, "Accepted")
           }
@@ -439,7 +437,7 @@ async test "tools/list waits for the initialized notification to complete" {
 /// fails the test. Every test but the unreachable-endpoint one wants exactly
 /// this.
 async fn connect_or_fail(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   url : String,
   headers~ : Map[String, String] = Map([]),
 ) -> @streamhttp.HttpConnection {
@@ -465,5 +463,5 @@ async fn answer_initialize(conn : @http.ServerConnection, id : Json) -> Unit {
   conn.send_response(200, "OK", extra_headers={
     "Content-Type": "application/json",
   })
-  conn.write(reply.stringify())
+  conn.write_string(reply.stringify())
 }

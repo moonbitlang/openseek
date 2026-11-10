@@ -1411,7 +1411,7 @@ test "Git history and commit-change protocol round-trip immutable identities" {
   assert_eq(decoded, history)
   let payload : @protocol.GitHistoryPayload = {
     session: "s1",
-    workspace: Some("/workspace"),
+    workspace: "/workspace",
     snapshot: Some(snapshot),
     skip: 50,
     limit: 50,
@@ -1451,13 +1451,18 @@ test "Git history and commit-change protocol round-trip immutable identities" {
 test "Git history codecs ignore unknown fields and omit absent optionals" {
   let payload : @protocol.GitHistoryPayload = @json.from_json({
     "session": "s1",
-    "workspace": null,
+    "workspace": "/workspace",
     "snapshot": null,
     "skip": 0,
     "limit": 0,
     "future_payload": true,
   })
-  @debug.assert_eq(payload.to_json(), { "session": "s1", "skip": 0, "limit": 0 })
+  @debug.assert_eq(payload.to_json(), {
+    "session": "s1",
+    "workspace": "/workspace",
+    "skip": 0,
+    "limit": 0,
+  })
   let commit_payload : @protocol.GitCommitChangesPayload = @json.from_json({
     "session": "s1",
     "workspace": null,
@@ -1542,13 +1547,14 @@ test "Git history codecs ignore unknown fields and omit absent optionals" {
 
 ///|
 test "Git history codecs reject missing, null, and malformed required data" {
-  let missing_session = refused(() => {
+  let missing_workspace = refused(() => {
     let _ : @protocol.GitHistoryPayload = @json.from_json({
+      "session": "s1",
       "skip": 0,
       "limit": 50,
     })
   })
-  assert_true(missing_session)
+  assert_true(missing_workspace)
   let null_commit = refused(() => {
     let _ : @protocol.GitCommitChangesPayload = @json.from_json({
       "session": "s1",

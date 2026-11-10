@@ -1,0 +1,44 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/files"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub const MaxEditorFileBytes : Int32 = 1048576
+
+pub const MaxOfficeFileBytes : Int32 = 20971520
+
+pub async fn browse(@protocol.BrowseDirectoryPayload) -> @protocol.BrowseDirectoryReply
+
+pub async fn capture(@protocol.ReadFilePayload) -> (String, Bytes)
+
+pub async fn create_directory(@protocol.CreateDirectoryPayload) -> @protocol.BrowseDirectoryReply
+
+pub async fn import_attachment(@protocol.PrepareAttachmentPayload) -> @protocol.ImportAttachmentReply
+
+pub async fn materialize_semantic_selection(@protocol.MaterializeSemanticSelectionPayload) -> @protocol.MaterializeSemanticSelectionReply
+
+pub async fn prepare_attachment(@protocol.PrepareAttachmentPayload) -> @protocol.PrepareAttachmentReply
+
+pub async fn read_directory(@protocol.ReadDirPayload) -> @protocol.ReadDirReply
+
+pub async fn read_file(@protocol.ReadFilePayload) -> @protocol.ReadFileReply
+
+pub async fn stage_attachments(@protocol.StageAttachmentsPayload) -> @protocol.EmptyReply
+
+pub async fn stat_files(@protocol.StatFilesPayload) -> @protocol.StatFilesReply
+
+// Errors
+
+// Types and methods
+type Watcher
+pub fn Watcher::Watcher() -> Self
+pub async fn Watcher::run(Self, async (@protocol.Notification) -> Unit) -> Unit
+pub async fn Watcher::unwatch(Self) -> Unit
+pub async fn Watcher::watch(Self, @protocol.WatchWorkspacePayload) -> Unit
+
+// Type aliases
+
+// Traits

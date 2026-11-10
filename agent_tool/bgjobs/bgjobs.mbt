@@ -82,7 +82,7 @@ struct BgJobRuntime {
     String?,
     Int32,
     String?,
-    &@process.ProcessInput?,
+    @process.ProcessInput?,
     @process.CancellationHandler?,
     Map[String, String]?,
   ) -> @shell_exec.ShellExecution
@@ -97,7 +97,7 @@ struct BgJobRuntime {
     String?,
     Int32,
     String?,
-    &@process.ProcessInput?,
+    @process.ProcessInput?,
   ) -> @shell_exec.ShellExecution
   // Spawn a per-job watcher task on that same group.
   spawn_watcher : (async () -> Unit) -> Unit
@@ -122,7 +122,7 @@ struct BgJobRuntime {
   generation : String
   publish_lock : @async.Mutex
   on_job_event : ((@protocol.JobEventKind, @protocol.JobRecord) -> Unit)?
-  settled : @async.CondVar
+  settled : @async.Cond
   mut last_id_ms : UInt64?
   // Separate counter for the spill files of detachable foreground executions
   // (which are not registered until adopted), so their `fg-<n>.out` files never
@@ -233,8 +233,8 @@ pub struct BgJobSnapshot {
 /// `hard_output_cap` bounds any single job's *full* retained output (characters);
 /// the watchdog kills a job that floods past it — production uses the default,
 /// tests shrink it to exercise the watchdog cheaply.
-pub fn[X] BgJobRuntime::BgJobRuntime(
-  scope : @agent_runtime.AgentTaskScope[X],
+pub fn BgJobRuntime::BgJobRuntime(
+  scope : @agent_runtime.AgentTaskScope,
   spill_dir? : String,
   persistent_logs~ : Bool = false,
   prepare_output_dir? : async () -> String,
@@ -330,7 +330,7 @@ pub async fn BgJobRuntime::spawn_foreground_retained(
   args : Array[String],
   cwd : String?,
   max_output_chars : Int32,
-  stdin? : &@process.ProcessInput,
+  stdin? : @process.ProcessInput,
 ) -> @shell_exec.ShellExecution {
   self.prepare_output()
   let spill_path = self.spill_dir.map(dir => {
@@ -359,7 +359,7 @@ pub async fn BgJobRuntime::start(
   read_only_review~ : Bool = false,
   output_rewrites~ : Array[(String, String)] = [],
   moonrun_policy_active~ : Bool = false,
-  stdin? : &@process.ProcessInput,
+  stdin? : @process.ProcessInput,
   cancel_handler? : @process.CancellationHandler,
   extra_env? : Map[String, String],
   on_end? : async (JobEnd) -> Unit,
@@ -805,7 +805,7 @@ async test "a large-output job spills; snapshot previews, read_output is full" {
 #cfg(not(platform="windows"))
 async test "adopt registers an already-running execution as a job" {
   @async.with_task_group(group => {
-    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let scope : @agent_runtime.AgentTaskScope = AgentTaskScope(group)
     let rt = BgJobRuntime::BgJobRuntime(scope)
     let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
       "30",
@@ -823,7 +823,7 @@ async test "adopt registers an already-running execution as a job" {
 #cfg(not(platform="windows"))
 async test "an adopted job runs terminal cleanup once when stopped" {
   @async.with_task_group(group => {
-    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let scope : @agent_runtime.AgentTaskScope = AgentTaskScope(group)
     let rt = BgJobRuntime::BgJobRuntime(scope)
     let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
       "30",

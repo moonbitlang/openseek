@@ -195,12 +195,12 @@ async test "analyze run writes reports to caller output directory" {
       stale_dir + "/workspaces/01/.openseek/sessions/trial-01",
       recursive=true,
     )
-    @fs.write_file(
+    @fs.write_text(
       actual_events_path,
       assistant_events("trial-01", "I used @string.parse_int"),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       stale_events_path,
       assistant_events("trial-01", "I only used moon test"),
       create_mode=CreateOrTruncate,
@@ -235,7 +235,7 @@ async test "analyze run writes reports to caller output directory" {
           },
         ] : Json),
     }
-    @fs.write_file(
+    @fs.write_text(
       manifest_path(out_dir),
       manifest_json.stringify(),
       create_mode=CreateOrTruncate,

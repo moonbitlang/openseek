@@ -161,7 +161,7 @@ fn State::fence_archived_history(
   // A prompt being prepared or submitted still owns its admission request.
   guard self.conversations.get(id) is Some(conversation) &&
     !conversation.sending &&
-    conversation.history_disk_request != Some(conversation.request) else {
+    conversation.history_cache_request != Some(conversation.request) else {
     return (self, @cmd.none)
   }
   // Fence pre-archive reads even after a later restore. Replace an unfinished
@@ -251,6 +251,38 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
   match edit {
     Rename(_) => !session.archived
     Archive(archived) => session.archived != archived && self.can_delete(id)
+    SetApproval(mode) =>
+      session.approval != mode && self.can_choose_approval(id)
+  }
+}
+
+///|
+/// A running engine keeps the policy it started with, so the server refuses
+/// a change until the turn ends. A session the server has not created yet
+/// has no mode to change, and a save in flight holds the picker.
+pub fn State::can_choose_approval(self : State, id : String) -> Bool {
+  !self.retired.contains(id) &&
+  !self.deletions.contains(id) &&
+  !self.metadata_saves.contains(id) &&
+  self.sessions.any(session => {
+    session.id == id && !session.archived && !session.generating
+  }) &&
+  self.conversations
+  .get(id)
+  .map_or(true, conversation => {
+    !conversation.sending &&
+    conversation.outgoing is None &&
+    !conversation.generating
+  })
+}
+
+///|
+/// The mode the session's next engine starts with. Before the server creates
+/// the session, and on servers without approval modes, engines ask.
+pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+  match self.sessions.iter().find_first(session => session.id == id) {
+    Some(session) => session.approval
+    None => ApprovalAsk
   }
 }
 
@@ -271,7 +303,10 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   self.conversations.get(id) is Some(conversation) &&
   self.can_compose(id) &&
   !self.deletions.contains(id) &&
-  !(self.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
+  // The next turn's engine starts with the saved approval mode, never one
+  // still on its way to the server.
+  !(self.metadata_saves.get(id)
+  is Some({ edit: Archive(true) | SetApproval(_), .. })) &&
   !conversation.loading &&
   !conversation.sending &&
   conversation.outgoing is None &&
@@ -315,7 +350,6 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   token? : String,
   navigation~ : Int32,
-  desktop_history~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
   // A boundary observed while this read was in flight may be missing from it.
   // Settle the read first so its records are not discarded, then read again.
@@ -344,9 +378,7 @@ pub fn update(
   }
   let (next, command, select) = match msg {
     AccountChanged(user_id) => {
-      let cache_catalog = desktop_history &&
-        user_id is Some(_) &&
-        token is Some(_)
+      let cache_catalog = user_id is Some(_) && token is Some(_)
       let next = {
         ..State::empty(),
         user_id,
@@ -357,7 +389,7 @@ pub fn update(
       let (next, command) = next.list(token, emit)
       let catalog = if cache_catalog && token is Some(token) {
         run(emit, () => {
-          let entries = match history_cache(token, List) {
+          let entries = match next.history_cache(token, List) {
             Entries(entries) => entries
             _ => []
           }
@@ -366,7 +398,11 @@ pub fn update(
       } else {
         @cmd.none
       }
-      (next, @cmd.batch([command, catalog]), None)
+      (
+        next,
+        @cmd.batch([next.cache_account_changed(state.user_id), command, catalog]),
+        None,
+      )
     }
     Refresh => {
       guard !(state.list_status is Retrying) else {
@@ -438,6 +474,7 @@ pub fn update(
             updated_at: None,
             generating: false,
             archived: false,
+            approval: ApprovalAsk,
           })
         }
       })
@@ -505,6 +542,7 @@ pub fn update(
           updated_at: None,
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -613,6 +651,7 @@ pub fn update(
                 archived,
                 generating: session.generating && !archived,
               }
+            SetApproval(approval) => { ..session, approval, }
           }
         }
       })
@@ -639,6 +678,19 @@ pub fn update(
       let metadata_saves = state.metadata_saves.copy()
       metadata_saves.remove(id)
       let (next, command) = { ..state, metadata_saves, }.failed(error)
+      // A turn that began before the save reached the server holds the mode.
+      if save.edit is SetApproval(_) && error is Http(409) {
+        return (
+          {
+            ..next,
+            notice: Some(
+              "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
+            ),
+          },
+          command,
+          None,
+        )
+      }
       (next, command, None)
     }
     Delete(id) => {
@@ -667,11 +719,7 @@ pub fn update(
       guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
         return (state, @cmd.none, None)
       }
-      (
-        state.forget(id),
-        cache_mutation(desktop_history, token, Remove(session=id)),
-        None,
-      )
+      (state.forget(id), state.cache_mutation(token, Remove(session=id)), None)
     }
     DeleteFailed(epoch, id, request, error) => {
       guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
@@ -680,7 +728,7 @@ pub fn update(
       if error is Http(404) {
         return (
           state.forget(id),
-          cache_mutation(desktop_history, token, Remove(session=id)),
+          state.cache_mutation(token, Remove(session=id)),
           None,
         )
       }
@@ -941,36 +989,37 @@ pub fn update(
           notice: None,
         })
       }
-      let (next, command) = if desktop_history &&
-        token is Some(token) &&
+      let (next, command) = if token is Some(token) &&
         !conversation.history_cached &&
         !conversation.history_reading &&
-        conversation.history_disk_request is None {
-        next.read_disk_history(id, token, emit)
+        conversation.history_cache_request is None {
+        next.read_persistent_history(id, token, emit)
       } else {
         next.load(id, token, emit, reuse=true)
       }
       (next, command, None)
     }
-    DiskHistoryLoaded(epoch, id, request, history) => {
+    CachedHistoryLoaded(epoch, id, request, history) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.history_disk_request == Some(request) else {
+        conversation.history_cache_request == Some(request) else {
         return (state, @cmd.none, None)
       }
-      let awaiting_disk = conversation.request == request &&
+      let awaiting_cache = conversation.request == request &&
         conversation.history_reading
-      // A boundary observed during the disk read is covered by the network
+      // A boundary observed during the cache read is covered by the network
       // read that follows it, which starts after that boundary.
       let conversation = {
         ..conversation,
-        history_disk_request: None,
-        history_reading: conversation.history_reading && !awaiting_disk,
+        history_cache_request: None,
+        history_reading: conversation.history_reading && !awaiting_cache,
       }
       let next = state.replace(
         id,
         if history is Some(history) && !conversation.history_cached {
-          let cached = conversation.with_latest_page(history)
+          let cached = conversation
+            .with_latest_page(history)
+            .with_prediction(history.prediction)
           {
             ..cached.restore_goal(cached.document),
             history_cached: true,
@@ -982,7 +1031,7 @@ pub fn update(
           conversation
         },
       )
-      if !awaiting_disk {
+      if !awaiting_cache {
         return (next, @cmd.none, None)
       }
       let (next, command) = next.load(id, token, emit)
@@ -1127,7 +1176,7 @@ pub fn update(
         history_cached: true,
         history_etag: history.etag,
         history_reading: false,
-        history_disk_request: None,
+        history_cache_request: None,
         events: conversation.events.filter(event => {
           !conversation.records.any(record => {
             record.task_id == event.task_id &&
@@ -1220,15 +1269,10 @@ pub fn update(
         @cmd.batch([
           refresh,
           turn,
-          if desktop_history {
-            cache_mutation(
-              true,
-              token,
-              Write(session=id, page=history.cache_page()),
-            )
-          } else {
-            @cmd.none
-          },
+          state.cache_mutation(
+            token,
+            Write(session=id, page=history.cache_page()),
+          ),
         ]),
         None,
       )
@@ -1254,7 +1298,7 @@ pub fn update(
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
-        history_disk_request: None,
+        history_cache_request: None,
         loading: false,
         history_required: false,
         watch_status: if observing && conversation.last_seq is Some(_) {

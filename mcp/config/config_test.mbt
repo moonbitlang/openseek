@@ -50,7 +50,7 @@ test "decode parses an http server with headers" {
       },
     },
   })
-  guard servers[0] is Http(name~, url~, headers~) else {
+  guard servers[0] is Http(name~, url~, headers~, ..) else {
     fail("expected an http server")
   }
   assert_eq(name, "remote")
@@ -140,7 +140,7 @@ test "later configurations replace whole servers before connection" {
   let merged = @config.merge([first, [], second])
   assert_eq(merged.length(), 2)
   assert_true(
-    merged[0] is Http(name="seekmoon", url="http://localhost/mcp", headers~) &&
+    merged[0] is Http(name="seekmoon", url="http://localhost/mcp", headers~, ..) &&
     headers.get("X-SeekMoon-Tool-Groups") == Some("browser"),
   )
   assert_true(merged[1] is Stdio(name="extra", ..))
@@ -158,7 +158,7 @@ test "a server's target identifies it without its secrets" {
   )
   assert_eq(stdio.target(), "npx")
   fn http(url : String) -> String {
-    @config.McpServer::Http(name="remote", url~, headers={}).target()
+    @config.McpServer::Http(name="remote", url~, headers={}, headers_helpers=[]).target()
   }
 
   assert_eq(

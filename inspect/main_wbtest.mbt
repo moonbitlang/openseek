@@ -277,22 +277,22 @@ async test "session listing uses jsonl files and ignores junk entries" {
     )
     let sessions = "\{root}/.openseek/sessions"
     @fs.mkdir(sessions, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{sessions}/openseek_session-flat-a.jsonl",
-      @fs.read_file(source_store.session_file(SessionId("flat-a"))).text(),
+      @fs.read_text(source_store.session_file(SessionId("flat-a"))),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{sessions}/openseek_session-flat-b.jsonl",
-      @fs.read_file(source_store.session_file(SessionId("flat-b"))).text(),
+      @fs.read_text(source_store.session_file(SessionId("flat-b"))),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{sessions}/openseek_session-image-only.jsonl",
-      @fs.read_file(source_store.session_file(SessionId("image-only"))).text(),
+      @fs.read_text(source_store.session_file(SessionId("image-only"))),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{sessions}/.DS_Store",
       "not a session",
       create_mode=CreateOrTruncate,
@@ -326,9 +326,9 @@ async test "session_catalog serves a direct directory of copied jsonl files" {
     source_store.create(Session(SessionId("copied"), system_prompt=""))
     let copied_dir = "\{root}/copied"
     @fs.mkdir(copied_dir, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{copied_dir}/openseek_session-copied.jsonl",
-      @fs.read_file(source_store.session_file(SessionId("copied"))).text(),
+      @fs.read_text(source_store.session_file(SessionId("copied"))),
       create_mode=CreateOrTruncate,
     )
     let catalog = session_catalog(copied_dir, [], ".openseek")
@@ -350,9 +350,9 @@ async test "session_catalog serves marker-named copied jsonl directories" {
     source_store.create(Session(SessionId("marker-copy"), system_prompt=""))
     let copied_dir = "\{root}/.openseek"
     @fs.mkdir(copied_dir, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{copied_dir}/openseek_session-marker-copy.jsonl",
-      @fs.read_file(source_store.session_file(SessionId("marker-copy"))).text(),
+      @fs.read_text(source_store.session_file(SessionId("marker-copy"))),
       create_mode=CreateOrTruncate,
     )
     let catalog = session_catalog(copied_dir, [], ".openseek")
@@ -537,16 +537,16 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
       assert_eq(t2, token)
       let base = "http://127.0.0.1:\{port}"
       // /api/info is open, and names the sessions served.
-      let (info, body) = @http.get("\{base}/api/info")
+      let (info, body) = @http.get_text("\{base}/api/info")
       assert_eq(info.code, 200)
       assert_true(
-        @json.parse(body.text()) is { "identity": String(served), .. } &&
+        @json.parse(body) is { "identity": String(served), .. } &&
         served == identity,
       )
       // Everything else needs the token, as ?t= or the cookie it sets.
-      let (denied, _) = @http.get("\{base}/api/sessions")
+      let (denied, _) = @http.get_text("\{base}/api/sessions")
       assert_eq(denied.code, 403)
-      let (allowed, _) = @http.get("\{base}/api/sessions?t=\{token}")
+      let (allowed, _) = @http.get_text("\{base}/api/sessions?t=\{token}")
       assert_eq(allowed.code, 200)
       // Opening with ?t= leaves the token in an HttpOnly cookie for the page.
       assert_true(
@@ -559,7 +559,7 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
           cookie.path == Some("/")
         }),
       )
-      let (by_cookie, _) = @http.get("\{base}/api/sessions", headers={
+      let (by_cookie, _) = @http.get_text("\{base}/api/sessions", headers={
         "Cookie": "openseek_inspect_\{port}=\{token}",
       })
       assert_eq(by_cookie.code, 200)
@@ -569,9 +569,11 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
       let tcp = @socket.Tcp::connect(@socket.Addr::parse("127.0.0.1:\{port}"))
       defer tcp.close()
       tcp.write(
-        "GET /api/sessions?t=\{token} HTTP/1.1\r\nHost: evil.example:\{port}\r\nConnection: close\r\n\r\n",
+        @utf8.encode(
+          "GET /api/sessions?t=\{token} HTTP/1.1\r\nHost: evil.example:\{port}\r\nConnection: close\r\n\r\n",
+        ),
       )
-      assert_eq(tcp.read_until("\r\n"), Some("HTTP/1.1 403 Forbidden"))
+      assert_eq(tcp.read_until(b"\r\n"), Some(b"HTTP/1.1 403 Forbidden"))
       // Other sessions never take over a busy port.
       let other = "\{root}/other/.openseek"
       @fs.mkdir(other, recursive=true, allow_exist=true)
@@ -586,7 +588,7 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
         _ => Some(())
       }
       assert_true(taken is None)
-      group.return_immediately(())
+      group.return_immediately()
     })
   })
 }
@@ -627,7 +629,7 @@ async test "inspect_version matches moon.mod" {
   // Tests run from the module or the workspace root, depending on the build.
   let mut manifest = ""
   for path in ["moon.mod", "inspect/moon.mod"] {
-    let text = @fs.read_file(path).text() catch { _ => continue }
+    let text = @fs.read_text(path) catch { _ => continue }
     if text.contains("name = \"moonbitlang/inspect\"") {
       manifest = text
       break

@@ -33,13 +33,14 @@ async fn revoke_device(
   device : DeviceRegistration,
 ) -> Unit {
   guard @async.with_timeout_opt(RevokeTimeoutMs, () => {
-      let client = @http.Client(server_url)
-      defer client.close()
-      client.request(Delete, "/v2/devices/\{device.id}", extra_headers={
-        "Authorization": "Bearer \{device.token}",
-      })
-      let response = client.end_request()
-      client.skip_response_body()
+      let conn = @http.request(
+        Delete,
+        "\{server_url}/v2/devices/\{device.id}",
+        headers={ "Authorization": "Bearer \{device.token}" },
+      )
+      defer conn.close()
+      let response = conn.end_request()
+      conn.skip_response_body()
       response.code
     })
     is Some(code) else {
@@ -62,7 +63,7 @@ async fn revoke_session(session : AuthSession) -> Unit {
     }
   }
   guard @async.with_timeout_opt(RevokeTimeoutMs, () => {
-      let (response, _) = @http.post(
+      let (response, _) = @http.post_text(
         session.server_url + "/v2/auth/logout",
         "",
         headers={ "Authorization": "Bearer " + session.account.token },

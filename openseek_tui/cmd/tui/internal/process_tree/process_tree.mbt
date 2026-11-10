@@ -23,7 +23,7 @@
 /// Containment is best effort: if the job cannot be set up, `proc` runs
 /// exactly as it would without it.
 #cfg(all(target="native", platform="windows"))
-pub fn[G] contain(group : @async.TaskGroup[G], proc : @process.Process) -> Unit {
+pub fn contain(group : @async.TaskGroup, proc : @process.Process) -> Unit {
   let job = contain_ffi(proc.pid)
   guard job != 0UL else { return }
   group.spawn_bg(no_wait=true) <| () => {
@@ -39,10 +39,7 @@ pub fn[G] contain(group : @async.TaskGroup[G], proc : @process.Process) -> Unit 
 /// A no-op on Unix and wasm. Wasm has no host API for Windows Job Objects;
 /// cancellation there only guarantees termination of the spawned process.
 #cfg(not(all(target="native", platform="windows")))
-pub fn[G] contain(
-  _group : @async.TaskGroup[G],
-  _proc : @process.Process,
-) -> Unit {
+pub fn contain(_group : @async.TaskGroup, _proc : @process.Process) -> Unit {
   ()
 }
 

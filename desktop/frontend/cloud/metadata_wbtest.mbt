@@ -444,3 +444,120 @@ test "externally archived inventory fences pending history through restoration" 
   assert_false(ended.conversations["a"].sending)
   assert_true(ended.can_edit("a", Archive(false)))
 }
+
+///|
+test "Cloud sessions decode their approval mode and treat an absent one as ask" {
+  let base : Json = {
+    "id": "a",
+    "title": "A",
+    "updated_at": 1,
+    "generating": false,
+  }
+  assert_true(
+    decode_sessions({ "sessions": [base] })[0].approval is ApprovalAsk,
+  )
+  guard base is Object(fields) else { fail("object fixture") }
+  for
+    (wire, expected) in [
+      ("ask", @protocol.ApprovalAsk),
+      ("review", @protocol.ApprovalReview),
+    ] {
+    let item = fields.copy()
+    item["approval"] = Json(wire)
+    assert_eq(
+      decode_sessions({ "sessions": [Json(item)] })[0].approval,
+      expected,
+    )
+    assert_eq(ToJson::to_json(SessionEdit::SetApproval(expected)), {
+      "approval": Json(wire),
+    })
+  }
+  for invalid in [Json::null(), Json("auto"), Json(1)] {
+    let item = fields.copy()
+    item["approval"] = invalid
+    let failed = try {
+      ignore(decode_sessions({ "sessions": [Json(item)] }))
+      false
+    } catch {
+      @cloud_client.RequestError(Malformed) => true
+      _ => false
+    }
+    assert_true(failed)
+  }
+}
+
+///|
+test "approval mode saves only between turns and holds sending until saved" {
+  let initial = deletion_state()
+  assert_true(initial.can_choose_approval("a"))
+  assert_true(initial.approval("a") is ApprovalAsk)
+  // Choosing the mode already in effect saves nothing.
+  assert_true(
+    metadata_update(
+      initial,
+      Edit(account="fixture", session="a", edit=SetApproval(ApprovalAsk)),
+    ) ==
+    initial,
+  )
+  let running = {
+    ..initial,
+    sessions: initial.sessions.map(item => { ..item, generating: true, }),
+  }
+  assert_false(running.can_choose_approval("a"))
+  assert_true(
+    metadata_update(
+      running,
+      Edit(account="fixture", session="a", edit=SetApproval(ApprovalReview)),
+    ) ==
+    running,
+  )
+  let streaming = initial.replace("a", {
+    ..initial.conversations["a"],
+    generating: true,
+  })
+  assert_false(streaming.can_choose_approval("a"))
+  let archived = {
+    ..initial,
+    sessions: initial.sessions.map(item => { ..item, archived: true, }),
+  }
+  assert_false(archived.can_edit("a", SetApproval(ApprovalReview)))
+  let pending = metadata_update(
+    initial,
+    Edit(account="fixture", session="a", edit=SetApproval(ApprovalReview)),
+  )
+  assert_true(pending.metadata_saves["a"].edit is SetApproval(ApprovalReview))
+  assert_true(pending.approval("a") is ApprovalAsk)
+  assert_false(pending.can_choose_approval("a"))
+  // The next turn's engine starts with the mode the server holds.
+  assert_false(pending.can_send("a"))
+  let saved = metadata_update(
+    pending,
+    Edited(2, "a", pending.metadata_saves["a"].request),
+  )
+  assert_true(saved.approval("a") is ApprovalReview)
+  assert_true(saved.metadata_saves.is_empty())
+  assert_true(saved.can_send("a"))
+  assert_true(saved.can_choose_approval("a"))
+  let pending = metadata_update(
+    saved,
+    Edit(account="fixture", session="a", edit=SetApproval(ApprovalAsk)),
+  )
+  let refused = metadata_update(
+    pending,
+    EditFailed(2, "a", pending.metadata_saves["a"].request, Http(409)),
+  )
+  assert_true(refused.approval("a") is ApprovalReview)
+  assert_true(refused.can_choose_approval("a"))
+  assert_true(refused.can_send("a"))
+  assert_eq(
+    refused.notice,
+    Some(
+      "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
+    ),
+  )
+  // A conversation the server has not created yet has no mode to change.
+  let drafting = metadata_update(initial, Create)
+  guard drafting.creation is Some(creation) else { fail("expected a draft") }
+  assert_false(drafting.can_choose_approval(creation.id))
+  assert_true(drafting.approval(creation.id) is ApprovalAsk)
+}

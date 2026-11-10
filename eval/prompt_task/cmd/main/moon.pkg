@@ -1,7 +1,7 @@
 import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/eval/prompt_task/harness",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/cli",
 }
@@ -11,3 +11,7 @@ warnings = "+unnecessary_annotation"
 supported_targets = "+native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

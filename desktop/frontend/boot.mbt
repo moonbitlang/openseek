@@ -7,7 +7,7 @@
 
 ///|
 priv suberror AppShortcutSubscription {
-  AppShortcutSubscription(@cmd.Emit[Msg])
+  AppShortcutSubscription(@cmd.Emit[Msg], files~ : Bool, symbols~ : Bool)
 }
 
 ///|
@@ -16,13 +16,19 @@ fn app_shortcut_sub_loader(
   scheduler : &Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    AppShortcutSubscription(emit) => {
+    AppShortcutSubscription(emit, files~, symbols~) => {
       let mut emit = emit
+      let mut files = files
+      let mut symbols = symbols
       let target = @dom.document().as_event_target()
       let is_apple = app_shortcut_platform_is_apple()
       let listener : @dom.Listener = event => {
         guard event.to_keyboard_event() is Some(keyboard) &&
           app_shortcut_message(keyboard, is_apple) is Some(message) else {
+          return
+        }
+        if (message is QuickOpenOpen(@quick_open.Files) && !files) ||
+          (message is QuickOpenOpen(@quick_open.Symbols) && !symbols) {
           return
         }
         // In a real browser these chords overlap print/new-tab, new-window,
@@ -50,8 +56,17 @@ fn app_shortcut_sub_loader(
           )
         },
         update_tagger: payload => {
-          guard payload is AppShortcutSubscription(next) else { return }
+          guard payload
+            is AppShortcutSubscription(
+              next,
+              files=new_files,
+              symbols=new_symbols
+            ) else {
+            return
+          }
           emit = next
+          files = new_files
+          symbols = new_symbols
         },
       })
     }
@@ -66,11 +81,17 @@ fn app_shortcut_sub_loader(
 /// sidebar, Shift+B toggles the right panel, and Shift+F opens Search.
 /// Period opens Settings.
 /// Plus/equal and minus adjust the app font size, including held-key repeats.
-fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
+/// Quick Open chords the palette cannot answer keep their browser meaning.
+fn app_shortcut_subscription(emit : @cmd.Emit[Msg], model : Model) -> @sub.Sub {
+  let target = model.quick_open_target()
   @sub.custom_sub(
     "app-shortcut-capture",
     Global,
-    AppShortcutSubscription(emit),
+    AppShortcutSubscription(
+      emit,
+      files=target is Some(_),
+      symbols=target is Some(input) && input.supports(@quick_open.Symbols),
+    ),
     app_shortcut_sub_loader,
   )
 }
@@ -134,6 +155,7 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
     platform,
     open_web_links_in_app,
     reveal_files,
+    preview_files: ctx.can_preview_html(desktop=self.is_desktop),
     share_files: ctx.root() is Some(_),
     download_files: ctx.owner is @interop.Cloud(..) && ctx.root() is Some(_),
     downloading: self.file_panel.download is Some(_),
@@ -397,6 +419,20 @@ fn SidebarDispatcher::project_new(
 }
 
 ///|
+fn SidebarDispatcher::project_import(
+  self : SidebarDispatcher,
+  id : @project.Id,
+) -> @cmd.Cmd {
+  guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) else {
+    return self.unroutable("import", "channel \{id.channel()}")
+  }
+  guard @resource.of_path(channel, id.root()) is Some(project) else {
+    return @cmd.none
+  }
+  self.emit(OpenSessionImport(channel, project))
+}
+
+///|
 fn SidebarDispatcher::project_settings(
   self : SidebarDispatcher,
   id : @project.Id,
@@ -440,12 +476,26 @@ fn SidebarDispatcher::section_primary(
 }
 
 ///|
+fn SidebarDispatcher::section_menu(
+  self : SidebarDispatcher,
+  id : @section.Id,
+  action : @section.MenuAction,
+) -> @cmd.Cmd {
+  match (id.source(), action) {
+    ("cloud.chats", ImportConversation) => self.emit(OpenCloudImport)
+    (source, _) => self.unroutable("section menu", "source \{source}")
+  }
+}
+
+///|
 fn SidebarDispatcher::placeholder_open(
   self : SidebarDispatcher,
   id : String,
 ) -> @cmd.Cmd {
   if id == "cloud-sign-in" {
     self.emit(RemoteConnectClicked)
+  } else if id == "cloud-sign-in-cancel" {
+    self.emit(RemoteCancelClicked)
   } else if id == "cloud-list-status" {
     self.emit(CloudAction(@cloud.Refresh))
   } else {
@@ -465,6 +515,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   let project : @project.Actions = {
     new_conversation: id => self.project_new(id),
+    import_conversation: id => self.project_import(id),
     open_settings: id => self.project_settings(id),
     detach: id => self.project_detach(id),
     host_details: id => {
@@ -477,6 +528,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   let section : @section.Actions = {
     primary: id => self.section_primary(id),
+    menu: (id, action) => self.section_menu(id, action),
     placeholder: id => self.placeholder_open(id),
     project,
     conversation,
@@ -584,7 +636,7 @@ fn main {
           @sub.on_resize(
             emit.map(viewport => ViewportResized(width=viewport.width.to_int())),
           ),
-          app_shortcut_subscription(emit),
+          app_shortcut_subscription(emit, model),
           language_subscription(emit),
           // Host event sources follow the device roster. Removing a device
           // therefore unloads its WebSocket immediately; advancing its retry
@@ -747,6 +799,7 @@ fn main {
         browser_open_external: emit(BrowserOpenExternal),
         reveal_file: path => emit(RevealFile(path)),
         share_file: path => emit(ShareFile(path)),
+        preview_file: path => emit(PreviewFile(path)),
         toggle_menu: emit(ToggleRightPanelMenu),
         toggle_expanded: emit(ToggleRightPanelExpanded),
         close_tabs: emit.map(selection => CloseDockTabs(selection)),
@@ -841,18 +894,6 @@ fn main {
       state.map(model => model.quick_open),
       emit.map(msg => QuickOpen(msg)),
       state.map(model => model.locale),
-    )
-    let context_menu_html = @action_menu.context_component(
-      state.map(model => model.locale),
-      state.map(model => model.context_menu_input()),
-      {
-        open_link: url => emit(ExternalLinkClicked(url)),
-        open_external_link: url => open_external_link(emit, url),
-        open_file: path => emit(OpenFile(path)),
-        reveal_file: path => emit(RevealFile(path)),
-        share_file: path => emit(ShareFile(path)),
-        download_file: path => emit(DownloadFile(path)),
-      },
     )
     let transfer_menu_html = @action_menu.component(
       state.map(model => model.conversation_transfer_input()),
@@ -1015,9 +1056,7 @@ fn main {
     let file_feedback = pdf_feedback.map2(cloud_office_feedback, (_, _) => {
       @html.nothing
     })
-    let context_menu_html = @rabbita.Val::map3(
-      context_menu_html,
-      file_feedback,
+    let selection_actions_html = file_feedback.map2(
       @action_menu.selection_component(
         state.map(model => model.locale),
         quote_target,
@@ -1039,11 +1078,9 @@ fn main {
           })
         },
       ),
-      (context_menu, _, selection_actions) => {
-        @html.fragment([context_menu, selection_actions])
-      },
+      (_, selection_actions) => selection_actions,
     )
-    let skills_html = @skills.component(
+    let skills_views = @skills.component(
       state.map(model => model.skills_input()),
       state.map(model => model.skills),
       state.map(model => model.locale),
@@ -1073,7 +1110,7 @@ fn main {
     // Reset the filter between visits, but render the closed page too so its
     // DOM is already mounted before the next opening.
     let archived_chats_html = state
-      .map(model => model.management_dialog is Some(ArchivedChats))
+      .map(model => model.management_dialog is Some(Settings(ArchivedChats)))
       .switch_by(
         _ => {
           @archived_chats.component(
@@ -1085,29 +1122,29 @@ fn main {
         by=open => if open { "open" } else { "closed" },
       )
     let management_pages = @rabbita.Val::map3(
-      skills_html,
+      skills_views,
       workspace_settings_html,
       archived_chats_html,
       (skills, workspace_settings, archived_chats) => {
         (skills, workspace_settings, archived_chats)
       },
     )
-    let quick_open_and_context_menu = @rabbita.Val::map3(
+    let shell_overlays = @rabbita.Val::map3(
       quick_open_html,
-      context_menu_html,
+      selection_actions_html,
       transfer_menu_html,
-      (quick_open, context_menu, transfer_menu) => {
-        (quick_open, context_menu, transfer_menu)
+      (quick_open, selection_actions, transfer_menu) => {
+        (quick_open, selection_actions, transfer_menu)
       },
     )
-    state.view9(
+    let shell = state.view9(
       terminal_html,
       transcript_html,
       right_panel_html,
       composer_html,
       codex_composer_html,
       sidebar_html,
-      quick_open_and_context_menu,
+      shell_overlays,
       management_pages,
       (
         model,
@@ -1117,7 +1154,7 @@ fn main {
         composer_html,
         codex_composer_html,
         sidebar_html,
-        quick_open_and_context_menu,
+        shell_overlays,
         management_pages,
       ) => {
         view(
@@ -1131,10 +1168,24 @@ fn main {
           composer_html,
           codex_composer_html,
           sidebar_html,
-          quick_open_and_context_menu,
+          shell_overlays,
           management_pages,
         )
       },
+    )
+    @action_menu.context_component(
+      state.map(model => model.locale),
+      state.map(model => model.context_menu_input()),
+      {
+        open_link: url => emit(ExternalLinkClicked(url)),
+        open_external_link: url => open_external_link(emit, url),
+        open_file: path => emit(OpenFile(path)),
+        reveal_file: path => emit(RevealFile(path)),
+        share_file: path => emit(ShareFile(path)),
+        download_file: path => emit(DownloadFile(path)),
+        preview_file: path => emit(PreviewFile(path)),
+      },
+      shell,
     )
   })
   app.mount("app")

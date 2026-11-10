@@ -9,7 +9,7 @@ async fn lifetime_request(
   )
   for ;; {
     let message = ws.recv()
-    let reply = @json.parse(message.read_all().text())
+    let reply = @json.parse(message.text.read_all())
     if reply is { "id": 1, "result": result, .. } {
       return result
     }
@@ -45,7 +45,7 @@ async fn with_lifetime_server(
           heartbeat_ms~,
         )
       })
-      guard announcement.read_until("\n") is Some(line) &&
+      guard @io.Utf8Reader(announcement).read_until("\n") is Some(line) &&
         @json.parse(line)
         is { "port": Number(port, ..), "instance": String(instance), .. } else {
         fail("missing app-server endpoint")

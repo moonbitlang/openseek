@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // The `auth.status` shape (docs/remote-protocol.md): absent fields, never
 // null, stand for a signed-out user and device.
-const relay = 'https://openseek-api.moonbitlang.cn';
+const relay = 'https://seekmoon.moonbitlang.com';
 const signedOut = { connected: false, server_url: relay };
 const signedIn = {
   connected: true,
@@ -69,7 +69,7 @@ async function installDesktop(page, { managed = false } = {}) {
       openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 5 });
+            window.desktopEvent('openseek.agent.connected', { protocol: 6 });
           }
           return window.desktopRequest({ method, params });
         },
@@ -84,36 +84,38 @@ async function installDesktop(page, { managed = false } = {}) {
 test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
+  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
+  const remoteAccess = page.getByRole('region', { name: 'Remote access', exact: true });
+  await remoteAccess.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const section = page.getByRole('region', { name: 'Account', exact: true });
 
   const connect = section.getByRole('button', { name: 'Sign in', exact: true });
   await expect(connect).toBeEnabled();
   await connect.click();
 
-  const waiting = section.getByRole('status');
-  await expect(waiting).toHaveText('Waiting for the browser…');
-  const accountRow = section.locator('.setting-row', { has: page.getByRole('status') });
-  await expect(accountRow.locator('.setting-name')).toHaveText('Account');
-  await expect(accountRow.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+  await expect(section.getByRole('status')).toHaveText('Finish signing in in your browser…');
+  await expect(section.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 
   auth.finishConnect();
   const signOut = section.getByRole('button', { name: 'Sign out', exact: true });
   await expect(section.getByText('@octocat', { exact: true })).toBeVisible();
   await expect(signOut).toBeEnabled();
-  const toggle = section.getByRole('switch', { name: 'Remote control', exact: true });
+  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
+  const toggle = remoteAccess.getByRole('switch', { name: 'Remote control', exact: true });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
   await toggle.focus();
   await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(section.getByText('online — reachable from your browser', { exact: true })).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
   await expect(signOut).toBeEnabled();
   expect(auth.account.token).toBe('ts_fixture');
   await signOut.click();
   await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
   await expect(toggle).toBeDisabled();
   expect(auth.app.pageErrors).toEqual([]);
 });
@@ -121,15 +123,16 @@ test('account sign-in remains independent of the remote access toggle and signs 
 test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'System', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'FPS overlay', exact: true });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.focus();
   await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('true');
-  await toggle.scrollIntoViewIfNeeded();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'System', exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -140,15 +143,15 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
 test('environment-managed remote access keeps its connection while the account logs out', async ({ page }) => {
   const auth = await installDesktop(page, { managed: true });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
-  await expect(section.getByRole('switch')).toHaveCount(0);
-  await expect(section).toContainText('Signing out does not close this debug connection.');
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
+  const section = page.getByRole('region', { name: 'Account', exact: true });
   await section.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
   auth.finishConnect();
   await section.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
-  await expect(section.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute('href', signedIn.device.url);
+  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Remote access', exact: true }).getByRole('link', { name: 'Open', exact: true })).toHaveAttribute('href', signedIn.device.url);
   expect(auth.status.connected).toBe(true);
   expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
   expect(auth.app.pageErrors).toEqual([]);

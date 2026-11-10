@@ -51,7 +51,7 @@ fn RemoteBridgeSub::install(
           "/v2/devices/" +
           @uri.encode_component(self.device_id) +
           "/connect-ticket"
-        let (response, body) = @http.post(endpoint, "", headers={
+        let (response, body) = @http.post_text(endpoint, "", headers={
           "Authorization": "Bearer " + account.token,
         })
         guard self.active else { return }
@@ -68,7 +68,7 @@ fn RemoteBridgeSub::install(
           return
         }
         guard response.code == 200 &&
-          body.json()
+          @json.parse(body)
           is { "ticket": String(ticket), "expires_in": Number(expires, ..), .. } &&
           ticket.has_prefix("wst_") &&
           expires > 0 else {

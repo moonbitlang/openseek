@@ -2,7 +2,7 @@
 package "moonbitlang/openseek/agent_tool/ptc"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",
@@ -14,7 +14,7 @@ import {
 
 // Types and methods
 type Program
-pub async fn Program::close(Self, discard_images? : Bool) -> Unit
+pub async fn Program::close(Self, discard_images? : Bool) -> Unit nocancel
 pub fn Program::env(Self) -> Map[String, String]
 pub fn Program::handoff(Self, String, async (@json.Json) -> Unit) -> Unit
 pub fn Program::id(Self) -> String
@@ -35,9 +35,9 @@ pub(all) struct ProgramBinding {
 }
 
 type Service
-pub async fn Service::close(Self) -> Unit
+pub async fn Service::close(Self) -> Unit nocancel
 pub fn Service::register(Self, on_trace? : (@json.Json) -> Unit, on_image_output? : (@bgjobs.ImageOutput) -> Unit) -> Program raise
-pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int32, trace_timeout_ms? : Int32, image_directory? : async () -> String?, bind? : (String) -> ProgramBinding) -> Self
+pub async fn Service::start(@async.TaskGroup, @agent_tool.Tools, call_timeout_ms? : Int32, trace_timeout_ms? : Int32, image_directory? : async () -> String?, bind? : (String) -> ProgramBinding) -> Self
 
 // Type aliases
 

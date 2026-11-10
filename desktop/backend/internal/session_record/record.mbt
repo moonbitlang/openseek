@@ -108,8 +108,7 @@ async fn[T] with_shared_record_lock(
   required~ : Bool = false,
 ) -> T {
   let lock = @fs.open(path.to_string(), mode=ReadOnly, create_mode=OpenExisting) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() && !required =>
-      return body()
+    @os_error.OsError(NotFound, ..) if !required => return body()
     error => raise Unreadable("cannot take the session record's lock: \{error}")
   }
   defer lock.close()
@@ -257,8 +256,8 @@ pub async fn read_text(root : @pathx.Absolute, session : String) -> String {
   let path = record_path(root, session)
   let lock = lock_path(root, session)
   with_shared_record_lock(lock, () => {
-    @fs.read_file(path.to_string()).text() catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() =>
+    @fs.read_text(path.to_string()) catch {
+      @os_error.OsError(NotFound, ..) =>
         raise Absent("no durable record at \{path}")
       error => raise Unreadable("cannot read the session record: \{error}")
     }
@@ -270,7 +269,7 @@ pub async fn read_text(root : @pathx.Absolute, session : String) -> String {
 /// on the way. Mutates as it goes; `poll` owns the reset that a failure needs.
 async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
   let file = @fs.open(self.path.to_string(), mode=ReadOnly) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() =>
+    @os_error.OsError(NotFound, ..) =>
       raise Absent("no durable record at \{self.path}")
     error => raise Unreadable("cannot open the session record: \{error}")
   }
@@ -452,7 +451,11 @@ fn anchor_of(chunk : Bytes) -> Bytes {
 /// Whether the bytes ending at `offset` are still the ones read there. An
 /// empty anchor (nothing read yet) is vacuously true; a read that fails
 /// reports false, which costs one re-read from the head.
-async fn anchored_at(file : @fs.File, offset : Int64, anchor : Bytes) -> Bool {
+pub async fn anchored_at(
+  file : @fs.File,
+  offset : Int64,
+  anchor : Bytes,
+) -> Bool {
   if anchor.length() == 0 {
     return true
   }

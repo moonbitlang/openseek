@@ -2,16 +2,14 @@
 
 The source-write sandbox as one prepared-command capability.
 `mbtx`, `bgjobs`, and `job_output` share one macOS `sandbox-exec`
-integration: describe command intent with the `Shell` or `Exec` variants of
-`Command`,
+integration: pass a program and its argv,
 prepare an opaque `SandboxedCommand`, run its program and arguments, then ask
 that same value to judge the output. Everything SBPL-specific — profile text,
 denial subjects, escaping, the `sandbox-exec` path, and the availability probe
 — stays behind the API.
 
 This package does not own workspace path manipulation. Generic lexical
-operations live in `internal/workspace_path`, and the platform shell pair
-lives in `agent_tool/internal/platform_shell`.
+operations live in `internal/workspace_path`.
 
 ## The contract
 
@@ -19,24 +17,30 @@ Prepare, run, classify:
 
 ```mbt check
 ///|
-async test "prepare, run, and classify a shell command" {
+async test "prepare, run, and classify a command" {
   let dir = @fs.tmpdir(prefix="sandbox-example-")
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
-  let shell_text = "echo sandbox-ready"
+  let argv = ["sandbox-ready"]
   let prepared = @sandbox.SandboxedCommand::create_if_available(
-    ".",
-    Shell(shell_text),
+    workspace_root=".",
+    "echo",
+    argv,
     profile_path="\{dir}/profile.sb",
   )
   let (program, args) = match prepared {
     Some(command) => (command.program(), command.args())
     // Enforcement is unavailable outside macOS and inside some nested
     // sandboxes. Running without it is an explicit caller policy decision.
-    None => (@platform_shell.program, @platform_shell.args(shell_text))
+    None => ("echo", argv)
   }
-  let (exit_code, output) = @process.collect_output_merged(program, args)
-  let output = output.text()
-  assert_eq(exit_code, 0)
+  let result = @process.run(
+    program,
+    args,
+    stdout=Collect,
+    stderr=DuplicateStdout,
+  )
+  let output = result.stdout_text()
+  assert_eq(result.exit_code, 0)
   assert_eq(output.trim(), "sandbox-ready")
   if prepared is Some(command) {
     // Classify with the same value that supplied the executed program/argv.
@@ -66,10 +70,10 @@ also own the file.
 
 ## Commands
 
-`Shell(cmd)` runs shell text through the platform shell under the profile.
-`Exec(program, args)` prepares a pre-tokenized argv with no
-shell involved — the shape `mbtx` uses to run `moon` directly. Both
-produce the same opaque `SandboxedCommand`. Its executable, arguments, and
+A command is a program and a pre-tokenized argv; no shell is involved, which
+is how `mbtx` runs `moon` directly. A caller that needs shell text passes the
+shell itself as the program (`"sh", ["-c", text]`). Preparation produces an
+opaque `SandboxedCommand`. Its executable, arguments, and
 denial subjects travel together because classification is meaningful only for
 output produced by that prepared invocation.
 

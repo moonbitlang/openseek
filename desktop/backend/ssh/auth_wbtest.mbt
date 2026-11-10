@@ -122,13 +122,13 @@ async test "SSH IPC rejects unrelated peers and serializes challenge delivery th
       })
       let unrelated = @socket.Tcp::connect(server.addr)
       defer unrelated.close()
-      unrelated.write("{\"token\":\"wrong\",\"prompt\":\"p\",\"hint\":\"\"}\n")
-      assert_eq(unrelated.read_some(), None)
+      unrelated.write(b"{\"token\":\"wrong\",\"prompt\":\"p\",\"hint\":\"\"}\n")
+      assert_eq(unrelated.read(), None)
       assert_true(connection.waiter is None)
       let helper = @socket.Tcp::connect(server.addr)
       defer helper.close()
       helper.write(
-        "{\"token\":\"private-token\",\"prompt\":\"demo's password: \",\"hint\":\"\"}\n",
+        b"{\"token\":\"private-token\",\"prompt\":\"demo's password: \",\"hint\":\"\"}\n",
       )
       assert_true(
         events.get()
@@ -153,7 +153,7 @@ async test "SSH IPC rejects unrelated peers and serializes challenge delivery th
       let next = @socket.Tcp::connect(server.addr)
       defer next.close()
       next.write(
-        "{\"token\":\"private-token\",\"prompt\":\"Code:\",\"hint\":\"\"}\n",
+        b"{\"token\":\"private-token\",\"prompt\":\"Code:\",\"hint\":\"\"}\n",
       )
       assert_true(
         events.get()
@@ -165,7 +165,7 @@ async test "SSH IPC rejects unrelated peers and serializes challenge delivery th
       connection.close()
       assert_true(auth_frame(next) == { "action": "cancel" })
       assert_true(connection.waiter is None)
-      group.return_immediately(())
+      group.return_immediately()
     })
   })
 }

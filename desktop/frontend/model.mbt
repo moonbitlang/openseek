@@ -271,6 +271,10 @@ const GlmReasoningStorageKey : String = "openseek.glm_reasoning_effort"
 const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 
 ///|
+/// Browser Cloud preferences must not replace any connected host's settings.
+const CloudFollowupBehaviorStorageKey : String = "openseek.cloud_followup_behavior"
+
+///|
 /// Every conversation whose tier the user has chosen, so reopening one
 /// recovers its own tier instead of inheriting whatever was picked last in
 /// some unrelated chat. Page-local like the rest of this file: the desktop
@@ -970,8 +974,18 @@ priv enum Screen {
 priv enum ManagementDialog {
   Skills
   Schedules
-  Settings
+  Settings(SettingsSection)
+}
+
+///|
+#derive(Eq)
+priv enum SettingsSection {
+  General
+  Engine
+  Account
+  Connections
   ArchivedChats
+  SystemSettings
 }
 
 ///|
@@ -1141,6 +1155,10 @@ priv struct DeviceState {
   // conversations copy their launch mode from here; an absent row that has
   // not been fetched yet is the Local default.
   workspace_settings : Array[ProjectSettings]
+  // This host's engine endpoint settings (`settings.get`/`settings.set`,
+  // kept fresh by `settings.changed`), mirrored per device so one host's
+  // replies and broadcasts can only ever land on its own entry.
+  host_settings : HostSettingsMirror
   // The project the user last selected — where "New chat" lands. `None`
   // means nothing has been selected on this device yet, not that a chat has
   // nowhere to go: see `target_project`. A placement always retains its
@@ -1172,6 +1190,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     chat_root: None,
     worktrees: [],
     workspace_settings: [],
+    host_settings: HostSettingsMirror::loading(),
     active_project: None,
   }
 }
@@ -1309,31 +1328,13 @@ priv struct Model {
   openseek_reasoning : OpenSeekReasoning
   glm_reasoning : OpenSeekReasoning
   max_steps : String
-  // Whether the host has a key stored for each keyed provider. The key text
-  // itself never reaches a client — the Settings page only needs presence
-  // (placeholder wording, the ready gate); a new key is staged in
-  // `setup_api_key` until saved through `settings.set`.
-  deepseek_key_saved : Bool
-  glm_key_saved : Bool
-  custom_key_saved : Bool
+  // Device-less Cloud's follow-up behavior, kept in the browser (see
+  // `CloudFollowupBehaviorStorageKey`); a page with a host uses its settings.
+  cloud_followup_behavior : FollowupBehavior
+  // A new API key typed into the focused host's form, staged here until
+  // saved through `settings.set`. The host settings themselves live on each
+  // `DeviceState`.
   setup_api_key : String
-  // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`. Both mirror the host's settings store and are
-  // edited through `settings.set`.
-  api_provider : ApiProvider
-  custom_api_url : String
-  followup_behavior : FollowupBehavior
-  // Host-settings writes still in flight. While any are, incoming
-  // `settings.changed` broadcasts and `settings.get` replies may predate an
-  // optimistic edit, so the newest revision is deferred until the last write
-  // settles instead of clobbering the form mid-edit.
-  settings_saves : Int32
-  // Host-local monotonic revision attached to every settings status. It
-  // orders concurrent clients' broadcasts and RPC replies; -1 means this
-  // bridge generation has not accepted an authoritative status yet.
-  host_settings_revision : Int32
-  host_settings_error : String?
-  deferred_host_settings : HostSettings?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1434,7 +1435,9 @@ priv struct Model {
   archive_confirm : ArchiveConfirm?
   // Permanent chat deletion has its own explicit confirmation. It never
   // shares the worktree-discard dialog because the data at risk differs.
-  delete_confirm : DeletePrompt?
+  // Closed retains the displayed prompt for the native closing transition,
+  // without authorizing another deletion.
+  delete_confirm : DeleteDialogState
   // The live chat whose delete question is out with the host. Only the
   // answer about this chat may open the confirmation, and only once: an
   // answer overtaken by a later click must not put another chat's dialog
@@ -1581,8 +1584,9 @@ priv struct Model {
   account_login_create : Int32?
   account_preferences : AccountPreferences
   remote_access : RemoteAccess?
-  // An `auth.connect` waiting on the user's browser round-trip.
+  // A pending account sign-in or sign-out.
   remote_connecting : Bool
+  account_login : AccountLogin?
   // The last connect/disconnect failure, shown inside the section.
   remote_error : String?
 }
@@ -1595,6 +1599,13 @@ priv struct RemoteAccess {
   connected : Bool
   managed_by_env : Bool
   device_url : String?
+}
+
+///|
+#derive(Eq)
+priv enum AccountLogin {
+  Waiting
+  Cancelling(connect_pending~ : Bool, cancel_pending~ : Bool)
 }
 
 ///|
@@ -1649,20 +1660,52 @@ priv struct ProjectAdoption {
 }
 
 ///|
+/// A host's engine endpoint settings, with key material reduced to presence:
+/// the key text never reaches a client — the Settings page only needs
+/// presence (placeholder wording, the ready gate).
+#derive(Eq)
+priv struct HostEndpoint {
+  // Which endpoint the engine talks to; `custom_api_url` only matters when
+  // the provider is `Custom`.
+  provider : ApiProvider
+  custom_api_url : String
+  followup_behavior : FollowupBehavior
+  deepseek_key_saved : Bool
+  glm_key_saved : Bool
+  custom_key_saved : Bool
+}
+
+///|
 /// One `settings.get`/`settings.set` reply (or `settings.changed`
-/// broadcast), decoded: the host's engine endpoint settings, with key
-/// material reduced to presence.
+/// broadcast), decoded. The host-local monotonic revision orders concurrent
+/// clients' broadcasts and RPC replies.
 #derive(Eq)
 priv struct HostSettings {
   revision : Int32
-  provider : String
-  custom_api_url : String
-  has_deepseek_key : Bool
-  has_glm_key : Bool
-  has_custom_key : Bool
-  followup_behavior : String
+  endpoint : HostEndpoint
+  // The default prompt for new chats: `builtin_moonbit_guide` or `custom`,
+  // with the host's saved custom text either way.
   prompt_source : String
   custom_prompt : String
+}
+
+///|
+/// One device's host-settings mirror for its current bridge connection.
+#derive(Eq)
+priv struct HostSettingsMirror {
+  // The newest authoritative status, its endpoint carrying any optimistic
+  // edits made since. `None` until this connection accepts one; every
+  // control that edits the settings stays disabled until then.
+  current : HostSettings?
+  // Writes still in flight. While any are, incoming broadcasts and `get`
+  // replies may predate an optimistic edit, so the newest status waits in
+  // `deferred` until the last write settles instead of clobbering the form
+  // mid-edit.
+  saves : Int32
+  deferred : HostSettings?
+  // Why the last `settings.get` failed, shown with a retry until a status
+  // lands.
+  error : String?
 }
 
 ///|
@@ -1690,6 +1733,7 @@ priv enum Msg {
     openseek_effort~ : String?,
     glm_effort~ : String?
   )
+  CloudFollowupLoaded(String?)
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
   CloudAction(@cloud.Msg)
@@ -1775,9 +1819,12 @@ priv enum Msg {
   // round-trip, so the section shows an in-progress state until a
   // finished/failed message settles it.
   RemoteConnectClicked
-  // The Cancel beside a waiting Connect: fires `auth.cancel`; the pending
-  // connect settles the section through its own failure reply.
+  // Cancel browser sign-in and wait for both host operations to settle.
   RemoteCancelClicked
+  AccountLoginCancelled(Int32)
+  AccountLoginTimedOut(Int32)
+  AccountCancelFailed(Int32, String)
+  AccountCancelFinished(Int32)
   // The Remote access Disconnect button and its failure (success arrives
   // as `RemoteStatusLoaded` via the op's reply).
   RemoteDisconnectClicked
@@ -1808,7 +1855,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
-  OpenArchivedChats
+  SettingsSectionSelected(SettingsSection)
   CloseManagementDialog
   OpenLocalApiSettings
   Navigation(NavigationMsg)
@@ -1840,9 +1887,9 @@ priv enum Msg {
   // startup.
   SidebarModeSelected(@sidebar.Mode)
   SidebarModeLoaded(@sidebar.Mode)
-  // The sidebar's device selector chose a device by id. A page owns its
-  // device for its lifetime, so the choice loads that device's page.
-  DeviceChosen(String)
+  // The sidebar's device selector chose a device by id, or Cloud with None.
+  // A page owns its device for its lifetime, so the choice loads that page.
+  DeviceChosen(String?)
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
   LanguageLoaded(@i18n.Preference?, Array[String])
@@ -1937,10 +1984,17 @@ priv enum Msg {
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
   ShareFile(String)
+  PreviewFile(String)
+  CloudFilePreviewCreated(
+    owner~ : @interop.ConversationIdentity,
+    auth_epoch~ : Int32,
+    result~ : Result[String, String]
+  )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
-  OpenSessionImport
+  OpenSessionImport(@interop.ChannelId, @common.Uri)
+  OpenCloudImport
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
@@ -2191,7 +2245,7 @@ priv enum DeviceMsg {
   FilePanel(@fileeditor.Msg)
   // The host's settings, from a `settings.get` reply or a peer client's
   // edit broadcast as `settings.changed`. Applied only while no local write
-  // is in flight — see `Model::settings_saves`.
+  // is in flight — see `HostSettingsMirror::saves`.
   HostSettingsLoaded(HostSettings, connection_generation~ : Int32?)
   HostSettingsLoadFailed(String, connection_generation~ : Int32)
   // A `settings.set` this client sent came back with the post-write state.
@@ -2706,17 +2760,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,
     max_steps: DefaultMaxSteps,
-    deepseek_key_saved: false,
-    glm_key_saved: false,
-    custom_key_saved: false,
+    cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
-    api_provider: Deepseek,
-    custom_api_url: "",
-    followup_behavior: FollowupSteer,
-    settings_saves: 0,
-    host_settings_revision: -1,
-    host_settings_error: None,
-    deferred_host_settings: None,
     is_desktop: desktop,
     window_focused: !desktop || @interop.page_has_focus(),
     app_version: "development",
@@ -2767,7 +2812,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     project_picker: None,
     pending_project_adoption: None,
     archive_confirm: None,
-    delete_confirm: None,
+    delete_confirm: Empty,
     delete_pending: None,
     deletes_in_flight: [],
     conversation_rename: None,
@@ -2819,6 +2864,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     account_preferences: AccountPreferences::empty(),
     remote_access: None,
     remote_connecting: false,
+    account_login: None,
     remote_error: None,
   }
 }
@@ -2945,80 +2991,134 @@ fn Model::skills_input(self : Model) -> @skills.Input {
 }
 
 ///|
-/// Whether the focused host has supplied an authoritative settings snapshot
-/// for the current bridge generation. A negative revision is the loading
-/// sentinel installed on startup, focus changes, and reconnects.
-fn Model::host_settings_loaded(self : Model) -> Bool {
-  self.host_settings_revision >= 0
+/// The focused host's settings, once this connection has accepted an
+/// authoritative status.
+fn Model::host_settings(self : Model) -> HostSettings? {
+  self.focused_device().bind(dev => dev.host_settings.current)
 }
 
 ///|
-/// Forget every value owned by the focused host before fetching another
-/// snapshot. The neutral values are deliberately not actionable while the
-/// revision remains negative; this prevents a failed or delayed `settings.get`
-/// from exposing one device's configuration on another device. The setup
-/// modal closes with the mirror it was rendering — an open modal over the
-/// loading sentinel would show default data with every control disabled —
-/// and the next authoritative snapshot reopens it if still warranted.
-fn Model::clear_host_settings(self : Model) -> Model {
+/// Whether the focused host has supplied an authoritative settings snapshot
+/// for the current bridge connection.
+fn Model::host_settings_loaded(self : Model) -> Bool {
+  self.host_settings() is Some(_)
+}
+
+///|
+/// The focused host's provider. Until it reports, this is the host store's
+/// zero-config provider; the controls that edit it stay disabled meanwhile.
+fn Model::api_provider(self : Model) -> ApiProvider {
+  self.host_settings().map_or(Deepseek, settings => settings.endpoint.provider)
+}
+
+///|
+/// The focused host's follow-up behavior, defaulting like `api_provider`;
+/// device-less Cloud uses its browser preference.
+fn Model::followup_behavior(self : Model) -> FollowupBehavior {
+  if self.has_host() {
+    self
+    .host_settings()
+    .map_or(FollowupSteer, settings => settings.endpoint.followup_behavior)
+  } else {
+    self.cloud_followup_behavior
+  }
+}
+
+///|
+/// Rewrite one device's mirror. A channel this page does not hold has none.
+fn Model::map_host_settings(
+  self : Model,
+  channel : @interop.ChannelId,
+  f : (HostSettingsMirror) -> HostSettingsMirror,
+) -> Model {
+  guard self.device_state(channel) is Some(dev) else { return self }
+  self.replace_device({ ..dev, host_settings: f(dev.host_settings), })
+}
+
+///|
+/// Drop the focused host's form state before the UI acts on another host
+/// or connection: the staged key and any unsaved prompt text were typed for
+/// the old one, and the setup modal closes with the snapshot it was
+/// rendering. The next authoritative snapshot reopens it if still warranted.
+fn Model::reset_api_setup(self : Model) -> Model {
   {
     ..self,
     api_setup_open: false,
-    api_provider: Deepseek,
-    custom_api_url: "",
-    followup_behavior: FollowupSteer,
-    deepseek_key_saved: false,
-    glm_key_saved: false,
-    custom_key_saved: false,
     setup_api_key: "",
     default_prompt: @prompt.Model::new(),
-    settings_saves: 0,
-    host_settings_revision: -1,
-    host_settings_error: None,
-    deferred_host_settings: None,
   }
 }
 
 ///|
-/// Fold one host settings payload into the mirror. Whether the result is
-/// usable — and how loudly to say so when it is not — is the update
-/// handlers' call (the API-setup modal, the Settings guide); this fold only
-/// mirrors the store, so a payload applied from a deferred flush can never
-/// yank the screen around on its own.
-fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
-  let provider = if settings.provider == "custom" &&
-    settings.custom_api_url == OpenRouterChatCompletionsUrl {
-    OpenRouter
-  } else {
-    ApiProvider::parse(settings.provider)
-  }
-  let next = {
+/// Load the focused host's committed prompt default into the Settings
+/// editor, keeping any unsaved text that still differs from it.
+fn Model::receive_default_prompt(self : Model) -> Model {
+  guard self.host_settings() is Some(settings) else { return self }
+  {
     ..self,
-    host_settings_revision: settings.revision,
-    host_settings_error: None,
     default_prompt: self.default_prompt.receive(
       settings.prompt_source,
       settings.custom_prompt,
     ),
-    deferred_host_settings: None,
-    api_provider: provider,
-    custom_api_url: settings.custom_api_url,
-    followup_behavior: FollowupBehavior::parse(settings.followup_behavior),
-    deepseek_key_saved: settings.has_deepseek_key,
-    glm_key_saved: settings.has_glm_key,
-    custom_key_saved: settings.has_custom_key,
   }
-  let next = next.align_fresh_conversation_with_provider()
+}
+
+///|
+/// Why the focused host's last settings read failed, until a status lands.
+fn Model::host_settings_error(self : Model) -> String? {
+  self.focused_device().bind(dev => dev.host_settings.error)
+}
+
+///|
+/// Show the setup dialog when `channel`'s settings left it open for the
+/// focused host; a background host's reply never raises it.
+fn Model::api_setup_dialog(
+  self : Model,
+  channel : @interop.ChannelId,
+) -> @cmd.Cmd {
+  if channel == self.focused && self.api_setup_open && !self.cloud_selected() {
+    @dialog.show("api-setup-dialog")
+  } else {
+    @cmd.none
+  }
+}
+
+///|
+/// Whether the focused host has settings writes in flight.
+fn Model::host_settings_saving(self : Model) -> Bool {
+  self.focused_device() is Some(dev) && dev.host_settings.saves > 0
+}
+
+///|
+/// Fold one authoritative status into `channel`'s mirror. Whether the result
+/// is usable — and how loudly to say so when it is not — is the update
+/// handlers' call (the API-setup modal, the Settings guide); this fold only
+/// mirrors the store, so a payload applied from a deferred flush can never
+/// yank the screen around on its own.
+fn Model::apply_host_settings(
+  self : Model,
+  channel : @interop.ChannelId,
+  settings : HostSettings,
+) -> Model {
+  let next = self.map_host_settings(channel, mirror => mirror.apply(settings))
+  let next = if channel == next.focused {
+    next.receive_default_prompt()
+  } else {
+    next
+  }
+  let next = next.align_new_chats_with_provider(channel)
+  // A draft opened before this host's first snapshot captures its prompt
+  // now; one that already captured a prompt keeps it.
   {
     ..next,
     conversations: next.conversations.map(conv => {
-      if conv.device == next.focused &&
+      if conv.device == channel &&
         conv.system_prompt is None &&
         conv.durable_frontier() == 0 &&
         !conv.is_running() {
         {
           ..conv,
-          system_prompt: Some(next.default_prompt.text(conv.engine_model)),
+          system_prompt: Some(settings.prompt_text(conv.engine_model)),
         }
       } else {
         conv
@@ -3028,16 +3128,42 @@ fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
 }
 
 ///|
+/// Show `behavior` as the focused host's follow-up behavior without writing
+/// it: one submission that picks its own uses this, and the caller puts the
+/// host's value back afterwards.
+fn Model::override_followup_behavior(
+  self : Model,
+  behavior : FollowupBehavior,
+) -> Model {
+  self.map_host_settings(self.focused, mirror => {
+    ..mirror,
+    current: mirror.current.map(current => {
+      ..current,
+      endpoint: { ..current.endpoint, followup_behavior: behavior, },
+    }),
+  })
+}
+
+///|
+/// Record an optimistic edit of the focused host's endpoint; the caller
+/// pushes the matching `settings.set` patch. Nothing changes before the
+/// first snapshot — the edit handlers check that first.
+fn Model::edit_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
+  self.map_host_settings(self.focused, mirror => mirror.edit(endpoint))
+}
+
+///|
+/// The base prompt a new draft on `channel` captures, once that host's
+/// settings have arrived; until then the draft cannot be sent.
 fn Model::draft_system_prompt(
   self : Model,
   channel : @interop.ChannelId,
   model : @deepseek.Model,
 ) -> String? {
-  if channel == self.focused && self.host_settings_loaded() {
-    Some(self.default_prompt.text(model))
-  } else {
-    None
-  }
+  self
+  .device_state(channel)
+  .bind(dev => dev.host_settings.current)
+  .map(settings => settings.prompt_text(model))
 }
 
 ///|
@@ -3048,24 +3174,42 @@ fn Conversation::prompt_ready(self : Conversation) -> Bool {
 }
 
 ///|
-/// Keep a never-started chat aligned with the host endpoint. Stored and
+/// Keep `channel`'s never-started chats aligned with that host's endpoint,
+/// and the default model with it while it is focused. Stored and
 /// already-running conversations remain pinned: changing their model behind
 /// the user's back would rewrite conversation semantics, while a fresh chat
 /// has no history to preserve and otherwise begins with a known-bad
-/// provider/model mismatch.
-fn Model::align_fresh_conversation_with_provider(self : Model) -> Model {
-  let default_model = if self.default_model.matches_provider(self.api_provider) {
-    self.default_model
+/// provider/model mismatch. A retained draft on a background host is
+/// included: its cached settings arm Send as soon as it is reopened.
+fn Model::align_new_chats_with_provider(
+  self : Model,
+  channel : @interop.ChannelId,
+) -> Model {
+  guard self.device_state(channel) is Some(dev) &&
+    dev.host_settings.current is Some({ endpoint: { provider, .. }, .. }) else {
+    return self
+  }
+  let next = if channel == self.focused &&
+    !self.default_model.matches_provider(provider) {
+    { ..self, default_model: provider.default_model(), }
   } else {
-    self.api_provider.default_model()
+    self
   }
-  let next = { ..self, default_model, }
-  guard next.composing_new_chat() &&
-    next.active_conversation() is Some(conv) &&
-    !conv.engine_model.matches_provider(next.api_provider) else {
-    return next
+  let new_chat_model = if next.default_model.matches_provider(provider) {
+    next.default_model
+  } else {
+    provider.default_model()
   }
-  next.replace_conversation({ ..conv, engine_model: default_model, })
+  let conversations = next.conversations.map(conv => {
+    if conv.device == channel &&
+      !conv.engine_model.matches_provider(provider) &&
+      next.conversation_is_new_chat(conv) {
+      { ..conv, engine_model: new_chat_model, }
+    } else {
+      conv
+    }
+  })
+  { ..next, conversations, }
 }
 
 ///|
@@ -3082,41 +3226,34 @@ fn Model::reasoning_for(
 }
 
 ///|
-/// Retain the highest host revision observed while one or more optimistic
-/// writes are outstanding. The body is applied only when the last write
-/// settles, preventing both stale rollback and mid-edit UI clobbering.
-fn Model::defer_host_settings(self : Model, settings : HostSettings) -> Model {
-  if settings.revision < self.host_settings_revision {
-    return self
+/// Apply `channel`'s newest deferred status once its optimistic writes no
+/// longer protect the form. For the focused host the settled mirror then
+/// decides the setup modal like any other snapshot — a deferred first
+/// snapshot (an optimistic write races it here) must be able to open the
+/// modal, not just retire it.
+fn Model::flush_host_settings(
+  self : Model,
+  channel : @interop.ChannelId,
+) -> Model {
+  guard self.device_state(channel) is Some(dev) else { return self }
+  let mirror = dev.host_settings
+  let next = if mirror.deferred is Some(settings) && mirror.accepts(settings) {
+    self.apply_host_settings(channel, settings)
+  } else {
+    self.map_host_settings(channel, mirror => { ..mirror, deferred: None, })
   }
-  let deferred = match self.deferred_host_settings {
-    Some(current) if current.revision > settings.revision => current
-    _ => settings
+  if channel == next.focused {
+    next.settle_api_setup()
+  } else {
+    next
   }
-  { ..self, deferred_host_settings: Some(deferred), }
-}
-
-///|
-/// Apply the newest deferred status once optimistic writes no longer protect
-/// the form. A lower revision is discarded; equal is deliberately accepted
-/// so a failed optimistic edit can be restored by an authoritative `get`.
-/// The settled mirror then decides the setup modal like any other snapshot —
-/// a deferred first snapshot (an optimistic write races it here) must be
-/// able to open the modal, not just retire it.
-fn Model::flush_host_settings(self : Model) -> Model {
-  let next = match self.deferred_host_settings {
-    Some(settings) if settings.revision >= self.host_settings_revision =>
-      self.apply_host_settings(settings)
-    _ => { ..self, deferred_host_settings: None, }
-  }
-  next.settle_api_setup()
 }
 
 ///|
 /// Whether the composer should carry the BYOK reminder — the durable surface
 /// once the setup modal was dismissed, because a greyed Send with no
 /// explanation anywhere in the UI is the state the modal exists to prevent.
-/// Gated on the loaded mirror so a reconnect's loading sentinel cannot flash
+/// Gated on the loaded mirror so a reconnect's loading mirror cannot flash
 /// it, and shown regardless of the dismissal: quiet must not mean lost.
 fn Model::api_setup_banner_visible(self : Model) -> Bool {
   self.bridge_state() is Connected &&
@@ -3133,7 +3270,7 @@ fn Model::api_setup_banner_visible(self : Model) -> Bool {
 /// the one thing SeekMoon cannot run without, so a dismissible toast is not
 /// loud enough.
 fn Model::settle_api_setup(self : Model) -> Model {
-  // The loading sentinel's neutral values are not a verdict on the endpoint;
+  // A loading mirror's neutral values are not a verdict on the endpoint;
   // a flush with nothing applied (a failed save before any snapshot) must
   // not announce them.
   guard self.host_settings_loaded() else { return self }
@@ -3144,7 +3281,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
   if self.api_ready() {
     { ..self, api_setup_open: false, api_setup_dismissed: false, select_menu, }
   } else if self.api_setup_dismissed ||
-    self.management_dialog is Some(Settings) ||
+    self.management_dialog is Some(Settings(_)) ||
     self.cloud_selected() {
     { ..self, api_setup_open: false, select_menu, }
   } else {
@@ -3158,11 +3295,10 @@ fn Model::settle_api_setup(self : Model) -> Model {
 /// OpenRouter uses the same model selector as the official DeepSeek endpoint.
 /// The credentials themselves live on the host; a start carries none.
 fn Model::api_ready(self : Model) -> Bool {
-  match self.api_provider {
-    Deepseek => self.deepseek_key_saved
-    Glm => self.glm_key_saved
-    OpenRouter => self.custom_key_saved
-    Custom => plausible_endpoint_url(self.custom_api_url)
+  guard self.host_settings() is Some({ endpoint, .. }) else { return false }
+  match endpoint.provider {
+    Deepseek | Glm | OpenRouter => endpoint.key_saved()
+    Custom => plausible_endpoint_url(endpoint.custom_api_url)
   }
 }
 
@@ -3182,7 +3318,7 @@ fn plausible_endpoint_url(url : String) -> Bool {
 fn Model::settings_status(self : Model) -> Status {
   if self.api_ready() {
     Ready
-  } else if self.api_provider is (Deepseek | Glm | OpenRouter) {
+  } else if self.api_provider() is (Deepseek | Glm | OpenRouter) {
     ApiKeyRequired
   } else {
     SetupRequired

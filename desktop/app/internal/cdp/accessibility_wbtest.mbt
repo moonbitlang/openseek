@@ -99,12 +99,12 @@ async test "a page's tree may be larger than other replies" {
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       defer server.close()
       group.spawn_bg(() => {
-        let (conn, _) = server.accept()
+        let (conn, request) = accept_request(server)
         defer conn.close()
-        let ws = @websocket.from_http_server(conn.read_request(), conn)
+        let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         assert_eq(
-          @json.parse(ws.recv().read_all().text()),
+          @json.parse(ws.recv().text.read_all()),
           (
             { "id": 1, "method": "Accessibility.getFullAXTree", "params": {} } :
             Json),

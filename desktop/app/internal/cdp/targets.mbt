@@ -9,8 +9,8 @@ pub struct Target {
 /// Discover targets on a local Chromium debugging endpoint. The host still
 /// owns port allocation and the association between native views and targets.
 pub async fn list_targets(port : Int32) -> Array[Target] {
-  let (_, body) = @http.get("http://127.0.0.1:\{port}/json/list")
-  let json = @json.parse(body.text())
+  let (_, body) = @http.get_text("http://127.0.0.1:\{port}/json/list")
+  let json = @json.parse(body)
   guard json is Array(targets) else {
     raise Protocol("Invalid CDP target list")
   }

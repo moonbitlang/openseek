@@ -1,11 +1,8 @@
 
-/* ---------- narrow (phone) layout ---------- */
-/* One breakpoint for the whole app; it must match NarrowBreakpoint in
-   frontend/model.mbt, whose flag drives the behavior half of these
-   rules (the drawer's default, the file panel's drill-down). */
+/* The shell's 760px breakpoint must match NarrowBreakpoint in frontend/model.mbt
+   for drawer and file-panel drill-down behavior. Components have their own queries. */
 
-/* The open drawer's dimmed backdrop; the view renders it only on the
-   narrow layout, so it needs no media query. A tap closes the drawer. */
+/* The view renders this backdrop only in narrow layouts; no media query is needed. */
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
@@ -26,13 +23,6 @@
 }
 
 @media (max-width: 760px) {
-  .topbar {
-    padding-inline-end: var(--panel-toggle-inline-inset);
-  }
-
-  .quick-open-backdrop {
-    --quick-open-top: 16px;
-  }
   .quick-open-list {
     max-height: calc(100vh - 116px);
   }
@@ -45,8 +35,6 @@
     max-width: 100%;
   }
 
-  /* The sidebar leaves the grid and overlays it as a drawer; the
-     content column always has the full width. */
   .app {
     --sidebar-column-width: 0px;
     grid-template-columns: minmax(0, 1fr);
@@ -70,9 +58,6 @@
     transform: translateX(-100%);
   }
 
-  /* The topbar keeps only what a phone needs: the toggle, the title,
-     the run state. The workspace chip and the counters live in the
-     composer/settings anyway. */
   .topbar-title {
     max-width: 38%;
   }
@@ -87,8 +72,6 @@
     flex-wrap: wrap;
   }
 
-  /* The files panel covers the whole app instead of splitting the
-     content; the conversation keeps the full width underneath. */
   .content.panel-open,
   .content.panel-open.panel-expanded {
     grid-template-columns: minmax(0, 1fr) 0;
@@ -136,18 +119,6 @@
     display: none;
   }
 
-  /* Settings and Skills: one column — label and description above,
-     the control below at full width. */
-  .setting-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-4);
-  }
-  .setting-control {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   /* Errors stay below the header so a failed send leaves its restored draft
      and retry controls visible. Bound a group of errors as well as each one. */
   .notifications.corner-bottom-right,
@@ -163,8 +134,6 @@
     align-items: stretch;
   }
 
-  /* Account entry uses the same small-screen layout in ordinary browsers and
-     embedded hosts. Keep shell toolbar sizes shared. */
   .portal-inner {
     padding: var(--space-7) var(--space-7);
   }
@@ -190,15 +159,12 @@
     font-size: 16px;
   }
 
-  /* Portal: the header wraps instead of overflowing. */
   .portal-header {
     flex-wrap: wrap;
     gap: var(--space-5);
   }
 }
 
-/* Keep status changes visible without forcing motion on users who disable it
-   at the operating-system level. Static shape and color still show each state. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --drawer-duration: 0ms;

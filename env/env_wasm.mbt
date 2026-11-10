@@ -8,6 +8,10 @@ fn current_exe_dir_ffi() -> UInt64 = "moonbitlang/core" "env/current_exe_dir"
 
 ///|
 #unsafe_skip_stub_check
+fn get_errno() -> Int32 = "moonbitlang/async" "os_error/get_errno"
+
+///|
+#unsafe_skip_stub_check
 fn buffer_is_null(buffer : UInt64) -> Bool = "moonbitlang/async" "c_buffer/is_null"
 
 ///|
@@ -33,11 +37,11 @@ fn free_buffer(buffer : UInt64) -> Unit = "moonbitlang/async" "c_buffer/free"
 fn executable_path_from_buffer(
   buffer : UInt64,
   context : String,
-) -> String raise @os_error.OSError {
-  let errno = @os_error.get_errno()
+) -> String raise @os_error.OsError {
+  let errno = get_errno()
   // Host buffer handles are opaque; the ABI defines which handles are null.
   if buffer_is_null(buffer) {
-    raise OSError(errno, context~)
+    raise @os_error.OsError::from_errno(errno, context~)
   }
   // Each successful import transfers one NUL-terminated native path buffer.
   defer free_buffer(buffer)
@@ -48,12 +52,12 @@ fn executable_path_from_buffer(
 }
 
 ///|
-fn current_exe_internal() -> String raise @os_error.OSError {
+fn current_exe_internal() -> String raise @os_error.OsError {
   executable_path_from_buffer(current_exe_ffi(), "@env.current_exe()")
 }
 
 ///|
-fn current_exe_dir_internal() -> String raise @os_error.OSError {
+fn current_exe_dir_internal() -> String raise @os_error.OsError {
   executable_path_from_buffer(current_exe_dir_ffi(), "@env.current_exe_dir()")
 }
 

@@ -54,9 +54,9 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   )
   let dirty_checkout = repo.join(".worktrees/wt-1")
   assert_true(@fsx.exists(dirty_checkout.join("deps/one/.git").to_path()))
-  @fs.write_file(
+  @fs.write_text(
     dirty_checkout.join("junk.txt").to_string(),
-    b"x",
+    "x",
     create_mode=CreateOrTruncate,
   )
   guard archive_session(manager, "s-sub-dirty", (_, _) => ())

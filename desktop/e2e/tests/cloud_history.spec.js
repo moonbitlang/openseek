@@ -1,3 +1,4 @@
+import { historyCacheRows } from './support/cloud_history_cache.js';
 import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
@@ -6,75 +7,6 @@ const png = readFileSync(new URL('../../../deepseek/client/testdata/two-colors.p
 const image = { type: 'image', media_type: 'image/png', data: png };
 const sessionURL = `${authOrigin}/cloud/session/${sessionA}`;
 const user = (task, content, created_at) => ({ task_id: task, kind: 'user', data: { content }, created_at });
-
-test('Cloud history recalls text from image messages in order and skips image-only or empty prompts', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.trimHistory = true;
-  cloud.histories.set(sessionA, {
-    messages: [
-      user('plain', 'An older plain question', 1000),
-      user('mixed', [{ type: 'text', text: 'Review ' }, image, { type: 'text', text: 'the attached image' }], 1001),
-      user('image-only', [image], 1002),
-      user('empty', '  ', 1003),
-    ],
-    generating: false,
-  });
-  await cloud.install();
-  await page.goto(sessionURL);
-  const task = page.locator('#task');
-  const caption = page.locator('.composer-mode-chip');
-
-  for (const reload of [false, true]) {
-    if (reload) await page.reload();
-    await expect(task).toBeEnabled();
-    await task.press('ArrowUp');
-    await expect(task).toHaveValue('Review the attached image');
-    await expect(caption).toHaveText('History 2/2');
-    await expect(page.locator('.composer-image')).toHaveCount(0);
-    await task.press('Home');
-    await task.press('ArrowUp');
-    await expect(task).toHaveValue('An older plain question');
-    await expect(caption).toHaveText('History 1/2');
-    await task.press('End');
-    await task.press('ArrowDown');
-    await expect(task).toHaveValue('Review the attached image');
-    await task.press('End');
-    await task.press('ArrowDown');
-    await expect(task).toHaveValue('');
-    await expect(caption).toHaveCount(0);
-  }
-
-  await task.fill('Keep my unsent draft');
-  await task.press('Home');
-  await task.press('ArrowUp');
-  await expect(task).toHaveValue('Keep my unsent draft');
-  expect(cloud.device.ticketRequests).toHaveLength(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
-test('Cloud rich-message history restores file mention chips without exposing the wire envelope or old image', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  const prompt = 'Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>';
-  cloud.histories.set(sessionA, {
-    messages: [user('with-file-and-image', [{ type: 'text', text: prompt }, image], 1000)],
-    generating: false,
-  });
-  await cloud.install();
-  await page.goto(sessionURL);
-  const task = page.locator('#task');
-  await expect(task).toBeEnabled();
-  await task.press('ArrowUp');
-  await expect(task).toHaveValue('Update the heading');
-  await expect(page.locator('.composer .mention-chip')).toContainText('index.html');
-  await expect(page.locator('.composer-image')).toHaveCount(0);
-  await expect(page.locator('.composer-mode-chip')).toHaveText('History 1/1');
-  await task.press('End');
-  await task.press('ArrowDown');
-  await expect(task).toHaveValue('');
-  await expect(page.locator('.composer .mention-chip')).toHaveCount(0);
-  expect(cloud.device.ticketRequests).toHaveLength(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
 
 test('Cloud reads one turn at a time, preserves the viewport, and revalidates only the latest page', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -106,7 +38,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   const transcript = page.locator('#transcript');
   const bubbles = transcript.locator('.msg.user .msg-content');
   const loadingOlder = transcript.getByRole('status').filter({ hasText: 'Loading more…' });
-  const rowSpinner = cloud.row(sessionA).locator('..').locator('.conversation-load-spinner');
+  const rowSpinner = cloud.rowContainer(sessionA).locator('.conversation-load-spinner');
   await expect(bubbles).toHaveText(['Third question']);
   await expect(loadingOlder).toHaveCount(0);
   await expect(rowSpinner).toHaveCount(0);
@@ -154,6 +86,11 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   expect((await unchanged).status()).toBe(304);
   expect(await requests.at(-1).headerValue('if-none-match')).toBe(firstTag);
   await expect(bubbles).toHaveCount(3);
+  // Older pages survive revisits in memory, while persistence keeps only the latest turn.
+  await expect.poll(async () => (await historyCacheRows(page)).find(row => row.session === sessionA)?.page.offset).toBe(2);
+  const saved = (await historyCacheRows(page)).find(row => row.session === sessionA).page;
+  expect(saved.session.events.map(event => event.sequence)).toEqual([7, 8, 9]);
+  expect(saved.etag).toBe(firstTag);
   const task = page.locator('#task');
   for (const prompt of ['Third question', 'Second question', 'First question']) {
     await task.press('Home');
@@ -224,77 +161,4 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   await page.mouse.wheel(0, -200);
   await expect(bubbles).toHaveText(['Earlier question', 'Latest question']);
   expect(queries).toEqual(['?limit=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=0']);
-});
-
-test('Cloud skips older reads when the cached turn is complete even during generation', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  const task = 'first-task';
-  const turns = [{
-    messages: [
-      { ...user(task, 'Already cached', 1), engine_sequence: 1 },
-      { task_id: task, kind: 'task_finished', data: { status: 'completed' }, created_at: 1001 },
-    ],
-    events: [
-      { sequence: 1, item: { kind: 'user', payload: { content: 'Already cached' } } },
-      { sequence: 2, item: { kind: 'terminal', payload: { kind: 'finished' } } },
-    ],
-  }];
-  cloud.historyTurns.set(sessionA, turns);
-  cloud.histories.set(sessionA, { messages: [], generating: true });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  const transcript = page.locator('#transcript');
-  await expect(transcript.getByText('Already cached')).toBeVisible();
-  await cloud.open(sessionB);
-  turns.push({ messages: [user('new-task', 'Latest turn', 3)], events: [] });
-  await cloud.open(sessionA);
-  await expect(transcript.locator('.msg.user .msg-content')).toHaveText(['Already cached', 'Latest turn']);
-
-  const olderReads = cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`).length;
-  await transcript.hover();
-  await page.mouse.wheel(0, -200);
-  // Use a browser event turn to let any pagination command reach fetch.
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  expect(cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`)).toHaveLength(olderReads);
-  await expect(transcript.locator('.transcript-loading-older')).toHaveCount(0);
-});
-
-test('Cloud renders only turns contiguous with the latest when another device adds turns', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  const turn = (text, index) => ({ messages: [user(`task-${index}`, text, index + 1)], events: [] });
-  const turns = ['First question', 'Second question', 'Third question'].map(turn);
-  cloud.historyTurns.set(sessionA, turns);
-  await cloud.install();
-  const queries = [];
-  page.on('request', request => {
-    const url = new URL(request.url());
-    if (request.method() === 'GET' && url.pathname === `/v1/sessions/${sessionA}/messages`) {
-      queries.push(url.search);
-    }
-  });
-  await page.goto(sessionURL);
-  const transcript = page.locator('#transcript');
-  const bubbles = transcript.locator('.msg.user .msg-content');
-  const pageUp = async () => {
-    await transcript.hover();
-    await page.mouse.wheel(0, -200);
-  };
-  await expect(bubbles).toHaveText(['Third question']);
-  await pageUp();
-  await expect(bubbles).toHaveText(['Second question', 'Third question']);
-  await pageUp();
-  await expect(bubbles).toHaveText(['First question', 'Second question', 'Third question']);
-
-  await cloud.open(sessionB);
-  turns.push(turn('Fourth question', 3), turn('Fifth question', 4));
-  await cloud.open(sessionA);
-  await expect(bubbles).toHaveText(['Fifth question']);
-  await pageUp();
-  await expect(bubbles).toHaveText([
-    'First question', 'Second question', 'Third question', 'Fourth question', 'Fifth question',
-  ]);
-  expect(queries).toEqual([
-    '?limit=1', '?limit=1&offset=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=3',
-  ]);
 });

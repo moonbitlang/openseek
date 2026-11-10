@@ -10,9 +10,9 @@ async test "a frozen version-1 session file still loads" {
   let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-legacy-v1-"))
   defer @fs.rmdir(store.root(), recursive=true)
   @fs.mkdir("\{store.root()}/sessions/legacy", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "legacy"),
-    @fs.read_file(legacy_v1_fixture).text(),
+    @fs.read_text(legacy_v1_fixture),
     create_mode=CreateOrTruncate,
   )
   let loaded = store.load(SessionId("legacy"))
@@ -85,9 +85,7 @@ async test "a frozen version-1 session file still loads" {
 
 ///|
 async test "the lenient log parser reads the frozen version-1 file cleanly" {
-  let parsed = @session_log.parse_events(
-    @fs.read_file(legacy_v1_fixture).text(),
-  )
+  let parsed = @session_log.parse_events(@fs.read_text(legacy_v1_fixture))
   assert_eq(
     parsed.header,
     Some({ id: "legacy", system_prompt: "You are a test agent.", }),

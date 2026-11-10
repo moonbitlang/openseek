@@ -21,7 +21,7 @@ fn plan_reminders(result : @agent_session.Session) -> Array[String] {
 /// retry shows up as a hard request-count mismatch instead of silently
 /// shifting the cadence.
 async fn plan_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   bodies : Array[String],
   plan_calls~ : Int32,
   record_first~ : Bool,
@@ -36,21 +36,21 @@ async fn plan_test_server(
         "Content-Type": "text/event-stream",
       })
       if record_first && bodies.length() == 1 {
-        conn.write(
+        conn.write_string(
           (
             #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"fix the parser\",\"status\":\"in_progress\"}]}"}}]}}]}
           ),
         )
-        conn.write("\n\n")
+        conn.write_string("\n\n")
       } else if bodies.length() <= plan_calls {
-        conn.write(
+        conn.write_string(
           (
             #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"step\",\"status\":\"doing\"}]}"}}]}}]}
           ),
         )
-        conn.write("\n\n")
+        conn.write_string("\n\n")
       } else {
-        conn.write(
+        conn.write_string(
           (
             #|data: {"choices":[{"delta":{"content":"done"}}]}
             #|
@@ -58,7 +58,7 @@ async fn plan_test_server(
           ),
         )
       }
-      conn.write("data: [DONE]\n\n")
+      conn.write_string("data: [DONE]\n\n")
     },
   )
 }

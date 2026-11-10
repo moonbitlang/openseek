@@ -64,13 +64,13 @@ async test "web_search executes end-to-end against a mock messages endpoint" {
     }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
-        (request, body, conn) => {
-          let _ = body.read_all()
+        (request, conn) => {
+          let _ = conn.read_all()
           assert_eq(request.path, "/anthropic/v1/messages")
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write(sample_response_body())
+          conn.write_string(sample_response_body())
         },
         max_connections=4,
       )
@@ -107,12 +107,12 @@ async test "web_search surfaces a provider error as a recoverable tool error" {
     }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let _ = body.read_all()
+        (_request, conn) => {
+          let _ = conn.read_all()
           conn.send_response(401, "Unauthorized", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write(
+          conn.write_string(
             "{\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}",
           )
         },

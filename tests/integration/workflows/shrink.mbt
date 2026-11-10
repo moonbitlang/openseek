@@ -181,7 +181,7 @@ async fn moon_child(dir : String) -> Unit {
         1
       let canned = dir + "/analyze-\{turn}.txt"
       if @fs.exists(canned) {
-        println(@fs.read_file(canned).text())
+        println(@fs.read_text(canned))
       }
     }
     ["check", ..] if @fs.exists(dir + "/fail-check") =>

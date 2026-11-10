@@ -2,7 +2,7 @@
 /// Scripted stand-in for goal-check tests: responses come from a queue of
 /// SSE payload lines, bodies are recorded, assertions happen after the run.
 async fn goal_check_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   bodies : Array[String],
   responses : Array[String],
   on_request? : async () -> Unit,
@@ -19,8 +19,8 @@ async fn goal_check_test_server(
       conn.send_response(200, "OK", extra_headers={
         "Content-Type": "text/event-stream",
       })
-      conn.write("data: \{responses[bodies.length() - 1]}\n\n")
-      conn.write("data: [DONE]\n\n")
+      conn.write_string("data: \{responses[bodies.length() - 1]}\n\n")
+      conn.write_string("data: [DONE]\n\n")
     },
   )
 }
@@ -30,7 +30,7 @@ async fn goal_check_test_server(
 /// from the queue; the checkpoint summary call — the only non-streaming
 /// request, recognizable by its prompt — gets a plain JSON body.
 async fn goal_ceiling_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   bodies : Array[String],
   checkpoint_bodies : Array[String],
   responses : Array[String],
@@ -45,7 +45,7 @@ async fn goal_ceiling_test_server(
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "application/json",
         })
-        conn.write(
+        conn.write_string(
           "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"GOAL-CEILING-SUMMARY\"}}]}",
         )
       } else {
@@ -53,8 +53,8 @@ async fn goal_ceiling_test_server(
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write("data: \{responses[bodies.length() - 1]}\n\n")
-        conn.write("data: [DONE]\n\n")
+        conn.write_string("data: \{responses[bodies.length() - 1]}\n\n")
+        conn.write_string("data: [DONE]\n\n")
       }
     },
   )

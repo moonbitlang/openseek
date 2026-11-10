@@ -17,7 +17,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
   for session in ["one", "two"] {
     let dir = workspace.join(".openseek/sessions").join(session)
     @fs.mkdir(dir.to_string(), recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       dir.join("openseek_session-\{session}.jsonl").to_string(),
       "{\"version\":1,\"id\":\"\{session}\",\"system_prompt\":\"\"}\n",
     )
@@ -178,7 +178,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       }),
     )
     let script = root.join("list-engine.sh").to_string()
-    @fs.write_file(script, "#!/bin/sh\nprintf '[]\\n'\n")
+    @fs.write_text(script, "#!/bin/sh\nprintf '[]\\n'\n")
     @fs.chmod(script, 0o700)
     let actor = @engine.new_engine_actor(script)
     let ready : @async.Queue[Unit] = Queue(kind=Blocking(1))
@@ -258,7 +258,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
     assert_true(
       client.call_tool(name="artifacts_attach", arguments=second).is_error,
     )
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 

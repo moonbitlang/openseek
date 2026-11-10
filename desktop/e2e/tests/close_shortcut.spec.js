@@ -37,7 +37,7 @@ async function installDesktop(page, systemDark = false) {
       openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 5 });
+            window.desktopEvent('openseek.agent.connected', { protocol: 6 });
           }
           return window.desktopRequest({ method, params });
         },
@@ -270,38 +270,6 @@ test('Close follows terminal focus and keeps the remaining terminal usable', asy
   await page.locator('#task').click();
   await closeFocused(page);
   await expect.poll(() => requests('app.close_window').length).toBe(1);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Close respects dialogs and closes successive dock tabs without closing the window', async ({ page }) => {
-  const app = await installDesktop(page);
-  await app.openQuickOpen();
-  await page.locator('#quick-open-input').fill('main');
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  const tabs = page.locator('.editor-tab');
-  await expect(tabs).toHaveCount(1);
-  await expect(page.getByRole('region', { name: 'Readonly code viewer' })).toBeVisible();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true })
-    .getByRole('menuitem', { name: 'Browse', exact: true }).click();
-  await expect(tabs).toHaveCount(2);
-
-  await app.openQuickOpen();
-  await expect(page.locator('#quick-open-input')).toBeFocused();
-  await closeFocused(page);
-  await expect(page.locator('#quick-open-input')).toBeFocused();
-  await page.keyboard.press('Escape');
-  // A tab's close button will disappear on close. Focus must remain in the
-  // dock for the next command, instead of falling back to the window.
-  await tabs.last().locator('.tab-close').focus();
-  await closeFocused(page);
-  await expect(tabs).toHaveCount(1);
-  await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
-  await closeFocused(page);
-  await expect(tabs).toHaveCount(0);
-  await expect(page.locator('.content.panel-open')).toHaveCount(0);
-  expect(app.requests.filter(request => request.method === 'app.close_window'))
-    .toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
 

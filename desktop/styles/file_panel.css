@@ -1,5 +1,4 @@
 
-/* ---------- files panel ---------- */
 .file-image-preview {
   display: grid;
   place-items: center;
@@ -14,7 +13,6 @@
   object-fit: contain;
 }
 
-/* Shared icon button styling for panel controls. */
 .panel-toggle {
   --panel-toggle-size: calc(var(--font-size-base) * 2);
   display: grid;
@@ -37,7 +35,7 @@ button.panel-toggle:not(:disabled):hover {
 
 .panel-toggle.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .file-reveal-button {
@@ -60,15 +58,14 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-primary);
 }
 
-/* The editor part: a tab strip of open files over the viewer, with the
-   file tree as a toggleable pane on the viewer's right. */
 .editor {
+  anchor-name: --editor-edge;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--color-separator);
+  border-left: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
   /* Own stacking context so the opaque editor always paints above the
      conversation column, never the other way around. */
@@ -84,12 +81,12 @@ button.panel-toggle:not(:disabled):hover {
   transition-delay: var(--drawer-duration);
 }
 
-/* The editor's top bar, the same height as the topbar so the header
-   divider runs continuously across the window: the open-file tabs on
-   the left, with space reserved for the shell's fixed panel toggle
-   on the right. Always rendered — the editor's child order is
-   structural (see panel_view). */
+/* panel_view keeps the tab bar mounted so toggling modes cannot re-key the
+   imperative viewer host. Reserve the shell's fixed panel-toggle slot. */
 .editor-tabsbar {
+  /* Keep the launcher attached to + as the panel and tab strip resize. */
+  position: relative;
+  anchor-scope: --dock-menu-trigger;
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   display: flex;
   align-items: center;
@@ -97,12 +94,10 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
 }
 
-/* The tabs scroll horizontally rather than wrapping; the scrollbar is
-   hidden — the chips themselves make the overflow discoverable. */
 .editor-tabs {
   display: flex;
   align-items: center;
@@ -116,9 +111,6 @@ button.panel-toggle:not(:disabled):hover {
   display: none;
 }
 
-/* One open file, styled like the app's other selectable chips
-   (tree rows, panel toggles): a quiet rounded chip, accent-tinted
-   when active. */
 .editor-tab {
   display: flex;
   align-items: center;
@@ -127,7 +119,7 @@ button.panel-toggle:not(:disabled):hover {
   max-width: min(200px, 100%);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
@@ -138,9 +130,8 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-primary);
 }
 .editor-tab.active {
-  /* Match the selected conversation in the left sidebar. */
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 /* A tab whose file vanished from disk keeps its place, struck through
    until the file reappears or the tab is closed. */
@@ -153,9 +144,6 @@ button.panel-toggle:not(:disabled):hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The close affordance is a Codicon centered by this grid, not a text `×`:
-   the SVG box centers exactly, while a glyph's ink sits on the text baseline
-   and so reads about a pixel low. */
 .tab-close {
   --icon-size: var(--icon-sm);
   flex: 0 0 auto;
@@ -178,11 +166,7 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-muted);
 }
 
-/* The viewer and the toggleable file-tree panel split the column below
-   the breadcrumb, Emacs-style: the tree docks flat along the bottom
-   and takes real layout height, the viewer keeps the rest. Both stay
-   mounted (see panel_view) so the viewer host is never re-keyed; CSS
-   alone hides the panel. */
+/* Keep viewer and tree mounted across layout changes to preserve viewer state. */
 .editor-body {
   display: flex;
   flex-direction: column;
@@ -293,14 +277,6 @@ button.panel-toggle:not(:disabled):hover {
 .viewer-notice.hidden {
   display: none;
 }
-/* The file tree as a flat bottom panel, Emacs-window style: full
-   width, a 1px seam against the viewer, no chrome of its own. Non-modal —
-   the viewer above stays live when the tree is shown or hidden.
-   The height is `--tree-height`, set as the user drags the handle on
-   the top seam (see tree_resize.mbt); it defaults to a third and is
-   clamped so the panel floors at 96px while the viewer keeps at
-   least 120px. The clamp also re-fits the panel on window resize
-   without any script. */
 /* Animate the stored manual preference. The temporary picker uses full size
    independently, so selecting a document does not start a closing animation. */
 @property --tree-open-progress {
@@ -309,6 +285,7 @@ button.panel-toggle:not(:disabled):hover {
   initial-value: 0;
 }
 .file-tree-pane {
+  anchor-name: --tree-edge;
   --tree-open-progress: 0;
   --tree-visibility: hidden;
   --tree-size: clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
@@ -318,7 +295,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 calc(var(--tree-size) * var(--tree-open-progress));
   min-height: 0;
   overflow: hidden;
-  border-top: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
+  border-top: calc(1px * var(--tree-open-progress)) solid var(--color-seam);
   background: var(--color-bg-surface);
   visibility: var(--tree-visibility);
   transition:
@@ -334,11 +311,6 @@ button.panel-toggle:not(:disabled):hover {
   pointer-events: none;
 }
 
-/* The right-sidebar layout (a Settings choice): same DOM, the body
-   flexes as a row and the tree becomes a column on the viewer's
-   right. The width is `--tree-width`, set by the same drag handle
-   (now on the pane's left seam), clamped so the tree floors at 180px
-   while the viewer keeps at least 240px. */
 .editor.tree-right .editor-body {
   flex-direction: row;
 }
@@ -346,7 +318,7 @@ button.panel-toggle:not(:disabled):hover {
   --tree-size: clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
   min-width: 0;
   border-top: none;
-  border-left: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
+  border-left: calc(1px * var(--tree-open-progress)) solid var(--color-seam);
 }
 .editor.tree-picker .file-tree-pane {
   flex-basis: var(--tree-size);
@@ -362,29 +334,26 @@ button.panel-toggle:not(:disabled):hover {
   visibility: inherit;
 }
 
-/* Drag-to-resize handle on the panel's viewer-facing seam — the
-   row-resize twin of .editor-resize-handle in the bottom layout, a
-   col-resize strip on the left seam in the sidebar layout. */
 .tree-resize-handle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  --resize-handle-line-size: 100% 2px;
+  position: fixed;
+  position-anchor: --tree-edge;
+  top: anchor(top);
+  left: anchor(left);
+  right: anchor(right);
   height: var(--resize-handle-height);
+  transform: translateY(-50%);
   z-index: 2;
   cursor: row-resize;
 }
 .editor.tree-right .tree-resize-handle {
+  --resize-handle-line-size: 2px 100%;
   right: auto;
-  bottom: 0;
+  bottom: anchor(bottom);
   width: var(--resize-handle-width);
   height: auto;
+  transform: translateX(-50%);
   cursor: col-resize;
-}
-.tree-resize-handle:hover,
-html.is-resizing-row .tree-resize-handle,
-html.is-resizing-col .tree-resize-handle {
-  background: var(--color-accent-soft);
 }
 html.is-resizing-row {
   cursor: row-resize;
@@ -392,30 +361,20 @@ html.is-resizing-row {
 html.is-resizing-col {
   cursor: col-resize;
 }
-html.is-resizing-row *,
-html.is-resizing-col * {
-  user-select: none !important;
-}
 .file-panel-error.empty {
   display: none;
 }
 
-/* Drag-to-resize handle on the editor's left edge. A thin strip floated
-   above the seam (z-index over the viewer) with a col-resize cursor; it
-   tints on hover and while dragging. Hidden when the panel is closed (the
-   editor column is then zero-width). */
 .editor-resize-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  position: fixed;
+  position-anchor: --editor-edge;
+  top: anchor(top);
+  bottom: anchor(bottom);
+  left: anchor(left);
+  transform: translateX(-50%);
   width: var(--resize-handle-width);
   z-index: 3;
   cursor: col-resize;
-}
-.editor-resize-handle:hover,
-html.is-resizing .editor-resize-handle {
-  background: var(--color-accent-soft);
 }
 .content:not(.panel-open) .editor-resize-handle {
   display: none;
@@ -423,20 +382,15 @@ html.is-resizing .editor-resize-handle {
 .content.panel-expanded .editor-resize-handle {
   display: none;
 }
-/* While dragging, keep the resize cursor everywhere and stop the drag from
-   selecting text under the pointer. */
+/* Resize handlers prevent selection at mousedown. Global user-select changes
+   make long transcripts expensive to resize even with offscreen rows skipped. */
 html.is-resizing {
   cursor: col-resize;
 }
-html.is-resizing * {
-  user-select: none !important;
-}
 
-/* Like VS Code's SplitView, keep divider drags out of the editor's mouse
-   hit testing: a mousemove there reads geometry after the drag writes sizes.
-   Restrict this to viewer content so Desktop's divider handles remain usable.
-   Include descendants because viewer widgets can explicitly enable pointers.
-   Removing the existing drag class restores each widget's normal behavior. */
+/* Suppress viewer mouse hit testing during divider drags to avoid geometry
+   reads after size writes. Include descendants that re-enable pointer events,
+   but leave Desktop's divider handles interactive. */
 html:is(
   .is-resizing,
   .is-resizing-row,
@@ -478,10 +432,6 @@ html:is(
 .editor.mode-picker.mode-search-picker .viewer-stack::after {
   content: "Select a search result to open";
 }
-/* Keep the launcher attached to + as the panel and tab strip resize. */
-.editor-tabsbar {
-  position: relative;
-}
 .tab-action {
   --tab-action-size: calc(var(--font-size-base) * 26 / 14);
   flex: 0 0 auto;
@@ -498,7 +448,7 @@ html:is(
 }
 .tab-action:hover:not(:disabled) {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .tab-action:disabled {
   opacity: 0.4;
@@ -506,9 +456,6 @@ html:is(
 }
 .tab-add.hidden {
   display: none;
-}
-.editor-tabsbar {
-  anchor-scope: --dock-menu-trigger;
 }
 .tab-add {
   anchor-name: --dock-menu-trigger;
@@ -547,7 +494,6 @@ html:is(
 .dock-menu .dock-launcher-name {
   font-weight: inherit;
 }
-/* The empty strip's centered launcher pane, same rows as the popup. */
 .dock-launcher {
   display: none;
 }
@@ -580,7 +526,7 @@ html:is(
 }
 .dock-launcher-row:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .dock-launcher-name {
   font-weight: 600;
@@ -609,7 +555,7 @@ html:is(
   gap: var(--space-3);
   flex: 0 0 auto;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
 }
 .browser-nav-button {
   flex: 0 0 auto;
@@ -626,7 +572,7 @@ html:is(
 }
 .browser-nav-button:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .browser-nav-button.browser-annotate:not(.active):hover {
   color: var(--color-text-secondary);
@@ -634,7 +580,7 @@ html:is(
 }
 .browser-nav-button.browser-annotate.active,
 .browser-nav-button.browser-annotate.active:hover {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -659,7 +605,7 @@ html:is(
 .browser-failure {
   flex: 0 0 auto;
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
 }
@@ -735,14 +681,13 @@ html:is(
 }
 .search-option.pressed {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-option > svg {
   display: block;
   width: var(--icon-lg);
   height: var(--icon-lg);
 }
-/* Mode selector: text vs semantic, mirroring semgrep's search-mode split. */
 .search-mode {
   flex: 0 0 auto;
   display: flex;
@@ -763,7 +708,7 @@ html:is(
   cursor: pointer;
 }
 .search-mode-button + .search-mode-button {
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-mode-button:hover {
   background: var(--color-bg-subtle);
@@ -771,7 +716,7 @@ html:is(
 }
 .search-mode-button.pressed {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-mode-options {
   flex: 0 0 auto;
@@ -779,7 +724,6 @@ html:is(
   align-items: center;
   gap: var(--space-2);
 }
-/* Semantic hits: one structural match per block, semgrep-style. */
 .search-semantic-pattern-group {
   min-width: 0;
 }
@@ -808,7 +752,7 @@ html:is(
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-xs);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-family: var(--font-family-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -816,21 +760,21 @@ html:is(
 .search-semantic-pattern-results {
   min-width: 0;
   margin-left: var(--space-5);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-semantic-pattern-results > .search-file-group {
   margin-left: var(--space-4);
 }
 .search-semantic-pattern-results .search-file-results {
   margin-left: var(--space-6);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-selection-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
@@ -892,7 +836,7 @@ html:is(
   background: var(--color-accent-soft);
 }
 .search-semantic-hit.selected .search-semantic-select {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-semantic-hit:hover {
   background: var(--color-bg-hover, var(--color-bg-surface));
@@ -958,7 +902,7 @@ html:is(
   gap: var(--space-2);
   flex: 0 0 auto;
   padding: 0 var(--space-5) var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 .search-toolbar button {
   padding: var(--space-2) var(--space-4);
@@ -1046,7 +990,7 @@ html:is(
   padding: 0 var(--space-2);
   border-radius: 9px;
   background: var(--color-bg-subtle);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   line-height: calc(18 / 12);
   text-align: center;
@@ -1162,7 +1106,7 @@ html:is(
   font-size: var(--font-size-xs);
 }
 .search-pattern-repair-status svg {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   flex: 0 0 auto;
 }
 .search-pattern-repair-status.error {
@@ -1216,7 +1160,7 @@ html:is(
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: inherit;
   text-decoration: underline;
@@ -1235,7 +1179,7 @@ html:is(
   flex: 0 0 auto;
   gap: var(--space-1);
   padding: var(--space-4) var(--space-2) var(--space-2);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
 }
 
 .explorer-tab {
@@ -1263,7 +1207,7 @@ html:is(
 }
 
 .explorer-tab.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -1290,8 +1234,6 @@ html:is(
   padding: var(--space-2) 0 var(--space-4);
 }
 
-/* Keep the tree directly beneath the existing Files tab. Its compact spacing
-   does not change the Search or Changes inventories. */
 .file-tree.workspace-file-list {
   --tree-step: 14px;
   --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
@@ -1427,17 +1369,12 @@ button.review-section-header:hover,
 }
 
 .review-split-handle {
+  --resize-handle-line-size: 100% 2px;
   position: relative;
-  flex: 0 0 5px;
-  border-top: 1px solid var(--color-separator);
-  border-bottom: 1px solid transparent;
+  flex: 0 0 var(--resize-handle-height);
+  background: linear-gradient(var(--color-seam), var(--color-seam)) center /
+    100% 1px no-repeat;
   cursor: row-resize;
-}
-
-.review-split-handle:hover,
-.review-split-handle:focus-visible,
-html.is-resizing-review .review-split-handle {
-  background: var(--color-accent-soft);
 }
 
 .review-split-handle.hidden {
@@ -1447,7 +1384,6 @@ html.is-resizing-review .review-split-handle {
 html.is-resizing-review,
 html.is-resizing-review * {
   cursor: row-resize;
-  user-select: none !important;
 }
 
 .git-graph-header {
@@ -1826,7 +1762,7 @@ button.git-history-file:focus-visible {
 }
 
 button.git-history-file.selected {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -1853,7 +1789,7 @@ button.git-history-file.selected {
 .git-history-file-status.status-added { color: var(--color-success); }
 .git-history-file-status.status-deleted { color: var(--color-danger); }
 .git-history-file-status.status-renamed,
-.git-history-file-status.status-copied { color: var(--color-accent-strong); }
+.git-history-file-status.status-copied { color: var(--color-accent); }
 
 .git-commit-files-message,
 .git-graph-message,
@@ -1901,7 +1837,7 @@ button.git-history-file.selected {
   border: 0;
   border-radius: 2px;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: var(--font-size-sm);
   line-height: calc(20 / 13);
@@ -1922,7 +1858,7 @@ button.git-history-file.selected {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: var(--font-size-sm);
   cursor: pointer;
@@ -1994,7 +1930,7 @@ button.git-history-file.selected {
 }
 
 .tree-row:focus-visible {
-  outline: 2px solid var(--color-accent-strong);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -2004,7 +1940,7 @@ button.git-history-file.selected {
 
 .tree-row.selected {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .change-tree {
@@ -2038,7 +1974,7 @@ button.git-history-file.selected {
 
 .change-row.renamed .change-path,
 .change-status.renamed {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .change-row.modified .change-path,
@@ -2088,19 +2024,19 @@ button.git-history-file.selected {
   margin: 0 var(--space-1) 0 0;
   border: 1px solid color-mix(in srgb, var(--color-text-primary) 30%, transparent);
   border-radius: 3px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: transparent;
   cursor: pointer;
 }
 
 .change-review-checkbox[aria-checked="true"],
 .change-review-checkbox[aria-checked="mixed"] {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
 .change-review-checkbox:hover:not(:disabled) {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
 }
 
 .change-review-checkbox:disabled {
@@ -2146,12 +2082,6 @@ button.git-history-file.selected {
   text-overflow: ellipsis;
 }
 
-/* The slimmer second row under the tab bar: the active file's path,
-   with the tree-pane toggle at the right edge — the same padding as
-   the tab bar above, so it sits directly under the panel toggle.
-   Hidden while no file is open (the tree then shows unconditionally);
-   it stays in the DOM so the editor's child order never re-keys the
-   viewer host. */
 .viewer-breadcrumb.hidden {
   display: none;
 }
@@ -2164,9 +2094,9 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   height: 2.5rem;
   padding: 0 var(--space-6) 0 var(--space-5);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   font-size: var(--font-size-xs);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: visible;
   background: var(--color-bg-surface);
@@ -2193,7 +2123,7 @@ button.git-history-file.selected {
 }
 
 .viewer-breadcrumb-row {
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
 }
 
 .review-command-row {
@@ -2212,7 +2142,6 @@ button.git-history-file.selected {
   display: none;
 }
 
-/* The path crumbs grow and ellipsize. */
 .crumb-path {
   display: flex;
   align-items: center;
@@ -2222,7 +2151,6 @@ button.git-history-file.selected {
   overflow: hidden;
 }
 
-/* Every crumb but the current one opens a directory picker. */
 .crumb {
   appearance: none;
   padding: 0;
@@ -2249,7 +2177,7 @@ button.git-history-file.selected {
 }
 .crumb-sep {
   flex: 0 0 auto;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
 /* The tab already identifies an Office file. Keep its folder breadcrumb and
@@ -2286,7 +2214,6 @@ button.git-history-file.selected {
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
-  background: transparent;
   font: inherit;
   font-size: var(--font-size-xs);
 }
@@ -2302,7 +2229,6 @@ button.git-history-file.selected {
 }
 .office-viewer-find input:focus {
   outline: 1px solid var(--color-accent);
-  background: var(--color-bg-surface);
 }
 .office-viewer-control {
   display: grid;
@@ -2321,7 +2247,7 @@ button.git-history-file.selected {
 }
 .office-viewer-control:hover:not(:disabled),
 .office-viewer-control.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 .office-viewer-control:disabled {
@@ -2331,15 +2257,12 @@ button.git-history-file.selected {
 }
 .office-viewer-zoom-value {
   min-width: 38px;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
-/* VS Code-style breadcrumb picker: clicking a directory opens its immediate
-   children over the source viewer. It is deliberately independent from the
-   docked Explorer, but shares the Explorer's directory cache and ordering. */
 .breadcrumb-picker {
   position: absolute;
   top: calc(100% - 1px);
@@ -2365,7 +2288,7 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   min-height: 2.5rem;
   padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   background: var(--color-bg-subtle);
   font-size: var(--font-size-xs);
@@ -2440,7 +2363,7 @@ button.git-history-file.selected {
 }
 
 .breadcrumb-picker-row.selected {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -2536,7 +2459,7 @@ button.git-history-file.selected {
 .review-nav-position,
 .review-hunk-position {
   min-width: 2.75rem;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-align: center;
 }
@@ -2593,7 +2516,7 @@ button.git-history-file.selected {
 
 .review-mode-button.active,
 .review-layout-button.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
   font-weight: 600;
 }
@@ -2603,7 +2526,7 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   width: 1px;
   height: 18px;
-  background: var(--color-border);
+  background: var(--color-divider);
 }
 
 .review-mode-divider {
@@ -2619,7 +2542,6 @@ button.git-history-file.selected {
   opacity: 0.5;
 }
 
-/* Pending controls keep their settled appearance but remain non-interactive. */
 .review-layout-control:not(.pending) .review-layout-button:disabled {
   color: inherit;
 }
@@ -2661,7 +2583,7 @@ button.git-history-file.selected {
 
 .review-comments-control.active,
 .review-tests-control.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
@@ -2771,8 +2693,8 @@ button.git-history-file.selected {
   min-width: 0;
   margin: 0;
   border: 0;
-  border-top: 1px solid var(--color-separator);
-  border-bottom: 1px solid var(--color-separator);
+  border-top: 1px solid var(--color-seam);
+  border-bottom: 1px solid var(--color-seam);
   border-radius: 0;
   padding: var(--space-2) var(--space-2);
   color: var(--vscode-editor-foreground, var(--color-text-primary));
@@ -2881,7 +2803,7 @@ button.git-history-file.selected {
 }
 
 .semantic-review-host .semantic-entry-content {
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   overflow: hidden;
 }
 
@@ -2901,8 +2823,8 @@ button.git-history-file.selected {
 
 .semantic-review-host .semantic-reorder {
   margin: var(--space-4) 0 0;
-  border-top: 1px solid var(--color-separator);
-  border-bottom: 1px solid var(--color-separator);
+  border-top: 1px solid var(--color-seam);
+  border-bottom: 1px solid var(--color-seam);
   padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -2970,9 +2892,6 @@ button.git-history-file.selected {
   display: none !important;
 }
 
-/* The workflows tab. Like the browser and launcher modes, the file chrome is
-   hidden while it is active and its own body is shown; the body is always
-   mounted, so the panel's child order stays structural. */
 .editor .workflow-panel {
   display: none;
 }
@@ -3006,7 +2925,7 @@ button.git-history-file.selected {
   flex-wrap: wrap;
   gap: var(--space-4);
   padding: 0 var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -3027,7 +2946,6 @@ button.git-history-file.selected {
 .workflow-run-count {
   color: var(--color-text-muted);
 }
-/* Spend nobody could account for: not a failure, but not a zero either. */
 .workflow-run-unaccounted,
 .workflow-row-unaccounted {
   color: var(--color-warning, var(--color-text-secondary));
@@ -3036,8 +2954,6 @@ button.git-history-file.selected {
   display: flex;
   flex-direction: column;
 }
-/* A row is a button: clicking it opens the child's transcript. It shares the
-   lane dock's baseline grid so a child reads the same way in both places. */
 .workflow-row {
   display: grid;
   grid-template-columns: 6px auto 1fr auto;
@@ -3129,21 +3045,19 @@ button.git-history-file.selected {
   opacity: 0.5;
 }
 
-/* Background jobs share the dock's stable body slots. */
 .editor .jobs-panel { display: none; }
 .editor.mode-jobs .viewer-breadcrumb,
 .editor.mode-jobs .editor-body,
 .editor.mode-jobs .browser-chrome { display: none; }
 .editor.mode-jobs .jobs-panel { display: flex; }
 
-/* The GitHub inventory is its own dock body, independent of Review/Files. */
 .editor .github-panel { display: none; }
 .editor.mode-github .viewer-breadcrumb,
 .editor.mode-github .editor-body,
 .editor.mode-github .browser-chrome { display: none; }
 .editor.mode-github .github-panel { display: flex; }
 .github-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: row; overflow: hidden; color: var(--color-text-primary); }
-.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-separator); background: var(--color-bg-surface); overflow: hidden; }
+.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-seam); background: var(--color-bg-surface); overflow: hidden; }
 .github-detail-host { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; container: github-detail / inline-size; }
 .github-detail {
   --gh-bg: light-dark(#ffffff, #0d1117);
@@ -3151,7 +3065,6 @@ button.git-history-file.selected {
   --gh-muted: light-dark(#59636e, #9198a1);
   --gh-border: light-dark(#d1d9e0, #3d444d);
   --gh-subtle: light-dark(#f6f8fa, #151b23);
-  --gh-link: light-dark(#0969da, #4493f8);
   --gh-green: light-dark(#1a7f37, #3fb950);
   --gh-red: light-dark(#cf222e, #f85149);
   display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0;
@@ -3164,9 +3077,9 @@ button.git-history-file.selected {
 .github-pr-header { margin-bottom: var(--space-3); }
 .github-detail-title { flex: 1; min-width: 0; margin: 0 0 var(--space-6); font-size: clamp(1.75rem, 3.8cqw, 2.5rem); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
 .github-detail-dismiss { flex: none; margin-left: auto; color: var(--gh-muted); }
-.github-detail-link { padding: 0; border: 0; background: transparent; color: var(--gh-link); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.github-detail-link { padding: 0; border: 0; background: transparent; color: var(--color-accent); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .github-detail-link:hover { text-decoration: underline; }
-.github-detail-link:focus-visible, .github-action-button:focus-visible, summary.github-checks-summary:focus-visible { outline: 2px solid var(--gh-link); outline-offset: 3px; }
+.github-detail-link:focus-visible, .github-action-button:focus-visible, summary.github-checks-summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
 .github-title-number { display: inline; white-space: nowrap; font-weight: 300; }
 .github-detail-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-5); color: var(--gh-muted); line-height: 1.8; }
 .github-merge-description { flex: 1; min-width: 180px; padding-top: var(--space-1); }
@@ -3201,7 +3114,7 @@ button.git-history-file.selected {
 .github-detail .msg-content code { background: light-dark(#eff1f3, #262c36); color: inherit; border-radius: 4px; padding: .15em .35em; font-size: 85%; }
 .github-detail .msg-content pre { background: var(--gh-subtle); padding: var(--space-6); border-radius: 6px; }
 .github-detail .msg-content pre code { padding: 0; background: transparent; }
-.github-detail .msg-content a { color: var(--gh-link); }
+.github-detail .msg-content a { color: var(--color-accent); }
 .github-detail .msg-content table { overflow-wrap: normal; }
 .github-detail .msg-content img { max-width: 100%; height: auto; }
 .github-detail-status { margin: var(--space-4) 0 var(--space-6); font-size: var(--font-size-md); line-height: 1.5; color: var(--gh-muted); }
@@ -3231,7 +3144,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-check-hide, .github-checks-details[open] .github-check-show { display: none; }
 .github-checks-details[open] .github-check-hide { display: inline; }
 .github-checks { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.github-checks:focus-visible { outline: 2px solid var(--gh-link); outline-offset: -2px; }
+.github-checks:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
 .github-check { display: flex; align-items: center; gap: var(--space-5); min-height: 3.5em; padding: var(--space-5) var(--space-6); font-size: var(--font-size-md); line-height: 1.5; }
 .github-check + .github-check { border-top: 1px solid var(--gh-border); }
 .github-check-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 16px; width: 16px; height: 20px; color: var(--gh-muted); }
@@ -3265,7 +3178,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 .github-toolbar { flex: none; display: flex; align-items: center; gap: var(--space-4); min-height: 2.75rem; padding: 0 var(--space-2) 0 var(--space-4); }
 .github-repository { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
-.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-border); }
+.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-divider); }
 .github-pulls.expanded { flex: 2 1 0; }
 .github-issues.expanded { flex: 1 1 0; }
 .github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); scrollbar-width: thin; }
@@ -3295,7 +3208,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checkout-notification.failed .github-checkout-message > .icon { color: var(--color-danger); }
 .github-checkout-notification.pending .github-checkout-message > .icon { animation: jobs-spin 1s linear infinite; }
 .github-checkout-details { margin: var(--space-4) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.github-checkout-dialog .github-checkout-choices { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-7); }
+.github-checkout-choices { flex-direction: column; }
 .github-checkout-discard { color: var(--color-danger); }
 @media (prefers-reduced-motion: reduce) { .github-checkout.pending .icon, .github-checkout-notification.pending .icon { animation: none; } }
 @media (hover: none) { .github-checkout { opacity: 1; } }
@@ -3315,7 +3228,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
 .jobs-summary-active { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); }
 .jobs-summary-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
-.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border); }
+.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-divider); }
 .jobs-list { display: flex; flex-direction: column; gap: var(--space-6); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
 .jobs-group { flex-shrink: 0; min-width: 0; }
 .jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 var(--space-5); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
@@ -3342,7 +3255,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   }
 }
 .jobs-more { margin-top: var(--space-4); }
-.jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-border); }
+.jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-divider); }
 .jobs-group-count { min-width: 20px; padding: var(--space-1) var(--space-3); border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
 .jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18em,100%),1fr)); gap: var(--space-4); }
 .jobs-row { display: flex; flex-direction: column; gap: var(--space-4); text-align: left; padding: var(--space-5); border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
@@ -3352,7 +3265,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-row-head { flex-wrap: wrap; gap: var(--space-3); }
 .jobs-id { min-width: 0; font-size: var(--font-size-xs); color: var(--color-text-secondary); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .jobs-command { overflow-wrap: anywhere; max-width: 100%; font-size: var(--font-size-md); font-weight: 500; }
-.jobs-row-meta { font-size: var(--font-size-xs); line-height: 1.5; font-variant-numeric: tabular-nums; }
+.jobs-row-meta { line-height: 1.5; font-variant-numeric: tabular-nums; }
 .jobs-status { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: 5px; background: color-mix(in srgb, var(--job-color) 10%, transparent); color: var(--job-color); font-size: var(--font-size-xs); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .jobs-status::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .jobs-row-running, .jobs-status-running { --job-color: var(--color-accent); }
@@ -3368,7 +3281,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 @keyframes jobs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .jobs-status-running::before { animation: none; } }
 .jobs-detail { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-height: 290px; min-width: 0; }
-.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: var(--space-6); }
+.jobs-detail-title { flex-wrap: wrap; border-top: 1px solid var(--color-divider); padding-top: var(--space-6); }
 .jobs-full-command { margin: 0; padding: var(--space-4) var(--space-5); font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
 .jobs-path { font-size: var(--font-size-sm); overflow-wrap: anywhere; line-height: var(--line-height-normal); }
 .jobs-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); }
@@ -3474,7 +3387,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-filter-controls {
   flex: 0 0 auto;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .review-filter-layout > .review-git-layout {
@@ -3662,21 +3575,20 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   /* The split-pane resize handle uses 20; expanded actions may cross it. */
   z-index: 21;
 }
-/* GitHub review threads share the existing Review shell and diff geometry. */
 .github-review-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
-.github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-separator); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
+.github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-seam); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
 .github-review-toggle svg { width: 1rem; height: 1rem; }
-.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-faint); padding: 0.125em; box-sizing: border-box; }
+.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-muted); padding: 0.125em; box-sizing: border-box; }
 .github-review-switch::after { content: ''; display: block; width: 1em; height: 1em; border-radius: 50%; background: white; }
-.github-review-switch.on { background: #0969da; }
+.github-review-switch.on { background: var(--color-switch-on); }
 .github-review-switch.on::after { margin-left: 1em; }
 .github-review-refresh { font-size: var(--font-size-title); padding: 0 var(--space-2); cursor: pointer; }
-.github-review-status { font-size: var(--font-size-xs); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
+.github-review-status { font-size: var(--font-size-xs); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--color-seam); color: var(--color-text-muted); white-space: normal; }
 .github-review-status.hidden { display: none; }
 .github-review-error { color: var(--color-danger, #cf222e); white-space: pre-wrap; overflow-wrap: anywhere; }
 .github-review-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); padding: var(--space-2) 0; }
 .github-review-recovery > span { flex: 1 1 260px; }
-.github-review-update { flex: none; padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-update { flex: none; padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-update:disabled { opacity: .5; cursor: default; }
 .github-review-unplaced { margin-top: var(--space-2); }
 .github-review-unplaced summary { cursor: pointer; }
@@ -3684,12 +3596,12 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
 .semantic-entry-editor-parent { position: relative; }
 .github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 var(--space-5); }
-.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
+.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
 .github-review-thread + .github-review-thread { margin-top: var(--space-4); }
-.github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-separator); }
+.github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-seam); }
 .github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }
 .github-review-resolved-toggle { margin-left: auto; cursor: pointer; color: var(--color-text-muted); }
-.github-review-comment + .github-review-comment { border-top: 1px solid var(--color-separator); }
+.github-review-comment + .github-review-comment { border-top: 1px solid var(--color-seam); }
 .github-review-comment-header { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5) var(--space-5) var(--space-2); min-width: 0; }
 .github-review-avatar { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 26px; }
 .github-review-avatar-fallback { display: flex; align-items: center; justify-content: center; background: var(--color-bg-subtle); }
@@ -3702,22 +3614,22 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-markdown > :last-child { margin-bottom: 0; }
 .github-review-markdown pre { max-width: 100%; overflow: auto; padding: var(--space-4); background: var(--color-bg-subtle); }
 .github-review-markdown img { max-width: 100%; }
-.github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
+.github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-seam); background: var(--color-bg-subtle); }
 .github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
-.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
-.github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); border: 1px solid var(--color-seam); border-radius: 6px; font: inherit; line-height: 1.5; }
+.github-review-input:focus { border-color: var(--color-focus-ring); outline: 1px solid var(--color-focus-ring); outline-offset: -1px; }
 .github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
-.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-composer-actions .github-review-send { color: white; background: #1f883d; border-color: #1a7f37; font-weight: 600; }
 .github-review-thread button:disabled { opacity: .5; cursor: default; }
 .github-review-resolve { margin-top: var(--space-5); }
-.github-review-badge { padding: 0 var(--space-3); border: 1px solid var(--color-separator); border-radius: 9px; }
+.github-review-badge { padding: 0 var(--space-3); border: 1px solid var(--color-seam); border-radius: 9px; }
 .github-review-delete-confirm { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
 .github-review-delete-confirm .danger { color: #cf222e; }
 .github-review-file-count { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: var(--font-size-caption); padding-left: var(--space-2); }
 .github-review-file-count svg { width: 13px; height: 13px; }
 
-.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: var(--space-5); font-size: var(--font-size-sm); }
+.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-seam); display: flex; flex-direction: column; gap: var(--space-5); font-size: var(--font-size-sm); }
 .browser-annotation.hidden { display: none; }
-.browser-annotation button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.browser-annotation button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }

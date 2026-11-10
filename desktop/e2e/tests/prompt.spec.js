@@ -13,6 +13,7 @@ class PromptHarness extends DesktopBrowserHarness {
 async function settings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Engine', exact: true }).click();
   return page.getByRole('button', { name: 'Additional prompt', exact: true });
 }
 
@@ -83,25 +84,6 @@ test('custom prompt persists and both sources send complete system prompts', asy
   await expect(editor).toHaveValue('Saved by another client');
   await newChat(page);
   expect((await send(page, app, 'Use the shared host setting')).system_prompt.endsWith('\n\nSaved by another client')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('changing the default preserves an existing unsent draft', async ({ page }) => {
-  const app = new PromptHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const builtin = (await send(page, app, 'Remember the builtin text')).system_prompt;
-  await newChat(page, false);
-  await page.locator('#task').fill('Keep this draft');
-  await expect(page).toHaveURL(/\/chat\/draft\/[^/?#]+$/);
-  const draft = new URL(page.url()).pathname;
-  await choose(page, 'Custom prompt');
-  await saveCustom(page, app, 'New default');
-  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe(draft);
-  await expect(page.locator('#task')).toHaveValue('Keep this draft');
-  expect((await send(page, app, 'Send the existing draft')).system_prompt).toBe(builtin);
   expect(app.pageErrors).toEqual([]);
 });
 

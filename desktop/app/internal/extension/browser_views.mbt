@@ -10,6 +10,7 @@
 /// views exist is never mirrored here — `WindowHandle::find_view` is the
 /// truth.
 struct BrowserViews {
+  previews : @static_preview.Server
   mut window : @proton.WindowHandle?
   debug_port : Int32
   mut pick : BrowserPick?
@@ -48,9 +49,12 @@ struct BrowserViews {
 ///|
 /// Configure remote debugging before CEF starts, then attach the native window
 /// through window_ready when Proton creates it.
-pub async fn BrowserViews::BrowserViews() -> BrowserViews {
+pub async fn BrowserViews::BrowserViews(
+  previews~ : @static_preview.Server = Server(),
+) -> BrowserViews {
   let debug_port = prepare_debugging()
   {
+    previews,
     window: None,
     debug_port,
     pick: None,
@@ -73,6 +77,15 @@ pub fn BrowserViews::window_ready(
 }
 
 ///|
+/// Attach previews to the application lifetime before the window opens.
+pub fn BrowserViews::start_previews(
+  self : BrowserViews,
+  group : @core_async.TaskGroup,
+) -> Unit {
+  self.previews.start(group)
+}
+
+///|
 /// Give the views their way to reach the page: `notify` delivers one
 /// `browser.event`. Set once the bridge exists, which is after the views do.
 pub fn BrowserViews::page_attached(
@@ -84,6 +97,7 @@ pub fn BrowserViews::page_attached(
 
 ///|
 pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
+  self.previews.clear()
   self.cancel_pick()
   self.window = None
   self.page_connected = false
@@ -100,6 +114,7 @@ fn BrowserViews::page_is_connected(self : BrowserViews) -> Unit {
 /// Drop every browser view. A reloaded page allocates ids from scratch, so
 /// views of the previous page must not survive its `host.connect`.
 fn BrowserViews::close_all(self : BrowserViews) -> Unit {
+  self.previews.clear()
   self.cancel_pick()
   self.owners.clear()
   self.navigating.clear()
@@ -426,6 +441,7 @@ fn BrowserViews::close(
   self : BrowserViews,
   payload : @protocol.BrowserIdPayload,
 ) -> @protocol.EmptyReply raise {
+  self.previews.close(payload.id)
   if self.pick is Some(pick) && pick.id == payload.id {
     self.cancel_pick()
   }
@@ -465,6 +481,22 @@ fn BrowserViews::focused_browser(
 /// the same create-if-missing handler as `browser.open`.
 fn browser_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
   [
+    WindowEndpoint(@commands.browser_preview, (_, payload) => {
+      let _ = views.attached_window()
+      let url = views.previews.open(
+        payload.id,
+        payload.path,
+        root?=payload.root,
+      )
+      errdefer views.previews.close(payload.id)
+      views.open({
+        id: payload.id,
+        url,
+        dark: payload.dark,
+        session: payload.session,
+        request: None,
+      })
+    }),
     WindowEndpoint(@commands.browser_pick_element, (_, payload) => {
       views.pick_element(payload)
     }),

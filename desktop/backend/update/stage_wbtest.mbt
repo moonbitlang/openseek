@@ -13,8 +13,8 @@ async test "package download streams to disk and reports byte progress" {
     defer server.close()
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let _ = body.read_all()
+        (_request, conn) => {
+          let _ = conn.read_all()
           conn.send_response(200, "OK", extra_headers={ "Content-Length": "6" })
           conn.write_string("abcdef")
           conn.end_response()
@@ -33,7 +33,7 @@ async test "package download streams to disk and reports byte progress" {
         progress.push((downloaded_bytes, total_bytes))
       },
     )
-    assert_eq(@fs.read_file(destination).text(), "abcdef")
+    assert_eq(@fs.read_text(destination), "abcdef")
     assert_true(progress.length() >= 2)
     assert_eq(progress[0].0, 0)
     assert_eq(progress[0].1, Some(6))
@@ -58,8 +58,8 @@ async test "package download follows HTTP 302 redirects" {
     defer server.close()
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
-        (request, body, conn) => {
-          let _ = body.read_all()
+        (request, conn) => {
+          let _ = conn.read_all()
           assert_eq(request.headers.get("Accept-Encoding"), Some("identity"))
           let redirect = match request.path {
             "/package.zip" =>
@@ -98,7 +98,7 @@ async test "package download follows HTTP 302 redirects" {
         progress.push((downloaded_bytes, total_bytes))
       },
     )
-    assert_eq(@fs.read_file(destination).text(), "abcdef")
+    assert_eq(@fs.read_text(destination), "abcdef")
     assert_eq(progress.length(), 2)
     assert_eq(progress[0].0, 0)
     assert_eq(progress[0].1, Some(6))
@@ -117,8 +117,8 @@ async test "package download reports redirect and final response failures" {
       let mut loop_requests = 0
       group.spawn_bg(no_wait=true) <| () => {
         server.run_forever(
-          (request, body, conn) => {
-            let _ = body.read_all()
+          (request, conn) => {
+            let _ = conn.read_all()
             match request.path {
               "/loop" => {
                 loop_requests += 1

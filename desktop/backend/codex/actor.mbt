@@ -359,9 +359,9 @@ fn Actor::report_unavailable(
 }
 
 ///|
-async fn[G] Actor::run_connection(
+async fn Actor::run_connection(
   self : Actor,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup,
   pending : ActorInput?,
   emit : (String, Json) -> Unit,
 ) -> Unit {
@@ -507,9 +507,9 @@ fn Actor::supports_reverse_request(_self : Actor, method_ : String) -> Bool {
 }
 
 ///|
-fn[G] Connection::dispatch_input(
+fn Connection::dispatch_input(
   self : Connection,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup,
   reverse_requests : ReverseRequestRegistry,
   input : ActorInput,
 ) -> Unit {

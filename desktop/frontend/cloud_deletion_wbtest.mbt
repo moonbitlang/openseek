@@ -18,10 +18,10 @@ test "Cloud delete captures its title and uses the shared confirmation" {
     model,
   )
   assert_true(
-    staged.delete_confirm is Some(CloudDelete(title="Cloud conversation", ..)),
+    staged.delete_confirm is Open(CloudDelete(title="Cloud conversation", ..)),
   )
   let (_, cancelled) = update(test_dispatch(), CancelDeleteSession, staged)
-  assert_true(cancelled.delete_confirm is None)
+  assert_true(cancelled.delete_confirm is Closed(_))
   assert_true(cancelled.cloud.deletions.is_empty())
 }
 
@@ -67,7 +67,7 @@ test "Cloud deletion preserves another page and ignores another account's replie
     CloudAction(@cloud.Deleted(3, "cloud-a", request)),
     settings,
   )
-  assert_true(removed.management_dialog is Some(Settings))
+  assert_true(removed.management_dialog is Some(Settings(General)))
   assert_true(removed.cloud.creation is Some(_))
   let (_, switched) = update(
     test_dispatch(),

@@ -49,7 +49,7 @@ test('an empty Chat list starts a draft without creating a session', async ({ pa
   const cloud = new CloudHarness(page, { desktop: true });
   cloud.sessionIds = [];
   await cloud.install();
-  await page.goto('https://openseek-api.moonbitlang.cn/console/index.html?device=device-a');
+  await page.goto('https://seekmoon.moonbitlang.com/console/index.html?device=device-a');
   await sidebarMode(page, 'Chat').click();
   await expect.poll(() => cloud.requests.some(request => request.method === 'GET' && request.path === '/v1/sessions')).toBe(true);
   await cloud.create();
@@ -68,6 +68,7 @@ test('a project draft survives Chat navigation and account sign-out', async ({ p
   await sidebarMode(page, 'Chat').click();
   await cloud.open();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('dialog', { name: 'Settings', exact: true })
     .getByRole('button', { name: 'Dismiss', exact: true }).click();

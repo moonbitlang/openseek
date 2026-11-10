@@ -321,13 +321,15 @@ async fn run_against(
       env[name] = value
     }
   }
+  let mut exit_code = 0
+  let mut output = ""
   @async.with_task_group(group => {
     if host is Some(host) {
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       group.add_defer(() => server.close())
       group.spawn_bg(no_wait=true, () => {
         server.run_forever(
-          (head, body, conn) => {
+          (head, conn) => {
             let authorized = head.headers
               .iter()
               .any(entry => {
@@ -335,7 +337,7 @@ async fn run_against(
                 entry.1 == "Bearer fixture-token"
               })
             assert_true(authorized)
-            let request = @json.parse(body.read_all().text())
+            let request = @json.parse(conn.text.read_all())
             guard request
               is {
                 "version": 1,
@@ -349,7 +351,7 @@ async fn run_against(
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "application/json",
             })
-            conn.write(answer.stringify())
+            conn.write_string(answer.stringify())
             conn.end_response()
             conn.close()
           },
@@ -372,8 +374,10 @@ async fn run_against(
       env~,
       inherit_env=false,
     ).output(timeout_ms=60000)
-    (result.exit_code(), result.stdout() + result.stderr())
+    exit_code = result.exit_code()
+    output = result.stdout() + result.stderr()
   })
+  (exit_code, output)
 }
 
 ///|

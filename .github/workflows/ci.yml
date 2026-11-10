@@ -1,15 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
-# A newer PR head supersedes its older checks. Keep main runs complete so every
-# merged commit still receives a full CI result.
+# Validate before merging; a newer PR head supersedes its older checks.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   workflows:
@@ -220,6 +217,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      # Keep this version in sync with cmd/viz_app/e2e/package.json and its lockfile.
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.60.0-noble
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -245,9 +245,8 @@ jobs:
         working-directory: cmd/viz_app/e2e
         run: npm ci
 
-      - name: Install Chromium
-        working-directory: cmd/viz_app/e2e
-        run: npx playwright install --with-deps chromium
+      - name: Pull preinstalled Playwright browsers
+        run: docker pull "$PLAYWRIGHT_IMAGE"
 
       - name: Build session viewer
         working-directory: cmd/viz_app
@@ -255,7 +254,22 @@ jobs:
 
       - name: Run session viewer E2E tests
         working-directory: cmd/viz_app/e2e
-        run: npm test
+        env:
+          OPENSEEK_VIZ_BROWSER_BASE_URL: http://127.0.0.1:5176
+        # The browser image has no MoonBit toolchain, so the fixture server
+        # runs on the runner and tests reach it over the host network.
+        run: |
+          setsid moon run ../../../scripts/serve-static.mbtx ../../.. 5176 &
+          server_pid=$!
+          trap 'kill -- "-$server_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --retry 120 --retry-connrefused --retry-delay 1 \
+            --output /dev/null "$OPENSEEK_VIZ_BROWSER_BASE_URL/web/index.html"
+          docker run --rm --init --ipc=host --network host \
+            --env CI=true \
+            --env OPENSEEK_VIZ_BROWSER_BASE_URL \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            --workdir "$GITHUB_WORKSPACE/cmd/viz_app/e2e" \
+            "$PLAYWRIGHT_IMAGE" npm test
 
       # A published moonbitlang/inspect embeds the viewer (scripts/publish.mjs
       # inspect) so `moonx` can run it with no files beside the wasm. Build that

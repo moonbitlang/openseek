@@ -14,7 +14,7 @@ import org.json.JSONObject
  */
 internal object AppUpdate {
     /** The same manifest Desktop checks (`desktop/backend/update/update.mbt`). */
-    const val MANIFEST_URL = "https://openseek-api.moonbitlang.cn/desktop/releases/latest.json"
+    const val MANIFEST_URL = "https://seekmoon.moonbitlang.com/desktop/releases/latest.json"
     const val PLATFORM = "android"
 
     data class Release(val version: String, val url: String, val sha256: String)

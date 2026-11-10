@@ -65,8 +65,8 @@ async test "fixture writes to disk and reports mismatches" {
 async test "with_tmpdir hands back a writable dir and removes it afterward" {
   let captured = @filesystem.with_tmpdir(dir => {
     let path = "\{dir}/note.txt"
-    @fs.write_file(path, "hello", create_mode=CreateOrTruncate)
-    assert_eq(@fs.read_file(path).text(), "hello")
+    @fs.write_text(path, "hello", create_mode=CreateOrTruncate)
+    assert_eq(@fs.read_text(path), "hello")
     dir
   })
   // The directory and its contents are gone once the body returns.
@@ -78,7 +78,7 @@ async test "with_tmpdir cleans up even when the body raises" {
   let mut leaked = ""
   @filesystem.with_tmpdir(dir => {
     leaked = dir
-    @fs.write_file("\{dir}/x", "x", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/x", "x", create_mode=CreateOrTruncate)
     fail("boom")
   }) catch {
     _ => ()

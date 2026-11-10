@@ -8,20 +8,34 @@ import {
 // Values
 
 // Errors
+pub suberror InvalidResourcePath {
+  InvalidResourcePath
+}
+pub fn InvalidResourcePath::output(Self, &Logger) -> Unit
+pub fn InvalidResourcePath::to_string(Self) -> String
+pub impl Show for InvalidResourcePath
+
+pub suberror UnsupportedResourcePath {
+  UnsupportedResourcePath
+}
+pub fn UnsupportedResourcePath::output(Self, &Logger) -> Unit
+pub fn UnsupportedResourcePath::to_string(Self) -> String
+pub impl Show for UnsupportedResourcePath
 
 // Types and methods
 #derive(Eq, Hash, @debug.Debug)
 pub struct Absolute(String)
 pub fn Absolute::contains(Self, Self) -> Bool
 pub fn Absolute::equal(Self, Self) -> Bool
-pub fn Absolute::from_uri_path(String) -> Self?
 pub fn Absolute::hash(Self) -> Int32
 pub fn Absolute::hash_combine(Self, Hasher) -> Unit
 pub fn Absolute::join(Self, Relative) -> Self
 pub fn Absolute::normalize(Self) -> Self
 pub fn Absolute::not_equal(Self, Self) -> Bool
 pub fn Absolute::output(Self, &Logger) -> Unit
+pub fn Absolute::parse_resource_path(String) -> Self raise InvalidResourcePath
 pub fn Absolute::relative_to(Self, root~ : Self) -> Relative?
+pub fn Absolute::resource_path(Self) -> String raise UnsupportedResourcePath
 pub fn Absolute::to_path(Self) -> Path
 pub fn Absolute::to_repr(Self) -> @debug.Repr
 pub fn Absolute::to_string(Self) -> String

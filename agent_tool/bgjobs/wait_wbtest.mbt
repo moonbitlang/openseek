@@ -5,20 +5,22 @@ async test "wait_any ignores unrelated completions and validates all ids" {
     @async.with_task_group(group => {
       let jobs = BgJobRuntime(AgentTaskScope(group))
       let (input, release) = @process.write_to_process()
+      defer input.close()
       defer release.close()
       let first = jobs.start(
         program="/bin/cat",
         args=[],
         command="first",
-        stdin=input,
+        stdin=Shared(input),
       )
       let (other_input, other_release) = @process.write_to_process()
+      defer other_input.close()
       defer other_release.close()
       let other = jobs.start(
         program="/bin/cat",
         args=[],
         command="other",
-        stdin=other_input,
+        stdin=Shared(other_input),
       )
       let mut woke = false
       let waiter = group.spawn(() => {
@@ -85,12 +87,13 @@ async test "cancelled wait does not cancel a job or consume later completion" {
     @async.with_task_group(group => {
       let jobs = BgJobRuntime(AgentTaskScope(group))
       let (input, release) = @process.write_to_process()
+      defer input.close()
       defer release.close()
       let id = jobs.start(
         program="/bin/cat",
         args=[],
         command="alive",
-        stdin=input,
+        stdin=Shared(input),
       )
       let waiter = group.spawn(() => jobs.wait_any([id]), allow_failure=true)
       @async.pause()
@@ -152,12 +155,13 @@ async test "metadata_changed reports a publication that could not be persisted" 
         persistent_logs=true,
       )
       let (input, release) = @process.write_to_process()
+      defer input.close()
       defer release.close()
       let id = jobs.start(
         program="/bin/cat",
         args=[],
         command="metadata",
-        stdin=input,
+        stdin=Shared(input),
       )
       jobs.metadata_changed(id)
       // Put a directory where the record file goes: the atomic rename fails.
@@ -189,12 +193,13 @@ async test "stalled persistence reports failure and releases publication for oth
         }
       })
       let (input, release) = @process.write_to_process()
+      defer input.close()
       defer release.close()
       let id = jobs.start(
         program="/bin/cat",
         args=[],
         command="persistence test",
-        stdin=input,
+        stdin=Shared(input),
       )
       let entered : @async.Queue[Unit] = Queue(kind=Unbounded)
       let blocked : @async.Queue[Unit] = Queue(kind=Unbounded)

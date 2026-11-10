@@ -155,7 +155,7 @@ test('a failed thread start keeps its original draft identity and project for re
   await page.locator('#send').click();
   await expect(page.getByText(/Reply lost/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeDisabled();
   await expect(page.locator('#task')).toHaveValue('Retry this prompt');
   await page.keyboard.press('ControlOrMeta+o');
   await expect(page.getByRole('dialog', { name: 'Add a project' })).toHaveCount(0);
@@ -166,7 +166,7 @@ test('a failed thread start keeps its original draft identity and project for re
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.thread.start').length).toBe(2);
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -178,11 +178,11 @@ test('the title cannot add or change projects until draft opening settles', asyn
   await choose(page, 'Codex test');
   await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeDisabled();
   const request = app.requests.find(r => r.method === 'codex.draft.open');
   app.replyFor = reply;
   pending.resolve(reply(request));
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
   await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
@@ -220,103 +220,6 @@ test('returning to the same blank Codex entry retains its pending project add', 
   await expect(page).toHaveURL(/\/codex\/new$/);
   expect(app.pageErrors).toEqual([]);
 });
-
-// The two conditions are independent, so each value runs once.
-for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings']]) {
-  test(`a pending project add preserves its draft while sending is blocked (detach previous: ${detachPrevious}, page: ${managementPage})`, async ({ page }) => {
-    const app = await open(page, ['/workspace', '/other'], true);
-    await choose(page, 'Codex test');
-    await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
-    await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
-    await page.locator('#task').fill('Send in the added project');
-    await expect(page.locator('#send')).toBeEnabled();
-    const session = await page.locator('#transcript').getAttribute('data-transcript-session');
-    const pending = Promise.withResolvers();
-    const reply = app.replyFor.bind(app);
-    app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
-    await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
-    await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-    await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-    const addRequest = app.requests.find(r => r.method === 'workspace.add');
-    await expect(page.locator('#send')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
-    await page.locator('#task').press('Enter');
-    expect(app.requests.some(r => r.method === 'codex.thread.start')).toBe(false);
-    await expect(page.locator('#task')).toHaveValue('Send in the added project');
-    if (managementPage) {
-      await page.getByRole('button', { name: managementPage, exact: true }).click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      if (managementPage === 'Settings') {
-        await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
-      }
-    }
-    if (detachPrevious) {
-      app.workspaces = app.workspaces.filter(path => path !== '/workspace');
-    }
-    pending.resolve(reply(addRequest));
-    app.notify('workspace.changed', { workspaces: app.workspaces });
-    await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
-    if (managementPage) {
-      const back = page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true });
-      await expect(back).toBeVisible();
-      if (managementPage === 'Settings') {
-        await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
-      }
-      await back.click();
-    }
-    await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
-    await expect(app.projectRow('/Users/test')).toHaveClass(/\bactive\b/);
-    expect(app.requests.filter(r => r.method === 'codex.draft.open').map(r => r.params.cwd)).toEqual(['/workspace', '/Users/test']);
-    await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
-    await expect(page.locator('#task')).toHaveValue('Send in the added project');
-    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-    await page.locator('#send').click();
-    await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
-{
-  const managementPage = 'Settings';
-
-  for (const broadcastFirst of [false, true]) {
-    test(`adding a project behind ${managementPage} preserves its draft (broadcast first: ${broadcastFirst})`, async ({ page }) => {
-      const app = await open(page, ['/workspace', '/other']);
-      await choose(page, 'Codex test');
-      await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
-      await page.locator('#task').fill('Keep the hidden draft');
-      const session = await page.locator('#transcript').getAttribute('data-transcript-session');
-      const pending = Promise.withResolvers();
-      const reply = app.replyFor.bind(app);
-      app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
-      await page.getByRole('button', { name: 'Add a project', exact: true }).click();
-      await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
-      await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-      await page.getByRole('button', { name: managementPage, exact: true }).click();
-      const result = reply(app.requests.find(r => r.method === 'workspace.add'));
-      if (broadcastFirst) {
-        app.notify('workspace.changed', { workspaces: app.workspaces });
-        await expect(app.projectRow('/Users/test')).toBeVisible();
-        pending.resolve(result);
-      } else {
-        pending.resolve(result);
-        // Let the RPC callback settle before publishing the registry snapshot.
-        await page.waitForTimeout(100);
-        app.notify('workspace.changed', { workspaces: app.workspaces });
-      }
-      await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
-      const back = page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true });
-      await expect(back).toBeVisible();
-      await back.click();
-      await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
-      await expect(page.locator('#task')).toHaveValue('Keep the hidden draft');
-      await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
-      expect(app.pageErrors).toEqual([]);
-    });
-  }
-}
 
 for (const agent of ['Codex', 'OpenSeek']) {
   test(`a completed project add does not replace a newer ${agent} sidebar selection`, async ({ page }) => {
@@ -364,12 +267,12 @@ test('a failed hidden Codex draft does not block adding a project from OpenSeek'
   app.rpcErrors.set('codex.thread.start', 'Reply lost');
   await page.locator('#send').click();
   await expect(page.getByText(/Reply lost/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New Project', exact: true })).toBeEnabled();
   await page.keyboard.press('ControlOrMeta+o');
   await expect(page.getByRole('dialog', { name: 'Add a project' })).toBeVisible();
   expect(app.pageErrors).toEqual([]);

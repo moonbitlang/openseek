@@ -1,14 +1,9 @@
 
 
-/* ---------- main column ---------- */
 main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  /* Constrain the single column too: without this it defaults to `auto`
-     and sizes to its widest content (a long code line), so the
-     transcript would grow past `main`'s track and slide under the files
-     panel. minmax(0, …) holds it to the track and lets inner content
-     wrap/scroll instead. */
+  /* Allow wide transcript content to scroll instead of widening the main track. */
   grid-template-columns: minmax(0, 1fr);
   /* Descendants use the live main-pane height to keep the composer inside the
      conversation row while the terminal is resized. */
@@ -20,7 +15,6 @@ main {
   background: var(--color-bg-canvas);
 }
 
-/* ---------- top bar ---------- */
 .topbar {
   grid-row: 1;
   display: flex;
@@ -33,12 +27,12 @@ main {
   padding-inline-start: var(--main-titlebar-leading-inset);
   padding-inline-end: var(--main-titlebar-trailing-inset);
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
-  border-bottom: 1px solid var(--color-separator);
-  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-seam);
+  background: var(--color-bg-canvas);
 }
 
-/* Both ends of the titlebar share one control grid. Panel buttons elsewhere
-   keep their own geometry. */
+/* Both ends of the titlebar share one control grid, overriding RUI's inline
+   dimensions. Panel buttons elsewhere keep their own geometry. */
 .sidebar-toggle,
 .topbar > .panel-toggle,
 .editor-tabsbar > .panel-toggle,
@@ -48,9 +42,9 @@ main {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  inline-size: var(--titlebar-control-size);
+  inline-size: var(--titlebar-control-size) !important;
   min-inline-size: var(--titlebar-control-size);
-  block-size: var(--titlebar-control-size);
+  block-size: var(--titlebar-control-size) !important;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -62,7 +56,6 @@ main {
   color: var(--color-text-muted);
   cursor: pointer;
   position: fixed;
-  /* Center in the effective app header alongside the sidebar mode switch. */
   inset-block-start: max(
     0px,
     calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
@@ -103,7 +96,7 @@ main {
   max-width: 28%;
   white-space: nowrap;
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
 .topbar-workspace-label {
@@ -122,7 +115,7 @@ main {
   align-items: center;
   gap: 7px;
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 .run-status.accent .run-text {
@@ -133,47 +126,6 @@ main {
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* The MCP rows of the conversation overview's connectors card. */
-.connectors-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 2px 0;
-  color: var(--color-text-secondary);
-}
-.connectors-row > .run-dot {
-  margin-top: 6px;
-}
-.connectors-text {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-.connectors-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text-primary);
-}
-/* Errors run long; two lines here, the rest on hover. */
-.connectors-detail {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  overflow-wrap: anywhere;
-}
-.connectors-state {
-  flex: none;
-  color: var(--color-text-muted);
-}
-.connectors-note {
-  padding: 2px 0;
-  color: var(--color-text-muted);
 }
 
 .run-dot {
@@ -206,27 +158,6 @@ main {
   animation: pulseDot 1.6s ease-out infinite;
 }
 
-/* Outcomes and requests stay distinguishable without color or animation.
-   The glyph occupies the conversation row's 20px slot, the same one the
-   row's action buttons beside it use, so every glyph in the row shares one
-   grid. Without the slot the box hugs the glyph and the 14px icon lands off
-   that grid. */
-.sidebar-run-status {
-  --icon-size: var(--icon-md);
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-}
-.sidebar-run-status.running { color: var(--color-text-secondary); }
-.sidebar-run-status.running .icon {
-  animation: spinRunDot 0.9s linear infinite;
-}
-.sidebar-run-status.needs-input { color: var(--color-warning); }
-.sidebar-run-status.completed { color: var(--color-text-secondary); }
-.sidebar-run-status.failed { color: var(--color-danger); }
-
 /* The shell owns one panel control across both headers. Reserve its space
    continuously while the editor track expands instead of adding/removing a
    flex item at the start of the animation. */
@@ -245,7 +176,6 @@ main {
   display: none;
 }
 
-/* Loading and failed conversations keep the shared header visible. */
 main > .conversation-load-state {
   grid-row: 2 / -1;
 }

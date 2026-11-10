@@ -13,7 +13,7 @@ async fn append_raw(
   id : String,
   text : String,
 ) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     store.session_file(SessionId(id)),
     text,
     create_mode=OpenOrCreate,

@@ -17,7 +17,7 @@ async test "cancelling the Codex actor settles an in-flight API call" {
     #|      ;;
     #|  esac
     #|done
-  @fs.write_file(script, source, create_mode=CreateOrTruncate)
+  @fs.write_text(script, source, create_mode=CreateOrTruncate)
   @fs.chmod(script, 0o700)
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {

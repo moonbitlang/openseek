@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/language"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn lsp_hover(MoonCliState, @protocol.LspHoverPayload) -> @protocol.LspHoverReply
+
+pub async fn lsp_open(MoonCliState, @protocol.LspOpenPayload) -> @protocol.LspDiagnosticsReply
+
+pub async fn moon_package_graph(MoonCliState, @protocol.MoonPackageGraphPayload) -> @protocol.MoonPackageGraphReply
+
+pub async fn moonide_codelens(MoonCliState, @protocol.MoonIdeCodeLensPayload) -> @protocol.MoonIdeCodeLensReply
+
+pub async fn moonide_definition(MoonCliState, @protocol.MoonIdeNavigationPayload) -> @protocol.MoonIdeNavigationReply
+
+pub async fn moonide_references(MoonCliState, @protocol.MoonIdeNavigationPayload) -> @protocol.MoonIdeNavigationReply
+
+pub async fn workspace_symbols(MoonCliState, @protocol.WorkspaceSymbolsPayload) -> @protocol.WorkspaceSymbolsReply
+
+// Errors
+#derive(@debug.Debug)
+pub suberror LanguageError {
+  InvalidRequest(String)
+  RootNotOwned
+  RootMismatch
+  PathOutsideRoot
+  Unavailable(String)
+  MoonIdeFailed(String)
+}
+pub fn LanguageError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub struct DiagnosticsPush {
+  root : String
+  path : String
+  diagnostics : Array[@protocol.LspDiagnostic]
+}
+
+type MoonCliState
+pub fn MoonCliState::MoonCliState(String, runtime_dir? : @pathx.Path, source~ : @moonbit.ToolchainSource) -> Self
+pub async fn MoonCliState::forward_diagnostics(Self, async (DiagnosticsPush) -> Unit) -> Unit
+
+// Type aliases
+
+// Traits

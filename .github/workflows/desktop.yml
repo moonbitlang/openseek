@@ -1,29 +1,13 @@
 name: Desktop
 
+# The browser packager reads Editor packages and assets, shared engine
+# protocols, and tool output views directly from this checkout.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "desktop/**"
-      # The browser packager reads Editor MoonBit packages, styles, fonts, and
-      # Mermaid assets directly from this checkout.
-      - "editor/**"
-      # Desktop's browser frontend renders the shared engine event protocol
-      # and root-module tool output views.
-      - "protocol/**"
-      - "share/artifact/**"
-      - "agent_tool/edit_diff/**"
-      - "agent_tool/mbtx/html/**"
-      - "jsonrpc/**"
-      - "viz_export/**"
-      - "moon.mod"
-      - "moon.work"
-      - ".github/workflows/desktop.yml"
-      - ".github/workflows/desktop-release.yml"
   pull_request:
     paths:
       - "desktop/**"
       - "editor/**"
+      - "indexeddb/**"
       - "protocol/**"
       - "share/artifact/**"
       - "agent_tool/edit_diff/**"
@@ -35,15 +19,13 @@ on:
       - ".github/workflows/desktop.yml"
       - ".github/workflows/desktop-release.yml"
 
-# A newer PR head supersedes its older run. Keep main runs complete so every
-# relevant merged commit still receives Desktop E2E and packaging results.
+# Validate before merging; a newer PR head supersedes its older run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
-  # The Windows package job lives in desktop-windows.yml, which runs on pull
-  # requests only when they change packaging paths.
+  # The Windows package job lives in desktop-windows.yml.
 
   # The window host is the only module that depends on Proton, so it builds in
   # its own desktop/app/moon.work and is checked here rather than by the root
@@ -79,8 +61,7 @@ jobs:
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # Pull requests may restore the default branch's cache, but their own
-      # merge-ref caches are private to that PR and cannot warm other branches.
+      # Restore an existing default-branch cache or this PR's merge-ref cache.
       - name: Restore Proton runtime
         id: cef-cache
         uses: actions/cache/restore@v4
@@ -106,9 +87,10 @@ jobs:
           moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
           setup
 
-      # Main is the sole Linux writer; PR jobs remain restore-only.
+      # A cache miss is saved for subsequent runs of this PR. Merge-ref caches
+      # are isolated from main and other pull requests.
       - name: Save Proton runtime
-        if: github.event_name == 'push' && steps.cef-cache.outputs.cache-hit != 'true'
+        if: steps.cef-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
@@ -134,6 +116,8 @@ jobs:
           fi
           moon test $packages --target native
 
+  # Run E2E for the workflow's full path scope, including shared packages and
+  # dependency pins, so their integration is checked before merging.
   desktop-e2e:
     name: desktop e2e
     runs-on: ubuntu-24.04
@@ -172,13 +156,15 @@ jobs:
       - name: Pull preinstalled Playwright browsers
         run: docker pull "$PLAYWRIGHT_IMAGE"
 
-      - name: Build Desktop browser application
+      - name: Build browser application and IndexedDB contracts
         working-directory: desktop
         # The Moon entrypoint remains a compatibility CLI. The browser build
         # never touches the window host, so CI calls the build program directly.
         # Each isolated test page loads this bundle, so use the smaller
         # production build instead of repeatedly transferring debug output.
-        run: node package/build.mjs browser --release
+        run: |
+          node package/build.mjs browser --release
+          moon test ../indexeddb --target js --build-only --include-skipped
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e

@@ -69,6 +69,7 @@ async test "a stop goes through the job's cancel handler" {
   @async.with_task_group(group => {
     let rt = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     let (input, writer) = @process.write_to_process()
+    defer input.close()
     defer writer.close()
     let handler = @process.CancellationHandler(_ => {
       writer.close()
@@ -78,7 +79,7 @@ async test "a stop goes through the job's cancel handler" {
       program="sh",
       args=["-c", "cat >/dev/null; echo flushed"],
       command="graceful child",
-      stdin=input,
+      stdin=Shared(input),
       cancel_handler=handler,
     )
     assert_true(rt.stop(id))

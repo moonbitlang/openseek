@@ -111,7 +111,7 @@ async fn upload_grant(
   desktop~ : Bool,
 ) -> @protocol.ShareAuthorization {
   let base : String = if desktop {
-    "https://openseek-api.moonbitlang.cn/"
+    "https://seekmoon.moonbitlang.com/"
   } else {
     @js.Value::cast_from(@dom.document()).get_with_string("baseURI")
   }

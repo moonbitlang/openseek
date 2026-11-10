@@ -7,21 +7,19 @@ import {
   "openseek_desktop/backend/api",
   "openseek_desktop/backend/auth",
   "openseek_desktop/backend/broadcast",
-  "openseek_desktop/backend/engine",
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/host",
-  "openseek_desktop/backend/internal/gitx",
   "openseek_desktop/backend/platform",
   "openseek_desktop/protocol",
   "openseek_desktop/backend/tunnel",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/io",
-  "moonbitlang/async/os_error",
-  "moonbitlang/async/semaphore",
-  "moonbitlang/async/socket",
-  "moonbitlang/async/websocket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/io",
+  "moonbitlang/core/async/os_error",
+  "moonbitlang/core/async/semaphore",
+  "moonbitlang/core/async/socket",
+  "moonbitlang/core/async/websocket",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "tonyfettes/xlog",
@@ -30,3 +28,16 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/io",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/semaphore",
+    "moonbitlang/core/async/socket",
+    "moonbitlang/core/async/websocket",
+  ],
+)

@@ -70,21 +70,15 @@ async test "file profile transport keeps oversized contents out of argv on every
     let profile = "(version 1)\n(allow default)\n" +
       "; padding\n".repeat(220_000)
     let path = write_profile_file(profile, "\{dir}/profile with spaces.sb")
-    let saved = @fs.read_file(path).text()
+    let saved = @fs.read_text(path)
     assert_true(saved.has_prefix(profile))
     assert_true(
       saved.has_suffix(
         "(deny file-write* (literal \"\{sbpl_string_escape(path)}\"))\n",
       ),
     )
-    assert_eq(
-      sandbox_exec_file_args(path, Exec("moon", ["check", "space in arg"])),
-      ["-f", path, "moon", "check", "space in arg"],
-    )
-    let command = "printf 'space in command'"
-    assert_eq(
-      sandbox_exec_file_args(path, Shell(command)),
-      ["-f", path, @platform_shell.program, ..@platform_shell.args(command)],
-    )
+    assert_eq(sandbox_exec_file_args(path, "moon", ["check", "space in arg"]), [
+      "-f", path, "moon", "check", "space in arg",
+    ])
   })
 }

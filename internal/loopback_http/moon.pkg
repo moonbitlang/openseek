@@ -1,8 +1,12 @@
 import {
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
 }
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/socket" ],
+)

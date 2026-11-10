@@ -10,12 +10,12 @@ import {
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/openseek/agent_tool/internal/sandbox",
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async/os_error",
 }
 
 // The bundled workflows run from this embedded copy; `share/workflow/` stays
@@ -50,7 +50,7 @@ import {
   "moonbitlang/openseek/agent_tool/job_output",
   "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek_protocol",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool/bgjobs",
@@ -72,3 +72,12 @@ import {
 // inside the budget on both backends, and the suite finishes faster for it.
 
 max_concurrent_tests = 2
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+  ],
+)

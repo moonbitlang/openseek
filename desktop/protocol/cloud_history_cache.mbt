@@ -1,9 +1,10 @@
 ///|
-/// The persisted part of a Cloud history page. Live status and predictions
-/// are derived from current observations instead of being restored from disk.
+/// The persisted part of a Cloud history page and its saved prediction.
+/// Live status is derived from current observations.
 pub(all) struct CloudHistoryCachePage {
   session : SessionDocument
   messages : Array[Json]
+  prediction : @wire.PredictionRecord?
   offset : Int32?
   etag : String?
 }
@@ -38,6 +39,17 @@ pub(all) enum CloudHistoryCacheReply {
 ///|
 pub impl FromJson for CloudHistoryCachePage with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Cloud history cache page")
+  let etag = object.optional_string("etag")
+  // Legacy pages lack this field. Restore their transcript but fetch the
+  // response body to recover any prediction covered by the old validator.
+  let (prediction, etag) = match object.fields.get("prediction") {
+    Some(Null) => (None, etag)
+    Some(value) =>
+      (Some(@json.from_json(value, path=path.add_key("prediction"))), etag) catch {
+        _ => (None, None)
+      }
+    None => (None, None)
+  }
   {
     session: @json.from_json(
       object.required_json("session"),
@@ -47,8 +59,9 @@ pub impl FromJson for CloudHistoryCachePage with fn from_json(json, path) {
       object.required_json("messages"),
       path=path.add_key("messages"),
     ),
+    prediction,
     offset: object.optional_int("offset"),
-    etag: object.optional_string("etag"),
+    etag,
   }
 }
 
@@ -57,6 +70,7 @@ pub impl ToJson for CloudHistoryCachePage with fn to_json(self) {
   {
     "session": self.session.to_json(),
     "messages": Json(self.messages),
+    "prediction": self.prediction.map_or(Json::null(), value => value.to_json()),
     "offset": self.offset.map_or(Json::null(), value => Json(value)),
     "etag": self.etag.map_or(Json::null(), value => Json(value)),
   }
@@ -177,3 +191,47 @@ pub extend CloudHistoryCacheReply with FromJson::{from_json}
 
 ///|
 pub extend CloudHistoryCacheReply with ToJson::{to_json}
+
+///|
+pub fn CloudHistoryCachePage::label(
+  page : CloudHistoryCachePage,
+  session : String,
+) -> String {
+  for message in page.messages {
+    guard message is { "kind": "user", .. } else { continue }
+    let text = match message {
+      { "engine_sequence": Number(sequence, ..), .. } if sequence > 0 &&
+        sequence == sequence.to_int().to_double() =>
+        page.session.events
+        .unwrap_or([])
+        .iter()
+        .find_first(event => {
+          event.sequence == sequence.to_int() && event.item is User(_)
+        })
+        .map_or("", event => {
+          match event.item {
+            User(user) => user.content.text()
+            _ => ""
+          }
+        })
+      { "data": { "content": String(text), .. }, .. } => text
+      { "data": { "content": Array(parts), .. }, .. } =>
+        parts
+        .iter()
+        .filter_map(part => {
+          match part {
+            { "type": "text", "text": String(text), .. } => Some(text)
+            _ => None
+          }
+        })
+        .head()
+        .unwrap_or("")
+      _ => ""
+    }
+    if !text.is_blank() {
+      let line = text.trim().to_owned().split("\n").head().unwrap_or("")
+      return String::from_iter(line.iter().take(80))
+    }
+  }
+  session
+}

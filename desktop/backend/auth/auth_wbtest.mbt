@@ -17,20 +17,6 @@ fn sample_session(avatar~ : String) -> AuthSession {
 }
 
 ///|
-test "pkce challenge is the verifier's unpadded base64url sha256" {
-  // Cross-checked against RFC 7636 S256 (python:
-  // urlsafe_b64encode(sha256(b"test-verifier")).rstrip("=")) — and against
-  // the relay's own challenge_s256, which must accept what start_url sends.
-  inspect(
-    pkce_challenge("test-verifier"),
-    content="JBbiqONGWPaAmwXk_8bT6UnlPfrn65D32eZlJS-zGG0",
-  )
-  inspect(pkce_challenge("test-verifier").length(), content="43")
-  // Stable across calls — the exchange must send what start_url promised.
-  assert_true(pkce_challenge("v") == pkce_challenge("v"))
-}
-
-///|
 test "start url carries every parameter, name percent-encoded" {
   inspect(
     start_url(
@@ -83,6 +69,26 @@ test "auth.json codec round-trips and reads corruption as signed out" {
 }
 
 ///|
+test "a sign-in saved against the legacy origin loads as the current one" {
+  let session = sample_session(avatar="")
+  guard session_to_json(session) is Object(fields) else {
+    fail("expected an object")
+  }
+  fields["server_url"] = Json(LegacyAccountOrigin)
+  guard session_from_json(Json::object(fields)) is Some(reloaded) else {
+    fail("a legacy-origin sign-in was dropped")
+  }
+  assert_true(reloaded.server_url == AccountOrigin)
+  assert_true(reloaded.account.token == "ts_secret")
+  assert_true(
+    reloaded.device.map(device => device.token) ==
+    session.device.map(device => device.token),
+  )
+  fields["server_url"] = Json("https://elsewhere.example")
+  assert_true(session_from_json(Json::object(fields)) is None)
+}
+
+///|
 async test "auth.json persists 0600 and deletes cleanly" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-auth-"))
   let body = () => {
@@ -94,9 +100,10 @@ async test "auth.json persists 0600 and deletes cleanly" {
       } else {
         ["-c", "%a", auth_file(dir).to_string()]
       }
-      let (code, output, _) = @processx.collect_output_no_stdin("stat", args)
+      let result = @processx.collect_output_no_stdin("stat", args)
+      let code = result.exit_code
       assert_eq(code, 0)
-      assert_eq(output.text().trim().to_owned(), "600")
+      assert_eq(result.stdout_text().trim().to_owned(), "600")
     }
     let restored = AuthStore::load(runtime_dir=dir)
     assert_true(restored.account() == Some(session.account))
@@ -158,7 +165,7 @@ test "store transitions dedup their auth.changed edges" {
   guard store.desired_connector() is Some(config) else {
     fail("signed-in store offered no connector config")
   }
-  assert_true(config.relay_url == "wss://openseek-api.moonbitlang.cn/v1/tunnel")
+  assert_true(config.relay_url == "wss://seekmoon.moonbitlang.com/v1/tunnel")
   // Registration flips once; a repeat is not a visible change.
   assert_true(store.mark_registered("d_abc"))
   assert_false(store.mark_registered("d_abc"))
@@ -224,7 +231,7 @@ test "status shapes" {
     Some({
       id: "d_abc",
       name: "My Mac",
-      url: "https://openseek-api.moonbitlang.cn/device/d_abc/chat",
+      url: "https://seekmoon.moonbitlang.com/device/d_abc/chat",
     }),
   )
   // The transport encoding must not accidentally disclose the stored token.
@@ -239,20 +246,19 @@ async test "the loopback listener takes the matching redirect and ignores strays
     let port = server.addr.port()
     let waiter = group.spawn(() => wait_for_code(server, oauth_state="st"))
     // A stray (forged state) answers 404 and keeps the wait alive.
-    let (stray, _) = @http.get(
+    let (stray, _) = @http.get_text(
       "http://127.0.0.1:\{port}/cb?code=x&state=forged",
     )
     assert_true(stray.code == 404)
     let browser = group.spawn(() => {
-      @http.get("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
+      @http.get_text("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
     })
     let (code, conn) = waiter.wait()
     defer conn.close()
     assert_true(code == "one-time")
     respond_html(conn, 200, "OK", sign_in_done_page())
-    let (granted, granted_data) = browser.wait()
+    let (granted, granted_page) = browser.wait()
     assert_true(granted.code == 200)
-    let granted_page = granted_data.text()
     assert_true(granted_page.contains("Return to SeekMoon"))
     assert_false(granted_page.contains("?device="))
     // The loopback page is self-contained, but its palette stays on the same
@@ -262,7 +268,7 @@ async test "the loopback listener takes the matching redirect and ignores strays
     assert_true(granted_page.contains("--font-family-sans"))
     assert_true(granted_page.contains("font-family: var(--font-family-sans)"))
     assert_false(granted_page.contains("--paper"))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -277,8 +283,8 @@ test "cancel only lands on a live sign-in" {
 ///|
 test "url derivations" {
   inspect(
-    tunnel_url("https://openseek-api.moonbitlang.cn"),
-    content="wss://openseek-api.moonbitlang.cn/v1/tunnel",
+    tunnel_url("https://seekmoon.moonbitlang.com"),
+    content="wss://seekmoon.moonbitlang.com/v1/tunnel",
   )
   inspect(
     tunnel_url("http://127.0.0.1:3000/"),
@@ -352,7 +358,7 @@ async test "account code exchange uses v2 without registering a device" {
       let request = connection.read_request()
       assert_true(request.meth is Post)
       assert_eq(request.path, "/v2/auth/account/exchange")
-      assert_eq(@json.parse(connection.read_all().text()), {
+      assert_eq(@json.parse(connection.text.read_all()), {
         "code": "ac_fixture",
         "code_verifier": "verifier",
       })

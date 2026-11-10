@@ -23,76 +23,81 @@ pub fn Model::view(
   locale : @i18n.Locale,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  let children : Array[@html.Html] = []
-  if self.content is Some(content) {
+  let children = if self.content is Some(content) {
     let busy = content.operation.busy()
-    children.push(
-      @html.div(class="export-dialog-header", [
-        @html.h2(id="session-import-title", class="modal-title", title(locale)),
-        @html.button(
-          class="export-dialog-close",
-          on_click=emit(Close),
-          attrs=@html.Attrs::build().aria_label(
-            label(locale, "Close imported history", "关闭导入历史"),
+    let (description, destination) = match content.target {
+      Host(target) =>
+        (
+          label(
+            locale, "Import as a conversation you can continue in the selected project. Original workspace files are not imported.",
+            "导入后可在所选项目中继续聊天。原工作区文件不会随对话一起导入。",
           ),
-          @icons.icon(@icons.icon_close),
+          @html.p(class="session-import-destination", target.workspace),
+        )
+      Cloud(..) =>
+        (
+          label(
+            locale, "Import a Cloud conversation export as a new Cloud chat. Original workspace files are not imported.",
+            "将 Cloud 对话导出导入为新的 Cloud 聊天。原工作区文件不会随对话一起导入。",
+          ),
+          @html.nothing,
+        )
+    }
+    [
+      @rui.dialog_header([
+        @rui.dialog_title(id="session-import-title", title(locale)),
+      ]),
+      @html.div([
+        @rui.dialog_description(description),
+        destination,
+        @html.div(class="session-import-actions", [
+          @html.button(
+            class="button secondary",
+            disabled=busy,
+            on_click=emit(PickFile),
+            label(locale, "Import JSON file", "导入 JSON 文件"),
+          ),
+          @html.input(
+            class="field-surface",
+            value=content.link,
+            placeholder=label(
+              locale, "OpenSeek share link", "OpenSeek 分享链接",
+            ),
+            on_input=emit.map(value => LinkChanged(value)),
+            attrs=@html.Attrs::build()
+              .aria_label(
+                label(locale, "OpenSeek share link", "OpenSeek 分享链接"),
+              )
+              .data_set("focus-owner", "true"),
+          ),
+          @html.button(
+            class="button primary",
+            disabled=busy || content.link.is_blank(),
+            on_click=emit(ImportLink),
+            label(locale, "Import link", "导入链接"),
+          ),
+        ]),
+        @html.div(
+          class="session-import-status",
+          attrs=@html.Attrs::build().role("status"),
+          match content.operation {
+            Ready => ""
+            Reading =>
+              label(locale, "Choose a JSON file…", "请选择 JSON 文件…")
+            Importing => label(locale, "Importing…", "正在导入…")
+            Failed(message) => message
+          },
         ),
       ]),
-    )
-    children.push(
-      @html.p(
-        class="modal-body",
-        label(
-          locale, "Import as a conversation you can continue in the current workspace. Original workspace files are not imported.",
-          "导入后可在当前工作区继续聊天。原工作区文件不会随对话一起导入。",
-        ),
-      ),
-    )
-    children.push(
-      @html.div(class="session-import-actions", [
-        @html.button(
-          class="button secondary",
-          disabled=busy,
-          on_click=emit(PickFile),
-          label(locale, "Import JSON file", "导入 JSON 文件"),
-        ),
-        @html.input(
-          value=content.link,
-          placeholder=label(
-            locale, "OpenSeek share link", "OpenSeek 分享链接",
-          ),
-          on_input=emit.map(value => LinkChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label(
-              label(locale, "OpenSeek share link", "OpenSeek 分享链接"),
-            )
-            .data_set("focus-owner", "true"),
-        ),
-        @html.button(
-          class="button primary",
-          disabled=busy || content.link.is_blank(),
-          on_click=emit(ImportLink),
-          label(locale, "Import link", "导入链接"),
-        ),
-      ]),
-    )
-    children.push(
-      @html.div(
-        class="session-import-status",
-        attrs=@html.Attrs::build().role("status"),
-        match content.operation {
-          Ready => ""
-          Reading =>
-            label(locale, "Choose a JSON file…", "请选择 JSON 文件…")
-          Importing => label(locale, "Importing…", "正在导入…")
-          Failed(message) => message
-        },
-      ),
-    )
+    ]
+  } else {
+    []
   }
-  @html.dialog(
+  @rui.dialog(
     id=DialogId,
-    class="modal session-import-dialog",
+    class="dialog-size-medium",
+    close_label=label(locale, "Close imported history", "关闭导入历史"),
+    on_close=_ => emit(Close),
     on_cancel=emit(Close),
     attrs=@html.Attrs::build().aria_labelledby("session-import-title"),
     children,

@@ -56,7 +56,7 @@ async fn ProjectCatalog::resolve(
   if self.roots.get(cwd) is Some(cached) {
     return Some(cached)
   }
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     "git",
     ["worktree", "list", "--porcelain"],
     cwd~,
@@ -67,8 +67,9 @@ async fn ProjectCatalog::resolve(
       return Some(cwd)
     }
   }
+  let code = result.exit_code
   if code == 0 {
-    let output = stdout.text() catch { _ => "" }
+    let output = result.stdout_text() catch { _ => "" }
     if self.record_worktrees(cwd, output) is Some(project) {
       return Some(project)
     }
@@ -87,8 +88,8 @@ pub fn ProjectCatalog::main_project(
   self : ProjectCatalog,
   cwd : String,
 ) -> String? {
-  guard @pathx.Absolute::from_uri_path(cwd.trim().to_owned()) is Some(requested) else {
-    return None
+  let requested = @pathx.Absolute::parse_resource_path(cwd.trim().to_owned()) catch {
+    InvalidResourcePath => return None
   }
   for project, _ in self.known_projects {
     if @pathx.Path(project).to_absolute() is Some(root) &&

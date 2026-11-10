@@ -1,14 +1,17 @@
 ///|
 /// Unsandboxed setup helper: run git and require success.
 async fn git_setup(args : Array[String], cwd : String) -> String {
-  let (code, data) = @process.collect_stdout(
+  let result = @process.run(
     "git",
     args,
     inherit_env=true,
+    stdout=Collect,
     cwd=cwd.clamped_view(),
   )
-  guard code == 0 else { fail("git failed in \{cwd}: \{data.text()}") }
-  data.text()
+  guard result.exit_code == 0 else {
+    fail("git failed in \{cwd}: \{result.stdout_text()}")
+  }
+  result.stdout_text()
 }
 
 ///|
@@ -45,7 +48,8 @@ async test "the worker profile confines writes to the worker tree" {
     let deny_roots = [common, origin, sibling]
     async fn probe(cmd : String) -> @sandbox.SandboxedCommand? {
       @sandbox.SandboxedCommand::create_worker_if_available(
-        Shell(cmd),
+        "sh",
+        ["-c", cmd],
         deny_roots~,
         worker_root~,
         worker_admin_dir~,
@@ -75,7 +79,7 @@ async test "the worker profile confines writes to the worker tree" {
     }
     let (origin_exit, origin_text) = merged_output_text(against_origin)
     assert_true(origin_exit != 0)
-    assert_eq(@fs.read_file("\{origin}/seed.txt").text(), "seed\n")
+    assert_eq(@fs.read_text("\{origin}/seed.txt"), "seed\n")
     assert_true(against_origin.output_reports_denial(origin_text))
     // The guidance follows the profile. A worker that hit its boundary must not
     // get the source-write text: it would be told to make source changes with
@@ -98,9 +102,7 @@ async test "the worker profile confines writes to the worker tree" {
     }
     let (gitfile_exit, _) = merged_output_text(against_gitfile)
     assert_true(gitfile_exit != 0)
-    assert_true(
-      @fs.read_file("\{worker_root}/.git").text().has_prefix("gitdir:"),
-    )
+    assert_true(@fs.read_text("\{worker_root}/.git").has_prefix("gitdir:"))
     // 6. Commits cannot land: blob/object writes hit the shared store. The
     // add/commit chain fails and the branch still holds only the base commit.
     guard probe("cd \{worker_root} && git add -A && git commit -q -m steal")
@@ -121,7 +123,8 @@ async test "worker profile validation rejects impossible geometries" {
     let root = @fs.realpath(dir)
     // Worker root not nested below any denied root.
     let outside = @sandbox.SandboxedCommand::create_worker_if_available(
-      Shell(":"),
+      "sh",
+      ["-c", ":"],
       deny_roots=["\{root}/repo"],
       worker_root="\{root}/elsewhere",
       worker_admin_dir="\{root}/repo/.git/worktrees/x",
@@ -131,7 +134,8 @@ async test "worker profile validation rejects impossible geometries" {
     assert_true(outside is None)
     // A denied root below the worker root would be re-opened wholesale.
     let reopened = @sandbox.SandboxedCommand::create_worker_if_available(
-      Shell(":"),
+      "sh",
+      ["-c", ":"],
       deny_roots=["\{root}/repo", "\{root}/repo/.worktrees/w1/nested"],
       worker_root="\{root}/repo/.worktrees/w1",
       worker_admin_dir="\{root}/repo/.git/worktrees/w1",
@@ -141,7 +145,8 @@ async test "worker profile validation rejects impossible geometries" {
     assert_true(reopened is None)
     // A miscomputed admin dir that IS a denied root would re-open it.
     let admin_reopens = @sandbox.SandboxedCommand::create_worker_if_available(
-      Shell(":"),
+      "sh",
+      ["-c", ":"],
       deny_roots=["\{root}/repo", "\{root}/repo/.git"],
       worker_root="\{root}/repo/.worktrees/w1",
       worker_admin_dir="\{root}/repo/.git",
@@ -174,7 +179,8 @@ async test "the worker profile confines a directory worker to its directory" {
     }
     async fn probe(cmd : String) -> @sandbox.SandboxedCommand? {
       @sandbox.SandboxedCommand::create_worker_if_available(
-        Shell(cmd),
+        "sh",
+        ["-c", cmd],
         deny_roots=[workspace],
         worker_root=mine,
         git_index="\{mine}/.git/index",
@@ -189,7 +195,7 @@ async test "the worker profile confines a directory worker to its directory" {
       fail("probe build failed")
     }
     assert_eq(merged_output_text(own).0, 0)
-    assert_eq(@fs.read_file("\{mine}/seed.txt").text(), "x")
+    assert_eq(@fs.read_text("\{mine}/seed.txt"), "x")
     guard probe("cd \{mine} && git status --porcelain") is Some(status) else {
       fail("probe build failed")
     }
@@ -200,12 +206,12 @@ async test "the worker profile confines a directory worker to its directory" {
       fail("probe build failed")
     }
     assert_true(merged_output_text(against_sibling).0 != 0)
-    assert_eq(@fs.read_file("\{theirs}/seed.txt").text(), "seed\n")
+    assert_eq(@fs.read_text("\{theirs}/seed.txt"), "seed\n")
     guard probe("cd \{mine} && git restore seed.txt") is Some(restore) else {
       fail("probe build failed")
     }
     assert_eq(merged_output_text(restore).0, 0)
-    assert_eq(@fs.read_file("\{mine}/seed.txt").text(), "seed\n")
+    assert_eq(@fs.read_text("\{mine}/seed.txt"), "seed\n")
     guard probe("printf x > \{mine}/seed.txt") is Some(again) else {
       fail("probe build failed")
     }

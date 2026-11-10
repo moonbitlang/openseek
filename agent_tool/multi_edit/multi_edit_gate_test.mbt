@@ -7,8 +7,8 @@ async test "multi_edit gates the whole batch through moonc before writing" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-gate-", dir => {
     let a_original = "///|\npub fn f() -> Int {\n  42\n}\n"
     let b_original = "///|\npub fn g() -> Int {\n  7\n}\n"
-    @fs.write_file("\{dir}/a.mbt", a_original, create_mode=CreateOrTruncate)
-    @fs.write_file("\{dir}/b.mbt", b_original, create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/a.mbt", a_original, create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/b.mbt", b_original, create_mode=CreateOrTruncate)
     // One clean edit (a.mbt) plus one that would break b.mbt: the WHOLE batch
     // is rejected and neither file changes.
     let out = run_multi_edit({
@@ -31,8 +31,8 @@ async test "multi_edit gates the whole batch through moonc before writing" {
     assert_true(out.content.contains("rejected: the batch would introduce"))
     assert_true(out.content.contains("NO files were changed"))
     assert_true(out.content.contains("b.mbt: would gain 1 new parse error(s)"))
-    assert_eq(@fs.read_file("\{dir}/a.mbt").text(), a_original)
-    assert_eq(@fs.read_file("\{dir}/b.mbt").text(), b_original)
+    assert_eq(@fs.read_text("\{dir}/a.mbt"), a_original)
+    assert_eq(@fs.read_text("\{dir}/b.mbt"), b_original)
     // A clean batch applies to both files.
     let ok = run_multi_edit({
       "edits": [
@@ -51,8 +51,8 @@ async test "multi_edit gates the whole batch through moonc before writing" {
       ],
     })
     assert_false(ok.is_error)
-    assert_true(@fs.read_file("\{dir}/a.mbt").text().contains("  43"))
-    assert_true(@fs.read_file("\{dir}/b.mbt").text().contains("  8"))
+    assert_true(@fs.read_text("\{dir}/a.mbt").contains("  43"))
+    assert_true(@fs.read_text("\{dir}/b.mbt").contains("  8"))
     // Opt-out: the breaking batch lands.
     let fx = run_multi_edit({
       "edits": [
@@ -66,6 +66,6 @@ async test "multi_edit gates the whole batch through moonc before writing" {
       "revert_on_parse_errors": false,
     })
     assert_false(fx.is_error)
-    assert_true(@fs.read_file("\{dir}/b.mbt").text().contains("match 8 {"))
+    assert_true(@fs.read_text("\{dir}/b.mbt").contains("match 8 {"))
   })
 }

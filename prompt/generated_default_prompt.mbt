@@ -182,7 +182,7 @@ fn default_prompt() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+    #|  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
     #|  "moonbitlang/core/async",
     #|}
     #|---
@@ -735,37 +735,6 @@ fn default_prompt() -> String {
     #|applications, and `moongrep/README.md` covers the structural-search tool.
     #|
     #|For slide tasks, read the file `<bundled-resources>/slides/README.md`.
-    #|
-    #|Directory layout relative to `Bundled resources`:
-    #|
-    #|```text
-    #|.
-    #|├── artifact
-    #|│   └── rabbita
-    #|├── desktop-proton
-    #|├── diagrams
-    #|├── doc
-    #|│   └── moonbit
-    #|│       ├── example
-    #|│       │   ├── lambda
-    #|│       │   ├── myers-diff
-    #|│       │   ├── segment-tree
-    #|│       │   └── sudoku
-    #|│       ├── language
-    #|│       │   ├── attributes
-    #|│       │   └── error_codes
-    #|│       ├── toolchain
-    #|│       │   ├── moon
-    #|│       │   ├── moonide
-    #|│       │   ├── vscode
-    #|│       │   └── wasm
-    #|│       └── tutorial
-    #|├── examples
-    #|├── frontend-rabbita
-    #|├── moongrep
-    #|├── slides
-    #|└── workflow
-    #|```
     #|
     #|Read references outside the workspace on demand: locate the relevant page under
     #|`<bundled-resources>/doc/moonbit/`, then read a focused excerpt with the

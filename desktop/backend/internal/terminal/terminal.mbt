@@ -1,14 +1,43 @@
 // The host side of the integrated terminal: a session table plus the ops the
 // IPC layer calls into. PTY processes themselves are owned by the pump
-// (`run_terminal_pump`), which runs inside the host services' task group —
+// (`run_pump`), which runs inside the host services' task group —
 // see pump.mbt.
 
 ///|
 /// A host-side failure with a user-facing message; the IPC boundary
 /// translates it into the error the webview displays.
 pub suberror TerminalError {
-  TerminalError(String)
+  InvalidBase64Input
+  AmbiguousInput
+  NoWorkspace
+  EmptyCommand
+  ServiceClosed
+  CancelledByReconnect
+  SpawnFailed(String)
+  NotOpen(String)
+  WriteFailed(String)
+  ResizeFailed(String)
 }
+
+///|
+pub impl Show for TerminalError with fn output(self, logger) {
+  let message = match self {
+    InvalidBase64Input => "terminal input contains invalid base64"
+    AmbiguousInput => "terminal input must contain exactly one data field"
+    NoWorkspace => "terminal requires a conversation workspace"
+    EmptyCommand => "terminal command must not be empty"
+    ServiceClosed => "terminal service is closed"
+    CancelledByReconnect => "terminal open was cancelled by reconnect"
+    SpawnFailed(detail) => "terminal spawn failed: \{detail}"
+    NotOpen(id) => "terminal \{id} is not open"
+    WriteFailed(detail) => "terminal write failed: \{detail}"
+    ResizeFailed(detail) => "terminal resize failed: \{detail}"
+  }
+  logger.write_string(message)
+}
+
+///|
+pub extend TerminalError with Show::{output, to_string}
 
 ///|
 /// The request queue uses this private error only to wake and stop its pump.
@@ -133,8 +162,8 @@ priv struct OpenRequest {
   cwd : String
   cols : Int32
   rows : Int32
-  /// Spawn outcome for the waiting `open_terminal` call.
-  reply : @async.Queue[Result[Unit, String]]
+  /// Spawn outcome for the waiting `spawn` call.
+  reply : @async.Queue[Result[Unit, TerminalError]]
 }
 
 ///|
@@ -144,7 +173,7 @@ struct TerminalState {
   requests : @async.Queue[OpenRequest]
   sessions : Map[String, TerminalSession]
   /// Once closed, this state cannot serve another connection. Page reconnects
-  /// use `close_all_terminals` instead and leave the pump available.
+  /// use `close_all` instead and leave the pump available.
   mut closed : Bool
   /// Incremented by the connect handshake so opens from an older page cannot
   /// publish a session after that page has gone away.
@@ -152,7 +181,7 @@ struct TerminalState {
 }
 
 ///|
-pub fn new_terminal_state() -> TerminalState {
+pub fn TerminalState::TerminalState() -> TerminalState {
   {
     requests: Queue(kind=Unbounded),
     sessions: Map([]),
@@ -165,66 +194,64 @@ pub fn new_terminal_state() -> TerminalState {
 /// Open a terminal session in `cwd` and return its id once the child is
 /// running. Without `command`, POSIX launches `$SHELL -l` and Windows launches
 /// `%COMSPEC%`; with it, that argv runs directly in the session's PTY instead.
-/// Requires `run_terminal_pump` to be running (the host services' task
+/// Requires `run_pump` to be running (the host services' task
 /// group), otherwise the call waits until it is. A permanently shut down state
 /// rejects the request instead of leaving its caller parked.
-pub async fn open_terminal(
-  state : TerminalState,
+async fn TerminalState::spawn(
+  self : TerminalState,
   cwd~ : String,
   cols~ : Int32,
   rows~ : Int32,
   command? : Array[String],
 ) -> String {
-  guard !state.closed else { raise TerminalError("terminal service is closed") }
+  guard !self.closed else { raise ServiceClosed }
   let argv = session_argv(command?)
   let id = @uuid.mint()
-  let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
-  state.requests.put({
+  let reply : @async.Queue[Result[Unit, TerminalError]] = Queue(
+    kind=Blocking(1),
+  )
+  self.requests.put({
     id,
-    connection_generation: state.connection_generation,
+    connection_generation: self.connection_generation,
     argv,
     cwd,
     cols,
     rows,
     reply,
   }) catch {
-    TerminalPumpClosed => raise TerminalError("terminal service is closed")
+    TerminalPumpClosed => raise ServiceClosed
     error => raise error
   }
   match reply.get() {
     Ok(_) => id
-    Err(message) => raise TerminalError(message)
+    Err(error) => raise error
   }
 }
 
 ///|
 /// Write user input (already encoded as terminal input bytes) to a session.
-pub async fn write_terminal(
-  state : TerminalState,
+async fn TerminalState::write(
+  self : TerminalState,
   id~ : String,
   data : Bytes,
 ) -> Unit {
-  guard state.sessions.get(id) is Some(session) else {
-    raise TerminalError("terminal \{id} is not open")
-  }
+  guard self.sessions.get(id) is Some(session) else { raise NotOpen(id) }
   session.pty.write(data) catch {
-    error => raise TerminalError(@debug.render(Repr(error)))
+    error => raise WriteFailed(@debug.render(Repr(error)))
   }
 }
 
 ///|
 /// Propagate a webview-side viewport change to the PTY.
-pub fn resize_terminal(
-  state : TerminalState,
+pub fn TerminalState::resize(
+  self : TerminalState,
   id~ : String,
   cols~ : Int32,
   rows~ : Int32,
 ) -> Unit raise {
-  guard state.sessions.get(id) is Some(session) else {
-    raise TerminalError("terminal \{id} is not open")
-  }
+  guard self.sessions.get(id) is Some(session) else { raise NotOpen(id) }
   session.pty.resize(cols~, rows~) catch {
-    error => raise TerminalError("terminal resize failed: \{error}")
+    error => raise ResizeFailed("\{error}")
   }
 }
 
@@ -232,12 +259,12 @@ pub fn resize_terminal(
 /// Acknowledge every output chunk through the latest sequence the webview has
 /// rendered. A later acknowledgement covers an earlier request that failed to
 /// reach the host; duplicates and out-of-order older requests remain no-ops.
-pub fn ack_terminal(
-  state : TerminalState,
+pub fn TerminalState::ack(
+  self : TerminalState,
   id~ : String,
   sequence~ : Int32,
 ) -> Unit {
-  guard state.sessions.get(id) is Some(session) else { return }
+  guard self.sessions.get(id) is Some(session) else { return }
   if session.output.acknowledge_through(sequence) {
     session.cond.signal()
   }
@@ -248,8 +275,8 @@ pub fn ack_terminal(
 /// output tasks together; the PTY then closes its controlling handle, allows a
 /// bounded graceful exit, and releases its native resources before `Exited`.
 /// Unknown ids are a no-op (already exited).
-pub fn close_terminal(state : TerminalState, id~ : String) -> Unit {
-  guard state.sessions.get(id) is Some(session) else { return }
+pub fn TerminalState::close(self : TerminalState, id~ : String) -> Unit {
+  guard self.sessions.get(id) is Some(session) else { return }
   guard !session.closing else { return }
   session.closing = true
   session.cond.broadcast()
@@ -262,13 +289,13 @@ pub fn close_terminal(state : TerminalState, id~ : String) -> Unit {
 /// Retire every live session and invalidate every open requested by an older
 /// page. A freshly (re)loaded page cannot reclaim the old page's terminal
 /// tabs, including requests the pump has not published as sessions yet.
-pub fn close_all_terminals(state : TerminalState) -> Unit {
+pub fn TerminalState::close_all(self : TerminalState) -> Unit {
   // Incrementing before the live-session sweep also covers requests that the
   // pump dequeued but whose PTY spawn has not completed.
-  state.connection_generation += 1
+  self.connection_generation += 1
   // Materialized: teardown mutates the table as sessions unwind.
-  for id in state.sessions.keys().to_array() {
-    close_terminal(state, id~)
+  for id in self.sessions.keys().to_array() {
+    self.close(id~)
   }
 }
 
@@ -279,14 +306,11 @@ pub fn close_all_terminals(state : TerminalState) -> Unit {
 pub fn TerminalState::shutdown(self : TerminalState) -> Unit {
   guard !self.closed else { return }
   self.closed = true
-  close_all_terminals(self)
+  self.close_all()
   // A request still in this queue has an opener blocked on its private reply.
   // Close that reply explicitly before removing the pump's only route to it.
   while (self.requests.try_get() catch { _ => None }) is Some(request) {
-    request.reply.close(
-      error=TerminalError("terminal service is closed"),
-      clear=true,
-    )
+    request.reply.close(error=ServiceClosed, clear=true)
   }
   self.requests.close(error=TerminalPumpClosed, clear=true)
 }

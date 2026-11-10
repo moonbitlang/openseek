@@ -49,8 +49,8 @@ fn Connection::shutdown(self : Connection) -> Unit {
 /// Spawn `codex app-server`, install the two inbound event receivers before
 /// the handshake, then send the required initialize/initialized pair. Raises
 /// the failure after tearing down any spawn, protocol, or timeout failure.
-async fn[X] connect(
-  group : @async.TaskGroup[X],
+async fn connect(
+  group : @async.TaskGroup,
   command~ : String,
   notification_handler~ : (String, Json) -> Unit,
   request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise,
@@ -73,28 +73,19 @@ async fn[X] connect(
     command,
     windows=@async.platform is Windows,
   )
-  let (stdin_writer, stdout_reader, stderr_reader, process) = try {
-    let (child_stdin, stdin_writer) = @process.write_to_process()
-    errdefer stdin_writer.close()
-    let (stdout_reader, child_stdout) = @process.read_from_process()
-    errdefer stdout_reader.close()
-    let (stderr_reader, child_stderr) = @process.read_from_process()
-    errdefer stderr_reader.close()
-    let process = @process.spawn(
-      group,
-      executable,
-      args,
-      inherit_env=true,
-      extra_env=env,
-      stdin=child_stdin,
-      stdout=child_stdout,
-      stderr=child_stderr,
-      no_console_window=true,
-      cancel_handler=@process.graceful_cancel(timeout=1000),
-      no_wait=true,
-    )
-    (stdin_writer, stdout_reader, stderr_reader, process)
-  } catch {
+  let process = @process.spawn(
+    group,
+    executable,
+    args,
+    inherit_env=true,
+    extra_env=env,
+    stdin=FeedFromParent,
+    stdout=Collect,
+    stderr=Collect,
+    no_console_window=true,
+    cancel_handler=@process.graceful_cancel(timeout=1000),
+    no_wait=true,
+  ) catch {
     error =>
       raise CodexError::Unavailable(
         "Could not start \{command} app-server via \{executable}: \{error}",
@@ -124,7 +115,14 @@ async fn[X] connect(
       on_closed()
     }
   }
-  let transport = StdioTransport(stdout_reader, stdin_writer, teardown~)
+  let stdin_writer = process.stdin
+  let stdout_reader = process.stdout
+  let stderr_reader = process.stderr
+  let transport = StdioTransport(
+    stdout_reader.text,
+    stdin_writer.text,
+    teardown~,
+  )
   let rpc = @jsonrpc.Client(transport)
   rpc.set_notification_handler(notification_handler)
   rpc.set_request_handler(request_handler)
@@ -157,7 +155,7 @@ async fn[X] connect(
       () => {
         defer stderr_reader.close()
         for ;; {
-          let line = stderr_reader.read_until("\n") catch {
+          let line = stderr_reader.text.read_until("\n") catch {
             error => {
               @xlog.warn(category="codex") <?
                 {

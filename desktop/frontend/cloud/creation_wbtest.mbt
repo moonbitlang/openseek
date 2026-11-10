@@ -108,6 +108,7 @@ test "all native commands share deferred session creation and observation readin
       steers: [],
       compacting: false,
       compact_queued: false,
+      approval: None,
     }
     let ready = watch_snapshot(observing, stream, None, 0, control)
     assert_true(ready.conversations["session"].outgoing is None)
@@ -168,6 +169,7 @@ test "first goal creation failures restore the shared editor and retry only on e
     steers: [],
     compacting: false,
     compact_queued: false,
+    approval: None,
   })
   assert_true(ready.conversations["session"].controls.pending is Some(_))
   let applied = native_event(
@@ -215,6 +217,7 @@ test "first compact remains pending through its pre-command snapshot and definit
     steers: [],
     compacting: false,
     compact_queued: false,
+    approval: None,
   })
   assert_eq(
     ready.conversations["session"].controls.compact_request,
@@ -277,6 +280,7 @@ test "a first command waits for a new observer after a definitive observation fa
     steers: [],
     compacting: false,
     compact_queued: false,
+    approval: None,
   })
   assert_true(ready.conversations["session"].outgoing is None)
   assert_true(ready.conversations["session"].watch_status is Watching)

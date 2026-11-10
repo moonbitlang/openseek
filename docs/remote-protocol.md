@@ -156,7 +156,7 @@ credentials and is unchanged by it. Device ids are stable database ids,
 not secrets — the barrier is ownership:
 
 - **Accounts** use one `ts_` session for Cloud, shares, and account-level
-  device operations, issued by `https://openseek-api.moonbitlang.cn`.
+  device operations, issued by `https://seekmoon.moonbitlang.com`.
   `GET /v2/auth/me` and `POST /v2/auth/logout` select an explicit Bearer
   before cookies; an invalid Bearer never falls back to a cookie. Existing
   v1 endpoints retain their legacy contract for older clients. The configured
@@ -226,12 +226,13 @@ control-frame definitions in `desktop/backend/tunnel`.
 | `-32700` | unparsable frame | — |
 | `-32600` | not a valid JSON-RPC request | — |
 | `-32601` | unknown method | 404 unknown op |
-| `-32602` | params failed to decode | 400 `PayloadError` |
-| `-32000` | engine error (`EngineError` — busy conversation, spawn failure, …) | 409 |
-| `-32001` | host error (`HostError` — bad path, LSP failure, …) | 409 |
-| `-32603` | internal error | 500 |
+| `-32602` | params failed to decode, or a `PayloadError` | 400 `PayloadError` |
+| `-32000` | the method ran and failed (a busy conversation, a refused path, a git refusal, an unexpected failure, …) | 409 / 500 |
 
-`error.message` is the user-facing text. `error.data` is unused for now.
+`error.message` is the user-facing text: the failing error's own message.
+Clients show it and do not branch on the code, so failures of every kind
+share `-32000`; an error type a method raises needs only a message written
+for the person reading it. `error.data` is unused for now.
 
 ## Connection lifecycle: reconnect = resync
 
@@ -517,7 +518,7 @@ still signs out a session whose issuer no longer matches the origin.
 | `app.info` | `{}` | `{version, console_url?}` — the installed package version and a development build's loopback console URL |
 | `settings.get` | `{}` | the status shape below |
 | `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, glm_api_key?, custom_api_key?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; an unknown `provider` is refused. | the status shape below, post-write |
-| `mcp.status` | `{session}` | what that conversation's engine holds of its MCP servers: `{engine:"stopped"}` when it has no engine running, `{engine:"connecting"}` when its engine is running and has not reported yet, else `{engine:"running", status}`. `status` is the engine's latest `mcp_status` event on the serve protocol, kept by the host and returned unchanged: `{configs, servers}`, each config `{path, state:"loaded"}` or `{path, state:"failed", error}` in the order the engine was given them, each server `{name, transport:"stdio"\|"http", target, state, …}` with `state:"connected"` or `"lost"` plus `tools:[{name, description}]`, `"no_tools"`, `"failed"` plus `error`, or `"skipped"`; no configuration at all is `{configs:[], servers:[]}`. The request reads what the host kept: it starts nothing and does not ask the engine. An engine reports when it has connected its servers and again on every change — a connected server exiting. Each report also reaches connected clients as an `agent.event` carrying `mcp_status`, which is transient like every notification — a client that shows this state re-reads `mcp.status` when one arrives, and on reconnect. An engine that exits sends nothing more, so a client re-reading later gets `stopped` |
+| `mcp.status` | `{session}` | what that conversation's engine holds of its MCP servers: `{engine:"stopped"}` when it has no engine running, `{engine:"connecting"}` when its engine is running and has not reported yet, else `{engine:"running", status}`. `status` is the engine's latest `mcp_status` event on the serve protocol, kept by the host and returned unchanged: `{configs, servers}`, each config `{path, state:"loaded"}` or `{path, state:"failed", error}` in the order the engine was given them, each server `{name, transport:"stdio"\|"http", target, state, …}` with `state:"connected"` or `"lost"` plus `tools:[{name, description}]`, `"connecting"`, `"no_tools"`, `"failed"` plus `error`, or `"skipped"`; no configuration at all is `{configs:[], servers:[]}`. The request reads what the host kept: it starts nothing and does not ask the engine. An engine reports as soon as it starts, with its servers `connecting`, and again on every change — a server finishing connecting, or a connected server exiting. Each report also reaches connected clients as an `agent.event` carrying `mcp_status`, which is transient like every notification — a client that shows this state re-reads `mcp.status` when one arrives, and on reconnect. An engine that exits sends nothing more, so a client re-reading later gets `stopped` |
 
 The status shape, also the params of every `settings.changed` notification:
 
@@ -651,9 +652,9 @@ The protocol is intentionally single-root: `../`, `~/`, and absolute search
 locations are rejected instead of escaping `root`. Includes are emitted first
 and every default or request exclusion follows, so an exclusion wins when both
 match. The Host accepts at most 20,000 occurrences and sets `limit_hit` when the
-cap is reached. A connection teardown cancels every process it owns. Installed
-builds resolve only their packaged ripgrep; a `PATH` fallback is permitted
-solely for a detected development layout.
+cap is reached. A connection teardown cancels every process it owns. The Host runs the
+pinned `cli/rg` package (ripgrep ported to MoonBit) through the selected
+MoonBit toolchain's `moonx`; installed builds do not bundle a native ripgrep.
 
 ### terminal.* — connection-scoped PTYs
 
@@ -849,7 +850,7 @@ The status shape, also the params of every `auth.changed` notification:
 
 ```jsonc
 {
-  "server_url": "https://openseek-api.moonbitlang.cn",
+  "server_url": "https://seekmoon.moonbitlang.com",
                                  // signed in: the token's issuer; signed out: the
                                  // SeekMoon relay origin — always present now that
                                  // the relay no longer depends on the chat provider

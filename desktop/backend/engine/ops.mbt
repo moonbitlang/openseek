@@ -653,11 +653,12 @@ pub fn approve_run(
 /// message rather than a bare exit code when one is available.
 async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String {
   let engine = manager.engine
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(engine, args) catch {
+  let result = @processx.collect_output_no_stdin(engine, args) catch {
     error => raise EngineError("failed to run engine: \{error}")
   }
+  let code = result.exit_code
   if code != 0 {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+    let detail = (result.stderr_text() catch { _ => "" }).trim().to_owned()
     raise EngineError(
       if detail.is_empty() {
         "engine exited with code \{code}"
@@ -666,7 +667,7 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
       },
     )
   }
-  stdout.text() catch {
+  result.stdout_text() catch {
     _ => raise EngineError("engine wrote malformed output")
   }
 }
@@ -694,8 +695,8 @@ pub async fn rename_session(
     raise EngineError("session id must not be empty")
   }
   guard !title.is_empty() else { raise EngineError("title must not be empty") }
-  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
   manager.workspace_lifecycle_lock.acquire()
@@ -730,8 +731,8 @@ pub async fn load_session(
   // detached workspace is rejected instead of silently probing another
   // store, which could return a different history for the same session id.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
+    let absolute = @pathx.Absolute::parse_resource_path(hint)
+    guard @workspaces.registered_dir(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
     Some(@workspaces.store_root(workspace))
@@ -811,8 +812,8 @@ pub async fn load_archived_session(
   // one, find the archived record across all attached stores and the global
   // store, matching the placement rules of the archived index.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
+    let absolute = @pathx.Absolute::parse_resource_path(hint)
+    guard @workspaces.registered_dir(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
     Some(@session_store.archived_root(@workspaces.store_root(workspace)))
@@ -877,19 +878,6 @@ async fn follower_snapshot(
 }
 
 ///|
-/// A host-native absolute path at the protocol boundary. Resource URIs use
-/// their authority for the device, so UNC paths have no reversible encoding
-/// and are rejected explicitly instead of being published under a new host.
-fn @pathx.Absolute::resource_path(
-  self : @pathx.Absolute,
-) -> String raise EngineError {
-  guard self.to_uri_path() is Some(path) else {
-    raise EngineError("UNC paths are not supported by frontend resources")
-  }
-  path
-}
-
-///|
 pub async fn list_workspaces() -> @protocol.WorkspacesReply {
   Workspaces(
     @workspaces.registered().map(path => path.resource_path()),
@@ -902,9 +890,7 @@ pub async fn attach_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
 ) -> @protocol.WorkspacesReply {
-  guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-    raise EngineError("workspace is not a supported absolute resource path")
-  }
+  let absolute = @pathx.Absolute::parse_resource_path(path)
   let paths = @workspaces.add(absolute.0, paths => {
     on_committed(paths.map(path => path.resource_path()))
   })
@@ -917,9 +903,7 @@ pub async fn detach_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
 ) -> @protocol.WorkspacesReply {
-  guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-    raise EngineError("workspace is not a supported absolute resource path")
-  }
+  let absolute = @pathx.Absolute::parse_resource_path(path)
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   let workspace = @workspaces.expanded_path(absolute.0)
@@ -989,7 +973,7 @@ async fn attach_run_workspace(root : @pathx.Path) -> String {
     fail("expected a global store under HOME")
   }
   @fsx.ensure_dir(global.to_path())
-  @fs.write_file(
+  @fs.write_text(
     global.join("workspaces.json").to_string(),
     ({ "workspaces": [workspace.to_string()] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1017,11 +1001,11 @@ async fn configure_custom_provider(manager : EngineManager) -> Unit {
 /// Serve `actor` in `group` and wait until its pump accepts commands: the
 /// first thing every run test does after building the manager.
 #cfg(not(platform="windows"))
-async fn[G] serve_until_pumping(
+async fn serve_until_pumping(
   actor : EngineActor,
   manager : EngineManager,
   sink : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
 ) -> Unit {
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
     actor.run(sink, _ => ())
@@ -1078,12 +1062,12 @@ async test "start echoes the client submission id in Started" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nprintf '%s' \"$(command -v moon)\" > selected-moon.tmp\nmv selected-moon.tmp selected-moon\nwhile IFS= read -r line; do :; done\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let selected_seed = root.join("explicit seed")
   let selected_home = runtime.join("toolchains/moonbit/linux-x64")
   prepare_fake_moonbit_seed(selected_seed, version="explicit-test")
@@ -1139,7 +1123,7 @@ async test "start echoes the client submission id in Started" {
       @fsx.read_text(marker),
       selected_home.resolve().join("bin/moon").to_string(),
     )
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1173,12 +1157,12 @@ async test "native commands share writer delivery and preserve turn ownership" {
   )
   // Echoes every command it reads back into a file, so the test can check the
   // goal really left the host rather than only that the op returned.
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nfor arg in \"$@\"; do case \"$arg\" in --system-prompt-file=*) printf '%s\\n' \"${arg#--system-prompt-file=}\" >> '\{launch_args}';; esac; done\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -1282,21 +1266,19 @@ async test "native commands share writer delivery and preserve turn ownership" {
     assert_true(
       @async.with_timeout_opt(3000, () => {
         while !@fsx.exists(received) ||
-              !@fs.read_file(received.to_string())
-              .text()
-              .contains("\"command\":\"compact\"") {
+              !@fs.read_text(received.to_string()).contains(
+                "\"command\":\"compact\"",
+              ) {
           @async.sleep(1)
         }
       })
       is Some(_),
     )
     assert_true(
-      @fs.read_file(received.to_string())
-      .text()
-      .contains("keep the build green"),
+      @fs.read_text(received.to_string()).contains("keep the build green"),
     )
     let lines = [
-      for line in @fs.read_file(received.to_string()).text().trim().split("\n") => {
+      for line in @fs.read_text(received.to_string()).trim().split("\n") => {
         @json.parse(line)
       }
     ]
@@ -1337,7 +1319,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
     for path in launches {
       assert_eq(@fsx.read_text(Path(path.to_owned())), custom_prompt)
     }
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1349,15 +1331,15 @@ async test "native commands share writer delivery and preserve turn ownership" {
 #cfg(not(platform="windows"))
 async test "a discarded command answers its sender" {
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "sleep 30"],
-      stdin=child_stdin,
+      stdin=FeedFromParent,
       cancel_handler=@process.graceful_cancel(timeout=10),
       no_wait=true,
     )
+    let writer = process.stdin
     let engine = test_serve_engine(
       "s-discard",
       writer,
@@ -1383,7 +1365,7 @@ async test "a discarded command answers its sender" {
     assert_false(
       engine.submit(@protocol.goal_clear(), failure_reason="unreachable"),
     )
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1412,12 +1394,12 @@ async test "setup failure retires the writer before an immediate next start" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  IFS= read -r line || exit 0\n  printf '%s\\n' '{\"event\":\"agent_setup_failed\",\"error\":\"boom\"}'\n  sleep 1\n  printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"append failed\"}'\n  printf '' > '\{old_done}'\n  exit 0\nfi\nif [ ! -f '\{old_done}' ]; then printf '' > '\{overlapped}'; fi\nwhile IFS= read -r line; do\n\{commit_terminal_sh()}  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -1465,7 +1447,7 @@ async test "setup failure retires the writer before an immediate next start" {
       })
       is Some(_),
     )
-    assert_eq(@fs.read_file(count.to_string()).text(), "2")
+    assert_eq(@fs.read_text(count.to_string()), "2")
     // Let the second run finish before teardown: its engine commits its
     // terminal record under the workspace, and a commit still in flight would
     // race the recursive removal of the test directory.
@@ -1487,7 +1469,7 @@ async test "setup failure retires the writer before an immediate next start" {
     }
     assert_eq(first_finishes, 1)
     assert_true(has_finished_run(emitted, second.run_id))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1521,12 +1503,12 @@ async test "a prompt bigger than the pipe still settles exactly once" {
   // Deliberately never read stdin, then die with the prompt still half
   // written: the JSONL frame on the wire is partial, so the handle must
   // become unusable and the run must be reported as failed.
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nsleep 1\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -1570,7 +1552,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
     }
     assert_eq(finishes, 1)
     assert_true(open_run_engine(manager, run_id~) is None)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1603,12 +1585,12 @@ async test "named session retries after its first prompt creates no record" {
   // the session directory, never reads stdin, and dies with the large prompt's
   // JSONL frame still partial. The successor accepts a normal prompt and
   // finishes it.
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n\{commit_terminal_sh()}  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -1674,8 +1656,8 @@ async test "named session retries after its first prompt creates no record" {
       })
       is Some(_),
     )
-    assert_eq(@fs.read_file(count.to_string()).text(), "2")
-    group.return_immediately(())
+    assert_eq(@fs.read_text(count.to_string()), "2")
+    group.return_immediately()
   })
 }
 
@@ -1765,12 +1747,12 @@ async test "load rejects a detached workspace hint instead of probing global" {
   @sys.set_env_var("HOME", dir)
   defer restore_home_env(previous)
   @fsx.ensure_dir(Path(dir + "/sessions/s-detached"))
-  @fs.write_file(
+  @fs.write_text(
     engine,
     "#!/bin/sh\nprintf '' > '\{marker}'\nprintf '%s' '{\"events\":[]}'\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine]).exit_code, 0)
   let manager = new_engine_manager(engine)
   let detail = try {
     ignore(
@@ -1815,12 +1797,12 @@ async test "workspace detach refuses a running conversation without hiding it" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do sleep 30; done\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -1856,7 +1838,7 @@ async test "workspace detach refuses a running conversation without hiding it" {
       fail("expected an absolute workspace fixture")
     }
     assert_true(@workspaces.registered().contains(workspace_path))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1888,12 +1870,12 @@ async test "workspace detach drains an idle writer and its follower first" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do\n\{commit_terminal_sh()}  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\nprintf '' > '\{exited}'\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -1932,7 +1914,7 @@ async test "workspace detach drains an idle writer and its follower first" {
       fail("engine pump stopped during detach")
     }
     assert_true(sessions.get("s-detach-idle") is None)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 

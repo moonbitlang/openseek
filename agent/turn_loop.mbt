@@ -144,7 +144,7 @@ async fn AgentLoop::run(
 ) -> @agent_session.Session {
   self.last_session = session
   let mut failure : Error? = None
-  errdefer @async.protect_from_cancel(() => self.seal_unwinding_turn(failure))
+  errdefer self.seal_unwinding_turn(failure)
   let outcome = try {
     for step in 0..<max_steps; session = session {
       let session = self.prepare_step(session)
@@ -307,19 +307,25 @@ async fn AgentLoop::run(
 
 ///|
 /// Persist the terminal on either error or cancellation. A cancellation signal
-/// bypasses catch, so the enclosing errdefer owns this protected cleanup.
+/// bypasses catch, so this runs from the enclosing errdefer and cannot itself
+/// be cancelled.
 /// Every append is best effort: cleanup must not replace the original exit.
-async fn AgentLoop::seal_unwinding_turn(self : Self, failure : Error?) -> Unit {
+async fn AgentLoop::seal_unwinding_turn(
+  self : Self,
+  failure : Error?,
+) -> Unit nocancel {
   let terminal : @agent_session.SessionItem = match failure {
     Some(error) => Terminal(Failed("agent failed: \{error}"))
     None => Terminal(Interrupted("cancelled"))
   }
-  // Best-effort: a goal met in the dying batch keeps its durable clear
-  // when the store still accepts appends.
-  let session = self.flush_goal_tombstone(self.last_session) catch {
-    _ => self.last_session
-  }
-  ignore(self.append(session, terminal) catch { _ => session })
+  @async.protect_from_cancel(() => {
+    // Best-effort: a goal met in the dying batch keeps its durable clear
+    // when the store still accepts appends.
+    let session = self.flush_goal_tombstone(self.last_session) catch {
+      _ => self.last_session
+    }
+    ignore(self.append(session, terminal) catch { _ => session })
+  })
 }
 
 ///|

@@ -347,7 +347,7 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
   let mut failure : String? = None
   for ;; {
     let command = self.commands.get() catch { _ => break }
-    self.writer.write(command.command.to_jsonl()) catch {
+    self.writer.write(@utf8.encode(command.command.to_jsonl())) catch {
       error => {
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
@@ -1319,9 +1319,9 @@ fn reset_engine_generation(
 /// Install one spawn request without touching its ack. The caller owns ack
 /// completion so cancellation can defer it until the entire pump task group
 /// has unwound; ordinary success/failure replies immediately.
-async fn[G] handle_spawn_command(
+async fn handle_spawn_command(
   sink~ : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
   manager~ : EngineManager,
   sessions~ : Map[String, SessionSlot],
   claim~ : PendingClaim,
@@ -1527,9 +1527,9 @@ async fn engine_process_args(
 /// stream tasks: the stdout reader feeding the queue, the stderr drain, and
 /// the consumer that forwards events to the webview for the engine's
 /// lifetime.
-async fn[G] start_serve_engine(
+async fn start_serve_engine(
   sink~ : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
   manager~ : EngineManager,
   slot~ : SessionSlot,
   config~ : RunConfig,
@@ -1566,9 +1566,6 @@ async fn[G] start_serve_engine(
       discard_follower_startup(manager, follower)
     }
   })
-  let (child_stdin, writer) = @process.write_to_process()
-  let (reader, child_stdout) = @process.read_from_process()
-  let (stderr_reader, child_stderr) = @process.read_from_process()
   let env = engine_process_env(
     config,
     manager.runtime_dir,
@@ -1607,9 +1604,9 @@ async fn[G] start_serve_engine(
     args,
     inherit_env=false,
     extra_env=env,
-    stdin=child_stdin,
-    stdout=child_stdout,
-    stderr=child_stderr,
+    stdin=FeedFromParent,
+    stdout=Collect,
+    stderr=Collect,
     cwd?=config.cwd.map(cwd => cwd.to_string().clamped_view()),
     // The GUI-subsystem host has no console, so a console-subsystem child
     // would otherwise open its own visible conhost window on Windows.
@@ -1625,6 +1622,9 @@ async fn[G] start_serve_engine(
     }),
     no_wait=true,
   )
+  let writer = process.stdin
+  let reader = process.stdout
+  let stderr_reader = process.stderr
   @xlog.info() <?
     {
       "event": "desktop_engine_spawned",
@@ -1663,7 +1663,7 @@ async fn[G] start_serve_engine(
     message_receipts: Receipts(),
     queued_runs: [],
     job_requests: Map([]),
-    last_activity_ms: engine_clock_ms(),
+    last_activity_ms: @async.now(),
     mcp_status: None,
   }
   startup_engine = Some(engine)
@@ -1673,7 +1673,7 @@ async fn[G] start_serve_engine(
   group.spawn_bg(no_wait=true, allow_failure=true, () => engine.write_commands())
   slot.engine = Some(engine)
   let stderr_task = group.spawn(no_wait=true) <| () => {
-    stderr_reader.read_all().text() catch {
+    stderr_reader.text.read_all() catch {
       _ => ""
     }
   }
@@ -1816,10 +1816,10 @@ async fn ServeEngine::consume(
 ) -> Int32 {
   let engine = self
   let sink = self.sink
-  let mcp_errors : Map[String, String] = Map([])
   // The read end belongs to this task for its whole life, so every way out —
   // EOF, a stream this host cannot read, cancellation — closes it here.
   defer reader.close()
+  let mut exit_code = -1
   // Sub-run probes are children of this task: one per running child, spawned
   // at its `subrun_started` bracket and cancelled at the finish. `no_wait`
   // makes the engine's own EOF their backstop — a child whose finish bracket
@@ -1833,7 +1833,7 @@ async fn ServeEngine::consume(
     // path — and its journal into `workflow.entry` pushes.
     let tails : Map[String, @async.Task[Unit]] = Map([])
     for ;; {
-      guard reader.read_until("\n") is Some(line) else { break }
+      guard reader.text.read_until("\n") is Some(line) else { break }
       for json in @jsonl.parse(line) {
         // Every stdout event is a hint that the engine may just have
         // appended to the durable record — the follower's low-latency
@@ -1841,28 +1841,35 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
-          // Partial success still reports registration. Remember failures by
-          // source path until a later engine successfully loads that file.
+          // A configuration file's failure is forwarded once per distinct
+          // error, remembered by source path until a later engine reports
+          // that file again.
           Some(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
-            if manager.mcp.current_engine_id != Some(engine.id) {
-              continue
-            }
-            mcp_errors[path] = error
-            if manager.mcp.errors.get(path) == Some(error) {
+            if manager.mcp.current_engine_id != Some(engine.id) ||
+              manager.mcp.errors.get(path) == Some(error) {
               continue
             }
             manager.mcp.errors[path] = error
           }
-          Some(McpToolsRegistered(..)) =>
-            if manager.mcp.current_engine_id == Some(engine.id) {
-              manager.mcp.errors = mcp_errors
-            }
           // Kept for `mcp.status`, and still forwarded: a page showing this
-          // conversation's status reads it again when it sees one.
-          Some(McpStatus(status~)) => engine.mcp_status = Some(status)
+          // conversation's status reads it again when it sees one. Its
+          // configs are what this engine made of each file, which replace
+          // the failures earlier engines reported.
+          Some(McpStatus(status~)) => {
+            engine.mcp_status = Some(status)
+            if manager.mcp.current_engine_id == Some(engine.id) {
+              let errors : Map[String, String] = Map([])
+              for config in status.configs {
+                if config.state is Failed(error) {
+                  errors[config.path] = error
+                }
+              }
+              manager.mcp.errors = errors
+            }
+          }
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {
               emit(
@@ -2178,10 +2185,9 @@ async fn ServeEngine::consume(
     // does not finish until the child has actually terminated, but the task's
     // result is `Cancelled` rather than an exit code; normalize that reaped
     // outcome to -1 so retirement can still publish the EOF latch.
-    engine.process.wait() catch {
-      _ => -1
-    }
+    exit_code = engine.process.wait() catch { _ => -1 }
   }
+  exit_code
 }
 
 ///|
@@ -2388,7 +2394,7 @@ fn test_serve_engine(
   session_root? : @pathx.Absolute,
   follower? : SessionFollower,
   condemned~ : Bool = false,
-  last_activity_ms~ : Int64 = engine_clock_ms(),
+  last_activity_ms~ : Int64 = @async.now(),
   id~ : String = "test",
 ) -> ServeEngine {
   {
@@ -2431,18 +2437,18 @@ async test "a failed pump closes its open run and retires the slot" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // Unreadable output, then a child that would otherwise outlive the pump:
     // the kill is what ends it, not a cooperative exit.
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf 'not json\\n'; sleep 30"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-consumer-died",
       writer,
@@ -2491,8 +2497,6 @@ async test "an engine that dies between turns still reports why" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // Malformed stdout from an engine holding no open turn: the pump cannot
     // go on reading it, so the consumer's catch stashes the cause and forces
     // retirement from `Idle`.
@@ -2500,10 +2504,12 @@ async test "an engine that dies between turns still reports why" {
       group,
       "/bin/sh",
       ["-c", "printf '%s\\n' 'not json'"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-idle-death",
       writer,
@@ -2531,7 +2537,7 @@ async test "an engine that dies between turns still reports why" {
       }
     }
     assert_true(reported.contains("the engine's event consumer failed"))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -2547,18 +2553,18 @@ async test "a failed turn reports its own reason exactly once" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // A turn that fails and exits: `turn_failed` is both the run's close and
     // the only place its reason is written down.
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"boom\"}'"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-turn-failed",
       writer,
@@ -2594,7 +2600,7 @@ async test "a failed turn reports its own reason exactly once" {
     assert_eq(finishes, 1)
     assert_eq(forwarded, 0)
     assert_eq(cause, "turn failed: boom")
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -2608,18 +2614,18 @@ async test "a failed command leaves settlement to the EOF retirement" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // A child that is already gone, so the first write hits a closed pipe
     // and the pump reaches EOF on its first read.
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 0"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-write-failed",
       writer,
@@ -2678,7 +2684,7 @@ async test "a failed command leaves settlement to the EOF retirement" {
     }
     assert_eq(finishes, 1)
     assert_true(cause.has_prefix("failed to write the goal"))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -2708,14 +2714,14 @@ async test "a run's close spares the commands queued to outlive its turn" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "sleep 30"],
-      stdin=child_stdin,
+      stdin=FeedFromParent,
       no_wait=true,
     )
+    let writer = process.stdin
     let engine = test_serve_engine(
       "s-outlive",
       writer,
@@ -2767,7 +2773,7 @@ async test "a run's close spares the commands queued to outlive its turn" {
       @protocol.compact(),
       @protocol.goal_set("ship it", auto=false),
     ])
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -3205,7 +3211,7 @@ async fn prepare_fake_moonbit_seed(
   write_fake_executable(seed.join("bin/moon"))
   write_fake_executable(seed.join("bin/moonc"))
   write_fake_file(seed.join("lib/core/moon.mod"))
-  @fs.write_file(
+  @fs.write_text(
     seed.join(".openseek-moonbit-seed-version").to_string(),
     version,
     create_mode=CreateOrTruncate,
@@ -3218,7 +3224,7 @@ async fn prepare_fake_bundled_moonbit_home(
   version~ : String,
 ) -> Unit {
   prepare_fake_moonbit_seed(moon_home, version~)
-  @fs.write_file(
+  @fs.write_text(
     moon_home.join(".openseek-moonbit-bundle-version").to_string(),
     "version=\{version}",
     create_mode=CreateOrTruncate,
@@ -3234,7 +3240,7 @@ async fn prepare_fake_bundled_moonbit_home(
 ///|
 async fn write_fake_file(path : @pathx.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
-  @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
+  @fs.write_text(path.to_string(), "", create_mode=CreateOrTruncate)
 }
 
 ///|
@@ -3242,7 +3248,7 @@ async fn write_fake_file(path : @pathx.Path) -> Unit {
 /// and initialization executes `moonc`, so both fakes must carry the bit.
 async fn write_fake_executable(path : @pathx.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
-  @fs.write_file(
+  @fs.write_text(
     path.to_string(),
     "",
     create_mode=CreateOrTruncate,
@@ -3256,12 +3262,12 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   let dir = @fs.tmpdir(prefix="openseek-engine-startup-")
   defer @fs.rmdir(dir, recursive=true)
   let baseline_engine = dir + "/baseline.sh"
-  @fs.write_file(
+  @fs.write_text(
     baseline_engine,
     "#!/bin/sh\nprintf '%s' '{\"events\":[]}'\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", baseline_engine]), 0)
+  assert_eq(@process.run("chmod", ["+x", baseline_engine]).exit_code, 0)
   let manager = new_engine_manager(baseline_engine)
   let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }

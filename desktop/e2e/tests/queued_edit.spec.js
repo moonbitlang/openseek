@@ -2,7 +2,7 @@ import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
+for (const outcome of ['accepted', 'rpc-error']) {
   test(`queued edit serializes saves and recovers after ${outcome}`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     app.hostSettings.followup_behavior = 'queue';
@@ -76,7 +76,7 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     expect(heldRequest.params.text).not.toContain('Context added during save');
     const response = outcome === 'rpc-error'
       ? { error: { code: -32000, message: 'Save rejected' } }
-      : { result: { accepted: outcome === 'accepted' } };
+      : { result: { accepted: true } };
     app.socket.send(JSON.stringify({ jsonrpc: '2.0', id: heldRequest.id, ...response }));
     await expect(composer).toBeEnabled();
     await expect(added).toBeVisible();

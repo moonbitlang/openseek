@@ -147,9 +147,9 @@ async test "attached workspace dir resolves registered worktree paths" {
   @fsx.ensure_dir(ws.join(".worktrees/wt/src").to_path())
   @fsx.ensure_dir(ws.join(".worktrees/stray").to_path())
   @fsx.ensure_dir(ws.join("src").to_path())
-  @fs.write_file(
+  @fs.write_text(
     ws.join("src/main.mbt").to_string(),
-    b"main",
+    "main",
     create_mode=CreateOrTruncate,
   )
   let worktree_file = ws.join(".worktrees/wt/src/main.mbt")
@@ -277,12 +277,12 @@ async test "worktree remove refuses a running conversation without unmapping it"
     runtime.join("toolchains/moonbit/macos-arm64").to_path(),
     version="0.10.0-test",
   )
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do sleep 30; done\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(
     engine.to_string(),
     runtime_dir=runtime.to_path(),
@@ -325,7 +325,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
       fail("expected the worktree to stay registered")
     }
     assert_eq(info.sessions, ["s-wt-run"])
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -528,9 +528,9 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   @fsx.ensure_dir(
     @workspaces.store_root(repo).join("sessions").join("s-arc").to_path(),
   )
-  @fs.write_file(
+  @fs.write_text(
     repo.join(".worktrees/wt-1/junk.txt").to_string(),
-    b"x",
+    "x",
     create_mode=CreateOrTruncate,
   )
   // A dirty checkout returns a structured confirmation state before anything
@@ -636,9 +636,9 @@ async test "archive keeps worktree placement for explicit repair after unarchive
     codex_owner,
     _ => (),
   )
-  @fs.write_file(
+  @fs.write_text(
     repo.join(".worktrees/\{codex.name}/local.txt").to_string(),
-    b"dirty",
+    "dirty",
     create_mode=CreateOrTruncate,
   )
   guard codex_owner.archive_check(manager.worktree_host())
@@ -666,7 +666,7 @@ async fn join_worktree_row(
   session : String,
 ) -> Unit {
   let path = @workspaces.store_root(workspace).join("worktrees.json").to_path()
-  let registry = @json.parse(@fs.read_file(path.to_string()).text())
+  let registry = @json.parse(@fs.read_text(path.to_string()))
   guard registry is Object({ "worktrees": Array(rows), .. }) else {
     fail("the worktree registry has no rows")
   }
@@ -802,9 +802,9 @@ async test "permanent archived deletion drops placement but keeps files and bran
   prepare_git_repo(workspace)
   ignore(@gitx.run(workspace, ["branch", "openseek/chat"]))
   ignore(@workspaces.add(workspace.to_string(), _ => ()))
-  @fs.write_file(
+  @fs.write_text(
     workspace.join("project-note.txt").to_string(),
-    b"keep me",
+    "keep me",
     create_mode=CreateOrTruncate,
   )
   @fsx.ensure_dir(workspace.join(".openseek/archived/sessions/chat").to_path())
@@ -904,9 +904,9 @@ async test "deleting a live conversation skips the archive and drops its placeme
   assert_eq(unnamed.worktree, "wt-1")
   assert_eq(unnamed.dirty_path_count, 0)
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
-  @fs.write_file(
+  @fs.write_text(
     repo.join(".worktrees/wt-1/junk.txt").to_string(),
-    b"x",
+    "x",
     create_mode=CreateOrTruncate,
   )
   @debug.assert_eq(
@@ -1052,9 +1052,9 @@ async test "deleting a live conversation leaves a same-id checkout in another pr
       @workspaces.store_root(repo).join("sessions").join("chat").to_path(),
     )
   }
-  @fs.write_file(
+  @fs.write_text(
     first.join(".worktrees/wt-1/local.txt").to_string(),
-    b"x",
+    "x",
     create_mode=CreateOrTruncate,
   )
   // The check answers for the selected project only.

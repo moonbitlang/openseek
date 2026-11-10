@@ -1,18 +1,11 @@
-/* ---------- conversation overview ----------
-   One element, two presentations, chosen by the main pane's width alone:
-   with room for a 600px conversation beside it, a rail of cards to the right
-   of the transcript and the composer; otherwise a panel over the
-   transcript's right edge, from under the titlebar to above the composer.
-   Showing and hiding is the root's single preference either way. */
+/* The same overview overlays the transcript in narrow panes and becomes a
+   right-hand rail in wide panes. Both layouts share one visibility preference. */
 
 main {
   --conv-overview-width: 300px;
 }
 
-/* The overview is positioned against its grid area instead of being placed
-   in the grid: an in-flow item would take the transcript's cell and push the
-   transcript into an auto-height row. Absolutely positioned, it leaves the
-   conversation's rows as they are and still lines up with them. */
+/* Position against the grid area without displacing the transcript's row. */
 main:has(> .conv-overview) {
   position: relative;
 }
@@ -43,7 +36,7 @@ main:has(> .conv-overview) {
 
 .conv-overview-card {
   padding: var(--space-5) 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-divider);
 }
 .conv-overview-card:last-child {
   border-bottom: 0;
@@ -116,7 +109,7 @@ main:has(> .conv-overview) {
   cursor: pointer;
 }
 .conv-overview-card-title > .icon {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   transform: rotate(-90deg);
   transition: transform var(--drawer-duration) var(--drawer-easing);
 }
@@ -159,7 +152,7 @@ main:has(> .conv-overview) {
 }
 .conv-overview-mini.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .conv-overview-mini:disabled {
   opacity: 0.5;
@@ -193,7 +186,7 @@ main:has(> .conv-overview) {
 }
 
 .conv-overview-row-sub {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 .conv-overview-row > .conv-overview-row-sub {
   flex: none;
@@ -214,9 +207,46 @@ main:has(> .conv-overview) {
   font-size: var(--font-size-xs);
 }
 
-/* Changes card: the checkout first, then what the agent attached. The icon
-   carries the pull request's state; a row with a page links to it, and an
-   attached row's remove button sits outside the link. */
+.connectors-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--color-text-secondary);
+}
+.connectors-row > .run-dot {
+  margin-top: 6px;
+}
+.connectors-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.connectors-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+/* Errors run long; two lines here, the rest on hover. */
+.connectors-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+.connectors-state {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.connectors-note {
+  padding: 2px 0;
+  color: var(--color-text-muted);
+}
+
 .conv-changes-row,
 .conv-changes-error {
   display: flex;
@@ -252,7 +282,7 @@ a.conv-changes-link:hover {
   color: var(--color-success);
 }
 .conv-changes-icon.draft {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 .conv-changes-icon.merged {
   color: light-dark(#8250df, #a371f7);
@@ -303,11 +333,9 @@ a.conv-changes-link:hover {
   color: var(--color-danger);
 }
 .conv-changes-diff .partial {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
-/* The remove button stays out of the way until the row is hovered or
-   focused, like the transcript's row actions. */
 .conv-changes-remove {
   opacity: 0;
 }
@@ -324,7 +352,6 @@ a.conv-changes-link:hover {
   margin-inline: var(--space-2);
 }
 
-/* An attached branch's repository gives way before its name does. */
 .conv-changes-text > .conv-overview-row-sub {
   flex: 0 1000 auto;
   min-width: 0;
@@ -332,8 +359,6 @@ a.conv-changes-link:hover {
   text-overflow: ellipsis;
 }
 
-/* The merged pull requests' fold row reads as a row, not a button: its
-   chevron points right while folded and down once unfolded, like a card's. */
 .conv-changes-fold {
   border: 0;
   background: transparent;

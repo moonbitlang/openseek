@@ -38,8 +38,8 @@ async test "prediction preserves the main request prefix and leaves the session 
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     group.spawn_bg(no_wait=true, () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let request = @json.parse(body.read_all().text())
+        (_request, conn) => {
+          let request = @json.parse(conn.text.read_all())
           assert_true(
             request
             is {
@@ -137,8 +137,8 @@ async test "uncertain predictions are absent and malformed model output stays an
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     group.spawn_bg(no_wait=true, () => {
       server.run_forever(
-        (_request, body, conn) => {
-          ignore(body.read_all())
+        (_request, conn) => {
+          ignore(conn.read_all())
           let content = responses[index]
           index += 1
           let reply : Json = {

@@ -35,7 +35,7 @@ async test "native language preference survives independent reads and rejects in
 async test "native preference read reports corrupt files" {
   let dir = @fs.tmpdir(prefix="openseek-ui-language-")
   defer @fs.rmdir(dir, recursive=true)
-  @fs.write_file(dir + "/ui-language.json", "{broken")
+  @fs.write_text(dir + "/ui-language.json", "{broken")
   let rejected = try {
     read_ui_language(Some(dir)) |> ignore
     false
@@ -58,7 +58,7 @@ async test "native preference read propagates filesystem errors" {
   }
   // A non-directory ancestor must not be mistaken for a missing preference.
   let file = dir + "/not-a-directory"
-  @fs.write_file(file, "ordinary file")
+  @fs.write_text(file, "ordinary file")
   try read_ui_language(Some(file)) catch {
     _ => ()
   } noraise {
@@ -72,11 +72,11 @@ async test "ensure_codex_config creates the file once and keeps edits" {
   let nested = @pathx.Path("\{home}/isolated/codex")
   let created = ensure_codex_config(Some(nested))
   assert_eq(created, "\{home}/isolated/codex/config.toml")
-  let seeded = @fs.read_file(created).text()
+  let seeded = @fs.read_text(created)
   assert_true(seeded.has_prefix("# Codex configuration"))
   // A later call returns the same path without touching user edits.
-  @fs.write_file(created, "model = \"gpt-5.4\"\n", create_mode=CreateOrTruncate)
+  @fs.write_text(created, "model = \"gpt-5.4\"\n", create_mode=CreateOrTruncate)
   let again = ensure_codex_config(Some(nested))
   assert_eq(again, created)
-  assert_eq(@fs.read_file(created).text(), "model = \"gpt-5.4\"\n")
+  assert_eq(@fs.read_text(created), "model = \"gpt-5.4\"\n")
 }

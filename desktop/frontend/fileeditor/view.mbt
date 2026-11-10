@@ -2204,6 +2204,7 @@ fn office_viewer_toolbar(
         [
           @icons.icon(@icons.icon_search),
           @html.input(
+            class="field-surface",
             input_type=@html.InputType::Search,
             value=state.office_query,
             placeholder=ui(locale, OfficeFind),
@@ -2294,6 +2295,7 @@ pub fn breadcrumb_view(
   ctx : Ctx,
   reveal~ : (String, @cmd.Cmd)? = None,
   share~ : @cmd.Cmd? = None,
+  preview~ : @cmd.Cmd? = None,
 ) -> @html.Html {
   if ctx.active_history_diff is Some(diff) {
     return @html.div(
@@ -2380,6 +2382,25 @@ pub fn breadcrumb_view(
   }
   let review = review_toolbar_visible(state, ctx)
   let path_row : Array[@html.Html] = [@html.div(class="crumb-path", crumbs)]
+  path_row.push(
+    @html.span(
+      if preview is Some(command) &&
+        ctx.active_file is Some(path) &&
+        is_html_file(path.path) {
+        let label = ui(locale, PreviewHtml)
+        @html.button(
+          type_="button",
+          class="file-reveal-button",
+          title=label,
+          attrs=@html.Attrs::build().aria_label(label),
+          on_click=command,
+          [@icons.icon_eye(), @html.text(label)],
+        )
+      } else {
+        @html.nothing
+      },
+    ),
+  )
   if !review {
     path_row.push(review_diff_navigation(locale~, dispatch, state, ctx))
   }
@@ -2428,7 +2449,7 @@ pub fn breadcrumb_view(
         title=label,
         on_click=command,
         attrs=@html.Attrs::build().aria_label(label),
-        [icon(@icons.icon_link_external), @html.text(label)],
+        [icon(@icons.icon_folder_opened), @html.text(label)],
       ),
     )
   }
@@ -3803,6 +3824,7 @@ fn review_filter_controls(
     ),
     @html.div(class="review-path-filter", [
       @html.input(
+        class="field-surface",
         input_type=@html.InputType::Text,
         value=state.change_path_filter,
         placeholder=ui(locale, FilterFilesPath),

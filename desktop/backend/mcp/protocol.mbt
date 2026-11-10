@@ -157,7 +157,6 @@ async fn Server::call_tool(
   }
   async fn invoke() -> Result[Array[Content], String] {
     try (tool.call)({ session, arguments, }) catch {
-      error if @async.is_being_cancelled() => raise error
       error => Err("\{error}")
     } noraise {
       content => Ok(content)

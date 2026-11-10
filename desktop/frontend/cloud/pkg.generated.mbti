@@ -24,6 +24,8 @@ pub async fn export_snapshot(String, String) -> @protocol.SessionSnapshot
 
 pub async fn file_unchanged(String, String, String, String) -> Bool
 
+pub async fn import_session(String, @protocol.SessionImportSource) -> @protocol.SessionImportReply
+
 pub async fn read_directory(String, String, String) -> @protocol.ReadDirReply
 
 pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol.ReadFileReply
@@ -34,7 +36,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, desktop_history? : Bool) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -47,6 +49,18 @@ pub enum CommandInput {
 }
 pub fn CommandInput::equal(Self, Self) -> Bool
 pub fn CommandInput::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub struct ControlApproval {
+  id : String
+  tool_name : String
+  detail : String
+  body : String?
+}
+pub fn ControlApproval::equal(Self, Self) -> Bool
+pub fn ControlApproval::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlApproval::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for ControlApproval
 
 #derive(Eq)
 pub struct ControlInput {
@@ -71,6 +85,7 @@ pub enum ControlOperation {
   QueueEdit(id~ : String, content~ : @openseek_protocol.Content)
   QueueWithdraw(id~ : String)
   QueueSteer(id~ : String)
+  Approve(id~ : String, allow~ : Bool)
 }
 pub fn ControlOperation::equal(Self, Self) -> Bool
 pub fn ControlOperation::not_equal(Self, Self) -> Bool
@@ -115,6 +130,7 @@ pub struct ControlState {
   steers : Array[SteerReceipt]
   compact_queued : Bool
   compacting : Bool
+  approval : ControlApproval?
 }
 pub fn ControlState::equal(Self, Self) -> Bool
 pub fn ControlState::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -137,7 +153,7 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
-  history_disk_request : Int32?
+  history_cache_request : Int32?
   history_window : HistoryWindow
   history_older_request : (Int32, Int32, Int32)?
   history_turn_request : (Int32, Int32)?
@@ -179,8 +195,10 @@ pub(all) struct Conversation {
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
+  approval_answered : String?
   notice : String?
 }
+pub fn Conversation::awaits_approval(Self) -> Bool
 pub fn Conversation::can_load_older_history(Self) -> Bool
 pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
 pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
@@ -189,6 +207,7 @@ pub fn Conversation::extends_history_backward(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
 pub fn Conversation::not_equal(Self, Self) -> Bool
 pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
+pub fn Conversation::published_approval(Self, Self) -> ControlApproval?
 pub fn Conversation::run_heartbeat(Self) -> @composer.RunHeartbeat?
 pub fn Conversation::visible_reasoning(Self, Array[@transcript.TranscriptItem]) -> (String?, Bool)
 pub fn Conversation::with_command_result(Self, Self, String) -> (Self, Bool)
@@ -274,7 +293,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
-  DiskHistoryLoaded(Int32, String, Int32, History?)
+  CachedHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, @cloud_client.Failure)
@@ -347,6 +366,7 @@ pub(all) struct Session {
   updated_at : Double?
   generating : Bool
   archived : Bool
+  approval : @protocol.OpenSeekApproval
 }
 pub fn Session::equal(Self, Self) -> Bool
 pub fn Session::not_equal(Self, Self) -> Bool
@@ -355,6 +375,7 @@ pub fn Session::not_equal(Self, Self) -> Bool
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
+  SetApproval(@protocol.OpenSeekApproval)
 }
 pub fn SessionEdit::equal(Self, Self) -> Bool
 pub fn SessionEdit::not_equal(Self, Self) -> Bool
@@ -386,6 +407,8 @@ pub(all) struct State {
   creation : Creation?
   notice : String?
 }
+pub fn State::approval(Self, String) -> @protocol.OpenSeekApproval
+pub fn State::can_choose_approval(Self, String) -> Bool
 pub fn State::can_compose(Self, String) -> Bool
 pub fn State::can_delete(Self, String) -> Bool
 pub fn State::can_edit(Self, String, SessionEdit) -> Bool

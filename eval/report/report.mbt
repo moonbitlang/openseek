@@ -210,14 +210,14 @@ pub async fn write_files(
   html~ : String = "",
 ) -> Unit {
   let _ = @fs.mkdir(out_dir, recursive=true) catch { _ => () }
-  @fs.write_file(
+  @fs.write_text(
     "\{out_dir}/report.json",
     json.stringify(),
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file("\{out_dir}/report.md", markdown, create_mode=CreateOrTruncate)
+  @fs.write_text("\{out_dir}/report.md", markdown, create_mode=CreateOrTruncate)
   if html != "" {
-    @fs.write_file("\{out_dir}/report.html", html, create_mode=CreateOrTruncate)
+    @fs.write_text("\{out_dir}/report.html", html, create_mode=CreateOrTruncate)
   }
 }
 

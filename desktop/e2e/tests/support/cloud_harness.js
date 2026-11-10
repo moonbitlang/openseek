@@ -3,11 +3,12 @@ import { createHash } from 'node:crypto';
 import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
-export const authOrigin = 'https://openseek-api.moonbitlang.cn';
+export const authOrigin = 'https://seekmoon.moonbitlang.com';
 export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
+export const importedSession = '44444444-4444-4444-8444-444444444444';
 const bundle = new URL('../../../dist/browser/', import.meta.url);
 
 // Resolves with the first matching response once its request has ended, so the
@@ -44,38 +45,26 @@ export class CloudHarness {
     this.apiStatus = 200;
     this.meStatus = 401;
     this.listStatus = 200;
-    this.historyStatus = 200;
-    this.createStatus = 201;
-    this.sendStatus = 202;
+    this.importStatus = 201;
     this.shareStatus = 200;
-    this.exportStatus = 200;
     this.exportSnapshots = new Map();
-    this.exportOffline = false;
-    this.deleteStatus = 204;
     this.patchStatus = 204;
     this.patchOffline = false;
     this.pausePatch = null;
     this.deleteOffline = false;
     this.pauseDelete = null;
-    this.disconnectShare = false;
     this.logoutStatus = 204;
-    this.apiOffline = false;
     this.listOffline = false;
     this.disconnectSend = false;
-    this.rejectStreamCancel = false;
     this.streamCancellations = 0;
     this.fileStreamCancellations = 0;
-    this.sessionStreamCancellations = 0;
     this.sessionEventStatus = 200;
     this.pauseSessionEvents = null;
     this.controlSnapshots = new Map();
     this.manualTasks = false;
-    this.pauseControl = null;
     this.controlRejected = null;
     this.controlOffline = false;
     this.fileEventStatus = 200;
-    this.pauseCreate = null;
-    this.pauseSend = null;
     this.pauseHistory = null;
     this.pauseStream = null;
     this.sessionIds = [sessionA, sessionB];
@@ -83,11 +72,12 @@ export class CloudHarness {
     this.archived = new Set();
     this.histories = new Map();
     this.historyTurns = new Map();
-    this.trimHistory = false;
     this.nativeNotices = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
     this.exchangeCount = 0;
+    this.authorization = null;
+    this.pauseAuthorizationCancel = null;
     this.taskCount = 0;
   }
 
@@ -97,8 +87,8 @@ export class CloudHarness {
     await this.page.exposeFunction('cloudWaitForEvent', index => this.eventPauses?.get(index));
     await this.page.exposeFunction('cloudStreamCancelled', () => this.streamCancellations++);
     await this.page.exposeFunction('cloudFileStreamCancelled', () => this.fileStreamCancellations++);
-    await this.page.exposeFunction('cloudSessionStreamCancelled', () => { this.sessionStreamCancellations++; this.streamCancellations++; });
-    await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, rejectStreamCancel, streamChunkSize }) => {
+    await this.page.exposeFunction('cloudSessionStreamCancelled', () => this.streamCancellations++);
+    await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, streamChunkSize }) => {
       window.cloudUnhandledRejections = [];
       window.addEventListener('unhandledrejection', event => window.cloudUnhandledRejections.push(String(event.reason)));
       const key = 'seekmoon.cloud.token.v1';
@@ -140,7 +130,6 @@ export class CloudHarness {
           }, cancel() {
             window.cloudSessionStreams.get(session)?.delete(current);
             window.cloudSessionStreamCancelled();
-            if (rejectStreamCancel) return Promise.reject(new Error('Fixture cancellation rejected'));
           } }), { status: response.status, headers: response.headers });
         }
         const fileEvents = String(args[0]).match(/\/v1\/sessions\/([^/]+)\/files\/events$/);
@@ -190,12 +179,11 @@ export class CloudHarness {
           }, cancel() {
             cancelled = true;
             window.cloudStreamCancelled();
-            if (rejectStreamCancel) return Promise.reject(new Error('Fixture cancellation rejected'));
           } }), { status: response.status, headers: response.headers });
         }
         return response;
       };
-    }, { cached: this.cached, authOrigin, cloudOrigin, rejectStreamCancel: this.rejectStreamCancel, streamChunkSize: this.streamChunkSize ?? 1 });
+    }, { cached: this.cached, authOrigin, cloudOrigin, streamChunkSize: this.streamChunkSize ?? 1 });
     await this.page.route(`${authOrigin}/console/**`, async route => {
       const path = new URL(route.request().url()).pathname.replace(/^\/console\/(?:releases\/v[^/]+\/)?/, '') || 'index.html';
       const contentType = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.html') ? 'text/html' : 'application/octet-stream';
@@ -216,7 +204,6 @@ export class CloudHarness {
       const request = route.request();
       const path = new URL(request.url()).pathname;
       this.requests.push({ side: 'api', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
-      if (this.apiOffline) return route.abort('failed');
       if (path === '/v2/auth/me') {
         const signed = this.accountSignedIn || (request.headers().cookie || '').includes('fixture-account');
         return route.fulfill({ status: signed ? 200 : this.meStatus, contentType: 'application/json', body: JSON.stringify({ user_id: this.userId, login: 'octocat', avatar_url: '' }) });
@@ -254,9 +241,17 @@ export class CloudHarness {
       if (request.method === 'auth.status') return { connected: false, server_url: authOrigin };
       if (request.method === 'account.session') return this.accountSignedIn ? { session: this.account() } : {};
       if (request.method === 'auth.connect') {
+        const authorization = this.authorization;
+        if (authorization) await authorization.promise;
         if (this.authorizationError) throw new Error(this.authorizationError);
         this.accountSignedIn = true;
         return { connected: false, server_url: authOrigin, user: { login: 'octocat', avatar_url: '' } };
+      }
+      if (request.method === 'auth.cancel') {
+        const authorization = this.authorization;
+        if (this.pauseAuthorizationCancel) await this.pauseAuthorizationCancel;
+        authorization?.reject(new Error('the sign-in was cancelled'));
+        return { connected: false, server_url: authOrigin };
       }
       if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
       if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
@@ -281,7 +276,7 @@ export class CloudHarness {
           setBadge: params => window.cloudNotification('setBadge', params),
         },
         openseek: new Proxy({}, { get: (_, method) => async params => {
-          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 5 } });
+          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 6 } });
           return window.cloudHostRequest({ method, params });
         } }),
       };
@@ -313,7 +308,6 @@ export class CloudHarness {
         return this.promptCommand(route, json, headers, session, envelope.command);
       }
       if (operation === 'commands' && ['goal', 'compact'].includes(envelope.command.command)) {
-        if (this.pauseControl) await this.pauseControl;
         if (this.controlOffline) return route.abort('failed');
         const rejected = this.controlRejected || (envelope.task_id !== undefined && envelope.task_id !== snapshot.data.active_task_id ? 'task_mismatch' : null);
         if (rejected) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: rejected });
@@ -325,7 +319,6 @@ export class CloudHarness {
       }
       const body = operation === 'commands' ? { task_id: envelope.task_id, ...envelope.command } : envelope;
       if (operation === 'commands') operation = body.command === 'cancel' ? 'stop' : body.command;
-      if (this.pauseControl) await this.pauseControl;
       if (this.controlOffline) return route.abort('failed');
       const current = this.controlState(session);
       const idleQueueEdit = operation === 'queue' && ['edit', 'withdraw'].includes(body.action)
@@ -363,11 +356,15 @@ export class CloudHarness {
       return json({ accepted: true, task_id: body.task_id, action: body.action, id: body.id });
     }
     if (path === '/v1/me/preferences') return json({ allow_content_improvement: false });
+    if (path === '/v1/sessions/import' && request.method() === 'POST') {
+      if (this.importStatus !== 201) {
+        return route.fulfill({ status: this.importStatus, headers, contentType: 'text/plain', body: '' });
+      }
+      this.sessionIds = [importedSession, ...this.sessionIds.filter(id => id !== importedSession)];
+      return json({ id: importedSession }, 201);
+    }
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
-        const finish = this.pauseCreate;
-        if (finish) await finish;
-        if (this.createStatus !== 201) return json({}, this.createStatus);
         this.sessionIds = [sessionC, ...this.sessionIds.filter(id => id !== sessionC)];
         return json({ id: sessionC }, 201);
       }
@@ -391,21 +388,18 @@ export class CloudHarness {
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       if (this.pauseDelete) await this.pauseDelete;
       if (this.deleteOffline) return route.abort('failed');
-      if (![204, 404].includes(this.deleteStatus)) return json({}, this.deleteStatus);
       const session = decodeURIComponent(path.split('/').pop());
       this.sessionIds = this.sessionIds.filter(id => id !== session);
       this.histories.delete(session);
-      return route.fulfill({ status: this.deleteStatus, headers });
+      return route.fulfill({ status: 204, headers });
     }
     if (/^\/v1\/sessions\/[^/]+\/export$/.test(path)) {
-      if (this.exportOffline) return route.abort('failed');
       const session = decodeURIComponent(path.split('/')[3]);
-      return json(this.exportSnapshots.get(session), this.exportStatus);
+      return json(this.exportSnapshots.get(session));
     }
     if (/^\/v1\/sessions\/[^/]+\/share$/.test(path)) {
       const body = request.postDataJSON();
       if (Object.keys(body).join(',') !== 'idempotency_key') throw new Error('Share accepts only the operation key');
-      if (this.disconnectShare) return route.abort('failed');
       return json({ url: `${authOrigin}/v1/shares/sh_fixture` }, this.shareStatus);
     }
     const match = path.match(/^\/v1\/sessions\/([^/]+)\/messages$/);
@@ -430,21 +424,21 @@ export class CloudHarness {
       }
       const body = JSON.stringify(history.session ? history : { ...history, ...this.nativeHistory(session, history) });
       const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';
-      const status = this.historyStatus;
       if (this.pauseHistory) await this.pauseHistory;
-      if (status !== 200) return route.fulfill({ status, headers, contentType: 'application/json', body });
       const cacheHeaders = { ...headers, ETag: etag, 'Cache-Control': 'no-store' };
-      if ((await request.headerValue('If-None-Match')) === etag) {
+      // WebKit routing rejects all 3xx, including 304. Send the full history
+      // there; Chromium retains conditional-response coverage.
+      if (this.page.context().browser().browserType().name() !== 'webkit'
+          && (await request.headerValue('If-None-Match')) === etag) {
         return route.fulfill({ status: 304, headers: cacheHeaders });
       }
-      return route.fulfill({ status, headers: cacheHeaders, contentType: 'application/json', body });
+      return route.fulfill({ headers: cacheHeaders, contentType: 'application/json', body });
     }
     throw new Error('Messages are read-only; use the native commands endpoint');
   }
 
   async promptCommand(route, json, headers, session, body) {
     this.postCount++;
-    if (this.sendStatus !== 202) return this.sendErrorBody ? route.fulfill({ status: this.sendStatus, headers, contentType: 'text/plain', body: this.sendErrorBody }) : json({}, this.sendStatus);
     const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
     if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
@@ -458,7 +452,6 @@ export class CloudHarness {
     const previous = this.histories.get(session)?.messages || [];
     const messages = [...previous, { task_id: task, kind: 'user', data: { content: body.content }, created_at: 1000 }];
     this.histories.set(session, { messages, generating: true, outcome: null });
-    if (this.pauseSend) await this.pauseSend;
     if (this.disconnectSend) return route.abort('failed');
     await json({ accepted: true }, 202);
     await this.publishTaskStream(session, task, data);
@@ -472,14 +465,12 @@ export class CloudHarness {
       if (record.kind === 'user') {
         const mapped = { ...record, engine_sequence: items.length + 1 };
         items.push({ kind: record.kind, payload: record.data });
-        if (this.trimHistory) mapped.data = record.data.submission_id ? { submission_id: record.data.submission_id } : {};
         return mapped;
       }
       const payload = record.data;
       if (['tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
       if (record.kind === 'assistant_message') {
         items.push({ kind: 'assistant', payload });
-        if (this.trimHistory) return { ...record, data: {}, engine_sequence: items.length };
       }
       if (record.kind === 'tool_call') {
         const call = payload.function ? { id: payload.id, name: payload.function.name, arguments: payload.function.arguments } : payload;
@@ -494,10 +485,7 @@ export class CloudHarness {
       return record;
     });
     items.push(...(this.nativeNotices.get(session) || []));
-    const projected = this.trimHistory
-      ? messages.filter(record => ['user', 'assistant_message', 'task_finished'].includes(record.kind))
-      : messages;
-    return { messages: projected, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
+    return { messages, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
   }
 
   controlState(session) {
@@ -642,15 +630,18 @@ export class CloudHarness {
     return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
   }
 
+  rowContainer(id) {
+    return this.page.locator('.conversation-row').filter({ has: this.row(id) });
+  }
+
   // Archived conversations are managed within the Settings dialog.
   async openArchivedChats() {
     await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await this.page.getByRole('button', { name: 'Manage', exact: true }).click();
-    await expect(this.page.getByRole('dialog', { name: 'Archived chats', exact: true })).toBeVisible();
+    await this.page.getByRole('tab', { name: 'Archive', exact: true }).click();
   }
 
   archivedRow(id) {
-    return this.page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
+    return this.page.getByRole('tabpanel', { name: 'Archive', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
   }
 
   async openArchived(id) {

@@ -150,7 +150,7 @@ async test "the seed is found in the canonical seekmoon resource tree" {
     ]
     for file in files {
       let (path, content) = file
-      @fs.write_file(
+      @fs.write_text(
         root.join(path).to_string(),
         content,
         create_mode=CreateOrTruncate,

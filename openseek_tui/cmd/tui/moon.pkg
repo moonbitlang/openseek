@@ -12,11 +12,11 @@ import {
   "moonbitlang/openseek_tui/tui/doc",
   "moonbitlang/openseek_tui/tui/style",
   "moonbit-community/displaytext",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
-  "moonbitlang/async/process",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/stdio",
   "bobzhang/open_in_browser",
   "moonbitlang/core/argparse",
   "moonbitlang/core/debug",
@@ -33,3 +33,13 @@ import {
 warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native+wasm"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+    "moonbitlang/core/async/stdio",
+  ],
+)

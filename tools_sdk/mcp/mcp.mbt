@@ -61,35 +61,33 @@ pub async fn search(
 const INVALID_CATALOG = "Invalid MCP catalog from the MCP host"
 
 ///|
-/// The catalog this script downloaded, with the capability it came from. The
-/// host's catalog changes only when a connection is lost, and a call to a lost
-/// server says so, so one download serves the whole script. Keying it by the
-/// capability keeps a catalog from one host from answering for another.
-let downloaded : Ref[(String, @catalog.Catalog)?] = Ref(None)
+/// The catalog this script downloaded. The host's catalog changes only as a
+/// server finishes connecting or loses its connection, and a call to a server
+/// still connecting or lost says so, so one download serves the whole script.
+let downloaded : Ref[@catalog.Catalog?] = Ref(None)
 
 ///|
 /// The host's catalog: the one this script already downloaded, or a fresh
 /// download. A failed download is not kept, so the next search tries again.
 async fn catalog() -> @catalog.Catalog raise SearchError {
-  let capability = @env.get_env_var("OPENSEEK_MCP")
-  if downloaded.val is Some((from, catalog)) && capability == Some(from) {
+  if downloaded.val is Some(catalog) {
     return catalog
   }
   let catalog = decode_catalog(download())
-  if capability is Some(capability) {
-    downloaded.val = Some((capability, catalog))
-  }
+  downloaded.val = Some(catalog)
   catalog
 }
 
 ///|
 /// Every catalog item, one `list` request per reply's worth, in the host's
-/// order.
+/// order. Every request after the first names the snapshot the first reply
+/// came from, so a catalog that changes meanwhile cannot shift the pages.
 async fn download() -> Array[Json] raise SearchError {
   let items : Array[Json] = []
   let mut cursor = None
+  let mut snapshot = None
   for ;; {
-    let reply = send(List(cursor~)) catch {
+    let reply = send(List(cursor~, snapshot~)) catch {
       TransportError(message) => raise SearchError(message)
     }
     // A cursor the host refuses arrives as an error result with the reason.
@@ -98,6 +96,11 @@ async fn download() -> Array[Json] raise SearchError {
       raise SearchError(INVALID_CATALOG)
     }
     items.append(page)
+    match data {
+      { "snapshot": Number(id, ..), .. } => snapshot = Some(id.to_int())
+      { "snapshot": _, .. } => raise SearchError(INVALID_CATALOG)
+      _ => ()
+    }
     match data {
       { "next_cursor": Number(next, ..), .. } => cursor = Some(next.to_int())
       { "next_cursor": _, .. } => raise SearchError(INVALID_CATALOG)

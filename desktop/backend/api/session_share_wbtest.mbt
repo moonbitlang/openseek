@@ -2,7 +2,7 @@
 async test "share progress is scoped to the requesting endpoint catalog" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-progress-"))
   defer @fs.rmdir(dir.to_string(), recursive=true)
-  @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
+  @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=dir)
   let state = ApiState(engine="unused-test-engine", auth=store)
   let hub : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(8))
@@ -76,7 +76,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
     let origin = "http://127.0.0.1:\{server.addr.port()}"
     let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-auth-"))
     defer @fs.rmdir(dir.to_string(), recursive=true)
-    @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
+    @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
     let store = @auth.AuthStore::load(runtime_dir=dir)
     assert_true(store.signed_in())
     guard store.account() is Some(current) else {
@@ -180,7 +180,7 @@ async test "remote grants never retire the host account even when the upload is 
     defer server.close()
     let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-grant-"))
     defer @fs.rmdir(dir.to_string(), recursive=true)
-    @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
+    @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
     let store = @auth.AuthStore::load(runtime_dir=dir)
     let original = store.account()
     let share = SessionShare::{
@@ -233,7 +233,7 @@ async test "remote grants never retire the host account even when the upload is 
 async test "remote share calls cannot select the host account" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-authority-"))
   defer @fs.rmdir(dir.to_string(), recursive=true)
-  @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
+  @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=dir)
   let state = ApiState(engine="unused-test-engine", auth=store)
   let original = store.account()

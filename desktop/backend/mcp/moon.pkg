@@ -1,9 +1,9 @@
 import {
   "moonbitlang/openseek/mcp/wire",
   "openseek_desktop/backend/entropy",
-  "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -18,3 +18,11 @@ import {
   "moonbitlang/openseek/mcp/streamhttp",
   "moonbitlang/openseek/mcp/config" @mcpconfig,
 } for "test"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)

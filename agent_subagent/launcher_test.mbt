@@ -3,6 +3,12 @@
 /// request line, finds its `--result-file` and `--session` among the
 /// arguments the launcher appends, and `result FIELDS` writes a result
 /// answering its request (whose id is the child's session).
+///
+/// A script that ignores its closed stdin waits with `exec`, so the kill at the
+/// end of its grace ends the waiting command too. A command left running would
+/// hold the pipes it inherited past its test, and a spawn can inherit a pipe
+/// another test creates at the same moment: that test's child would then never
+/// read EOF on its stdin.
 let preamble : String =
   #|read line
   #|while [ $# -gt 0 ]; do
@@ -29,8 +35,8 @@ struct Harness {
 }
 
 ///|
-async fn[X] harness(
-  group : @async.TaskGroup[X],
+async fn harness(
+  group : @async.TaskGroup,
   script : String,
   max_live? : Int32,
   max_workers? : Int32,
@@ -149,7 +155,7 @@ async test "a child that reports is Captured, with its usage and stored report" 
     )
     assert_true(info.report is Some(Stored))
     let stored = @json.parse(
-      @fs.read_file("\{h.root}/sessions/\{session}/report.json").text(),
+      @fs.read_text("\{h.root}/sessions/\{session}/report.json"),
     )
     assert_eq(stored, { "answer": "42" })
     assert_true(h.launcher.report(session) is Some({ "answer": "42", .. }))
@@ -259,7 +265,7 @@ async test "a report written during a stop's grace is Captured" {
 #cfg(not(platform="windows"))
 async test "a child that outlasts the grace is Stopped" {
   @async.with_task_group(group => {
-    let h = harness(group, "trap '' TERM; sleep 30", grace_ms=200)
+    let h = harness(group, "trap '' TERM; exec sleep 30", grace_ms=200)
     let (job_id, _) = h.start()
     @async.sleep(200)
     assert_true(h.runtime.stop(job_id))
@@ -278,7 +284,7 @@ async test "a request the child never reads is not delivered" {
     // reads, so writing it blocks until the delivery deadline.
     let h = harness(
       group,
-      "sleep 30",
+      "exec sleep 30",
       grace_ms=100,
       delivery_timeout_ms=300,
       reads=false,
@@ -380,7 +386,7 @@ async test "a cancelled start does not keep its slot" {
 #cfg(not(platform="windows"))
 async test "a stop during delivery is Stopped, not undelivered" {
   @async.with_task_group(group => {
-    let h = harness(group, "sleep 30", grace_ms=100, reads=false)
+    let h = harness(group, "exec sleep 30", grace_ms=100, reads=false)
     let big = "x".repeat(1_000_000)
     let started = h.launcher.start(
       kind="explore",
@@ -472,7 +478,7 @@ async test "closing a script asks its children to stop and returns at once" {
     // The child ignores its closed stdin, so it ends only at the grace.
     let h = harness(
       group,
-      "touch \"$RESULT.reading\"; trap '' TERM; while :; do sleep 1; done",
+      "touch \"$RESULT.reading\"; trap '' TERM; exec sleep 30",
       grace_ms=3_000,
     )
     let launch : @protocol.SubagentLaunch = Script(program="program-1", call=0)

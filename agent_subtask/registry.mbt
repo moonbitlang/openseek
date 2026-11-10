@@ -104,7 +104,7 @@ async fn save_entry(
   }
   let target = entry_path(common_git_dir, entry)
   let temp = "\{target}.tmp"
-  @fs.write_file(
+  @fs.write_text(
     temp,
     ToJson::to_json(entry).stringify(),
     create_mode=CreateOrTruncate,
@@ -130,7 +130,7 @@ pub async fn load_entries(
   let names = @fs.readdir(dir) catch { _ => return (entries, skipped) }
   for name in names {
     guard name.has_suffix(".json") else { continue }
-    let text = @fs.read_file("\{dir}/\{name}").text() catch {
+    let text = @fs.read_text("\{dir}/\{name}") catch {
       _ => {
         skipped.push(name)
         continue

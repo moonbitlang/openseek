@@ -45,7 +45,7 @@ async test "runs a pure-core program and returns its output" {
 /// but it stays the fixture driven through the real tool below, being the
 /// smallest script whose whole behavior is its arguments.
 async fn unlinked_example(name : String) -> String {
-  @fs.read_file("share/examples/\{name}").text()
+  @fs.read_text("share/examples/\{name}")
 }
 
 ///|
@@ -53,25 +53,25 @@ async fn unlinked_example(name : String) -> String {
 /// language guide: the bundled workflows are linked the same way, so the reusable-script
 /// contract is verified against the very file `@builtin/` runs.
 async fn prompt_workflow(name : String) -> String {
-  let prompt = @fs.read_file("prompt/moonbit_syntax_and_api.mbt.md").text()
+  let prompt = @fs.read_text("prompt/moonbit_syntax_and_api.mbt.md")
   assert_true(
     prompt.contains("[share/workflow/\{name}](../share/workflow/\{name})"),
     msg="the language guide no longer links share/workflow/\{name}",
   )
-  @fs.read_file("share/workflow/\{name}").text()
+  @fs.read_text("share/workflow/\{name}")
 }
 
 ///|
 async test "language guide reusable check script forwards arguments" {
   let source = prompt_workflow("check.mbtx")
   @vfs.with_tmpdir(ws => {
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/moon.mod",
       "name = \"test/args\"",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
-    @fs.write_file(
+    @fs.write_text("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
+    @fs.write_text(
       "\{ws}/main.mbt",
       "pub fn answer() -> Int { 42 }",
       create_mode=CreateOrTruncate,
@@ -159,7 +159,7 @@ async test "save and run creates parents, suggests reuse, and preserves existing
     assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
     assert_true(out.content.contains("omit source"))
     let path = "\{ws}/scripts/check.mbtx"
-    assert_eq(@fs.read_file(path).text(), source)
+    assert_eq(@fs.read_text(path), source)
     assert_true(
       state.created_and_unchanged(path, @agent_tool.content_digest(source)),
     )
@@ -171,7 +171,7 @@ async test "save and run creates parents, suggests reuse, and preserves existing
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("different content"))
-    assert_eq(@fs.read_file(path).text(), source)
+    assert_eq(@fs.read_text(path), source)
     assert_false(
       dispatch(tool, { "source": source, "filename": "check.mbtx" }).is_error,
     )
@@ -242,13 +242,13 @@ async test "bundled workflows use cwd and propagate check and test failures" {
   @vfs.with_tmpdir(ws => {
     let project = "\{ws}/nested"
     @fs.mkdir(project)
-    @fs.write_file(
+    @fs.write_text(
       "\{project}/moon.mod",
       "name = \"test/workflow\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file("\{project}/moon.pkg", "", create_mode=CreateOrTruncate)
-    @fs.write_file(
+    @fs.write_text("\{project}/moon.pkg", "", create_mode=CreateOrTruncate)
+    @fs.write_text(
       "\{project}/main_test.mbt",
       "test { assert_eq(1, 1) }\n",
       create_mode=CreateOrTruncate,
@@ -258,7 +258,7 @@ async test "bundled workflows use cwd and propagate check and test failures" {
       let out = run_in(ws, { "filename": filename, "cwd": "nested" })
       assert_false(out.is_error, msg=out.content)
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{project}/main_test.mbt",
       "test { assert_eq(1, 2) }\n",
       create_mode=CreateOrTruncate,
@@ -269,7 +269,7 @@ async test "bundled workflows use cwd and propagate check and test failures" {
     let out = run_in(ws, { "filename": combined_path, "cwd": "nested" })
     assert_true(out.is_error, msg=out.content)
     assert_true(out.content.contains("moon test failed"), msg=out.content)
-    @fs.write_file(
+    @fs.write_text(
       "\{project}/main.mbt",
       "fn broken() -> Int { true }\n",
       create_mode=CreateOrTruncate,
@@ -291,13 +291,13 @@ async test "bundled workflows use cwd and propagate check and test failures" {
 async test "filename resolves from workspace independently of cwd and is reread" {
   @vfs.with_tmpdir(ws => {
     @fs.mkdir("\{ws}/sub")
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/sub/marker",
       "saved-script-ok",
       create_mode=CreateOrTruncate,
     )
     let path = "\{ws}/saved script.mbtx"
-    @fs.write_file(
+    @fs.write_text(
       path,
       (
         #|---
@@ -310,7 +310,7 @@ async test "filename resolves from workspace independently of cwd and is reread"
     let out = run_in(ws, { "filename": "./saved script.mbtx", "cwd": "sub" })
     assert_false(out.is_error, msg=out.content)
     assert_true(out.content.contains("saved-script-ok"))
-    @fs.write_file(
+    @fs.write_text(
       path,
       "fn main { println(43) }",
       create_mode=CreateOrTruncate,
@@ -343,7 +343,7 @@ async test "filename reports read failures and refuses ambiguous calls" {
 ///|
 async test "saved scripts retain compiler filenames and report FFI errors" {
   @vfs.with_tmpdir(ws => {
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/broken.mbtx",
       (
         #|---
@@ -357,7 +357,7 @@ async test "saved scripts retain compiler filenames and report FFI errors" {
     let out = run_in(ws, { "filename": "./broken.mbtx" })
     assert_true(out.is_error)
     assert_true(out.content.contains("broken.mbtx:5:"), msg=out.content)
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/ffi.mbtx",
       (
         #|---
@@ -462,7 +462,7 @@ async test "a run timeout carries build warnings and blames only the program" {
 ///|
 async test "reads a workspace file by a RELATIVE path (default cwd = workspace)" {
   @vfs.with_tmpdir(ws => {
-    @fs.write_file("\{ws}/note.txt", "one\ntwo\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{ws}/note.txt", "one\ntwo\n", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
         #|---
@@ -484,7 +484,7 @@ async test "reads a workspace file by a RELATIVE path (default cwd = workspace)"
 async test "cwd argument overrides the working directory" {
   @vfs.with_tmpdir(elsewhere => {
     @vfs.with_tmpdir(target => {
-      @fs.write_file(
+      @fs.write_text(
         "\{target}/marker.txt",
         "CWD-OK\n",
         create_mode=CreateOrTruncate,
@@ -526,8 +526,9 @@ async fn sandbox_enforcement_available() -> Bool {
   // A host where even tmpdir fails must skip (as the old probe did), not raise.
   let dir = @fs.tmpdir(prefix="openseek-mbtx-gate-") catch { _ => return false }
   let available = @sandbox.SandboxedCommand::create_if_available(
-      dir,
-      Shell(":"),
+      workspace_root=dir,
+      "true",
+      [],
       profile_path="\{dir}/profile.sb",
     )
     is Some(_)
@@ -593,7 +594,7 @@ async test "a snippet writes the workspace except its sources" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       for file in ["keep.mbt", "notes.txt"] {
-        @fs.write_file("\{ws}/\{file}", "keep me\n", create_mode=CreateNew)
+        @fs.write_text("\{ws}/\{file}", "keep me\n", create_mode=CreateNew)
       }
       let source = (
         #|---
@@ -624,7 +625,7 @@ async test "a snippet writes the workspace except its sources" {
         ] {
         assert_true(out.content.contains(line), msg=out.content)
       }
-      assert_eq(@fs.read_file("\{ws}/keep.mbt").text(), "keep me\n")
+      assert_eq(@fs.read_text("\{ws}/keep.mbt"), "keep me\n")
       assert_false(@fs.exists("\{ws}/MOON.PKG"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
     })
@@ -702,7 +703,7 @@ async test "a scratch inside the workspace keeps its source writes" {
 async test "a snippet may read outside the workspace, though it may not write" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
-      @fs.write_file(
+      @fs.write_text(
         "\{outside}/note.txt",
         "READABLE\n",
         create_mode=CreateOrTruncate,
@@ -871,7 +872,7 @@ async test "network allows outbound use and localhost-only binds" {
 async test "read_only denies source writes with no scratch lab wired" {
   guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(prefix="mbtx-ro-", ws => {
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/keep.mbt",
       "fn main {  }\n",
       create_mode=CreateOrTruncate,
@@ -893,14 +894,14 @@ async test "read_only denies source writes with no scratch lab wired" {
       ),
     })
     assert_true(output.content.contains("workspace=false"))
-    assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
+    assert_true(@fs.read_text("\{ws}/keep.mbt").contains("fn main {  }"))
   })
 }
 
 ///|
 async test "read-only snippets can print and read workspace source" {
   @vfs.with_tmpdir(prefix="mbtx-review-read-", ws => {
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/keep.mbt",
       "source contents",
       create_mode=CreateOrTruncate,
@@ -930,7 +931,7 @@ async test "a scratch lab is writable while workspace source stays denied" {
   guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(prefix="mbtx-lab-ws-", ws => {
     @vfs.with_tmpdir(prefix="mbtx-lab-", lab => {
-      @fs.write_file(
+      @fs.write_text(
         "\{ws}/keep.mbt",
         "fn main {  }\n",
         create_mode=CreateOrTruncate,
@@ -962,9 +963,7 @@ async test "a scratch lab is writable while workspace source stays denied" {
       let output = dispatch(definition, { "source": source })
       assert_true(output.content.contains("lab=true"))
       assert_true(output.content.contains("workspace=false"))
-      assert_true(
-        @fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"),
-      )
+      assert_true(@fs.read_text("\{ws}/keep.mbt").contains("fn main {  }"))
     })
   })
 }
@@ -987,12 +986,12 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
     @fs.mkdir("\{common_git}/worktrees/wt-1", recursive=true)
     @fs.mkdir(worker, recursive=true)
     @fs.mkdir(sibling, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{worker}/mine.mbt",
       "fn mine() -> Int { 1 }\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{sibling}/theirs.mbt",
       "fn theirs() -> Int { 2 }\n",
       create_mode=CreateOrTruncate,
@@ -1030,12 +1029,8 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
     assert_true(output.content.contains("mine=false"))
     assert_true(output.content.contains("theirs=false"))
     // Untouched on disk, not merely reported as denied — both trees.
-    assert_true(
-      @fs.read_file("\{sibling}/theirs.mbt").text().contains("fn theirs"),
-    )
-    assert_true(
-      @fs.read_file("\{worker}/mine.mbt").text().contains("-> Int { 1 }"),
-    )
+    assert_true(@fs.read_text("\{sibling}/theirs.mbt").contains("fn theirs"))
+    assert_true(@fs.read_text("\{worker}/mine.mbt").contains("-> Int { 1 }"))
   })
 }
 
@@ -1124,12 +1119,12 @@ async test "filename approval executes the reviewed snapshot even if the file ch
   @vfs.with_tmpdir(ws => {
     let path = "\{ws}/approved.mbtx"
     let original = "fn main { println(\"approved snapshot\") }"
-    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
     let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(ask => {
         assert_true(ask.body is Some(body) && body.has_suffix(original))
-        @fs.write_file(
+        @fs.write_text(
           path,
           "fn main { println(\"replacement program\") }",
           create_mode=CreateOrTruncate,
@@ -1329,7 +1324,7 @@ async test "error diagnostics name `source`, not the throwaway temp path" {
 /// spawning a child process: glob expansion itself is useful MoonBit IO.
 async test "moonbitlang/core/async/shell glob lists workspace paths" {
   @vfs.with_tmpdir(prefix="mbtx-glob-", ws => {
-    @fs.write_file("\{ws}/main.mbt", "fn main {}", create_mode=CreateOrTruncate)
+    @fs.write_text("\{ws}/main.mbt", "fn main {}", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
         #|---
@@ -1390,17 +1385,17 @@ async test "reads a captured command through Output accessors" {
 #cfg(not(platform="windows"))
 async test "streams structured moon check diagnostics with async shell" {
   @vfs.with_tmpdir(prefix="mbtx-json-check-", ws => {
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/moon.mod",
       "name = \"tmp/mbtx_json_check\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/main.mbt",
       "pub fn broken() -> Int { \"not an int\" }\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
+    @fs.write_text("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
         #|---

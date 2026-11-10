@@ -2,12 +2,15 @@
 package "openseek_desktop/backend/internal/session_record"
 
 import {
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/protocol",
 }
 
 // Values
+pub async fn anchored_at(@fs.File, Int64, Bytes) -> Bool
+
 pub async fn read_document(@pathx.Absolute, String) -> @protocol.SessionDocument
 
 pub async fn read_text(@pathx.Absolute, String) -> String

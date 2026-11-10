@@ -12,6 +12,7 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   const disclosure = row.getByRole('button', { name: 'workspace', exact: true });
   const menu = row.locator('.workspace-menu-button');
   const newChat = row.getByTitle('New conversation in this project');
+  await expect(row.locator('[data-slot="context-menu-trigger"] .workspace-disclosure')).toBeVisible();
   await expect(host).toHaveText('Test Mac');
   await expect(menu).toBeHidden();
   await expect(newChat).toBeHidden();

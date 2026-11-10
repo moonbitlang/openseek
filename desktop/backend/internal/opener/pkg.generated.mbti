@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/opener"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn open_path(@protocol.OpenPathPayload, preview_browser? : Bool) -> @protocol.OpenPathReply
+
+pub async fn reveal_path(@protocol.OpenPathPayload) -> @protocol.RevealPathReply
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

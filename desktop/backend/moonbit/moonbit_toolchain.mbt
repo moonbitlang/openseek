@@ -31,14 +31,14 @@ async fn bundled_moonbit_seed_version(seed_dir : @pathx.Absolute) -> String? {
 async fn prepare_tool_stdin(
   runtime_dir : @pathx.Path?,
   command : @pathx.Path,
-) -> &@process.ProcessInput {
+) -> @process.ProcessInput {
   let path = if runtime_dir is Some(dir) {
     dir.join("moonbit-tool.stdin")
   } else {
     "\{command}.stdin"
   }
-  @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
-  @process.redirect_from_file(path.to_string())
+  @fs.write_text(path.to_string(), "", create_mode=CreateOrTruncate)
+  FromFile(path.to_string())
 }
 
 ///|
@@ -65,7 +65,7 @@ async fn bundle_moonbit(
   let moon = moonbit_command(moon_home)
   let core_dir = moon_home.join("lib/core")
   let child_stdin = prepare_tool_stdin(runtime_dir, moon)
-  let (code, output) = @process.collect_output_merged(
+  let result = @process.run(
     moon.to_string(),
     args,
     inherit_env=true,
@@ -73,11 +73,14 @@ async fn bundle_moonbit(
     stdin=child_stdin,
     cwd=core_dir.to_string().clamped_view(),
     no_console_window=true,
+    stdout=Collect,
+    stderr=DuplicateStdout,
   )
+  let code = result.exit_code
   if code != 0 {
     fail(
       "failed to initialize bundled MoonBit toolchain: " +
-      output.text().trim().to_owned(),
+      result.stdout_text().trim().to_owned(),
     )
   }
 }
@@ -125,7 +128,7 @@ async fn initialize_moonbit(
     ["bundle", "--warn-list", "-a", "--target", "wasm-gc", "--quiet"],
     runtime_dir,
   )
-  @fs.write_file(
+  @fs.write_text(
     moonbit_bundle_stamp_path(moon_home).to_string(),
     "version=\{version}",
     create_mode=CreateOrTruncate,
@@ -273,7 +276,7 @@ async test "a host waits for another host's preparation and reuses it" {
   defer (@fs.rmdir(runtime.to_string(), recursive=true) catch { _ => () })
   let seed_dir = runtime.join("seed").join("macos-arm64").resolve()
   @fs.mkdir(seed_dir.to_string(), recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     moonbit_seed_version_path(seed_dir).to_string(),
     "test-version",
     create_mode=CreateOrTruncate,
@@ -307,9 +310,9 @@ async test "a host waits for another host's preparation and reuses it" {
     ]
     for file in complete {
       @fsx.ensure_dir(file.dirname())
-      @fs.write_file(file.to_string(), "", create_mode=CreateOrTruncate)
+      @fs.write_text(file.to_string(), "", create_mode=CreateOrTruncate)
     }
-    @fs.write_file(
+    @fs.write_text(
       moonbit_bundle_stamp_path(moon_home).to_string(),
       "version=test-version",
       create_mode=CreateOrTruncate,

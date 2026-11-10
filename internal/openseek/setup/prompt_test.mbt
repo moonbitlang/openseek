@@ -113,8 +113,8 @@ async test "configured system prompt can replace and append files" {
   @vfs.with_tmpdir(prefix="openseek-prompt-config-", dir => {
     let prompt_path = "\{dir}/prompt.md"
     let addendum_path = "\{dir}/addendum.md"
-    @fs.write_file(prompt_path, "base prompt\n", create_mode=CreateOrTruncate)
-    @fs.write_file(addendum_path, "addendum\n", create_mode=CreateOrTruncate)
+    @fs.write_text(prompt_path, "base prompt\n", create_mode=CreateOrTruncate)
+    @fs.write_text(addendum_path, "addendum\n", create_mode=CreateOrTruncate)
     let parsed = @testkit.run_matches(
       argv=[
         "--system-prompt-file", prompt_path, "--system-prompt-addendum-file", addendum_path,
@@ -141,7 +141,7 @@ async test "configured system prompt can replace and append files" {
 async test "configured system prompt advertises global skills" {
   @vfs.with_tmpdir(prefix="openseek-global-skills-", dir => {
     @fs.mkdir("\{dir}/skills", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/skills/release.md",
       (
         #|---
@@ -153,7 +153,7 @@ async test "configured system prompt advertises global skills" {
       create_mode=CreateOrTruncate,
     )
     let prompt_path = "\{dir}/prompt.md"
-    @fs.write_file(prompt_path, "base\n", create_mode=CreateOrTruncate)
+    @fs.write_text(prompt_path, "base\n", create_mode=CreateOrTruncate)
     let parsed = @testkit.run_matches(
       argv=["--system-prompt-file", prompt_path, "write", "MoonBit"],
       env={
@@ -175,13 +175,13 @@ async test "configured system prompt advertises global skills" {
 async test "configured system prompt uses the selected workspace root" {
   @vfs.with_tmpdir(prefix="openseek-prompt-workspace-", workspace => {
     let real_workspace = @fs.realpath(workspace)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/prompt.md",
       "workspace prompt\n",
       create_mode=CreateOrTruncate,
     )
     @fs.mkdir("\{workspace}/.openseek/skills", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/.openseek/skills/release.md",
       (
         #|---

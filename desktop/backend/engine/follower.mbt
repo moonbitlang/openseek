@@ -290,7 +290,7 @@ async fn SessionFollower::run(
         }
       }
     }
-    group.return_immediately(())
+    group.return_immediately()
   })
   // Publish the successful generation before removing the identity. A stop
   // waiter can therefore distinguish this deliberate retirement from an
@@ -367,9 +367,9 @@ fn EngineManager::kick_follower(self : EngineManager, session : String) -> Unit 
 /// and consumer have both been scheduled. A session root can still be absent
 /// only when the durable store cannot be resolved; in that case there is no
 /// record for a follower to scan.
-async fn[G] ensure_follower(
+async fn ensure_follower(
   sink~ : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
   manager~ : EngineManager,
   config~ : RunConfig,
 ) -> SessionFollower? {
@@ -623,7 +623,7 @@ async fn write_session_record(
     text.write_string(event)
     text <+ "\n"
   }
-  @fs.write_file(
+  @fs.write_text(
     path.to_string(),
     text.to_string(),
     create_mode=CreateOrTruncate,
@@ -637,7 +637,7 @@ async fn write_session_record(
 async fn write_damaged_record(root : @pathx.Absolute, session : String) -> Unit {
   let path = @session_record.record_path(root, session)
   @fsx.ensure_dir(path.dirname())
-  @fs.write_file(
+  @fs.write_text(
     path.to_string(),
     "{\"not\":\"a header\"}\n",
     create_mode=CreateOrTruncate,
@@ -677,12 +677,12 @@ fn follower_test_config(
 /// `ensure_follower` answers with is only present when this call installed a
 /// new follower; every test below reads the follower map instead.
 #cfg(not(platform="windows"))
-async fn[G] install_test_follower(
+async fn install_test_follower(
   engine : String,
   session : String,
   root : @pathx.Absolute,
   sink~ : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
   manager~ : EngineManager,
 ) -> Unit {
   ignore(
@@ -718,7 +718,7 @@ async test "a follower barrier broadcasts the durable tail before returning" {
       fail("expected the barrier to broadcast the committed event")
     }
     stop_follower(manager, session, writer_exited=true)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -758,7 +758,7 @@ async test "an unreadable existing record refuses the spawn baseline" {
     }
     assert_true(detail.contains("failed to baseline the session record"))
     assert_true(manager.followers.get("s-baseline") is None)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -794,7 +794,7 @@ async test "failed final scan keeps the follower active and propagates" {
       physical_equal(current, follower),
     )
     assert_false(follower.stopping)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -821,7 +821,7 @@ async test "an absent record retires as an empty drain" {
     stop_follower(manager, session, writer_exited=true)
     assert_true(follower.retired)
     assert_true(manager.followers.get(session) is None)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -859,7 +859,7 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
       fail("expected exactly one rooted commit")
     }
     assert_eq(session_root, root.resource_path())
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -890,16 +890,16 @@ async test "a committed terminal does not settle a run the stream never ended" {
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 0"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       session,
       writer,
@@ -936,7 +936,7 @@ async test "a committed terminal does not settle a run the stream never ended" {
       }
     }
     assert_eq(settlements, 1)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -957,16 +957,16 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 7"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       session,
       writer,
@@ -1007,7 +1007,7 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
     write_session_record(root, session, [])
     stop_follower(manager, session, writer_exited=true)
     assert_true(follower.retired)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1059,7 +1059,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
     assert_true(drained_before_commit)
     assert_true(detached is Workspaces([], chat_root=None))
     assert_true(manager.followers.get(session) is None)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1083,7 +1083,6 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       fail("expected follower")
     }
     write_damaged_record(root, session)
-    let (child_stdin, writer) = @process.write_to_process()
     // The real EOF consumer reaches this state after its first failed final
     // scan: the child is gone and the consumer with it, but the follower is
     // still live. Detach must retry it and propagate the failure again — so
@@ -1093,9 +1092,10 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       group,
       "/bin/sh",
       ["-c", "exit 0"],
-      stdin=child_stdin,
+      stdin=FeedFromParent,
       no_wait=true,
     )
+    let writer = process.stdin
     let engine = test_serve_engine(
       session,
       writer,
@@ -1124,7 +1124,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
     )
     assert_false(follower.stopping)
     discard_follower_startup(manager, follower)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1151,7 +1151,7 @@ async test "record stat failure is not mistaken for an empty final drain" {
     let record = @session_record.record_path(root, "s-stat")
     let session_dir = record.dirname()
     @fs.rmdir(session_dir.to_string(), recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       session_dir.to_string(),
       "file",
       create_mode=CreateOrTruncate,
@@ -1173,7 +1173,7 @@ async test "record stat failure is not mistaken for an empty final drain" {
     )
     assert_false(follower.stopping)
     discard_follower_startup(manager, follower)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -1355,7 +1355,7 @@ async test "cancelling follower baseline removes its startup identity" {
     }
     assert_true(cancelled)
     assert_true(manager.followers.get("s-cancel") is None)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 

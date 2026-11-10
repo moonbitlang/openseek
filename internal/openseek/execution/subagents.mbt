@@ -47,8 +47,8 @@ pub fn subagent_kinds() -> Array[@subagent.Kind] {
 /// model and endpoint, in `workspace_root`, its children's sessions claimed
 /// through `children`, and their result files in `result_dir`. `session`
 /// reads the live session, for a script's `audit_context`.
-pub fn[X] subagents(
-  scope : @agent_runtime.AgentTaskScope[X],
+pub fn subagents(
+  scope : @agent_runtime.AgentTaskScope,
   self_exe~ : String,
   model~ : @deepseek.Model,
   api_key~ : String,

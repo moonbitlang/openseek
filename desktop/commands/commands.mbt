@@ -784,6 +784,12 @@ pub let browser_open : Command[
 ] = Command("browser.open")
 
 ///|
+pub let browser_preview : Command[
+  @protocol.BrowserPreviewPayload,
+  @protocol.EmptyReply,
+] = Command("browser.preview")
+
+///|
 pub let browser_navigate : Command[
   @protocol.BrowserOpenPayload,
   @protocol.EmptyReply,

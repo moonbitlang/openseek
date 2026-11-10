@@ -26,7 +26,7 @@ async fn copy_file(
   destination : String,
   executable~ : Bool = false,
 ) -> Unit {
-  @fs.write_file(destination, @fs.read_file(source))
+  @fs.write_binary(destination, @fs.read_binary(source))
   if executable && !is_windows() {
     @fs.chmod(destination, 0o755)
   }
@@ -38,17 +38,19 @@ async fn command(
   args : Array[String],
   extra_env~ : Map[String, String] = {},
 ) -> String {
-  let (stdin, writer) = @process.write_to_process()
-  writer.close()
-  let (code, output, errors) = @process.collect_output(
+  let result = @process.run(
     program,
     args,
-    stdin~,
+    stdin=Empty,
+    stdout=Collect,
+    stderr=Collect,
     extra_env~,
     no_console_window=true,
   )
-  guard code == 0 else { fail("\{program} exited \{code}: \{errors.text()}") }
-  output.text()
+  guard result.exit_code == 0 else {
+    fail("\{program} exited \{result.exit_code}: \{result.stderr_text()}")
+  }
+  result.stdout_text()
 }
 
 ///|
@@ -114,14 +116,7 @@ async fn install(
   defer lock.close()
   @async.with_timeout(1200000, () => lock.lock(Exclusive))
   let cli_name = executable_name("openseek")
-  let rg_name = executable_name("rg")
   let needs_cli = !available(bin + "/" + cli_name, ["--help"])
-  // Validate the extracted distribution before changing the user's toolchain.
-  if !@fs.exists(source + "/bin/" + rg_name) {
-    fail(
-      "Extract the complete OpenSeek archive before running setup: missing rg",
-    )
-  }
   // The installed CLI can run setup too: preserve its source before removal.
   let stage = @fs.tmpdir(prefix="openseek-share-")
   defer @fs.rmdir(stage, recursive=true)
@@ -130,9 +125,8 @@ async fn install(
   if needs_moonbit {
     toolchain(home + "/.moon")
   }
-  copy_file(source + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
   @fs.rmdir(root + "/share", recursive=true) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => ()
+    @os_error.OsError(NotFound, ..) => ()
     error => raise error
   }
   copy_tree(stage + "/share", root + "/share")
@@ -223,7 +217,7 @@ pub async fn setup() -> Unit {
     fail("HOME (USERPROFILE on Windows) must name an absolute directory")
   }
   install(home, @exe.current_exe(), available=usable, toolchain=install_moonbit)
-  @stdio.stdout.write(
+  @stdio.stdout.text.write(
     "Installation complete. Add \{home}/.moon/bin and \{home}/.openseek/bin to PATH.\n",
   )
 }

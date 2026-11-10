@@ -1,0 +1,62 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/indexeddb"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+pub async fn open(String, Int32, upgrade~ : (Database, Transaction, Int32) -> Unit raise) -> Database
+
+// Errors
+pub(all) suberror IndexedDBError {
+  IndexedDBError(name~ : String, message~ : String)
+}
+
+// Types and methods
+#external
+pub type Database
+pub fn Database::close(Self) -> Unit
+pub fn Database::create_store(Self, String, key_path? : KeyPath) -> ObjectStore raise IndexedDBError
+pub fn Database::transaction(Self, Array[String], Mode) -> Transaction raise IndexedDBError
+
+#external
+pub type Index
+pub fn Index::delete_all(Self, key? : Key) -> Request raise IndexedDBError
+pub fn Index::get_all(Self, key? : Key) -> Request raise IndexedDBError
+
+pub(all) enum Key {
+  String(String)
+  Number(Double)
+  Array(Array[Key])
+}
+
+pub(all) enum KeyPath {
+  Field(String)
+  Fields(Array[String])
+}
+
+pub(all) enum Mode {
+  ReadOnly
+  ReadWrite
+}
+
+#external
+pub type ObjectStore
+pub fn ObjectStore::create_index(Self, String, KeyPath) -> Index raise IndexedDBError
+pub fn ObjectStore::delete(Self, Key) -> Request raise IndexedDBError
+pub fn ObjectStore::get(Self, Key) -> Request raise IndexedDBError
+pub fn ObjectStore::index(Self, String) -> Index raise IndexedDBError
+pub fn ObjectStore::put(Self, @json.Json, key? : Key) -> Request raise IndexedDBError
+
+type Request
+pub fn Request::result(Self) -> @json.Json? raise IndexedDBError
+
+type Transaction
+pub fn Transaction::abort(Self) -> Unit raise IndexedDBError
+pub fn Transaction::store(Self, String) -> ObjectStore raise IndexedDBError
+pub async fn Transaction::wait(Self) -> Unit
+
+// Type aliases
+
+// Traits

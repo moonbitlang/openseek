@@ -23,18 +23,6 @@ fn bundled_source(filename : String) -> String? raise {
 let bundled_workflow_hint : String = " Bundled workflows: @builtin/read.mbtx, @builtin/rg.mbtx (ripgrep search), @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status), @builtin/fix-deprecations.mbtx (ptc=true; one guarded edit per deprecation site). Agent workflows (they start subagents): @builtin/review.mbtx (independent worktree audit; criteria in args), @builtin/change-review.mbtx, @builtin/repo-map.mbtx, @builtin/simplify.mbtx (MoonBit simplification sweep; one pull request per package), @builtin/shrink.mbtx (shrinks the public API to a fixed point; one stacked pull request per round). Ordinary filenames select workspace files."
 
 ///|
-/// Resolve a workspace script path. Namespaced filenames never name a
-/// workspace file; `bundled_source` handles them.
-fn resolve_filename(workspace_root : String, filename : String) -> String raise {
-  guard !filename.has_prefix("@") else {
-    fail(
-      "\{filename} is a namespaced script and is read-only. Use ./\{filename} for a literal workspace path",
-    )
-  }
-  @workspace_path.resolve(workspace_root, filename)
-}
-
-///|
 test "only the builtin namespace selects bundled workflows" {
   assert_true(bundled_source("@builtin/check.mbtx") is Some(_))
   for name in ["check.mbtx", "./@builtin/check.mbtx", "scripts/check.mbtx"] {
@@ -51,20 +39,6 @@ test "only the builtin namespace selects bundled workflows" {
       _ => fail("invalid bundled name accepted: \{name}")
     }
   }
-  assert_eq(resolve_filename("/project", "check.mbtx"), "/project/check.mbtx")
-  assert_eq(
-    resolve_filename("/project", "/other/check.mbtx"),
-    "/other/check.mbtx",
-  )
-  assert_eq(
-    resolve_filename("/project", "./@builtin/check.mbtx"),
-    "/project/@builtin/check.mbtx",
-  )
-  try resolve_filename("/project", "@builtin/check.mbtx") catch {
-    _ => ()
-  } noraise {
-    _ => fail("a namespaced filename resolved to a workspace path")
-  }
 }
 
 ///|
@@ -78,9 +52,10 @@ async test "every share/workflow script is embedded verbatim and named in the hi
       bundled_workflow(name),
       // The generator normalizes CRLF, so a CRLF checkout compares equal.
       Some(
-        @fs.read_file("share/workflow/\{name}")
-        .text()
-        .replace_all(old="\r\n", new="\n"),
+        @fs.read_text("share/workflow/\{name}").replace_all(
+          old="\r\n",
+          new="\n",
+        ),
       ),
       msg="stale embedded copy of \{name}; run moon check to regenerate",
     )

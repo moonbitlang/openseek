@@ -11,6 +11,7 @@ fn deletion_state() -> State {
         updated_at: None,
         generating: false,
         archived: false,
+        approval: ApprovalAsk,
       },
     ],
   }

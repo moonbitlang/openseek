@@ -30,10 +30,7 @@ async fn main {
   let base = @path.Path(input).basename()
   let function_name = function_name_from_base(base)
   let base_dir = parent_dir(input, base)
-  let markdown = expand_resource_layout(
-    expand_example_links(@fs.read_file(input).text(), base_dir),
-    "share",
-  )
+  let markdown = expand_example_links(@fs.read_text(input), base_dir)
   let source = generated_source(base~, function_name~, markdown~)
   if output_matches(output, source) {
     return
@@ -44,7 +41,7 @@ async fn main {
     )
   }
   let tmp = "\{output}.tmp"
-  @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
+  @fs.write_text(tmp, source, create_mode=CreateOrTruncate)
   @fs.rename(tmp, output, replace=true)
 }
 
@@ -90,7 +87,7 @@ async fn expand_example_links(markdown : String, base_dir : String) -> String {
         } else {
           "\{base_dir}/\{target}"
         }
-        let text = @fs.read_file(path).text()
+        let text = @fs.read_text(path)
         let body = text.strip_suffix("\n").unwrap_or(text[:])
         out.write_string("```mbtx\n\{body}\n```")
       }
@@ -113,56 +110,8 @@ fn example_link_target(line : StringView) -> String? {
 }
 
 ///|
-/// Expand before stripping Markdown comments or emitting the static string.
-async fn expand_resource_layout(markdown : String, root : String) -> String {
-  let marker = "{{BUNDLED_RESOURCES_LAYOUT}}"
-  if !markdown.contains(marker) {
-    return markdown
-  }
-  let tree = StringBuilder()
-  tree.write_string(".")
-  async fn visit(directory : String, prefix : String) -> Unit {
-    let directories : Array[String] = []
-    for name in @fs.readdir(directory) {
-      // A `_build` tree is what `moon run` leaves beside a script it was
-      // pointed at (cram runs the bundled workflows that way); it is not part
-      // of the resources and must not describe them to the model. The
-      // G-machine and Go-programmer tutorials stay on disk but are not worth a
-      // line of the prompt: they walk a human through learning the language,
-      // while the model looks facts up in `language/` and `toolchain/`.
-      if !name.has_prefix(".") &&
-        name != "_build" &&
-        !name.has_prefix("gmachine") &&
-        name != "for-go-programmers" &&
-        @fs.kind("\{directory}/\{name}", follow_symlink=false) is Directory {
-        directories.push(name)
-      }
-    }
-    // String's default ordering is length-first; directory trees use lexical order.
-    directories.sort_by((a, b) => {
-      let length = if a.length() < b.length() { a.length() } else { b.length() }
-      for i in 0..<length {
-        if a[i] != b[i] {
-          return a[i].compare(b[i])
-        }
-      }
-      a.length().compare(b.length())
-    })
-    for index, name in directories {
-      let last = index == directories.length() - 1
-      let branch = if last { "└── " } else { "├── " }
-      tree.write_string("\n\{prefix}\{branch}\{name}")
-      let next_prefix = prefix + (if last { "    " } else { "│   " })
-      visit("\{directory}/\{name}", next_prefix)
-    }
-  }
-  visit(root, "")
-  markdown.replace_all(old=marker, new=tree.to_string())
-}
-
-///|
 async fn output_matches(output : StringView, source : StringView) -> Bool {
-  let current = @fs.read_file(output).text() catch { _ => return false }
+  let current = @fs.read_text(output) catch { _ => return false }
   current[:] == source
 }
 

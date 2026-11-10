@@ -57,7 +57,8 @@ async test "PTC background images have durable snapshots separate from trace and
     name="picture",
     execute=Sync(_ => @agent_tool.respond("picture", images=[picture])),
   )
-  let metadata = @async.with_task_group(group => {
+  let mut metadata = Json::null()
+  @async.with_task_group(group => {
     let service = Service::start(group, Tools([tool]), image_directory=() => {
       Some(root)
     })
@@ -82,7 +83,7 @@ async test "PTC background images have durable snapshots separate from trace and
       fail("expected handoff")
     }
     assert_true(output.images.is_empty())
-    program.trace()
+    metadata = program.trace()
   })
   guard metadata is { "ptc_images": Array(images), .. } else {
     fail("missing snapshots")
@@ -92,7 +93,7 @@ async test "PTC background images have durable snapshots separate from trace and
     guard image is { "path": String(path), .. } else {
       fail("missing retained path")
     }
-    assert_eq(@fs.read_file(path).binary(), picture.bytes)
+    assert_eq(@fs.read_binary(path), picture.bytes)
   }
   assert_false(metadata.stringify().contains("base64"))
 }

@@ -105,7 +105,8 @@ fn Presentation::button_class(self : Presentation, open : Bool) -> String {
   let state = if open { " open" } else { "" }
   match self {
     Composer(_, _) => "custom-select-button composer-model" + state
-    Setting => "custom-select-button setting-select-button" + state
+    Setting =>
+      "custom-select-button setting-select-button field-surface" + state
   }
 }
 

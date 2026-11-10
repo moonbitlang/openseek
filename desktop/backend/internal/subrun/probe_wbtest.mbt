@@ -16,7 +16,7 @@ async fn fresh_record(name : String) -> SubrunProbeState {
   let session = "parent-sr-1"
   let path = record_path_of(root, session)
   @fsx.ensure_dir(@pathx.Path(path).dirname())
-  @fs.write_file(
+  @fs.write_text(
     path,
     ({ "version": 1, "id": session, "system_prompt": "s" } : Json).stringify() +
     "\n",
@@ -37,8 +37,8 @@ async fn fresh_record(name : String) -> SubrunProbeState {
 ///|
 /// Grow the record the way the store does: append, never rewrite.
 async fn append_record(state : SubrunProbeState, text : String) -> Unit {
-  let existing = @fs.read_file(state.path).text()
-  @fs.write_file(state.path, existing + text, create_mode=CreateOrTruncate)
+  let existing = @fs.read_text(state.path)
+  @fs.write_text(state.path, existing + text, create_mode=CreateOrTruncate)
 }
 
 ///|
@@ -124,7 +124,7 @@ async test "a rewritten record is re-read from its head" {
   assert_eq(state.steps, 1)
   // The store's repair path can rewrite the file shorter than the probe's
   // offset; reading on from that offset would land mid-line forever.
-  @fs.write_file(
+  @fs.write_text(
     state.path,
     ({ "version": 1, "id": "parent-sr-1", "system_prompt": "s" } : Json).stringify() +
     "\n",
@@ -191,7 +191,7 @@ async test "a same-or-larger rewrite counts survivors once" {
   let grown = state.offset
   // The repair re-serializes the whole record from the child's own state:
   // events 1 and 2 as they were, plus the event whose append tore.
-  @fs.write_file(
+  @fs.write_text(
     state.path,
     ({ "version": 1, "id": "parent-sr-1", "system_prompt": "s" } : Json).stringify() +
     "\n" +
@@ -208,7 +208,7 @@ async test "a same-or-larger rewrite counts survivors once" {
     create_mode=CreateOrTruncate,
   )
   // Longer than what was read, so nothing about the size says "rewritten".
-  assert_true(@fs.read_file(state.path).text().length().to_int64() > grown)
+  assert_true(@fs.read_text(state.path).length().to_int64() > grown)
   assert_true(state.poll())
   // Events 1 and 2 arrive a second time and change nothing; only 3 and 4 are
   // new. A count that restarted with the file would say 1 here, and one that
@@ -229,8 +229,8 @@ async test "an undetectable replacement still cannot double-count" {
   assert_eq(state.steps, 2)
   // Byte-for-byte the same file, rewritten with one more event: every check
   // that looks at bytes or lengths says "just an append".
-  let same = @fs.read_file(state.path).text()
-  @fs.write_file(
+  let same = @fs.read_text(state.path)
+  @fs.write_text(
     state.path,
     same + item_line(3, "assistant", { "content": "three" }),
     create_mode=CreateOrTruncate,

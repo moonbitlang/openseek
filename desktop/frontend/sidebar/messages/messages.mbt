@@ -14,6 +14,7 @@ pub(all) enum Message {
   ShowMoreChats
   MoreActions
   NewProjectConversation
+  ImportConversation
   WorkspaceSettings
   WorkspaceDefaults
   DetachProject
@@ -30,6 +31,7 @@ pub(all) enum Message {
   Settings
   RefreshDevices
   ChooseDevice
+  Cloud
   NoDevicesOnline
   Refresh
   SignOut
@@ -39,6 +41,11 @@ pub(all) enum Message {
 /// Translate sidebar chrome without changing stable component identities.
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, ImportConversation) => "Import conversation"
+    (Spanish, ImportConversation) => "Importar conversación"
+    (SimplifiedChinese, ImportConversation) => "导入对话"
+    (TraditionalChinese, ImportConversation) => "匯入對話"
+    (Japanese, ImportConversation) => "会話をインポート"
     (English, NoMatchingConversations) => "No matching conversations"
     (SimplifiedChinese, NoMatchingConversations) => "未找到匹配的对话"
     (TraditionalChinese, NoMatchingConversations) => "找不到符合的對話"
@@ -70,9 +77,9 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, NewChat) => "新建对话"
     (TraditionalChinese, NewChat) => "新建對話"
     (Japanese, NewChat) => "新しいチャット"
-    (English, AddProject) => "Add a project"
+    (English, AddProject) => "New Project"
     (Spanish, AddProject) => "Añadir un proyecto"
-    (SimplifiedChinese, AddProject) => "添加项目"
+    (SimplifiedChinese, AddProject) => "新建项目"
     (TraditionalChinese, AddProject) => "新增專案"
     (Japanese, AddProject) => "プロジェクトを追加"
     (English, ShowMore) => "Show more"
@@ -182,6 +189,7 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ChooseDevice) => "选择设备"
     (TraditionalChinese, ChooseDevice) => "選擇裝置"
     (Japanese, ChooseDevice) => "デバイスを選択"
+    (_, Cloud) => "Cloud"
     (English, NoDevicesOnline) => "No devices online"
     (Spanish, NoDevicesOnline) => "No hay dispositivos en línea"
     (SimplifiedChinese, NoDevicesOnline) => "没有在线设备"

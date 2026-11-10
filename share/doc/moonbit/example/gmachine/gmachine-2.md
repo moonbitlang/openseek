@@ -38,7 +38,7 @@ The adjustment is done in the implementation of the `Unwind` instruction. If the
 
 ```moonbit
 
-fn GState::rearrange(self : GState, n : Int) -> Unit {
+fn GState::rearrange(self : GState, n : Int32) -> Unit {
   let appnodes = self.stack.take(n)
   let args = appnodes.map(fn(addr) {
     guard! self.heap[addr] is NApp(_, arg)
@@ -54,7 +54,7 @@ After this, both parameters and local variables can be accessed using the same c
 
 ```moonbit
 
-fn GState::push(self : GState, offset : Int) -> Unit {
+fn GState::push(self : GState, offset : Int32) -> Unit {
   // Push(n) a0 : . . . : an : s
   //     =>  an : a0 : . . . : an : s
   let addr = self.stack.unsafe_nth(offset)
@@ -86,7 +86,7 @@ Therefore, we need a new instruction to clean up these no longer needed addresse
 
 ```moonbit
 
-fn GState::slide(self : GState, n : Int) -> Unit {
+fn GState::slide(self : GState, n : Int32) -> Unit {
   let addr = self.pop1()
   self.stack = self.stack.drop(n).prepend(addr)
 }
@@ -97,21 +97,18 @@ Now we can compile `let`. We will compile the expressions corresponding to local
 > Compiling the main expression using the passed function makes it easy to reuse when adding subsequent features.
 ```moonbit
 fn compileLet(
-  comp : (RawExpr[String], List[(String, Int)]) -> List[Instruction],
+  comp : (RawExpr[String], List[(String, Int32)]) -> List[Instruction],
   defs : List[(String, RawExpr[String])],
   expr : RawExpr[String],
-  env : List[(String, Int)],
+  env : List[(String, Int32)],
 ) -> List[Instruction] {
-  let (env, codes) = for env = env, acc = @list.empty(), remaining = defs {
-    match remaining {
-      Empty => break (env, acc)
-      More((name, expr), tail=rest) => {
-        let code = expr.compileC(env)
-        let env = argOffset(1, env).prepend((name, 0))
-        continue env, acc + code, rest
-      }
-    }
-  }
+  let (env, codes) = defs.fold(init=(env, @list.List([])), fn(acc, def) {
+    let (env, codes) = acc
+    let (name, expr) = def
+    let code = expr.compileC(env)
+    let env = argOffset(1, env).prepend((name, 0))
+    (env, codes + code)
+  })
   codes + comp(expr, env) + @list.List([Slide(defs.length())])
 }
 ```
@@ -120,7 +117,7 @@ The semantics of `letrec` are more complex - it allows the N variables within th
 
 ```moonbit
 
-fn GState::alloc_nodes(self : GState, n : Int) -> Unit {
+fn GState::alloc_nodes(self : GState, n : Int32) -> Unit {
   let dummynode : Node = NInd(Addr(-1))
   for i = 0; i < n; i = i + 1 {
     let addr = self.heap.alloc(dummynode)
@@ -132,16 +129,16 @@ fn GState::alloc_nodes(self : GState, n : Int) -> Unit {
 The steps to compile letrec are similar to `let`:
 
 - Use `Alloc(n)` to allocate N addresses.
-- Use the `loop` expression to build a complete environment.
+- Use a `for` loop to build a complete environment.
 - Compile the local variables in `defs`, using the `Update` instruction to update the results to the pre-allocated addresses after compiling each one.
 - Compile the main expression and use the `Slide` instruction to clean up.
 
 ```moonbit
 fn compileLetrec(
-  comp : (RawExpr[String], List[(String, Int)]) -> List[Instruction],
+  comp : (RawExpr[String], List[(String, Int32)]) -> List[Instruction],
   defs : List[(String, RawExpr[String])],
   expr : RawExpr[String],
-  env : List[(String, Int)],
+  env : List[(String, Int32)],
 ) -> List[Instruction] {
   let mut env = env
   for remaining = defs {
@@ -156,7 +153,7 @@ fn compileLetrec(
   let n = defs.length()
   fn compileDefs(
     defs : List[(String, RawExpr[String])],
-    offset : Int,
+    offset : Int32,
   ) -> List[Instruction] {
     match defs {
       Empty => comp(expr, env) + @list.List([Slide(n)])
@@ -288,7 +285,7 @@ fn GState::negate(self : GState) -> Unit {
   }
 }
 
-fn GState::lift_arith2(self : GState, op : (Int, Int) -> Int) -> Unit {
+fn GState::lift_arith2(self : GState, op : (Int32, Int32) -> Int32) -> Unit {
   let (a1, a2) = self.pop2()
   match (self.heap[a1], self.heap[a2]) {
     (NNum(n1), NNum(n2)) => {
@@ -303,7 +300,7 @@ fn GState::lift_arith2(self : GState, op : (Int, Int) -> Int) -> Unit {
   }
 }
 
-fn GState::lift_cmp2(self : GState, op : (Int, Int) -> Bool) -> Unit {
+fn GState::lift_cmp2(self : GState, op : (Int32, Int32) -> Bool) -> Unit {
   let (a1, a2) = self.pop2()
   match (self.heap[a1], self.heap[a2]) {
     (NNum(n1), NNum(n2)) => {
@@ -346,7 +343,7 @@ fn GState::condition(
 No major adjustments are needed in the compilation part, just add some predefined programs:
 
 ```moonbit
-let compiled_primitives : List[(String, Int, List[Instruction])] = @list.List([
+let compiled_primitives : List[(String, Int32, List[Instruction])] = @list.List([
     // Arith
     (
       "add",
@@ -516,11 +513,11 @@ and modify the initial instruction sequence
 ```moonbit
 let initialState : GState = {
   heap,
-  stack: @list.empty(),
+  stack: @list.List([]),
   code: @list.List([PushGlobal("main"), Eval]),
   globals,
   stats: 0,
-  dump: @list.empty(),
+  dump: @list.List([]),
 }
 ```
 

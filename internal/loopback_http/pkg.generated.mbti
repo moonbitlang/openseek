@@ -2,7 +2,7 @@
 package "moonbitlang/openseek/internal/loopback_http"
 
 import {
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
 }
 

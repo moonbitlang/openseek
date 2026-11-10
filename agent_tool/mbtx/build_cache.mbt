@@ -130,9 +130,9 @@ async fn stage_source(path : String, source : String) -> Bool {
   // Only a genuinely absent file means "nothing staged yet"; a read that
   // fails for any other reason is carried, not read as a stale file to
   // overwrite. Non-UTF-8 content cannot equal `source`, so it is rewritten.
-  let current : String? = try @fs.read_file(path).text() catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => None
-    @os_error.OSError(_) as error => raise error
+  let current : String? = try @fs.read_text(path) catch {
+    @os_error.OsError(NotFound, ..) => None
+    @os_error.OsError(_, ..) as error => raise error
     _ => None
   } noraise {
     text => Some(text)
@@ -140,7 +140,7 @@ async fn stage_source(path : String, source : String) -> Bool {
   if current == Some(source) {
     return false
   }
-  @fs.write_file(path, source, create_mode=CreateOrTruncate)
+  @fs.write_text(path, source, create_mode=CreateOrTruncate)
   true
 }
 

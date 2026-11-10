@@ -13,10 +13,18 @@ pub(all) struct Account {
   avatar : String
   busy : Bool
   notice : String?
-  // The page's device, when it has one; a Cloud page has none.
-  device : DeviceChoice?
+  page : Page
   // The account's online devices, in roster order; the selector offers these.
   online_devices : Array[DeviceChoice]
+}
+
+///|
+/// Where the page works. A page keeps it for its lifetime.
+#derive(Debug, Eq)
+pub(all) enum Page {
+  CloudPage
+  // `name` is None while the roster does not list the device.
+  DevicePage(id~ : String, name~ : String?)
 }
 
 ///|
@@ -66,58 +74,10 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
-  // Switch the page to the device with this id.
-  select_device : (String) -> @cmd.Cmd
+  // Switch the page to the device with this id, or to Cloud with None.
+  select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
-}
-
-///|
-fn Input::find_project(self : Input, key : String) -> @project.Input? {
-  for section in self.sections {
-    for entry in section.entries {
-      if entry is @section.Project(project) && project.id().key() == key {
-        return Some(project)
-      }
-    }
-  }
-  None
-}
-
-///|
-fn find_conversation_in(
-  rows : Array[@conversation.Input],
-  key : String,
-) -> @conversation.Input? {
-  for row in rows {
-    if row.id().key() == key {
-      return Some(row)
-    }
-    if find_conversation_in(row.children, key) is Some(found) {
-      return Some(found)
-    }
-  }
-  None
-}
-
-///|
-fn Input::find_conversation(self : Input, key : String) -> @conversation.Input? {
-  for section in self.sections {
-    for entry in section.entries {
-      match entry {
-        @section.Project(project) =>
-          if find_conversation_in(project.conversations, key) is Some(found) {
-            return Some(found)
-          }
-        @section.Conversation(row) =>
-          if find_conversation_in([row], key) is Some(found) {
-            return Some(found)
-          }
-        @section.Placeholder(_) => ()
-      }
-    }
-  }
-  None
 }
 
 ///|
@@ -129,33 +89,21 @@ fn Input::menu_definition(
   if target == DeviceSelectorTarget && self.account is Some(account) {
     return Some(account.device_menu(actions.select_device, locale=self.locale))
   }
-  if self.find_project(target) is Some(project) {
-    return Some({
-      label: @messages.text(self.locale, WorkspaceActions),
-      entries: project.menu_entries(actions.section.project, locale=self.locale),
-    })
-  }
-  guard self.find_conversation(target) is Some(row) &&
-    row.menu_entries(locale=self.locale, actions.section.conversation)
-    is Some(entries) else {
-    return None
-  }
-  Some({ label: @messages.text(self.locale, ConversationActions), entries, })
+  None
 }
 
 ///|
-/// The selector's menu: online devices only, the page's own one checked and
-/// inert. With none online, one inert row says so.
+/// The selector's menu: Cloud, then online devices only, the page's own place
+/// checked and inert. With no device online, one inert row says so.
 fn Account::device_menu(
   self : Account,
-  select_device : (String) -> @cmd.Cmd,
+  select_device : (String?) -> @cmd.Cmd,
   locale~ : @i18n.Locale,
 ) -> @action_menu.Definition {
-  let entries : Array[@action_menu.Entry] = self.online_devices.map(choice => {
-    let current = self.device.map(device => device.id) == Some(choice.id)
-    Action({
-      label: choice.name,
-      title: choice.name,
+  fn choice(label : String, current : Bool, command : @cmd.Cmd) {
+    @action_menu.Entry::Action({
+      label,
+      title: label,
       icon: if current {
         Some(@icons.icon(@icons.icon_check))
       } else {
@@ -163,10 +111,19 @@ fn Account::device_menu(
       },
       enabled: !current,
       destructive: false,
-      command: select_device(choice.id),
+      command,
     })
-  })
-  if entries.is_empty() {
+  }
+  let cloud = @messages.text(locale, Cloud)
+  let entries = [
+    choice(cloud, self.page is CloudPage, select_device(None)),
+    Separator,
+  ]
+  for device in self.online_devices {
+    let current = self.page is DevicePage(id~, ..) && id == device.id
+    entries.push(choice(device.name, current, select_device(Some(device.id))))
+  }
+  if self.online_devices.is_empty() {
     let label = @messages.text(locale, NoDevicesOnline)
     entries.push(
       Action({
@@ -387,9 +344,10 @@ pub fn component(
       )
       let choose = @messages.text(input.locale, ChooseDevice)
       footer.push(
-        @html.button(
+        @rui.popover_trigger(
+          id=DeviceSelectorTarget + ":actions-trigger",
+          target_id=DeviceSelectorTarget + ":actions-content",
           class="sidebar-button device-selector",
-          type_="button",
           title=choose,
           // The footer sits at the bottom edge, so the menu opens upward.
           attrs=@action_menu.button_attrs(
@@ -401,9 +359,10 @@ pub fn component(
             @html.span(class="sidebar-icon", @icons.icon(@icons.icon_vm)),
             @html.span(
               class="sidebar-label",
-              match account.device {
-                Some(device) => device.name
-                None => choose
+              match account.page {
+                CloudPage => @messages.text(input.locale, Cloud)
+                DevicePage(name=Some(name), ..) => name
+                DevicePage(name=None, ..) => choose
               },
             ),
             @html.span(
@@ -416,6 +375,26 @@ pub fn component(
       footer.push(@html.div(class="console-account", account_row))
       if account.notice is Some(notice) {
         footer.push(@html.div(class="console-notice", notice))
+      }
+    }
+    let tools : Array[@html.Html] = [
+      input.search.view(input.locale, actions.search),
+    ]
+    for section in input.sections {
+      if section.label is None && section.action is Some(action) {
+        tools.push(
+          @html.button(
+            class="sidebar-button sidebar-new-project",
+            type_="button",
+            title=action.title,
+            disabled=action.disabled,
+            on_click=(actions.section.primary)(section.id),
+            [
+              @html.span(class="sidebar-icon", @icons.icon(@icons.icon_add)),
+              @html.span(class="sidebar-label", action.title),
+            ],
+          ),
+        )
       }
     }
     @html.aside([
@@ -442,7 +421,7 @@ pub fn component(
           ],
         ),
       ]),
-      input.search.view(input.locale, actions.search),
+      @html.div(class="sidebar-tools", tools),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),
       ]),
@@ -486,3 +465,9 @@ pub extend DeviceChoice with Debug::{to_repr}
 
 ///|
 pub extend DeviceChoice with Eq::{equal, not_equal}
+
+///|
+pub extend Page with Debug::{to_repr}
+
+///|
+pub extend Page with Eq::{equal, not_equal}

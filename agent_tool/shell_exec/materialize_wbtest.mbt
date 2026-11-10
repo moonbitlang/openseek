@@ -7,12 +7,12 @@ async test "background materialization seeds small output and preserves an empty
   defer sink.close()
   sink.materialize()
   assert_true(@fs.exists(path))
-  assert_eq(@fs.read_file(path).text(), "")
+  assert_eq(@fs.read_text(path), "")
   sink.append_chunk(b"early")
-  assert_eq(@fs.read_file(path).text(), "early")
+  assert_eq(@fs.read_text(path), "early")
   sink.materialize()
   sink.append_text(" later")
-  assert_eq(@fs.read_file(path).text(), "early later")
+  assert_eq(@fs.read_text(path), "early later")
   sink.close()
   assert_eq(sink.read_all(), "early later")
   assert_eq(sink.read_tail(5), "later")
@@ -38,8 +38,8 @@ async test "materialization serializes with the writer and retains split UTF-8" 
   })
   sink.finish()
   let expected = "café"
-  assert_true(@fs.read_file(path).text().has_prefix(expected))
-  assert_eq(@fs.read_file(path).text(), sink.head())
+  assert_true(@fs.read_text(path).has_prefix(expected))
+  assert_eq(@fs.read_text(path), sink.head())
   assert_eq(sink.size(), 304)
 }
 
@@ -112,7 +112,7 @@ async test "a failed seed keeps the captured head readable and partial path insp
   sink.append_text("captured before adoption")
   // Inject the state left by a partial initial write: the path exists but
   // no complete write was committed. Do not replace the retained memory head.
-  @fs.write_file(path, "captured")
+  @fs.write_text(path, "captured")
   sink.file_created = true
   sink.failure = Some("seed write failed")
   assert_eq(sink.file_bytes, 0L)
