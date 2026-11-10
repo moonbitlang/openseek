@@ -1861,7 +1861,6 @@
 .minimal-messages + .msg.user {
   margin-top: 0;
 }
-.minimal-process,
 .minimal-context-summary {
   margin: 0;
   min-width: 0;
@@ -1927,7 +1926,7 @@
   width: var(--icon-size, var(--icon-md));
   height: var(--icon-size, var(--icon-md));
 }
-:is(.minimal-tools, .minimal-process, .minimal-image-call) > .minimal-activity-summary {
+:is(.minimal-tools, .minimal-image-call) > .minimal-activity-summary {
   --icon-size: var(--icon-lg);
 }
 .minimal-call,
@@ -2024,7 +2023,7 @@
   height: 14px;
   transform: rotate(-90deg);
 }
-:is(.minimal-tools, .minimal-process, .minimal-image-call) > .minimal-activity-summary > .minimal-chevron {
+:is(.minimal-tools, .minimal-image-call) > .minimal-activity-summary > .minimal-chevron {
   transition: transform var(--disclosure-duration) ease;
 }
 .minimal-chevron svg {
@@ -2032,17 +2031,16 @@
   height: 14px;
 }
 .minimal-tools[open] > .minimal-activity-summary > .minimal-chevron,
-.minimal-process[open] > .minimal-activity-summary > .minimal-chevron,
 .minimal-image-call[open] > .minimal-activity-summary > .minimal-chevron,
 .minimal-context-summary[open] > .minimal-activity-summary > .minimal-chevron {
   transform: rotate(0deg);
 }
 
 /* The browser owns each disclosure's state; only its content box animates. */
-:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call) {
+:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-image-call) {
   interpolate-size: allow-keywords;
 }
-:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)::details-content {
+:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-image-call)::details-content {
   block-size: 0;
   overflow: clip;
   opacity: 0;
@@ -2050,12 +2048,12 @@
     opacity var(--disclosure-duration) ease,
     content-visibility var(--disclosure-duration) allow-discrete;
 }
-:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)[open]::details-content {
+:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-image-call)[open]::details-content {
   block-size: auto;
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-  :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)::details-content,
+  :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-image-call)::details-content,
   .activity-text::before,
   .tool-call-summary::after,
   .tool-result-summary::after,
