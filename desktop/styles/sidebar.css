@@ -1,6 +1,8 @@
 
-/* Keep insets on children so the session scrollbar reaches the sidebar edge. */
-aside {
+/* Keep insets on children so the session scrollbar reaches the sidebar edge.
+   The child selector keeps other `aside`s, such as the conversation
+   overview, from taking the sidebar's look and its `--sidebar-edge` anchor. */
+.app > aside {
   /* How far in from the aside's edges the sessions list and the footer sit.
      The header keeps its own, wider inset for the icon buttons. */
   --sidebar-inset: 12px;
