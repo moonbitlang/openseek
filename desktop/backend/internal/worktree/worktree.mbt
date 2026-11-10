@@ -13,7 +13,7 @@
 /// error through `Repr`, which prints only an opaque `<...: ...>` placeholder
 /// for types without it — swallowing the one string that says what failed.
 #derive(Debug)
-pub(all) suberror WorktreeError {
+pub suberror WorktreeError {
   WorktreeError(String)
 }
 

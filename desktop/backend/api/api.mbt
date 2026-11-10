@@ -760,7 +760,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.worktree_list, payload => {
-      @worktree.list(parse_workspace_resource_path(payload.workspace))
+      @worktree.list(@pathx.Absolute::parse_resource_path(payload.workspace))
     }),
     Endpoint(@commands.worktree_create, payload => {
       let owner = match (payload.session, payload.codex_thread) {
@@ -789,7 +789,7 @@ pub fn endpoints(
       }
       let reply = @worktree.create(
         state.manager.worktree_host(),
-        parse_workspace_resource_path(payload.workspace),
+        @pathx.Absolute::parse_resource_path(payload.workspace),
         owner,
         worktrees => {
           publish_worktree_changed(state, payload.workspace, worktrees)
@@ -823,7 +823,7 @@ pub fn endpoints(
     Endpoint(@commands.worktree_remove, payload => {
       @worktree.remove(
         state.manager.worktree_host(),
-        parse_workspace_resource_path(payload.workspace),
+        @pathx.Absolute::parse_resource_path(payload.workspace),
         payload.name,
         payload.force is Some(true),
         worktrees => {
@@ -1409,20 +1409,6 @@ fn publish_session_changed(
   workspace : String,
 ) -> Unit {
   state.hub.publish(SessionChanged({ change, session, workspace, }))
-}
-
-///|
-/// Decode a worktree op's wire workspace, a resource-URI path, into a path
-/// for this host. A spelling outside the resource-path contract cannot name a
-/// registered workspace, so it gets the same refusal as one that is not
-/// registered.
-fn parse_workspace_resource_path(
-  workspace : String,
-) -> @pathx.Absolute raise @worktree.WorktreeError {
-  @pathx.Absolute::parse_resource_path(workspace) catch {
-    InvalidResourcePath =>
-      raise WorktreeError("\{workspace} is not a registered workspace")
-  }
 }
 
 ///|
