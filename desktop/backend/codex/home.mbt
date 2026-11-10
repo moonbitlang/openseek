@@ -22,7 +22,7 @@ const HomeDirName : String = "codex"
 async fn prepare_home_directory(home : @pathx.Path) -> Unit {
   try {
     @fs.mkdir(home.to_string(), recursive=true, permission=0o700) catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => ()
+      @os_error.OsError(AlreadyExists, ..) => ()
       error => raise error
     }
     guard @fs.kind(home.to_string()) is Directory else {

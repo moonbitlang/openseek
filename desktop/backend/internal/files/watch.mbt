@@ -289,7 +289,9 @@ async fn FsWatchActive::watch(
     // still propagate so replacing this watcher cannot keep the retired child
     // alive.
     let events = self.watcher.wait() catch {
-      @os_error.OSError(_) as error if error.is_EINTR() => continue
+      // `EINTR` is 4 on both Linux and macOS, and has no `Kind` of its own.
+      @os_error.OsError(_, raw_code=4, ..) if @async.platform is (Linux | MacOS) =>
+        continue
       error => raise error
     }
     emit(
@@ -318,14 +320,23 @@ pub async fn Watcher::run(
   emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   let mut active : FsWatchActive? = None
+  // The request that replaces the active watcher, taken from the queue while
+  // that watcher was still running.
+  let mut pending : FsWatchRequest? = None
   for ;; {
-    if active is None {
-      active = self.requests.get().activate(emit)
+    if pending is Some(request) {
+      pending = None
+      // Activate the replacement now. The native constructor and baseline
+      // must both finish before this exact request task receives success.
+      active = request.activate(emit)
       continue
     }
-    guard active is Some(watcher) else { continue }
+    guard active is Some(watcher) else {
+      pending = Some(self.requests.get())
+      continue
+    }
     let target = watcher.target
-    let request = @async.with_task_group(group => {
+    @async.with_task_group(group => {
       group.spawn_bg(() => {
         watcher.watch(emit) catch {
           error => {
@@ -348,19 +359,16 @@ pub async fn Watcher::run(
         }
         target.alive.val = false
       })
-      let next = for ;; {
+      for ;; {
         let next = self.requests.get()
         if next.keeps_active_watcher(target) {
           continue
         }
-        break next
+        pending = Some(next)
+        break
       }
-      group.return_immediately(next)
-      next
+      group.return_immediately()
     })
-    // Activate the replacement now. The native constructor and baseline must
-    // both finish before this exact request task receives success.
-    active = request.activate(emit)
   }
 }
 
@@ -466,7 +474,7 @@ async test "watch activation fails through its request and can be retried" {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     })
     let file = "\{dir}/not-a-directory"
-    @fs.write_file(file, "", create_mode=CreateOrTruncate)
+    @fs.write_text(file, "", create_mode=CreateOrTruncate)
     let actor = Watcher()
     let pushes : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(2))
     group.spawn_bg(() => actor.run(push => pushes.put(push)))
@@ -500,7 +508,7 @@ async test "watch activation fails through its request and can be retried" {
     }
     assert_true(baseline.baseline)
     assert_eq(baseline.generation, "page-a:ready-2")
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -540,7 +548,7 @@ async test "only an identical generation retains its active watcher" {
     }
     assert_true(replacement.baseline)
     assert_eq(replacement.generation, "page-a:10")
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -579,7 +587,7 @@ async test "file_signature reads a missing path as absent, not as a failure" {
   // is just as absent.
   let dir = @fs.tmpdir(prefix="openseek-file-signature-")
   defer @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
-  @fs.write_file("\{dir}/plain", b"x", create_mode=CreateOrTruncate)
+  @fs.write_binary("\{dir}/plain", b"x", create_mode=CreateOrTruncate)
   assert_true(file_signature("\{dir}/plain/child") is Missing)
   assert_true(file_signature("\{dir}/plain") is Present(_))
 }

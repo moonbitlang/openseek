@@ -8,7 +8,7 @@ async test "ordinary rooted file reads keep session files separate and follow ar
   for (path, content) in [(first, "first"), (second, "second")] {
     let file = @pathx.Path(dir).join(path)
     @fs.mkdir(file.dirname().to_string(), recursive=true)
-    @fs.write_file(file.to_string(), content)
+    @fs.write_text(file.to_string(), content)
     assert_true(
       @files.read_file({ max_bytes: None, root: Some(root), path, })
       is Content(content=read, ..) &&
@@ -43,7 +43,7 @@ async test "interactive reads can exceed the editor default with an explicit byt
     .resolve()
     .resource_path()
   let content = "x".repeat(@files.MaxEditorFileBytes + 1)
-  @fs.write_file(
+  @fs.write_text(
     @pathx.Absolute::parse_resource_path(path).to_string(),
     content,
   )

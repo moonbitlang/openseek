@@ -533,11 +533,12 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
 #cfg(not(platform="windows"))
 async test "unsupported Git worktree listing refuses creation before publication" {
   with_recovery_fixture((repo, host) => {
-    let (code, stdout, _) = @processx.collect_output_no_stdin("/bin/sh", [
+    let result = @processx.collect_output_no_stdin("/bin/sh", [
       "-c", "command -v git",
     ])
+    let code = result.exit_code
     assert_eq(code, 0)
-    let git = stdout.text().trim().to_owned()
+    let git = result.stdout_text().trim().to_owned()
     guard @sys.get_env_var("PATH") is Some(original_path) else {
       fail("fixture requires PATH")
     }

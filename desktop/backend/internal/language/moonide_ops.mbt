@@ -380,16 +380,17 @@ async fn moonide_navigation_op(
   let request = resolve_moonide_request(payload)
   let config = moonide_spawn_config(state)
   let args = query.args(request.relative_path, request.line, request.column)
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     config.executable,
     args,
     extra_env?=config.extra_env,
     inherit_env=config.extra_env is None,
     cwd=request.physical_workspace.to_string(),
   )
+  let code = result.exit_code
   if code != 0 {
-    let stderr = stderr.text().trim().to_owned()
-    let stdout = stdout.text().trim().to_owned()
+    let stderr = result.stderr_text().trim().to_owned()
+    let stdout = result.stdout_text().trim().to_owned()
     let detail = if !stderr.is_empty() { stderr } else { stdout }
     raise MoonIdeFailed(
       if detail.is_empty() {
@@ -399,7 +400,7 @@ async fn moonide_navigation_op(
       },
     )
   }
-  let output = stdout.text()
+  let output = result.stdout_text()
   canonical_moonide_locations(
     parse_moonide_output(output, request.physical_workspace),
     request.lexical_workspace,
@@ -446,16 +447,17 @@ pub async fn moonide_codelens(
     payload.path,
   )
   let config = moonide_spawn_config(state)
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     config.executable,
     moonide_codelens_args(location.physical_relative.0),
     extra_env?=config.extra_env,
     inherit_env=config.extra_env is None,
     cwd=location.root.physical.to_string(),
   )
+  let code = result.exit_code
   if code != 0 {
-    let stderr = stderr.text().trim().to_owned()
-    let stdout = stdout.text().trim().to_owned()
+    let stderr = result.stderr_text().trim().to_owned()
+    let stdout = result.stdout_text().trim().to_owned()
     let detail = if !stderr.is_empty() { stderr } else { stdout }
     raise MoonIdeFailed(
       if detail.is_empty() {
@@ -465,7 +467,7 @@ pub async fn moonide_codelens(
       },
     )
   }
-  let output = stdout.text()
+  let output = result.stdout_text()
   canonical_moonide_codelenses(
     parse_moonide_codelens_output(output),
     location.root.lexical,
@@ -706,12 +708,12 @@ async test "Moon IDE CodeLens canonicalization drops symlink targets outside the
   defer (@fs.rmdir(outside, recursive=true) catch { _ => () })
   defer (@fs.rmdir(root, recursive=true) catch { _ => () })
   @fs.mkdir("\{root}/src", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/src/inside.mbt",
     "fn inside {}",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{outside}/secret.mbt",
     "fn secret {}",
     create_mode=CreateOrTruncate,

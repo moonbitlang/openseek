@@ -160,14 +160,15 @@ async fn MoonCliState::run_moon(
     // Moon commands are non-interactive here. Giving them EOF prevents an
     // accidental prompt and remains valid when a Windows GUI host has no
     // standard-input handle to inherit.
-    let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+    let result = @processx.collect_output_no_stdin(
       config.command,
       args,
       extra_env?=config.env,
       inherit_env=config.env is None,
       cwd=cwd.0,
     )
-    (code, stdout.text(), stderr.text())
+    let code = result.exit_code
+    (code, result.stdout_text(), result.stderr_text())
   }) catch {
     _ => None
   }
@@ -278,7 +279,7 @@ async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
   for name in ["moon.mod", "moon.mod.json", "moon.work"] {
     let path = dir.join((name : @pathx.Relative)).to_string()
     guard @fs.exists(path) else { continue }
-    let (seconds, _) = @fs.mtime(path) catch { _ => continue }
+    let seconds = (@fs.mtime(path) catch { _ => continue }).sec()
     newest = match newest {
       Some(current) => Some(if seconds > current { seconds } else { current })
       None => Some(seconds)

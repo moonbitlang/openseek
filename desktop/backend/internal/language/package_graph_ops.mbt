@@ -218,12 +218,12 @@ async test "package graph cwd is the authorized moon.mod parent" {
     }
   })
   @fs.mkdir("\{root}/nested/module", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/nested/module/moon.mod",
     "{}",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/nested/module/README.md",
     "not a manifest",
     create_mode=CreateOrTruncate,

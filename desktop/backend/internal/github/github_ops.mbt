@@ -315,7 +315,7 @@ async fn gh_json(
   dir : @pathx.Absolute,
   args : Array[String],
 ) -> Json? {
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     gh.0,
     args,
     cwd=dir.0,
@@ -324,8 +324,9 @@ async fn gh_json(
   ) catch {
     _ => return None
   }
+  let code = result.exit_code
   guard code == 0 else { return None }
-  let output = stdout.text() catch { _ => return None }
+  let output = result.stdout_text() catch { _ => return None }
   Some(@json.parse(output)) catch {
     _ => None
   }

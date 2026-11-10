@@ -23,7 +23,7 @@ async test "current PR status verifies remote lifecycle even for saved branch as
   let _ = {
     defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "initial")
     let branch = @git.current_branch(repo).unwrap()
@@ -133,25 +133,25 @@ async test "checkout choices preserve edits until chosen and stash retains index
   let _ = {
     defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/tracked.txt",
       "original\n",
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["add", "tracked.txt"])
     git_test_commit(dir, "initial")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/tracked.txt",
       "staged\n",
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["add", "tracked.txt"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/tracked.txt",
       "working\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/untracked.txt",
       "keep\n",
       create_mode=CreateOrTruncate,
@@ -159,9 +159,9 @@ async test "checkout choices preserve edits until chosen and stash retains index
     assert_false(github_prepare_checkout(repo, 42, Ask))
     assert_true(github_prepare_checkout(repo, 42, Carry))
     assert_eq(@gitx.output(repo, ["show", ":tracked.txt"]), "staged\n")
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "working\n")
+    assert_eq(@fs.read_text("\{dir}/tracked.txt"), "working\n")
     assert_true(github_prepare_checkout(repo, 42, Stash))
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "original\n")
+    assert_eq(@fs.read_text("\{dir}/tracked.txt"), "original\n")
     assert_eq(
       @gitx.output(repo, ["show", "stash@{0}:tracked.txt"]),
       "working\n",
@@ -170,13 +170,13 @@ async test "checkout choices preserve edits until chosen and stash retains index
       @gitx.output(repo, ["show", "stash@{0}^2:tracked.txt"]),
       "staged\n",
     )
-    assert_eq(@fs.read_file("\{dir}/untracked.txt").text(), "keep\n")
+    assert_eq(@fs.read_text("\{dir}/untracked.txt"), "keep\n")
     assert_true(github_prepare_checkout(repo, 42, Ask))
     git_test_run(dir, ["stash", "apply", "--index"])
     assert_true(github_prepare_checkout(repo, 42, Discard))
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "original\n")
+    assert_eq(@fs.read_text("\{dir}/tracked.txt"), "original\n")
     assert_eq(@gitx.output(repo, ["show", ":tracked.txt"]), "original\n")
-    assert_eq(@fs.read_file("\{dir}/untracked.txt").text(), "keep\n")
+    assert_eq(@fs.read_text("\{dir}/untracked.txt"), "keep\n")
   }
 }
 

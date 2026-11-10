@@ -1,11 +1,11 @@
 import {
   "moonbitlang/openseek/jsonrpc",
   "openseek_desktop/backend/uuid",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/io",
-  "moonbitlang/async/os_error",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/io",
+  "moonbitlang/core/async/os_error",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "openseek_desktop/backend/pathx",
@@ -18,6 +18,16 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 supported_targets = "+native"
 
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 } for "test"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/io",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+  ],
+)

@@ -17,7 +17,7 @@ async test "workspace documents become references without creating an upload" {
   })
   let bytes = b"%PDF-1.7\noriginal document"
   let source = root.join("report.pdf")
-  @fs.write_file(source.to_string(), bytes)
+  @fs.write_binary(source.to_string(), bytes)
   let payload : @protocol.PrepareAttachmentPayload = {
     session,
     workspace: root.resource_path(),
@@ -29,7 +29,7 @@ async test "workspace documents become references without creating an upload" {
   )
   assert_eq(@files.import_attachment(payload).path, "report.pdf")
   assert_false(@fs.exists(root.join(".openseek").to_string()))
-  assert_eq(@fs.read_file(source.to_string()).binary(), bytes)
+  assert_eq(@fs.read_binary(source.to_string()), bytes)
 }
 
 ///|
@@ -44,7 +44,7 @@ async test "external imports require preparation and preserve original bytes and
   })
   let original = "\{outside}/下载-5-1.pdf"
   let bytes = b"%PDF-1.7\noriginal bytes"
-  @fs.write_file(original, bytes)
+  @fs.write_binary(original, bytes)
   let payload : @protocol.PrepareAttachmentPayload = {
     session,
     workspace: root.resource_path(),
@@ -61,12 +61,12 @@ async test "external imports require preparation and preserve original bytes and
   assert_true(first.path.has_suffix("/下载-5-1.pdf"))
   for imported in [first, second] {
     let file = root.join((imported.path : @pathx.Relative))
-    assert_eq(@fs.read_file(file.to_string()).binary(), bytes)
+    assert_eq(@fs.read_binary(file.to_string()), bytes)
     assert_eq(@fs.readdir(file.to_path().dirname().to_string()), [
       "下载-5-1.pdf",
     ])
   }
-  assert_eq(@fs.read_file(original).binary(), bytes)
+  assert_eq(@fs.read_binary(original), bytes)
 }
 
 ///|
@@ -89,11 +89,11 @@ async test "browser document bytes import one original file and reject traversal
       AttachmentUploadRequired(name~),
     )
     assert_eq(
-      @fs.read_file(
+      @fs.read_binary(
         root
         .join((@files.import_attachment(payload).path : @pathx.Relative))
         .to_string(),
-      ).binary(),
+      ),
       bytes,
     )
   }
@@ -217,16 +217,16 @@ async test "imported originals reach a newly bound worktree and remain available
   }
   ignore(@files.stage_attachments(payload))
   let target = checkout.join((imported.path : @pathx.Relative))
-  assert_eq(@fs.read_file(target.to_string()).binary(), bytes)
+  assert_eq(@fs.read_binary(target.to_string()), bytes)
   assert_eq(@fs.readdir(target.to_path().dirname().to_string()), ["report.pdf"])
   assert_eq(
-    @fs.read_file(source.join((imported.path : @pathx.Relative)).to_string()).binary(),
+    @fs.read_binary(source.join((imported.path : @pathx.Relative)).to_string()),
     bytes,
   )
   // A user's later edit is retained when the same pending message is retried.
-  @fs.write_file(target.to_string(), b"%PDF-user edit")
+  @fs.write_binary(target.to_string(), b"%PDF-user edit")
   ignore(@files.stage_attachments(payload))
-  assert_eq(@fs.read_file(target.to_string()).binary(), b"%PDF-user edit")
+  assert_eq(@fs.read_binary(target.to_string()), b"%PDF-user edit")
 }
 
 ///|
@@ -244,7 +244,7 @@ async test "attachment staging rejects non-imported paths and escaping source li
     @work_dir.revoke_host_workspace(session)
   })
   @fs.mkdir(source.join(".openseek/attachments/id").to_string(), recursive=true)
-  @fs.write_file("\{outside}/report.pdf", b"%PDF-outside")
+  @fs.write_binary("\{outside}/report.pdf", b"%PDF-outside")
   @fs.symlink(
     target="\{outside}/report.pdf",
     source.join(".openseek/attachments/id/report.pdf").to_string(),

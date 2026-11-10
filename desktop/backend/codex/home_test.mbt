@@ -30,9 +30,9 @@ async test "Codex home failure prevents spawning and can recover on a later requ
     #|      ;;
     #|  esac
     #|done
-  @fs.write_file(script, source, create_mode=CreateOrTruncate)
+  @fs.write_text(script, source, create_mode=CreateOrTruncate)
   @fs.chmod(script, 0o700)
-  @fs.write_file(home, "preserve this file", create_mode=CreateOrTruncate)
+  @fs.write_text(home, "preserve this file", create_mode=CreateOrTruncate)
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let failed : @async.Queue[Unit] = Queue(kind=Blocking(1))
@@ -55,16 +55,16 @@ async test "Codex home failure prevents spawning and can recover on a later requ
       } noraise {
         _ => fail("blocked home should reject Codex calls")
       }
-      assert_eq(@fs.read_file(home).text(), "preserve this file")
+      assert_eq(@fs.read_text(home), "preserve this file")
       assert_false(@fs.readdir(root).contains("spawned"))
       @fs.remove(home)
       assert_eq(
         actor.call(method_="account/read", params={}),
         Json::empty_object(),
       )
-      assert_eq(@fs.read_file(marker).text(), home)
+      assert_eq(@fs.read_text(marker), home)
       assert_true(@fs.kind(home) is Directory)
-      group.return_immediately(())
+      group.return_immediately()
     })
   })
 }
@@ -90,7 +90,7 @@ async test "Desktop requires an isolated home instead of inheriting one" {
       } noraise {
         _ => fail("missing isolated home must refuse Codex calls")
       }
-      group.return_immediately(())
+      group.return_immediately()
     })
   })
 }
