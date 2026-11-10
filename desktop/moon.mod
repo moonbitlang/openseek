@@ -5,7 +5,7 @@ version = "0.1.5"
 import {
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/fuzzy_match@0.2.6",
-  "moonbit-community/proton_contract@0.7.0",
+  "moonbit-community/proton_contract@0.9.0",
 }
 
 readme = "README.md"
