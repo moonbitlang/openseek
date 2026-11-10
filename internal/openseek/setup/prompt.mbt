@@ -48,9 +48,8 @@ pub async fn configured_system_prompt(
   // the recorded directory is where the session was started — resume it from
   // the same project root.
   //
-  // The resource directory is resolved from the running executable.
-  // Documentation layout and usage instructions live in the static default
-  // prompt, keeping the installation-dependent path in this tail.
+  // The resource directory and its layout describe the running installation,
+  // independently of the selected base prompt.
   let target = if workspace_root == "" { "." } else { workspace_root }
   let cwd = @fs.realpath(target) catch { _ => target }
   let outline = dir_outline(cwd).unwrap_or(
@@ -70,7 +69,17 @@ pub async fn configured_system_prompt(
       "\n\nSession scratch directory: \{Json(dir).stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
   }
   if @resources.directory() is Some(dir) {
-    prompt <+ "\n\nBundled resources: \{dir}"
+    let layout = resource_layout(dir)
+    prompt <+
+      $|
+      $|
+      $|Bundled resources: \{dir}
+      $|
+      $|Directory layout relative to `Bundled resources`:
+      $|
+      $|```text
+      $|\{layout}
+      $|```
   }
   let agents_section = agents_prompt_section(cwd)
   if agents_section is Some(section) {

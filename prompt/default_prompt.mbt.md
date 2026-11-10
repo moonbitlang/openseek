@@ -731,12 +731,6 @@ applications, and `moongrep/README.md` covers the structural-search tool.
 
 For slide tasks, read the file `<bundled-resources>/slides/README.md`.
 
-Directory layout relative to `Bundled resources`:
-
-```text
-{{BUNDLED_RESOURCES_LAYOUT}}
-```
-
 Read references outside the workspace on demand: locate the relevant page under
 `<bundled-resources>/doc/moonbit/`, then read a focused excerpt with the
 reading tools described above.

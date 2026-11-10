@@ -20,37 +20,6 @@ fn default_prompt_zh() -> String {
     #|
     #|环境信息若提供 `Bundled resources`，它指向本次安装的只读 `share/` 资源目录。MoonBit 官方文档（moonbit-docs 的 Markdown 构建版）位于其 `doc/moonbit/` 子目录。下文的 `<bundled-resources>` 表示该绝对路径。关于语言、标准库、工具链和教程的事实，以这些文档为准，先查阅再使用。
     #|
-    #|相对于 `Bundled resources` 的目录结构：
-    #|
-    #|```text
-    #|.
-    #|├── artifact
-    #|│   └── rabbita
-    #|├── desktop-proton
-    #|├── diagrams
-    #|├── doc
-    #|│   └── moonbit
-    #|│       ├── example
-    #|│       │   ├── lambda
-    #|│       │   ├── myers-diff
-    #|│       │   ├── segment-tree
-    #|│       │   └── sudoku
-    #|│       ├── language
-    #|│       │   ├── attributes
-    #|│       │   └── error_codes
-    #|│       ├── toolchain
-    #|│       │   ├── moon
-    #|│       │   ├── moonide
-    #|│       │   ├── vscode
-    #|│       │   └── wasm
-    #|│       └── tutorial
-    #|├── examples
-    #|├── frontend-rabbita
-    #|├── moongrep
-    #|├── slides
-    #|└── workflow
-    #|```
-    #|
     #|按需读取工作区外的参考资料：先在 `<bundled-resources>/doc/moonbit/` 下定位相关页面，再按下述方式读取所需片段。
     #|
     #|## 读取文件

@@ -80,7 +80,7 @@ test-moon:
     moon test --target native
     moon test --target js
 
-# Refresh filesystem-derived prompt content even when only share/ changed.
+# Refresh generated prompt sources from Markdown.
 prompt:
     moon run scripts/md_to_mbt_string -- prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
     moon run scripts/md_to_mbt_string -- prompt/moonbit_syntax_and_api.mbt.md prompt/generated_moonbit_syntax_and_api.mbt
