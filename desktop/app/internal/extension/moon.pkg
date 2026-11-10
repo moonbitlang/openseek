@@ -35,6 +35,7 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 supported_targets = "+native"
 
 import {
+  "moonbitlang/async/io",
   "moonbitlang/async/websocket",
   "moonbitlang/core/json",
 } for "wbtest"

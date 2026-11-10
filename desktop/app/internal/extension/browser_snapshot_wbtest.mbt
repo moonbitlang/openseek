@@ -7,9 +7,9 @@ async fn tree_of(nodes : Array[Json]) -> Array[@cdp.AxNode] {
       defer server.close()
       group.spawn_bg(() => {
         serve_target_list(server, ["page"])
-        let (conn, _) = server.accept()
+        let (conn, request) = accept_request(server)
         defer conn.close()
-        let ws = @websocket.from_http_server(conn.read_request(), conn)
+        let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         ignore(ws.recv().read_all())
         let reply : Json = { "id": 1, "result": { "nodes": Json(nodes) } }
@@ -37,9 +37,9 @@ async fn scripted_page(
       defer server.close()
       group.spawn_bg(() => {
         serve_target_list(server, ["page"])
-        let (conn, _) = server.accept()
+        let (conn, request) = accept_request(server)
         defer conn.close()
-        let ws = @websocket.from_http_server(conn.read_request(), conn)
+        let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
         for reply in replies {
           guard @json.parse(ws.recv().read_all().text())
