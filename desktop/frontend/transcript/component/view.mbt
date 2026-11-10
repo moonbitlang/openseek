@@ -36,6 +36,7 @@ fn assistant_view(
   subrun? : SubrunLink,
   fork? : @html.Html,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -108,7 +109,14 @@ fn assistant_view(
     Some(
       @html.div(
         class="activity-work",
-        tool_run_views(locale~, calls, sequence?, subrun?, wait_labels~),
+        tool_run_views(
+          locale~,
+          calls,
+          sequence?,
+          subrun?,
+          wait_labels~,
+          surface~,
+        ),
       ),
     )
   }
@@ -160,6 +168,7 @@ fn notice_view(
   body : String?,
   ts? : Double,
   sequence? : Int32,
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
   let rows : Array[@html.Html] = []
   if step_stamp(locale~, ts?) is Some(stamp) {
@@ -173,7 +182,7 @@ fn notice_view(
     is_error~,
     brief~,
     body.map(text => @deepseek.Content([Text(text)])),
-    tool_call_tabs_key(label, sequence),
+    tool_call_tabs_key(label, sequence, surface~),
   )
   rows.push(@html.div(class="activity-work", { "notice": row }))
   @html.div(class="activity-row", rows)
@@ -191,12 +200,14 @@ fn tool_run_views(
   sequence? : Int32,
   subrun? : SubrunLink,
   wait_labels~ : Map[Int32, String] = Map([]),
+  surface~ : @interop.ChatSurface,
 ) -> Map[String, @html.Html] {
   let rows : Map[String, @html.Html] = Map([])
   let burst = calls.length() > 1 && calls.all(call => call.arguments is Some(_))
   if burst {
     for index, call in calls {
       rows[tool_run_row_key(call, index, "request")] = tool_request_view(
+        surface~,
         locale~,
         call,
         sequence?,
@@ -206,6 +217,7 @@ fn tool_run_views(
     for index, call in calls {
       if tool_result_row_is_visible(call) {
         rows[tool_run_row_key(call, index, "result")] = tool_result_view(
+          surface~,
           locale~,
           call,
           sequence?,
@@ -217,6 +229,7 @@ fn tool_run_views(
     for index, call in calls {
       if call.arguments is Some(_) {
         rows[tool_run_row_key(call, index, "request")] = tool_request_view(
+          surface~,
           locale~,
           call,
           sequence?,
@@ -225,6 +238,7 @@ fn tool_run_views(
       }
       if tool_result_row_is_visible(call) {
         rows[tool_run_row_key(call, index, "result")] = tool_result_view(
+          surface~,
           locale~,
           call,
           sequence?,
@@ -307,6 +321,7 @@ fn tool_request_view(
   call : @transcript.ToolCall,
   sequence? : Int32,
   wait_label? : String,
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
   guard call.arguments is Some(arguments) else { return @html.nothing }
   let name = call.name
@@ -415,7 +430,7 @@ fn tool_request_view(
     )
   } else if tool_arguments_tabbed_view(
       locale~,
-      tool_call_tabs_key(call.call_id, sequence),
+      tool_call_tabs_key(call.call_id, sequence, surface~),
       name,
       Some(arguments),
     )
@@ -451,8 +466,8 @@ fn tool_request_view(
       ),
     ]
     for child in call.children {
-      nested.push(tool_request_view(locale~, child, sequence?))
-      nested.push(tool_result_view(locale~, child, sequence?))
+      nested.push(tool_request_view(locale~, child, sequence?, surface~))
+      nested.push(tool_result_view(locale~, child, sequence?, surface~))
     }
     body.push(@html.div(class="tool-call-section", nested))
   }
@@ -483,8 +498,9 @@ fn tool_result_view(
   call : @transcript.ToolCall,
   sequence? : Int32,
   subrun? : SubrunLink,
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
-  let key = tool_call_tabs_key(call.call_id, sequence)
+  let key = tool_call_tabs_key(call.call_id, sequence, surface~)
   // Calls without recorded arguments have no request row. Put their status
   // on the result instead, so every call has exactly one visible status.
   let status = if call.arguments is None {
@@ -1106,6 +1122,7 @@ fn transcript_item_view(
   edit? : @html.Html,
   editor? : @html.Html,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
   match item.kind {
     User(content~) =>
@@ -1122,6 +1139,7 @@ fn transcript_item_view(
     Assistant(reasoning~, prose~, calls~, replay=_, finished~, end_sequence=_) =>
       assistant_view(
         artifact_view?,
+        surface~,
         locale~,
         on_open,
         prose?,
@@ -1159,6 +1177,7 @@ fn transcript_item_view(
       )
     Notice(label~, brief~, is_error~, body~) =>
       notice_view(
+        surface~,
         locale~,
         label,
         brief,
@@ -1313,9 +1332,10 @@ fn transcript_view(
   // project title filters and switches registered projects").
   @html.section(
     attrs=@html.Attrs::build()
-      .id("transcript")
+      .id(transcript_root_id(input.surface))
       .class("transcript")
-      // Text selected here gets the shell's floating reply.
+      // Text selected here gets the shell's floating reply, addressed to the
+      // composer on the same surface.
       .data_set("context-quote", "")
       .data_set("transcript-session", input.active_session)
       .data_set(
@@ -1341,15 +1361,19 @@ pub fn program_calls_view(
   let calls = @transcript.program_calls(data, parent, origin~)
   guard !calls.is_empty() else { return None }
   let rows : Map[String, @html.Html] = Map([])
+  // A job's trace is shown outside both transcripts, under the column's ids
+  // as it always has been.
   for index, call in calls {
     rows[tool_run_row_key(call, index, "request")] = tool_request_view(
       locale~,
       call,
+      surface=Column,
     )
     if tool_result_row_is_visible(call) {
       rows[tool_run_row_key(call, index, "result")] = tool_result_view(
         locale~,
         call,
+        surface=Column,
       )
     }
   }
