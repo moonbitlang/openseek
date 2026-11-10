@@ -56,9 +56,9 @@ fn open_cloud_relative(
 }
 
 ///|
-/// Navigation data stays in the frontend while the host classifies the file.
-/// A composer action may target a parked conversation; return_to records the
-/// conversation that must remain on screen when that reply arrives.
+/// The host resolves paths for `owner`, and its `destination` owns the
+/// resulting dock tab. `return_to` keeps the visible conversation through an
+/// ordinary background composer action.
 priv struct FileOpenContext {
   owner : @interop.ConversationKey
   generation : Int32
@@ -66,6 +66,14 @@ priv struct FileOpenContext {
   annotation : String?
   return_to : @interop.ConversationKey?
   office_target : @office_location.Target?
+}
+
+///|
+/// The conversation whose dock gets the opened tab: `owner`'s `dock_home`.
+fn FileOpenContext::destination(
+  self : FileOpenContext,
+) -> @interop.ConversationKey {
+  dock_home_key(self.owner)
 }
 
 ///|
@@ -82,12 +90,18 @@ fn FileOpenContext::new(
 
 ///|
 /// Address a session file through the existing workspace filesystem commands.
+/// The file is the active conversation's, or `owner`'s when a link names the
+/// conversation it came from (a side chat's transcript).
 fn Model::session_file_target(
   self : Model,
   path : String,
+  owner? : @interop.ConversationKey,
 ) -> (@common.Uri, String)? {
-  guard !self.cloud_selected() &&
-    self.active_conversation() is Some(conversation) else {
+  let conversation = match owner {
+    Some(key) => self.find_conversation(key.channel, key.session)
+    None => self.active_conversation()
+  }
+  guard !self.cloud_selected() && conversation is Some(conversation) else {
     return None
   }
   @transcript.file_target(
@@ -107,11 +121,12 @@ fn request_open_path(
   range : @common.Range?,
   annotation? : String,
   return_to? : @interop.ConversationKey,
+  source? : ActiveCheckout,
 ) -> (@cmd.Cmd, Model) {
-  if model.session_file_target(path) is Some((root, relative)) {
-    guard model.active_checkout() is Some(active) else {
-      return (@cmd.none, model)
-    }
+  let source = if source is Some(_) { source } else { model.active_checkout() }
+  if model.session_file_target(path, owner?=source.map(active => active.owner))
+    is Some((root, relative)) {
+    guard source is Some(active) else { return (@cmd.none, model) }
     let model = model.begin_editor_navigation()
     let context = FileOpenContext::new(
       active.owner,
@@ -131,20 +146,21 @@ fn request_open_path(
       model,
     )
   }
-  guard model.active_checkout() is Some(active) &&
+  guard source is Some(active) &&
     active.placement is Some(placement) &&
     placement.is_ready() &&
     placement.checkout_root() is Some(cwd) else {
     return (@cmd.none, model)
   }
-  let model = if return_to is Some(owner) && owner != active.owner {
+  let destination = dock_home_key(active.owner)
+  let model = if return_to is Some(owner) && owner != destination {
     model
   } else {
-    let dock = model.dock_state_for(@interop.Host(active.owner))
+    let dock = model.dock_state_for(@interop.Host(destination))
     {
       ..model,
       file_panel: model.file_panel.prepare_owner(
-        @interop.Host(active.owner),
+        @interop.Host(destination),
         @dock.file_paths(dock),
       ),
     }
@@ -183,25 +199,47 @@ fn finish_open_path(
     (context.owner == active.owner || context.return_to == Some(active.owner)) else {
     return (@cmd.none, model)
   }
-  let selected = if context.owner == active.owner {
+  let source = if context.owner == active.owner {
+    Some(active)
+  } else if model.screen is Chat {
+    model
+    .find_conversation(context.owner.channel, context.owner.session)
+    .map(conv => model.checkout_of(conv))
+  } else {
+    None
+  }
+  guard source is Some(source) &&
+    source.placement is Some(source_placement) &&
+    source_placement.is_ready() else {
+    return (@cmd.none, model)
+  }
+  let selected = if context.destination() == active.owner {
     model
   } else {
-    // A background composer action can only select an existing conversation.
-    guard model.screen is Chat &&
-      model.find_conversation(context.owner.channel, context.owner.session)
-      is Some(_) else {
+    // Ordinary background actions retain their own dock. A side-chat open
+    // instead targets the parent that is already on screen.
+    guard context.destination() == context.owner && model.screen is Chat else {
       return (@cmd.none, model)
     }
     {
       ..model,
-      focused: context.owner.channel,
-      active_session: context.owner.session,
+      focused: context.destination().channel,
+      active_session: context.destination().session,
     }
   }
   guard selected.active_checkout() is Some(target) &&
-    target.owner == context.owner &&
+    target.owner == context.destination() &&
     target.placement is Some(placement) &&
     placement.is_ready() else {
+    return (@cmd.none, model)
+  }
+  // A side chat shares its parent's checkout. A changed registry must not
+  // reinterpret a source-relative directory in a different destination.
+  guard context.destination() == context.owner ||
+    (
+      target.owner.channel == source.owner.channel &&
+      placement.checkout_root() == source_placement.checkout_root()
+    ) else {
     return (@cmd.none, model)
   }
   let (cmd, opened) = match reply {
@@ -224,7 +262,7 @@ fn finish_open_path(
         office_target?=context.office_target,
       )
     }
-    Browser(path) => show_browser_path(dispatch, selected, path)
+    Browser(path) => show_browser_path(dispatch, selected, path, context.owner)
     Directory(target) =>
       reveal_local_directory(dispatch, selected, Relative(target.path))
     Refused(message) => selected.notify_error(dispatch, message)
@@ -331,10 +369,14 @@ fn show_editor_resource(
 }
 
 ///|
+/// Show `path` in a browser tab of the dock on screen. `opener` is the
+/// conversation the file was opened for — a side chat's, when its dock is its
+/// conversation's — and owns a new page.
 fn show_browser_path(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : String,
+  opener : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
   guard model.is_desktop &&
     model.active_checkout() is Some(active) &&
@@ -352,9 +394,19 @@ fn show_browser_path(
   } nobreak {
     None
   }
-  let (preview, id) = match reuse {
-    Some(id) => (@preview.navigate(model.preview, id, url), id)
-    None => @preview.open_page(model.preview, url~)
+  // A reused page keeps the conversation it was opened for — a side chat's,
+  // shown in this dock — so the host keeps it reachable by that one's tools.
+  let (preview, id, owner) = match reuse {
+    Some(id) =>
+      (
+        @preview.navigate(model.preview, id, url),
+        id,
+        model.browser_page_owner(id),
+      )
+    None => {
+      let (preview, id) = @preview.open_page(model.preview, url~, owner=opener)
+      (preview, id, Some(opener))
+    }
   }
   let dock = if dock.active is Some(FilePicker) {
     @dock.resolve_pick(dock, Browser(id~))
@@ -367,7 +419,7 @@ fn show_browser_path(
       id,
       url,
       model.theme.is_dark(model.system_dark),
-      Some(active.owner),
+      owner,
     ),
     {
       ..model.with_dock_state_for(@interop.Host(active.owner), dock),

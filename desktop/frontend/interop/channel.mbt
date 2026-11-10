@@ -212,6 +212,16 @@ pub(all) enum ChatSurface {
 }
 
 ///|
+/// How a transcript on this surface names itself as a quote source, so a
+/// selection made in it is offered to the composer on the same surface.
+pub fn ChatSurface::quote_source(self : ChatSurface) -> String {
+  match self {
+    Column => "column"
+    Dock => "dock"
+  }
+}
+
+///|
 /// `id` as an element id on this surface. Ids are document-wide and both
 /// surfaces can be mounted at once, so the dock's ids carry a prefix.
 pub fn ChatSurface::scoped(self : ChatSurface, id : String) -> String {

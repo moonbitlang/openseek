@@ -98,6 +98,7 @@ pub(all) enum ChatSurface {
 }
 pub fn ChatSurface::equal(Self, Self) -> Bool
 pub fn ChatSurface::not_equal(Self, Self) -> Bool
+pub fn ChatSurface::quote_source(Self) -> String
 pub fn ChatSurface::scoped(Self, String) -> String
 pub fn ChatSurface::to_repr(Self) -> @debug.Repr
 

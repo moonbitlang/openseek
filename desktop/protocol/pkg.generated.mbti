@@ -28,6 +28,8 @@ pub fn prompt(@openseek_protocol.Content, submission_id? : String) -> @openseek_
 
 pub fn side_chat_id(String, String) -> String
 
+pub fn side_chat_parent(String) -> String?
+
 pub fn split_side_chat_id(String) -> String?
 
 pub fn ssh_connection_arguments(String) -> Array[String] raise

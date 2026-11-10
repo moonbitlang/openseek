@@ -34,6 +34,11 @@ pub(all) struct PageState {
   // The last load failure's description, cleared by the next navigation.
   failure : String?
   cloud_preview : Bool
+  // The conversation the page was opened for. The host lets only that
+  // conversation's browser tools reach it, so every later navigation names
+  // it — even when the page shows in another conversation's dock, as a side
+  // chat's pages do in its conversation's.
+  owner : @interop.ConversationKey?
 }
 
 ///|
@@ -59,6 +64,7 @@ pub fn open_page(
   state : State,
   url? : String,
   cloud_preview~ : Bool = false,
+  owner? : @interop.ConversationKey,
 ) -> (State, Int32) {
   let id = state.next_id
   let pages = state.pages.copy()
@@ -69,6 +75,7 @@ pub fn open_page(
     loading: url is Some(_),
     failure: None,
     cloud_preview,
+    owner,
   }
   ({ ..state, pages, next_id: id + 1, }, id)
 }

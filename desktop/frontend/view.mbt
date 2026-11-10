@@ -264,6 +264,8 @@ fn Model::push_group_component_inputs(
   // parent's component input, so their disclosure state lives in the
   // conversation component. Listed records keep the host's resolved label;
   // the unlisted records above already carry their temporary local label.
+  // A side chat is shown in its conversation's dock, never as a row.
+  let items = items.filter(item => @protocol.side_chat_parent(item.id) is None)
   for tree in @transcript.session_tree(items) {
     let parent_label = session_item_label(tree.item)
     let children : Array[@conversation.Input] = []
@@ -2189,28 +2191,87 @@ fn conversation_loading_view(locale~ : @i18n.Locale = English) -> @html.Html {
 ///|
 fn conversation_load_failed_view(
   locale~ : @i18n.Locale = English,
-  dispatch : @cmd.Emit[Msg],
-  message : String,
-  retry~ : Bool = true,
+  message? : String,
+  retry? : @cmd.Cmd,
 ) -> @html.Html {
-  @html.div(
-    class="conversation-load-state failed",
-    [
-      @html.strong(shell_text(locale, CannotLoadConversation)),
-      @html.span(class="conversation-load-state-message", message),
-      ..if retry {
-        [
-          @html.button(
-            class="button secondary",
-            type_="button",
-            on_click=dispatch(RetrySelectedConversation),
-            shell_text(locale, RetryLabel),
-          ),
-        ]
-      } else {
-        []
-      },
-    ],
+  let children = [@html.strong(shell_text(locale, CannotLoadConversation))]
+  if message is Some(message) {
+    children.push(@html.span(class="conversation-load-state-message", message))
+  }
+  if retry is Some(retry) {
+    children.push(
+      @html.button(
+        class="button secondary",
+        type_="button",
+        on_click=retry,
+        shell_text(locale, RetryLabel),
+      ),
+    )
+  }
+  @html.div(class="conversation-load-state failed", children)
+}
+
+///|
+/// The questions an agent asked in `conv`, answered beside its transcript —
+/// the column's conversation, or the side chat in the dock.
+fn Model::question_region(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  conv : Conversation,
+) -> @html.Html {
+  question_region_view(self.question_region_of(conv), self.locale, dispatch)
+}
+
+///|
+/// What `Model::question_region` shows, compared rather than rendered, so a
+/// view of it is rebuilt only when it changes.
+#derive(Eq)
+priv struct QuestionRegion {
+  owner : @interop.ConversationKey
+  questions : @user_questions.Model
+  connected : Bool
+  connection_generation : Int32
+}
+
+///|
+/// `conv`'s questions, unless it cannot take answers: an archived record, or
+/// a device that is gone.
+fn Model::question_region_of(
+  self : Model,
+  conv : Conversation,
+) -> QuestionRegion? {
+  guard self.device_state(conv.device) is Some(device) &&
+    !conv.is_archived_read_only() else {
+    return None
+  }
+  Some({
+    owner: conv.key(),
+    questions: device.questions,
+    connected: device.bridge is Connected,
+    connection_generation: device.connection_generation,
+  })
+}
+
+///|
+fn question_region_view(
+  region : QuestionRegion?,
+  locale : @i18n.Locale,
+  dispatch : @cmd.Emit[Msg],
+) -> @html.Html {
+  guard region is Some(region) else {
+    return @html.div(class="user-question-region", @html.nothing)
+  }
+  region.questions.view(
+    region.owner.session,
+    locale,
+    region.connected,
+    dispatch.map(msg => {
+      UserQuestions(
+        channel=region.owner.channel,
+        connection_generation=region.connection_generation,
+        msg,
+      )
+    }),
   )
 }
 
@@ -2375,9 +2436,12 @@ fn view(
             [
               conversation_load_failed_view(
                 locale=model.locale,
-                dispatch,
-                message,
-                retry~,
+                message~,
+                retry?=if retry {
+                  Some(dispatch(RetrySelectedConversation))
+                } else {
+                  None
+                },
               ),
             ]
           Loading => [conversation_loading_view(locale=model.locale)]
@@ -2385,23 +2449,7 @@ fn view(
           Transcript(conversation=conv, ..) =>
             [
               transcript_html,
-              if model.device_state(conv.device) is Some(device) &&
-                !conv.is_archived_read_only() {
-                device.questions.view(
-                  conv.session_id,
-                  model.locale,
-                  device.bridge is Connected,
-                  dispatch.map(msg => {
-                    UserQuestions(
-                      channel=conv.device,
-                      connection_generation=device.connection_generation,
-                      msg,
-                    )
-                  }),
-                )
-              } else {
-                @html.div(class="user-question-region", @html.nothing)
-              },
+              model.question_region(dispatch, conv),
               if conv.is_archived_read_only() {
                 archived_read_only_view(
                   locale=model.locale,

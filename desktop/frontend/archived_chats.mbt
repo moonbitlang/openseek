@@ -8,7 +8,9 @@
 /// one group per project, then rows whose project could not be resolved. A parent
 /// and its archived sub-run records are one conversation, so only roots get a
 /// row; restoring or deleting one moves the complete family together. An old
-/// orphan child still owns a row and can therefore be restored. The desktop
+/// orphan child still owns a row and can therefore be restored. Side chats
+/// are archived with their conversation and come back with it, so they are
+/// not rows either. The desktop
 /// window lists every device, as its sidebar does; a browser page lists its
 /// own.
 fn Model::archived_chat_groups(self : Model) -> Array[@archived_chats.Group] {
@@ -53,7 +55,10 @@ fn Model::archived_chat_groups(self : Model) -> Array[@archived_chats.Group] {
   }
   for dev in devices {
     let channel = dev.channel.uri_authority()
-    for tree in @transcript.session_tree(dev.archived) {
+    let archived = dev.archived.filter(item => {
+      @protocol.side_chat_parent(item.id) is None
+    })
+    for tree in @transcript.session_tree(archived) {
       let item = tree.item
       place(dev, {
         id: @conversation.Id(
