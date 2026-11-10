@@ -97,6 +97,17 @@ test "a remembered Cloud conversation deleted since opens Cloud home" {
 }
 
 ///|
+test "the narrow drawer stays open across a mode switch" {
+  let work = { ..work_after_cloud(), narrow: true, sidebar_open: true, }
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(chat.cloud_identity() is Some(_))
+  assert_true(chat.sidebar_open)
+  let (_, back) = update(test_dispatch(), SidebarModeSelected(WorkMode), chat)
+  assert_eq(back.active_session, "desktop-test")
+  assert_true(back.sidebar_open)
+}
+
+///|
 test "a page without a host shows Chat alone" {
   let cloud = integrated_cloud_model()
   let cloud = {
