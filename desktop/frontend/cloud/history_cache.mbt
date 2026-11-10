@@ -11,6 +11,7 @@ fn History::cache_page(self : History) -> @protocol.CloudHistoryCachePage {
         Json(value)
       }),
     }),
+    prediction: self.prediction,
     offset: self.offset,
     etag: self.etag,
   }
@@ -27,7 +28,7 @@ fn cached_history(page : @protocol.CloudHistoryCachePage) -> History? {
     fields["page"] = { "offset": offset }
   }
   let history = decode_history(Json(fields)) catch { _ => return None }
-  Some({ ..history, etag: page.etag, })
+  Some({ ..history, etag: page.etag, prediction: page.prediction, })
 }
 
 ///|

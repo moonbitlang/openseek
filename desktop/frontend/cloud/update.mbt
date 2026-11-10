@@ -1017,7 +1017,9 @@ pub fn update(
       let next = state.replace(
         id,
         if history is Some(history) && !conversation.history_cached {
-          let cached = conversation.with_latest_page(history)
+          let cached = conversation
+            .with_latest_page(history)
+            .with_prediction(history.prediction)
           {
             ..cached.restore_goal(cached.document),
             history_cached: true,

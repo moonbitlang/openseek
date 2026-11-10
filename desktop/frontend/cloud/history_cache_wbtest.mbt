@@ -34,3 +34,18 @@ test "a late persistent cache read cannot replace a fresh Cloud page" {
   assert_eq(late.conversations["session"].history_etag, Some("fresh"))
   assert_eq(late.sequence, fresh.sequence)
 }
+
+///|
+test "legacy cached history remains readable but cannot validate omitted metadata" {
+  let page : @protocol.CloudHistoryCachePage = @json.from_json({
+    "session": native_document([]).to_json(),
+    "messages": [],
+    "offset": 3,
+    "etag": "legacy",
+  })
+  guard cached_history(page) is Some(history) else {
+    fail("legacy history should still load")
+  }
+  assert_eq(history.offset, Some(3))
+  assert_eq(history.etag, None)
+}
