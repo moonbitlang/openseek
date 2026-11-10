@@ -16,32 +16,33 @@ async fn preparation_fixture(
   let release = home + "/release"
   let distribution = release + "/openseek-macos-arm64"
   @fs.mkdir(distribution + "/bin", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     distribution + "/bin/openseek",
     "#!/bin/sh\nset -eu\ncase \"$1\" in\nsetup) printf 'setup\\n' >> \"$HOME/actions\"; " +
     (if fail_setup { "exit 19" } else { "true" }) +
     ";;\n*) exit 1;;\nesac\n",
     permission=0o755,
   )
-  @fs.write_file(
+  @fs.write_text(
     distribution + "/bin/openseek-app-server",
     "#!/bin/sh\nset -eu\n[ \"$#\" -eq 0 ]\nprintf 'server\\n' >> \"$HOME/actions\"\nprintf '{\"port\":1234}\\n'\n",
     permission=0o755,
   )
   // uname is the only platform shim; curl, tar and the generated bootstrap are real.
   @fs.mkdir(home + "/tools")
-  @fs.write_file(
+  @fs.write_text(
     home + "/tools/uname",
     "#!/bin/sh\ncase \"$1\" in -s) echo Darwin;; -m) echo arm64;; esac\n",
     permission=0o755,
   )
-  let (code, _, _) = @processx.collect_output_no_stdin("sh", [
+  let result = @processx.collect_output_no_stdin("sh", [
     "-c",
     "cd " +
     shell_quote(release) +
     " && tar -czf openseek-macos-arm64.tar.gz openseek-macos-arm64 && " +
     "if command -v sha256sum >/dev/null 2>&1; then sha256sum openseek-macos-arm64.tar.gz; else shasum -a 256 openseek-macos-arm64.tar.gz; fi > SHA256SUMS",
   ])
+  let code = result.exit_code
   assert_eq(code, 0)
   release
 }
@@ -51,7 +52,7 @@ async fn run_preparation(
   home : String,
   release : String,
 ) -> (Int32, String, String) {
-  let (code, out, err) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     "sh",
     ["-c", prepare_command("file://" + release, "=file")],
     extra_env={
@@ -61,7 +62,8 @@ async fn run_preparation(
       @env.get_env_var("PATH").unwrap_or("/usr/bin:/bin"),
     },
   )
-  (code, out.text(), err.text())
+  let code = result.exit_code
+  (code, result.stdout_text(), result.stderr_text())
 }
 
 ///|
@@ -79,13 +81,13 @@ async test "remote preparation downloads verifies installs and reuses the cached
     out.contains("installing") &&
     out.contains("\"port\":1234"),
   )
-  assert_eq(@fs.read_file(home + "/actions").text(), "setup\nserver\n")
+  assert_eq(@fs.read_text(home + "/actions"), "setup\nserver\n")
   assert_true(@fs.exists(home + "/.openseek/ssh/v" + CliRelease + "/.prepared"))
   @fs.rmdir(release, recursive=true)
   let (again, output, error) = run_preparation(home, release)
   assert_eq(again, 0, msg=error)
   assert_false(output.contains("downloading") || output.contains("installing"))
-  assert_eq(@fs.read_file(home + "/actions").text(), "setup\nserver\nserver\n")
+  assert_eq(@fs.read_text(home + "/actions"), "setup\nserver\nserver\n")
 }
 
 ///|
@@ -96,8 +98,8 @@ async test "archive checksum failure never executes setup and a fresh download c
   let home = @fs.tmpdir(prefix="ssh-prepare-checksum-")
   defer @fs.rmdir(home, recursive=true)
   let release = preparation_fixture(home)
-  let sums = @fs.read_file(release + "/SHA256SUMS")
-  @fs.write_file(
+  let sums = @fs.read_binary(release + "/SHA256SUMS")
+  @fs.write_text(
     release + "/SHA256SUMS",
     "invalid  openseek-macos-arm64.tar.gz\n",
   )
@@ -105,7 +107,7 @@ async test "archive checksum failure never executes setup and a fresh download c
   assert_true(code != 0 && err.contains("checksum mismatch"))
   assert_false(@fs.exists(home + "/actions"))
   assert_eq(@fs.readdir(home + "/.openseek/ssh", include_hidden=true), [])
-  @fs.write_file(release + "/SHA256SUMS", sums)
+  @fs.write_binary(release + "/SHA256SUMS", sums)
   let (retry, _, error) = run_preparation(home, release)
   assert_eq(retry, 0, msg=error)
 }
@@ -121,6 +123,6 @@ async test "failed setup is reported without starting or caching an app-server" 
   let (code, output, _) = run_preparation(home, release)
   assert_eq(code, 19)
   assert_true(output.contains("installing"))
-  assert_eq(@fs.read_file(home + "/actions").text(), "setup\n")
+  assert_eq(@fs.read_text(home + "/actions"), "setup\n")
   assert_eq(@fs.readdir(home + "/.openseek/ssh", include_hidden=true), [])
 }

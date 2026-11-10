@@ -8,14 +8,14 @@ async test "SSH bootstrap preserves its startup pipe and passes provider credent
   let home = directory + "/home with spaces"
   let prepared = home + "/.openseek/ssh/v" + CliRelease
   @fs.mkdir(prepared + "/bin", recursive=true)
-  @fs.write_file(prepared + "/.prepared", "")
-  @fs.write_file(
+  @fs.write_text(prepared + "/.prepared", "")
+  @fs.write_text(
     prepared + "/bin/openseek",
     "#!/bin/sh\nexit 0\n",
     permission=0o755,
   )
   let server = prepared + "/bin/openseek-app-server"
-  @fs.write_file(
+  @fs.write_text(
     server,
     "#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 23\n[ -p /dev/fd/0 ] || exit 24\nprintf '%s\\n' \"$DEEPSEEK\" \"$KIMI\" \"$GLM\" > \"$HOME/captured\"\nprintf '%s\\n' '{\"port\":1234}'\ncat >/dev/null\ntouch \"$HOME/closed\"\n",
     permission=0o755,
@@ -29,16 +29,12 @@ async test "SSH bootstrap preserves its startup pipe and passes provider credent
   let expected = values["DEEPSEEK"] + "\nremote-kimi\nremote-glm\n"
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let (input, writer) = @process.write_to_process()
-      defer writer.close()
-      let (reader, output) = @process.read_from_process()
-      defer reader.close()
       let child = @process.spawn(
         group,
         "sh",
         ["-c", command],
-        stdin=input,
-        stdout=output,
+        stdin=FeedFromParent,
+        stdout=Collect,
         inherit_env=false,
         extra_env={
           "HOME": home,
@@ -48,10 +44,17 @@ async test "SSH bootstrap preserves its startup pipe and passes provider credent
           "GLM": "remote-glm",
         },
       )
-      writer.write(line)
-      assert_eq(reader.read_until("\n"), Some("{\"stage\":\"connecting\"}"))
-      assert_eq(reader.read_until("\n"), Some("{\"port\":1234}"))
-      assert_eq(@fs.read_file(home + "/captured").text(), expected)
+      let writer = child.stdin
+      defer writer.close()
+      let reader = child.stdout
+      defer reader.close()
+      writer.text.write(line)
+      assert_eq(
+        reader.text.read_until("\n"),
+        Some("{\"stage\":\"connecting\"}"),
+      )
+      assert_eq(reader.text.read_until("\n"), Some("{\"port\":1234}"))
+      assert_eq(@fs.read_text(home + "/captured"), expected)
       assert_true(child.try_wait() is None)
       writer.close()
       assert_eq(child.wait(), 0)

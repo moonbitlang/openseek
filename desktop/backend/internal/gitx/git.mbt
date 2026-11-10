@@ -56,7 +56,7 @@ pub fn environment() -> Map[String, String] {
 async fn collect(
   dir : @pathx.Absolute,
   args : Array[String],
-) -> (Int32, &@io.Data, &@io.Data) {
+) -> @process.ProcessResult {
   @processx.collect_output_no_stdin(
     "git",
     args,
@@ -71,8 +71,9 @@ async fn collect(
 ///|
 /// The refusal for a git command that exited with `code`: git's own stderr,
 /// or the command and status when git said nothing.
-fn refusal(args : Array[String], code : Int32, stderr : &@io.Data) -> GitError {
-  let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+fn refusal(args : Array[String], result : @process.ProcessResult) -> GitError {
+  let code = result.exit_code
+  let detail = (result.stderr_text() catch { _ => "" }).trim().to_owned()
   GitError(
     if detail.is_empty() {
       "git \{args.join(" ")} exited with code \{code}"
@@ -86,9 +87,10 @@ fn refusal(args : Array[String], code : Int32, stderr : &@io.Data) -> GitError {
 /// Run git in `dir` and return its stdout bytes exactly, for object content
 /// (`cat-file -p`) that need not be text.
 pub async fn output_bytes(dir : @pathx.Absolute, args : Array[String]) -> Bytes {
-  let (code, stdout, stderr) = collect(dir, args)
-  guard code == 0 else { raise refusal(args, code, stderr) }
-  stdout.binary()
+  let result = collect(dir, args)
+  let code = result.exit_code
+  guard code == 0 else { raise refusal(args, result) }
+  result.stdout_binary()
 }
 
 ///|
@@ -96,9 +98,10 @@ pub async fn output_bytes(dir : @pathx.Absolute, args : Array[String]) -> Bytes 
 /// the leading status-space and NUL separators intact; ordinary callers trim
 /// this value in `run` below.
 pub async fn output(dir : @pathx.Absolute, args : Array[String]) -> String {
-  let (code, stdout, stderr) = collect(dir, args)
-  guard code == 0 else { raise refusal(args, code, stderr) }
-  stdout.text() catch {
+  let result = collect(dir, args)
+  let code = result.exit_code
+  guard code == 0 else { raise refusal(args, result) }
+  result.stdout_text() catch {
     _ => raise GitError("git produced non-text output")
   }
 }
@@ -113,9 +116,10 @@ pub async fn output_with_status(
   dir : @pathx.Absolute,
   args : Array[String],
 ) -> (Int32, String) {
-  let (code, stdout, stderr) = collect(dir, args)
-  guard code == 0 || code == 1 else { raise refusal(args, code, stderr) }
-  let text = stdout.text() catch {
+  let result = collect(dir, args)
+  let code = result.exit_code
+  guard code == 0 || code == 1 else { raise refusal(args, result) }
+  let text = result.stdout_text() catch {
     _ => raise GitError("git produced non-text output")
   }
   (code, text)
@@ -134,9 +138,10 @@ pub async fn run(dir : @pathx.Absolute, args : Array[String]) -> String {
 /// fails, for questions where failure itself is the answer (is this a
 /// repository? does this branch exist?).
 pub async fn probe(dir : @pathx.Absolute, args : Array[String]) -> String? {
-  let (code, stdout, _) = collect(dir, args) catch { _ => return None }
+  let result = collect(dir, args) catch { _ => return None }
+  let code = result.exit_code
   guard code == 0 else { return None }
-  let text = stdout.text() catch { _ => return None }
+  let text = result.stdout_text() catch { _ => return None }
   Some(text.trim().to_owned())
 }
 

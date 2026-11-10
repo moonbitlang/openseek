@@ -28,12 +28,12 @@ async test "language paths accept frontend resource roots and reject escapes" {
     }
   })
   @fs.mkdir("\{root}/src", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/src/main.mbt",
     "fn main {}",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{outside}/secret.mbt",
     "fn secret {}",
     create_mode=CreateOrTruncate,

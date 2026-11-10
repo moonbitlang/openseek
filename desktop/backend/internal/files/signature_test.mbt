@@ -24,16 +24,17 @@ async test "file signatures detect atomic replacement with preserved mtime" {
   let dir = @fs.tmpdir(prefix="openseek-file-signature-")
   defer @fs.rmdir(dir, recursive=true)
   let path = "\{dir}/document.txt"
-  @fs.write_file(path, "original", create_mode=CreateOrTruncate)
+  @fs.write_text(path, "original", create_mode=CreateOrTruncate)
   let original_signature = signature(path)
   let original_mtime = @fs.mtime(path)
 
   // Replace the contents while preserving the original modification time.
   let replacement = "\{dir}/replacement"
-  @fs.write_file(replacement, "changed contents", create_mode=CreateOrTruncate)
-  let (code, _, _) = @processx.collect_output_no_stdin("touch", [
+  @fs.write_text(replacement, "changed contents", create_mode=CreateOrTruncate)
+  let result = @processx.collect_output_no_stdin("touch", [
     "-r", path, replacement,
   ])
+  let code = result.exit_code
   assert_eq(code, 0)
   @fs.rename(replacement, path, replace=true)
 
@@ -52,7 +53,7 @@ async test "read and stat signatures follow the same symlink target" {
   defer @fs.rmdir(dir, recursive=true)
   let target = "\{dir}/document.txt"
   let link = "\{dir}/link"
-  @fs.write_file(target, "target contents", create_mode=CreateOrTruncate)
+  @fs.write_text(target, "target contents", create_mode=CreateOrTruncate)
   @fs.symlink(link, target~)
 
   let (target_content, target_signature) = read_text(target)

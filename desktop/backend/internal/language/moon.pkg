@@ -4,8 +4,8 @@ import {
   "openseek_desktop/backend/moonbit",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/protocol",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "tonyfettes/xlog",
@@ -19,3 +19,10 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

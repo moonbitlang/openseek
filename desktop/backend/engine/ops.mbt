@@ -653,11 +653,12 @@ pub fn approve_run(
 /// message rather than a bare exit code when one is available.
 async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String {
   let engine = manager.engine
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(engine, args) catch {
+  let result = @processx.collect_output_no_stdin(engine, args) catch {
     error => raise EngineError("failed to run engine: \{error}")
   }
+  let code = result.exit_code
   if code != 0 {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+    let detail = (result.stderr_text() catch { _ => "" }).trim().to_owned()
     raise EngineError(
       if detail.is_empty() {
         "engine exited with code \{code}"
@@ -666,7 +667,7 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
       },
     )
   }
-  stdout.text() catch {
+  result.stdout_text() catch {
     _ => raise EngineError("engine wrote malformed output")
   }
 }

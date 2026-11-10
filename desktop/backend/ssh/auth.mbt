@@ -74,7 +74,7 @@ async fn Connection::serve_auth(
     self.waiter = Some(waiter)
     emit({ "authentication": request.to_json() })
     let answer = waiter.answer.get()
-    socket.write(answer.to_json().stringify() + "\n")
+    socket.write(@utf8.encode(answer.to_json().stringify() + "\n"))
     if answer is Cancel {
       return
     }

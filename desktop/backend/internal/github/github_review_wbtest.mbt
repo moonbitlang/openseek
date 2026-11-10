@@ -117,12 +117,12 @@ async test "review file snapshots use pinned local commits across renames additi
   let _ = {
     defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/old name.mbt",
       "original\n".repeat(20),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/removed.mbt",
       "removed\n",
       create_mode=CreateOrTruncate,
@@ -131,17 +131,17 @@ async test "review file snapshots use pinned local commits across renames additi
     git_test_commit(dir, "base")
     let base = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
     git_test_run(dir, ["mv", "old name.mbt", "new name.mbt"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/new name.mbt",
       "original\n".repeat(20) + "changed\n",
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["rm", "removed.mbt"])
-    @fs.write_file("\{dir}/added.mbt", "added\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/added.mbt", "added\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "head")
     let head = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/new name.mbt",
       "uncommitted\n",
       create_mode=CreateOrTruncate,
@@ -185,15 +185,15 @@ async test "review snapshots distinguish an absent side from an empty blob" {
     let _ = {
       defer git_test_cleanup(dir)
       git_test_run(dir, ["init", "--quiet"])
-      @fs.write_file("\{dir}/seed.txt", "seed\n", create_mode=CreateOrTruncate)
+      @fs.write_text("\{dir}/seed.txt", "seed\n", create_mode=CreateOrTruncate)
       if !added {
-        @fs.write_file("\{dir}/empty.mbt", "", create_mode=CreateOrTruncate)
+        @fs.write_text("\{dir}/empty.mbt", "", create_mode=CreateOrTruncate)
       }
       git_test_run(dir, ["add", "."])
       git_test_commit(dir, "base")
       let base = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
       if added {
-        @fs.write_file("\{dir}/empty.mbt", "", create_mode=CreateOrTruncate)
+        @fs.write_text("\{dir}/empty.mbt", "", create_mode=CreateOrTruncate)
       } else {
         git_test_run(dir, ["rm", "empty.mbt"])
       }

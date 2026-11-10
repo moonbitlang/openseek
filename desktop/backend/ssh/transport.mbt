@@ -16,7 +16,7 @@ pub impl @jsonrpc.Transport for TcpTransport with fn recv(self) {
     raise SshError("Expected a JSON WebSocket frame")
   }
   let body = Buffer()
-  while message.read_some(max_len=65536) is Some(bytes) {
+  while message.read() is Some(bytes) {
     guard body.length() + bytes.length() <= 32 * 1024 * 1024 else {
       raise SshError("SSH RPC frame exceeds 32 MiB")
     }

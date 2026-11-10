@@ -7,7 +7,7 @@ async fn github_command(
   args : Array[String],
   env? : Map[String, String],
 ) -> String {
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     gh.0,
     args,
     cwd=dir.0,
@@ -16,8 +16,9 @@ async fn github_command(
   ) catch {
     error => raise Unavailable("Could not run GitHub CLI: \{error}")
   }
+  let code = result.exit_code
   guard code == 0 else {
-    let detail = stderr.text() catch {
+    let detail = result.stderr_text() catch {
       _ => "GitHub CLI returned unreadable error output."
     }
     raise Unavailable(
@@ -28,7 +29,7 @@ async fn github_command(
       },
     )
   }
-  stdout.text() catch {
+  result.stdout_text() catch {
     _ => raise InvalidResponse("GitHub CLI returned unreadable output.")
   }
 }

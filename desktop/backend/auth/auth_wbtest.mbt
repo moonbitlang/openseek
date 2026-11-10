@@ -100,9 +100,10 @@ async test "auth.json persists 0600 and deletes cleanly" {
       } else {
         ["-c", "%a", auth_file(dir).to_string()]
       }
-      let (code, output, _) = @processx.collect_output_no_stdin("stat", args)
+      let result = @processx.collect_output_no_stdin("stat", args)
+      let code = result.exit_code
       assert_eq(code, 0)
-      assert_eq(output.text().trim().to_owned(), "600")
+      assert_eq(result.stdout_text().trim().to_owned(), "600")
     }
     let restored = AuthStore::load(runtime_dir=dir)
     assert_true(restored.account() == Some(session.account))
