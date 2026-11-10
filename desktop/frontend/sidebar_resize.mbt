@@ -131,12 +131,7 @@ fn set_sidebar_width(width : Int32) -> Unit {
 ///|
 /// Toggle a class on the document element (empty string clears it).
 fn set_root_class(class_name : String) -> Unit {
-  if document_element() is Some(root) {
+  if @dom.document().get_document_element() is Some(root) {
     root.set_attribute("class", class_name)
   }
-}
-
-///|
-fn document_element() -> @dom.Element? {
-  @dom.document().query_selector("html").to_option()
 }

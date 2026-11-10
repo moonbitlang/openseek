@@ -269,11 +269,7 @@ fn relative_date(value : String, locale : String) -> String {
   if time.is_nan() || time.is_inf() {
     return value
   }
-  let date_class : @js.Value = @js.globalThis.get_with_string("Date")
-  let now : Double = date_class.apply_with_string(
-    "now",
-    ([] : FixedArray[@js.Value]),
-  )
+  let now = @interop.now_ms()
   let seconds = if now < time { 0.0 } else { (now - time) / 1000.0 }
   let intl : @js.Value = @js.globalThis.get_with_string("Intl")
   let options = @js.Object::new()

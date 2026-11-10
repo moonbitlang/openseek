@@ -66,10 +66,9 @@ fn focus_conversation_rename() -> @cmd.Cmd {
         .get_element_by_id(@conversation.RenameFieldId)
         .to_option()
         is Some(input) {
-        let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if input.to_html_element() is Some(element) {
+          element.focus()
+        }
         let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
           "select",
           ([] : FixedArray[@js.Value]),

@@ -80,6 +80,8 @@ pub fn resize_handle_view() -> @html.Html
 
 pub fn semantic_review_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
 
+pub fn short_commit(String) -> String
+
 pub fn show_office_feedback(@cmd.Emit[Msg], OfficeSelectionPreview) -> @cmd.Cmd
 
 pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub

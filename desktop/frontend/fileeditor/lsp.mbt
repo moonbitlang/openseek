@@ -20,21 +20,6 @@ pub fn ModelUri::resource(self : ModelUri) -> @common.Uri {
 }
 
 ///|
-/// The Viewer uses the frontend resource URI itself as its document URI. Its
-/// authority already carries the channel identity, so no platform-sensitive
-/// `file:` conversion is needed in the browser.
-fn model_uri_of(resource : @common.Uri) -> @common.Uri {
-  resource
-}
-
-///|
-/// The channel a viewer model URI belongs to; `None` for a URI this app did
-/// not mint. A foreign or authority-less URI never falls back to a host.
-fn model_uri_channel(uri : @common.Uri) -> @interop.ChannelId? {
-  @resource.channel(uri)
-}
-
-///|
 /// Decode a viewer model URI into the absolute path it names; `None` for a
 /// URI this app did not mint, which has no host op to route to anyway.
 /// The returned URI is the same typed resource: no browser-host filesystem
@@ -289,9 +274,9 @@ test "model uris retain resource paths and channels" {
       guard @resource.of_path(channel, path) is Some(resource) else {
         fail("test resource path was not absolute")
       }
-      let minted = model_uri_of(resource)
+      let minted = resource
       assert_true(model_uri_path(minted) == Some(resource))
-      assert_true(model_uri_channel(minted) == Some(channel))
+      assert_true(@resource.channel(minted) == Some(channel))
       // The ModelUri string form re-parses to the same document key — the
       // `remove_editor_feedback` path. URI serialization owns escaping while
       // the parsed path and channel remain stable.
@@ -309,9 +294,9 @@ test "foreign uris do not parse as model paths or channels" {
   assert_true(
     model_uri_path(@common.Uri::parse("openseek-notice:/a.bin")) is None,
   )
-  assert_true(model_uri_channel(@common.Uri::file("/a.bin")) is None)
+  assert_true(@resource.channel(@common.Uri::file("/a.bin")) is None)
   assert_true(
-    model_uri_channel(@common.Uri::parse("openseek://unknown/a.bin")) is None,
+    @resource.channel(@common.Uri::parse("openseek://unknown/a.bin")) is None,
   )
 }
 

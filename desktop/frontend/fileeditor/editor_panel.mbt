@@ -1341,7 +1341,7 @@ fn show_file_in_viewer(
     // (withheld binary/oversized file) has no file behind it, so its inert
     // scheme never parses as a model path and hover stays off.
     let uri = if live {
-      model_uri_of(document)
+      document
     } else {
       // A deleted preview has no file behind it. Keep the document's full
       // path so equal basenames in different directories do not alias one
@@ -1631,7 +1631,7 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 /// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
   let clear = @cmd.custom_cmd(_scheduler => {
-    park_cloud_view_state()
+    detach_viewer_models()
     for key in viewer_state.view_states.keys().to_array() {
       if !key.has_prefix("openseek-cloud:") {
         viewer_state.view_states.remove(key)
@@ -1642,32 +1642,6 @@ fn clear_viewer() -> @cmd.Cmd {
         viewer_state.markdown_view_states.remove(key)
       }
     }
-    if viewer_state.viewer is Some(viewer) {
-      if viewer_state.point_range_highlight is Some(highlight) {
-        highlight.clear()
-      }
-      if viewer_state.search_match_highlights is Some(highlights) {
-        highlights.clear()
-      }
-      if viewer_state.services is Some(services) &&
-        viewer.get_model() is Some(model) {
-        services.quick_diff.set_original_content(model.uri, None)
-      }
-      let previous = viewer.get_model()
-      viewer.set_model(None)
-      dispose_source_model(previous)
-    }
-    if viewer_state.markdown_viewer is Some(markdown_viewer) {
-      match markdown_viewer.set_model(None) {
-        Some(previous) => dispose_markdown_model(previous)
-        None => ()
-      }
-    }
-    viewer_state.document = None
-    viewer_state.live = false
-    viewer_state.navigation = None
-    clear_mbti_diagram()
-    clear_package_graph()
     clear_diff_comparison()
     clear_semantic_review_editors()
   })
@@ -1681,36 +1655,42 @@ fn clear_viewer() -> @cmd.Cmd {
 /// CSS, while the next complete comparison replaces it atomically. Its memory
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
-  let clear = @cmd.custom_cmd(_scheduler => {
-    park_cloud_view_state()
-    if viewer_state.viewer is Some(viewer) {
-      if viewer_state.point_range_highlight is Some(highlight) {
-        highlight.clear()
-      }
-      if viewer_state.search_match_highlights is Some(highlights) {
-        highlights.clear()
-      }
-      if viewer_state.services is Some(services) &&
-        viewer.get_model() is Some(model) {
-        services.quick_diff.set_original_content(model.uri, None)
-      }
-      let previous = viewer.get_model()
-      viewer.set_model(None)
-      dispose_source_model(previous)
-    }
-    if viewer_state.markdown_viewer is Some(markdown_viewer) {
-      match markdown_viewer.set_model(None) {
-        Some(previous) => dispose_markdown_model(previous)
-        None => ()
-      }
-    }
-    viewer_state.document = None
-    viewer_state.live = false
-    viewer_state.navigation = None
-    clear_mbti_diagram()
-    clear_package_graph()
-  })
+  let clear = @cmd.custom_cmd(_scheduler => detach_viewer_models())
   @cmd.batch([clear, clear_office_surface()])
+}
+
+///|
+/// Detach and dispose the mounted source and markdown models, clearing their
+/// highlights and the generated diagram surfaces. Cloud reading positions are
+/// parked first so they survive the disposal.
+fn detach_viewer_models() -> Unit {
+  park_cloud_view_state()
+  if viewer_state.viewer is Some(viewer) {
+    if viewer_state.point_range_highlight is Some(highlight) {
+      highlight.clear()
+    }
+    if viewer_state.search_match_highlights is Some(highlights) {
+      highlights.clear()
+    }
+    if viewer_state.services is Some(services) &&
+      viewer.get_model() is Some(model) {
+      services.quick_diff.set_original_content(model.uri, None)
+    }
+    let previous = viewer.get_model()
+    viewer.set_model(None)
+    dispose_source_model(previous)
+  }
+  if viewer_state.markdown_viewer is Some(markdown_viewer) {
+    match markdown_viewer.set_model(None) {
+      Some(previous) => dispose_markdown_model(previous)
+      None => ()
+    }
+  }
+  viewer_state.document = None
+  viewer_state.live = false
+  viewer_state.navigation = None
+  clear_mbti_diagram()
+  clear_package_graph()
 }
 
 ///|
@@ -1740,7 +1720,7 @@ fn apply_diagnostics(
       viewer_state.live &&
       viewer_state.document == Some(absolute) &&
       viewer_state.services is Some(services) {
-      let uri = model_uri_of(absolute)
+      let uri = absolute
       services.markers.set_diagnostics(
         DiagnosticsOwner,
         uri,

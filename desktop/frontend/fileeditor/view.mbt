@@ -4,26 +4,6 @@
 // dispatches pre-mapped to this package's `Msg`.
 
 ///|
-/// The folder codicon for the tree-pane toggle, from Microsoft's
-/// vscode-codicons (CC BY 4.0); the path data is unmodified, transcribed
-/// into `@svg` builders (an innerHTML-bearing element cannot be safely
-/// morphed by the positional child diff) — mirrors the main package's icon
-/// set, which is not importable from here.
-fn icon_folder() -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build().fill("currentColor"),
-    [
-      @svg.path(
-        d="M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z",
-      ),
-    ],
-  )
-}
-
-///|
 /// The file codicon used by the breadcrumb picker, from Microsoft's
 /// vscode-codicons (CC BY 4.0).
 fn icon_file() -> @html.Html {
@@ -41,57 +21,29 @@ fn icon_file() -> @html.Html {
 }
 
 ///|
-/// Git Graph chrome uses the same 16×16 Codicon geometry as VS Code's SCM
-/// history view. Keep the paths local to this package, like the existing file
-/// and folder icons, because the app-level icon package is not importable here.
-fn git_graph_codicon(d : String) -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build().fill("currentColor"),
-    [@svg.path(d~)],
-  )
-}
-
-///|
 fn icon_git_repository() -> @html.Html {
-  git_graph_codicon(
+  @icons.codicon(
     "M12.5 12C12.776 12 13 11.776 13 11.5V3C13 1.895 12.105 1 11 1H5C3.895 1 3 1.895 3 3V13C3 14.105 3.895 15 5 15V15.5C5 15.702 5.122 15.885 5.309 15.962C5.495 16.039 5.711 15.997 5.854 15.854L6.5 15.208L7.146 15.854C7.242 15.95 7.37 16 7.5 16C7.564 16 7.63 15.987 7.691 15.962C7.878 15.885 8 15.702 8 15.5V15H12.5C12.776 15 13 14.776 13 14.5C13 14.224 12.776 14 12.5 14H8V13.5C8 13.224 7.776 13 7.5 13H5.5C5.224 13 5 13.224 5 13.5V14C4.448 14 4 13.552 4 13V12H12.5ZM4 3C4 2.448 4.448 2 5 2H11C11.552 2 12 2.448 12 3V11H4V3Z",
   )
 }
 
 ///|
-fn icon_git_branch() -> @html.Html {
-  git_graph_codicon(
-    "M14 5.5C14 4.121 12.879 3 11.5 3C10.121 3 9 4.121 9 5.5C9 6.682 9.826 7.669 10.93 7.928C10.744 8.546 10.177 9 9.5 9H6.5C5.935 9 5.419 9.195 5 9.512V4.949C6.14 4.717 7 3.707 7 2.5C7 1.121 5.879 0 4.5 0C3.121 0 2 1.121 2 2.5C2 3.708 2.86 4.717 4 4.949V11.05C2.86 11.282 2 12.292 2 13.499C2 14.878 3.121 15.999 4.5 15.999C5.879 15.999 7 14.878 7 13.499C7 12.317 6.174 11.33 5.07 11.071C5.256 10.453 5.823 9.999 6.5 9.999H9.5C10.723 9.999 11.74 9.115 11.954 7.953C13.116 7.738 14 6.723 14 5.5ZM3 2.5C3 1.673 3.673 1 4.5 1C5.327 1 6 1.673 6 2.5C6 3.327 5.327 4 4.5 4C3.673 4 3 3.327 3 2.5ZM6 13.5C6 14.327 5.327 15 4.5 15C3.673 15 3 14.327 3 13.5C3 12.673 3.673 12 4.5 12C5.327 12 6 12.673 6 13.5ZM11.5 7C10.673 7 10 6.327 10 5.5C10 4.673 10.673 4 11.5 4C12.327 4 13 4.673 13 5.5C13 6.327 12.327 7 11.5 7Z",
-  )
-}
-
-///|
 fn icon_git_cloud() -> @html.Html {
-  git_graph_codicon(
+  @icons.codicon(
     "M8 4C6.34315 4 5 5.34315 5 7C5 7.27614 4.77614 7.5 4.5 7.5H4.25C3.00736 7.5 2 8.50736 2 9.75C2 10.9926 3.00736 12 4.25 12H11.75C12.9926 12 14 10.9926 14 9.75C14 8.50736 12.9926 7.5 11.75 7.5H11.5C11.2239 7.5 11 7.27614 11 7C11 5.34315 9.65685 4 8 4ZM4.03004 6.50733C4.27283 4.53062 5.95767 3 8 3C10.0423 3 11.7272 4.53063 11.97 6.50733C13.6623 6.62043 15 8.029 15 9.75C15 11.5449 13.5449 13 11.75 13H4.25C2.45507 13 1 11.5449 1 9.75C1 8.029 2.33769 6.62043 4.03004 6.50733Z",
   )
 }
 
 ///|
-fn icon_git_sync() -> @html.Html {
-  git_graph_codicon(
-    "M14 3.5V6.5C14 6.78 13.78 7 13.5 7H10.5C10.22 7 9.99999 6.78 9.99999 6.5C9.99999 6.22 10.22 6 10.5 6H12.58C11.78 4.17 10.01 3 7.99999 3C5.77999 3 3.79999 4.5 3.18999 6.64C3.12999 6.86 2.92999 7 2.70999 7C2.65999 7 2.61999 7 2.56999 6.98C2.29999 6.9 2.14999 6.63 2.22999 6.36C2.95999 3.79 5.32999 2 7.99999 2C10.05 2 11.91 3.02 13 4.69V3.5C13 3.22 13.22 3 13.5 3C13.78 3 14 3.22 14 3.5ZM13.42 9.02C13.16 8.95 12.88 9.1 12.8 9.37C12.19 11.51 10.22 13.01 7.98999 13.01C5.97999 13.01 4.20999 11.84 3.40999 10.01H5.48999C5.76999 10.01 5.98999 9.79 5.98999 9.51C5.98999 9.23 5.76999 9.01 5.48999 9.01H2.48999C2.20999 9.01 1.98999 9.23 1.98999 9.51V12.51C1.98999 12.79 2.20999 13.01 2.48999 13.01C2.76999 13.01 2.98999 12.79 2.98999 12.51V11.32C4.07999 12.98 5.93999 14.01 7.98999 14.01C10.66 14.01 13.03 12.22 13.76 9.65C13.84 9.38 13.68 9.11 13.41 9.03L13.42 9.02Z",
-  )
-}
-
-///|
 fn icon_git_chevron_right() -> @html.Html {
-  git_graph_codicon(
+  @icons.codicon(
     "M6.14601 3.14579C5.95101 3.34079 5.95101 3.65779 6.14601 3.85279L10.292 7.99879L6.14601 12.1448C5.95101 12.3398 5.95101 12.6568 6.14601 12.8518C6.34101 13.0468 6.65801 13.0468 6.85301 12.8518L11.353 8.35179C11.548 8.15679 11.548 7.83979 11.353 7.64478L6.85301 3.14479C6.65801 2.94979 6.34101 2.95079 6.14601 3.14579Z",
   )
 }
 
 ///|
 fn icon_git_list_tree() -> @html.Html {
-  git_graph_codicon(
+  @icons.codicon(
     "M2 3.5C2 3.22386 2.22386 3 2.5 3H13.5C13.7761 3 14 3.22386 14 3.5C14 3.77614 13.7761 4 13.5 4H6V6H13.5C13.7761 6 14 6.22386 14 6.5C14 6.77614 13.7761 7 13.5 7H6V9H13.5C13.7761 9 14 9.22386 14 9.5C14 9.77614 13.7761 10 13.5 10H6V12H13.5C13.7761 12 14 12.2239 14 12.5C14 12.7761 13.7761 13 13.5 13H5.5C5.22386 13 5 12.7761 5 12.5V4H2.5C2.22386 4 2 3.77614 2 3.5Z",
   )
 }
@@ -124,10 +76,9 @@ fn focus_breadcrumb_entry_after_render(index : Int32) -> @cmd.Cmd {
         .get_element_by_id(breadcrumb_entry_id(index))
         .to_option()
         is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if row.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -139,10 +90,9 @@ fn focus_explorer_tab_after_render(id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document().get_element_by_id(id).to_option() is Some(tab) {
-        let _ : @js.Value = @js.Value::cast_from(tab).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if tab.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -987,7 +937,10 @@ fn review_git_sections(
                 class="git-graph-context git-graph-branch",
                 title=git_graph_branch_label(locale~, state),
                 [
-                  @html.span(class="git-graph-context-icon", icon_git_branch()),
+                  @html.span(
+                    class="git-graph-context-icon",
+                    @icons.icon_git_branch(),
+                  ),
                   @html.span(
                     class="git-graph-context-label",
                     git_graph_branch_label(locale~, state),
@@ -999,7 +952,7 @@ fn review_git_sections(
                 title=ui(locale, RefreshGraph),
                 on_click=dispatch(GitHistoryRefreshRequested),
                 attrs=@html.Attrs::build().aria_label(ui(locale, RefreshGraph)),
-                @html.span(class="git-graph-refresh-icon", icon_git_sync()),
+                @html.span(class="git-graph-refresh-icon", @icons.icon_sync()),
               ),
             ]),
           ]),
@@ -1061,10 +1014,9 @@ fn focus_git_commit_after_render(index : Int32) -> @cmd.Cmd {
     _ => {
       if @dom.document().get_element_by_id(git_commit_row_id(index)).to_option()
         is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if row.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -1422,7 +1374,7 @@ fn git_commit_refs(
         if ["upstream", "base"].contains(ref_.kind) {
           icon_git_cloud()
         } else {
-          icon_git_branch()
+          @icons.icon_git_branch()
         },
       ),
     ]
@@ -2318,7 +2270,7 @@ pub fn breadcrumb_view(
               ui(locale, ShowFileTree)
             },
             on_click=dispatch(ToggleTree),
-            icon(icon_folder),
+            icon(@icons.icon_folder),
           ),
         ]),
         @html.div(class="review-command-row", [
@@ -2462,7 +2414,7 @@ pub fn breadcrumb_view(
         ui(locale, ShowFileTree)
       },
       on_click=dispatch(ToggleTree),
-      icon(icon_folder),
+      icon(@icons.icon_folder),
     ),
   )
   if pdf && !review {
@@ -2707,15 +2659,21 @@ fn review_controls_pending(state : State, ctx : Ctx) -> Bool {
 }
 
 ///|
+/// Whether both sides of the active history comparison have loaded.
+fn history_diff_loaded(state : State, ctx : Ctx) -> Bool {
+  ctx.active_history_diff is Some(diff) &&
+  state.history_docs.get(history_diff_key(diff)) is Some(history) &&
+  history.original.text() is Some(_) &&
+  history.modified.text() is Some(_)
+}
+
+///|
 fn full_diff_available(state : State, ctx : Ctx) -> Bool {
   let review_available = ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some(_) &&
     doc.diff_content() is Some(_)
-  let history_available = ctx.active_history_diff is Some(diff) &&
-    state.history_docs.get(history_diff_key(diff)) is Some(history) &&
-    history.original.text() is Some(_) &&
-    history.modified.text() is Some(_)
+  let history_available = history_diff_loaded(state, ctx)
   review_available || history_available
 }
 
@@ -2725,10 +2683,7 @@ fn full_diff_ready(state : State, ctx : Ctx) -> Bool {
     state.docs.get(path) is Some(doc) &&
     doc.review is Some({ view_mode: ReviewDiff, .. }) &&
     doc.diff_content() is Some(_)
-  let history_ready = ctx.active_history_diff is Some(diff) &&
-    state.history_docs.get(history_diff_key(diff)) is Some(history) &&
-    history.original.text() is Some(_) &&
-    history.modified.text() is Some(_)
+  let history_ready = history_diff_loaded(state, ctx)
   review_ready || history_ready
 }
 
@@ -2741,9 +2696,7 @@ fn moon_diff_available(state : State, ctx : Ctx) -> Bool {
     doc.diff_content() is Some(_)
   let history_available = ctx.active_history_diff is Some(diff) &&
     supports_moon_diff(diff.path.0) &&
-    state.history_docs.get(history_diff_key(diff)) is Some(history) &&
-    history.original.text() is Some(_) &&
-    history.modified.text() is Some(_)
+    history_diff_loaded(state, ctx)
   review_available || history_available
 }
 
@@ -3372,7 +3325,7 @@ fn breadcrumb_picker(
     attrs=@html.Attrs::build().id(BreadcrumbPickerId),
     [
       @html.div(class="breadcrumb-picker-heading", [
-        @html.span(class="breadcrumb-picker-heading-icon", icon_folder()),
+        @html.span(class="breadcrumb-picker-heading-icon", @icons.icon_folder()),
         @html.span(class="breadcrumb-picker-title", label),
         @html.span(class="breadcrumb-picker-count", count),
         @html.span(
@@ -3462,7 +3415,7 @@ fn breadcrumb_picker_row(
           "breadcrumb-picker-icon file"
         },
         if entry.is_dir {
-          icon_folder()
+          @icons.icon_folder()
         } else {
           icon_file()
         },
@@ -3886,10 +3839,9 @@ fn focus_change_filter_after_render() -> @cmd.Cmd {
         .get_element_by_id("review-path-filter-input")
         .to_option()
         is Some(input) {
-        let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if input.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,

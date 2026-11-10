@@ -11,7 +11,8 @@ fn history_diff_key(diff : @dock.GitHistoryDiff) -> String {
 }
 
 ///|
-fn short_commit(commit : String) -> String {
+/// The first eight characters of a commit id.
+pub fn short_commit(commit : String) -> String {
   if commit.length() <= 8 {
     commit
   } else {

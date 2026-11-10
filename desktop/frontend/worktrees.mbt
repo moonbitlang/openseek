@@ -1932,3 +1932,34 @@ test "a start payload keeps launch choices without naming a worktree" {
   assert_true(kimi_model.thinking is None)
   assert_eq(kimi_model.system_prompt, Some(""))
 }
+
+///|
+/// Re-project every conversation of `channel` in `workspace` onto `dev`'s
+/// worktree registry. A conversation whose worktree disappeared falls back to
+/// the project: the checkout is gone, so every placement derived from it goes
+/// too. `forget_git` retires probes already in flight for the removed
+/// checkout; the enum transition simultaneously makes every file, LSP,
+/// terminal and launcher root re-project to the project.
+fn Model::rebind_project_conversations(
+  self : Model,
+  channel : @interop.ChannelId,
+  workspace : @common.Uri,
+  dev : DeviceState,
+  fence~ : Int32,
+) -> Array[Conversation] {
+  self.conversations.map(conv => {
+    guard conv.device == channel && conv.project() == workspace else {
+      return conv
+    }
+    let placement = dev.conversation_workspace(
+      workspace,
+      conv.session_id,
+      conv.workspace,
+    )
+    if conv.workspace is Worktree(..) && placement is Project(..) {
+      { ..conv.forget_git(fence~), workspace: placement, }
+    } else {
+      { ..conv, workspace: placement, }
+    }
+  })
+}

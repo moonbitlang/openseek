@@ -225,9 +225,7 @@ fn open_schedules(
 
 ///|
 fn schedule_client_now() -> Int64 {
-  let date : @js.Value = @js.globalThis.get_with_string("Date")
-  let now : Double = date.apply_with_string("now", ([] : FixedArray[@js.Value]))
-  now.to_int64()
+  @interop.now_ms().to_int64()
 }
 
 ///|

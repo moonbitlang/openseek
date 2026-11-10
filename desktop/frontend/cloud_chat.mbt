@@ -148,13 +148,12 @@ fn update_cloud(
     []
   }
   let cloud = if completion is Some((id, _)) {
-    let conversations = cloud.conversations.copy()
-    conversations[id] = {
-      ..conversations[id],
+    let conv = cloud.conversations[id]
+    cloud.replace(id, {
+      ..conv,
       unseen_finish: true,
-      last_finished_task: conversations[id].task,
-    }
-    { ..cloud, conversations, }
+      last_finished_task: conv.task,
+    })
   } else {
     cloud
   }

@@ -100,9 +100,10 @@ fn submit_command_result(
       }
       let draft : @composer.Draft = { task: text, mentions: [], images: [], }
       // A command result is a new message, never an edit of a queued draft.
-      let conversations = model.cloud.conversations.copy()
-      conversations[session] = { ..before, queue_edit: None, }
-      let target = { ..model, cloud: { ..model.cloud, conversations, }, }
+      let target = {
+        ..model,
+        cloud: model.cloud.replace(session, { ..before, queue_edit: None, }),
+      }
       let message = match choice {
         Some(choice) =>
           @cloud.ControlAction(
@@ -116,9 +117,7 @@ fn submit_command_result(
         return (command, next)
       }
       let (after, admitted) = after.with_command_result(before, id)
-      let conversations = next.cloud.conversations.copy()
-      conversations[session] = after
-      let next = { ..next, cloud: { ..next.cloud, conversations, }, }
+      let next = { ..next, cloud: next.cloud.replace(session, after), }
       (
         @cmd.batch([
           command,
@@ -242,9 +241,13 @@ fn recover_command_result(
         model.cloud.conversations.get(session) is Some(conv) else {
         return (@cmd.none, model)
       }
-      let conversations = model.cloud.conversations.copy()
-      conversations[session] = { ..conv, queue_edit: None, }
-      (@cmd.none, { ..model, cloud: { ..model.cloud, conversations, }, })
+      (
+        @cmd.none,
+        {
+          ..model,
+          cloud: model.cloud.replace(session, { ..conv, queue_edit: None, }),
+        },
+      )
     }
   }
 }

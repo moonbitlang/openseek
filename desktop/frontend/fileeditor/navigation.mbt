@@ -21,7 +21,7 @@ fn NavigationContext::relative_path(
   self : NavigationContext,
   absolute : @common.Uri,
 ) -> @pathx.Relative? {
-  guard model_uri_channel(absolute) is Some(channel) &&
+  guard @resource.channel(absolute) is Some(channel) &&
     channel == self.owner.channel &&
     @resource.relative_to(absolute, self.root) is Some(relative) &&
     !relative.is_root() else {
@@ -260,7 +260,7 @@ fn MoonIdeProjection::to_viewer(
     }
     result.push(@language.Location::{
       is_test: location.is_test,
-      uri: model_uri_of(absolute),
+      uri: absolute,
       range: @common.Range(
         location.start_line,
         location.start_column,
@@ -311,7 +311,7 @@ async fn resolve_navigation_preview(
     return None
   }
   guard viewer_state.navigation is Some(context) else { return None }
-  guard model_uri_channel(resource) is Some(channel) &&
+  guard @resource.channel(resource) is Some(channel) &&
     channel == context.owner.channel &&
     model_uri_path(resource) is Some(absolute) &&
     @resource.relative_to(absolute, context.root) is Some(relative) &&
@@ -443,7 +443,7 @@ test "moon ide locations stay one based and channel routed" {
   assert_eq(locations.length(), 1)
   assert_eq(locations[0].is_test, Some(true))
   assert_true(
-    model_uri_channel(locations[0].uri) == Some(Remote("device")) &&
+    @resource.channel(locations[0].uri) == Some(Remote("device")) &&
     model_uri_path(locations[0].uri) is Some(resource) &&
     resource.path == "/ws/lib.mbt" &&
     locations[0].range == @common.Range(2, 3, 2, 9),

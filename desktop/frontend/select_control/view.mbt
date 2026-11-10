@@ -169,10 +169,9 @@ fn Control::focus(
   let id = if option is Some(index) { self.option_id(index) } else { self.id }
   let focus = _ => {
     if @dom.document().get_element_by_id(id).to_option() is Some(element) {
-      let _ : @js.Value = @js.Value::cast_from(element).apply_with_string(
-        "focus",
-        ([] : FixedArray[@js.Value]),
-      )
+      if element.to_html_element() is Some(element) {
+        element.focus()
+      }
     }
   }
   if after_render {

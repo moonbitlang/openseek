@@ -354,21 +354,6 @@ fn apply_theme() -> @cmd.Cmd {
 }
 
 ///|
-/// Apply the selected family to every mounted emulator. Future tabs read the
-/// same family from the root CSS variable when they mount. Re-fitting the
-/// visible emulator updates both xterm's metrics and the PTY grid through the
-/// existing `onResize` callback.
-pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    for _, entry in term_host.entries {
-      let options : @js.Value = entry.term.get_with_string("options")
-      options.set_with_string("fontFamily", @js.Value::cast_from(font_family))
-    }
-    refit_visible()
-  })
-}
-
-///|
 /// Apply the selected size to every mounted emulator. Future tabs read the
 /// same size from the root CSS token when they mount. Re-fitting reports the
 /// resulting grid through xterm's existing `onResize` callback.
