@@ -105,5 +105,27 @@ test "providers without a balance query never ask" {
     base,
   )
   assert_false(loaded.api_balance.loading)
-  assert_eq(loaded.api_balance.request, base.api_balance.request)
+  assert_true(loaded.api_balance.reply is None)
+}
+
+///|
+test "a reply in flight when the host was left never lands after returning" {
+  let (_, pending) = update(test_dispatch(), RefreshApiBalance, test_model())
+  let sent = pending.api_balance.request
+  // Leaving the host (or reconnecting) forgets its balance; returning keeps
+  // the cached settings, so no new request replaces the old one.
+  let returned = pending.reset_api_setup()
+  let (_, late) = update_dev(
+    test_dispatch(),
+    ApiBalanceLoaded(
+      BalanceReported({
+        available: false,
+        amounts: [{ currency: "CNY", amount: 0.0, }],
+      }),
+      request=sent,
+    ),
+    returned,
+  )
+  assert_true(late.api_balance.reply is None)
+  assert_true(late.balance_notice() is None)
 }

@@ -32,10 +32,11 @@ fn ApiBalanceState::empty() -> ApiBalanceState {
 }
 
 ///|
-/// Drop what belongs to the previous host or connection. The request counter keeps
-/// counting so a reply still in flight from that host can never match.
+/// Drop what belongs to the previous host or connection. The request
+/// counter moves past every request already sent, so a reply still in
+/// flight can never match, even after focus returns to the same host.
 fn ApiBalanceState::forget(self : ApiBalanceState) -> ApiBalanceState {
-  { ..ApiBalanceState::empty(), request: self.request, }
+  { ..ApiBalanceState::empty(), request: self.request + 1, }
 }
 
 ///|
