@@ -5,6 +5,8 @@ class ScheduleHarness extends DesktopBrowserHarness {
   constructor(page) {
     super(page);
     this.schedules = { entries: [], runs: [] };
+    // Action name -> refusal reason the host answers it with.
+    this.refusals = new Map();
   }
   replyFor(request) {
     if (request.method === 'schedules.list') return structuredClone(this.schedules);
@@ -12,9 +14,11 @@ class ScheduleHarness extends DesktopBrowserHarness {
       const { id, spec, run_now } = request.params;
       const entry = { id: id || 'plan-1', spec, enabled: true, run_requested: run_now, next_at: Date.now() + 60000 };
       this.schedules.entries = [...this.schedules.entries.filter(e => e.id !== entry.id), entry];
-      return structuredClone(this.schedules);
+      return { status: 'changed', state: structuredClone(this.schedules) };
     }
     if (request.method === 'schedules.action') {
+      const refusal = this.refusals.get(request.params.action);
+      if (refusal) return { status: 'refused', reason: refusal };
       const entry = this.schedules.entries.find(e => e.id === request.params.id);
       switch (request.params.action) {
         case 'pause': entry.enabled = false; delete entry.next_at; break;
@@ -26,7 +30,7 @@ class ScheduleHarness extends DesktopBrowserHarness {
         }); break;
         case 'stop': this.schedules.runs[0].status = { kind: 'stopped' }; this.schedules.runs[0].finished_at = Date.now(); break;
       }
-      return structuredClone(this.schedules);
+      return { status: 'changed', state: structuredClone(this.schedules) };
     }
     return super.replyFor(request);
   }
@@ -172,3 +176,22 @@ for (const broadcastDirectory of [true, false]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('skip reasons and declined actions are shown in the page language', async ({ page }) => {
+  const app = new ScheduleHarness(page);
+  app.schedules.entries = [{
+    id: 'plan-1',
+    spec: { name: 'Hourly check', task: 'Check', timing: { kind: 'every', minutes: 60 }, timeout_minutes: 30 },
+    enabled: true, run_requested: false, skipped: 'capacity_full', next_at: Date.now() + 60000,
+  }];
+  app.refusals.set('run', 'already_queued');
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await expect(page.getByText('Skipped: all execution slots were busy', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Run now', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('This schedule is already queued to run');
+  // A declined action leaves the controls usable.
+  await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeEnabled();
+  expect(app.pageErrors).toEqual([]);
+});

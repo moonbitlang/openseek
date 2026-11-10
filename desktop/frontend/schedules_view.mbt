@@ -69,14 +69,18 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         options.push(@html.option(value=project.path, project.path))
       }
     }
-    fn field(label : String, name : String, value : String) -> @html.Html {
+    fn field(
+      label : String,
+      edit : (String) -> ScheduleField,
+      value : String,
+    ) -> @html.Html {
       @html.label(class="schedule-field", [
         @html.span(label),
         @html.input(
           class="schedule-input field-surface",
           value~,
           attrs=@html.Attrs::build().data_set("focus-owner", ""),
-          on_input=emit.map(value => Field(name, value)),
+          on_input=emit.map(value => Field(edit(value))),
         ),
       ])
     }
@@ -89,7 +93,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             ui(locale, NewSchedule)
           },
         ),
-        field(ui(locale, NameLabel), "name", form.name),
+        field(ui(locale, NameLabel), value => Name(value), form.name),
         @html.label(class="schedule-field", [
           @html.span(ui(locale, WorkingDirectory)),
           @html.select(
@@ -98,7 +102,9 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               .data_set("focus-owner", "")
               .aria_label(ui(locale, WorkingDirectory))
               .value_prop(form.workspace.unwrap_or("auto")),
-            on_change=emit.map(value => Field("workspace", value)),
+            on_change=emit.map(value => {
+              Field(Workspace(if value == "auto" { None } else { Some(value) }))
+            }),
             options,
           ),
         ]),
@@ -116,7 +122,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             class="schedule-input field-surface",
             attrs=@html.Attrs::build().data_set("focus-owner", ""),
             value=form.task,
-            on_input=emit.map(value => Field("task", value)),
+            on_input=emit.map(value => Field(Task(value))),
             "",
           ),
         ]),
@@ -129,17 +135,21 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
                 .data_set("focus-owner", "")
                 .aria_label(ui(locale, ScheduleLabel))
                 .value_prop(if form.once { "once" } else { "every" }),
-              on_change=emit.map(value => Field("timing", value)),
+              on_change=emit.map(value => Field(OneTime(value == "once"))),
               [
                 @html.option(value="every", ui(locale, EveryLabel)),
                 @html.option(value="once", ui(locale, OnceIn)),
               ],
             ),
           ]),
-          field(ui(locale, MinutesLabel), "minutes", form.minutes),
-          field(ui(locale, TimeoutMinutes), "timeout", form.timeout),
+          field(ui(locale, MinutesLabel), value => Minutes(value), form.minutes),
+          field(
+            ui(locale, TimeoutMinutes),
+            value => Timeout(value),
+            form.timeout,
+          ),
         ]),
-        field(ui(locale, ModelDefault), "model", form.model),
+        field(ui(locale, ModelDefault), value => Model(value), form.model),
         @html.p(class="page-subtitle", ui(locale, SchedulePermissions)),
         @html.p(class="page-subtitle", ui(locale, RunNowDescription)),
         @html.div(class="schedule-toolbar", [
@@ -205,22 +215,23 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           entry.spec.workspace.unwrap_or(ui(locale, AutomaticDirectory)),
         ),
         @html.p(class="schedule-task", entry.spec.task),
-        match entry.notice {
-          Some(notice) => @html.p(class="schedule-meta", notice)
+        match entry.skipped {
+          Some(skip) =>
+            @html.p(class="schedule-meta", schedule_skip_text(locale, skip))
           None => @html.nothing
         },
         @html.div(class="schedule-toolbar", [
           @html.button(
             class="button secondary",
             disabled=page.changing() || running || entry.run_requested,
-            on_click=emit(Action(entry.id, "run")),
+            on_click=emit(Action(entry.id, Run)),
             ui(locale, RunNow),
           ),
           @html.button(
             class="button secondary",
             disabled=page.changing(),
             on_click=emit(
-              Action(entry.id, if entry.enabled { "pause" } else { "resume" }),
+              Action(entry.id, if entry.enabled { Pause } else { Resume }),
             ),
             if entry.enabled {
               ui(locale, PauseLabel)
@@ -238,14 +249,14 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             @html.button(
               class="button secondary",
               disabled=page.changing(),
-              on_click=emit(Action(entry.id, "stop")),
+              on_click=emit(Action(entry.id, Stop)),
               ui(locale, StopRun),
             )
           } else {
             @html.button(
               class="button secondary",
               disabled=page.changing(),
-              on_click=emit(Action(entry.id, "delete")),
+              on_click=emit(Action(entry.id, Delete)),
               ui(locale, DeleteLabel),
             )
           },
@@ -291,7 +302,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             @html.button(
               class="button secondary",
               disabled=page.changing(),
-              on_click=emit(Action(run.schedule_id, "stop")),
+              on_click=emit(Action(run.schedule_id, Stop)),
               ui(locale, StopRun),
             )
           } else {

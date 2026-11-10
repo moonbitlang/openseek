@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 6
+pub const HostProtocolRevision : Int32 = 7
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -3091,9 +3091,25 @@ pub impl @json.FromJson for RunsReply
 pub impl @json.ToJson for RunsReply
 
 #derive(Eq, @debug.Debug)
+pub(all) enum ScheduleAction {
+  Pause
+  Resume
+  Run
+  Stop
+  Delete
+}
+pub fn ScheduleAction::equal(Self, Self) -> Bool
+pub fn ScheduleAction::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleAction::not_equal(Self, Self) -> Bool
+pub fn ScheduleAction::to_json(Self) -> @json.Json
+pub fn ScheduleAction::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleAction
+pub impl @json.ToJson for ScheduleAction
+
+#derive(Eq, @debug.Debug)
 pub(all) struct ScheduleActionPayload {
   id : String
-  action : String
+  action : ScheduleAction
 }
 pub fn ScheduleActionPayload::equal(Self, Self) -> Bool
 pub fn ScheduleActionPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3104,12 +3120,25 @@ pub impl @json.FromJson for ScheduleActionPayload
 pub impl @json.ToJson for ScheduleActionPayload
 
 #derive(Eq, @debug.Debug)
+pub(all) enum ScheduleChangeReply {
+  Changed(SchedulesReply)
+  Refused(ScheduleRefusal)
+}
+pub fn ScheduleChangeReply::equal(Self, Self) -> Bool
+pub fn ScheduleChangeReply::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleChangeReply::not_equal(Self, Self) -> Bool
+pub fn ScheduleChangeReply::to_json(Self) -> @json.Json
+pub fn ScheduleChangeReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleChangeReply
+pub impl @json.ToJson for ScheduleChangeReply
+
+#derive(Eq, @debug.Debug)
 pub(all) struct ScheduleEntry {
   id : String
   spec : ScheduleSpec
   enabled : Bool
   run_requested : Bool
-  notice : String?
+  skipped : ScheduleSkip?
   next_at : Int64?
 }
 pub fn ScheduleEntry::equal(Self, Self) -> Bool
@@ -3119,6 +3148,24 @@ pub fn ScheduleEntry::to_json(Self) -> @json.Json
 pub fn ScheduleEntry::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ScheduleEntry
 pub impl @json.ToJson for ScheduleEntry
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ScheduleRefusal {
+  ForeignOwner
+  Missing
+  UnattachedProject
+  PastTime
+  AlreadyRunning
+  AlreadyQueued
+  StopBeforeDelete
+}
+pub fn ScheduleRefusal::equal(Self, Self) -> Bool
+pub fn ScheduleRefusal::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleRefusal::not_equal(Self, Self) -> Bool
+pub fn ScheduleRefusal::to_json(Self) -> @json.Json
+pub fn ScheduleRefusal::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleRefusal
+pub impl @json.ToJson for ScheduleRefusal
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ScheduleRun {
@@ -3170,6 +3217,21 @@ pub fn ScheduleSavePayload::to_json(Self) -> @json.Json
 pub fn ScheduleSavePayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ScheduleSavePayload
 pub impl @json.ToJson for ScheduleSavePayload
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ScheduleSkip {
+  PreviousRunActive
+  CapacityFull
+  MissedTime
+  AutomaticFolderUnavailable
+}
+pub fn ScheduleSkip::equal(Self, Self) -> Bool
+pub fn ScheduleSkip::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleSkip::not_equal(Self, Self) -> Bool
+pub fn ScheduleSkip::to_json(Self) -> @json.Json
+pub fn ScheduleSkip::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleSkip
+pub impl @json.ToJson for ScheduleSkip
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ScheduleSpec {

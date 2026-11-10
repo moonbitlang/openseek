@@ -929,13 +929,13 @@ pub let schedules_list : Command[
 ///|
 pub let schedules_save : Command[
   @protocol.ScheduleSavePayload,
-  @protocol.SchedulesReply,
+  @protocol.ScheduleChangeReply,
 ] = Command("schedules.save")
 
 ///|
 pub let schedules_action : Command[
   @protocol.ScheduleActionPayload,
-  @protocol.SchedulesReply,
+  @protocol.ScheduleChangeReply,
 ] = Command("schedules.action")
 
 ///|

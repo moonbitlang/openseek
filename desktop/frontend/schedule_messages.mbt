@@ -58,6 +58,19 @@ priv enum UiMessage {
   OpenSession
   ViewLog
   LogLabel
+  RecordedFailure
+  LogUnreadable
+  SkippedPreviousRunActive
+  SkippedCapacityFull
+  SkippedMissedTime
+  SkippedAutomaticFolderUnavailable
+  RefusedForeignOwner
+  RefusedMissing
+  RefusedUnattachedProject
+  RefusedPastTime
+  RefusedAlreadyRunning
+  RefusedAlreadyQueued
+  RefusedStopBeforeDelete
 }
 
 ///|
@@ -403,5 +416,153 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, LogLabel) => "日志："
     (TraditionalChinese, LogLabel) => "日誌："
     (Japanese, LogLabel) => "ログ："
+    (English, RecordedFailure) => "Recorded failure:"
+    (Spanish, RecordedFailure) => "Fallo registrado:"
+    (SimplifiedChinese, RecordedFailure) => "已记录的失败："
+    (TraditionalChinese, RecordedFailure) => "已記錄的失敗："
+    (Japanese, RecordedFailure) => "記録されたエラー："
+    (English, LogUnreadable) => "Log could not be read:"
+    (Spanish, LogUnreadable) => "No se pudo leer el registro:"
+    (SimplifiedChinese, LogUnreadable) => "无法读取日志："
+    (TraditionalChinese, LogUnreadable) => "無法讀取日誌："
+    (Japanese, LogUnreadable) => "ログを読み取れませんでした："
+    (English, SkippedPreviousRunActive) =>
+      "Skipped: the previous run was still active"
+    (Spanish, SkippedPreviousRunActive) =>
+      "Omitido: la ejecución anterior seguía activa"
+    (SimplifiedChinese, SkippedPreviousRunActive) =>
+      "已跳过：上一次运行仍在进行"
+    (TraditionalChinese, SkippedPreviousRunActive) =>
+      "已略過：上一次執行仍在進行"
+    (Japanese, SkippedPreviousRunActive) =>
+      "スキップ：前回の実行がまだ終わっていませんでした"
+    (English, SkippedCapacityFull) => "Skipped: all execution slots were busy"
+    (Spanish, SkippedCapacityFull) =>
+      "Omitido: todas las ranuras de ejecución estaban ocupadas"
+    (SimplifiedChinese, SkippedCapacityFull) =>
+      "已跳过：所有执行槽位都在使用中"
+    (TraditionalChinese, SkippedCapacityFull) =>
+      "已略過：所有執行槽位都在使用中"
+    (Japanese, SkippedCapacityFull) =>
+      "スキップ：すべての実行枠が使用中でした"
+    (English, SkippedMissedTime) =>
+      "Skipped: the host missed the scheduled time"
+    (Spanish, SkippedMissedTime) =>
+      "Omitido: el host no llegó a la hora programada"
+    (SimplifiedChinese, SkippedMissedTime) =>
+      "已跳过：主机错过了计划时间"
+    (TraditionalChinese, SkippedMissedTime) =>
+      "已略過：主機錯過了計劃時間"
+    (Japanese, SkippedMissedTime) =>
+      "スキップ：ホストが予定時刻に間に合いませんでした"
+    (English, SkippedAutomaticFolderUnavailable) =>
+      "Skipped: the host could not prepare this task's automatic folder"
+    (Spanish, SkippedAutomaticFolderUnavailable) =>
+      "Omitido: el host no pudo preparar el directorio de trabajo creado automáticamente para esta tarea"
+    (SimplifiedChinese, SkippedAutomaticFolderUnavailable) =>
+      "已跳过：主机无法准备此任务自动创建的工作目录"
+    (TraditionalChinese, SkippedAutomaticFolderUnavailable) =>
+      "已略過：主機無法準備此任務自動建立的工作目錄"
+    (Japanese, SkippedAutomaticFolderUnavailable) =>
+      "スキップ：ホストがこのタスクの自動作成された作業ディレクトリを準備できませんでした"
+    (English, RefusedForeignOwner) =>
+      "Schedules are run by another SeekMoon open on this computer; change them there"
+    (Spanish, RefusedForeignOwner) =>
+      "Otra instancia de SeekMoon abierta en este equipo ejecuta las programaciones; cámbialas allí"
+    (SimplifiedChinese, RefusedForeignOwner) =>
+      "计划由这台电脑上另一个打开的 SeekMoon 运行，请在那里修改"
+    (TraditionalChinese, RefusedForeignOwner) =>
+      "計劃由這台電腦上另一個開啟的 SeekMoon 執行，請在那裡修改"
+    (Japanese, RefusedForeignOwner) =>
+      "スケジュールはこのコンピューターで開いている別の SeekMoon が実行しています。そちらで変更してください"
+    (English, RefusedMissing) => "This schedule no longer exists"
+    (Spanish, RefusedMissing) => "Esta programación ya no existe"
+    (SimplifiedChinese, RefusedMissing) => "此计划已不存在"
+    (TraditionalChinese, RefusedMissing) => "此計劃已不存在"
+    (Japanese, RefusedMissing) =>
+      "このスケジュールはもう存在しません"
+    (English, RefusedUnattachedProject) =>
+      "Choose an attached project for this schedule"
+    (Spanish, RefusedUnattachedProject) =>
+      "Elige un proyecto adjunto para esta programación"
+    (SimplifiedChinese, RefusedUnattachedProject) =>
+      "请为此计划选择一个已添加的项目"
+    (TraditionalChinese, RefusedUnattachedProject) =>
+      "請為此計劃選擇一個已加入的專案"
+    (Japanese, RefusedUnattachedProject) =>
+      "このスケジュールには追加済みのプロジェクトを選んでください"
+    (English, RefusedPastTime) =>
+      "The scheduled time has passed. Choose a time in the future."
+    (Spanish, RefusedPastTime) =>
+      "La hora programada ya pasó. Elige una hora futura."
+    (SimplifiedChinese, RefusedPastTime) =>
+      "计划时间已过，请选择将来的时间。"
+    (TraditionalChinese, RefusedPastTime) =>
+      "計劃時間已過，請選擇未來的時間。"
+    (Japanese, RefusedPastTime) =>
+      "予定時刻は過ぎています。これから先の時刻を選んでください。"
+    (English, RefusedAlreadyRunning) => "This schedule is already running"
+    (Spanish, RefusedAlreadyRunning) =>
+      "Esta programación ya se está ejecutando"
+    (SimplifiedChinese, RefusedAlreadyRunning) => "此计划正在运行"
+    (TraditionalChinese, RefusedAlreadyRunning) => "此計劃正在執行"
+    (Japanese, RefusedAlreadyRunning) =>
+      "このスケジュールはすでに実行中です"
+    (English, RefusedAlreadyQueued) => "This schedule is already queued to run"
+    (Spanish, RefusedAlreadyQueued) =>
+      "Esta programación ya está en cola para ejecutarse"
+    (SimplifiedChinese, RefusedAlreadyQueued) =>
+      "此计划已在排队等待运行"
+    (TraditionalChinese, RefusedAlreadyQueued) =>
+      "此計劃已在排隊等待執行"
+    (Japanese, RefusedAlreadyQueued) =>
+      "このスケジュールはすでに実行待ちです"
+    (English, RefusedStopBeforeDelete) =>
+      "Stop this run before deleting its schedule"
+    (Spanish, RefusedStopBeforeDelete) =>
+      "Detén esta ejecución antes de eliminar su programación"
+    (SimplifiedChinese, RefusedStopBeforeDelete) =>
+      "请先停止本次运行，再删除其计划"
+    (TraditionalChinese, RefusedStopBeforeDelete) =>
+      "請先停止本次執行，再刪除其計劃"
+    (Japanese, RefusedStopBeforeDelete) =>
+      "スケジュールを削除する前に、この実行を停止してください"
   }
+}
+
+///|
+/// What the page says about a schedule occurrence that did not launch.
+fn schedule_skip_text(
+  locale : @i18n.Locale,
+  skip : @protocol.ScheduleSkip,
+) -> String {
+  ui(
+    locale,
+    match skip {
+      PreviousRunActive => SkippedPreviousRunActive
+      CapacityFull => SkippedCapacityFull
+      MissedTime => SkippedMissedTime
+      AutomaticFolderUnavailable => SkippedAutomaticFolderUnavailable
+    },
+  )
+}
+
+///|
+/// What the page says when the host declines a schedule change.
+fn schedule_refusal_text(
+  locale : @i18n.Locale,
+  refusal : @protocol.ScheduleRefusal,
+) -> String {
+  ui(
+    locale,
+    match refusal {
+      ForeignOwner => RefusedForeignOwner
+      Missing => RefusedMissing
+      UnattachedProject => RefusedUnattachedProject
+      PastTime => RefusedPastTime
+      AlreadyRunning => RefusedAlreadyRunning
+      AlreadyQueued => RefusedAlreadyQueued
+      StopBeforeDelete => RefusedStopBeforeDelete
+    },
+  )
 }
