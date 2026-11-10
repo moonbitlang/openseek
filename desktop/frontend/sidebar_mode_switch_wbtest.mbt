@@ -2,17 +2,9 @@
 /// A Work conversation with a typed draft and a run in flight on screen, after
 /// the Cloud conversation `cloud-a` was on screen before it.
 fn work_after_cloud() -> Model raise {
-  let project = @interop.ChannelId::Local.test_project()
-  let listed : @transcript.SessionListItem = {
-    id: "desktop-test",
-    title: Some("Work conversation"),
-    workspace: project,
-    workspace_name: "project",
-    updated_at_ms: None,
-  }
   let model = integrated_cloud_model()
-    .with_active_project(Some(project))
-    .with_dev(dev => { ..dev, sessions: [listed], })
+    .with_active_project(Some(@interop.ChannelId::Local.test_project()))
+    .with_listed(["desktop-test"])
   let (_, model) = update(
     test_dispatch(),
     OpenSession(Local, "desktop-test"),

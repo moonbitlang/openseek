@@ -4990,19 +4990,19 @@ fn update_msg(
     // empty page shows. `settle_launch_mode` also moves a blank Work start
     // page to Chat once that page is known, so the app reopens in the mode
     // it was left in.
-    SidebarModeLoaded(sidebar_mode) =>
-      if !model.work_available() {
-        (@cmd.none, { ..model, sidebar_mode: ChatMode, })
-      } else if model.sidebar_revealed is None &&
+    SidebarModeLoaded(sidebar_mode) => {
+      guard model.work_available() else {
+        return (@cmd.none, { ..model, sidebar_mode: ChatMode, })
+      }
+      let model = { ..model, reopen_in_chat: sidebar_mode is ChatMode, }
+      if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
         location.target.is_cloud()) {
-        (
-          @cmd.none,
-          { ..model, sidebar_mode, reopen_in_chat: sidebar_mode is ChatMode, },
-        )
+        (@cmd.none, { ..model, sidebar_mode, })
       } else {
-        (@cmd.none, { ..model, reopen_in_chat: sidebar_mode is ChatMode, })
+        (@cmd.none, model)
       }
+    }
     WindowFocusChanged(focused) => {
       // Returning to a visible transcript marks its completed turn read.
       // Permission questions remain actionable until answered and therefore
