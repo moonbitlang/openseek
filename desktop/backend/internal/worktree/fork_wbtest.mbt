@@ -5,12 +5,7 @@
 #cfg(not(platform="windows"))
 async test "a fork gets its own checkout at the source's HEAD, without its uncommitted work" {
   with_recovery_fixture((repo, host) => {
-    let created = create(
-      host,
-      repo.resource_path(),
-      WorktreeOwner::openseek("first"),
-      _ => (),
-    )
+    let created = create(host, repo, WorktreeOwner::openseek("first"), _ => ())
     let source = worktree_dir(repo, created.name)
     let head = commit_recovery_fixture(source, "source work")
     for n in 1..<=21 {
@@ -88,12 +83,7 @@ async test "a fork gets its own checkout at the source's HEAD, without its uncom
 #cfg(not(platform="windows"))
 async test "a fork whose record was not written leaves no worktree behind" {
   with_recovery_fixture((repo, host) => {
-    let created = create(
-      host,
-      repo.resource_path(),
-      WorktreeOwner::openseek("first"),
-      _ => (),
-    )
+    let created = create(host, repo, WorktreeOwner::openseek("first"), _ => ())
     let published : Array[Array[@protocol.WorktreeInfo]] = []
     let made : Array[@pathx.Absolute] = []
     let failed = try {
@@ -160,12 +150,7 @@ async test "a fork whose record was not written leaves no worktree behind" {
 #cfg(not(platform="windows"))
 async test "a source whose checkout is gone is refused before anything is made" {
   with_recovery_fixture((repo, host) => {
-    let created = create(
-      host,
-      repo.resource_path(),
-      WorktreeOwner::openseek("first"),
-      _ => (),
-    )
+    let created = create(host, repo, WorktreeOwner::openseek("first"), _ => ())
     @fs.rmdir(worktree_dir(repo, created.name).to_string(), recursive=true)
     let mut asked = false
     let refused = try {
@@ -225,12 +210,9 @@ async test "a fork provisions the submodules of its own commit" {
     ]),
   )
   ignore(@workspaces.add(repo.to_string(), _ => ()))
-  let created = create(
-    test_host(),
-    repo.to_string(),
-    WorktreeOwner::openseek("first"),
-    _ => (),
-  )
+  let created = create(test_host(), repo, WorktreeOwner::openseek("first"), _ => {
+    ()
+  })
   // The source removes the submodule the main checkout still has
   // initialized; its HEAD is what the fork is made from.
   let source = worktree_dir(repo, created.name)

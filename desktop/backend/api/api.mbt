@@ -760,7 +760,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.worktree_list, payload => {
-      @worktree.list(payload.workspace)
+      @worktree.list(@pathx.Absolute::parse_resource_path(payload.workspace))
     }),
     Endpoint(@commands.worktree_create, payload => {
       let owner = match (payload.session, payload.codex_thread) {
@@ -789,7 +789,7 @@ pub fn endpoints(
       }
       let reply = @worktree.create(
         state.manager.worktree_host(),
-        payload.workspace,
+        @pathx.Absolute::parse_resource_path(payload.workspace),
         owner,
         worktrees => {
           publish_worktree_changed(state, payload.workspace, worktrees)
@@ -823,7 +823,7 @@ pub fn endpoints(
     Endpoint(@commands.worktree_remove, payload => {
       @worktree.remove(
         state.manager.worktree_host(),
-        payload.workspace,
+        @pathx.Absolute::parse_resource_path(payload.workspace),
         payload.name,
         payload.force is Some(true),
         worktrees => {

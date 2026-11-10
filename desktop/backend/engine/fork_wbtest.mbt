@@ -210,7 +210,7 @@ async fn with_worktree_fork_fixture(
   manager.pump = Serving(sessions=Map([]))
   let created = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("s-src"),
     _ => (),
   )
@@ -380,7 +380,7 @@ async test "a fork is committed exactly when its record was written" {
 
     // The engine refused before writing anything: no fork, no worktree.
     assert_true(fork_with("fails-before") is None)
-    guard @worktree.list(repo.to_string()).worktrees is [row] else {
+    guard @worktree.list(repo).worktrees is [row] else {
       fail("a refused fork must leave only the source's worktree")
     }
     assert_eq(row.sessions, ["s-src"])
@@ -531,7 +531,7 @@ async test "a side chat is a numbered member of its conversation's family" {
       is Deleted,
     )
     assert_true(@fsx.is_dir(checkout.to_path()))
-    guard @worktree.list(repo.to_string()).worktrees is [row] else {
+    guard @worktree.list(repo).worktrees is [row] else {
       fail("the worktree row must survive a closed side chat")
     }
     assert_eq(row.sessions, ["s-src", second.session])

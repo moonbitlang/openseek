@@ -13,17 +13,17 @@ pub async fn add_session_to_new_worktree(@pathx.Absolute, session~ : String, wor
 
 pub async fn add_session_to_worktree(@pathx.Absolute, session~ : String, worktree_of~ : String, async (@pathx.Absolute) -> Unit, record_exists~ : async () -> Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> Unit
 
-pub async fn create(WorktreeHost, String, WorktreeOwner, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
+pub async fn create(WorktreeHost, @pathx.Absolute, WorktreeOwner, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
 
 pub async fn drop_placements(@pathx.Absolute, Array[String]) -> Array[@protocol.WorktreeInfo]?
 
-pub async fn list(String) -> @protocol.WorktreesReply
+pub async fn list(@pathx.Absolute) -> @protocol.WorktreesReply
 
 pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding]
 
 pub async fn owner_dir(@pathx.Absolute, @pathx.Absolute) -> @pathx.Absolute
 
-pub async fn remove(WorktreeHost, String, String, Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.WorktreesReply
+pub async fn remove(WorktreeHost, @pathx.Absolute, String, Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.WorktreesReply
 
 pub async fn run_dir(@pathx.Absolute, String) -> @pathx.Absolute
 

@@ -45,20 +45,14 @@ async test "worktree creation reads settings using a resource path" {
     session_is_moving: _ => false,
     drain_sessions: _ => (),
   }
-  let reply = create(
-    host,
-    repo.resource_path(),
-    WorktreeOwner::openseek("windows-session"),
-    _ => (),
-  )
+  let reply = create(host, repo, WorktreeOwner::openseek("windows-session"), _ => {
+    ()
+  })
   assert_eq(reply.name, "wt-1")
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
-  let replay = create(
-    host,
-    repo.resource_path(),
-    WorktreeOwner::openseek("windows-session"),
-    _ => (),
-  )
+  let replay = create(host, repo, WorktreeOwner::openseek("windows-session"), _ => {
+    ()
+  })
   assert_eq(replay.name, reply.name)
   assert_eq(replay.worktrees.length(), 1)
 }

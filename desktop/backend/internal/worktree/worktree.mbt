@@ -1016,9 +1016,8 @@ async fn require_main_worktree(dir : @pathx.Absolute) -> Unit {
 /// The worktrees of a registered workspace. Read-only: a worktree whose
 /// directory was deleted outside the app reports `present: false` here and
 /// is cleaned up by `remove_worktree`, never by listing.
-pub async fn list(workspace : String) -> @protocol.WorktreesReply {
-  let absolute = @pathx.Absolute::parse_resource_path(workspace)
-  guard @workspaces.registered_dir(absolute) is Some(dir) else {
+pub async fn list(workspace : @pathx.Absolute) -> @protocol.WorktreesReply {
+  guard @workspaces.registered_dir(workspace) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   worktree_registry_lock.acquire()
@@ -1105,7 +1104,7 @@ async fn fresh_worktree_name(
 /// checkout back best-effort (it holds no user data yet).
 pub async fn create(
   host : WorktreeHost,
-  workspace : String,
+  workspace : @pathx.Absolute,
   owner : WorktreeOwner,
   on_committed : (Array[@protocol.WorktreeInfo]) -> Unit,
   name? : String,
@@ -1135,8 +1134,7 @@ pub async fn create(
   // Registration is checked under the lifecycle lock, which detachment also
   // holds: a workspace can no longer slip out of the registry between this
   // check and the registry commit below.
-  let absolute = @pathx.Absolute::parse_resource_path(workspace)
-  guard @workspaces.registered_dir(absolute) is Some(dir) else {
+  guard @workspaces.registered_dir(workspace) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
@@ -1423,7 +1421,7 @@ async fn delete_worktree_checkout(
 /// deleted outside the app, only this worktree's Git registration is removed.
 pub async fn remove(
   host : WorktreeHost,
-  workspace : String,
+  workspace : @pathx.Absolute,
   name : String,
   force : Bool,
   on_committed : (Array[@protocol.WorktreeInfo]) -> Unit,
@@ -1435,8 +1433,7 @@ pub async fn remove(
   // a checkout from an already-detached workspace.
   host.lifecycle_lock.acquire()
   defer host.lifecycle_lock.release()
-  let absolute = @pathx.Absolute::parse_resource_path(workspace)
-  guard @workspaces.registered_dir(absolute) is Some(dir) else {
+  guard @workspaces.registered_dir(workspace) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   let entry = {
@@ -1735,7 +1732,7 @@ async test "worktree create provisions detached checkout, recovery ref, registry
   let committed : Ref[Int32] = Ref(-1)
   let reply = create(
     host,
-    repo.to_string(),
+    repo,
     WorktreeOwner::openseek("s-fix-auth"),
     infos => committed.val = infos.length(),
     name="fix-auth",
@@ -1780,7 +1777,7 @@ async test "worktree create provisions detached checkout, recovery ref, registry
   let exclude = @fsx.read_text(repo.join(".git/info/exclude").to_path())
   assert_true(exclude.contains(".worktrees/"))
   assert_true(exclude.contains(".openseek/"))
-  guard list(repo.to_string()).worktrees is [listed] else {
+  guard list(repo).worktrees is [listed] else {
     fail("expected one listed worktree")
   }
   assert_eq(listed.name, "fix-auth")
@@ -1802,19 +1799,13 @@ async test "explicit registry removal can prune a vanished worktree" {
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-release"),
-      _ => (),
-      name="wt",
-    ),
+    create(host, repo, WorktreeOwner::openseek("s-release"), _ => (), name="wt"),
   )
   @fs.rmdir(repo.join(".worktrees/wt").to_string(), recursive=true)
   // The low-level protocol operation remains available for orphan cleanup.
   // The bundled UI does not expose it for a conversation; Archive retains the
   // row so a later Unarchive still requires explicit Repair.
-  let reply = remove(host, repo.to_string(), "wt", false, _ => ())
+  let reply = remove(host, repo, "wt", false, _ => ())
   assert_eq(reply.worktrees.length(), 0)
   // Unbound, the conversation runs in the workspace again — no refusal.
   assert_eq(run_dir(repo, "s-release").to_string(), repo.to_string())
@@ -1834,28 +1825,20 @@ async test "worktree names are host-generated and skip surviving references" {
   prepare_git_repo(repo)
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
-  let first = create(host, repo.to_string(), WorktreeOwner::openseek("s-1"), _ => {
-    ()
-  })
+  let first = create(host, repo, WorktreeOwner::openseek("s-1"), _ => ())
   assert_eq(first.name, "wt-1")
   // The session is the idempotency key: a replay (a retry after a lost
   // reply) gets the existing binding back, never a second checkout.
-  let replay = create(host, repo.to_string(), WorktreeOwner::openseek("s-1"), _ => {
-    ()
-  })
+  let replay = create(host, repo, WorktreeOwner::openseek("s-1"), _ => ())
   assert_eq(replay.name, "wt-1")
   assert_eq(replay.worktrees.length(), 1)
-  let second = create(host, repo.to_string(), WorktreeOwner::openseek("s-2"), _ => {
-    ()
-  })
+  let second = create(host, repo, WorktreeOwner::openseek("s-2"), _ => ())
   assert_eq(second.name, "wt-2")
   // Removal keeps the recovery ref, so a fresh name never resurrects wt-1.
-  ignore(remove(host, repo.to_string(), "wt-1", false, _ => ()))
-  let third = create(host, repo.to_string(), WorktreeOwner::openseek("s-3"), _ => {
-    ()
-  })
+  ignore(remove(host, repo, "wt-1", false, _ => ()))
+  let third = create(host, repo, WorktreeOwner::openseek("s-3"), _ => ())
   assert_eq(third.name, "wt-3")
-  guard list(repo.to_string()).worktrees is [a, b] else {
+  guard list(repo).worktrees is [a, b] else {
     fail("expected two registered worktrees")
   }
   assert_eq(a.name, "wt-2")
@@ -1866,16 +1849,11 @@ async test "worktree names are host-generated and skip surviving references" {
   ignore(@gitx.run(repo, ["branch", "openseek/wt-4"]))
   // Codex uses the same registry, name allocator, and idempotency contract,
   // but its owner remains in a distinct field from OpenSeek sessions.
-  let codex = create(host, repo.to_string(), WorktreeOwner::codex("thread-1"), _ => {
+  let codex = create(host, repo, WorktreeOwner::codex("thread-1"), _ => ())
+  assert_eq(codex.name, "wt-5")
+  let codex_replay = create(host, repo, WorktreeOwner::codex("thread-1"), _ => {
     ()
   })
-  assert_eq(codex.name, "wt-5")
-  let codex_replay = create(
-    host,
-    repo.to_string(),
-    WorktreeOwner::codex("thread-1"),
-    _ => (),
-  )
   assert_eq(codex_replay.name, "wt-5")
   guard codex_replay.worktrees.iter().find_first(info => info.name == "wt-5")
     is Some(codex_info) else {
@@ -1900,21 +1878,15 @@ async test "worktree remove prunes an externally deleted checkout" {
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-gone"),
-      _ => (),
-      name="gone",
-    ),
+    create(host, repo, WorktreeOwner::openseek("s-gone"), _ => (), name="gone"),
   )
   @fs.rmdir(repo.join(".worktrees/gone").to_string(), recursive=true)
-  guard list(repo.to_string()).worktrees is [listed] else {
+  guard list(repo).worktrees is [listed] else {
     fail("expected the deleted worktree to stay listed")
   }
   assert_false(listed.present)
-  ignore(remove(host, repo.to_string(), "gone", false, _ => ()))
-  assert_eq(list(repo.to_string()).worktrees.length(), 0)
+  ignore(remove(host, repo, "gone", false, _ => ()))
+  assert_eq(list(repo).worktrees.length(), 0)
   assert_false(
     @gitx.run(repo, ["worktree", "list", "--porcelain"]).contains(
       ".worktrees/gone",
