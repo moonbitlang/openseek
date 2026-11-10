@@ -71,9 +71,9 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 /// `mcp_service`, when supplied, is the session's MCP host, whose handoff
 /// `mbtx` gives every sandboxed script. The caller starts it over the servers
 /// it connected, keeping this package free of MCP clients.
-pub async fn[X] build_tools(
+pub async fn build_tools(
   runtime : @agent_runtime.AgentRuntime,
-  scope : @agent_runtime.AgentTaskScope[X],
+  scope : @agent_runtime.AgentTaskScope,
   on_background_wake? : () -> Unit,
   job_log_dir? : String,
   session_scratch_dir? : String,
@@ -127,7 +127,7 @@ pub async fn[X] build_tools(
     Some(root) =>
       Some(() => {
         @fs.mkdir(root, recursive=true, permission=0o700) catch {
-          @os_error.OSError(_) as error if error.is_EEXIST() => {
+          @os_error.OsError(AlreadyExists, ..) as error => {
             guard @fs.kind(root) is Directory else { raise error }
           }
           error => raise error

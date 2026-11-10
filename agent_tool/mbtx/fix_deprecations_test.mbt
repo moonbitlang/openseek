@@ -54,9 +54,9 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
         program_service=service,
         foreground_timeout_ms=180000,
       )
-      let source = @fs.read_file(
+      let source = @fs.read_text(
         @fs.realpath("share/workflow/fix-deprecations.mbtx"),
-      ).text()
+      )
       let output = @async.with_timeout(240000, () => {
         dispatch(tool, {
           "description": "fix deprecations",
@@ -81,12 +81,12 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
         output.content.contains("after: 0 error(s), 1 warning(s) (was 0/4)"),
         msg=output.content,
       )
-      let fixed = @fs.read_file("\{ws}/lib/lib.mbt").text()
+      let fixed = @fs.read_text("\{ws}/lib/lib.mbt")
       assert_true(fixed.contains("  len([1, 2, 3]) + len([4])\n"), msg=fixed)
       assert_true(fixed.contains("  old() + len([])\n"), msg=fixed)
       assert_true(fixed.contains("#deprecated(\"use `len` instead\")"))
       // A dry run plans the same three edits and writes nothing.
-      @fs.write_file("\{ws}/lib/lib.mbt", lib, create_mode=CreateOrTruncate)
+      @fs.write_text("\{ws}/lib/lib.mbt", lib, create_mode=CreateOrTruncate)
       let planned = @async.with_timeout(120000, () => {
         dispatch(tool, {
           "description": "plan deprecation fixes",
@@ -101,7 +101,7 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
         planned.content.contains("dry run: 3 edit(s) planned, none written"),
         msg=planned.content,
       )
-      assert_eq(@fs.read_file("\{ws}/lib/lib.mbt").text(), lib)
+      assert_eq(@fs.read_text("\{ws}/lib/lib.mbt"), lib)
       // The limit applies to a dry run too.
       let limited = @async.with_timeout(120000, () => {
         dispatch(tool, {
@@ -207,9 +207,9 @@ async test "fix-deprecations handles qualified calls and methods across packages
         program_service=service,
         foreground_timeout_ms=240000,
       )
-      let source = @fs.read_file(
+      let source = @fs.read_text(
         @fs.realpath("share/workflow/fix-deprecations.mbtx"),
-      ).text()
+      )
       let output = @async.with_timeout(300000, () => {
         dispatch(tool, {
           "description": "fix deprecations across packages",
@@ -225,7 +225,7 @@ async test "fix-deprecations handles qualified calls and methods across packages
         output.content.contains("after: 0 error(s), 1 warning(s) (was 0/8)"),
         msg=output.content,
       )
-      let fixed = @fs.read_file("\{ws}/b/b.mbt").text()
+      let fixed = @fs.read_text("\{ws}/b/b.mbt")
       assert_true(
         fixed.contains(
           "  @a.len([1, 2]) + p.count() + @a.len([]) + @a.total([3]) + @a.total([4])\n",

@@ -7,8 +7,8 @@
 /// reader/writer pair. `on_close` is the synchronous teardown (e.g. terminate
 /// the subprocess and close its pipes) run when the client closes.
 priv struct NdjsonTransport {
-  reader : &@io.Reader
-  writer : &@io.Writer
+  reader : &@io.TextReader
+  writer : &@io.TextWriter
   mut modern : Bool
   on_close : () -> Unit
 }
@@ -22,8 +22,8 @@ priv struct NdjsonTransport {
 /// endpoints (and terminate any process). There is deliberately no default: a
 /// no-op `on_close` would leave the client's tasks and fds alive.
 fn NdjsonTransport::NdjsonTransport(
-  reader : &@io.Reader,
-  writer : &@io.Writer,
+  reader : &@io.TextReader,
+  writer : &@io.TextWriter,
   on_close~ : () -> Unit,
 ) -> NdjsonTransport {
   { reader, writer, on_close, modern: false, }

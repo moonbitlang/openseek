@@ -117,7 +117,7 @@ async fn BgJobRuntime::publish(
     if self.persistent_logs && self.spill_dir is Some(dir) {
       let path = "\{dir}/\{@protocol.job_storage_name(id)}.json"
       let temporary = "\{path}.tmp"
-      @fs.write_file(
+      @fs.write_text(
         temporary,
         record.to_json().stringify(),
         create_mode=CreateOrTruncate,

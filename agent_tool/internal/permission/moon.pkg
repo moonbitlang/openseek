@@ -2,10 +2,14 @@ import {
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool/write_scope",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/x/crypto",
 }
 
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/fs" ],
+)

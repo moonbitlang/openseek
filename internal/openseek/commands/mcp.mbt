@@ -20,7 +20,7 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
     let shown_path = @cli.terminal_safe_line(path, limit=200)
     // This command is a validation gate: a bad file exits nonzero, unlike
     // run/serve, which report the file and continue with the remaining ones.
-    let text = @fs.read_file(path).text() catch {
+    let text = @fs.read_text(path) catch {
       error =>
         fail(
           "cannot read \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
@@ -80,7 +80,7 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
       }
     }
     // The servers spawned above live on this group; returning tears them down.
-    group.return_immediately(())
+    group.return_immediately()
   }
 }
 

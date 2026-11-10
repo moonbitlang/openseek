@@ -277,7 +277,7 @@ checked example can exercise real file IO through a relative path:
 ///|
 async test "mbtx reads a workspace file" {
   @vfs.with_tmpdir(prefix="mbtx-readme-io-", workspace => {
-    @fs.write_file(
+    @fs.write_text(
       workspace + "/data.txt",
       "Ada\nGrace\n",
       create_mode=CreateOrTruncate,

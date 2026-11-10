@@ -29,8 +29,8 @@ struct Harness {
 }
 
 ///|
-async fn[X] harness(
-  group : @async.TaskGroup[X],
+async fn harness(
+  group : @async.TaskGroup,
   script : String,
   max_live? : Int32,
   max_workers? : Int32,
@@ -149,7 +149,7 @@ async test "a child that reports is Captured, with its usage and stored report" 
     )
     assert_true(info.report is Some(Stored))
     let stored = @json.parse(
-      @fs.read_file("\{h.root}/sessions/\{session}/report.json").text(),
+      @fs.read_text("\{h.root}/sessions/\{session}/report.json"),
     )
     assert_eq(stored, { "answer": "42" })
     assert_true(h.launcher.report(session) is Some({ "answer": "42", .. }))

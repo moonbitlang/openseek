@@ -123,8 +123,8 @@ priv enum PendingWork {
 /// The one operation currently occupying the serve loop. Compaction is a
 /// non-steerable active operation, but it is still cancellable like a turn.
 priv enum ActiveWork {
-  ActiveTurn(@async.Task[Unit])
-  ActiveCompact(@async.Task[Unit])
+  ActiveTurn(@core_async.Task[Unit])
+  ActiveCompact(@core_async.Task[Unit])
 }
 
 ///|

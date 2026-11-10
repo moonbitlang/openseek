@@ -203,7 +203,7 @@ async fn write_file(
   // guard above — or (b) a DANGLING symlink lurks at the path (`exists`
   // follows links, so it reads false, but O_CREAT would create the link's
   // target, e.g. alias.txt -> lib/new.mbt landing ungated source).
-  @fs.write_file(
+  @fs.write_text(
     path,
     input.content,
     create_mode=if existed && (!is_mbt_source(path) || source_overwrite) {

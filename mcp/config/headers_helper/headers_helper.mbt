@@ -9,33 +9,35 @@ pub async fn run(
   helper : @config.HeadersHelperCommand,
   cwd? : String,
 ) -> Map[String, String] {
-  let (stdin, writer) = @process.write_to_process()
-  writer.close()
-  let (stderr, stderr_pipe) = @process.read_from_process()
-  defer stderr.close()
   let diagnostics = @buffer.Buffer()
-  let (code, stdout) = @async.with_task_group(group => {
+  let stdout = @buffer.Buffer()
+  let mut code = 0
+  @async.with_task_group(group => {
+    let process = @process.spawn(
+      group,
+      helper.command,
+      helper.arguments,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Collect,
+      cwd?=cwd.map(value => value),
+      no_console_window=true,
+    )
     group.spawn_bg(() => {
-      while stderr.read_some() is Some(chunk) {
+      while process.stderr.read() is Some(chunk) {
         diagnostics.write_bytes(chunk)
         @stdio.stderr.write(chunk)
       }
     })
-    @process.collect_stdout(
-      helper.command,
-      helper.arguments,
-      stdin~,
-      stderr=stderr_pipe,
-      cwd?=cwd.map(value => value),
-      no_console_window=true,
-    )
+    stdout.write_bytes(process.stdout.read_all())
+    code = process.wait()
   })
   guard code == 0 else {
     fail(
       "MCP headersHelper exited with status \{code}:\n\{@utf8.decode(diagnostics.to_bytes())}",
     )
   }
-  decode_helper_headers(stdout.text())
+  decode_helper_headers(@utf8.decode(stdout.to_bytes()))
 }
 
 ///|

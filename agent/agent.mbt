@@ -137,8 +137,9 @@ pub async fn run_turn_with_append(
   workspace_root~ : String = ".",
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_session.Session {
+  let mut result = session
   @async.with_task_group() <| group => {
-    run_turn_in_scope(
+    result = run_turn_in_scope(
       runtime=AgentRuntime(workspace_root~, approval?),
       scope=AgentTaskScope(group),
       api_key~,
@@ -153,6 +154,7 @@ pub async fn run_turn_with_append(
       retry_backoff_ms?,
     )
   }
+  result
 }
 
 ///|
@@ -245,9 +247,9 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// The caller owns the lifetime of `runtime`, `scope`, and any shared
 /// `tools` registry passed here. Provider reasoning fragments always join the
 /// transient event stream; consumers choose whether and how to present them.
-pub async fn[X] run_turn_in_scope(
+pub async fn run_turn_in_scope(
   runtime~ : @agent_runtime.AgentRuntime,
-  scope~ : @agent_runtime.AgentTaskScope[X],
+  scope~ : @agent_runtime.AgentTaskScope,
   api_key~ : String,
   model~ : @deepseek.Model,
   session~ : @agent_session.Session,

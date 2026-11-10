@@ -84,9 +84,9 @@ async fn read_invocation(
       fail(
         "a task on the command line cannot be combined with --input-format json",
       )
-    Batch => @stdio.stdin.read_all().text()
+    Batch => @stdio.stdin.text.read_all()
     Managed =>
-      match @stdio.stdin.read_until("\n") {
+      match @stdio.stdin.text.read_until("\n") {
         Some(line) => line
         None => fail("stdin closed before a request arrived")
       }

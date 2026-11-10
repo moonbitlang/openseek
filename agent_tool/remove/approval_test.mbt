@@ -9,8 +9,8 @@ async test "existing and externally changed files ask once with path reason and 
     })
     let existing = "\{dir}/existing.txt"
     let changed = "\{dir}/changed.txt"
-    @fs.write_file(existing, "existing", create_mode=CreateNew)
-    @fs.write_file(changed, "formatted", create_mode=CreateNew)
+    @fs.write_text(existing, "existing", create_mode=CreateNew)
+    @fs.write_text(changed, "formatted", create_mode=CreateNew)
     state.record_created(changed, @agent_tool.content_digest("unformatted"))
     for path in [existing, changed] {
       let result = run_remove(
@@ -37,7 +37,7 @@ async test "existing and externally changed files ask once with path reason and 
     assert_true(asked[0].detail.contains("not recorded"))
     assert_true(asked[1].detail.contains("content has changed"))
     // A grant is not retained, even when the same path is recreated unchanged.
-    @fs.write_file(existing, "existing", create_mode=CreateNew)
+    @fs.write_text(existing, "existing", create_mode=CreateNew)
     ignore(
       run_remove(
         state,
@@ -53,7 +53,7 @@ async test "existing and externally changed files ask once with path reason and 
 async test "unchanged agent-created files do not ask even if approval would be rejected" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/own.txt"
-    @fs.write_file(path, "mine", create_mode=CreateNew)
+    @fs.write_text(path, "mine", create_mode=CreateNew)
     let state = @agent_tool.FileStateMap()
     state.record_created(path, @agent_tool.content_digest("mine"))
     let result = run_remove(
@@ -71,7 +71,7 @@ async test "unchanged agent-created files do not ask even if approval would be r
 async test "rejection cancellation and unavailable approval all preserve the file" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/keep.txt"
-    @fs.write_file(path, "keep", create_mode=CreateNew)
+    @fs.write_text(path, "keep", create_mode=CreateNew)
     for
       (outcome, message) in [
         (@agent_runtime.Rejected, "rejected"),
@@ -86,7 +86,7 @@ async test "rejection cancellation and unavailable approval all preserve the fil
       guard result is Respond(out) else { fail("expected response") }
       assert_true(out.is_error)
       assert_true(out.content.contains(message))
-      assert_eq(@fs.read_file(path).text(), "keep")
+      assert_eq(@fs.read_text(path), "keep")
     }
   })
 }
@@ -95,7 +95,7 @@ async test "rejection cancellation and unavailable approval all preserve the fil
 async test "approval does not hold the file gate and cannot authorize a changed version" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/changing.txt"
-    @fs.write_file(path, "before", create_mode=CreateNew)
+    @fs.write_text(path, "before", create_mode=CreateNew)
     let state = @agent_tool.FileStateMap()
     let result = @async.with_timeout(2000, () => {
       run_remove(
@@ -103,7 +103,7 @@ async test "approval does not hold the file gate and cannot authorize a changed 
         { "path": path, "reason": "cleanup" },
         approval=ApprovalChannel(_ => {
           state.with_access(() => {
-            @fs.write_file(path, "after", create_mode=CreateOrTruncate)
+            @fs.write_text(path, "after", create_mode=CreateOrTruncate)
           })
           AllowedOnce
         }),
@@ -112,7 +112,7 @@ async test "approval does not hold the file gate and cannot authorize a changed 
     guard result is Respond(out) else { fail("expected response") }
     assert_true(out.is_error)
     assert_true(out.content.contains("changed while awaiting approval"))
-    assert_eq(@fs.read_file(path).text(), "after")
+    assert_eq(@fs.read_text(path), "after")
   })
 }
 
@@ -120,14 +120,14 @@ async test "approval does not hold the file gate and cannot authorize a changed 
 async test "approval rechecks file kind and worker scope" {
   @vfs.with_tmpdir(dir => {
     @fs.mkdir("\{dir}/allowed")
-    @fs.write_file("\{dir}/target", "same", create_mode=CreateNew)
+    @fs.write_text("\{dir}/target", "same", create_mode=CreateNew)
     guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
       is Ok(scope) else {
       fail("expected scope")
     }
     let path = "\{dir}/allowed/file"
     for replace_with_link in [true, false] {
-      @fs.write_file(path, "same", create_mode=CreateNew)
+      @fs.write_text(path, "same", create_mode=CreateNew)
       let definition = @remove.definition(
         workspace_root=dir,
         write_scope=scope,
@@ -147,7 +147,7 @@ async test "approval rechecks file kind and worker scope" {
         fail("expected response")
       }
       assert_true(out.is_error)
-      assert_eq(@fs.read_file(path).text(), "same")
+      assert_eq(@fs.read_text(path), "same")
       if replace_with_link {
         @fs.remove(path)
       }
@@ -160,7 +160,7 @@ async test "symlinks never request approval" {
   @vfs.with_tmpdir(dir => {
     @fs.mkdir("\{dir}/allowed")
     @fs.mkdir("\{dir}/allowed/directory")
-    @fs.write_file("\{dir}/outside", "keep", create_mode=CreateNew)
+    @fs.write_text("\{dir}/outside", "keep", create_mode=CreateNew)
     @fs.symlink("\{dir}/allowed/link", target="\{dir}/outside")
     guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
       is Ok(scope) else {
@@ -178,7 +178,7 @@ async test "symlinks never request approval" {
       }
       assert_true(out.is_error)
     }
-    assert_eq(@fs.read_file("\{dir}/outside").text(), "keep")
+    assert_eq(@fs.read_text("\{dir}/outside"), "keep")
   })
 }
 
@@ -187,7 +187,7 @@ async test "binary files can be approved and cancellation leaves the gate reusab
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/binary"
     let bytes = b"\xff\x00\x80"
-    @fs.write_file(path, bytes, create_mode=CreateNew)
+    @fs.write_binary(path, bytes, create_mode=CreateNew)
     let state = @agent_tool.FileStateMap()
     let asked = Ref(false)
     let timed_out = try {
@@ -210,7 +210,7 @@ async test "binary files can be approved and cancellation leaves the gate reusab
     }
     assert_true(timed_out)
     assert_true(asked.val)
-    assert_eq(@fs.read_file(path).binary(), bytes)
+    assert_eq(@fs.read_binary(path), bytes)
     let result = @async.with_timeout(2000, () => {
       run_remove(
         state,
@@ -244,7 +244,7 @@ async test "approval is invalidated when a parent symlink redirects to identical
     guard result is Respond(out) else { fail("expected response") }
     assert_true(out.is_error)
     assert_true(out.content.contains("changed while awaiting approval"))
-    assert_eq(@fs.read_file("\{dir}/first/file").text(), "same")
-    assert_eq(@fs.read_file("\{dir}/second/file").text(), "same")
+    assert_eq(@fs.read_text("\{dir}/first/file"), "same")
+    assert_eq(@fs.read_text("\{dir}/second/file"), "same")
   })
 }

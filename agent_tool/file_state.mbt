@@ -85,7 +85,7 @@ pub async fn FileStateMap::create_parent_directories(
   }
   for directory in missing.rev_iter() {
     @fs.mkdir(directory) catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => continue
+      @os_error.OsError(AlreadyExists, ..) => continue
       error => raise error
     }
     self.record_created_directory(directory)

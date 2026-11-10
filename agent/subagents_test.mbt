@@ -23,7 +23,7 @@ async test "a session's subagent ends with a notice and a readable report" {
   @async.with_timeout(10000, () => {
     @async.with_task_group(group => {
       let runtime = @agent_runtime.AgentRuntime()
-      let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+      let scope : @agent_runtime.AgentTaskScope = AgentTaskScope(group)
       let mut woke = false
       let tools = @agent.build_tools(
         runtime,

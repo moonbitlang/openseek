@@ -16,7 +16,7 @@ async fn bind_test_server(skip_message : String) -> @http.Server? {
 
 ///|
 async fn explore_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   handle : (Json) -> String raise,
 ) -> String? {
   guard bind_test_server("local TCP bind unavailable; skipping explore test")
@@ -25,14 +25,14 @@ async fn explore_test_server(
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
-      (request, body, conn) => {
+      (request, conn) => {
         assert_eq(request.path, "/chat/completions")
-        let payload = handle(@json.parse(body.read_all().text()))
+        let payload = handle(@json.parse(conn.text.read_all()))
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write("data: \{payload}\n\n")
-        conn.write("data: [DONE]\n\n")
+        conn.write_string("data: \{payload}\n\n")
+        conn.write_string("data: [DONE]\n\n")
       },
       max_connections=8,
     )

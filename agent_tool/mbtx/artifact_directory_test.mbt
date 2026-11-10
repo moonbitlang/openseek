@@ -29,8 +29,8 @@ async test "explicit artifact paths use existing scratch permissions without gra
     )
     assert_false(one.is_error, msg=one.content)
     assert_false(two.is_error, msg=two.content)
-    assert_eq(@fs.read_file(first + "/chart.html").text(), "first")
-    assert_eq(@fs.read_file(second + "/chart.html").text(), "second")
+    assert_eq(@fs.read_text(first + "/chart.html"), "first")
+    assert_eq(@fs.read_text(second + "/chart.html"), "second")
     let escaped = dispatch(
       @mbtx.definition(workspace_root=workspace, scratch_dir=first_scratch),
       {
@@ -57,7 +57,7 @@ async test "explicit artifact paths use existing scratch permissions without gra
     assert_false(escaped.is_error, msg=escaped.content)
     assert_false(@fs.exists(workspace + "/main.mbt"))
     assert_false(@fs.exists(root + "/output.html"))
-    assert_eq(@fs.read_file(second + "/chart.html").text(), "second")
+    assert_eq(@fs.read_text(second + "/chart.html"), "second")
     let resumed = dispatch(
       @mbtx.definition(workspace_root=workspace, scratch_dir=first_scratch),
       {

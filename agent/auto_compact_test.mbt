@@ -10,7 +10,7 @@ priv enum MockReply {
 
 ///|
 async fn auto_compact_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   handle : (Json) -> MockReply raise,
 ) -> String? {
   serve_chat_completions(
@@ -24,14 +24,14 @@ async fn auto_compact_test_server(
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
-          conn.write("data: \{payload}\n\n")
-          conn.write("data: [DONE]\n\n")
+          conn.write_string("data: \{payload}\n\n")
+          conn.write_string("data: [DONE]\n\n")
         }
         Body(json) => {
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write(json.stringify())
+          conn.write_string(json.stringify())
         }
       }
     },

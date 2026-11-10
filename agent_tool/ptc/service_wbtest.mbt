@@ -35,10 +35,9 @@ async test "session listener reuses its port with isolated revocable capabilitie
         is { "ptc_calls": [{ "arguments": { "owner": "second", .. }, .. }], .. },
       )
       first.close()
-      let (response, body) = @http.post(url, ({} : Json), headers={
+      let (response, _) = @http.post_text(url, "{}", headers={
         "Authorization": "Bearer \{token}",
       })
-      ignore(body.text())
       assert_eq(response.code, 403)
       assert_true(
         request(second.env(), "echo", {}) is { "is_error": false, .. },
@@ -230,10 +229,10 @@ async test "incomplete HTTP headers cannot exhaust listener slots indefinitely" 
       for _ in 0..<16 {
         let client = @socket.Tcp::connect(service.server.addr)
         clients.push(client)
-        client.write("POST /call HTTP/1.1\r\nAuthorization:")
+        client.write(b"POST /call HTTP/1.1\r\nAuthorization:")
       }
       @async.sleep(20)
-      let response = clients[0].read_all().text()
+      let response = @utf8.decode(clients[0].read_all())
       assert_true(
         response.contains(
           "PTC request receive timed out after 5 seconds; no tool executed",
@@ -275,12 +274,14 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
       let client = @socket.Tcp::connect(service.server.addr)
       defer client.close()
       client.write(
-        "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\n\{headers}\r\n",
+        @utf8.encode(
+          "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\n\{headers}\r\n",
+        ),
       )
       // Closing with unread oversized input may reset TCP instead of delivering
       // the error body. Neither outcome admits an executor.
       let response = @async.with_timeout(1000, () => {
-        Some(client.read_all().text()) catch {
+        Some(@utf8.decode(client.read_all())) catch {
           _ => None
         }
       })
@@ -361,8 +362,8 @@ async test "HTTP admission reports size limits and malformed input distinctly" {
         ] {
         let client = @socket.Tcp::connect(service.server.addr)
         defer client.close()
-        client.write(input)
-        let response = client.read_all().text()
+        client.write(@utf8.encode(input))
+        let response = @utf8.decode(client.read_all())
         assert_true(response.contains(reason), msg=response)
         assert_true(response.contains("no tool executed"))
         assert_false(response.contains("timed out"))
@@ -404,7 +405,9 @@ async test "client disconnect leaves an accepted call owned by its live program"
       defer client.close()
       let body = ({ "version": 1, "name": "edit", "arguments": {} } : Json).stringify()
       client.write(
-        "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\nContent-Length: \{@utf8.encode(body).length()}\r\n\r\n\{body}",
+        @utf8.encode(
+          "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\nContent-Length: \{@utf8.encode(body).length()}\r\n\r\n\{body}",
+        ),
       )
       entered.get()
       client.close()
@@ -620,20 +623,22 @@ async test "HTTP accepts fragmented headers and UTF-8 across single-byte chunks"
       let (_, token) = capability(program.env())
       let client = @socket.Tcp::connect(service.server.addr)
       defer client.close()
-      client.write("POST /ca")
-      client.write("ll HTTP/1.1\r")
-      client.write("\nAuthorization: Bea")
-      client.write("rer \{token}\r\nTransfer-Encoding: chunked\r\n\r\n")
+      client.write(b"POST /ca")
+      client.write(b"ll HTTP/1.1\r")
+      client.write(b"\nAuthorization: Bea")
+      client.write(
+        @utf8.encode("rer \{token}\r\nTransfer-Encoding: chunked\r\n\r\n"),
+      )
       let body = (
         { "version": 1, "name": "probe", "arguments": { "text": "你好" } } :
         Json).stringify()
       for byte in @utf8.encode(body).to_array() {
-        client.write("1\r\n")
+        client.write(b"1\r\n")
         client.write(Bytes::from_array([byte]))
-        client.write("\r\n")
+        client.write(b"\r\n")
       }
-      client.write("0\r\n\r\n")
-      assert_true(client.read_all().text().contains("200 OK"))
+      client.write(b"0\r\n\r\n")
+      assert_true(@utf8.decode(client.read_all()).contains("200 OK"))
       assert_eq(arguments.val, Some({ "text": "你好" }))
     })
   })
@@ -671,7 +676,9 @@ async test "HTTP rejects malformed chunks and excessive framing before reservati
         defer client.close()
         try {
           client.write(
-            "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\nTransfer-Encoding: chunked\r\n\r\n\{chunks}",
+            @utf8.encode(
+              "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\nTransfer-Encoding: chunked\r\n\r\n\{chunks}",
+            ),
           )
           ignore(client.read_all())
         } catch {

@@ -114,8 +114,12 @@ async fn post(
   if origin is Some(origin) {
     headers["Origin"] = origin
   }
-  let (response, body) = @http.post(grant.url, message.stringify(), headers~)
-  let text = body.text()
+  let (response, body) = @http.post_text(
+    grant.url,
+    message.stringify(),
+    headers~,
+  )
+  let text = body
   (response.code, if text.is_empty() { None } else { Some(@json.parse(text)) })
 }
 
@@ -199,7 +203,7 @@ async test "HTTP clients select tool groups for discovery and calls" {
       })
       assert_eq(result.render_text(), "s-filtered {\"tab\":3}")
       // Use a raw call to check the protocol error for an excluded tool.
-      let (response, body) = @http.post(
+      let (response, body) = @http.post_text(
         grant.url,
         request(9, "tools/call", { "name": "echo" }).stringify(),
         headers={
@@ -209,7 +213,7 @@ async test "HTTP clients select tool groups for discovery and calls" {
       )
       assert_eq(response.code, 200)
       assert_true(
-        body.json() is { "error": { "code": Number(-32602, ..), .. }, .. },
+        @json.parse(body) is { "error": { "code": Number(-32602, ..), .. }, .. },
       )
     })
   })
@@ -323,7 +327,7 @@ async test "requests without a granted token, or from a web origin, are refused"
     // enough for it.
     assert_true(post(grant, ping, origin="https://example.com") is (403, None))
     assert_true(post({ ..grant, url: grant.url + "x", }, ping) is (404, None))
-    let (response, _) = @http.get(grant.url, headers={
+    let (response, _) = @http.get_text(grant.url, headers={
       "Authorization": grant.authorization,
     })
     assert_eq(response.code, 405)
@@ -334,12 +338,12 @@ async test "requests without a granted token, or from a web origin, are refused"
 async test "a body that is not JSON is a parse error" {
   with_server(server => {
     let grant = grant(server, "s-parse")
-    let (response, body) = @http.post(grant.url, "{not json", headers={
+    let (response, body) = @http.post_text(grant.url, "{not json", headers={
       "Authorization": grant.authorization,
     })
     assert_eq(response.code, 400)
     assert_true(
-      body.json() is { "error": { "code": Number(-32700, ..), .. }, .. },
+      @json.parse(body) is { "error": { "code": Number(-32700, ..), .. }, .. },
     )
   })
 }

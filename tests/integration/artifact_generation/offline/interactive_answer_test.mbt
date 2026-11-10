@@ -32,9 +32,7 @@ async test "interactive answer generation repairs script and component diagnosti
         "index.html",
       ]
       let sources = [
-        for name in files => {
-          @fs.read_file("share/artifact/rabbita/" + name).text()
-        }
+        for name in files => @fs.read_text("share/artifact/rabbita/" + name)
       ]
       let create =
         #|---
@@ -100,8 +98,8 @@ async test "interactive answer generation repairs script and component diagnosti
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       group.spawn_bg(no_wait=true) <| () => {
         server.run_forever(
-          (_request, body, conn) => {
-            bodies.push(body.read_all().text())
+          (_request, conn) => {
+            bodies.push(conn.text.read_all())
             assert_false(@fs.exists(scratch + "/invalid-executed"))
             if bodies.length() == 4 {
               assert_false(@fs.exists(scratch + "/artifact/speedup-v1.html"))
@@ -112,8 +110,8 @@ async test "interactive answer generation repairs script and component diagnosti
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "text/event-stream",
             })
-            conn.write("data: \{responses[bodies.length() - 1]}\n\n")
-            conn.write("data: [DONE]\n\n")
+            conn.write_string("data: \{responses[bodies.length() - 1]}\n\n")
+            conn.write_string("data: [DONE]\n\n")
           },
           max_connections=responses.length(),
         )
@@ -136,7 +134,7 @@ async test "interactive answer generation repairs script and component diagnosti
           api_url=url,
           session=Session(
             SessionId("interactive-answer"),
-            system_prompt=@fs.read_file("prompt/default_prompt.mbt.md").text(),
+            system_prompt=@fs.read_text("prompt/default_prompt.mbt.md"),
           ),
           content=Content([
             Text("Explain parallel speedup with an interactive answer"),

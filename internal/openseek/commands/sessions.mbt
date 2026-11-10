@@ -66,7 +66,7 @@ async fn sessions_compact(matches : @argparse.Matches) -> Unit {
   let from_sequence = required_positive_int(from_input, "--from")
   let to_sequence = required_positive_int(to_input, "--to")
   let summary_path = @workspace_path.resolve(workspace_root, compact_file)
-  let summary = @fs.read_file(summary_path).text()
+  let summary = @fs.read_text(summary_path)
   let compacted = store.compact(
     store.load(id),
     content=summary,
@@ -231,15 +231,10 @@ async fn session_listing_updated_at_ms(
   store : @store.SessionStore,
   listing : @store.SessionListing,
 ) -> Int64? {
-  let (seconds, nanoseconds) = @fs.mtime(store.session_file(listing.id())) catch {
+  let modified = @fs.mtime(store.session_file(listing.id())) catch {
     _ => return None
   }
-  Some(mtime_to_unix_millis(seconds, nanoseconds))
-}
-
-///|
-fn mtime_to_unix_millis(seconds : Int64, nanoseconds : Int32) -> Int64 {
-  seconds * 1000 + (nanoseconds / 1000000).to_int64()
+  Some(modified.msec())
 }
 
 ///|

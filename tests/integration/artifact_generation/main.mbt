@@ -7,7 +7,7 @@ async fn main {
       "Usage: artifact_generation ENGINE_SETTINGS_FILE [RESUME_ACCEPTANCE_DIRECTORY]",
     )
   }
-  let settings = @json.parse(@fs.read_file(settings_file).text())
+  let settings = @json.parse(@fs.read_text(settings_file))
   guard settings
     is {
       "provider": String("deepseek"),
@@ -37,18 +37,18 @@ async fn main {
     ) +
     "\n\nEnvironment\nWorkspace: \{workspace}\nSession scratch directory: \{scratch}\nBundled resources: \{resources}\n"
   let initial : @agent_session.Session = if resuming {
-    @json.from_json(@json.parse(@fs.read_file(root + "/session.json").text()))
+    @json.from_json(@json.parse(@fs.read_text(root + "/session.json")))
   } else {
     Session(SessionId("live-artifact"), system_prompt=system)
   }
   let latest = Ref(initial)
   let selected = if resuming && @fs.exists(root + "/selection.json") {
-    Some(@fs.read_file(root + "/selection.json").text())
+    Some(@fs.read_text(root + "/selection.json"))
   } else {
     None
   }
   let original_page = if selected is Some(_) {
-    Some(@fs.read_file(scratch + "/artifact/linear-v1.html").binary())
+    Some(@fs.read_binary(scratch + "/artifact/linear-v1.html"))
   } else {
     None
   }
@@ -70,7 +70,7 @@ async fn main {
           "用一个中文交互组件解释线性函数 y = ax + b。两个有标签的整数滑块分别调节 a、b（范围 -5 到 5、步长 1，id 分别为 a 和 b），初始 a=1、b=0；在 id=y2 的 output 中显示 x=2 时 y 的数值，并提供重置。不需要图像或 SVG，只围绕参数和结果解释这个问题。使用普通 MoonBit/Rabbita 源码和本地事件，调用内置打包脚本，输出文件名必须为 linear-v1.html。沿用起始项目的状态桥，提供数值字段 a、b、y_at_2，让用户能携带当前参数继续提问。只读取内置参考资料、依赖、这个空工作区和 scratch，不修改其他目录。先读产物指南和起始项目，用 init.mbtx 准备项目，源码写到新的 scratch 文件，再通过 write.mbtx 传入来源文件路径批量应用。检查并运行相关纯模型测试，打包成功后在最终回答引用页面。不要运行应用、开发服务器或浏览器。"
         }
         let content : @protocol.Content = Content([Text(task)])
-        @agent.run_turn_in_scope(
+        latest.val = @agent.run_turn_in_scope(
           runtime~,
           scope~,
           tools~,
@@ -99,27 +99,27 @@ async fn main {
   ) catch {
     error => Err(error)
   }
-  @fs.write_file(
+  @fs.write_text(
     root + "/session.json",
     ToJson::to_json(latest.val).stringify(indent=2),
     create_mode=CreateOrTruncate,
   )
   let session = match outcome {
-    Ok(session) => session
+    Ok(_) => latest.val
     Err(error) => fail("live acceptance did not finish: \{error}")
   }
   guard session.last_terminal() is Some(Finished(answer)) else {
     fail("live model did not finish; inspect the saved acceptance session")
   }
   if selected is Some(_) {
-    @fs.write_file(root + "/followup.md", answer, create_mode=CreateOrTruncate)
+    @fs.write_text(root + "/followup.md", answer, create_mode=CreateOrTruncate)
     assert_true(
       original_page is Some(bytes) &&
-      @fs.read_file(scratch + "/artifact/linear-v1.html").binary() == bytes,
+      @fs.read_binary(scratch + "/artifact/linear-v1.html") == bytes,
     )
     println("Live follow-up ready: \{root}/followup.md")
   } else {
-    @fs.write_file(root + "/answer.md", answer, create_mode=CreateOrTruncate)
+    @fs.write_text(root + "/answer.md", answer, create_mode=CreateOrTruncate)
     guard answer.contains("scratch/artifact/linear-v1.html") else {
       fail("live answer omitted the page reference")
     }

@@ -10,15 +10,15 @@ import {
   "moonbitlang/openseek/agent_subrun",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/mcp/host" @mcphost,
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/async/aqueue",
   "moonbitlang/core/argparse",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/openseek/cli",
-  "moonbitlang/async/stdio",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/stdio",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/json",
   "moonbitlang/openseek/mcp/config" @mcpconfig,
   "moonbitlang/openseek/mcp/tools" @mcptools,
@@ -29,10 +29,21 @@ import {
 
 import {
   "moonbitlang/openseek/internal/openseek/testkit",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
 } for "test"
 
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/aqueue",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+    "moonbitlang/core/async/stdio",
+  ],
+)

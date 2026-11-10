@@ -2,7 +2,7 @@
 async test "PTC real script edits and receives reply without deadlock" {
   @vfs.with_tmpdir(ws => {
     @async.with_task_group(group => {
-      @fs.write_file("\{ws}/note.txt", "old\n")
+      @fs.write_text("\{ws}/note.txt", "old\n")
       let state = @agent_tool.FileStateMap()
       state.record_created(
         "\{ws}/note.txt",
@@ -47,7 +47,7 @@ async test "PTC real script edits and receives reply without deadlock" {
       })
       assert_false(output.is_error, msg=output.content)
       assert_true(output.content.contains("reply received"))
-      assert_eq(@fs.read_file("\{ws}/note.txt").text(), "final\n")
+      assert_eq(@fs.read_text("\{ws}/note.txt"), "final\n")
       assert_true(
         state.created_and_unchanged(
           "\{ws}/note.txt",
@@ -145,7 +145,7 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         assert_false(output.is_error, msg=output.content)
         assert_true(output.content.contains("foreground done"))
       }
-      assert_eq(@fs.read_file("\{ws}/saved.mbtx").text(), source)
+      assert_eq(@fs.read_text("\{ws}/saved.mbtx"), source)
       for
         args in [
           ({ "ptc": true, "source": source, "escalated": true } : Json),
@@ -216,7 +216,7 @@ async test "PTC leaves the script namespace and source unchanged" {
       )
       assert_false(output.is_error, msg=output.content)
       assert_true(output.content.contains("user-owned name"))
-      assert_eq(@fs.read_file("\{ws}/unchanged.mbtx").text(), source)
+      assert_eq(@fs.read_text("\{ws}/unchanged.mbtx"), source)
       // No tool call was made, so no trace is persisted with the result.
       assert_true(output.data is None)
     })
@@ -323,7 +323,7 @@ async test "PTC write and remove preserve existing permissions and deletion appr
       assert_false(@fs.exists("\{ws}/outside.txt"))
       assert_false(@fs.exists("\{ws}/forbidden.mbt"))
       assert_eq(
-        @fs.read_file("\{ws}/allowed/source.mbt").text(),
+        @fs.read_text("\{ws}/allowed/source.mbt"),
         "fn f() -> Int { 1 }",
       )
     })

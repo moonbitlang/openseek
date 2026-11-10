@@ -79,8 +79,8 @@ pub struct Server {
 /// own task, which ends with the group. Every failure a task returns is also
 /// reported as the event it always was. The connections' reader/writer tasks
 /// run on `scope`'s group and live until it ends.
-pub fn[X] start(
-  scope : @agent_runtime.AgentTaskScope[X],
+pub fn start(
+  scope : @agent_runtime.AgentTaskScope,
   servers : Array[@config.McpServer],
   client_name~ : String,
   client_version~ : String,
@@ -247,8 +247,8 @@ fn cut(text : String, limit : Int32, marked~ : Bool) -> String {
 /// including discovery outrunning `discovery_timeout_ms`, so a server that
 /// handshakes but never answers `tools/list` cannot hang the engine's startup.
 /// Cancellation propagates.
-async fn[X] connect_server(
-  scope : @agent_runtime.AgentTaskScope[X],
+async fn connect_server(
+  scope : @agent_runtime.AgentTaskScope,
   server : @config.McpServer,
   client_name~ : String,
   client_version~ : String,

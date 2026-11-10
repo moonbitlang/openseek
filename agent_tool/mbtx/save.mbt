@@ -38,8 +38,8 @@ async fn save_script(
     }
   }
   check_scope()
-  let existing = try @fs.read_file(path).text() catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => None
+  let existing = try @fs.read_text(path) catch {
+    @os_error.OsError(NotFound, ..) => None
     error => raise error
   } noraise {
     existing => Some(existing)
@@ -54,7 +54,7 @@ async fn save_script(
   }
   file_state.create_parent_directories(path)
   check_scope()
-  @fs.write_file(path, source, create_mode=CreateNew)
+  @fs.write_text(path, source, create_mode=CreateNew)
   file_state.record_created(path, @agent_tool.content_digest(source))
   path
 }

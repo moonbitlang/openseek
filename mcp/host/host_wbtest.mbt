@@ -9,11 +9,11 @@ async fn send_body(
     is { "url": String(url), "token": String(handed), .. } else {
     fail("missing MCP host handoff")
   }
-  let (response, reply) = @http.post(url, body, headers={
+  let (response, reply) = @http.post_text(url, body.stringify(), headers={
     "Authorization": "Bearer \{token.unwrap_or(handed)}",
   })
   if response.code == 200 {
-    (response.code, Some(reply.json()))
+    (response.code, Some(@json.parse(reply)))
   } else {
     (response.code, None)
   }
@@ -223,7 +223,7 @@ async test "a listing pages through the catalog it started from" {
 ///|
 async test "the MCP host saves a result's images and names their files" {
   let image = @protocol.Image::from_bytes(
-    @fs.read_file("deepseek/client/testdata/two-colors.png").binary(),
+    @fs.read_binary("deepseek/client/testdata/two-colors.png"),
   )
   let call : Json = {
     "version": 1,
@@ -261,7 +261,7 @@ async test "the MCP host saves a result's images and names their files" {
       assert_true(
         path.has_prefix("\{directory}/mcp-image-") && path.has_suffix(".png"),
       )
-      assert_eq(@fs.read_file(path).binary(), image.bytes)
+      assert_eq(@fs.read_binary(path), image.bytes)
     }
   })
   // Without a directory the image is dropped, and the text says so.

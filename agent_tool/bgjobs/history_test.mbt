@@ -31,7 +31,7 @@ fn history_record(generation : String, id : String) -> @protocol.JobRecord {
 async fn store_record(root : String, record : @protocol.JobRecord) -> Unit {
   let directory = "\{root}/\{record.generation}"
   @fs.mkdir(directory, recursive=true, allow_exist=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{directory}/\{@protocol.job_storage_name(record.id)}.json",
     record.to_json().stringify(),
     create_mode=CreateOrTruncate,
@@ -60,12 +60,12 @@ async test "earlier job records are read from generations whose engine is gone" 
     store_record(root, history_record("gen-dead", "uuid-2"))
     owner_lock(root, "gen-dead").close()
     // A record stored under another job's name is not this file's.
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/gen-dead/\{@protocol.job_storage_name("uuid-9")}.json",
       history_record("gen-dead", "uuid-3").to_json().stringify(),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/gen-dead/broken.json",
       "{",
       create_mode=CreateOrTruncate,

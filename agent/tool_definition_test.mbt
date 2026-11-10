@@ -62,7 +62,7 @@ async test "registered remove uses approval without holding the shared file gate
       let tools = @agent.build_tools(runtime, AgentTaskScope(group))
       registered.val = Some(tools)
       for should_delete in [true, false] {
-        @fs.write_file("\{dir}/target.txt", "existing", create_mode=CreateNew)
+        @fs.write_text("\{dir}/target.txt", "existing", create_mode=CreateNew)
         let result = @agent_tool.execute_tool_call(
           @agent_tool.AgentToolCall::from_arguments("remove", {
             "path": "target.txt",
@@ -75,17 +75,11 @@ async test "registered remove uses approval without holding the shared file gate
         assert_eq(@fs.exists("\{dir}/target.txt"), !should_delete)
         if !should_delete {
           assert_true(out.content.contains("changed while awaiting approval"))
-          assert_eq(
-            @fs.read_file("\{dir}/target.txt").text(),
-            "written while waiting",
-          )
+          assert_eq(@fs.read_text("\{dir}/target.txt"), "written while waiting")
         }
       }
       assert_eq(asks, 2)
-      assert_eq(
-        @fs.read_file("\{dir}/other.txt").text(),
-        "written while waiting",
-      )
+      assert_eq(@fs.read_text("\{dir}/other.txt"), "written while waiting")
     })
   })
 }
@@ -121,7 +115,7 @@ async test "registered mbtx receives the session scratch write permission" {
       assert_false(out.is_error, msg=out.content)
     })
     // Agent task cleanup removes its temporary jobs, not session scratch.
-    assert_eq(@fs.read_file("\{scratch}/value.txt").text(), "retained")
+    assert_eq(@fs.read_text("\{scratch}/value.txt"), "retained")
     assert_true(@fs.exists("\{scratch}/helper.mbtx"))
   })
 }

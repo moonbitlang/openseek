@@ -104,9 +104,9 @@ struct ShellExecution {
 /// the PARENT's fd 0 — under `openseek serve` that descriptor is the JSONL
 /// command channel, and a child that reads stdin would consume the engine's own
 /// commands. Omitting it therefore does not fall back to inheritance: the child
-/// gets a pipe of its own whose write end is closed at once, so it reads EOF
-/// immediately (on Windows too, where inheriting the engine's held-open pipe
-/// hangs `git`). Pass a redirect when the program should actually read something.
+/// reads the null device, so it sees EOF immediately (on Windows too, where
+/// inheriting the engine's held-open pipe hangs `git`). Pass another input when
+/// the program should actually read something.
 ///
 /// `cancel_handler` is how the process is ended when the execution is stopped
 /// or its group is cancelled; by default it is killed at once. A program that
@@ -114,12 +114,12 @@ struct ShellExecution {
 /// gives that signal and a grace before killing. With one, the execution's
 /// output is drained until the process has exited even when the group is
 /// being cancelled, so the handler must end the process.
-pub async fn[X] ShellExecution::start(
-  scope : @agent_runtime.AgentTaskScope[X],
+pub async fn ShellExecution::start(
+  scope : @agent_runtime.AgentTaskScope,
   program~ : String,
   args~ : Array[String],
   cwd? : String,
-  stdin? : &@process.ProcessInput,
+  stdin? : @process.ProcessInput,
   inline_cap~ : Int32 = default_inline_cap,
   hard_cap~ : Int32 = default_hard_cap,
   spill_path? : String,
@@ -134,15 +134,6 @@ pub async fn[X] ShellExecution::start(
     hard_cap~,
     spill_path?,
   )
-  let (reader, writer) = @process.read_from_process()
-  let child_stdin : &@process.ProcessInput = match stdin {
-    Some(input) => input
-    None => {
-      let (stdin_reader, stdin_writer) = @process.write_to_process()
-      stdin_writer.close()
-      stdin_reader
-    }
-  }
   // The handler runs on every cancellation, a requested stop or the group's
   // teardown alike; teardown requests nothing, so it is recorded here, before
   // the handler's own effects, unless a cause is already known.
@@ -154,9 +145,9 @@ pub async fn[X] ShellExecution::start(
     group,
     program,
     args,
-    stdin=child_stdin,
-    stdout=writer,
-    stderr=writer,
+    stdin=stdin.unwrap_or(Empty),
+    stdout=Collect,
+    stderr=DuplicateStdout,
     cwd?=cwd.map(cwd => cwd.clamped_view()),
     extra_env?,
     cancel_handler=CancellationHandler(pid => {
@@ -168,6 +159,7 @@ pub async fn[X] ShellExecution::start(
     no_wait=true,
     no_console_window=true,
   )
+  let reader = process.stdout
   let exec = {
     sink,
     process,
@@ -227,17 +219,19 @@ async fn ShellExecution::monitor(
     reads.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       defer ignore(reader_done.try_put(()) catch { _ => false })
       errdefer self.request_stop()
+      let buffer = FixedArray::make(1024, b'\x00')
       for ;; {
         match
-          (reader.read_some(max_len=1024) catch {
+          (reader.read_into(buffer) catch {
             error => {
               let message = "failed to read process output: \{error}"
               self.sink.failure = Some(message)
               fail(message)
             }
           }) {
-          None => break
-          Some(bytes) => {
+          0 => break
+          read => {
+            let bytes = Bytes::from_array(buffer[:read])
             self.sink.append_chunk(bytes)
             // Output-limit watchdogs, two thresholds:
             // - Foreground (`kill_when_full`): stop the child as soon as output
@@ -546,10 +540,10 @@ async test "background flips to Backgrounded and keeps running" {
 
 ///|
 /// Windows twin of the stdin regression: `ShellExecution::start` must hand the
-/// child its own immediately-closed stdin pipe, so the child sees EOF at once
-/// instead of inheriting the engine's host-held stdin pipe (which hangs git).
+/// child the null device as stdin, so the child sees EOF at once instead of
+/// inheriting the engine's host-held stdin pipe (which hangs git).
 #cfg(platform="windows")
-async test "execution child sees an immediately-closed stdin pipe on Windows" {
+async test "execution child sees an empty redirected stdin on Windows" {
   @async.with_task_group(group => {
     let exec = ShellExecution::start(
       AgentTaskScope(group),

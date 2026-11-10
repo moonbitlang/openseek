@@ -28,6 +28,7 @@ async fn answered(
   desk : ApprovalDesk,
   allow : Bool,
 ) -> @agent_runtime.ApprovalOutcome {
+  let mut outcome : @agent_runtime.ApprovalOutcome = Rejected
   @async.with_task_group(group => {
     let asked = group.spawn(() => {
       desk.ask({
@@ -39,8 +40,9 @@ async fn answered(
     await_standing(desk)
     guard desk.standing() is Some(id) else { fail("no question was announced") }
     desk.settle(id, allow)
-    asked.wait()
+    outcome = asked.wait()
   })
+  outcome
 }
 
 ///|
