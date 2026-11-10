@@ -182,7 +182,7 @@
   gap: var(--space-3);
   min-width: 0;
   min-height: 2em;
-  padding: 0 var(--space-2) 0 var(--space-4);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
@@ -205,7 +205,7 @@
   align-items: center;
   align-self: stretch;
   flex: 1 1 auto;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 .conversation-content > .sidebar-label,
@@ -548,13 +548,13 @@
   color: var(--color-text-primary);
 }
 .conversation-row.nested {
-  padding-left: var(--space-6);
+  padding-left: var(--space-5);
 }
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  /* Align beneath titles: 2.5rem includes the leading twisty cell. */
-  padding: 0 var(--space-4) 0 2.5rem;
+  /* Match nested titles: row inset, twisty cell, then content gap. */
+  padding: 0 var(--space-4) 0 calc(var(--space-5) + 1rem + var(--space-2));
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -612,11 +612,11 @@ button.row-twisty:hover {
 }
 
 .conversation-row.subrun {
-  padding-left: 2rem;
+  padding-left: calc(2rem - var(--space-2));
   color: var(--color-text-muted);
 }
 .conversation-row.subrun.nested {
-  padding-left: 2.5rem;
+  padding-left: calc(2.5rem - var(--space-2));
 }
 
 #project-picker-dialog {
