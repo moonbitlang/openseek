@@ -18,9 +18,15 @@ pub suberror ConfigError {
 
 // Types and methods
 #derive(Eq, @debug.Debug)
+pub(all) struct HeadersHelperCommand {
+  command : String
+  arguments : Array[String]
+}
+
+#derive(Eq, @debug.Debug)
 pub(all) enum McpServer {
   Stdio(name~ : String, command~ : String, args~ : Array[String], env~ : Map[String, String])
-  Http(name~ : String, url~ : String, headers~ : Map[String, String])
+  Http(name~ : String, url~ : String, headers~ : Map[String, String], headers_helpers~ : Array[HeadersHelperCommand])
 }
 pub fn McpServer::name(Self) -> String
 pub fn McpServer::target(Self) -> String

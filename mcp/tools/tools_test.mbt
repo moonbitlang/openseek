@@ -383,6 +383,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
     let scope = @agent_runtime.AgentTaskScope(group)
     let servers = [
       @config.Http(
+        headers_helpers=[],
         name="remote",
         url="http://127.0.0.1:\{server.addr.port()}/mcp",
         headers=Map([]),
@@ -568,6 +569,7 @@ async fn[X] connect_all(
   servers : Array[@config.McpServer],
   client_name~ : String,
   client_version~ : String,
+  workspace_root? : String,
   discovery_timeout_ms? : Int32,
 ) -> Array[@tools.ServerEntry] {
   let entries : Array[@tools.ServerEntry] = []
@@ -577,6 +579,7 @@ async fn[X] connect_all(
       servers,
       client_name~,
       client_version~,
+      workspace_root?,
       discovery_timeout_ms?,
     ) {
     entries.push(server.connecting.wait())
@@ -669,6 +672,7 @@ async test "start returns before a server settles, which its task then tells" {
           name="slow",
           url="http://127.0.0.1:\{server.addr.port()}/mcp",
           headers=Map([]),
+          headers_helpers=[],
         ),
       ],
       client_name="openseek",
