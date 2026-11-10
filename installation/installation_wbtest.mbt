@@ -1,6 +1,6 @@
 ///|
 async fn executable(path : String, text : String) -> Unit {
-  @fs.write_file(path, "#!/bin/sh\nprintf '\{text}\\n'\n", permission=0o755)
+  @fs.write_text(path, "#!/bin/sh\nprintf '\{text}\\n'\n", permission=0o755)
 }
 
 ///|
@@ -26,10 +26,10 @@ async fn fixture_bundle(destination : String) -> Unit {
       "doc/moonbit/index.md", "doc/moonbit/language/index.md", "doc/moonbit/language/fundamentals.md",
       "doc/moonbit/toolchain/index.md", "workflow/read.mbtx",
     ] {
-    @fs.write_file(destination + "/share/" + file, "resource")
+    @fs.write_text(destination + "/share/" + file, "resource")
   }
   @fs.mkdir(destination + "/share/licenses", allow_exist=true)
-  @fs.write_file(destination + "/share/licenses/LICENSE", "fixture license")
+  @fs.write_text(destination + "/share/licenses/LICENSE", "fixture license")
 }
 
 ///|
@@ -63,7 +63,7 @@ async test "setup installs missing dependencies and reuses them offline" {
   assert_true(usable(home + "/.moon/bin/moon", ["version"]))
   assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
   assert_eq(
-    @fs.read_file(home + "/.openseek/share/licenses/LICENSE").text(),
+    @fs.read_text(home + "/.openseek/share/licenses/LICENSE"),
     "fixture license",
   )
   @fs.rmdir(home + "/download", recursive=true)
@@ -74,13 +74,13 @@ async test "setup installs missing dependencies and reuses them offline" {
     toolchain=_ => fail("must not reinstall SDK"),
   )
   assert_eq(
-    @fs.read_file(
+    @fs.read_text(
       home + "/.openseek/share/doc/moonbit/language/fundamentals.md",
-    ).text(),
+    ),
     "resource",
   )
   assert_eq(
-    @fs.read_file(home + "/.openseek/share/licenses/LICENSE").text(),
+    @fs.read_text(home + "/.openseek/share/licenses/LICENSE"),
     "fixture license",
   )
 }
@@ -107,7 +107,7 @@ async test "setup resolves a launcher symlink outside the extracted distribution
     "bootstrap-cli\n",
   )
   assert_eq(
-    @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
+    @fs.read_text(home + "/.openseek/share/doc/moonbit/index.md"),
     "resource",
   )
 }
@@ -121,11 +121,11 @@ async test "setup reuses PATH MoonBit but replaces the complete resource tree" {
   defer @fs.rmdir(home, recursive=true)
   let source_cli = fixture_distribution(home)
   fixture_bundle(home + "/.openseek")
-  @fs.write_file(
+  @fs.write_text(
     home + "/.openseek/share/doc/moonbit/index.md",
     "old documentation",
   )
-  @fs.write_file(home + "/.openseek/share/doc/moonbit/obsolete.md", "old")
+  @fs.write_text(home + "/.openseek/share/doc/moonbit/obsolete.md", "old")
   @fs.remove(home + "/.openseek/share/doc/moonbit/language/fundamentals.md")
   install(
     home,
@@ -145,14 +145,14 @@ async test "setup reuses PATH MoonBit but replaces the complete resource tree" {
     "bootstrap-cli\n",
   )
   assert_eq(
-    @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
+    @fs.read_text(home + "/.openseek/share/doc/moonbit/index.md"),
     "resource",
   )
   assert_false(@fs.exists(home + "/.openseek/share/doc/moonbit/obsolete.md"))
   assert_eq(
-    @fs.read_file(
+    @fs.read_text(
       home + "/.openseek/share/doc/moonbit/language/fundamentals.md",
-    ).text(),
+    ),
     "resource",
   )
 }
@@ -168,12 +168,12 @@ async test "setup keeps a working MoonBit and CLI" {
   fixture_toolchain(home + "/.moon")
   fixture_bundle(home + "/.openseek")
   executable(home + "/.openseek/bin/openseek", "keep-cli")
-  @fs.write_file(home + "/.moon/credentials", "keep")
+  @fs.write_text(home + "/.moon/credentials", "keep")
   install(home, source_cli, available=isolated_available, toolchain=_ => {
     fail("SDK must not be replaced")
   })
   assert_eq(command(home + "/.openseek/bin/openseek", ["--help"]), "keep-cli\n")
-  assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
+  assert_eq(@fs.read_text(home + "/.moon/credentials"), "keep")
 }
 
 ///|
@@ -194,7 +194,7 @@ async test "setup propagates installer failure and trusts successful return" {
   let error = try {
     install(home, source_cli, available~, toolchain=destination => {
       @fs.mkdir(destination, recursive=true)
-      @fs.write_file(destination + "/credentials", "keep")
+      @fs.write_text(destination + "/credentials", "keep")
       fail("installer failed")
     })
     "accepted"
@@ -204,7 +204,7 @@ async test "setup propagates installer failure and trusts successful return" {
   assert_true(error.contains("installer failed"))
   install(home, source_cli, available~, toolchain=fixture_toolchain)
   assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
-  assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
+  assert_eq(@fs.read_text(home + "/.moon/credentials"), "keep")
 }
 
 ///|
@@ -252,7 +252,7 @@ async test "a missing resource source fails before installing MoonBit or deletin
   assert_true(error.contains(home + "/download/share"))
   assert_false(@fs.exists(home + "/.moon"))
   assert_eq(
-    @fs.read_file(home + "/.openseek/share/licenses/LICENSE").text(),
+    @fs.read_text(home + "/.openseek/share/licenses/LICENSE"),
     "fixture license",
   )
 }
