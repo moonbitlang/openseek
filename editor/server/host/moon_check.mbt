@@ -41,11 +41,12 @@ fn new_native_moon_check_diagnostics(
     // `moon check` exits nonzero whenever errors exist, so the exit code is
     // ignored and stdout is parsed unconditionally.
     Some(
-      @process.collect_stdout(
+      @process.run(
         moon_command,
         ["check", "--output-json"],
+        stdout=Collect,
         cwd=normalize_host_path(root.val),
-      ).1.text(),
+      ).stdout_text(),
     ) catch {
       _ => None
     }

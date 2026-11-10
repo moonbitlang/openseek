@@ -1,10 +1,18 @@
 import {
   "moonbitlang/jsonl",
-  "moonbitlang/async",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
 }
 
 supported_targets = "+native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/process",
+  ],
+)
