@@ -105,9 +105,14 @@ fn checkout_target() -> String {
 }
 
 ///|
-fn merged_target() -> String {
-  MenuTarget + ":merged"
+/// The merged row's menu target names the pull requests it stands for, so a
+/// menu opened over one set closes rather than removing another.
+fn merged_target(merged : Array[@protocol.SessionArtifact]) -> String {
+  MergedTarget + merged.map(artifact => artifact.url).join(" ")
 }
+
+///|
+const MergedTarget : String = "conv-changes:merged:"
 
 ///|
 fn attached_target(artifact : @protocol.SessionArtifact) -> String {
@@ -194,11 +199,13 @@ pub fn rows(
     items.push(checkout_row(locale, checkout))
   }
   let merged : Array[@html.Html] = []
+  let merged_artifacts : Array[@protocol.SessionArtifact] = []
   for artifact in attached(conversation, checkout, state) {
     let pull_request = state.summary_of(artifact)
     let row = attached_row(locale, artifact, pull_request)
     if pull_request is Some({ state: Merged, .. }) {
       merged.push(row)
+      merged_artifacts.push(artifact)
     } else {
       items.push(row)
     }
@@ -222,6 +229,7 @@ pub fn rows(
     rows.push(
       merged_fold(
         locale,
+        merged_target(merged_artifacts),
         merged.length(),
         open,
         emit(MergedToggled(conversation)),
@@ -264,11 +272,13 @@ pub fn menu(
       entries: link_entries(locale, pull_request.url, open_link~),
     })
   }
-  if target == merged_target() {
+  if target.has_prefix(MergedTarget) {
     let merged = attached(conversation, checkout, state).filter(artifact => {
       state.summary_of(artifact) is Some({ state: Merged, .. })
     })
-    guard !merged.is_empty() else { return None }
+    guard !merged.is_empty() && merged_target(merged) == target else {
+      return None
+    }
     // Removing what is already being removed would do nothing, so the action
     // waits until those removals answer.
     let removing = merged
@@ -637,6 +647,7 @@ fn toggle_button(label : String, command : @cmd.Cmd) -> @html.Html {
 /// menu takes them all off the list.
 fn merged_fold(
   locale : @i18n.Locale,
+  target : String,
   count : Int32,
   open : Bool,
   toggle : @cmd.Cmd,
@@ -665,7 +676,7 @@ fn merged_fold(
             @icons.icon(@icons.icon_chevron_down),
           ],
         ),
-        more_button(more, merged_target()),
+        more_button(more, target),
       ]),
     ]),
   ])

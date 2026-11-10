@@ -730,13 +730,16 @@ test "the merged row's menu removes every merged pull request" {
       state,
       emit,
       open_link=_ => @cmd.none,
-      "conv-changes:merged",
+      "conv-changes:merged:" + pull(2).url + " " + pull(3).url,
     )
   }
   // With nothing merged there is no merged row, so no menu.
   assert_true(menu(state) is None)
   let state = summarize(state, 1, described(1, "open"))
   let state = summarize(state, 2, described(2, "merged"))
+  // A menu opened over one set of merged pull requests does not remove
+  // another.
+  assert_true(menu(state) is None)
   let state = summarize(state, 3, described(3, "merged"))
   guard menu(state) is Some({ entries: [Action(remove)], .. }) else {
     fail("the merged row's menu is not one Remove")
