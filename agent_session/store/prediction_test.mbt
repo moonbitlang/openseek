@@ -7,7 +7,7 @@ async test "completed predictions survive reopening without changing the transcr
     .append(User(UserMessage(Content([Text("fix it")]))))
     .append(Terminal(Finished("fixed")))
   store.create(session)
-  let transcript = @fs.read_file(store.session_file(id)).text()
+  let transcript = @fs.read_text(store.session_file(id))
   assert_true(@store.SessionStore(store.root()).prediction(id) is None)
   let record : @protocol.PredictionRecord = {
     source_sequence: 2,
@@ -16,7 +16,7 @@ async test "completed predictions survive reopening without changing the transcr
   store.save_prediction(session, record)
   let reopened = @store.SessionStore(store.root())
   assert_eq(reopened.prediction(id), Some(record))
-  assert_eq(@fs.read_file(store.session_file(id)).text(), transcript)
+  assert_eq(@fs.read_text(store.session_file(id)), transcript)
   let running = reopened.append(
     session,
     User(UserMessage(Content([Text("next")]))),
@@ -58,7 +58,7 @@ async test "legacy attempts and failures do not block a completed result" {
       "request_id": "legacy",
       "outcome": outcome,
     }
-    @fs.write_file(path, legacy.stringify())
+    @fs.write_text(path, legacy.stringify())
     assert_true(
       @store.SessionStore(store.root()).prediction(session.id()) is None,
     )
@@ -80,7 +80,7 @@ async test "corrupt prediction metadata remains an error rather than a cache mis
   defer @fs.rmdir(store.root(), recursive=true)
   let id = @agent_session.SessionId("corrupt")
   store.create(Session(id, system_prompt="system"))
-  @fs.write_file(store.root() + "/sessions/corrupt/prediction.json", "broken")
+  @fs.write_text(store.root() + "/sessions/corrupt/prediction.json", "broken")
   try store.prediction(id) catch {
     _ => ()
   } noraise {

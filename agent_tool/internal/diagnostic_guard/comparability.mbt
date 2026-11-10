@@ -188,9 +188,7 @@ async fn is_build_input(path : String) -> Bool {
     return false
   }
   for manifest in ["moon.pkg", "moon.pkg.json"] {
-    let text = @fs.read_file("\{dir}/\{manifest}").text() catch {
-      _ => continue
-    }
+    let text = @fs.read_text("\{dir}/\{manifest}") catch { _ => continue }
     if text.contains(name) {
       return true
     }

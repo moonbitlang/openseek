@@ -139,7 +139,7 @@ async test "edit replaces a unique exact match" {
     assert_false(output.is_error)
     guard output.brief is Some(brief) else { fail("expected a brief") }
     assert_eq(brief, "edited unique.txt:2 (1×)")
-    assert_eq(@fs.read_file(path).text(), "alpha\ndelta\ngamma\n")
+    assert_eq(@fs.read_text(path), "alpha\ndelta\ngamma\n")
   })
 }
 
@@ -170,7 +170,7 @@ async test "edit rejects replace_all even with a range" {
     )
     assert_true(output.is_error)
     assert_eq(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
       (
         #|token
         #|inside token
@@ -199,7 +199,7 @@ async test "edit resolves relative paths under the workspace root" {
       output.content,
       "ok: replaced 1 occurrence(s) at line 1 in \{path}",
     )
-    assert_eq(@fs.read_file(path).text(), "after")
+    assert_eq(@fs.read_text(path), "after")
   })
 }
 
@@ -217,7 +217,7 @@ async test "edit preserves surrounding multiline content" {
       "start_line": 1,
     })
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "fn main {\n  println(\"new\")\n}\n")
+    assert_eq(@fs.read_text(path), "fn main {\n  println(\"new\")\n}\n")
   })
 }
 
@@ -264,7 +264,7 @@ async test "edit inserts when old_string is empty" {
     })
     assert_false(output.is_error)
     assert_true(output.content.contains("ok: inserted line 2 in"))
-    let updated = @fs.read_file(path).text()
+    let updated = @fs.read_text(path)
     assert_eq(updated, "line1\ninserted\nline2\n")
   })
 }
@@ -290,7 +290,7 @@ async test "edit can append at end of file via start_line past the last line" {
     // The summary reports where the content actually landed (the requested
     // line was clamped), so the model gets real coordinates for follow-ups.
     assert_true(output.content.contains("ok: appended line 3 at end of file"))
-    assert_eq(@fs.read_file(path).text(), "a\nb\nc\n")
+    assert_eq(@fs.read_text(path), "a\nb\nc\n")
   })
 }
 
@@ -318,7 +318,7 @@ async test "edit reports the inclusive line range of a multi-line insert" {
     })
     assert_false(output.is_error)
     assert_true(output.content.contains("ok: inserted lines 2-3 in"))
-    assert_eq(@fs.read_file(path).text(), "one\nx\ny\ntwo\nthree\n")
+    assert_eq(@fs.read_text(path), "one\nx\ny\ntwo\nthree\n")
   })
 }
 
@@ -347,7 +347,7 @@ async test "edit reports the inclusive line range of a multi-line append" {
     assert_true(
       output.content.contains("ok: appended lines 3-4 at end of file"),
     )
-    assert_eq(@fs.read_file(path).text(), "a\nb\nc\nd\n")
+    assert_eq(@fs.read_text(path), "a\nb\nc\nd\n")
   })
 }
 
@@ -365,7 +365,7 @@ async test "edit append onto a file without a trailing newline shares the last l
     })
     assert_false(output.is_error)
     assert_true(output.content.contains("ok: appended line 2 at end of file"))
-    assert_eq(@fs.read_file(path).text(), "a\nbc\n")
+    assert_eq(@fs.read_text(path), "a\nbc\n")
   })
 }
 
@@ -420,7 +420,7 @@ async test "edit rejects invalid moon.pkg comment rewrite" {
       "new_string": "# comment",
       "start_line": 1,
     })
-    let read_back = @fs.read_file(path).text()
+    let read_back = @fs.read_text(path)
     assert_true(output.is_error)
     assert_true(
       output.content.contains("moon.pkg use // for comment syntax, not #"),
@@ -440,7 +440,7 @@ async test "edit rejects generated mbti files" {
       "new_string": "new",
       "start_line": 1,
     })
-    let read_back = @fs.read_file(path).text()
+    let read_back = @fs.read_text(path)
     assert_true(output.is_error)
     assert_true(output.content.contains("run moon info"))
     assert_eq(read_back, "package old\n")
@@ -485,7 +485,7 @@ async test "edit reports range for missing match" {
       "error editing \{path}: old_string not found in line range 2-2\n\n─── file context ───────────────────────────────\n```\n   1 | alpha\n > 2 | beta\n   3 | alpha\n   4 | \n```\n",
     )
     assert_true(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "alpha\nbeta\nalpha\n")
+    assert_eq(@fs.read_text(path), "alpha\nbeta\nalpha\n")
   })
 }
 
@@ -507,7 +507,7 @@ async test "edit replaces first match from start line" {
       "ok: replaced 1 occurrence(s) at line 1 in \{path}",
     )
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "alpha delta\nmiddle\nbeta")
+    assert_eq(@fs.read_text(path), "alpha delta\nmiddle\nbeta")
   })
 }
 
@@ -537,7 +537,7 @@ async test "edit replaces first match inside range" {
       "ok: replaced 1 occurrence(s) at line 2 in \{path}",
     )
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "beta\ndelta\nmiddle\nbeta\nbeta\n")
+    assert_eq(@fs.read_text(path), "beta\ndelta\nmiddle\nbeta\nbeta\n")
   })
 }
 
@@ -584,7 +584,7 @@ async test "edit gates .mbt results through moonc before writing" {
   @vfs.with_tmpdir(prefix="openseek-edit-gate-", dir => {
     let original = "///|\npub fn f() -> Int {\n  42\n}\n"
     let path = "\{dir}/a.mbt"
-    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
     // A breaking edit is rejected and the file is untouched.
     let out = run_edit({
       "path": path,
@@ -594,7 +594,7 @@ async test "edit gates .mbt results through moonc before writing" {
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("rejected: the edit would introduce"))
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     // A clean edit is applied.
     let ok = run_edit({
       "path": path,
@@ -603,11 +603,11 @@ async test "edit gates .mbt results through moonc before writing" {
       "start_line": 3,
     })
     assert_false(ok.is_error)
-    assert_true(@fs.read_file(path).text().contains("  43"))
+    assert_true(@fs.read_text(path).contains("  43"))
     // A file with a pre-existing parse error still accepts an unrelated edit.
     let pre_broken = "///|\npub fn g() -> Int {\n  1 +\n}\n// tail\n"
     let path2 = "\{dir}/b.mbt"
-    @fs.write_file(path2, pre_broken, create_mode=CreateOrTruncate)
+    @fs.write_text(path2, pre_broken, create_mode=CreateOrTruncate)
     let kept = run_edit({
       "path": path2,
       "old_string": "// tail",
@@ -615,7 +615,7 @@ async test "edit gates .mbt results through moonc before writing" {
       "start_line": 5,
     })
     assert_false(kept.is_error)
-    assert_true(@fs.read_file(path2).text().contains("(edited)"))
+    assert_true(@fs.read_text(path2).contains("(edited)"))
     // Opt-out: the breaking edit lands.
     let fx = run_edit({
       "path": path,
@@ -625,7 +625,7 @@ async test "edit gates .mbt results through moonc before writing" {
       "revert_on_parse_errors": false,
     })
     assert_false(fx.is_error)
-    assert_true(@fs.read_file(path).text().contains("match 43 {"))
+    assert_true(@fs.read_text(path).contains("match 43 {"))
   })
 }
 
@@ -643,7 +643,7 @@ async fn assert_link_edit_gated(
   @vfs.with_tmpdir(prefix~, dir => {
     let target_path = "\{dir}/\{target}"
     let original = "///|\npub fn f() -> Int {\n  42\n}\n"
-    @fs.write_file(target_path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(target_path, original, create_mode=CreateOrTruncate)
     @fs.symlink(target~, "\{dir}/\{link}")
     let out = run_edit({
       "path": "\{dir}/\{link}",
@@ -653,7 +653,7 @@ async fn assert_link_edit_gated(
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("rejected: the edit would introduce"))
-    assert_eq(@fs.read_file(target_path).text(), original)
+    assert_eq(@fs.read_text(target_path), original)
   })
 }
 
@@ -708,7 +708,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
       #|keep one here
       #|beta one
       #|
-    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
     let preview = run_edit({
       "path": path,
       "old_string": "one",
@@ -720,7 +720,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
     assert_true(preview.content.contains("3 match(es) at 3 site(s)"))
     assert_true(preview.content.contains("file NOT modified"))
     // the preview never writes
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     // extract the emitted edits array, then DROP the middle site (line 2) —
     // the selection step is the feature's point
     let entries = preview_edits(preview.content)
@@ -741,7 +741,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
     }
     guard action is Respond(applied) else { fail("expected Respond") }
     assert_false(applied.is_error)
-    let text = @fs.read_file(path).text()
+    let text = @fs.read_text(path)
     assert_true(text.contains("alpha uno"))
     // the dropped entry was NOT applied
     assert_true(text.contains("keep one here"))
@@ -753,7 +753,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
 async test "replace_all_preview honors the range and collapses same-line matches" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/doc.txt"
-    @fs.write_file(
+    @fs.write_text(
       path,
       (
         #|foo before range
@@ -790,7 +790,7 @@ async test "replace_all_preview honors the range and collapses same-line matches
 async test "replace_all_preview shows a multiline match as a line span" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/span.txt"
-    @fs.write_file(
+    @fs.write_text(
       path,
       (
         #|head
@@ -822,7 +822,7 @@ async test "replace_all_preview caps the site list and says how to see more" {
     for index in 1..<=45 {
       lines.write_string("line \{index} zap\n")
     }
-    @fs.write_file(path, lines.to_string(), create_mode=CreateOrTruncate)
+    @fs.write_text(path, lines.to_string(), create_mode=CreateOrTruncate)
     let preview = run_edit({
       "path": path,
       "old_string": "zap",
@@ -844,7 +844,7 @@ async test "replace_all_preview caps the site list and says how to see more" {
 async test "replace_all_preview errors on no matches and on empty old_string" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/plain.txt"
-    @fs.write_file(path, "nothing here\n", create_mode=CreateOrTruncate)
+    @fs.write_text(path, "nothing here\n", create_mode=CreateOrTruncate)
     let missing = run_edit({
       "path": path,
       "old_string": "ghost",
@@ -878,7 +878,7 @@ async test "a many-match line does not starve later sites of the cap" {
       lines.write_string("q ")
     }
     lines.write_string("\nq alone\nq also\n")
-    @fs.write_file(path, lines.to_string(), create_mode=CreateOrTruncate)
+    @fs.write_text(path, lines.to_string(), create_mode=CreateOrTruncate)
     let preview = run_edit({
       "path": path,
       "old_string": "q",
@@ -905,7 +905,7 @@ async test "a minified dense line stays fast and yields a note, not a huge entry
     // and the whole-line entry would embed the 100k-char line twice — so the
     // site is reported with a note instead of an entry.
     let dense = String::make(100_000, 'q')
-    @fs.write_file(path, "\{dense}\nq alone\n", create_mode=CreateOrTruncate)
+    @fs.write_text(path, "\{dense}\nq alone\n", create_mode=CreateOrTruncate)
     let preview = run_edit({
       "path": path,
       "old_string": "q",
@@ -929,7 +929,7 @@ async test "a huge expanded replacement is estimated, never materialized" {
     // The line itself is small (100 chars), but 100 matches x a 2000-char
     // replacement would expand to ~200k — the estimate must catch it BEFORE
     // replace_all builds the string, and the site yields a note, no entry.
-    @fs.write_file(
+    @fs.write_text(
       path,
       "\{String::make(100, 'q')}\nq alone\n",
       create_mode=CreateOrTruncate,
@@ -959,7 +959,7 @@ async test "the entries array stays parseable under the result cap" {
     for index in 1..<=40 {
       lines.write_string("hit \{index}\n")
     }
-    @fs.write_file(path, lines.to_string(), create_mode=CreateOrTruncate)
+    @fs.write_text(path, lines.to_string(), create_mode=CreateOrTruncate)
     let preview = run_edit({
       "path": path,
       "old_string": "hit",
@@ -987,7 +987,7 @@ async test "context blocks are budgeted; entries still cover every site" {
     for index in 1..<=40 {
       lines.write_string("\{filler} hit \{index}\n")
     }
-    @fs.write_file(path, lines.to_string(), create_mode=CreateOrTruncate)
+    @fs.write_text(path, lines.to_string(), create_mode=CreateOrTruncate)
     let preview = run_edit({
       "path": path,
       "old_string": "hit",
@@ -1009,7 +1009,7 @@ async test "the expansion estimate does not overflow 32-bit arithmetic" {
     // 4096 one-char matches x ~2^19 growth = 2^31: a 32-bit estimate wraps
     // negative and sails past the guard, then replace_all would attempt a
     // ~2GiB string. The Int64 estimate must reject the site with a note.
-    @fs.write_file(
+    @fs.write_text(
       path,
       "\{String::make(4096, 'q')}\nq alone\n",
       create_mode=CreateOrTruncate,
@@ -1069,7 +1069,7 @@ async test "a write scope confines edit to its allowed paths" {
     }
     assert_true(blocked.is_error)
     assert_true(blocked.content.contains("write blocked"))
-    assert_true(@fs.read_file("\{dir}/other/b.txt").text() == "hello\n")
+    assert_true(@fs.read_text("\{dir}/other/b.txt") == "hello\n")
     // An in-scope link to an out-of-scope file is denied on its resolution.
     @fs.symlink(target="\{dir}/other/b.txt", "\{dir}/lib/link.txt")
     guard run({
@@ -1083,7 +1083,7 @@ async test "a write scope confines edit to its allowed paths" {
     }
     assert_true(via_link.is_error)
     assert_true(via_link.content.contains("write blocked"))
-    assert_true(@fs.read_file("\{dir}/other/b.txt").text() == "hello\n")
+    assert_true(@fs.read_text("\{dir}/other/b.txt") == "hello\n")
   })
 }
 

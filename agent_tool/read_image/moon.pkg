@@ -8,7 +8,14 @@ supported_targets = "+wasm+native"
 
 import {
   "moonbitlang/openseek/agent_tool",
-  "moonbitlang/async/fs",
-  "moonbitlang/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async",
   "moonbitlang/openseek_protocol" @protocol,
 } for "test"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

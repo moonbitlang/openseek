@@ -29,18 +29,21 @@ async fn git_run(
     }
   }
   let outcome = @async.with_timeout_opt(timeout_ms, () => {
-    @process.collect_output_merged(
+    @process.run(
       "git",
       args,
       extra_env=env,
       inherit_env=false,
+      stdout=Collect,
+      stderr=DuplicateStdout,
       cwd=cwd.clamped_view(),
     )
   }) catch {
     error => return { exit_code: -1, output: "git spawn failed: \{error}", }
   }
   match outcome {
-    Some((exit_code, data)) => { exit_code, output: data.text(), }
+    Some(result) =>
+      { exit_code: result.exit_code, output: result.stdout_text(), }
     None => { exit_code: -1, output: "git timed out after \{timeout_ms}ms", }
   }
 }

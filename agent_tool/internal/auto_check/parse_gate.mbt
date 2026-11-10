@@ -133,7 +133,7 @@ pub async fn content_parse_errors(
   // into a raised error that masks the gate's answer.
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   try {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/\{scratch_name}",
       content,
       create_mode=CreateOrTruncate,

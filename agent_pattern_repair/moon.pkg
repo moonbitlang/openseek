@@ -3,8 +3,8 @@ import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/deepseek",
-  "moonbitlang/async",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -15,4 +15,11 @@ dev_build(
   rule: "md_to_mbt_string",
   input: "pattern_repair_system_prompt.mbt.md",
   output: "generated_pattern_repair_system_prompt.mbt",
+)
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/process",
+  ],
 )

@@ -239,17 +239,16 @@ async fn perform_search(
   // Official DeepSeek expects `x-api-key`; an Anthropic-compatible proxy may
   // expect `Authorization: Bearer` — send both so either resolves.
   let attempt = () => {
-    @http.post("\{base_url}/messages", body, headers={
+    @http.post_text("\{base_url}/messages", body.stringify(), headers={
       "Content-Type": "application/json",
       "X-Api-Key": api_key,
       "Authorization": "Bearer \{api_key}",
       "Anthropic-Version": AnthropicVersion,
     })
   }
-  guard @async.with_timeout_opt(timeout_ms, attempt) is Some((resp, data)) else {
+  guard @async.with_timeout_opt(timeout_ms, attempt) is Some((resp, text)) else {
     raise SearchFailure("web search timed out after \{timeout_ms}ms")
   }
-  let text = data.text()
   guard resp.code >= 200 && resp.code < 300 else {
     raise SearchFailure(
       "DeepSeek search API error \{resp.code}: \{error_detail(text)}",

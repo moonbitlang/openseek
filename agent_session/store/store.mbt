@@ -253,7 +253,7 @@ async fn read_session_file(
   store : SessionStore,
   id : @agent_session.SessionId,
 ) -> ParsedSessionFile {
-  parse_session_file(id, @fs.read_file(store.session_file_path(id)).text())
+  parse_session_file(id, @fs.read_text(store.session_file_path(id)))
 }
 
 ///|
@@ -264,12 +264,12 @@ async fn file_fingerprint(path : String) -> FileFingerprint? {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return None }
   defer file.close()
   let size = file.size() catch { _ => return None }
-  let (mtime_seconds, mtime_nanoseconds) = file.mtime() catch {
-    _ => return None
-  }
-  let (ctime_seconds, ctime_nanoseconds) = file.ctime() catch {
-    _ => return None
-  }
+  let mtime = file.mtime() catch { _ => return None }
+  let mtime_seconds = mtime.sec()
+  let mtime_nanoseconds = mtime.nsec()
+  let ctime = file.ctime() catch { _ => return None }
+  let ctime_seconds = ctime.sec()
+  let ctime_nanoseconds = ctime.nsec()
   Some({
     size,
     mtime_seconds,
@@ -325,7 +325,7 @@ async fn ensure_session_is_current(
     _ => ()
   }
   let parsed = read_session_file(store, session.id()) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => {
+    @os_error.OsError(NotFound, ..) => {
       if session.last_sequence() != 0 {
         fail(
           "stale session snapshot for \{session.id().value()}: no durable session file, in-memory last sequence \{session.last_sequence()}",
@@ -364,9 +364,9 @@ async fn persist_event(
   if !repair_tail && @fs.exists(path) {
     // `sync=Data` (fdatasync) is the durability policy for event appends: a
     // returned append survives an OS crash, not just a process crash. It is
-    // also the `write_file` default today — stated explicitly so the policy
+    // also the `write_text` default today — stated explicitly so the policy
     // does not silently follow an upstream default change.
-    @fs.write_file(
+    @fs.write_text(
       path,
       ToJson::to_json(event).stringify() + "\n",
       create_mode=OpenOrCreate,
@@ -401,7 +401,7 @@ async fn write_text_atomic(
   dirs~ : Array[String],
 ) -> Unit {
   let tmp_path = "\{path}.tmp"
-  @fs.write_file(tmp_path, text, create_mode=CreateOrTruncate, sync=Data)
+  @fs.write_text(tmp_path, text, create_mode=CreateOrTruncate, sync=Data)
   @fs.rename(tmp_path, path, replace=true)
   for dir in dirs {
     sync_dir_best_effort(dir)
@@ -435,7 +435,7 @@ async fn ensure_dir_exists(dir : String, attempts~ : Int32 = 4) -> Unit {
     return
   }
   @fs.mkdir(dir, recursive=true) catch {
-    @os_error.OSError(_) as error if error.is_EEXIST() && attempts > 0 =>
+    @os_error.OsError(AlreadyExists, ..) if attempts > 0 =>
       ensure_dir_exists(dir, attempts=attempts - 1)
     error => if @fs.exists(dir) { () } else { raise error }
   }
@@ -566,7 +566,7 @@ pub async fn SessionStore::fork(
   }
   let title = self.title(source)
   @fs.mkdir(self.session_dir(fork), recursive=true) catch {
-    @os_error.OSError(_) as error if error.is_EEXIST() =>
+    @os_error.OsError(AlreadyExists, ..) =>
       fail("session \{fork.value()} already exists")
     error => raise error
   }
@@ -657,8 +657,8 @@ pub async fn SessionStore::title(
   self : SessionStore,
   id : @agent_session.SessionId,
 ) -> String? {
-  let text = @fs.read_file(self.title_path(id)).text() catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+  let text = @fs.read_text(self.title_path(id)) catch {
+    @os_error.OsError(NotFound, ..) => return None
     error => raise error
   }
   let title = text.trim().to_owned()
@@ -707,9 +707,9 @@ async fn first_prompt_in_log(path : String) -> String {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
   // The first line is the session header; the prompt scan starts after it.
-  let _ = file.read_until("\n") catch { _ => return "" }
+  let _ = file.text.read_until("\n") catch { _ => return "" }
   for _ in 0..<first_prompt_scan_limit {
-    let next = file.read_until("\n") catch { _ => return "" }
+    let next = file.text.read_until("\n") catch { _ => return "" }
     guard next is Some(line) else { break }
     if line.is_blank() {
       continue
@@ -767,8 +767,7 @@ pub async fn SessionStore::listings(
     let stamp = @fs.mtime(path) catch {
       // A child's session claimed for it but not yet recorded is a
       // reserved id, not a session.
-      @os_error.OSError(_) as error if error.is_ENOENT() &&
-        self.only_claimed(id) => continue
+      @os_error.OsError(NotFound, ..) if self.only_claimed(id) => continue
       _ => {
         unreadable.push({
           id,
@@ -779,7 +778,8 @@ pub async fn SessionStore::listings(
         continue
       }
     }
-    let (seconds, nanoseconds) = stamp
+    let seconds = stamp.sec()
+    let nanoseconds = stamp.nsec()
     stamped.push(
       (
         {
@@ -814,7 +814,8 @@ pub async fn SessionStore::latest(
   let stamped : Array[(@agent_session.SessionId, Int64, Int32)] = []
   for id in self.list() {
     let stamp = @fs.mtime(self.session_file_path(id)) catch { _ => continue }
-    let (seconds, nanoseconds) = stamp
+    let seconds = stamp.sec()
+    let nanoseconds = stamp.nsec()
     stamped.push((id, seconds, nanoseconds))
   }
   // Newest first.

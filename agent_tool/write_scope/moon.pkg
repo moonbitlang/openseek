@@ -1,15 +1,22 @@
 import {
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/x/path",
 }
 
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 } for "test"
 
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

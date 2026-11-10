@@ -26,8 +26,8 @@ async fn write_profile_file(profile : String, path : String) -> String {
   let file = @fs.open(path, mode=WriteOnly, create_mode=CreateOrTruncate)
   defer file.close()
   let real_path = @fs.realpath(path)
-  file.write(profile)
-  file.write(
+  file.text.write(profile)
+  file.text.write(
     "\n(deny file-write* (literal \"\{sbpl_string_escape(real_path)}\"))\n",
   )
   real_path
@@ -101,14 +101,12 @@ async fn probe_sandbox_exec_available() -> Bool {
 
 ///|
 /// Exit code of `program args`, or `None` when the spawn (or an unexpected IO
-/// error) fails; a cancellation still propagates. A thin wrapper over
-/// `@process.collect_output_merged`, which already drains merged stdout+stderr
-/// before waiting, so a child that fills the pipe buffer cannot deadlock
-/// against `wait`. The sandbox-availability probe only needs the exit status
-/// plus a follow-up `@fs.exists` check, so the collected bytes are discarded.
+/// error) fails; a cancellation still propagates. The sandbox-availability
+/// probe only needs the exit status plus a follow-up `@fs.exists` check, so
+/// the child's output is discarded rather than inherited.
 async fn run_probe_exit(program : String, args : Array[String]) -> Int32? {
-  let (exit_code, _) = @process.collect_output_merged(program, args) catch {
+  let result = @process.run(program, args, stdout=Discard, stderr=Discard) catch {
     _ => return None
   }
-  Some(exit_code)
+  Some(result.exit_code)
 }

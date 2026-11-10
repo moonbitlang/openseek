@@ -78,14 +78,7 @@ async test "edit guards are opt-in and multi_edit retains its default boundary" 
             n == count.to_double(),
           )
         }
-        assert_eq(
-          @fs.read_file(path).text(),
-          if kept {
-            candidate
-          } else {
-            original
-          },
-        )
+        assert_eq(@fs.read_text(path), if kept { candidate } else { original })
         if !kept {
           assert_true(
             result.data
@@ -135,10 +128,10 @@ async test "both tools recommend delta plus one for newly reached errors" {
       assert_true(
         result.content.contains("revert_if_error_delta_greater_or_equal=12"),
       )
-      assert_eq(@fs.read_file(path).text(), original)
+      assert_eq(@fs.read_text(path), original)
       let retried = run_guard_case(batch, path, original, candidate, Some(12))
       assert_false(retried.is_error, msg=retried.content)
-      assert_eq(@fs.read_file(path).text(), candidate)
+      assert_eq(@fs.read_text(path), candidate)
     })
   }
 }

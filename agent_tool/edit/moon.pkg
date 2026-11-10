@@ -9,8 +9,8 @@ import {
   "moonbitlang/openseek/agent_tool/internal/line_offset",
   "moonbitlang/openseek/agent_tool/write_scope",
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 }
 
 import {
@@ -22,3 +22,10 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

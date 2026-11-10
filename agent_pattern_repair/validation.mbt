@@ -56,25 +56,23 @@ async fn run_pattern_repair_validator(
     "--strict-check",
     "--exit-code",
   ]
-  let (code, stdout, stderr) = try {
-    let (stdin_reader, stdin_writer) = @process.write_to_process()
-    stdin_writer.close()
-    @process.collect_output(
-      validator.command,
-      args,
-      inherit_env=false,
-      extra_env=@env.get_env_vars(),
-      stdin=stdin_reader,
-      cwd=workspace_root,
-      no_console_window=true,
-    )
-  } catch {
+  let result = @process.run(
+    validator.command,
+    args,
+    inherit_env=false,
+    extra_env=@env.get_env_vars(),
+    stdin=Empty,
+    stdout=Collect,
+    stderr=Collect,
+    cwd=workspace_root,
+    no_console_window=true,
+  ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => raise Unavailable
   }
-  if code != 0 {
-    let detail = match stderr.text().trim() {
-      "" => stdout.text().trim().to_owned()
+  if result.exit_code != 0 {
+    let detail = match result.stderr_text().trim() {
+      "" => result.stdout_text().trim().to_owned()
       detail => detail.to_owned()
     }
     let diagnostic = if detail.is_empty() {

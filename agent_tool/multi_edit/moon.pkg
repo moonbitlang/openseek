@@ -9,8 +9,8 @@ import {
   "moonbitlang/openseek/agent_tool/internal/manifest_error",
   "moonbitlang/openseek/agent_tool/multi_edit/internal/decode",
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/json",
 }
 
@@ -21,3 +21,10 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

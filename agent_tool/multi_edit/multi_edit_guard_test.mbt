@@ -76,7 +76,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       ) else {
       fail("unexpected data: \{shown(fixed.data)}")
     }
-    let after_fix = @fs.read_file(path).text()
+    let after_fix = @fs.read_text(path)
     // A batch that leaves an unused binding behind is rolled back whole.
     let reverted = run_multi_edit({
       "edits": [
@@ -97,7 +97,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       msg=reverted.content,
     )
     assert_true(reverted.content.contains("Unused variable 'unused'"))
-    assert_eq(@fs.read_file(path).text(), after_fix)
+    assert_eq(@fs.read_text(path), after_fix)
     guard reverted.data
       is Some(
         {
@@ -146,7 +146,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       ) else {
       fail("unexpected data: \{shown(over.data)}")
     }
-    assert_eq(@fs.read_file(path).text(), after_fix)
+    assert_eq(@fs.read_text(path), after_fix)
     // A delta of one is below threshold two: kept, and the counts still
     // quantify the delta on a kept batch.
     let tolerated = run_multi_edit({
@@ -210,7 +210,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
 async test "the error guard's data names the verdict and the sites" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-guard-err-", dir => {
     let path = write_guard_module(dir)
-    let original = @fs.read_file(path).text()
+    let original = @fs.read_text(path)
     let reverted = run_multi_edit({
       "edits": [
         {
@@ -224,7 +224,7 @@ async test "the error guard's data names the verdict and the sites" {
     })
     assert_true(reverted.is_error)
     assert_true(reverted.content.contains("reverted: applied 1 edit(s)"))
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     guard reverted.data
       is Some(
         {
@@ -271,7 +271,7 @@ async test "the error guard's data names the verdict and the sites" {
         }
       ),
     )
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
   })
 }
 
@@ -279,7 +279,7 @@ async test "the error guard's data names the verdict and the sites" {
 async test "failed and rejected batches report their problems in data; an uncheckable tree is not written" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-guard-data-", dir => {
     let path = write_guard_module(dir)
-    let original = @fs.read_file(path).text()
+    let original = @fs.read_text(path)
     let failed = run_multi_edit({
       "edits": [
         {
@@ -338,10 +338,10 @@ async test "failed and rejected batches report their problems in data; an unchec
       ) else {
       fail("unexpected data: \{shown(rejected.data)}")
     }
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     // A manifest moon cannot load: a batch that leaves the plan broken is
     // rolled back, told why, and told what comes first.
-    @fs.write_file("\{dir}/moon.mod", "name = \n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/moon.mod", "name = \n", create_mode=CreateOrTruncate)
     let unverified = run_multi_edit({
       "edits": [
         {
@@ -369,7 +369,7 @@ async test "failed and rejected batches report their problems in data; an unchec
       msg=unverified.content,
     )
     assert_true(unverified.data is Some({ "outcome": "reverted", .. }))
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
     // The batch that repairs the plan is kept: the tree improved, whatever
     // its counts, and there was no baseline to compare them against.
     let repaired = run_multi_edit({
@@ -392,10 +392,7 @@ async test "failed and rejected batches report their problems in data; an unchec
       repaired.data is Some({ "outcome": "applied", "plan_repaired": true, .. }),
       msg=shown(repaired.data),
     )
-    assert_eq(
-      @fs.read_file("\{dir}/moon.mod").text(),
-      "name = \"tmp/batch_guard\"\n",
-    )
+    assert_eq(@fs.read_text("\{dir}/moon.mod"), "name = \"tmp/batch_guard\"\n")
     let bad = run_multi_edit({
       "edits": [],
       "revert_if_warning_delta_greater_or_equal": "yes",
@@ -461,8 +458,8 @@ async test "the guards cover every project a batch touches" {
       fail("unexpected data: \{shown(reverted.data)}")
     }
     assert_true(site.contains("b/lib/lib.mbt"), msg=site)
-    assert_eq(@fs.read_file("\{dir}/a/lib/lib.mbt").text(), a)
-    assert_eq(@fs.read_file("\{dir}/b/lib/lib.mbt").text(), b)
+    assert_eq(@fs.read_text("\{dir}/a/lib/lib.mbt"), a)
+    assert_eq(@fs.read_text("\{dir}/b/lib/lib.mbt"), b)
     // Clean in both: kept, and the result carries `b`'s own warning, which
     // the first project's check alone would not show.
     let kept = run_multi_edit({
@@ -506,12 +503,12 @@ async test "the guards cover every project a batch touches" {
     }
     // The error guard compares net counts across projects: an error that already
     // exists in `b` must not offset one this batch introduces in `a`.
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/b/lib/lib.mbt",
       "///|\npub fn g() -> Int {\n  \"s\"\n}\n",
       create_mode=CreateOrTruncate,
     )
-    let a_now = @fs.read_file("\{dir}/a/lib/lib.mbt").text()
+    let a_now = @fs.read_text("\{dir}/a/lib/lib.mbt")
     let broken = run_multi_edit({
       "edits": [
         {
@@ -535,6 +532,6 @@ async test "the guards cover every project a batch touches" {
       broken.data is Some({ "reason": "error_delta", .. }),
       msg=shown(broken.data),
     )
-    assert_eq(@fs.read_file("\{dir}/a/lib/lib.mbt").text(), a_now)
+    assert_eq(@fs.read_text("\{dir}/a/lib/lib.mbt"), a_now)
   })
 }

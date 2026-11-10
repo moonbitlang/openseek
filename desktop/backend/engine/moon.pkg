@@ -5,6 +5,7 @@ import {
   "moonbitlang/x/uuid" @x_uuid,
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/os_error",
+  "moonbitlang/core/async/os_error" @core_os_error,
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/viz_export",
@@ -47,3 +48,7 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/os_error" ],
+)

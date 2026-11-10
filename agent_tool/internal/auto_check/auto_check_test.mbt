@@ -2,12 +2,12 @@
 /// Writes the `moon.mod` + `moon.pkg` fixture pair a checkable module needs;
 /// tests whose manifest is itself under test keep explicit writes.
 async fn write_module(dir : String, name : String) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     "\{dir}/moon.mod",
     "name = \"\{name}\"\n",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{dir}/moon.pkg",
     "warnings = \"+unnecessary_annotation\"\n",
     create_mode=CreateOrTruncate,
@@ -39,7 +39,7 @@ async test "append_summary runs compact check for MoonBit source" {
 async test "append_summary checks from module root for nested source" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-root-", dir => {
     write_module(dir, "tmp/auto_check_root")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/root_bad.mbt",
       "pub fn root_bad() -> Int { missing_from_root }\n",
       create_mode=CreateOrTruncate,
@@ -63,7 +63,7 @@ async test "append_summary runs compact check for MoonBit markdown source" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-md-", dir => {
     write_module(dir, "tmp/auto_check_md")
     let path = "\{dir}/README.mbt.md"
-    @fs.write_file(
+    @fs.write_text(
       path,
       (
         #|```mbt check
@@ -85,7 +85,7 @@ async test "append_summary runs compact check for MoonBit markdown source" {
 ///|
 async test "append_summary surfaces raw moon check failure" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-manifest-", dir => {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.mod",
       "name = \"tmp/auto_check_manifest\"\n",
       create_mode=CreateOrTruncate,
@@ -143,13 +143,13 @@ async test "append_summary checks from moon.work workspace root" {
 ///|
 async test "append_summary surfaces failed pre-build despite zero diagnostics" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-prebuild-", dir => {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.mod",
       "name = \"tmp/auto_check_prebuild\"\n",
       create_mode=CreateOrTruncate,
     )
     let path = "\{dir}/moon.pkg"
-    @fs.write_file(
+    @fs.write_text(
       path,
       (
         #|options(
@@ -164,8 +164,8 @@ async test "append_summary surfaces failed pre-build despite zero diagnostics" {
       ),
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file("\{dir}/in.txt", "", create_mode=CreateOrTruncate)
-    @fs.write_file(
+    @fs.write_text("\{dir}/in.txt", "", create_mode=CreateOrTruncate)
+    @fs.write_text(
       "\{dir}/main.mbt",
       "pub fn hi() -> Int { 1 }\n",
       create_mode=CreateOrTruncate,
@@ -217,7 +217,7 @@ async test "check names a failed pre-build without diagnostics" {
 ///|
 async test "append_summary runs for MoonBit source without local package" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-unpackaged-", dir => {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.mod",
       "name = \"tmp/auto_check_unpacked\"\n",
       create_mode=CreateOrTruncate,
@@ -259,7 +259,7 @@ async test "check names a failed run; count_errors keeps its tally" {
     }
     assert_eq(counted.error_count, 0)
     // A clean module is `Checked`.
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.mod",
       "name = \"tmp/checked\"\n",
       create_mode=CreateOrTruncate,

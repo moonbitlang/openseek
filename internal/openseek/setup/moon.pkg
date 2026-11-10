@@ -9,7 +9,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/x/path",
   "moonbitlang/async/process",
   "moonbitlang/openseek/prompt",
@@ -31,3 +31,7 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/os_error" ],
+)
