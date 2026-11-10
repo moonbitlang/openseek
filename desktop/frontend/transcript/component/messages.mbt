@@ -67,7 +67,6 @@ priv enum UiMessage {
   OtherTools
   AssistantLabel
   ContextSummary
-  WorkCompleted
   ViewActivity
   RequestedChanges
   CopyDiff
@@ -423,11 +422,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ContextSummary) => "上下文摘要"
     (TraditionalChinese, ContextSummary) => "上下文摘要"
     (Japanese, ContextSummary) => "コンテキストの要約"
-    (English, WorkCompleted) => "Work completed"
-    (Spanish, WorkCompleted) => "Trabajo completado"
-    (SimplifiedChinese, WorkCompleted) => "工作已完成"
-    (TraditionalChinese, WorkCompleted) => "工作已完成"
-    (Japanese, WorkCompleted) => "作業が完了しました"
     (English, ViewActivity) => "View activity"
     (Spanish, ViewActivity) => "Ver actividad"
     (SimplifiedChinese, ViewActivity) => "查看活动"
