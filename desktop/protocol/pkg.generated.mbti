@@ -671,10 +671,12 @@ pub impl @json.ToJson for CloudHistoryCacheEntry
 pub(all) struct CloudHistoryCachePage {
   session : SessionDocument
   messages : Array[@json.Json]
+  prediction : @openseek_protocol.PredictionRecord?
   offset : Int32?
   etag : String?
 }
 pub fn CloudHistoryCachePage::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCachePage::label(Self, String) -> String
 pub fn CloudHistoryCachePage::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCachePage
 pub impl @json.ToJson for CloudHistoryCachePage

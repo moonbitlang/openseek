@@ -11,6 +11,7 @@ fn History::cache_page(self : History) -> @protocol.CloudHistoryCachePage {
         Json(value)
       }),
     }),
+    prediction: self.prediction,
     offset: self.offset,
     etag: self.etag,
   }
@@ -27,37 +28,49 @@ fn cached_history(page : @protocol.CloudHistoryCachePage) -> History? {
     fields["page"] = { "offset": offset }
   }
   let history = decode_history(Json(fields)) catch { _ => return None }
-  Some({ ..history, etag: page.etag, })
+  Some({ ..history, etag: page.etag, prediction: page.prediction, })
 }
 
 ///|
-async fn history_cache(
+fn native_history_cache() -> Bool {
+  @interop.openseek_api().map_or(false, api => {
+    @interop.js_prop(api, @commands.cloud_history_cache.name()) is Some(_)
+  })
+}
+
+///|
+async fn State::history_cache(
+  self : State,
   token : String,
   action : @protocol.CloudHistoryCacheAction,
 ) -> @protocol.CloudHistoryCacheReply {
-  @interop.bridge_request(Local, @commands.cloud_history_cache, {
-    token,
-    action,
-  }) catch {
-    _ => Done
+  if native_history_cache() {
+    @interop.bridge_request(Local, @commands.cloud_history_cache, {
+      token,
+      action,
+    }) catch {
+      _ => Done
+    }
+  } else {
+    self.indexed_history_cache(action)
   }
 }
 
 ///|
-fn cache_mutation(
-  enabled : Bool,
+fn State::cache_mutation(
+  self : State,
   token : String?,
   action : @protocol.CloudHistoryCacheAction,
 ) -> @cmd.Cmd {
-  guard enabled && token is Some(token) else { return @cmd.none }
+  guard token is Some(token) else { return @cmd.none }
   @cmd.custom_cmd(_ => {
-    @js.Promise::from_async(() => ignore(history_cache(token, action)))
+    @js.Promise::from_async(() => ignore(self.history_cache(token, action)))
     |> ignore
   })
 }
 
 ///|
-fn State::read_disk_history(
+fn State::read_persistent_history(
   self : State,
   session : String,
   token : String,
@@ -70,14 +83,14 @@ fn State::read_disk_history(
       ..conversation,
       request,
       history_reading: true,
-      history_disk_request: Some(request),
+      history_cache_request: Some(request),
     }),
     run(emit, () => {
-      let history = match history_cache(token, Read(session~)) {
+      let history = match self.history_cache(token, Read(session~)) {
         Page(Some(page)) => cached_history(page)
         _ => None
       }
-      DiskHistoryLoaded(self.epoch, session, request, history)
+      CachedHistoryLoaded(self.epoch, session, request, history)
     }),
   )
 }

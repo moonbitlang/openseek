@@ -25,50 +25,6 @@ async fn read_cloud_history(
 }
 
 ///|
-fn cached_history_label(
-  page : @protocol.CloudHistoryCachePage,
-  session : String,
-) -> String {
-  for message in page.messages {
-    guard message is { "kind": "user", .. } else { continue }
-    let text = match message {
-      { "engine_sequence": Number(sequence, ..), .. } if sequence > 0 &&
-        sequence == sequence.to_int().to_double() =>
-        page.session.events
-        .unwrap_or([])
-        .iter()
-        .find_first(event => {
-          event.sequence == sequence.to_int() && event.item is User(_)
-        })
-        .map_or("", event => {
-          match event.item {
-            User(user) => user.content.text()
-            _ => ""
-          }
-        })
-      { "data": { "content": String(text), .. }, .. } => text
-      { "data": { "content": Array(parts), .. }, .. } =>
-        parts
-        .iter()
-        .filter_map(part => {
-          match part {
-            { "type": "text", "text": String(text), .. } => Some(text)
-            _ => None
-          }
-        })
-        .head()
-        .unwrap_or("")
-      _ => ""
-    }
-    if !text.is_blank() {
-      let line = text.trim().to_owned().split("\n").head().unwrap_or("")
-      return String::from_iter(line.iter().take(80))
-    }
-  }
-  session
-}
-
-///|
 /// Window-only Cloud cache operations share the account persistence mutex
 /// with credential changes and sign-out cleanup.
 pub async fn AuthStore::cloud_history_cache(
@@ -97,10 +53,7 @@ pub async fn AuthStore::cloud_history_cache(
             !self.cloud_history_deleted.contains((user, session)) &&
             (read_cloud_history(dir.join(name)) catch { _ => None })
             is Some(page) {
-            entries.push({
-              session,
-              label: cached_history_label(page, session),
-            })
+            entries.push({ session, label: page.label(session), })
           }
         }
       }

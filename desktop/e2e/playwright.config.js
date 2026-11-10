@@ -28,6 +28,7 @@ export default defineConfig({
   workers: isCI ? 4 : '50%',
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'webkit-indexeddb', testMatch: '**/indexeddb.spec.js', use: { browserName: 'webkit' } },
     { name: 'webkit-mobile', testMatch: '**/mobile_browser.spec.js', use: { browserName: 'webkit' } },
     // Safari's grid sizing can hide question cards even when Chromium passes.
     {

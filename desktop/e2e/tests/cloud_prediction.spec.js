@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { historyCacheRows } from './support/cloud_history_cache.js';
 import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 const prediction = (source_sequence = 12, text = 'Commit the fix') => ({
@@ -95,12 +96,19 @@ test('Cloud restores native prediction metadata on session switches and reload w
   await cloud.open(sessionB);
   await expect(input).toHaveValue('');
   await expect(input).toHaveAttribute('placeholder', 'Review the documentation');
+  const isHistoryA = response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`;
+  const updated = page.waitForResponse(response => isHistoryA(response) && response.status() === 200);
   await cloud.open(sessionA);
   await expect(input).toHaveValue('Unsent draft');
   await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
   await input.fill('');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
+  const etag = (await updated).headers().etag;
+  await expect.poll(async () => (await historyCacheRows(page)).find(row => row.session === sessionA)?.page.etag).toBe(etag);
+  const revalidated = page.waitForResponse(isHistoryA);
   await page.reload(); await cloud.open(sessionA);
+  expect((await revalidated).status()).toBe(304);
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(input).toHaveValue('');
   cloud.assertNoPredictionRequests();

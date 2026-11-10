@@ -48,8 +48,15 @@ test('a first-send rejection preserves the input and retries the existing Cloud 
   await cloud.install(); await cloud.goto(); await cloud.create();
   let releaseHistory;
   cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
+  // Cache lookup is asynchronous. Establish the delayed history read before
+  // the first SSE snapshot submits the prompt, which fences that read.
+  let releaseEvents;
+  cloud.pauseSessionEvents = new Promise(resolve => { releaseEvents = resolve; });
+  const initialRead = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === `/v1/sessions/${sessionC}/messages`);
   await page.locator('#task').fill('Keep this initial input');
   await page.locator('#task').press('Enter');
+  await initialRead;
+  releaseEvents();
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionC}/messages`);
   releaseHistory();
