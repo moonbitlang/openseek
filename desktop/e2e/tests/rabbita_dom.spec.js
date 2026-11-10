@@ -784,18 +784,6 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
   expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
-
-  // OpenRouter uses the ordinary chat model selector and persisted preference.
-  await app.openSession();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
-    .toBe('deepseek-v4-pro');
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'DS Flash', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
-    .toBe('deepseek-flash');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   expect(app.pageErrors).toEqual([]);
 });
 

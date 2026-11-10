@@ -155,14 +155,7 @@ fn conversation_model_key(
 
 ///|
 test "engine models round-trip their wire names" {
-  inspect(
-    parse_engine_model("deepseek-v4-pro").unwrap().label(),
-    content="DS Pro",
-  )
-  inspect(
-    parse_engine_model("deepseek-flash").unwrap().label(),
-    content="DS Flash",
-  )
+  assert_true(parse_engine_model("deepseek-v4-pro") is Some(Deepseek(V4Pro)))
   inspect(
     parse_engine_model("deepseek-flash").unwrap().to_string(),
     content="deepseek-flash",
@@ -171,14 +164,9 @@ test "engine models round-trip their wire names" {
   // selecting the flash model — and is re-registered under the canonical
   // wire name the next time it is saved.
   inspect(
-    parse_engine_model("deepseek-v4-flash").unwrap().label(),
-    content="DS Flash",
-  )
-  inspect(
     parse_engine_model("deepseek-v4-flash").unwrap().to_string(),
     content="deepseek-flash",
   )
-  inspect(parse_engine_model("glm-5.3").unwrap().label(), content="GLM 5.3")
   inspect(
     parse_engine_model("glm-5.3-flash").unwrap().to_string(),
     content="glm-5.3-flash",

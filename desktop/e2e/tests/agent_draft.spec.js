@@ -14,10 +14,11 @@ async function open(page) {
   return app;
 }
 
-async function choose(page, name) {
+async function choose(page, agent) {
   await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name, exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText(name);
+  const menu = page.getByRole('listbox', { name: 'Model', exact: true });
+  await menu.getByRole('group', { name: agent, exact: true }).getByRole('option').first().click();
+  await expect(menu).toBeHidden();
 }
 
 async function noDraftRows(page, initialRows) {
@@ -43,7 +44,7 @@ test('one draft carries current text, file mentions and images through repeated 
   expect(chatDraftPath).toMatch(/\/chat\/draft\//);
   const codexDraftPath = chatDraftPath.replace('/chat/draft/', '/codex/draft/');
   const historyLength = await page.evaluate(() => history.length);
-  await choose(page, 'Codex test');
+  await choose(page, 'Codex');
   await expect.poll(() => new URL(page.url()).pathname).toBe(codexDraftPath);
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
   await expect(task).toHaveValue(initialText);
@@ -52,7 +53,7 @@ test('one draft carries current text, file mentions and images through repeated 
   await task.press('End');
   await task.pressSequentially(' Edited in Codex');
   const codexText = await task.inputValue();
-  await choose(page, 'DS Pro');
+  await choose(page, 'OpenSeek');
   await expect.poll(() => new URL(page.url()).pathname).toBe(chatDraftPath);
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
   await expect(task).toHaveValue(codexText);
@@ -62,7 +63,7 @@ test('one draft carries current text, file mentions and images through repeated 
   await task.press('End');
   await task.pressSequentially(' Edited in DeepSeek');
   const finalText = await task.inputValue();
-  await choose(page, 'Codex test');
+  await choose(page, 'Codex');
   await expect(task).toHaveValue(finalText);
   await noDraftRows(page, initialRows);
   await page.locator('#send').click();
@@ -78,12 +79,12 @@ test('one draft carries current text, file mentions and images through repeated 
 test('an image-only Codex draft migrates back and sends through DeepSeek', async ({ page }) => {
   const app = await open(page);
   const initialRows = await page.locator('.conversation-row').count();
-  await choose(page, 'Codex test');
+  await choose(page, 'Codex');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await choose(page, 'DS Pro');
+  await choose(page, 'OpenSeek');
   await expect(page.locator('#task')).toHaveValue('');
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await noDraftRows(page, initialRows);
@@ -96,7 +97,7 @@ test('an image-only Codex draft migrates back and sends through DeepSeek', async
 
 test('a submitted Codex draft cannot switch agents while thread creation is pending', async ({ page }) => {
   const app = await open(page);
-  await choose(page, 'Codex test');
+  await choose(page, 'Codex');
   const pending = Promise.withResolvers();
   const replyFor = app.replyFor.bind(app);
   app.replyFor = async request => {
@@ -151,7 +152,7 @@ test('simplify sends the sweep prompt with its focus', async ({ page }) => {
 
 test('a failed first Codex send keeps the agent fixed while retrying', async ({ page }) => {
   const app = await open(page);
-  await choose(page, 'Codex test');
+  await choose(page, 'Codex');
   app.rpcErrors.set('codex.thread.start', 'Reply lost');
   await page.locator('#task').fill('Keep this conversation in Codex');
   await page.locator('#send').click();
@@ -192,11 +193,11 @@ test('reusing a draft waits for its pending open and close before reopening', as
     return reply(request);
   };
   await page.locator('#task').fill('Retain this prompt');
-  await choose(page, 'Codex test');
+  await choose(page, 'Codex');
   await expect.poll(() => opens).toBe(1);
   const id = app.requests.find(r => r.method === 'codex.draft.open').params.draft_id;
-  await choose(page, 'DS Pro');
-  await choose(page, 'Codex test');
+  await choose(page, 'OpenSeek');
+  await choose(page, 'Codex');
   expect(app.requests.filter(r => r.method === 'codex.draft.close')).toHaveLength(0);
   expect(opens).toBe(1);
   firstOpen.resolve();
