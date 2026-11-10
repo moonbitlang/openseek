@@ -28,7 +28,7 @@ pub(all) enum McpServer {
     name~ : String,
     url~ : String,
     headers~ : Map[String, String],
-    headers_helpers~ : Array[HeadersHelperCommand]
+    headers_helper~ : HeadersHelperCommand?
   )
 }
 
@@ -162,7 +162,7 @@ fn decode_http_server(
   let headers = decode_string_map(name, entry, "headers")
   let url = expand_env(name, url, env)
   let headers = headers.map((_, value) => expand_env(name, value, env))
-  let headers_helpers = if entry is { "headersHelper": value, .. } {
+  let headers_helper = if entry is { "headersHelper": value, .. } {
     guard value is Array([String(command), .. items]) else {
       raise Invalid(
         "server `\{name}`: `headersHelper` must be a nonempty array of strings",
@@ -181,11 +181,11 @@ fn decode_http_server(
         argument
       }
     ]
-    [{ command, arguments, }]
+    Some({ command, arguments, })
   } else {
-    []
+    None
   }
-  Http(name~, url~, headers~, headers_helpers~)
+  Http(name~, url~, headers~, headers_helper~)
 }
 
 ///|
