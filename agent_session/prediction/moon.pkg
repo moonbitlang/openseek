@@ -3,12 +3,20 @@ import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client",
   "moonbitlang/core/json",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 supported_targets = "+wasm+native"
 
 import {
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
 } for "test"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)

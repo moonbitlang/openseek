@@ -52,7 +52,7 @@ async test "nearest project dir prefers the closest module or workspace" {
     let module_dir = "\{dir}/packages/demo"
     let source = "\{module_dir}/src"
     @fs.mkdir(source, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.work",
       "members = []\n",
       create_mode=CreateOrTruncate,
@@ -60,7 +60,7 @@ async test "nearest project dir prefers the closest module or workspace" {
     assert_true(
       @moon_check.nearest_project_dir(source) is Some(root) && root == dir,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{module_dir}/moon.mod",
       "name = \"example/demo\"\n",
       create_mode=CreateOrTruncate,

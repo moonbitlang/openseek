@@ -39,7 +39,7 @@ pub async fn SessionStore::claim(
   let dir = self.session_dir(id)
   ensure_dir_exists(self.sessions_dir())
   @fs.mkdir(dir) catch {
-    @os_error.OSError(_) as error if error.is_EEXIST() => return Taken
+    @os_error.OsError(AlreadyExists, ..) => return Taken
     error => raise error
   }
   guard @env.rand(16) is Some(entropy) else {
@@ -47,7 +47,7 @@ pub async fn SessionStore::claim(
   }
   let token = @hex.encode(entropy)
   let claim : Json = { "sha256": token_digest(token) }
-  @fs.write_file(
+  @fs.write_text(
     "\{dir}/\{claim_file_name}",
     claim.stringify(),
     create_mode=CreateNew,
@@ -80,7 +80,7 @@ pub async fn SessionStore::accept_claim(
 ) -> Unit {
   let dir = self.session_dir(id)
   let entries = @fs.readdir(dir) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() =>
+    @os_error.OsError(NotFound, ..) =>
       fail("session \{id.value()} was not claimed: it does not exist")
     error => raise error
   }
@@ -91,7 +91,7 @@ pub async fn SessionStore::accept_claim(
     fail("session \{id.value()} already has records of its own")
   }
   let path = "\{dir}/\{claim_file_name}"
-  let recorded = @json.parse(@fs.read_file(path).text()) catch {
+  let recorded = @json.parse(@fs.read_text(path)) catch {
     error => fail("session \{id.value()}: unreadable claim file: \{error}")
   }
   guard recorded is { "sha256": String(expected), .. } &&
@@ -99,7 +99,7 @@ pub async fn SessionStore::accept_claim(
     fail("session \{id.value()} was claimed for another run")
   }
   @fs.rename(path, "\{dir}/\{accepted_claim_file_name}", replace=false) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() || error.is_EEXIST() =>
+    @os_error.OsError(NotFound | AlreadyExists, ..) =>
       fail("session \{id.value()} holds no claim; it was accepted already")
     error => raise error
   }
@@ -116,7 +116,7 @@ pub async fn SessionStore::settle_claim(
   id : @agent_session.SessionId,
 ) -> Unit {
   @fs.remove("\{self.session_dir(id)}/\{accepted_claim_file_name}") catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => ()
+    @os_error.OsError(NotFound, ..) => ()
     error => raise error
   }
 }

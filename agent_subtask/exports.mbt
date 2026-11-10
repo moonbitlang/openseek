@@ -65,7 +65,7 @@ async fn integrate_continue_locked(
   // The caller resolves the markers with file tools, which do not stage:
   // the recorded conflict set is staged here, once no markers remain in it.
   for path in entry.conflict_paths {
-    let text = @fs.read_file("\{origin}/\{path}").text() catch {
+    let text = @fs.read_text("\{origin}/\{path}") catch {
       // Deleted, or not text: git decides below.
       _ => continue
     }

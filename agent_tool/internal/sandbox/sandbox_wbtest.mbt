@@ -70,7 +70,7 @@ async test "file profile transport keeps oversized contents out of argv on every
     let profile = "(version 1)\n(allow default)\n" +
       "; padding\n".repeat(220_000)
     let path = write_profile_file(profile, "\{dir}/profile with spaces.sb")
-    let saved = @fs.read_file(path).text()
+    let saved = @fs.read_text(path)
     assert_true(saved.has_prefix(profile))
     assert_true(
       saved.has_suffix(

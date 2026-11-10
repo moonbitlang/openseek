@@ -88,7 +88,7 @@ async test "compiler capture gives children immediate stdin EOF" {
 #cfg(not(platform="windows"))
 async test "compiler capture preserves literal arguments and the working directory" {
   let dir = @fs.tmpdir(prefix="openseek-process-output-")
-  @fs.write_file("\{dir}/marker", "cwd-ok", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/marker", "cwd-ok", create_mode=CreateOrTruncate)
   let literal = "space ; $HOME $(echo expanded) ' quote"
   let output = collect_process_output(
     "sh",

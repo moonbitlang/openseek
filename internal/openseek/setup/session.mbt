@@ -124,7 +124,7 @@ pub async fn load_or_new_session(
 
   if store.exists(id) {
     store.load(id) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => fresh()
+      @os_error.OsError(NotFound, ..) => fresh()
       error => raise error
     }
   } else {

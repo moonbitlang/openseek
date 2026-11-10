@@ -39,7 +39,7 @@ pub async fn SessionStore::list(
   self : SessionStore,
 ) -> Array[@agent_session.SessionId] {
   let names = @fs.readdir(self.sessions_dir(), sort=true) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => []
+    @os_error.OsError(NotFound, ..) => []
     error => raise error
   }
   [

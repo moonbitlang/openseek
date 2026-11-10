@@ -33,9 +33,14 @@ async test "prepare, run, and classify a command" {
     // sandboxes. Running without it is an explicit caller policy decision.
     None => ("echo", argv)
   }
-  let (exit_code, output) = @process.collect_output_merged(program, args)
-  let output = output.text()
-  assert_eq(exit_code, 0)
+  let result = @process.run(
+    program,
+    args,
+    stdout=Collect,
+    stderr=DuplicateStdout,
+  )
+  let output = result.stdout_text()
+  assert_eq(result.exit_code, 0)
   assert_eq(output.trim(), "sandbox-ready")
   if prepared is Some(command) {
     // Classify with the same value that supplied the executed program/argv.

@@ -84,7 +84,7 @@ pub async fn discover_skills(dir : String) -> Array[Skill] {
 
 ///|
 async fn add_skill_file(skills : Array[Skill], path : String) -> Unit {
-  let text = @fs.read_file(path).text() catch { _ => return }
+  let text = @fs.read_text(path) catch { _ => return }
   let fallback = match file_stem(path) {
     "SKILL" => {
       // For <name>/SKILL.md layouts the directory carries the name — its

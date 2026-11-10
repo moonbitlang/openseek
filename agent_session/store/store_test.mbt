@@ -18,7 +18,7 @@ async fn append_raw(
   id : String,
   text : String,
 ) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, id),
     text,
     create_mode=OpenOrCreate,
@@ -47,7 +47,7 @@ async test "store writes the header record on the first line" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   store.create(Session(SessionId("s1"), system_prompt="system"))
-  let text = @fs.read_file(session_file(store, "s1")).text()
+  let text = @fs.read_text(session_file(store, "s1"))
   assert_eq(
     text, "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
   )
@@ -290,7 +290,7 @@ async test "fork never replaces a session that already exists" {
   // A directory without a session file still holds the id: its leftover
   // title must not become the fork's.
   @fs.mkdir("\{store.root()}/sessions/husk", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{store.root()}/sessions/husk/session-title",
     "Somebody else's",
     create_mode=CreateOrTruncate,
@@ -332,7 +332,7 @@ async test "latest skips a corrupt newest session in favor of a loadable one" {
   @async.sleep(50)
   store.create(Session(SessionId("corrupt"), system_prompt="system"))
   // The newest directory stats fine but cannot be loaded.
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "corrupt"),
     "not a header line\n",
     create_mode=CreateOrTruncate,
@@ -345,7 +345,7 @@ async test "latest skips a corrupt newest session in favor of a loadable one" {
 async test "store propagates non-missing list errors" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{store.root()}/sessions",
     "not a directory",
     create_mode=CreateOrTruncate,
@@ -420,7 +420,7 @@ async test "first append creates the session file with its header" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let next = store.append(session, User(UserMessage(Content([Text("first")]))))
   assert_eq(next.events().length(), 1)
-  let text = @fs.read_file(session_file(store, "s1")).text()
+  let text = @fs.read_text(session_file(store, "s1"))
   assert_true(
     text.has_prefix(
       "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
@@ -677,7 +677,7 @@ async test "store rejects a session file without a header record" {
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   // A bare event log — the pre-header layout, or a file whose header line was
   // lost — must fail loudly rather than load with a fabricated identity.
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "s1"),
     ToJson::to_json(event).stringify() + "\n",
     create_mode=CreateOrTruncate,
@@ -695,7 +695,7 @@ async test "store rejects a malformed header line" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "s1"),
     "not json at all\n",
     create_mode=CreateOrTruncate,
@@ -714,9 +714,9 @@ async test "store rejects a header whose id does not match the directory" {
   defer @fs.rmdir(store.root(), recursive=true)
   store.create(Session(SessionId("other"), system_prompt="system"))
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "s1"),
-    @fs.read_file(session_file(store, "other")).text(),
+    @fs.read_text(session_file(store, "other")),
     create_mode=CreateOrTruncate,
   )
   try store.load(SessionId("s1")) catch {
@@ -737,11 +737,11 @@ async test "load drops a torn trailing record without mutating the file" {
   // A crash mid-append leaves a half-written last line. The uncommitted tail
   // is dropped so the session stays resumable, and load itself is read-only.
   append_raw(store, "s1", "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi")
-  let text_before = @fs.read_file(session_file(store, "s1")).text()
+  let text_before = @fs.read_text(session_file(store, "s1"))
   let loaded = store.load(SessionId("s1"))
   assert_eq(loaded.events().length(), 1)
   assert_eq(loaded.last_sequence(), 1)
-  assert_eq(@fs.read_file(session_file(store, "s1")).text(), text_before)
+  assert_eq(@fs.read_text(session_file(store, "s1")), text_before)
 }
 
 ///|
@@ -777,7 +777,7 @@ async test "append repairs a torn tail before persisting the next event" {
   assert_eq(next.events().length(), 2)
   assert_eq(next.last_sequence(), 2)
   // The rewrite discarded the torn bytes and terminated every line.
-  let text = @fs.read_file(session_file(store, "s1")).text()
+  let text = @fs.read_text(session_file(store, "s1"))
   assert_true(text.has_suffix("\n"))
   assert_true(!text.contains("assi"))
   let reloaded = store.load(SessionId("s1"))
@@ -799,7 +799,7 @@ async test "append repairs and keeps a complete unterminated final event" {
   assert_eq(resumed.events().length(), 1)
   let next = store.append(resumed, Runtime(RuntimeNotice("second")))
   assert_eq(next.last_sequence(), 2)
-  let text = @fs.read_file(session_file(store, "s1")).text()
+  let text = @fs.read_text(session_file(store, "s1"))
   assert_true(text.has_suffix("\n"))
   let reloaded = store.load(SessionId("s1"))
   assert_eq(reloaded.events().length(), 2)
@@ -867,7 +867,7 @@ async test "load keeps a header-only file that lost its newline" {
   // `create` can never produce this (tmp+rename is atomic), but the tolerance
   // rule is uniform: in a zero-event file the header is the final record.
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "s1"),
     "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}",
     create_mode=CreateOrTruncate,
@@ -877,7 +877,7 @@ async test "load keeps a header-only file that lost its newline" {
   assert_eq(loaded.system_prompt(), "system")
   // The next append terminates the header line as it persists the event.
   ignore(store.append(loaded, User(UserMessage(Content([Text("first")])))))
-  let text = @fs.read_file(session_file(store, "s1")).text()
+  let text = @fs.read_text(session_file(store, "s1"))
   assert_true(text.has_suffix("\n"))
   assert_eq(store.load(SessionId("s1")).events().length(), 1)
 }
@@ -899,7 +899,7 @@ async test "compact repairs a torn tail before persisting the summary" {
     to_sequence=2,
   )
   assert_eq(compacted.events().length(), 3)
-  let text = @fs.read_file(session_file(store, "s1")).text()
+  let text = @fs.read_text(session_file(store, "s1"))
   assert_true(text.has_suffix("\n"))
   assert_true(!text.contains("runt"))
   assert_eq(store.load(SessionId("s1")).events().length(), 3)
@@ -974,7 +974,7 @@ async test "store names an unsupported session file version on load" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     session_file(store, "s1"),
     "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
     create_mode=CreateOrTruncate,
@@ -1068,10 +1068,7 @@ async test "single-text records keep the string content understood by old client
     )
     .append(Runtime(RuntimeNotice("notice")))
   store.create(session)
-  let lines = @fs.read_file(session_file(store, "plain"))
-    .text()
-    .split("\n")
-    .to_array()
+  let lines = @fs.read_text(session_file(store, "plain")).split("\n").to_array()
   let texts : Array[String] = []
   for line in lines[1:] {
     if line.is_empty() {
@@ -1101,7 +1098,7 @@ async test "legacy JSONL can append and replay embedded images and text" {
       #|{"sequence":4,"ts":0,"item":{"kind":"tool_result","payload":{"tool_call_id":"old-call","tool_name":"read","content":"old result","is_error":false}}}
     ) +
     "\n"
-  @fs.write_file(session_file(store, "mixed"), legacy)
+  @fs.write_text(session_file(store, "mixed"), legacy)
   let loaded = store.load(SessionId("mixed"))
   guard loaded.events()[0].item() is User(old_user) else {
     fail("expected user")
@@ -1122,7 +1119,7 @@ async test "legacy JSONL can append and replay embedded images and text" {
   }
   assert_true(old_tool.content().0 is [Text("old result")])
   let image = @agent_session.Image::from_bytes(
-    @fs.read_file("deepseek/client/testdata/two-colors.png").binary(),
+    @fs.read_binary("deepseek/client/testdata/two-colors.png"),
   )
   let user = @agent_session.UserMessage(
     Content([Text("compare "), Image(image), Text(" with "), Image(image)]),
@@ -1143,7 +1140,7 @@ async test "legacy JSONL can append and replay embedded images and text" {
     content=[Text("result: "), Image(image)],
   )
   let _ = store.append(appended, Tool(result))
-  let written = @fs.read_file(session_file(store, "mixed")).text()
+  let written = @fs.read_text(session_file(store, "mixed"))
   assert_true(written.has_prefix(legacy))
   let event = @json.parse(written.split("\n").to_array()[5].to_owned())
   assert_true(
@@ -1192,7 +1189,7 @@ async test "image-only conversations have a nonempty listing preview" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let image = @agent_session.Image::from_bytes(
-    @fs.read_file("deepseek/client/testdata/two-colors.png").binary(),
+    @fs.read_binary("deepseek/client/testdata/two-colors.png"),
   )
   let session = @agent_session.Session(
     SessionId("image-only"),

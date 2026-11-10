@@ -175,7 +175,7 @@ async test "multi_edit applies fixes through the registry" {
       "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
     )
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "let a = new_a\nlet b = new_b\n")
+    assert_eq(@fs.read_text(path), "let a = new_a\nlet b = new_b\n")
   })
 }
 ```

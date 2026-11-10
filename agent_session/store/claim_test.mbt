@@ -30,7 +30,7 @@ async test "a claim creates the session directory once" {
   assert_eq(token.length(), 32)
   assert_true(store.exists(SessionId("p-sr-1")))
   // Only the token's digest is on disk: reading the claim does not give it.
-  let recorded = @fs.read_file("\{store.root()}/sessions/p-sr-1/claim.json").text()
+  let recorded = @fs.read_text("\{store.root()}/sessions/p-sr-1/claim.json")
   assert_false(recorded.contains(token))
   assert_true(store.claim(SessionId("p-sr-1")) is Taken)
   // The claim keeps its id taken in the listing the ordinal floor reads.
@@ -81,7 +81,7 @@ async test "a claim is refused once its session has records" {
   defer @fs.rmdir(store.root(), recursive=true)
   let id = @agent_session.SessionId("p-sr-4")
   let token = claimed(store, "p-sr-4")
-  @fs.write_file(session_file(store, "p-sr-4"), "", create_mode=CreateNew)
+  @fs.write_text(session_file(store, "p-sr-4"), "", create_mode=CreateNew)
   inspect(
     refusal(() => store.accept_claim(id, token)),
     content="session p-sr-4 already has records of its own",
@@ -109,7 +109,7 @@ async test "a reader's session lock does not block acceptance" {
   defer @fs.rmdir(store.root(), recursive=true)
   let id = @agent_session.SessionId("p-sr-7")
   let token = claimed(store, "p-sr-7")
-  @fs.write_file(
+  @fs.write_text(
     "\{store.root()}/sessions/p-sr-7/session.lock",
     "",
     create_mode=CreateNew,

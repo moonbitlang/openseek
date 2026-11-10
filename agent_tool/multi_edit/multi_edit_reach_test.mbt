@@ -65,7 +65,7 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
       ),
     )
     assert_false(reverted.content.contains("more precise old_strings"))
-    assert_eq(@fs.read_file("\{dir}/a/a.mbt").text(), a_original)
+    assert_eq(@fs.read_text("\{dir}/a/a.mbt"), a_original)
     // The re-issue the report asked for: kept, with the split made explicit.
     let kept = run_multi_edit({
       "edits": [fix],
@@ -77,7 +77,7 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
         "applied with 12 error(s) kept (error count change 11 < revert_if_error_delta_greater_or_equal=12)",
       ),
     )
-    assert_true(@fs.read_file("\{dir}/a/a.mbt").text().contains("  1\n"))
+    assert_true(@fs.read_text("\{dir}/a/a.mbt").contains("  1\n"))
     // Negative control: a batch that breaks the edited file ITSELF (twenty-five
     // errors inside a/a.mbt) must be called an over-match, never a reach —
     // even though it also makes the one pre-batch error disappear. The tmpdir
@@ -105,6 +105,6 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
     )
     assert_true(breaking.content.contains("more precise old_strings"))
     assert_false(breaking.content.contains("re-issue it UNCHANGED"))
-    assert_true(@fs.read_file("\{dir}/a/a.mbt").text().contains("  1\n"))
+    assert_true(@fs.read_text("\{dir}/a/a.mbt").contains("  1\n"))
   })
 }

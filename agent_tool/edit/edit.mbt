@@ -248,7 +248,7 @@ async fn edit_file(
     return err("old_string and new_string are both empty")
   }
   if input.old_string == input.new_string {
-    let content = @fs.read_file(path).text()
+    let content = @fs.read_text(path)
     return err(
       "old_string and new_string are identical\{old_string_context(content, input.start_line, input.end_line)}\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
     )
@@ -261,7 +261,7 @@ async fn edit_file(
     }
     return preview_replace_all(input, path~)
   }
-  let content = @fs.read_file(path).text()
+  let content = @fs.read_text(path)
   if input.old_string == "" {
     // Insertion: insert new_string at the start of start_line (a zero-width
     // edit). Any start_line past the last line clamps to end of file, so a
@@ -425,7 +425,7 @@ async fn preview_replace_all(
   input : @decode.EditInput,
   path~ : String,
 ) -> @agent_tool.ToolAction {
-  let orig_content = @fs.read_file(path).text()
+  let orig_content = @fs.read_text(path)
   let (content, _) = @matching.normalize_content_for_matching(orig_content)
   let region = select_edit_region(content, input)
   // The cap bounds emitted SITES, not raw matches: matches arrive in order, so
@@ -843,7 +843,7 @@ async fn commit_edit(
     // before it. If the file changed meanwhile (an editor save), the
     // candidate would overwrite that change and a rollback would restore a
     // stale original, so the edit is refused instead.
-    let current = @fs.read_file(path).text()
+    let current = @fs.read_text(path)
     if current != original_content {
       return not_verified(
         "the file changed while the baseline was measured; re-read it and retry",
@@ -905,10 +905,10 @@ async fn commit_edit(
   // restores only what it recognizes.
   if baseline is Some(_) {
     @async.protect_from_cancel(() => {
-      @fs.write_file(target, new_content, create_mode=CreateOrTruncate)
+      @fs.write_text(target, new_content, create_mode=CreateOrTruncate)
     })
   } else {
-    @fs.write_file(target, new_content, create_mode=CreateOrTruncate)
+    @fs.write_text(target, new_content, create_mode=CreateOrTruncate)
   }
   // A targeted edit preserves most of the file, so provenance depends on
   // whether the content it read (original_content) is still what the agent
@@ -956,7 +956,7 @@ async fn commit_edit(
 
     // A read that fails is its own outcome, never a value to compare: an
     // empty candidate must not match a file that is gone.
-    let current = @fs.read_file(target).text() catch {
+    let current = @fs.read_text(target) catch {
       error =>
         return unknown_effect(
           "could not be read after the post-write check (\{error})",
@@ -1297,7 +1297,7 @@ async fn restore_content(
   // The check between the write and this restore is a window in which
   // another writer (an editor save) may have changed the file; restoring over
   // that would erase their work. Only the content this edit wrote is undone.
-  let current = @fs.read_file(path).text() catch {
+  let current = @fs.read_text(path) catch {
     error =>
       return Some(
         "cannot read the file to verify it before restoring: \{error}",
@@ -1313,7 +1313,7 @@ async fn restore_content(
   // So the restore runs to completion once started.
   let mut failure : String? = None
   @async.protect_from_cancel(() => {
-    @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
+    @fs.write_text(path, original_content, create_mode=CreateOrTruncate) catch {
       error => failure = Some("\{error}")
     }
   })

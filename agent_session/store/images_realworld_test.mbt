@@ -3,7 +3,7 @@
 /// Expected colors appear only in the assertion, never in the request.
 async test "realworld inline user and tool images are recognized" {
   let image = @agent_session.Image::from_bytes(
-    @fs.read_file("deepseek/client/testdata/two-colors.png").binary(),
+    @fs.read_binary("deepseek/client/testdata/two-colors.png"),
   )
   guard @env.get_env_var("DEEPSEEK") is Some(api_key) && api_key != "" else {
     println("DEEPSEEK is not set; skipping realworld inline image recognition")

@@ -58,7 +58,7 @@ async test "a record this build does not know is not delivered" {
   let dir = @fs.tmpdir(prefix="openseek-inbox-")
   defer @fs.rmdir(dir, recursive=true)
   let path = "\{dir}/inbox.jsonl"
-  @fs.write_file(
+  @fs.write_text(
     path,
     (
       #|{"v":2,"id":"a","from":"p","kind":"instruction","text":"newer format"}

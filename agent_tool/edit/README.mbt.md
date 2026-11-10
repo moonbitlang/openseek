@@ -230,7 +230,7 @@ async test "edit tool applies a focused code change through the registry" {
     )
     assert_false(output.is_error)
     assert_eq(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
       "fn greet() -> String {\n  \"hello, MoonBit\"\n}\n",
     )
   })

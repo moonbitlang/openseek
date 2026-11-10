@@ -212,7 +212,7 @@ async fn scheduled_session_result(
   // turn without a terminal, and the exit code explains it. Any other load
   // failure is real and still raises.
   let terminal = store.load(SessionId(run.session)).last_terminal() catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => None
+      @core_os_error.OsError(NotFound, ..) => None
       error => raise error
     }
   schedule_run_status(terminal, exit_code~)
