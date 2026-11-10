@@ -41,22 +41,20 @@ fn terminal_model_message(terminal : TurnTerminal) -> String? {
 ///|
 fn append_item_message(
   item : SessionItem,
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[ModelMessage],
 ) -> Unit {
   match item {
     User(message) =>
-      messages.push(
-        ChatMessage(User, content=to_deepseek_parts(message.content())),
-      )
+      messages.push(ModelMessage(User, content=message.content().0))
     Runtime(notice) =>
-      messages.push(ChatMessage(User, content=[Text(notice.content())]))
+      messages.push(ModelMessage(User, content=[Text(notice.content())]))
     Summary(summary) =>
       messages.push(
-        ChatMessage(User, content=[Text(summary_model_content(summary))]),
+        ModelMessage(User, content=[Text(summary_model_content(summary))]),
       )
     Assistant(message) =>
       messages.push(
-        ChatMessage(
+        ModelMessage(
           Assistant,
           content=[Text(message.content())],
           tool_calls=message.tool_calls(),
@@ -65,10 +63,7 @@ fn append_item_message(
       )
     Tool(result) =>
       messages.push(
-        ChatMessage(
-          Tool(result.tool_call_id()),
-          content=to_deepseek_parts(result.content()),
-        ),
+        ModelMessage(Tool(result.tool_call_id()), content=result.content().0),
       )
     Terminal(terminal) =>
       if terminal_model_message(terminal) is Some(content) {
@@ -79,7 +74,7 @@ fn append_item_message(
           last.role is Assistant &&
           last.content.is_text_only() &&
           last.content.text() == content) {
-          messages.push(ChatMessage(Assistant, content=[Text(content)]))
+          messages.push(ModelMessage(Assistant, content=[Text(content)]))
         }
       }
   }
@@ -88,11 +83,11 @@ fn append_item_message(
 ///|
 fn flush_pending_tool_calls(
   pending : Array[@deepseek.ToolCall],
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[ModelMessage],
 ) -> Unit {
   for call in pending {
     messages.push(
-      ChatMessage(Tool(call.id), content=[
+      ModelMessage(Tool(call.id), content=[
         Text(
           "error: previous agent process exited before recording a result for tool \{call.name}",
         ),
@@ -121,7 +116,8 @@ fn is_covered_by_later_summary(
 }
 
 ///|
-/// Project the durable session log into DeepSeek messages with inline image data URLs.
+/// Project the durable session log into model messages that keep durable
+/// content; `ModelMessage::to_chat_message` builds each request's wire form.
 ///
 /// The first returned message is always the session's system prompt. Remaining
 /// messages are derived from events in log order after applying repair and
@@ -143,9 +139,9 @@ fn is_covered_by_later_summary(
 ///
 /// This method is a read-only projection. It never mutates the session and never
 /// removes durable events.
-pub fn Session::chat_messages(self : Session) -> Array[@deepseek.ChatMessage] {
-  let messages : Array[@deepseek.ChatMessage] = [
-    ChatMessage(System, content=[Text(self.system_prompt())]),
+pub fn Session::chat_messages(self : Session) -> Array[ModelMessage] {
+  let messages : Array[ModelMessage] = [
+    ModelMessage(System, content=[Text(self.system_prompt())]),
   ]
   let pending_tool_calls : Array[@deepseek.ToolCall] = []
   let events = self.events()

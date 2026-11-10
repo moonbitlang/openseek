@@ -47,11 +47,15 @@ pub async fn generate(
 ) -> GenerationResult {
   let messages = session.chat_messages()
   guard messages.length() > 1 else { return Skipped }
-  messages.push(ChatMessage(User, content=[Text(PredictionPrompt)]))
+  messages.push(ModelMessage(User, content=[Text(PredictionPrompt)]))
   // Adding JSON mode reduced parent cache hits in DeepSeek comparisons.
   // Request JSON in the appended prompt and validate it below instead.
   let response = @async.with_timeout(8000, () => {
-    client.chat(messages, tools~, max_tokens=1024)
+    client.chat(
+      messages.map(message => message.to_chat_message()),
+      tools~,
+      max_tokens=1024,
+    )
   })
   guard response.tool_calls.is_empty() else {
     fail("prediction returned a tool call")

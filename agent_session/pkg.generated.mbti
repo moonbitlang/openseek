@@ -36,8 +36,6 @@ pub fn goal_marker(String) -> GoalMarker?
 
 pub fn parse_goal_baseline(String) -> GoalBaseline?
 
-pub fn to_deepseek_parts(@openseek_protocol.Content) -> Array[@deepseek.ContentPart]
-
 // Errors
 
 // Types and methods
@@ -65,6 +63,17 @@ pub enum GoalMarker {
   GoalUnblocked
 }
 
+#derive(@debug.Debug)
+pub struct ModelMessage {
+  role : @deepseek.Role
+  content : @openseek_protocol.Content
+  tool_calls : Array[@deepseek.ToolCall]
+  reasoning_content : String?
+}
+pub fn ModelMessage::ModelMessage(@deepseek.Role, content~ : Array[@openseek_protocol.ContentPart], tool_calls? : Array[@deepseek.ToolCall], reasoning_content? : String) -> Self
+pub fn ModelMessage::to_chat_message(Self) -> @deepseek.ChatMessage
+pub fn ModelMessage::to_repr(Self) -> @debug.Repr
+
 #derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 type RuntimeNotice
 pub fn RuntimeNotice::RuntimeNotice(String) -> Self
@@ -75,7 +84,7 @@ type Session
 pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Vector[SessionEvent]) -> Self
 pub fn Session::append(Self, SessionItem, unix_ms? : Int64) -> Self
 pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, SessionEvent)
-pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
+pub fn Session::chat_messages(Self) -> Array[ModelMessage]
 pub fn Session::compact(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32, unix_ms? : Int64) -> Self raise
 pub fn Session::current_goal(Self) -> StandingGoal?
 pub fn Session::current_goal_baseline(Self) -> GoalBaseline?

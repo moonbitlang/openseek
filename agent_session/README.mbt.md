@@ -54,9 +54,10 @@ readable.
 `Content`, `ContentPart`, and `Image` are re-exported from the shared protocol
 module; `SteerApplied` receipts preserve the same ordered content.
 
-`Session::chat_messages()` returns `@deepseek.ChatMessage` values, projecting
-images into `image_url` parts containing base64 data URLs while preserving part
-order and stored history. `deepseek/client` checks image support when encoding
+`Session::chat_messages()` returns `ModelMessage` values, which keep durable
+content in part order. `ModelMessage::to_chat_message` builds the
+`@deepseek.ChatMessage` for a request, projecting images into `image_url` parts
+containing base64 data URLs. `deepseek/client` checks image support when encoding
 each request; the DeepSeek encoder restricts images to user/tool roles.
 Both normal turns and resumed sessions send the image bytes directly; no Files
 API upload, provider ID, expiry handling, or upload cache is involved. Images
@@ -82,7 +83,7 @@ flowchart LR
   compact["agent_session/compact"] -->|"chat_messages()"| session
   compact -->|"optional durable summary"| store
 
-  session -->|"projects to"| deepseek["deepseek.ChatMessage[]"]
+  session -->|"projects to"| model["ModelMessage[]"]
 ```
 
 The core data model is an immutable session with an append-only event log.
@@ -101,7 +102,7 @@ classDiagram
     +append(SessionItem, unix_ms) Session
     +append_event(SessionItem, unix_ms)
     +compact(content, from_sequence, to_sequence) Session
-    +chat_messages() ChatMessage[]
+    +chat_messages() ModelMessage[]
   }
 
   class SessionId {
@@ -234,8 +235,8 @@ test "append_event returns the durable event" {
 
 ## Model Projection
 
-`Session::chat_messages` converts the durable session into the exact DeepSeek
-messages sent to the model. Projection is where session-specific repair and
+`Session::chat_messages` converts the durable session into the messages sent to
+the model; `ModelMessage::to_chat_message` encodes each one for a request. Projection is where session-specific repair and
 compaction rules are applied:
 
 - The first message is always the stored system prompt.
@@ -278,7 +279,7 @@ flowchart TD
 
   loop --> done["end"]
   done --> finalFlush["flush remaining pending tool calls"]
-  finalFlush --> messages["DeepSeek ChatMessage[]"]
+  finalFlush --> messages["ModelMessage[]"]
 ```
 
 ```mbt check

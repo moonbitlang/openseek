@@ -525,7 +525,6 @@ test "durable content replays mixed content without provider IDs" {
     Text("after"),
   ]
   let user = @agent_session.UserMessage(Content(parts))
-  let expected = @agent_session.to_deepseek_parts(user.content())
   let session = @agent_session.Session(
     SessionId("mixed"),
     system_prompt="system",
@@ -538,7 +537,7 @@ test "durable content replays mixed content without provider IDs" {
     system_prompt="system",
   ).append(decoded.item())
   let messages = resumed.chat_messages()
-  assert_eq(messages[1].content.0, expected)
+  assert_eq(messages[1].content, user.content())
 }
 
 ///|
