@@ -18,19 +18,17 @@
 /// language -> code: no
 /// ```
 fn render_diagram_code_block(code_block : MarkdownCodeBlock) -> String? {
-  let diagram_language = match code_block.language_id {
-    Some("diago") | Some("d2") => "diago"
-    Some("uml") | Some("plantuml") => "uml"
-    _ => return None
+  guard code_block.language_id is Some(language) &&
+    @diagrams.DiagramKind::from_fence(language) is Some(kind) else {
+    return None
   }
   let source_attribute = match code_block.node_id {
     Some(_) => markdown_source_attributes(code_block.block_source_range)
     None => ""
   }
-  let code_language = code_block.language_id.unwrap_or(diagram_language)
   Some(
     (
-      $|<div class="moonbit-viewer-markdown-diagram" data-diagram-language="\{diagram_language}" data-diagram-state="fallback"\{source_attribute}><pre><code class="language-\{code_language}">\{@common.escape_html(code_block.code)}</code></pre></div>
+      $|<div class="moonbit-viewer-markdown-diagram" data-diagram-language="\{kind.name()}" data-diagram-state="fallback"\{source_attribute}><pre><code class="language-\{language}">\{@common.escape_html(code_block.code)}</code></pre></div>
       $|
     ),
   )

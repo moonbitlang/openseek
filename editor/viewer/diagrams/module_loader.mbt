@@ -4,24 +4,45 @@
 /// time a diagram is rendered. A relative URL resolves against the document
 /// base. A failed import or render passes `None`.
 pub fn use_module(url : String) -> Unit {
-  renderer.val = Some((kind, source, on_result) => {
-    render_with_module(url, kind.name(), source, svg => on_result(Some(svg)), () => {
-      on_result(None)
-    })
+  let load = diagram_module(url)
+  renderer.val = Some((kind, source, wanted, on_result) => {
+    render_with_module(
+      load,
+      kind.name(),
+      source,
+      wanted,
+      svg => on_result(Some(svg)),
+      () => on_result(None),
+    )
   })
 }
 
 ///|
+/// Imports the module on first use; every later request settles from the
+/// same promise.
+#external
+priv type DiagramModule
+
+///|
+extern "js" fn diagram_module(url : String) -> DiagramModule =
+  #| (url) => {
+  #|   let module;
+  #|   return () => (module ??= import(new URL(url, document.baseURI).href));
+  #| }
+
+///|
 extern "js" fn render_with_module(
-  url : String,
+  load : DiagramModule,
   kind : String,
   source : String,
+  wanted : () -> Bool,
   on_svg : (String) -> Unit,
   on_failure : () -> Unit,
 ) -> Unit =
-  #| (url, kind, source, onSvg, onFailure) => {
-  #|   import(new URL(url, document.baseURI).href).then(
+  #| (load, kind, source, wanted, onSvg, onFailure) => {
+  #|   load().then(
   #|     (module) => {
+  #|       if (!wanted()) return;
   #|       let svg;
   #|       try {
   #|         svg = module.render_diagram(kind, source);

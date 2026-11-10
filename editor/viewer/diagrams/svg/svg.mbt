@@ -2,53 +2,25 @@
 /// Compiles one diagram to SVG. Invalid source returns `None` so the caller
 /// can keep its source fallback. A host that bundles this package passes this
 /// function to `@diagrams.use_bundled_renderer`.
+///
+/// UML-family diagrams use CSS-backed paint values, so one SVG follows the
+/// host's current foreground and surface colors without a theme-time
+/// rerender. `Mbti` takes a generated `.mbti` body itself, not a PlantUML
+/// wrapper; `PackageDependencies` takes the JSON emitted by
+/// `moon tree --package --json`.
 pub fn render(kind : @diagrams.DiagramKind, source : String) -> String? {
-  match kind {
-    Diago => render_diago(source)
-    Uml => render_uml(source)
-    Mbti => render_mbti(source)
-    PackageDependencies => render_package_dependencies(source)
-  }
-}
-
-///|
-/// Compiles a D2/Diago body.
-pub fn render_diago(source : String) -> String? {
+  let color_scheme = viewer_uml_color_scheme()
   Some(
-    @diago.compile(
-      source,
-      options=@diago.CompileOptions::new().with_output_mode(Svg),
-    ),
-  ) catch {
-    _ => None
-  }
-}
-
-///|
-/// Uses CSS-backed paint values so one UML SVG follows the host's current
-/// foreground and surface colors without a theme-time rerender.
-pub fn render_uml(source : String) -> String? {
-  Some(@uml.render_svg(source, color_scheme=viewer_uml_color_scheme())) catch {
-    _ => None
-  }
-}
-
-///|
-/// Compiles one generated MoonBit interface body directly to the UML
-/// renderer's MBTI diagram family. The source is the `.mbti` file itself, not
-/// a PlantUML wrapper.
-pub fn render_mbti(source : String) -> String? {
-  Some(@uml.render_mbti_svg(source, color_scheme=viewer_uml_color_scheme())) catch {
-    _ => None
-  }
-}
-
-///|
-/// Compiles the JSON emitted by `moon tree --package --json` to a package
-/// dependency SVG. The command remains the host's responsibility.
-pub fn render_package_dependencies(source : String) -> String? {
-  Some(
-    @uml.render_package_dep_svg(source, color_scheme=viewer_uml_color_scheme()),
+    match kind {
+      Diago =>
+        @diago.compile(
+          source,
+          options=@diago.CompileOptions::new().with_output_mode(Svg),
+        )
+      Uml => @uml.render_svg(source, color_scheme~)
+      Mbti => @uml.render_mbti_svg(source, color_scheme~)
+      PackageDependencies => @uml.render_package_dep_svg(source, color_scheme~)
+    },
   ) catch {
     _ => None
   }

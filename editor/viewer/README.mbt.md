@@ -25,7 +25,7 @@ Without either, diagrams keep their escaped source. `MarkdownViewer` and
 consumers with their own Markdown parser call `@diagrams.render`, which reports
 `None` for invalid input so the consumer can retain the source as code. The
 result may arrive after the module loads, so a consumer whose target can be
-replaced meanwhile must drop a stale result.
+replaced meanwhile disposes the returned `PendingDiagram`.
 `MermaidDiagram` owns a single diagram inside a caller-owned, childless DOM
 container. It uses the same local Mermaid assets, strict rendering policy,
 escaped source fallback, and stale-result protection as `MarkdownViewer`.

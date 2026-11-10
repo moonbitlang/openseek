@@ -8,6 +8,7 @@ import {
   "moonbitlang/editor/viewer/common/languages",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/services",
+  "moonbitlang/editor/viewer/diagrams",
 }
 
 import {

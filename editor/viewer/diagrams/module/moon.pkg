@@ -1,4 +1,5 @@
 import {
+  "moonbit-community/rabbita/js",
   "moonbitlang/editor/viewer/diagrams",
   "moonbitlang/editor/viewer/diagrams/svg",
 }

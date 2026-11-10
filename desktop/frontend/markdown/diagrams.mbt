@@ -3,9 +3,9 @@
 /// Diagrams compile only when a source/container changes, never on unrelated
 /// Rabbita view updates.
 priv enum MarkdownDiagramRenderer {
-  /// A Diago or UML render; the flag turns false once the entry is disposed,
-  /// so a late result cannot write into a replaced container.
-  Compiled(Ref[Bool])
+  /// A Diago or UML render; disposing it stops a late result from writing
+  /// into a replaced container.
+  Compiled(@diagrams.PendingDiagram)
   Mermaid(@editor_viewer.MermaidDiagram)
 }
 
@@ -21,7 +21,7 @@ priv struct MarkdownDiagram {
 ///|
 fn MarkdownDiagram::dispose(self : Self) -> Unit {
   match self.renderer {
-    Compiled(current) => current.val = false
+    Compiled(render) => render.dispose()
     Mermaid(diagram) => diagram.dispose()
   }
 }
@@ -73,31 +73,19 @@ pub fn DiagramRenderers::refresh(
         }
       }
     } else {
-      let renderer = match language {
-        "mermaid" =>
-          MarkdownDiagramRenderer::Mermaid(
-            @editor_viewer.MermaidDiagram(
-              element,
-              source,
-              dark_mode~,
-              on_size_changed=self.on_size_changed,
-            ),
-          )
-        "d2" | "diago" =>
-          self.compile(
+      let renderer = if language == "mermaid" {
+        MarkdownDiagramRenderer::Mermaid(
+          @editor_viewer.MermaidDiagram(
             element,
             source,
-            Diago,
-            "moonbit-viewer-markdown-diagram",
-          )
-        "uml" | "plantuml" =>
-          self.compile(
-            element,
-            source,
-            Uml,
-            "chat-markdown-diagram moonbit-viewer-markdown-diagram",
-          )
-        _ => continue
+            dark_mode~,
+            on_size_changed=self.on_size_changed,
+          ),
+        )
+      } else if @diagrams.DiagramKind::from_fence(language) is Some(kind) {
+        self.compile(element, source, kind)
+      } else {
+        continue
       }
       retained.push({ element, source, language, dark_mode, renderer, })
     }
@@ -113,17 +101,19 @@ fn DiagramRenderers::compile(
   element : @dom.Element,
   source : String,
   kind : @diagrams.DiagramKind,
-  wrapper_class : String,
 ) -> MarkdownDiagramRenderer {
-  let current = Ref(true)
-  @diagrams.render(kind, source, svg => {
-    guard current.val && svg is Some(svg) else { return }
+  let wrapper_class = match kind {
+    Uml => "chat-markdown-diagram moonbit-viewer-markdown-diagram"
+    _ => "moonbit-viewer-markdown-diagram"
+  }
+  let render = @diagrams.render(kind, source, svg => {
+    guard svg is Some(svg) else { return }
     element.set_inner_html(
       "<div class=\"\{wrapper_class}\" data-diagram-language=\"\{kind.name()}\">\{svg}</div>",
     )
     (self.on_size_changed)()
   })
-  Compiled(current)
+  Compiled(render)
 }
 
 ///|

@@ -6,11 +6,9 @@ priv struct MarkdownDomLifetime {
   listeners : Array[@base_common.Disposable]
   mermaid_diagrams : Array[MermaidDiagram]
   mermaid_module_loader : MermaidModuleLoader
-  /// Diago and UML wrappers still showing their source fallback.
-  pending_diagrams : Array[(@rdom.Element, @diagrams.DiagramKind)]
+  /// Diago and UML renders, disposed with the lifetime.
+  diagram_renders : Array[@diagrams.PendingDiagram]
   options : MarkdownRenderOptions
-  on_size_changed : (() -> Unit)?
-  mermaid_enabled : Bool
   mut target_token : MarkdownTargetToken?
   mut active : Bool
 }
@@ -53,10 +51,8 @@ fn install_markdown_dom(
     listeners: [],
     mermaid_diagrams: [],
     mermaid_module_loader,
-    pending_diagrams: [],
+    diagram_renders: [],
     options,
-    on_size_changed: options.on_size_changed,
-    mermaid_enabled: options.mermaid_theme is Some(_),
     target_token: None,
     active: true,
   }
@@ -66,26 +62,37 @@ fn install_markdown_dom(
     () => lifetime.dispose(),
   )
   lifetime.target_token = Some(token)
-  let content = parse_markdown_content(owner_document, html)
-  postprocess_markdown_inputs(content)
-  lifetime.postprocess_images(
-    content,
-    options.base_uri,
-    options.allow_remote_images,
-  )
-  lifetime.postprocess_anchors(
-    content,
-    options.base_uri,
-    options.action_handler,
-  )
-  lifetime.postprocess_diagrams(content)
+  let content = lifetime.sanitized_content(html)
+  let pending_diagrams = lifetime.postprocess_diagrams(content)
   replace_target_with_markdown_content(target, content)
-  lifetime.render_diagrams()
+  lifetime.render_diagrams(pending_diagrams)
   match options.mermaid_theme {
     Some(theme) => lifetime.rerender_mermaid(mermaid_theme_name(theme))
     None => ()
   }
   lifetime
+}
+
+///|
+/// Parses `html` into an inert fragment and applies the input, image and link
+/// policy every fragment passes before it reaches the live DOM.
+fn MarkdownDomLifetime::sanitized_content(
+  self : MarkdownDomLifetime,
+  html : String,
+) -> MarkdownParsedContent {
+  let content = parse_markdown_content(self.owner_document, html)
+  postprocess_markdown_inputs(content)
+  self.postprocess_images(
+    content,
+    self.options.base_uri,
+    self.options.allow_remote_images,
+  )
+  self.postprocess_anchors(
+    content,
+    self.options.base_uri,
+    self.options.action_handler,
+  )
+  content
 }
 
 ///|
@@ -124,7 +131,7 @@ fn MarkdownDomLifetime::postprocess_images(
       continue
     }
     image.set_attribute("src", resolved)
-    if self.on_size_changed is Some(on_size_changed) {
+    if self.options.on_size_changed is Some(on_size_changed) {
       self.listen(image, "load", _event => if self.active { on_size_changed() })
     }
   }
@@ -190,28 +197,28 @@ fn MarkdownDomLifetime::postprocess_anchors(
 }
 
 ///|
+/// Wires every diagram wrapper and returns the Diago and UML wrappers still
+/// showing their source fallback.
 fn MarkdownDomLifetime::postprocess_diagrams(
   self : MarkdownDomLifetime,
   content : MarkdownParsedContent,
-) -> Unit {
+) -> Array[(@rdom.Element, @diagrams.DiagramKind)] {
+  let pending = []
   for diagram in markdown_content_query_all(content, "div") {
     if !markdown_element_has_class(diagram, "moonbit-viewer-markdown-diagram") {
       continue
     }
-    if self.mermaid_enabled &&
-      markdown_attribute_or_empty(diagram, "data-diagram-language") == "mermaid" {
+    let language = markdown_attribute_or_empty(diagram, "data-diagram-language")
+    if self.options.mermaid_theme is Some(_) && language == "mermaid" {
       self.mermaid_diagrams.push({
         wrapper: diagram,
         source: markdown_diagram_source(diagram),
         epoch: 0,
       })
     }
-    if markdown_attribute_or_empty(diagram, "data-diagram-state") == "fallback" {
-      match markdown_attribute_or_empty(diagram, "data-diagram-language") {
-        "diago" => self.pending_diagrams.push((diagram, Diago))
-        "uml" => self.pending_diagrams.push((diagram, Uml))
-        _ => ()
-      }
+    if markdown_attribute_or_empty(diagram, "data-diagram-state") == "fallback" &&
+      @diagrams.DiagramKind::from_fence(language) is Some(kind) {
+      pending.push((diagram, kind))
     }
     self.listen(diagram, "wheel", event => {
       if !self.active ||
@@ -250,37 +257,29 @@ fn MarkdownDomLifetime::postprocess_diagrams(
       }
     })
   }
+  pending
 }
 
 ///|
 /// Replaces each attached Diago/UML fallback with its compiled SVG. The SVG
 /// passes the same input, image and link policy as converted Markdown before
 /// it reaches the live DOM. A failed or missing renderer keeps the fallback.
-fn MarkdownDomLifetime::render_diagrams(self : MarkdownDomLifetime) -> Unit {
-  for pending in self.pending_diagrams {
-    let (wrapper, kind) = pending
-    @diagrams.render(kind, markdown_diagram_source(wrapper), svg => {
-      guard self.is_current() && svg is Some(svg) else { return }
-      let content = parse_markdown_content(self.owner_document, svg)
-      postprocess_markdown_inputs(content)
-      self.postprocess_images(
-        content,
-        self.options.base_uri,
-        self.options.allow_remote_images,
-      )
-      self.postprocess_anchors(
-        content,
-        self.options.base_uri,
-        self.options.action_handler,
-      )
-      replace_target_with_markdown_content(wrapper, content)
+fn MarkdownDomLifetime::render_diagrams(
+  self : MarkdownDomLifetime,
+  pending : Array[(@rdom.Element, @diagrams.DiagramKind)],
+) -> Unit {
+  for diagram in pending {
+    let (wrapper, kind) = diagram
+    let render = @diagrams.render(kind, markdown_diagram_source(wrapper), svg => {
+      guard svg is Some(svg) else { return }
+      replace_target_with_markdown_content(wrapper, self.sanitized_content(svg))
       wrapper.set_attribute("data-diagram-state", "rendered")
-      if self.on_size_changed is Some(on_size_changed) {
+      if self.options.on_size_changed is Some(on_size_changed) {
         on_size_changed()
       }
     })
+    self.diagram_renders.push(render)
   }
-  self.pending_diagrams.clear()
 }
 
 ///|
@@ -306,6 +305,9 @@ fn MarkdownDomLifetime::dispose(self : MarkdownDomLifetime) -> Unit {
   self.active = false
   for diagram in self.mermaid_diagrams {
     diagram.epoch += 1
+  }
+  for render in self.diagram_renders {
+    render.dispose()
   }
   while self.listeners.length() > 0 {
     let listener = self.listeners.remove(self.listeners.length() - 1)
@@ -336,7 +338,7 @@ fn MarkdownDomLifetime::rerender_mermaid(
   self : MarkdownDomLifetime,
   theme : String,
 ) -> Unit {
-  if !self.active || !self.mermaid_enabled {
+  if !self.active || self.options.mermaid_theme is None {
     return
   }
   for diagram in self.mermaid_diagrams {

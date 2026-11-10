@@ -1,14 +1,16 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/editor/viewer/diagrams/module"
 
+import {
+  "moonbit-community/rabbita/js",
+}
+
 // Values
-pub fn render_diagram(String, String) -> DiagramSvg
+pub fn render_diagram(String, String) -> @js.Nullable[String]
 
 // Errors
 
 // Types and methods
-#external
-pub type DiagramSvg
 
 // Type aliases
 
