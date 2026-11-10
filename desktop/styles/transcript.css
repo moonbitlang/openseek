@@ -268,6 +268,12 @@
   line-height: 1.25;
   color: var(--color-text-primary);
 }
+.empty-detail {
+  max-width: 36rem;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
 .empty-title-project {
   display: inline-flex;
   align-items: baseline;
