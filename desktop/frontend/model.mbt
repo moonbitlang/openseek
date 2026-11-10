@@ -354,13 +354,12 @@ const AppFontSizeMinPixels : Int32 = 12
 const AppFontSizeMaxPixels : Int32 = 18
 
 ///|
-/// Invalid ephemeral localStorage values retain the current readable choice.
-fn AppFontSize::parse(value : String, fallback : AppFontSize) -> AppFontSize {
-  let pixels = @string.parse_int(value) catch { _ => return fallback }
+fn AppFontSize::parse(value : String) -> AppFontSize? {
+  let pixels = @string.parse_int(value) catch { _ => return None }
   if pixels >= AppFontSizeMinPixels && pixels <= AppFontSizeMaxPixels {
-    AppFontSize(pixels)
+    Some(AppFontSize(pixels))
   } else {
-    fallback
+    None
   }
 }
 
@@ -1217,6 +1216,7 @@ priv enum SelectMenu {
   PromptMenu
   FollowupBehaviorMenu
   ThemeMenu
+  FontSizeMenu
   LanguageMenu
   NotificationCornerMenu
   TreeLayoutMenu
@@ -1380,8 +1380,8 @@ priv struct Model {
   theme : Theme
   language : @i18n.Preference
   locale : @i18n.Locale
-  // The Settings type scale shared by app chrome, editor text, and terminals.
-  app_font_size : AppFontSize
+  // No preference leaves the shared app/editor/terminal type scale to CSS.
+  app_font_size : AppFontSize?
   // One local display preference shared by OpenSeek and Codex transcripts.
   minimal_transcript : Bool
   fps_overlay_enabled : Bool
@@ -2788,7 +2788,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     theme: System,
     language: System,
     locale: English,
-    app_font_size: AppFontSize(14),
+    app_font_size: None,
     fps_overlay_enabled: false,
     minimal_transcript: true,
     narrow,

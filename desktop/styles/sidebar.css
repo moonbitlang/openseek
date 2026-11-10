@@ -103,7 +103,6 @@
 }
 .sidebar-section {
   display: grid;
-  /* Preserve the 1px gap at the default 14px type size, scaling with it. */
   --sidebar-row-gap: calc(1em / 14);
   gap: var(--sidebar-row-gap);
   min-width: 0;

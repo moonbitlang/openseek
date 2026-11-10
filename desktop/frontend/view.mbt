@@ -1619,31 +1619,24 @@ fn settings_general_group(
     @ui.form_row(
       @settings.text(locale, FontSize),
       [
-        @html.input(
-          input_type=@html.InputType::Range,
-          id="font-size-slider",
-          list="font-size-ticks",
-          class="setting-font-size-slider",
-          min=AppFontSizeMinPixels,
-          max=AppFontSizeMaxPixels,
-          step=1,
-          value=model.app_font_size.wire(),
-          on_input=dispatch.map(value => FontSizeChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label(@settings.text(locale, FontSize))
-            .aria_valuetext("\{model.app_font_size.wire()}px"),
-        ),
-        @html.datalist(
-          id="font-size-ticks",
-          [
+        FontSizeMenu.setting_control(
+          dispatch,
+          model,
+          id="font-size-select",
+          options=[
             for size in AppFontSizeMinPixels..<=AppFontSizeMaxPixels => {
-              @html.option(value=size.to_string(), "")
+              @select_control.ViewOption(
+                value=size.to_string(),
+                label="\{size}px",
+              )
             }
           ],
+          selected=model.app_font_size
+            .unwrap_or_else(AppFontSize::current)
+            .wire(),
+          aria_label=@settings.text(locale, FontSize),
+          change=dispatch.map(value => FontSizeChanged(value)),
         ),
-        @html.span(class="setting-font-size-value", [
-          @html.text("\{model.app_font_size.wire()}px"),
-        ]),
       ],
       desc=@settings.text(locale, FontSizeDescription),
     ),
