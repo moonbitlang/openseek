@@ -16,9 +16,20 @@ fn schedule_fixture(
     },
     enabled: true,
     run_requested: false,
-    notice: None,
+    skipped: None,
     next_at: Some(at),
   }
+}
+
+///|
+/// The state a change produced, failing the test when the host refused it.
+fn changed(
+  reply : @protocol.ScheduleChangeReply,
+) -> @protocol.SchedulesReply raise {
+  guard reply is Changed(state) else {
+    fail("the host refused the schedule change: \{reply.to_json().stringify()}")
+  }
+  state
 }
 
 ///|
@@ -138,14 +149,9 @@ async test "a second host reads the owner's schedules and neither runs nor chang
   // The entry is due for both; only the owner starts it.
   assert_eq(other.take_due(at=100000).length(), 0)
   assert_eq(owner.take_due(at=100000).length(), 1)
-  let refused = try {
-    ignore(other.action({ id: "due", action: "pause", }))
-    false
-  } catch {
-    EngineError(_) => true
-    error => raise error
-  }
-  assert_true(refused)
+  assert_true(
+    other.action({ id: "due", action: Pause, }) is Refused(ForeignOwner),
+  )
   // Looking did not end the owner's run, in the file or in the owner.
   guard other.list().runs is [seen] else {
     fail("the second host does not see the owner's run")
@@ -178,7 +184,7 @@ async test "a host takes over the store once its owner has exited" {
     fail("the new owner lost the previous owner's run")
   }
   assert_true(left.status is Interrupted)
-  let paused = other.action({ id: "due", action: "pause", })
+  let paused = changed(other.action({ id: "due", action: Pause, }))
   assert_false(paused.entries[0].enabled)
 }
 
@@ -190,17 +196,17 @@ async test "schedule Run now preserves a paused plan and its future interval" {
   ignore(service.list())
   let entry = schedule_fixture("p", 500000, Every(10))
   service.commit({ entries: [entry], runs: [], })
-  ignore(service.action({ id: "p", action: "run", }))
+  ignore(service.action({ id: "p", action: Run, }))
   assert_eq(service.take_due(at=100000).length(), 1)
   assert_eq(service.list().entries[0].next_at, Some(500000))
   // Stop before process spawn must be retained for the worker.
-  let state = service.action({ id: "p", action: "stop", })
+  let state = changed(service.action({ id: "p", action: Stop, }))
   assert_true(service.stopped.contains(state.runs[0].id))
   service.commit({
     entries: [{ ..entry, enabled: false, next_at: None, }],
     runs: [],
   })
-  ignore(service.action({ id: "p", action: "run", }))
+  ignore(service.action({ id: "p", action: Run, }))
   assert_eq(service.take_due(at=100000).length(), 1)
   assert_false(service.list().entries[0].enabled)
   assert_eq(service.list().entries[0].next_at, None)
@@ -217,22 +223,83 @@ async test "editing a schedule keeps its deadline unless its timing changes" {
   let entry = schedule_fixture("hourly", deadline, Every(60))
   let entry = { ..entry, spec: { ..entry.spec, workspace: None, }, }
   service.commit({ entries: [entry], runs: [], })
-  let renamed = service.save({
-    id: Some("hourly"),
-    spec: { ..entry.spec, name: "renamed", task: "inspect again", },
-    run_now: false,
-  })
+  let renamed = changed(
+    service.save({
+      id: Some("hourly"),
+      spec: { ..entry.spec, name: "renamed", task: "inspect again", },
+      run_now: false,
+    }),
+  )
   assert_eq(renamed.entries[0].next_at, Some(deadline))
   assert_eq(renamed.entries[0].spec.name, "renamed")
-  let retimed = service.save({
-    id: Some("hourly"),
-    spec: { ..entry.spec, timing: Every(30), },
-    run_now: false,
-  })
+  let retimed = changed(
+    service.save({
+      id: Some("hourly"),
+      spec: { ..entry.spec, timing: Every(30), },
+      run_now: false,
+    }),
+  )
   guard retimed.entries[0].next_at is Some(next_at) else {
     fail("a retimed interval schedule has a deadline")
   }
   assert_true(next_at > deadline)
+}
+
+///|
+async test "schedule changes the user can correct are refused with a reason" {
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-refused-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let service = Schedules(new_engine_manager("unused"), Some(root))
+  ignore(service.list())
+  let entry = schedule_fixture("p", 500000, Every(10))
+  let entry = { ..entry, spec: { ..entry.spec, workspace: None, }, }
+  let passed = schedule_fixture("passed", 1, Once(1))
+  let passed = {
+    ..passed,
+    spec: { ..passed.spec, workspace: None, },
+    enabled: false,
+    next_at: None,
+  }
+  service.commit({ entries: [entry, passed], runs: [], })
+  assert_true(
+    service.action({ id: "gone", action: Pause, }) is Refused(Missing),
+  )
+  assert_true(
+    service.save({ id: Some("gone"), spec: entry.spec, run_now: false, })
+    is Refused(Missing),
+  )
+  assert_true(
+    service.save({ id: None, spec: passed.spec, run_now: false, })
+    is Refused(PastTime),
+  )
+  assert_true(
+    service.action({ id: "passed", action: Resume, }) is Refused(PastTime),
+  )
+  assert_true(
+    service.save({
+      id: None,
+      spec: { ..entry.spec, workspace: Some(root.resolve().resource_path()), },
+      run_now: false,
+    })
+    is Refused(UnattachedProject),
+  )
+  ignore(changed(service.action({ id: "p", action: Run, })))
+  assert_true(
+    service.action({ id: "p", action: Run, }) is Refused(AlreadyQueued),
+  )
+  assert_eq(service.take_due(at=100000).length(), 1)
+  assert_true(
+    service.action({ id: "p", action: Run, }) is Refused(AlreadyRunning),
+  )
+  assert_true(
+    service.save({ id: Some("p"), spec: entry.spec, run_now: true, })
+    is Refused(AlreadyRunning),
+  )
+  assert_true(
+    service.action({ id: "p", action: Delete, }) is Refused(StopBeforeDelete),
+  )
+  // Refusals leave the store as it was.
+  assert_eq(service.list().entries.length(), 2)
 }
 
 ///|
@@ -264,12 +331,9 @@ async test "a schedule that cannot start does not hold back the others" {
   assert_eq(launches.length(), 1)
   assert_eq(launches[0].0.id, "project")
   let entries = service.list().entries
-  assert_eq(
-    entries[0].notice,
-    Some("Skipped: Automatic tasks need an available home directory"),
-  )
+  assert_eq(entries[0].skipped, Some(AutomaticFolderUnavailable))
   assert_eq(entries[0].next_at, Some(100000L + 10 * 60000))
-  assert_eq(entries[1].notice, None)
+  assert_eq(entries[1].skipped, None)
 }
 
 ///|
@@ -414,16 +478,18 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
     log.contains("moon=" + selected_home.resolve().join("bin/moon").to_string()),
   )
 
-  let automatic = service.save({
-      id: None,
-      spec: {
-        ..entry.spec,
-        name: "Automatic",
-        workspace: None,
-        timing: Every(30),
-      },
-      run_now: true,
-    }).entries[1]
+  let automatic = changed(
+      service.save({
+        id: None,
+        spec: {
+          ..entry.spec,
+          name: "Automatic",
+          workspace: None,
+          timing: Every(30),
+        },
+        run_now: true,
+      }),
+    ).entries[1]
   assert_true(automatic.run_requested)
   let first = service.take_due()[0]
   assert_eq(service.list().entries[1].next_at, automatic.next_at)
@@ -446,7 +512,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   assert_true(@workspaces.registered_dir(folder) is Some(_))
   assert_true(@fsx.read_text(Path(first.1.log_path)).contains("stderr marker"))
   @fsx.write_text(folder.to_path().join("progress.txt"), "keep this progress")
-  ignore(service.action({ id: automatic.id, action: "run", }))
+  ignore(service.action({ id: automatic.id, action: Run, }))
   let second = service.take_due()[0]
   assert_eq(second.1.workspace, first.1.workspace)
   assert_true(second.1.session != first.1.session)
@@ -547,7 +613,7 @@ async test "scheduled run Stop and timeout reap CLI processes" {
         Terminal(Finished("last commit before stop")),
       ),
     )
-    ignore(service.action({ id: entry.id, action: "stop", }))
+    ignore(service.action({ id: entry.id, action: Stop, }))
     @async.with_timeout(5000, () => worker.wait())
     assert_true(events.length() > commits_before_stop)
     assert_false(unleased_commit.val)
@@ -578,7 +644,7 @@ async test "scheduled run Stop and timeout reap CLI processes" {
         @async.sleep(10)
       }
     })
-    ignore(service.action({ id: entry.id, action: "stop", }))
+    ignore(service.action({ id: entry.id, action: Stop, }))
     @async.with_timeout(5000, () => worker.wait())
   })
   assert_true(service.list().runs[2].status is Stopped)

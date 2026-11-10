@@ -162,10 +162,10 @@ pub struct Schedules {
   stopped : Map[String, Unit]
 }
 pub fn Schedules::Schedules(EngineManager, @pathx.Path?) -> Self
-pub async fn Schedules::action(Self, @protocol.ScheduleActionPayload) -> @protocol.SchedulesReply
+pub async fn Schedules::action(Self, @protocol.ScheduleActionPayload) -> @protocol.ScheduleChangeReply
 pub async fn Schedules::list(Self) -> @protocol.SchedulesReply
 pub async fn Schedules::run(Self, on_run_changed~ : (@protocol.ScheduleRun) -> Unit, sink~ : EventSink, on_workspaces~ : (Array[String]) -> Unit) -> Unit
-pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.SchedulesReply
+pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.ScheduleChangeReply
 
 pub(all) struct SettingsPatch {
   provider : String?

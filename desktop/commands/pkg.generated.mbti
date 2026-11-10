@@ -243,11 +243,11 @@ pub let pattern_repair : Command[@protocol.PatternRepairPayload, @protocol.Patte
 
 pub let remote_access_set : Command[@protocol.RemoteAccessPayload, @protocol.AuthStatusPayload]
 
-pub let schedules_action : Command[@protocol.ScheduleActionPayload, @protocol.SchedulesReply]
+pub let schedules_action : Command[@protocol.ScheduleActionPayload, @protocol.ScheduleChangeReply]
 
 pub let schedules_list : Command[@protocol.EmptyPayload, @protocol.SchedulesReply]
 
-pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.SchedulesReply]
+pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.ScheduleChangeReply]
 
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 

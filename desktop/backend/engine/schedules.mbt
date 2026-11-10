@@ -91,11 +91,6 @@ fn Schedules::directory(self : Schedules) -> @pathx.Path raise EngineError {
 }
 
 ///|
-/// What a client is told when it tries to change schedules through a host
-/// that does not own the store.
-const ScheduleForeignOwner = "Schedules are run by another SeekMoon open on this computer; change them there"
-
-///|
 // Caller holds the lock. Whether this process owns the store, claiming it
 // when no running host does. A host that finds it taken asks again on its
 // next call, which is how it takes over once the owner has exited.
@@ -180,27 +175,30 @@ pub async fn Schedules::list(self : Schedules) -> @protocol.SchedulesReply {
 }
 
 ///|
+/// Save a schedule. A change the user can correct (another host owns the
+/// store, the project is detached, the time has passed) is refused with a
+/// reason; failing to read or save the store raises.
 pub async fn Schedules::save(
   self : Schedules,
   payload : @protocol.ScheduleSavePayload,
-) -> @protocol.SchedulesReply {
+) -> @protocol.ScheduleChangeReply {
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
-    guard self.owns() else { raise EngineError(ScheduleForeignOwner) }
+    guard self.owns() else { return Refused(ForeignOwner) }
     let state = self.load()
     // Validate typed callers too, and resolve only registered project paths.
     let spec : @protocol.ScheduleSpec = @json.from_json(payload.spec.to_json())
     if spec.workspace is Some(workspace) {
       let path = @pathx.Absolute::parse_resource_path(workspace)
       guard @workspaces.registered_dir(path) is Some(_) else {
-        raise EngineError("Choose an attached project for this schedule")
+        return Refused(UnattachedProject)
       }
     }
     let previous = match payload.id {
       Some(id) => {
         guard state.entries.search_by(entry => entry.id == id) is Some(index) else {
-          raise EngineError("Schedule no longer exists")
+          return Refused(Missing)
         }
         Some(state.entries[index])
       }
@@ -215,22 +213,20 @@ pub async fn Schedules::save(
         at > now => Some(at)
       _ => schedule_next(spec.timing, now)
     }
-    guard next_at is Some(_) else {
-      raise EngineError("Choose a time in the future")
-    }
+    guard next_at is Some(_) else { return Refused(PastTime) }
     let id = match previous {
       Some(entry) => entry.id
       None => @uuid.mint()
     }
     guard !payload.run_now || !schedule_running(state, id) else {
-      raise EngineError("This schedule is already running")
+      return Refused(AlreadyRunning)
     }
     let entry : @protocol.ScheduleEntry = {
       id,
       spec,
       enabled: true,
       run_requested: payload.run_now,
-      notice: None,
+      skipped: None,
       next_at,
     }
     let entries = state.entries.copy()
@@ -240,7 +236,7 @@ pub async fn Schedules::save(
     }
     let next = { ..state, entries, }
     self.commit(next)
-    next
+    Changed(next)
   })
 }
 
@@ -250,45 +246,44 @@ fn schedule_running(state : @protocol.SchedulesReply, id : String) -> Bool {
 }
 
 ///|
+/// Apply a user action to a schedule, refusing it with a reason when the
+/// schedule's state does not allow it.
 pub async fn Schedules::action(
   self : Schedules,
   payload : @protocol.ScheduleActionPayload,
-) -> @protocol.SchedulesReply {
+) -> @protocol.ScheduleChangeReply {
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
-    guard self.owns() else { raise EngineError(ScheduleForeignOwner) }
+    guard self.owns() else { return Refused(ForeignOwner) }
     let state = self.load()
     guard state.entries.search_by(entry => entry.id == payload.id)
       is Some(index) else {
-      raise EngineError("Schedule no longer exists")
+      return Refused(Missing)
     }
     let entry = state.entries[index]
     let entries = state.entries.copy()
     match payload.action {
-      "pause" =>
+      Pause =>
         entries[index] = {
           ..entry,
           enabled: false,
           run_requested: false,
           next_at: None,
         }
-      "resume" => {
+      Resume => {
         let next_at = schedule_next(entry.spec.timing, @async.now())
-        guard next_at is Some(_) else {
-          raise EngineError(
-            "This one-time schedule has passed; edit its time or run it now",
-          )
-        }
+        guard next_at is Some(_) else { return Refused(PastTime) }
         entries[index] = { ..entry, enabled: true, next_at, }
       }
-      "run" => {
-        guard !schedule_running(state, entry.id) && !entry.run_requested else {
-          raise EngineError("This schedule is already running or queued")
+      Run => {
+        guard !schedule_running(state, entry.id) else {
+          return Refused(AlreadyRunning)
         }
+        guard !entry.run_requested else { return Refused(AlreadyQueued) }
         entries[index] = { ..entry, run_requested: true, }
       }
-      "stop" =>
+      Stop =>
         for run in state.runs {
           if run.schedule_id == entry.id && run.status is Running {
             self.stopped[run.id] = ()
@@ -297,17 +292,16 @@ pub async fn Schedules::action(
             }
           }
         }
-      "delete" => {
+      Delete => {
         guard !schedule_running(state, entry.id) else {
-          raise EngineError("Stop this run before deleting its schedule")
+          return Refused(StopBeforeDelete)
         }
         ignore(entries.remove(index))
       }
-      _ => raise EngineError("Unknown schedule action")
     }
     let next = { ..state, entries, }
     self.commit(next)
-    next
+    Changed(next)
   })
 }
 
@@ -385,26 +379,32 @@ async fn Schedules::take_due(
         enabled: entry.enabled && next_at is Some(_),
       }
       changed = true
-      let notice = if running {
-        Some("Skipped: the previous run is still active")
+      let skipped : @protocol.ScheduleSkip? = if running {
+        Some(PreviousRunActive)
       } else if active >= ScheduleConcurrency {
-        Some("Skipped: all four execution slots were busy")
+        Some(CapacityFull)
       } else if !entry.run_requested &&
         entry.next_at is Some(at) &&
         now - at > 60000 {
-        Some("Skipped: the host missed the scheduled time")
+        Some(MissedTime)
       } else {
         None
       }
-      entries[index] = { ..entries[index], notice, }
-      guard notice is None else { continue }
+      entries[index] = { ..entries[index], skipped, }
+      guard skipped is None else { continue }
       // A schedule that cannot start is skipped on its own; the others
       // still launch on this tick.
       let workspace = schedule_run_workspace(entry) catch {
         error => {
+          @xlog.warn() <?
+            {
+              "event": "schedule_automatic_folder_unavailable",
+              "schedule": entry.id,
+              "message": "\{error}",
+            }
           entries[index] = {
             ..entries[index],
-            notice: Some("Skipped: \{error}"),
+            skipped: Some(AutomaticFolderUnavailable),
           }
           continue
         }

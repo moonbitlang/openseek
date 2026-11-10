@@ -84,7 +84,7 @@ test "reopening schedules and switching hosts preserve a pending save acknowledg
   assert_true(opened.schedules.pending is Some(Change))
   let (_, saved) = update_schedules(
     test_dispatch(),
-    Loaded(base.focused, 7, true, Ok({ entries: [], runs: [], })),
+    Loaded(base.focused, 7, true, Snapshot({ entries: [], runs: [], })),
     { ..opened, focused: @interop.ChannelId::Remote("other"), },
   )
   assert_true(saved.schedules.pending is None)
@@ -105,7 +105,7 @@ test "a schedule action during a background refresh is sent, not dropped" {
   let refresh = refreshing.schedules.sequence
   let (_, pausing) = update_schedules(
     test_dispatch(),
-    Action("plan", "pause"),
+    Action("plan", Pause),
     refreshing,
   )
   assert_true(pausing.schedules.pending is Some(Change))
@@ -115,7 +115,7 @@ test "a schedule action during a background refresh is sent, not dropped" {
   assert_eq(polled.schedules.sequence, pausing.schedules.sequence)
   let (_, again) = update_schedules(
     test_dispatch(),
-    Action("plan", "resume"),
+    Action("plan", Resume),
     polled,
   )
   assert_eq(again.schedules.sequence, pausing.schedules.sequence)
@@ -132,12 +132,17 @@ test "a schedule action during a background refresh is sent, not dropped" {
     },
     enabled: true,
     run_requested: false,
-    notice: None,
+    skipped: None,
     next_at: Some(1),
   }
   let (_, stale) = update_schedules(
     test_dispatch(),
-    Loaded(base.focused, refresh, false, Ok({ entries: [entry], runs: [], })),
+    Loaded(
+      base.focused,
+      refresh,
+      false,
+      Snapshot({ entries: [entry], runs: [], }),
+    ),
     again,
   )
   assert_true(stale.schedules.pending is Some(Change))
@@ -148,10 +153,56 @@ test "a schedule action during a background refresh is sent, not dropped" {
       base.focused,
       pausing.schedules.sequence,
       false,
-      Ok({ entries: [paused], runs: [], }),
+      Snapshot({ entries: [paused], runs: [], }),
     ),
     stale,
   )
   assert_true(settled.schedules.pending is None)
   assert_eq(settled.schedules.snapshot.entries, [paused])
+}
+
+///|
+test "a declined schedule change keeps the draft and explains why" {
+  let base = test_model()
+  let form = { ..ScheduleForm::empty(), name: "Nightly", task: "check", }
+  let model = {
+    ..base,
+    management_dialog: Some(Schedules),
+    schedules: {
+      ..SchedulePage::empty(),
+      owner: Some(base.focused),
+      form: Some(form),
+      pending: Some(Change),
+      sequence: 3,
+    },
+  }
+  let (_, declined) = update_schedules(
+    test_dispatch(),
+    Loaded(base.focused, 3, true, Declined(UnattachedProject)),
+    model,
+  )
+  assert_true(declined.schedules.pending is None)
+  assert_true(declined.schedules.form == Some(form))
+  assert_eq(
+    declined.schedules.error,
+    Some(schedule_refusal_text(English, UnattachedProject)),
+  )
+  let (_, renamed) = update_schedules(
+    test_dispatch(),
+    Field(Name("Weekly")),
+    declined,
+  )
+  assert_eq(renamed.schedules.form.map(form => form.name), Some("Weekly"))
+  let (_, automatic) = update_schedules(
+    test_dispatch(),
+    Field(Workspace(None)),
+    {
+      ..renamed,
+      schedules: {
+        ..renamed.schedules,
+        form: Some({ ..form, workspace: Some("/p"), }),
+      },
+    },
+  )
+  assert_eq(automatic.schedules.form.map(form => form.workspace), Some(None))
 }

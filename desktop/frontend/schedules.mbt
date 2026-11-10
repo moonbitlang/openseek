@@ -63,20 +63,49 @@ fn SchedulePage::empty() -> SchedulePage {
 }
 
 ///|
+/// An edit to one field of the schedule form.
+priv enum ScheduleField {
+  Name(String)
+  /// `None` selects the automatic working folder.
+  Workspace(String?)
+  Task(String)
+  Model(String)
+  OneTime(Bool)
+  Minutes(String)
+  Timeout(String)
+}
+
+///|
+/// How a schedules request ended.
+priv enum ScheduleOutcome {
+  /// The host's schedules after a refresh or an applied change.
+  Snapshot(@protocol.SchedulesReply)
+  /// The host declined the change, for a reason the user can correct.
+  Declined(@protocol.ScheduleRefusal)
+  /// The request did not complete; the bridge's description of why.
+  BridgeFailed(String)
+}
+
+///|
+fn ScheduleOutcome::of_change(
+  reply : @protocol.ScheduleChangeReply,
+) -> ScheduleOutcome {
+  match reply {
+    Changed(snapshot) => Snapshot(snapshot)
+    Refused(reason) => Declined(reason)
+  }
+}
+
+///|
 priv enum SchedulePageMsg {
   Poll
   New
   Edit(String)
-  Field(String, String)
+  Field(ScheduleField)
   CloseForm
   Save(Bool)
-  Action(String, String)
-  Loaded(
-    @interop.ChannelId,
-    Int32,
-    Bool,
-    Result[@protocol.SchedulesReply, String]
-  )
+  Action(String, @protocol.ScheduleAction)
+  Loaded(@interop.ChannelId, Int32, Bool, ScheduleOutcome)
   Log(String)
   LogLoaded(@interop.ChannelId, String, Result[String, String])
   CloseLog
@@ -119,24 +148,31 @@ fn request_schedules(
   let sequence = page.sequence + 1
   let cmd = @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.SchedulesReply, String] = try {
-        let reply = match request {
+      let result : ScheduleOutcome = try {
+        match request {
           List =>
-            @interop.bridge_request(
-              channel,
-              @commands.schedules_list,
-              @protocol.EmptyPayload::NoPayload,
+            Snapshot(
+              @interop.bridge_request(
+                channel,
+                @commands.schedules_list,
+                @protocol.EmptyPayload::NoPayload,
+              ),
             )
           Save(payload) =>
-            @interop.bridge_request(channel, @commands.schedules_save, payload)
+            ScheduleOutcome::of_change(
+              @interop.bridge_request(
+                channel, @commands.schedules_save, payload,
+              ),
+            )
           Action(payload) =>
-            @interop.bridge_request(
-              channel, @commands.schedules_action, payload,
+            ScheduleOutcome::of_change(
+              @interop.bridge_request(
+                channel, @commands.schedules_action, payload,
+              ),
             )
         }
-        Ok(reply)
       } catch {
-        error => Err(@interop.bridge_error_text(error))
+        error => BridgeFailed(@interop.bridge_error_text(error))
       }
       scheduler.add(
         dispatch(
@@ -253,7 +289,7 @@ fn update_schedules(
         return (@cmd.none, model)
       }
       let page = match result {
-        Ok(snapshot) =>
+        Snapshot(snapshot) =>
           {
             ..page,
             snapshot,
@@ -264,7 +300,14 @@ fn update_schedules(
               page.form
             },
           }
-        Err(error) => { ..page, pending: None, error: Some(error), }
+        // A declined save keeps its draft so the user can correct it.
+        Declined(reason) =>
+          {
+            ..page,
+            pending: None,
+            error: Some(schedule_refusal_text(model.locale, reason)),
+          }
+        BridgeFailed(error) => { ..page, pending: None, error: Some(error), }
       }
       (@cmd.none, { ..model, schedules: page, })
     }
@@ -369,25 +412,16 @@ fn update_schedules(
     }
     CloseForm =>
       (@cmd.none, { ..model, schedules: { ..page, form: None, error: None, }, })
-    Field(field, value) => {
+    Field(field) => {
       guard page.form is Some(form) else { return (@cmd.none, model) }
       let form = match field {
-        "name" => { ..form, name: value, }
-        "workspace" =>
-          {
-            ..form,
-            workspace: if value == "auto" {
-              None
-            } else {
-              Some(value)
-            },
-          }
-        "task" => { ..form, task: value, }
-        "model" => { ..form, model: value, }
-        "timing" => { ..form, once: value == "once", once_at: None, }
-        "minutes" => { ..form, minutes: value, once_at: None, }
-        "timeout" => { ..form, timeout: value, }
-        _ => form
+        Name(name) => { ..form, name, }
+        Workspace(workspace) => { ..form, workspace, }
+        Task(task) => { ..form, task, }
+        Model(model) => { ..form, model, }
+        OneTime(once) => { ..form, once, once_at: None, }
+        Minutes(minutes) => { ..form, minutes, once_at: None, }
+        Timeout(timeout) => { ..form, timeout, }
       }
       (@cmd.none, { ..model, schedules: { ..page, form: Some(form), }, })
     }
@@ -462,23 +496,13 @@ fn update_schedules(
                   log: Some(
                     (
                       path,
-                      (match model.locale {
-                        SimplifiedChinese => "已记录的失败：\n"
-                        TraditionalChinese => "已記錄的失敗：\n"
-                        Japanese => "記録されたエラー：\n"
-                        English => "Recorded failure:\n"
-                        Spanish => "Fallo registrado:\n"
-                      }) +
-                      message +
-                      (match model.locale {
-                        SimplifiedChinese => "\n\n无法读取日志：\n"
-                        TraditionalChinese => "\n\n無法讀取日誌：\n"
-                        Japanese =>
-                          "\n\nログを読み取れませんでした：\n"
-                        English => "\n\nLog could not be read:\n"
-                        Spanish => "\n\nNo se pudo leer el registro:\n"
-                      }) +
-                      error,
+                      (
+                        $|\{ui(model.locale, RecordedFailure)}
+                        $|\{message}
+                        $|
+                        $|\{ui(model.locale, LogUnreadable)}
+                        $|\{error}
+                      ),
                     ),
                   ),
                 },
