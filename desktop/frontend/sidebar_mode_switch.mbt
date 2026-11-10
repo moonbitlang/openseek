@@ -146,10 +146,16 @@ fn switch_mode_column(
     },
   }
   let (enter, next) = enter_location(dispatch, next, location, replace~)
+  // A Work page on an offline SSH host waits for that host, so the switch
+  // connects it as opening the page from its row does.
+  let (connect, next) = match next.offline_ssh_host(channel) {
+    Some(host) if mode is WorkMode => update_ssh(dispatch, Connect(host), next)
+    _ => (@cmd.none, next)
+  }
   // Opening a Cloud row closes the narrow drawer; the switch keeps it open
   // so the list just picked stays in view.
   (
-    @cmd.batch([focus, enter]),
+    @cmd.batch([focus, enter, connect]),
     {
       ..next,
       sidebar_mode: mode,

@@ -984,3 +984,44 @@ test "failed SSH project open retries its destination unless add project replace
     @interop.set_ssh_epoch(channel, None)
   }
 }
+
+///|
+test "switching back to Work connects the offline SSH host its page belongs to" {
+  let dispatch = test_dispatch()
+  let id = "switch-session"
+  let channel : @interop.ChannelId = Remote(id)
+  let base = auth_test_model(id)
+  let page : @routes.Location = {
+    device: base.console.page_device,
+    target: Session("saved"),
+  }
+  let chat = {
+    ..base,
+    conversations: base.conversations +
+    [empty_conversation(channel, "saved", channel.test_project())],
+    sidebar_mode: ChatMode,
+    selected_conversation: None,
+    navigation: {
+      ..base.navigation,
+      location: Some({ device: None, target: Cloud, }),
+      phase: Active,
+    },
+    mode_returns: { chat: None, work: Some((channel, page)), },
+  }
+  let (_, connecting) = update(dispatch, SidebarModeSelected(WorkMode), chat)
+  assert_eq(connecting.focused, channel)
+  assert_true(connecting.navigation.location == Some(page))
+  assert_true(connecting.ssh_ui.connecting.contains(id))
+  let (_, ready) = update(dispatch, ssh_ready_event(id, 1), connecting)
+  let (_, ready) = update(
+    dispatch,
+    FromDevice(
+      channel,
+      ProjectsChanged([channel.test_project()], chat_root=None),
+    ),
+    ready,
+  )
+  assert_true(ready.navigation.phase is Active)
+  assert_eq(ready.active_session, "saved")
+  @interop.set_ssh_epoch(channel, None)
+}

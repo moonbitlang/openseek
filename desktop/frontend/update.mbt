@@ -123,9 +123,7 @@ fn focus_channel(
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, Model) {
   guard channel != model.focused else { return (@cmd.none, model) }
-  let focus_cmd = if channel is Remote(id) &&
-    model.ssh_ui.hosts.any(host => host.id == id) &&
-    !model.ssh_online(id) {
+  let focus_cmd = if model.offline_ssh_host(channel) is Some(_) {
     @cmd.none
   } else if model.device_state(channel) is Some(dev) {
     @cmd.batch([

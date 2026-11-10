@@ -49,12 +49,23 @@ fn ssh_open_target(msg : Msg, model : Model) -> SshPendingOpen? {
     CodexOpenThread(id) => (model.focused, CodexThread(id))
     _ => return None
   }
+  guard model.offline_ssh_host(channel) is Some(id) else { return None }
+  Some({ host: id, target, generation: model.chat_navigation_generation, })
+}
+
+///|
+/// The saved SSH host behind `channel` while it is offline: opening a page
+/// there starts its connection.
+fn Model::offline_ssh_host(
+  self : Model,
+  channel : @interop.ChannelId,
+) -> String? {
   guard channel is Remote(id) &&
-    model.ssh_ui.hosts.any(host => host.id == id) &&
-    !model.ssh_online(id) else {
+    self.ssh_ui.hosts.any(host => host.id == id) &&
+    !self.ssh_online(id) else {
     return None
   }
-  Some({ host: id, target, generation: model.chat_navigation_generation, })
+  Some(id)
 }
 
 ///|
