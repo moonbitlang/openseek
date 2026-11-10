@@ -1038,23 +1038,30 @@ async fn run_text_search(
   let mut limit_hit = false
   let mut failure : @protocol.TextSearchError? = None
   @async.with_task_group(group => {
-    let process = @process.spawn(
-      group,
-      provider.command,
-      rg_args(text_search_args(payload)),
-      inherit_env=false,
-      extra_env=provider.environment,
-      stdin=Shared(stdin_reader),
-      stdout=Shared(child_stdout),
-      stderr=Shared(child_stderr),
-      cwd=native_root,
-      no_console_window=true,
-      cancel_handler=@process.hard_cancel(),
-      no_wait=true,
-    ) catch {
+    let process = try {
+      // The child holds its own copies of these ends; the parent's must close
+      // so the readers see end-of-file once the child exits.
+      defer stdin_reader.close()
+      defer child_stdout.close()
+      defer child_stderr.close()
+      errdefer stdout_reader.close()
+      errdefer stderr_reader.close()
+      @process.spawn(
+        group,
+        provider.command,
+        rg_args(text_search_args(payload)),
+        inherit_env=false,
+        extra_env=provider.environment,
+        stdin=Shared(stdin_reader),
+        stdout=Shared(child_stdout),
+        stderr=Shared(child_stderr),
+        cwd=native_root,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+        no_wait=true,
+      )
+    } catch {
       error => {
-        stdout_reader.close()
-        stderr_reader.close()
         failure = Some({
           code: "rg_unavailable",
           message: "Cannot start text search: \{error}",
@@ -1503,6 +1510,32 @@ async test "text search replies echo resource-form workspace roots" {
   }
   let reply = run_text_search(test_provider(), root, payload)
   assert_eq(reply.root, resource_root)
+}
+
+///|
+async test "text search replies once the search process exits" {
+  let dir = @fs.tmpdir(prefix="openseek-text-search-")
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.write_text("\{dir}/a.txt", "hello needle\n")
+  let root = @pathx.Path(dir).resolve()
+  let payload : @protocol.SearchTextPayload = {
+    root: root.resource_path(),
+    query: "needle",
+    regex: false,
+    case_sensitive: false,
+    whole_word: false,
+    include_glob: "",
+    exclude_glob: "",
+    session_key: "search:exit",
+    generation: 1,
+    max_results: 10,
+  }
+  let reply = @async.with_timeout_opt(30_000, () => {
+    run_text_search(test_provider(), root, payload)
+  })
+  guard reply is Some(reply) else { fail("text search did not reply") }
+  assert_true(reply.error is None)
+  assert_eq(reply.match_count, 1)
 }
 
 ///|
