@@ -197,17 +197,29 @@ pub async fn Schedules::save(
         raise EngineError("Choose an attached project for this schedule")
       }
     }
-    let next_at = schedule_next(spec.timing, @async.now())
+    let previous = match payload.id {
+      Some(id) => {
+        guard state.entries.search_by(entry => entry.id == id) is Some(index) else {
+          raise EngineError("Schedule no longer exists")
+        }
+        Some(state.entries[index])
+      }
+      None => None
+    }
+    let now = @async.now()
+    // An edit that leaves the timing alone keeps the pending deadline:
+    // renaming an hourly task must not push its next run an hour away.
+    let next_at = match previous {
+      Some(entry) if entry.spec.timing == spec.timing &&
+        entry.next_at is Some(at) &&
+        at > now => Some(at)
+      _ => schedule_next(spec.timing, now)
+    }
     guard next_at is Some(_) else {
       raise EngineError("Choose a time in the future")
     }
-    let id = match payload.id {
-      Some(id) => {
-        guard state.entries.any(entry => entry.id == id) else {
-          raise EngineError("Schedule no longer exists")
-        }
-        id
-      }
+    let id = match previous {
+      Some(entry) => entry.id
       None => @uuid.mint()
     }
     guard !payload.run_now || !schedule_running(state, id) else {
@@ -386,24 +398,23 @@ async fn Schedules::take_due(
       }
       entries[index] = { ..entries[index], notice, }
       guard notice is None else { continue }
+      // A schedule that cannot start is skipped on its own; the others
+      // still launch on this tick.
+      let workspace = schedule_run_workspace(entry) catch {
+        error => {
+          entries[index] = {
+            ..entries[index],
+            notice: Some("Skipped: \{error}"),
+          }
+          continue
+        }
+      }
       let id = @uuid.mint()
       let run : @protocol.ScheduleRun = {
         id,
         schedule_id: entry.id,
         name: entry.spec.name,
-        workspace: entry.spec.workspace.unwrap_or_else(() => {
-          guard @home.dir() is Some(home) else {
-            raise EngineError(
-              "Automatic tasks need an available home directory",
-            )
-          }
-          home
-          .join("OpenSeek")
-          .join("Scheduled")
-          .join(entry.id)
-          .resolve()
-          .resource_path()
-        }),
+        workspace,
         session: "scheduled-\{id}",
         started_at: now,
         finished_at: None,
@@ -419,4 +430,22 @@ async fn Schedules::take_due(
     }
     launches
   })
+}
+
+///|
+/// The directory a run of `entry` works in: its attached project, or the
+/// automatic folder the host keeps for it under the user's home.
+fn schedule_run_workspace(entry : @protocol.ScheduleEntry) -> String raise {
+  if entry.spec.workspace is Some(workspace) {
+    return workspace
+  }
+  guard @home.dir() is Some(home) else {
+    raise EngineError("Automatic tasks need an available home directory")
+  }
+  home
+  .join("OpenSeek")
+  .join("Scheduled")
+  .join(entry.id)
+  .resolve()
+  .resource_path()
 }

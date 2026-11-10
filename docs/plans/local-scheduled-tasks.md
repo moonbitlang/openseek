@@ -18,7 +18,10 @@ proposal for scheduled continuation of existing conversations.
   next future time and disables expired one-time plans. A tick more than a
   minute late is skipped, covering sleep/wake gaps.
 - Save and run now atomically saves the plan and queues an extra immediate run.
-  It keeps the scheduled deadline; saving alone does not execute.
+  It keeps the scheduled deadline; saving alone does not execute. An edit
+  that leaves the timing unchanged keeps the pending deadline.
+- A plan that cannot start (no automatic folder can be named, for example)
+  is skipped with a notice; other due plans still launch on that tick.
 - Run now preserves the plan's enabled state and future deadline. Pause stops
   future and queued launches; Stop run cancels the current process. A running
   plan must be stopped before it can be deleted. History is retained.
@@ -60,11 +63,11 @@ flowchart LR
   Session --> Viewer[Existing session viewer]
 ```
 
-The host service lives in `desktop/backend/internal/engine/schedules.mbt`, beside the
+The host service lives in `desktop/backend/engine/schedules.mbt`, beside the
 existing run configuration and process environment helpers. It does not add
 scheduling, deduplication, or a new execution protocol to the core agent/CLI.
-The primary host starts it from `desktop/backend/main.mbt`;
-`desktop/backend/internal/api` exposes
+The primary host starts it from `ApiState::start_services` in
+`desktop/backend/api/services.mbt`; `desktop/backend/api` exposes
 `schedules.list`, `schedules.save`, and `schedules.action`. Explicit protocol
 codecs reject malformed configuration and unknown timing/status variants.
 
@@ -83,7 +86,8 @@ and settlement notifications refresh the visible schedule page.
 
 Clients also poll every two seconds while the Scheduled page or a running
 scheduled session is visible,
-with one request in flight. Replies retain their device and request sequence.
+with one request in flight. A save or action supersedes a refresh in flight
+rather than waiting for it, and only a pending change disables the controls. Replies retain their device and request sequence.
 Saved plans outlive the page, and UI state does not drive the timer.
 
 ## Deliberate limits
