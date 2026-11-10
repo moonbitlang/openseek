@@ -1,3 +1,7 @@
+// Lifecycle regressions share the package's ambient HOME lock and registry
+// fixtures. Private access is needed to inspect recovery refs and exercise
+// rollback ownership without publishing those implementation details.
+
 ///|
 #cfg(not(platform="windows"))
 async fn collect_recovery_fixture(repo : @pathx.Absolute) -> Unit {
