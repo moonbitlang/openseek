@@ -460,7 +460,7 @@ async test "a failed claim is Failed and launches nothing" {
   let root = @fs.tmpdir(prefix="openseek-subrun-noclaim-")
   defer @fs.rmdir(root, recursive=true)
   // A file where the sessions directory should be makes every claim fail.
-  @fs.write_file("\{root}/sessions", "", create_mode=CreateNew)
+  @fs.write_text("\{root}/sessions", "", create_mode=CreateNew)
   let events : Array[@protocol.Event] = []
   let result = run_script(
     "touch launched",
