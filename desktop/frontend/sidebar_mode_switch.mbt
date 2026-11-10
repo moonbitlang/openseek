@@ -65,6 +65,14 @@ fn Model::remember_mode_return(self : Model) -> Model {
     self.navigation.location is Some(location) else {
     return self
   }
+  // Cloud home shows a draft at `/cloud`; remember the draft itself so its
+  // promotion to a conversation can find this return.
+  let location : @routes.Location = match
+    (location.target, self.cloud_draft_identity()) {
+    (Cloud, Some(@interop.Cloud(account~, session=id))) =>
+      { device: None, target: CloudDraft(account=Some(account), id~), }
+    _ => location
+  }
   match location_mode(location) {
     ChatMode if self.mode_returns.chat != Some(location) =>
       { ..self, mode_returns: { ..self.mode_returns, chat: Some(location), }, }
@@ -82,8 +90,8 @@ fn Model::remember_mode_return(self : Model) -> Model {
 
 ///|
 /// Where switching to `mode` lands, with the channel a Work page needs
-/// focused. A remembered conversation deleted since, or a Cloud page of an
-/// account no longer signed in, falls back to the mode's fresh page: Cloud
+/// focused. A remembered conversation deleted since, a Cloud draft no longer
+/// pending, or a Cloud page of an account no longer signed in, falls back to the mode's fresh page: Cloud
 /// home for Chat, a new chat in the last project for Work. A missing Work
 /// draft needs no check here: activation replaces it with a new chat itself.
 fn Model::mode_destination(
@@ -93,8 +101,9 @@ fn Model::mode_destination(
   match mode {
     ChatMode => {
       let location = match self.mode_returns.chat {
-        Some({ target: CloudSession(account=Some(owner), ..), .. })
-        | Some({ target: CloudDraft(account=Some(owner), ..), .. }) if self.cloud.user_id !=
+        Some({ target: CloudDraft(account=Some(owner), id~), .. }) if self.cloud.draft_identity() !=
+          Some(@interop.Cloud(account=owner, session=id)) => None
+        Some({ target: CloudSession(account=Some(owner), ..), .. }) if self.cloud.user_id !=
           Some(owner) => None
         Some({ target: CloudSession(session~, ..), .. }) if self.cloud.retired.contains(
             session,
