@@ -10,36 +10,41 @@ main:has(> .conv-overview) {
   position: relative;
 }
 
-/* Narrow: a panel over the transcript row, as tall as its cards. It never
-   reaches past the transcript row, so the composer remains usable while the
-   overview is open; longer content scrolls inside the panel. */
 .conv-overview {
   position: absolute;
   grid-column: 1;
-  grid-row: 2 / 3;
-  top: 6px;
-  right: 8px;
-  max-height: calc(100% - 12px);
   z-index: 20;
   box-sizing: border-box;
-  width: var(--conv-overview-width);
-  max-width: calc(100% - 16px);
-  padding: var(--space-1) 1rem;
   overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
 }
 
-.conv-overview-card {
-  padding: var(--space-5) 0;
-  border-bottom: 1px solid var(--color-divider);
-}
-.conv-overview-card:last-child {
-  border-bottom: 0;
+/* Narrow: a panel over the transcript row, as tall as its cards. It never
+   reaches past the transcript row, so the composer remains usable while the
+   overview is open; longer content scrolls inside the panel. */
+@container main-pane (width < 900px) {
+  .conv-overview {
+    grid-row: 2 / 3;
+    top: 6px;
+    right: 8px;
+    max-height: calc(100% - 12px);
+    width: var(--conv-overview-width);
+    max-width: calc(100% - 16px);
+    padding: var(--space-1) 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-surface);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .conv-overview-card {
+    padding: var(--space-5) 0;
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .conv-overview-card:last-child {
+    border-bottom: 0;
+  }
 }
 
 /* Wide: the conversation's children give the rail its column, and the rail
@@ -47,7 +52,7 @@ main:has(> .conv-overview) {
    The transcript keeps the pane's full width and gives the column from its
    own padding instead, so its scrollbar stays at the pane's right edge,
    outside the rail. */
-@container main-pane (min-width: 900px) {
+@container main-pane (width >= 900px) {
   main:has(> .conv-overview) > :not(.topbar, .transcript, .conv-overview) {
     margin-inline-end: var(--conv-overview-width);
   }
@@ -73,18 +78,10 @@ main:has(> .conv-overview) {
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
-    max-width: none;
     padding: var(--space-5) 0 var(--space-6);
-    /* Explicit, not just unset: sidebar.css styles every `aside`, this one
-       included, with the sidebar's border and background. */
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
   }
 
-  .conv-overview-card,
-  .conv-overview-card:last-child {
+  .conv-overview-card {
     padding: var(--space-5);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
