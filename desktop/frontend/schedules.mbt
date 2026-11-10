@@ -28,12 +28,22 @@ fn ScheduleForm::empty() -> ScheduleForm {
 }
 
 ///|
+/// The schedules request a page is waiting on. A change (save or action)
+/// supersedes a refresh in flight, whose stale reply the sequence then drops;
+/// a refresh never preempts a change, whose reply carries the newer snapshot.
+#derive(Eq)
+priv enum SchedulePending {
+  Refresh
+  Change
+}
+
+///|
 #derive(Eq)
 priv struct SchedulePage {
   owner : @interop.ChannelId?
   snapshot : @protocol.SchedulesReply
   form : ScheduleForm?
-  busy : Bool
+  pending : SchedulePending?
   sequence : Int32
   error : String?
   log : (String, String)?
@@ -45,7 +55,7 @@ fn SchedulePage::empty() -> SchedulePage {
     owner: None,
     snapshot: { entries: [], runs: [], },
     form: None,
-    busy: false,
+    pending: None,
     sequence: 0,
     error: None,
     log: None,
@@ -75,6 +85,13 @@ priv enum SchedulePageMsg {
 }
 
 ///|
+/// Whether a save or action is awaiting its reply. Only then are the page's
+/// controls unavailable; a background refresh leaves them usable.
+fn SchedulePage::changing(self : SchedulePage) -> Bool {
+  self.pending is Some(Change)
+}
+
+///|
 priv enum ScheduleRequest {
   List
   Save(@protocol.ScheduleSavePayload)
@@ -88,7 +105,16 @@ fn request_schedules(
   request : ScheduleRequest,
 ) -> (@cmd.Cmd, Model) {
   let page = model.schedules
-  guard !page.busy else { return (@cmd.none, model) }
+  let pending : SchedulePending = match request {
+    List => {
+      guard page.pending is None else { return (@cmd.none, model) }
+      Refresh
+    }
+    Save(_) | Action(_) => {
+      guard !page.changing() else { return (@cmd.none, model) }
+      Change
+    }
+  }
   let channel = model.focused
   let sequence = page.sequence + 1
   let cmd = @cmd.custom_cmd(scheduler => {
@@ -127,7 +153,7 @@ fn request_schedules(
       schedules: {
         ..page,
         owner: Some(channel),
-        busy: true,
+        pending: Some(pending),
         sequence,
         error: if request is List {
           page.error
@@ -231,14 +257,14 @@ fn update_schedules(
           {
             ..page,
             snapshot,
-            busy: false,
+            pending: None,
             form: if saved {
               None
             } else {
               page.form
             },
           }
-        Err(error) => { ..page, busy: false, error: Some(error), }
+        Err(error) => { ..page, pending: None, error: Some(error), }
       }
       (@cmd.none, { ..model, schedules: page, })
     }
@@ -366,7 +392,7 @@ fn update_schedules(
       (@cmd.none, { ..model, schedules: { ..page, form: Some(form), }, })
     }
     Save(run_now) => {
-      guard !page.busy && page.form is Some(form) else {
+      guard !page.changing() && page.form is Some(form) else {
         return (@cmd.none, model)
       }
       match schedule_form_spec(locale=model.locale, form) {

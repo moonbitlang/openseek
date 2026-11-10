@@ -150,9 +150,11 @@ async fn[G] Schedules::run_cli(
     return 0
   }
   // File redirection keeps memory bounded and never leaves a pipe undrained.
+  // It appends after the header `execute` wrote when the run started.
   let output = @process.redirect_to_file(
     run.log_path,
-    create_mode=CreateOrTruncate,
+    append=true,
+    create_mode=OpenOrCreate,
     permission=0o600,
   )
   defer output.close()

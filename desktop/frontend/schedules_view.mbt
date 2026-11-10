@@ -26,13 +26,12 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.div(class="schedule-toolbar", [
       @html.button(
         class="button",
-        disabled=page.busy,
+        disabled=page.changing(),
         on_click=emit(New),
         ui(locale, NewSchedule),
       ),
       @html.button(
         class="button secondary",
-        disabled=page.busy,
         on_click=emit(Poll),
         ui(locale, RefreshLabel),
       ),
@@ -146,13 +145,13 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.div(class="schedule-toolbar", [
           @html.button(
             class="button",
-            disabled=page.busy,
+            disabled=page.changing(),
             on_click=emit(Save(true)),
             ui(locale, SaveRunNow),
           ),
           @html.button(
             class="button secondary",
-            disabled=page.busy,
+            disabled=page.changing(),
             on_click=emit(Save(false)),
             ui(locale, SaveSchedule),
           ),
@@ -213,13 +212,13 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.div(class="schedule-toolbar", [
           @html.button(
             class="button secondary",
-            disabled=page.busy || running || entry.run_requested,
+            disabled=page.changing() || running || entry.run_requested,
             on_click=emit(Action(entry.id, "run")),
             ui(locale, RunNow),
           ),
           @html.button(
             class="button secondary",
-            disabled=page.busy,
+            disabled=page.changing(),
             on_click=emit(
               Action(entry.id, if entry.enabled { "pause" } else { "resume" }),
             ),
@@ -231,21 +230,21 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           ),
           @html.button(
             class="button secondary",
-            disabled=page.busy,
+            disabled=page.changing(),
             on_click=emit(Edit(entry.id)),
             ui(locale, EditLabel),
           ),
           if running {
             @html.button(
               class="button secondary",
-              disabled=page.busy,
+              disabled=page.changing(),
               on_click=emit(Action(entry.id, "stop")),
               ui(locale, StopRun),
             )
           } else {
             @html.button(
               class="button secondary",
-              disabled=page.busy,
+              disabled=page.changing(),
               on_click=emit(Action(entry.id, "delete")),
               ui(locale, DeleteLabel),
             )
@@ -291,7 +290,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           if run.status is Running {
             @html.button(
               class="button secondary",
-              disabled=page.busy,
+              disabled=page.changing(),
               on_click=emit(Action(run.schedule_id, "stop")),
               ui(locale, StopRun),
             )
