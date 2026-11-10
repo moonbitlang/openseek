@@ -64,33 +64,6 @@ pub struct ServerEntry {
 }
 
 ///|
-/// Connect every configured server, in config order, and keep the outcome of
-/// each beside the tools it offers. Every failure it returns is also reported
-/// as the event it always was. The connections' reader/writer tasks run on
-/// `scope`'s group and live until it ends.
-pub async fn[X] connect(
-  scope : @agent_runtime.AgentTaskScope[X],
-  servers : Array[@config.McpServer],
-  client_name~ : String,
-  client_version~ : String,
-  workspace_root? : String,
-  discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
-) -> Array[ServerEntry] {
-  [
-    for server in servers => {
-      connect_server(
-        scope,
-        server,
-        client_name~,
-        client_version~,
-        workspace_root?,
-        discovery_timeout_ms~,
-      )
-    }
-  ]
-}
-
-///|
 /// One configured server being connected in the background, with the task
 /// that connects it (see `start`). The task's result is what connecting came
 /// to.
@@ -103,8 +76,9 @@ pub struct Server {
 /// Start connecting every configured server at once, each in a task of its
 /// own on `scope`'s group, and return them in config order right away. A
 /// server that never settles (a stuck headers helper, say) holds back only its
-/// own task, which ends with the group. Each failure is reported as the event
-/// `connect` reports.
+/// own task, which ends with the group. Every failure a task returns is also
+/// reported as the event it always was. The connections' reader/writer tasks
+/// run on `scope`'s group and live until it ends.
 pub fn[X] start(
   scope : @agent_runtime.AgentTaskScope[X],
   servers : Array[@config.McpServer],

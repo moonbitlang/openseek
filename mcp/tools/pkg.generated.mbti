@@ -15,8 +15,6 @@ pub async fn call_tool(@mcp.McpClient, String, @json.Json) -> @agent_tool.ToolAc
 
 pub fn catalog_items(Array[Server]) -> Array[@json.Json]
 
-pub async fn[X] connect(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[ServerEntry]
-
 pub async fn discover(String, @mcp.McpClient) -> Array[@mcp.McpTool]
 
 pub fn[X] start(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[Server]

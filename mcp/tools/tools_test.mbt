@@ -258,7 +258,7 @@ async test "connect times out discovery on a wedged server" {
     let servers = [
       @config.Stdio(name="w", command="sh", args=["-c", script], env=Map([])),
     ]
-    let entries = @tools.connect(
+    let entries = connect_all(
       scope,
       servers,
       client_name="openseek",
@@ -270,7 +270,7 @@ async test "connect times out discovery on a wedged server" {
 }
 
 ///|
-async test "connect records a server that cannot start" {
+async test "a server that cannot start is recorded as failed" {
   @async.with_task_group(group => {
     let scope = @agent_runtime.AgentTaskScope(group)
     let servers = [
@@ -281,7 +281,7 @@ async test "connect records a server that cannot start" {
         env=Map([]),
       ),
     ]
-    let entries = @tools.connect(
+    let entries = connect_all(
       scope,
       servers,
       client_name="openseek",
@@ -311,7 +311,7 @@ async fn respond_json(
 }
 
 ///|
-/// End-to-end over HTTP: `connect` connects a configured Http server (a local
+/// End-to-end over HTTP: `start` connects a configured Http server (a local
 /// mock MCP endpoint), discovers its tool, and a call is proxied as a live
 /// tools/call through the Streamable HTTP transport, directly and through the
 /// MCP host.
@@ -480,7 +480,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
 }
 
 ///|
-/// Beside the tools, `connect` keeps what connecting each server came to, and
+/// Beside the tools, `start` keeps what connecting each server came to, and
 /// a live connection goes on saying whether it is still there.
 async test "connect keeps what each server came to, and a live one reports its loss" {
   @async.with_task_group(group => {
@@ -514,7 +514,7 @@ async test "connect keeps what each server came to, and a live one reports its l
       Stdio(name~, command="sh", args=["-c", script], env=Map([]))
     }
 
-    let entries = @tools.connect(
+    let entries = connect_all(
       scope,
       [
         sh("brief", brief),
@@ -559,6 +559,29 @@ async test "connect keeps what each server came to, and a live one reports its l
     }
     assert_true(client.is_closed())
   })
+}
+
+///|
+/// Start connecting `servers` and wait for every one to settle.
+async fn[X] connect_all(
+  scope : @agent_runtime.AgentTaskScope[X],
+  servers : Array[@config.McpServer],
+  client_name~ : String,
+  client_version~ : String,
+  discovery_timeout_ms? : Int32,
+) -> Array[@tools.ServerEntry] {
+  let entries : Array[@tools.ServerEntry] = []
+  for
+    server in @tools.start(
+      scope,
+      servers,
+      client_name~,
+      client_version~,
+      discovery_timeout_ms?,
+    ) {
+    entries.push(server.connecting.wait())
+  }
+  entries
 }
 
 ///|
