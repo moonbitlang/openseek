@@ -17,7 +17,7 @@ pub async fn directory() -> String? {
     .normalize()
     .to_string()
   let kind = @fs.kind(directory) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+    @os_error.OsError(NotFound, ..) => return None
     error => raise error
   }
   guard kind is Directory else {

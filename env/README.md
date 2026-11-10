@@ -12,7 +12,7 @@ import {
 ```
 
 Both `@exe.current_exe()` and `@exe.current_exe_dir()` return `String` and
-raise `OSError` from `moonbitlang/async/os_error` when the runtime cannot supply a path.
+raise `OsError` from `moonbitlang/core/async/os_error` when the runtime cannot supply a path.
 They never fall back to the working directory or command-line arguments.
 
 Supported targets:
@@ -23,12 +23,12 @@ Supported targets:
 - **Linear Wasm:** requires moonrun's `moonbitlang/core` imports
   `env/current_exe` and `env/current_exe_dir`. These identify the loaded Wasm
   file, with its path captured at load time. An in-memory module without a file
-  origin raises `OSError`. Returned host buffers are decoded using the async
+  origin raises `OsError`. Returned host buffers are decoded using the async
   OS-string ABI and released after each call.
 
 These hooks must be present in the toolchain/runtime used to build and run the
 program. Older versions without them fail at link or module instantiation time,
-before the API can raise `OSError`. JS and Wasm-GC are not supported.
+before the API can raise `OsError`. JS and Wasm-GC are not supported.
 
 Symlink spelling and behavior after renaming or deleting the executable follow
 the runtime. Neither API guarantees that the returned path still exists, and

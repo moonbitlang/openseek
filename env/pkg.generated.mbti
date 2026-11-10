@@ -2,13 +2,13 @@
 package "moonbitlang/openseek/env"
 
 import {
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async/os_error",
 }
 
 // Values
-pub fn current_exe() -> String raise @os_error.OSError
+pub fn current_exe() -> String raise @os_error.OsError
 
-pub fn current_exe_dir() -> String raise @os_error.OSError
+pub fn current_exe_dir() -> String raise @os_error.OsError
 
 // Errors
 
