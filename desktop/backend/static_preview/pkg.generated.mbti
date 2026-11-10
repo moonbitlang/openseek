@@ -2,7 +2,7 @@
 package "openseek_desktop/backend/static_preview"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "openseek_desktop/backend/pathx",
 }
 
@@ -18,7 +18,7 @@ pub fn Server::Server(engine? : String, runtime_dir? : @pathx.Path) -> Self
 pub fn Server::clear(Self) -> Unit
 pub fn Server::close(Self, Int32) -> Unit
 pub async fn Server::open(Self, Int32, String, root? : String) -> String
-pub fn Server::start(Self, @async.TaskGroup[Unit]) -> Unit
+pub fn Server::start(Self, @async.TaskGroup) -> Unit
 
 // Type aliases
 

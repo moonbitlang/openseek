@@ -3,8 +3,8 @@
 /// The bootstrap channel reports the port; it never carries application RPC.
 pub async fn serve_app_server(
   state : @api.ApiState,
-  lifetime : &@io.Reader,
-  announce : &@io.Writer,
+  lifetime : &@io.BinaryReader,
+  announce : &@io.BinaryWriter,
 ) -> Unit {
   run_app_server(
     state,
@@ -18,8 +18,8 @@ pub async fn serve_app_server(
 ///|
 async fn run_app_server(
   state : @api.ApiState,
-  lifetime : &@io.Reader,
-  announce : &@io.Writer,
+  lifetime : &@io.BinaryReader,
+  announce : &@io.BinaryWriter,
   startup_timeout_ms~ : Int32,
   heartbeat_ms~ : Int32,
 ) -> Unit {
@@ -33,17 +33,15 @@ async fn run_app_server(
       port: server.addr.port(),
       instance,
     }
-    announce.write(@json.to_json(announcement).stringify() + "\n")
+    announce.write(@utf8.encode(@json.to_json(announcement).stringify() + "\n"))
     group.spawn_bg(() => {
       ignore(
         @async.with_timeout_opt(startup_timeout_ms, () => {
-          while lifetime.read_some(max_len=4096) is Some(_) {
-            ()
-          }
+          lifetime.drop_all() |> ignore
         }),
       )
       if !owned {
-        group.return_immediately(())
+        group.return_immediately()
       }
     })
     for ;; {
@@ -66,11 +64,14 @@ async fn run_app_server(
             raise @host.HostError("Expected initialize")
           }
           let body = Buffer()
-          while message.read_some(max_len=4096) is Some(bytes) {
-            guard body.length() + bytes.length() <= 65536 else {
+          let chunk = FixedArray::make(4096, b'\x00')
+          for read = message.read_into(chunk)
+              read > 0
+              read = message.read_into(chunk) {
+            guard body.length() + read <= 65536 else {
               raise @host.HostError("Initialize too large")
             }
-            body.write_bytes(bytes)
+            body.write_bytes(Bytes::from_array(chunk[:read]))
           }
           let request : AppServerInitializeRequest = @json.from_json(
             @json.parse(@utf8.decode(body.to_bytes())),
@@ -97,7 +98,7 @@ async fn run_app_server(
         } catch {
           _ => ()
         }
-        group.return_immediately(())
+        group.return_immediately()
       })
     }
   })

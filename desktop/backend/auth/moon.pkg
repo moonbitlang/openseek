@@ -6,11 +6,11 @@ import {
   "openseek_desktop/backend/platform",
   "openseek_desktop/protocol",
   "openseek_desktop/uri",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/os_error",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/os_error",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
   "tonyfettes/xlog",
 }
@@ -22,3 +22,13 @@ supported_targets = "+native"
 import {
   "openseek_desktop/backend/internal/processx",
 } for "wbtest"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/socket",
+  ],
+)

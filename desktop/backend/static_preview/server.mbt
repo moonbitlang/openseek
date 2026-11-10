@@ -2,7 +2,7 @@
 /// Owns one read-only loopback process per preview tab.
 pub struct Server {
   priv moonx : @moonbit.MoonxProvider
-  priv mut group : @async.TaskGroup[Unit]?
+  priv mut group : @async.TaskGroup?
   priv tabs : Map[Int32, (@async.Queue[String], @async.Task[Unit])]
 }
 
@@ -19,7 +19,7 @@ pub fn Server::Server(
 }
 
 ///|
-pub fn Server::start(self : Server, group : @async.TaskGroup[Unit]) -> Unit {
+pub fn Server::start(self : Server, group : @async.TaskGroup) -> Unit {
   self.group = Some(group)
 }
 
@@ -120,16 +120,10 @@ async fn serve(
     "fs": { "read": [fixed.to_string()] },
     "net": { "bind": ["127.0.0.1:0"] },
   }
-  @fs.write_file(policy_path, policy.stringify())
+  @fs.write_text(policy_path, policy.stringify())
   @async.with_task_group(group => {
     // GUI launches on Windows need a valid stdin handle even for a CLI
     // that does not read from it.
-    let (stdin, input) = @process.write_to_process()
-    input.close()
-    let (output, stdout) = @process.read_from_process()
-    defer output.close()
-    let (errors, stderr) = @process.read_from_process()
-    defer errors.close()
     let child = @process.spawn(
       group,
       provider.command,
@@ -145,9 +139,9 @@ async fn serve(
         "--",
         fixed.to_string(),
       ],
-      stdin~,
-      stdout~,
-      stderr~,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Collect,
       inherit_env=false,
       extra_env=provider.environment,
       no_console_window=true,
@@ -169,7 +163,7 @@ async fn serve(
     let port = @async.with_timeout(120000, () => {
       // moonx may report a first-run download before serve starts listening.
       for ;; {
-        guard errors.read_until("\n") is Some(line) else {
+        guard child.stderr.text.read_until("\n") is Some(line) else {
           fail("Local HTML preview exited before listening")
         }
         guard line.has_prefix("Serving ") &&

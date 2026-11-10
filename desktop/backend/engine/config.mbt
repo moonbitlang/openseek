@@ -549,7 +549,7 @@ async test "host chooses durable placement from workspace state" {
   })
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-workspace"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,

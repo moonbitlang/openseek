@@ -251,8 +251,7 @@ async fn main {
     is_primary = true
     // Before the bridge: it prepares the workspace registry first, and
     // no page may attach to a host that has not.
-    state.start_services(group)
-    views.start_previews(group)
+    start_backend(group, state, views)
     group.spawn_bg(allow_failure=true, () => bridge.run())
     // The relay actor registers this host only when remote access (or the
     // environment override) is enabled, and idles otherwise.
@@ -438,4 +437,31 @@ fn relay_settings(matches : @argparse.Matches) -> @auth.ConnectorConfig? {
     return None
   }
   Some({ relay_url, device_token, device_name, })
+}
+
+///|
+/// Start the backend services and the HTML previews, and return once the
+/// services have started. They run on a core task group inside one task of
+/// Proton's application group, which still belongs to the old async library:
+/// cancelling that group at shutdown cancels the task and the core group in it.
+async fn start_backend(
+  group : @async.TaskGroup[Unit],
+  state : @api.ApiState,
+  views : @extension.BrowserViews,
+) -> Unit {
+  let started : @core_async.Queue[Result[Unit, Error]] = Queue(kind=Unbounded)
+  group.spawn_bg(() => {
+    @core_async.with_task_group(services => {
+      let result : Result[Unit, Error] = try {
+        state.start_services(services)
+        views.start_previews(services)
+        Ok(())
+      } catch {
+        error => Err(error)
+      }
+      started.put(result)
+      result.unwrap_or_error()
+    })
+  })
+  started.get().unwrap_or_error()
 }

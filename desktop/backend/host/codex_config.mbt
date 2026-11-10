@@ -31,7 +31,7 @@ async fn ensure_codex_config(home : @pathx.Path?) -> String {
       @fs.mkdir(home_path.0, recursive=true) catch {
         _ => ()
       }
-      @fs.write_file(config, CodexConfigHeader, create_mode=CreateNew) catch {
+      @fs.write_text(config, CodexConfigHeader, create_mode=CreateNew) catch {
         error => raise HostError("Could not create \{config}: \{error}")
       }
       config

@@ -49,7 +49,7 @@ fn platform_app_data_dir() -> @pathx.Path? {
 pub async fn prepared_runtime_dir(executable : String) -> @pathx.Path? {
   guard app_runtime_dir(executable) is Some(dir) else { return None }
   let exists = (@fs.kind(dir.to_string()) is Directory) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => false
+    @os_error.OsError(NotFound, ..) => false
     error => raise error
   }
   if !exists {

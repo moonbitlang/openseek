@@ -70,7 +70,7 @@ pub async fn AuthStore::cloud_history_cache(
       if valid_cache_id(session) &&
         !self.cloud_history_deleted.contains((user, session)) {
         @fs.mkdir(dir.to_string(), recursive=true, permission=0o700) catch {
-          @os_error.OSError(_) as error if error.is_EEXIST() => ()
+          @os_error.OsError(AlreadyExists, ..) => ()
           error => raise error
         }
         @fsx.write_text_atomic(

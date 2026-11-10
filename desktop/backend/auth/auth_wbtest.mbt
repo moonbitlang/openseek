@@ -246,20 +246,19 @@ async test "the loopback listener takes the matching redirect and ignores strays
     let port = server.addr.port()
     let waiter = group.spawn(() => wait_for_code(server, oauth_state="st"))
     // A stray (forged state) answers 404 and keeps the wait alive.
-    let (stray, _) = @http.get(
+    let (stray, _) = @http.get_text(
       "http://127.0.0.1:\{port}/cb?code=x&state=forged",
     )
     assert_true(stray.code == 404)
     let browser = group.spawn(() => {
-      @http.get("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
+      @http.get_text("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
     })
     let (code, conn) = waiter.wait()
     defer conn.close()
     assert_true(code == "one-time")
     respond_html(conn, 200, "OK", sign_in_done_page())
-    let (granted, granted_data) = browser.wait()
+    let (granted, granted_page) = browser.wait()
     assert_true(granted.code == 200)
-    let granted_page = granted_data.text()
     assert_true(granted_page.contains("Return to SeekMoon"))
     assert_false(granted_page.contains("?device="))
     // The loopback page is self-contained, but its palette stays on the same
@@ -269,7 +268,7 @@ async test "the loopback listener takes the matching redirect and ignores strays
     assert_true(granted_page.contains("--font-family-sans"))
     assert_true(granted_page.contains("font-family: var(--font-family-sans)"))
     assert_false(granted_page.contains("--paper"))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -359,7 +358,7 @@ async test "account code exchange uses v2 without registering a device" {
       let request = connection.read_request()
       assert_true(request.meth is Post)
       assert_eq(request.path, "/v2/auth/account/exchange")
-      assert_eq(@json.parse(connection.read_all().text()), {
+      assert_eq(@json.parse(connection.text.read_all()), {
         "code": "ac_fixture",
         "code_verifier": "verifier",
       })

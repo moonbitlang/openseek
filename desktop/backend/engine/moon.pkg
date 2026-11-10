@@ -4,8 +4,7 @@ import {
   "moonbitlang/core/encoding/base64",
   "moonbitlang/x/uuid" @x_uuid,
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/async/os_error",
-  "moonbitlang/core/async/os_error" @core_os_error,
+  "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/viz_export",
@@ -30,9 +29,9 @@ import {
   "openseek_desktop/backend/internal/worktree",
   "openseek_desktop/backend/internal/workspaces",
   "openseek_desktop/backend/resources",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
@@ -50,5 +49,10 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 supported_targets = "+native"
 
 options(
-  "allow-experimental-packages": [ "moonbitlang/core/async/os_error" ],
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+  ],
 )

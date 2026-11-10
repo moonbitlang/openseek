@@ -231,7 +231,7 @@ async fn job_history_page(
 ) -> @protocol.JobsListReply {
   guard offset >= 0 else { raise EngineError("invalid history offset") }
   let names = @fs.readdir(directory) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => []
+    @os_error.OsError(NotFound, ..) => []
     error => {
       errors.push("Cannot list job history: \{error}")
       []
@@ -257,8 +257,8 @@ async fn job_history_page(
     // discard readable metadata or the authoritative live-engine overlay.
     let stamp = match kind {
       Some(Directory) =>
-        Some(@fs.mtime("\{directory}/\{name}/owner.lock")) catch {
-          @os_error.OSError(_) as error if error.is_ENOENT() => None
+        Some(file_stamp(@fs.mtime("\{directory}/\{name}/owner.lock"))) catch {
+          @os_error.OsError(NotFound, ..) => None
           error => {
             errors.push("Cannot inspect runtime \{name}: \{error}")
             None

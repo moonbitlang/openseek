@@ -80,7 +80,7 @@ pub fn BrowserViews::window_ready(
 /// Attach previews to the application lifetime before the window opens.
 pub fn BrowserViews::start_previews(
   self : BrowserViews,
-  group : @async.TaskGroup[Unit],
+  group : @core_async.TaskGroup,
 ) -> Unit {
   self.previews.start(group)
 }

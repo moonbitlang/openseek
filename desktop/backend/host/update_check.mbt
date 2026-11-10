@@ -290,7 +290,7 @@ async test "self-update pump reports download failures" {
     assert_true(
       params is { "message": String("this build cannot install updates"), .. },
     )
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -333,7 +333,7 @@ async test "a bundle that cannot update itself leaves the staging directory alon
   // An unsigned code object stands in for the bundle: what the probe reads
   // is whether anyone signed it, not what it contains.
   let bundle = work.join("SeekMoonDev.app")
-  @fs.write_file(bundle.to_string(), "unsigned", create_mode=CreateNew)
+  @fs.write_text(bundle.to_string(), "unsigned", create_mode=CreateNew)
   let staged = work.join("update/extract/SeekMoon.app")
   @fs.mkdir(staged.to_string(), recursive=true)
   let updates : SelfUpdate = {

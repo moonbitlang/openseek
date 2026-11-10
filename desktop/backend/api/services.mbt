@@ -8,9 +8,9 @@
 /// not prepared, and a client finds the same backend behind any of them. The
 /// owners feed every page and client rather than borrowing one request's
 /// task as their owner, and stop when `group` ends.
-pub async fn[G] ApiState::start_services(
+pub async fn ApiState::start_services(
   self : ApiState,
-  group : @async.TaskGroup[G],
+  group : @async.TaskGroup,
 ) -> Unit {
   prepare_workspaces()
   group.spawn_bg(allow_failure=true, () => {

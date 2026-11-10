@@ -3,7 +3,7 @@ async test "local PDF preview returns an absolute path and preserves refusals" {
   let dir = @fs.tmpdir(prefix="openseek-host-pdf-")
   defer @fs.rmdir(dir, recursive=true)
   let file = "\{dir}/中文 #100%.pdf"
-  @fs.write_file(file, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
+  @fs.write_text(file, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
   let reply = @host.open_path_preview({
     session: "pdf-test",
     cwd: None,

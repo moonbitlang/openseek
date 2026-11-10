@@ -5,11 +5,18 @@ import {
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/remote",
   "openseek_desktop/backend/host",
-  "moonbitlang/async",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/stdio",
   "moonbitlang/core/env",
 }
 
 supported_targets = "native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/stdio",
+  ],
+)

@@ -351,7 +351,7 @@ struct DesktopBridgeActor {
   host_connection : @host.HostConnection
   // All producers write directly to this window-owned mailbox. Local
   // control, browser, filesystem and terminal events never enter the hub.
-  inbox : @async.Queue[BridgeInput]
+  inbox : @core_async.Queue[BridgeInput]
 }
 
 ///|

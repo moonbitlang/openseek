@@ -464,9 +464,9 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
       name="w1",
     ),
   )
-  @fs.write_file(
+  @fs.write_text(
     repo.join(".worktrees/w1/junk.txt").to_string(),
-    b"x",
+    "x",
     create_mode=CreateOrTruncate,
   )
   assert_true(

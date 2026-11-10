@@ -533,7 +533,7 @@ async fn WorktreeEntry::held_by_another(
     }
     guard @session_store.safe_session_id(bound) else { continue }
     let record : @fs.FileKind? = Some(@fs.kind(records.join(bound).to_string())) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => None
+      @os_error.OsError(NotFound, ..) => None
       error =>
         raise WorktreeError(
           "could not tell whether conversation \{bound} still uses this worktree: \{error}",

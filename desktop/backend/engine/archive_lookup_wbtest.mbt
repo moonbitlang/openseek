@@ -33,7 +33,7 @@ async test "archive names the missing store after a workspace detach" {
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-ws"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -85,7 +85,7 @@ async test "archive reports a workspace record whose directory vanished" {
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-ws"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -119,7 +119,7 @@ async test "loading a conversation from a detached workspace names that state" {
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-ws"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,

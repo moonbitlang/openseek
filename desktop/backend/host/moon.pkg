@@ -21,9 +21,9 @@ import {
   "openseek_desktop/backend/internal/terminal",
   "openseek_desktop/backend/update",
   "openseek_desktop/backend/resources",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
@@ -33,3 +33,11 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+  ],
+)

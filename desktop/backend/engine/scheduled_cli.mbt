@@ -8,7 +8,8 @@ async fn Schedules::execute(
   sink? : EventSink,
   on_workspaces? : (Array[String]) -> Unit,
 ) -> Unit {
-  let status : @protocol.ScheduleRunStatus = @async.with_task_group(group => {
+  let mut status : @protocol.ScheduleRunStatus = Stopped
+  @async.with_task_group(group => {
     let record_guard = self.manager.begin_record_op(run.session)
     defer self.manager.end_record_op(run.session, record_guard)
     // The follower outlives the timed writer scope so Stop and timeout can
@@ -16,8 +17,8 @@ async fn Schedules::execute(
     defer (if self.manager.followers.get(run.session) is Some(follower) {
       discard_follower_startup(self.manager, follower)
     })
-    let status : @protocol.ScheduleRunStatus = try {
-      @fs.write_file(
+    let result : @protocol.ScheduleRunStatus = try {
+      @fs.write_text(
         run.log_path,
         "Starting scheduled task\n",
         create_mode=CreateOrTruncate,
@@ -41,9 +42,9 @@ async fn Schedules::execute(
             { "event": "schedule_final_scan_failed", "message": "\{error}" }
       }
     }
-    status
+    status = result
   }) catch {
-    error => Failed("\{error}")
+    error => status = Failed("\{error}")
   }
   self.processes.remove(run.id)
   let status : @protocol.ScheduleRunStatus = if self.stopped.contains(run.id) {
@@ -53,7 +54,7 @@ async fn Schedules::execute(
   }
   self.stopped.remove(run.id)
   if status is Failed(message) {
-    @fs.write_file(
+    @fs.write_text(
       run.log_path,
       "\nFailed: \{message}\n",
       create_mode=OpenOrCreate,
@@ -98,9 +99,9 @@ async fn Schedules::execute(
 // async 0.21 exposes abandoned stdin cleanup only through its deprecated
 // close method; retain it until the dependency supplies a replacement.
 #warnings("-deprecated")
-async fn[G] Schedules::run_cli(
+async fn Schedules::run_cli(
   self : Schedules,
-  follower_group : @async.TaskGroup[G],
+  follower_group : @async.TaskGroup,
   spec : @protocol.ScheduleSpec,
   run : @protocol.ScheduleRun,
   sink? : EventSink,
@@ -156,12 +157,10 @@ async fn[G] Schedules::run_cli(
     permission=0o600,
   )
   defer output.close()
-  let (input, writer) = @process.write_to_process()
-  defer input.close()
-  writer.close()
+  let mut code = 0
   @async.with_task_group(group => {
     if self.stopped.contains(run.id) {
-      return 0
+      return
     }
     ignore(
       match sink {
@@ -179,9 +178,9 @@ async fn[G] Schedules::run_cli(
       group,
       config.engine,
       args,
-      stdin=input,
-      stdout=output,
-      stderr=output,
+      stdin=Empty,
+      stdout=Shared(output),
+      stderr=Shared(output),
       cwd=cwd.to_string(),
       extra_env=env,
       inherit_env=false,
@@ -194,8 +193,9 @@ async fn[G] Schedules::run_cli(
     if self.stopped.contains(run.id) {
       process.cancel()
     }
-    process.wait()
+    code = process.wait()
   })
+  code
 }
 
 ///|
@@ -212,7 +212,7 @@ async fn scheduled_session_result(
   // turn without a terminal, and the exit code explains it. Any other load
   // failure is real and still raises.
   let terminal = store.load(SessionId(run.session)).last_terminal() catch {
-      @core_os_error.OsError(NotFound, ..) => None
+      @os_error.OsError(NotFound, ..) => None
       error => raise error
     }
   schedule_run_status(terminal, exit_code~)

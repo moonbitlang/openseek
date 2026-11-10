@@ -2,16 +2,19 @@
 /// Grow only as bytes arrive, so a small operation does not allocate the full
 /// image allowance. Read at most one byte beyond the limit to distinguish an
 /// exact-size frame from an oversized one, regardless of fragment boundaries.
-async fn Inbound::read(reader : &@io.Reader) -> Inbound {
+async fn Inbound::read(reader : &@io.BinaryReader) -> Inbound {
   let buffer = Buffer()
-  while reader.read_some(
-          max_len=Int32::min(65536, InboundFrameMaxBytes - buffer.length() + 1),
-        )
-        is Some(chunk) {
-    if chunk.length() > InboundFrameMaxBytes - buffer.length() {
+  let chunk = FixedArray::make(65536, b'\x00')
+  for ;; {
+    let read = reader.read_into(
+      chunk,
+      max_len=Int32::min(65536, InboundFrameMaxBytes - buffer.length() + 1),
+    )
+    guard read > 0 else { break }
+    if read > InboundFrameMaxBytes - buffer.length() {
       return Oversized
     }
-    buffer.write_bytes(chunk)
+    buffer.write_bytes(Bytes::from_array(chunk[:read]))
   }
   classify(@utf8.decode(buffer.to_bytes()))
 }
