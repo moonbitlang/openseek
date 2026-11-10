@@ -195,3 +195,48 @@ test('skip reasons and declined actions are shown in the page language', async (
   await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
+
+test('logs and edits open in place, delete asks first, and a passed one-time task reads finished', async ({ page }) => {
+  const app = new ScheduleHarness(page);
+  const spec = (name, timing) => ({ name, task: 'Check', timing, timeout_minutes: 30 });
+  app.schedules.entries = [
+    { id: 'daily', spec: spec('Daily audit', { kind: 'every', minutes: 1440 }), enabled: true, run_requested: false, next_at: Date.now() + 60000 },
+    { id: 'once', spec: spec('Release notes', { kind: 'once', at: Date.now() - 60000 }), enabled: false, run_requested: false },
+  ];
+  app.schedules.runs = Array.from({ length: 6 }, (_, index) => ({
+    id: `run-${index}`, schedule_id: 'daily', name: `Daily audit ${index}`, workspace: '/workspace', session: `session-${index}`,
+    started_at: Date.now() - (index + 1) * 3600000, finished_at: Date.now() - index * 3600000, status: { kind: 'succeeded' }, log_path: `/runtime/run-${index}.log`,
+  }));
+  app.workingFiles['/runtime/run-0.log'] = 'oldest run output';
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  const daily = page.locator('.schedule-card').filter({ has: page.getByRole('heading', { name: 'Daily audit', exact: true }) });
+  await expect(daily).toContainText('Every day');
+  const once = page.locator('.schedule-card').filter({ has: page.getByRole('heading', { name: 'Release notes', exact: true }) });
+  await expect(once).toContainText('Finished');
+  await expect(once.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+  // The oldest run sits last; its log opens inside its own card.
+  const oldest = page.locator('.schedule-card').filter({ has: page.getByRole('heading', { name: 'Daily audit 0', exact: true }) });
+  await oldest.getByRole('button', { name: 'View log', exact: true }).click();
+  await expect(oldest.getByRole('region', { name: 'Run log', exact: true })).toBeVisible();
+  await expect(oldest.getByRole('region', { name: 'Run log', exact: true })).toBeInViewport();
+  await expect(oldest.locator('.schedule-log-content')).toHaveText('oldest run output');
+  await oldest.getByRole('button', { name: 'Close log', exact: true }).click();
+  await expect(oldest.getByRole('region', { name: 'Run log' })).toHaveCount(0);
+  // Editing replaces the card instead of opening a form at the top.
+  await once.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = page.locator('.schedule-form');
+  await expect(form.getByLabel('Name', { exact: true })).toHaveValue('Release notes');
+  await expect(form).toBeInViewport();
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await daily.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(daily).toContainText('Delete “Daily audit”? Its run history and working folder are kept.');
+  expect(app.requests.some(r => r.method === 'schedules.action')).toBe(false);
+  await daily.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(daily.getByRole('button', { name: 'Run now', exact: true })).toBeVisible();
+  await daily.getByRole('button', { name: 'Delete', exact: true }).click();
+  await daily.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect.poll(() => app.requests.find(r => r.method === 'schedules.action')?.params.action).toBe('delete');
+  expect(app.pageErrors).toEqual([]);
+});

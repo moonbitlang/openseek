@@ -804,7 +804,10 @@ textarea.schedule-input { min-height: 100px; resize: vertical; }
 .schedule-history-title { margin-top: 2.25rem; }
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
+.schedule-log { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
 .schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }
+.schedule-confirm { margin-top: var(--space-5); }
+.schedule-confirm > p { margin: 0; }
 
 .transcript-view-control {
   padding: var(--space-1);

@@ -43,7 +43,8 @@ priv enum UiMessage {
   OnceLabel
   NextLabel
   WaitingLabel
-  PausedFinished
+  PausedStatus
+  FinishedStatus
   QueuedLabel
   AutomaticDirectory
   RunNow
@@ -170,15 +171,15 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, ScheduledTasks) => "定時任務"
     (Japanese, ScheduledTasks) => "スケジュールタスク"
     (English, ScheduleDescription) =>
-      "Run independent OpenSeek tasks while this host is open. Missed times are skipped. Up to 4 tasks can run together; each plan runs one task at a time."
+      "Run tasks automatically while this host is running. A time that passes while the host is off or asleep is skipped."
     (Spanish, ScheduleDescription) =>
-      "Ejecuta tareas independientes de OpenSeek mientras este host esté abierto. Se omiten las ejecuciones perdidas. Pueden ejecutarse hasta 4 tareas a la vez; cada programación ejecuta una tarea a la vez."
+      "Ejecuta tareas automáticamente mientras este host está en marcha. Se omite una hora que pasa mientras el host está apagado o en reposo."
     (SimplifiedChinese, ScheduleDescription) =>
-      "在此主机运行期间执行独立的 OpenSeek 任务。已错过的执行时间会跳过。最多可同时运行 4 个任务，每个计划一次运行一个任务。"
+      "在此主机运行期间自动执行任务。主机关闭或休眠期间错过的时间会被跳过。"
     (TraditionalChinese, ScheduleDescription) =>
-      "在此主機執行期間執行獨立的 OpenSeek 任務。已錯過的執行時間會跳過。最多可同時執行 4 個任務，每個計劃一次執行一個任務。"
+      "在此主機執行期間自動執行任務。主機關閉或休眠期間錯過的時間會被略過。"
     (Japanese, ScheduleDescription) =>
-      "このホストの起動中に独立した OpenSeek タスクを実行します。過ぎた実行時刻はスキップします。同時に最大 4 タスク、各スケジュールにつき 1 タスクを実行できます。"
+      "このホストの実行中にタスクを自動で実行します。ホストの停止中やスリープ中に過ぎた時刻はスキップされます。"
     (English, NewSchedule) => "New schedule"
     (Spanish, NewSchedule) => "Nueva programación"
     (SimplifiedChinese, NewSchedule) => "新建计划"
@@ -338,11 +339,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, WaitingLabel) => "等待中"
     (TraditionalChinese, WaitingLabel) => "等待中"
     (Japanese, WaitingLabel) => "待機中"
-    (English, PausedFinished) => "Paused / finished"
-    (Spanish, PausedFinished) => "En pausa / finalizado"
-    (SimplifiedChinese, PausedFinished) => "已暂停 / 已结束"
-    (TraditionalChinese, PausedFinished) => "已暫停 / 已結束"
-    (Japanese, PausedFinished) => "一時停止 / 終了"
+    (English, PausedStatus) => "Paused"
+    (Spanish, PausedStatus) => "En pausa"
+    (SimplifiedChinese, PausedStatus) => "已暂停"
+    (TraditionalChinese, PausedStatus) => "已暫停"
+    (Japanese, PausedStatus) => "一時停止中"
+    (English, FinishedStatus) => "Finished"
+    (Spanish, FinishedStatus) => "Finalizado"
+    (SimplifiedChinese, FinishedStatus) => "已结束"
+    (TraditionalChinese, FinishedStatus) => "已結束"
+    (Japanese, FinishedStatus) => "終了"
     (English, QueuedLabel) => "Queued"
     (Spanish, QueuedLabel) => "En cola"
     (SimplifiedChinese, QueuedLabel) => "已排队"
@@ -565,4 +571,81 @@ fn schedule_refusal_text(
       StopBeforeDelete => RefusedStopBeforeDelete
     },
   )
+}
+
+///|
+/// A repeating interval in the largest whole unit that fits it: "Every day",
+/// not "Every 1440 min".
+fn schedule_interval_text(locale : @i18n.Locale, minutes : Int32) -> String {
+  let week = 7 * 24 * 60
+  let day = 24 * 60
+  if minutes % week == 0 {
+    let n = minutes / week
+    match (locale, n) {
+      (English, 1) => "Every week"
+      (English, _) => "Every \{n} weeks"
+      (Spanish, 1) => "Cada semana"
+      (Spanish, _) => "Cada \{n} semanas"
+      (SimplifiedChinese, 1) => "每周"
+      (SimplifiedChinese, _) => "每 \{n} 周"
+      (TraditionalChinese, 1) => "每週"
+      (TraditionalChinese, _) => "每 \{n} 週"
+      (Japanese, 1) => "毎週"
+      (Japanese, _) => "\{n} 週間ごと"
+    }
+  } else if minutes % day == 0 {
+    let n = minutes / day
+    match (locale, n) {
+      (English, 1) => "Every day"
+      (English, _) => "Every \{n} days"
+      (Spanish, 1) => "Cada día"
+      (Spanish, _) => "Cada \{n} días"
+      (SimplifiedChinese, 1) => "每天"
+      (SimplifiedChinese, _) => "每 \{n} 天"
+      (TraditionalChinese, 1) => "每天"
+      (TraditionalChinese, _) => "每 \{n} 天"
+      (Japanese, 1) => "毎日"
+      (Japanese, _) => "\{n} 日ごと"
+    }
+  } else if minutes % 60 == 0 {
+    let n = minutes / 60
+    match (locale, n) {
+      (English, 1) => "Every hour"
+      (English, _) => "Every \{n} hours"
+      (Spanish, 1) => "Cada hora"
+      (Spanish, _) => "Cada \{n} horas"
+      (SimplifiedChinese, 1) => "每小时"
+      (SimplifiedChinese, _) => "每 \{n} 小时"
+      (TraditionalChinese, 1) => "每小時"
+      (TraditionalChinese, _) => "每 \{n} 小時"
+      (Japanese, 1) => "1 時間ごと"
+      (Japanese, _) => "\{n} 時間ごと"
+    }
+  } else {
+    match locale {
+      English => "Every \{minutes} min"
+      Spanish => "Cada \{minutes} min"
+      SimplifiedChinese => "每 \{minutes} 分钟"
+      TraditionalChinese => "每 \{minutes} 分鐘"
+      Japanese => "\{minutes} 分ごと"
+    }
+  }
+}
+
+///|
+/// The question a schedule card asks before deleting it. The host keeps the
+/// schedule's run history and working folder.
+fn schedule_delete_question(locale : @i18n.Locale, name : String) -> String {
+  match locale {
+    English =>
+      "Delete “\{name}”? Its run history and working folder are kept."
+    Spanish =>
+      "¿Eliminar «\{name}»? Se conservan su historial de ejecuciones y su carpeta de trabajo."
+    SimplifiedChinese =>
+      "删除“\{name}”？其运行记录和工作目录会保留。"
+    TraditionalChinese =>
+      "刪除「\{name}」？其執行記錄和工作目錄會保留。"
+    Japanese =>
+      "「\{name}」を削除しますか？実行履歴と作業ディレクトリは残ります。"
+  }
 }
