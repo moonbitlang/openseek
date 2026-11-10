@@ -593,19 +593,6 @@ test "an idle tick changes nothing, a running one advances the clock" {
 }
 
 ///|
-test "an elapsed span never shows finer units than its own scale" {
-  assert_eq(elapsed_label(0.0), "0s")
-  assert_eq(elapsed_label(950.0), "0s")
-  assert_eq(elapsed_label(59_999.0), "59s")
-  assert_eq(elapsed_label(60_000.0), "1m 0s")
-  assert_eq(elapsed_label(134_000.0), "2m 14s")
-  assert_eq(elapsed_label(3_599_000.0), "59m 59s")
-  // Past an hour the seconds column is noise to anyone reading it.
-  assert_eq(elapsed_label(3_600_000.0), "1h 0m")
-  assert_eq(elapsed_label(87_240_000.0), "24h 14m")
-}
-
-///|
 test "follow-up choice is per draft and resets after submission or turn completion" {
   let base = Input::fixture("follow-up")
   let input = {

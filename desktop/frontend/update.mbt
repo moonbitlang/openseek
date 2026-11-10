@@ -2072,13 +2072,14 @@ fn update(
       dev.reconnect_failures == 0
     })
   // The Jobs panel reads the listing and the selected job's output; the
-  // overview's background tasks card reads only the listing.
+  // overview's background tasks card reads only the listing. Both describe
+  // the conversation on screen, which is the jobs owner's.
   let watch : @jobs.Watch = if !connected {
     Unwatched
   } else if model.file_panel_visible() &&
     model.dock_state().active is Some(Jobs) {
     Panel
-  } else if model.overview_jobs_owner() is Some(_) {
+  } else if model.overview_conversation() is Some(_) {
     Summary
   } else {
     Unwatched

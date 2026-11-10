@@ -100,16 +100,3 @@ pub fn BackgroundTasks::from_listing(
 pub fn BackgroundTasks::running(self : BackgroundTasks) -> Int32 {
   self.jobs.length() + self.subagents.length()
 }
-
-///|
-/// A running span in the unit a reader thinks in.
-fn elapsed(ms : Double) -> String {
-  let seconds = (ms.max(0.0) / 1000.0).to_int()
-  if seconds < 60 {
-    "\{seconds}s"
-  } else if seconds < 3600 {
-    "\{seconds / 60}m \{seconds % 60}s"
-  } else {
-    "\{seconds / 3600}h \{seconds % 3600 / 60}m"
-  }
-}
