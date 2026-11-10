@@ -1,0 +1,123 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let engine = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.mkdir("\{dir}/sessions/demo", recursive=true)
+  @fs.write_text(
+    "\{dir}/sessions/demo/openseek_session-demo.jsonl",
+    (
+      #|{"version":1,"id":"demo","system_prompt":"system"}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+      #|{"sequence":2,"ts":0,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text(
+    "\{dir}/summary.txt",
+    "hello and answer",
+    create_mode=CreateOrTruncate,
+  )
+  let result = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "list", "--session-root",
+      dir,
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+  ).output()
+  result.check()
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(id)
+  }
+  println(
+    show_session(engine, dir, "demo")
+    .transform(@json.Replacer::exclude(["ts"]))
+    .stringify(),
+  )
+  let result = @shell.Cmd(
+    "moon",
+    [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
+      engine,
+      "--",
+      "sessions",
+      "compact",
+      "demo",
+      "--session-root",
+      dir,
+      "--file",
+      "\{dir}/summary.txt",
+      "--from",
+      "1",
+      "--to",
+      "2",
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+  ).output()
+  result.check()
+  @stdio.stdout.text.write(result.stdout())
+  println(
+    show_session(engine, dir, "demo")
+    .transform(@json.Replacer::exclude(["ts"]))
+    .stringify(),
+  )
+}
+
+///|
+async fn show_session(engine : String, dir : String, id : String) -> Json {
+  let result = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "show", id,
+      "--session-root", dir,
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+  ).output()
+  result.check()
+  @json.parse(result.stdout())
+}

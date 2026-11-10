@@ -1,0 +1,47 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let engine = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  for level in ["warn", "error"] {
+    let result = @shell.Cmd(
+      "moon",
+      [
+        "run",
+        "--quiet",
+        "--target",
+        "wasm",
+        engine,
+        "--",
+        "run",
+        "--api-url",
+        ClosedEndpoint,
+        "--dir",
+        "\{dir}/\{level}",
+        "say hi",
+      ],
+      cwd=dir,
+      env={
+        "DEEPSEEK": "test-key",
+        "OPENSEEK_RETRY_ATTEMPTS": "1",
+        "MOON_XLOG": level,
+        "MOON_WORK": "off",
+      },
+    ).output()
+    println("exit=\{result.exit_code()}")
+    println(
+      "\{level}: \{result.stderr().split("\n").filter(line => line.has_prefix("session cli-")).count()}",
+    )
+  }
+}
+
+///|
+const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"

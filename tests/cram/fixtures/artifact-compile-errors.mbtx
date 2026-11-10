@@ -1,0 +1,71 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let project = "\{dir}/session/scratch/app"
+  @fs.mkdir(project, recursive=true)
+  let output = "\{dir}/session/scratch/artifact"
+  for name in ["moon.mod", "moon.pkg", "main.mbt"] {
+    @fs.write_text(
+      "\{project}/\{name}",
+      @fs.read_text("fixtures/artifact-app/\{name}"),
+      create_mode=CreateNew,
+    )
+  }
+  let builder = "\{root}/share/artifact/build.mbtx"
+
+  @fs.write_text(
+    "\{project}/main.mbt",
+    "fn main { missing_function() }",
+    create_mode=CreateOrTruncate,
+  )
+  let broken = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "broken.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{broken.exit_code()}")
+  println(
+    "undefined_function_reported=\{broken.stderr().contains("missing_function")}",
+  )
+  println(
+    "diagnostic_names_source=\{broken.stderr().contains("\{project}/main.mbt")}",
+  )
+  println("html_exists=\{@fs.exists("\{output}/broken.html")}")
+  println("source_exists=\{@fs.exists("\{output}/broken.html.source")}")
+
+  let warning_source =
+    #|fn main {
+    #|  let unused = 42
+    #|  println("Would otherwise build")
+    #|}
+  @fs.write_text(
+    "\{project}/main.mbt",
+    warning_source,
+    create_mode=CreateOrTruncate,
+  )
+  let warning = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "warning.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{warning.exit_code()}")
+  println("unused_value_reported=\{warning.stderr().contains("unused_value")}")
+  println("html_exists=\{@fs.exists("\{output}/warning.html")}")
+  println("source_exists=\{@fs.exists("\{output}/warning.html.source")}")
+}

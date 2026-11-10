@@ -1,0 +1,68 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
+  let echo =
+    #|{"version":1,"kind":"echo","input":0}
+    #|
+  @fs.mkdir("\{dir}/ws")
+  @fs.mkdir("\{dir}/store/sessions/p-sr-1", recursive=true)
+  @fs.write_text(
+    "\{dir}/store/sessions/p-sr-1/claim.json",
+    (
+      #|{"sha256":"46e9bc3476c92ea24fb17adac6cd9cdacff7a34a5c753100787da5a29984f836"}
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  let claimed = ["--session", "p-sr-1", "--session-root", "\{dir}/store"]
+  for
+    args in [
+      claimed,
+      [..claimed, "--claim", "t-2"],
+      [..claimed, "--claim", "t-1"],
+    ] {
+    let result = @shell.Cmd(
+      "moon",
+      [..run, "run", "--input-format", "json", "--dir", "\{dir}/ws", ..args],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(echo),
+    ).output()
+    @stdio.stdout.text.write(result.stderr())
+    println("exit \{result.exit_code()}")
+  }
+  for name in @fs.readdir("\{dir}/store/sessions/p-sr-1", sort=true) {
+    println(name)
+  }
+  for
+    args in [[..claimed, "--claim", "t-1"], ["--no-session", "--claim", "t-1"]] {
+    let result = @shell.Cmd(
+      "moon",
+      [..run, "run", "--input-format", "json", "--dir", "\{dir}/ws", ..args],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(echo),
+    ).output()
+    @stdio.stdout.text.write(result.stderr())
+    println("exit \{result.exit_code()}")
+  }
+  let result = @shell.Cmd(
+    "moon",
+    [..run, ..base, "--claim", "t-1", "words"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr())
+}

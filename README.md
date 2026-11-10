@@ -52,7 +52,7 @@ integration gates are:
 
 ```sh
 just check              # native + JS workspace checks and formatting
-just test               # native + JS workspace tests and OpenSeek cram tests
+just test               # native + JS workspace tests and CLI documentation tests
 just build              # native + JS MoonBit builds
 just editor-build       # editor web distribution and server
 just editor-test        # editor-only tests on every supported target
@@ -69,11 +69,9 @@ runs as a standalone MoonBit script and needs no Python runtime.
 When passing editor paths containing spaces, quote the whole assignment:
 `just --justfile editor/justfile "ROOT=C:/Users/me/My Project" dev`.
 
-The cram documentation tests (`just test-cram`, included in `just test`) use
-Bash. On Windows, `just test` selects Git for Windows' Bash at
-`%ProgramFiles%/Git/bin/bash.exe`, avoiding the WSL launcher on `PATH`.
-For a custom Git installation, set
-`just "CRAM_SHELL=D:/Git/bin/bash.exe" test`.
+The CLI documentation tests (`just test-cli`, included in `just test`) run
+with `moon testcli`. Their fixtures use MoonBit file and process APIs and need
+no Bash or sh interpreter.
 
 Windows installer packaging (`just desktop-package`) also needs NSIS with
 `makensis.exe` on `PATH` (usually under `C:/Program Files (x86)/NSIS`).
@@ -342,15 +340,16 @@ list` shows what is resumable from either.
 See each package README for API boundaries, examples, and package-specific test
 notes.
 
-## Verified CLI Documentation (cram)
+## Verified CLI Documentation (testcli)
 
-The CLI behaviour is documented as executable cram tests under `tests/`, built
-and run with `moon cram test`. The wrapper compiles the native `cmd/*` packages
-and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
+The CLI behaviour is documented as executable `mooncram` blocks under `tests/`,
+run with `moon testcli test tests/cram`. Simple cases name local
+packages or `.mbtx` scripts directly. Complex scenarios use MoonBit
+fixtures with isolated temporary directories; see [the authoring guide](tests/cram/README.md).
 
 - [`tests/cram/cli.md`](tests/cram/cli.md) — offline `openseek` subcommand
   examples (top-level and `run` help, and the `run`/`serve`/`sessions` behaviors).
-  They make no network calls and run in CI via `moon cram test tests/cram`.
+  They make no network calls and run in CI via `moon testcli test tests/cram`.
 - [`tests/cram/run-requests.md`](tests/cram/run-requests.md) — `run` driven by a
   parent: a JSON request on stdin, presets (`--kind`), the result file, refusals,
   cancellation by closing stdin, and the one-general-child lease
@@ -358,15 +357,13 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
   modelless `echo` preset and a closed local port, and needs no API key.
 - [`tests/cram/read-workflow.md`](tests/cram/read-workflow.md) — a tested guide
   to `read.mbtx`: numbered files, ranges, errors, and output limits. See
-  [Writing cram documentation](tests/cram/README.md) to add a guide for another script.
+  [Writing CLI documentation tests](tests/cram/README.md) to add a guide for another script.
 - [`tests/cram/validation-workflows.md`](tests/cram/validation-workflows.md) —
   the bundled check, test, and formatting scripts, exercised on a temporary project.
 - [`tests/live/deepseek.md`](tests/live/deepseek.md) — a real, non-mock DeepSeek
-  round trip. It is opt-in (`DEEPSEEK=sk-... moon cram test tests/live`) and
-  parses the agent's JSONL log with MoonBit itself: a `moon run -e` script reads
-  the stream through the published [`moonbitlang/jsonl`](https://mooncakes.io/docs/moonbitlang/jsonl)
-  package and asserts on typed `Json` values — no `jq` — without pinning
-  nondeterministic content such as token counts or model phrasing.
+  round trip. It is opt-in (`DEEPSEEK=sk-... moon testcli test tests/live`) and
+  parses the agent's JSONL log with MoonBit's JSON parser and pattern matching,
+  without pinning nondeterministic content such as token counts or model phrasing.
 
 For the evaluation-backed roadmap, see
 [`agent-improvement-guide.md`](agent-improvement-guide.md). It explains why the

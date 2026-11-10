@@ -1,0 +1,44 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let engine = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let request : Json = {
+    "command": "prompt",
+    "content": "Call the finish tool immediately with the answer DONE. Use no other tool.",
+  }
+  let result = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", engine, "--", "serve", "--model", "deepseek-flash",
+      "--max-steps", "3",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(request.stringify() + "\n"),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  let values : Array[Json] = []
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() {
+      values.push(@json.parse(line))
+    }
+  }
+  let tokens_ok = values.any(value => {
+    value is { "prompt_tokens": Number(n, ..), .. } && n > 0.0
+  })
+  let finished = values.any(value => {
+    value is { "answer": String(answer), .. } && answer.contains("DONE")
+  })
+  println("real_api_round_trip=\{tokens_ok}")
+  println("finished_with_DONE=\{finished}")
+}

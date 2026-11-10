@@ -1,0 +1,90 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.write_text(
+    "\{dir}/moon.mod",
+    (
+      #|name = "example/workflow_docs"
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text("\{dir}/moon.pkg", "", create_mode=CreateOrTruncate)
+  @fs.write_text(
+    "\{dir}/answer.mbt",
+    (
+      #|///|
+      #|pub fn answer() -> Int {42}
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text(
+    "\{dir}/answer_test.mbt",
+    (
+      #|///|
+      #|test "answer" { assert_eq(@workflow_docs.answer(), 42) }
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  for name in ["check", "test", "check-test", "info-fmt", "check-json"] {
+    let script = "\{root}/share/workflow/\{name}.mbtx"
+    let result = @shell.Cmd(
+      "moon",
+      ["run", "--quiet", "--target", "wasm", script, "--"],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+    ).output()
+    println("exit=\{result.exit_code()}")
+    @stdio.stdout.text.write(result.stdout())
+    if name == "info-fmt" {
+      for line in @fs.read_text("\{dir}/pkg.generated.mbti").split("\n") {
+        if line.has_prefix("pub fn") {
+          println(line)
+        }
+      }
+      @stdio.stdout.text.write(@fs.read_text("\{dir}/answer.mbt"))
+    }
+  }
+  @fs.write_text(
+    "\{dir}/answer.mbt",
+    (
+      #|///|
+      #|pub fn answer() -> Int { "wrong" }
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  for name in ["check", "check-test"] {
+    let script = "\{root}/share/workflow/\{name}.mbtx"
+    let result = @shell.Cmd(
+      "moon",
+      ["run", "--quiet", "--target", "wasm", script, "--"],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+    ).output()
+    println("exit=\{result.exit_code()}")
+    @stdio.stdout.text.write(result.stdout())
+    println(
+      result
+      .stderr()
+      .trim_end(chars="\n")
+      .split("\n")
+      .collect()
+      .last()
+      .unwrap_or(""),
+    )
+  }
+}

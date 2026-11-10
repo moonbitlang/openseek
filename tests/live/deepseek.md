@@ -6,20 +6,17 @@ the offline suite can run in CI without credentials, while these are opt-in:
 
 ```bash
 export DEEPSEEK=sk-...            # a real provider API key
-moon cram test tests/live
+moon testcli test tests/live --timeout-ms 300000
 ```
 
 `openseek run` prints its answer for a person. The machine-readable
 stream is `openseek serve`: fed one `prompt` command on stdin, it runs that
 turn, exits at stdin EOF, and writes one JSON object per line (JSONL) to
-stdout. Instead of an
-external tool such as `jq`, we parse that log with MoonBit itself: the published
-[`moonbitlang/jsonl`](https://mooncakes.io/docs/moonbitlang/jsonl) package reads stdin
-and hands back typed `Json` values, so the assertions are plain MoonBit `is`
-pattern matches. Its `read_stdin` helper encapsulates `moonbitlang/async/stdio`,
-so each script imports only `moonbitlang/jsonl` plus `moonbitlang/async` — the
-latter is unavoidable because `async fn main` requires it. The `grep '='` only
-drops `moon`'s own dependency-resolution chatter, not any log content.
+stdout. The MoonBit fixture captures that stream, parses each line into a `Json`
+value, and uses pattern matching to inspect usage, lifecycle, and tool events.
+
+The [live fixtures](fixtures/) run in fresh temporary directories.
+They remain opt-in and are excluded from `just test-cli` and CI.
 
 Every example gives the cheap Flash model a trivial, self-contained task and a
 tiny step budget.
@@ -36,8 +33,8 @@ may skip content events and go straight to tool execution.
 `run` prints only the answer on stdout, once the turn finishes. Its progress
 (the session, one line per tool call, and how the run ended) goes to stderr.
 
-```mooncram
-$ openseek.exe run --no-session --model deepseek-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null
+```mooncram moonbitlang/openseek
+$ moonx moonbitlang/openseek run --no-session --model deepseek-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool."
 DONE
 ```
 
@@ -50,25 +47,8 @@ invoked the `finish` tool with the requested answer (`finished_with_DONE`). The
 count, and a `=~ re"…"` regex match for the answer text.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","content":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
->   | moon run --target native -e '---
-> import {
->   "moonbitlang/jsonl@0.2.0",
->   "moonbitlang/async",
-> }
-> ---
-> 
-> async fn main {
->   let mut tokens_ok = false
->   let mut finished = false
->   for value in @jsonl.read_stdin() {
->     if value is { "prompt_tokens": Number(n, ..), .. } && n > 0.0 { tokens_ok = true }
->     if value is { "answer": String(answer), .. } && answer =~ re"DONE" { finished = true }
->   }
->   println("real_api_round_trip=\{tokens_ok}")
->   println("finished_with_DONE=\{finished}")
-> }' 2>/dev/null \
->   | grep '='
+$ moonx fixtures/round-trip.mbtx
+exit=0
 real_api_round_trip=true
 finished_with_DONE=true
 ```
@@ -77,8 +57,8 @@ finished_with_DONE=true
 
 A minimal run emits an `agent_step`, a `usage` record once DeepSeek answers, and
 an `agent_finished`. We collect the `"event"` values into a `Set`, which dedupes
-and preserves insertion order — so printing it yields the lifecycle in the order
-it occurred, the same `{agent_step, usage, agent_finished}` no matter how many
+and preserves insertion order. Joining those values prints the lifecycle in the
+order it occurred, the same `{agent_step, usage, agent_finished}` no matter how many
 steps the run takes. The filter is a whitelist of exactly those lifecycle
 events: the stream also carries content/reasoning payload events
 (`assistant_delta`, `reasoning_message`, …) whose presence and count vary per
@@ -86,25 +66,8 @@ run, and asserting the full set would break every time the engine grows a new
 event kind.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","content":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
->   | moon run --target native -e '---
-> import {
->   "moonbitlang/jsonl@0.2.0",
->   "moonbitlang/async",
-> }
-> ---
-> 
-> async fn main {
->   let lifecycle = ["agent_step", "usage", "agent_finished"]
->   let events = Set::new()
->   for value in @jsonl.read_stdin() {
->     if value is { "event": String(event), .. } && lifecycle.contains(event) {
->       events.add(event)
->     }
->   }
->   println("events=\{events}")
-> }' 2>/dev/null \
->   | grep '='
+$ moonx fixtures/lifecycle.mbtx
+exit=0
 events={agent_step, usage, agent_finished}
 ```
 
@@ -115,22 +78,8 @@ match the event tag and bind the answer at once, pulling the value straight out
 of the log — here it is exactly what we asked the model to finish with.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","content":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
->   | moon run --target native -e '---
-> import {
->   "moonbitlang/jsonl@0.2.0",
->   "moonbitlang/async",
-> }
-> ---
-> 
-> async fn main {
->   for value in @jsonl.read_stdin() {
->     if value is { "event": String("agent_finished"), "answer": String(answer), .. } {
->       println("final_answer=\{answer}")
->     }
->   }
-> }' 2>/dev/null \
->   | grep '='
+$ moonx fixtures/final-answer.mbtx
+exit=0
 final_answer=DONE
 ```
 
@@ -143,27 +92,8 @@ its `tool_name`, and use a regex on its `content` to confirm the snippet really
 ran and its output flowed back.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","content":"Use the mbtx tool to run a snippet that prints exactly: openseek-cram. Then call finish with the word done."}' | openseek.exe serve --model deepseek-flash --max-steps 6 2>/dev/null \
->   | moon run --target native -e '---
-> import {
->   "moonbitlang/jsonl@0.2.0",
->   "moonbitlang/async",
-> }
-> ---
-> 
-> async fn main {
->   let mut used_mbtx = false
->   let mut mbtx_output_seen = false
->   for value in @jsonl.read_stdin() {
->     if value is { "event": String("tool_result"), "tool_name": String("mbtx"), "content": String(out), .. } {
->       used_mbtx = true
->       if out =~ re"openseek-cram" { mbtx_output_seen = true }
->     }
->   }
->   println("used_mbtx=\{used_mbtx}")
->   println("mbtx_output_seen=\{mbtx_output_seen}")
-> }' 2>/dev/null \
->   | grep '='
+$ moonx fixtures/tool-result.mbtx
+exit=0
 used_mbtx=true
 mbtx_output_seen=true
 ```

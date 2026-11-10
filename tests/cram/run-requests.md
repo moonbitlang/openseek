@@ -1,10 +1,13 @@
 # Verified `openseek run` Requests and Results
 
-These examples are executed by `moon cram test tests/cram`. They drive
+These examples are executed by `moon testcli test tests/cram/run-requests.md`. They drive
 `openseek run --input-format json` through the real binary: one JSON request
 on stdin, the result in `--result-file` (the contract is `docs/run-result.md`).
 The `echo` preset is modelless, and the model-backed cases point at a closed
-local port, so the suite needs no API key and makes no network calls.
+local port, so the suite needs no API key and makes no external API calls.
+Validation cases call the CLI directly through testcli pipelines.
+[Fixtures](fixtures/cancel-on-stdin-eof.mbtx) handle result files and stdin
+timing in temporary directories, printing observations for the snapshots.
 
 ## A Request From a File: stdin EOF Ends the Input
 
@@ -12,14 +15,7 @@ In batch mode stdin is read through EOF, so a redirected file works and EOF
 never cancels anything. The result echoes the request's id and the preset.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> printf '{"version":1,"request_id":"r-1","kind":"echo","input":{"probe":42}}' > "$d/request.json"
-> openseek.exe run --input-format json --no-session --dir "$d/ws" --result-file "$d/result.json" < "$d/request.json" > /dev/null 2>&1
-> echo "exit $?"
-> cat "$d/result.json"
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/request-from-file.mbtx
 exit 0
 {"version":1,"request_id":"r-1","kind":"echo","status":"completed","output":{"probe":42}}
 ```
@@ -30,16 +26,7 @@ exit 0
 must be the same. A mismatch is refused before anything runs.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> printf '{"version":1,"input":"hi"}' | openseek.exe run --kind echo --input-format json --no-session --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
-> echo "exit $?"
-> cat "$d/result.json"
-> printf '{"version":1,"kind":"echo","input":"hi"}' | openseek.exe run --kind explore --input-format json --no-session --dir "$d/ws" --result-file "$d/result.json" 2>&1 > /dev/null
-> echo "exit $?"
-> cat "$d/result.json"
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/request-kind.mbtx
 exit 0
 {"version":1,"kind":"echo","status":"completed","output":"hi"}
 error: --kind explore does not match the request's kind echo
@@ -49,48 +36,78 @@ exit 1
 
 ## Requests That Cannot Run Are Refused Up Front
 
-```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> try() { openseek.exe run --no-session --dir "$d/ws" "$@" 2>&1 > /dev/null; echo "exit $?"; }
-> printf '{"version":1,"kind":"nope","input":{}}' | try --input-format json
-> printf '{"version":1,"kind":"worker","input":{"task":"fix things"}}' | try --input-format json
-> printf '{"version":1,"kind":"review","input":{"goal":"g","base":"origin/main"}}' | try --input-format json
-> printf '{"version":1,"kind":"review","input":{"base":" "}}' | try --input-format json
-> printf '{"version":2,"input":{}}' | try --input-format json
-> printf '{"version":1,"input":{"task":"t"},"schema":{"type":"object"}}' | try --input-format json
-> printf '{"version":1,"input":{"prompt":"t"}}' | try --input-format json
-> printf '{"version":1,"input":{"task":"t"}}' | try --input-format json words
-> try --kind echo words
-> try --cancel-on-stdin-eof words
-> printf 'not json' | try --input-format json
-> printf '{"version":1,"input":{"task":"t"}}\n' | try --input-format json --cancel-on-stdin-eof --review-gate
-> rm -rf "$d"
-> EOF
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"nope","input":{}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: unknown kind: nope
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"worker","input":{"task":"fix things"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: worker input requires an absolute `worker_root`
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"review","input":{"goal":"g","base":"origin/main"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: review takes a goal or a base, not both
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"review","input":{"base":" "}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: review requires a non-empty goal or base
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":2,"input":{}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: unsupported request version 2
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"},"schema":{"type":"object"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: this engine does not support the request's `schema`
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"prompt":"t"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: a general request's input needs a non-empty `task`
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"}}' | moonx moonbitlang/openseek run --no-session --input-format json words
+@STDOUT (empty)
+@STDERR
 error: a task on the command line cannot be combined with --input-format json
-exit 1
+[1]
+
+$ moonx moonbitlang/openseek run --no-session --kind echo words
+@STDOUT (empty)
+@STDERR
 error: --kind needs --input-format json: a preset reads a JSON request
-exit 1
+[1]
+
+$ moonx moonbitlang/openseek run --no-session --cancel-on-stdin-eof words
+@STDOUT (empty)
+@STDERR
 error: --cancel-on-stdin-eof needs --input-format json
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx 'not json' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: the request on stdin is not JSON: Invalid character 'o' at line 1, column 1
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"}}' | moonx moonbitlang/openseek run --no-session --input-format json --cancel-on-stdin-eof --review-gate
+@STDOUT (empty)
+@STDERR
 error: a delegated run (--cancel-on-stdin-eof) does not take --review-gate: it gets only what its parent's launch grants
-exit 1
+[1]
 ```
 
 ## A Refused Request Still Answers Under Its Id, and Leaves Nothing Behind
@@ -101,18 +118,12 @@ A preset names its session only once it records something, so the modelless
 `echo` reports none.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> printf '{"version":1,"request_id":"r-3","kind":"explore","input":{}}' | openseek.exe run --input-format json --no-session --dir "$d/ws" --result-file "$d/result.json" 2>&1 > /dev/null
-> cat "$d/result.json"
-> test -e "$d/ws" && echo "ws exists" || echo "no ws"
-> printf '{"version":1,"kind":"echo","input":0}' | openseek.exe run --input-format json --session s-echo --session-root "$d/sessions" --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
-> cat "$d/result.json"
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/refused-request-result.mbtx
+exit=1
 error: explore requires a non-empty query
 {"version":1,"request_id":"r-3","status":"failed","reason":"explore requires a non-empty query"}
-no ws
+workspace_exists=false
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":0}
 ```
 
@@ -127,20 +138,7 @@ accepted once; until the child records something (the modelless `echo` never
 does) an accepted marker stays, so the id is not listed as a session. `--claim` needs `--session`, and only a `--kind` run takes it.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> mkdir -p "$d/ws" "$d/store/sessions/p-sr-1"
-> printf '{"sha256":"46e9bc3476c92ea24fb17adac6cd9cdacff7a34a5c753100787da5a29984f836"}' > "$d/store/sessions/p-sr-1/claim.json"
-> child() { printf '{"version":1,"kind":"echo","input":0}' | openseek.exe run --input-format json --dir "$d/ws" "$@" 2>&1 > /dev/null; echo "exit $?"; }
-> child --session p-sr-1 --session-root "$d/store"
-> child --session p-sr-1 --session-root "$d/store" --claim t-2
-> child --session p-sr-1 --session-root "$d/store" --claim t-1
-> ls "$d/store/sessions/p-sr-1"
-> child --session p-sr-1 --session-root "$d/store" --claim t-1
-> child --no-session --claim t-1
-> openseek.exe run --no-session --dir "$d/ws" --claim t-1 words 2>&1 > /dev/null
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/claimed-session.mbtx
 error: a --kind run starts a new session, and p-sr-1 already exists
 exit 1
 error: session p-sr-1 was claimed for another run
@@ -151,6 +149,7 @@ error: session p-sr-1 holds no claim; it was accepted already
 exit 1
 error: --claim names a claimed session, so it needs --session
 exit 1
+exit=1
 error: --claim is for a --kind run: the general agent starts its own session
 ```
 
@@ -163,22 +162,12 @@ inherited `OPENSEEK_APPROVAL` does not reach it, and an explicit
 failed run.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> (printf '{"version":1,"kind":"echo","input":[1,2]}\n'; sleep 1) | openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
-> echo "exit $?"
-> cat "$d/result.json"
-> (printf '{"version":1,"kind":"echo","input":"inherited"}\n'; sleep 1) | env OPENSEEK_APPROVAL=ask openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
-> cat "$d/result.json"
-> printf '{"version":1,"kind":"echo","input":0}\n' | openseek.exe run --input-format json --cancel-on-stdin-eof --approval always --no-session --dir "$d/ws" 2>&1 > /dev/null
-> openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --result-file "$d/result.json" < /dev/null 2>&1 > /dev/null
-> echo "exit $?"
-> cat "$d/result.json"
-> rm -rf "$d"
-> EOF
-exit 0
+$ moonx fixtures/managed-run.mbtx
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":[1,2]}
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":"inherited"}
+exit=1
 error: a delegated run (--cancel-on-stdin-eof) refuses every escalation: --approval must be never
 error: stdin closed before a request arrived
 exit 1
@@ -197,54 +186,43 @@ file inside `--result-root`: a path outside it, or an existing file, is
 refused and left untouched.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> mkdir "$d/out" "$d/ws"
-> echo keep > "$d/out/existing.json"
-> managed() { openseek.exe run --input-format json --cancel-on-stdin-eof --no-session "$@"; }
-> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --dir / 2>&1 > /dev/null | head -1
-> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --mcp-config "$d/mcp.json" 2>&1 > /dev/null
-> printf '{"version":1,"kind":"echo","input":0}\n' | env OPENSEEK_MCP_CONFIG="$d/mcp.json" openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" 2>&1 > /dev/null
-> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --result-root "$d/out" --result-file "$d/elsewhere.json" 2>&1 > /dev/null | sed "s#$d#DIR#g; s#/private##g"
-> test -e "$d/elsewhere.json" && echo "elsewhere written" || echo "nothing written elsewhere"
-> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --result-root "$d/out" --result-file "$d/out/existing.json" 2>&1 > /dev/null | sed "s#$d#DIR#g; s#/private##g"
-> cat "$d/out/existing.json"
-> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --result-root "$d/out" --result-file "$d/out/result.json" > /dev/null 2>&1
-> cat "$d/out/result.json"
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/delegated-capabilities.mbtx
+exit=1
 error: argument '--dir' cannot be used multiple times
+exit=1
 error: a delegated run (--cancel-on-stdin-eof) does not take --mcp-config: it gets only what its parent's launch grants
+exit=0
 MCP config ignored: a delegated run starts no MCP servers its parent did not grant
+exit=1
 error: --result-file must be inside --result-root DIR/out
-nothing written elsewhere
+outside_result_exists=false
+exit=1
 error: --result-file must name a new file: DIR/out/existing.json already exists
 keep
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":0}
 ```
 
 A malformed `OPENSEEK_MAX_STEPS` does not refuse a request that carries its own
 step ceiling: the environment is parsed only when it would apply.
 
-```mooncram
-$ printf '{"version":1,"input":{"task":"t"},"limits":{"max_steps":2}}' | env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL OPENSEEK_MAX_STEPS=bad openseek.exe run --input-format json --no-session --dir "$(mktemp -d)" 2>&1 | tail -1
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"},"limits":{"max_steps":2}}' | DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash OPENSEEK_MAX_STEPS=bad moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: an API key is required for deepseek-flash: pass --api-key
+[1]
 ```
 
 ## Closing stdin Cancels a Managed Run, Which Still Reports
 
-The model endpoint is a closed local port, so the run is still retrying when
-the parent closes stdin after a second. The run is cancelled and its result
+The model endpoint is a closed local port. The parent waits for the first
+retry diagnostic before closing stdin. The run is cancelled and its result
 says `interrupted`, with the usage it recorded (none).
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> (printf '{"version":1,"request_id":"r-9","input":{"task":"say hi"}}\n'; sleep 1) | env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=20 OPENSEEK_RETRY_BACKOFF_MS=500 openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --api-url http://127.0.0.1:9/chat/completions --result-file "$d/result.json" > /dev/null 2>&1
-> echo "exit $?"
-> cat "$d/result.json"
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/cancel-on-stdin-eof.mbtx
+retry_started=true
 exit 1
 {"version":1,"request_id":"r-9","status":"interrupted","reason":"cancelled","usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":0},"steps":0}
 ```
@@ -253,22 +231,15 @@ exit 1
 
 A delegated general run holds the workspace's lease until it ends; a second
 one in the same workspace is refused at once. A parallel writer should be a
-`worker`, which gets its own worktree. (The background request is written by
-`sh -c` rather than a `( … )` subshell: a background bash subshell re-seeks
-this script's stdin when it exits, and the script would run again.)
+`worker`, which gets its own worktree. The MoonBit fixture starts the two child
+processes concurrently. It waits for the first child's retry diagnostic and
+holds that child's stdin open while the second attempts to acquire the lease.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> mkdir "$d/ws"
-> export DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=20 OPENSEEK_RETRY_BACKOFF_MS=500
-> sh -c 'printf "{\"version\":1,\"input\":{\"task\":\"first\"}}\n"; sleep 3' | openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --api-url http://127.0.0.1:9/chat/completions --result-file "$d/first.json" > /dev/null 2>&1 &
-> sleep 1
-> (printf '{"version":1,"input":{"task":"second"}}\n'; sleep 1) | openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --api-url http://127.0.0.1:9/chat/completions --result-file "$d/second.json" 2>&1 > /dev/null | sed -E 's#in [^;]*/ws;#in WORKSPACE;#'
-> wait
-> sed -E 's#in [^;]*/ws;#in WORKSPACE;#' "$d/second.json"
-> rm -rf "$d"
-> EOF
+$ moonx fixtures/workspace-lease.mbtx
+retry_started=true
+second_exit=1
 error: another delegated general run is already working in WORKSPACE; run a worker for parallel writes
+first_exit=1
 {"version":1,"status":"failed","reason":"another delegated general run is already working in WORKSPACE; run a worker for parallel writes"}
 ```

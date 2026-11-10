@@ -1,0 +1,41 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let engine = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let result = @shell.Cmd(
+    "moon",
+    [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
+      engine,
+      "--",
+      "run",
+      "--no-session",
+      "--api-url",
+      ClosedEndpoint,
+      "say hi",
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_RETRY_ATTEMPTS": "1",
+      "MOON_WORK": "off",
+    },
+  ).output()
+  println("exit=\{result.exit_code()}")
+  println("session_root_exists=\{@fs.exists("\{dir}/.openseek")}")
+}
+
+///|
+const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"

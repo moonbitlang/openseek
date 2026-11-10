@@ -1,0 +1,106 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
+  let json = [..base, "--input-format", "json"]
+  let echo =
+    #|{"version":1,"kind":"echo","input":0}
+    #|
+  @fs.mkdir("\{dir}/out")
+  @fs.mkdir("\{dir}/ws")
+  @fs.write_text(
+    "\{dir}/out/existing.json",
+    "keep\n",
+    create_mode=CreateOrTruncate,
+  )
+  let managed = [..json, "--cancel-on-stdin-eof"]
+  let result = @shell.Cmd(
+    "moon",
+    [..run, ..managed, "--dir", "/"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  println(result.stderr().split("\n").next().unwrap_or(""))
+  let result = @shell.Cmd(
+    "moon",
+    [..run, ..managed, "--mcp-config", "\{dir}/mcp.json"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr())
+  let result = @shell.Cmd(
+    "moon",
+    [..run, ..managed],
+    cwd=dir,
+    env={ "OPENSEEK_MCP_CONFIG": "\{dir}/mcp.json", "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr())
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      ..managed,
+      "--result-root",
+      "\{dir}/out",
+      "--result-file",
+      "\{dir}/elsewhere.json",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr().replace_all(old=dir, new="DIR"))
+  println("outside_result_exists=\{@fs.exists("\{dir}/elsewhere.json")}")
+
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      ..managed,
+      "--result-root",
+      "\{dir}/out",
+      "--result-file",
+      "\{dir}/out/existing.json",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr().replace_all(old=dir, new="DIR"))
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/out/existing.json"))
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      ..managed,
+      "--result-root",
+      "\{dir}/out",
+      "--result-file",
+      "\{dir}/out/result.json",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/out/result.json"))
+}

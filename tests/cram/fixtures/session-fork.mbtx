@@ -1,0 +1,95 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let env = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.mkdir("\{dir}/sessions/demo", recursive=true)
+  @fs.write_text(
+    "\{dir}/sessions/demo/openseek_session-demo.jsonl",
+    (
+      #|{"version":1,"id":"demo","system_prompt":"system"}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+      #|{"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+      #|{"sequence":3,"ts":0,"item":{"kind":"user","payload":{"content":"go on"}}}
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  let result = @shell.Cmd(
+    "moon",
+    [..run, "sessions", "fork", "demo", "--as", "retry", "--session-root", dir],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stdout())
+  let result = @shell.Cmd(
+    "moon",
+    [..run, "sessions", "show", "retry", "--session-root", dir],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{result.exit_code()}")
+  let session = @json.parse(result.stdout())
+  guard session is { "events": Array(events), .. } else {
+    fail("missing session events")
+  }
+  for event in events {
+    guard event is { "item": { "kind": String(kind), .. }, .. } else {
+      fail("missing event kind")
+    }
+    println(kind)
+  }
+  println(
+    "fork_scratch_in_prompt=\{session.stringify().contains("sessions/retry/scratch")}",
+  )
+
+  for extra in [["--as", "retry"], ["--as", "early", "--through", "1"]] {
+    let failure = @shell.Cmd(
+      "moon",
+      [..run, "sessions", "fork", "demo", ..extra, "--session-root", dir],
+      cwd=dir,
+      env~,
+    ).output()
+    println("exit=\{failure.exit_code()}")
+    @stdio.stdout.text.write(failure.stderr())
+  }
+  let result = @shell.Cmd(
+    "moon",
+    [..run, "sessions", "list", "--session-root", dir],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{result.exit_code()}")
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(id)
+  }
+}

@@ -1,0 +1,65 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let engine = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let request =
+    #|{"version":1,"request_id":"r-9","input":{"task":"say hi"}}
+  @async.with_task_group(group => {
+    let child = @process.spawn(
+      group,
+      "moon",
+      [
+        "run",
+        "--quiet",
+        "--target",
+        "wasm",
+        engine,
+        "--",
+        "run",
+        "--no-session",
+        "--dir",
+        "\{dir}/ws",
+        "--input-format",
+        "json",
+        "--cancel-on-stdin-eof",
+        "--api-url",
+        "http://127.0.0.1:9/chat/completions",
+        "--result-file",
+        "\{dir}/result.json",
+      ],
+      cwd=dir,
+      stdin=FeedFromParent,
+      stdout=Discard,
+      stderr=Collect,
+      extra_env={
+        "DEEPSEEK": "test-key",
+        "MOON_WORK": "off",
+        "OPENSEEK_RETRY_ATTEMPTS": "20",
+        "OPENSEEK_RETRY_BACKOFF_MS": "500",
+      },
+    )
+    child.stdin.text.write(request + "\n")
+    // A retry means the request has started and acquired its workspace.
+    let mut retry_started = false
+    while child.stderr.text.read_until("\n") is Some(line) {
+      if line.has_prefix("retrying (") {
+        retry_started = true
+        break
+      }
+    }
+    println("retry_started=\{retry_started}")
+    child.stdin.close()
+    println("exit \{child.wait()}")
+  })
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+}
