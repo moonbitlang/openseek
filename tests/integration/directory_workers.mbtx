@@ -76,11 +76,13 @@ fn parent_turn(messages : String, repos : Array[String]) -> Json {
       }),
     ])
   }
-  let ended = repos.all(repo => {
-    messages.contains("its change is left uncommitted in \{repo}")
-  })
-  if !ended {
-    return calls([tool_call(0, "wait", "job_wait", { "job_ids": [first, second] })])
+  // job_wait returns once any listed job has ended, so wait for each in turn.
+  let sent = (id : String) => messages.contains("\"id\":\"\{id}\"")
+  if !sent("wait-first") {
+    return calls([tool_call(0, "wait-first", "job_wait", { "job_ids": [first] })])
+  }
+  if !sent("wait-second") {
+    return calls([tool_call(0, "wait-second", "job_wait", { "job_ids": [second] })])
   }
   let read = repos.all(repo => messages.contains("git -C \{repo} diff"))
   if !read {
