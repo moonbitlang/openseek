@@ -894,13 +894,10 @@ fn transcript_sub_loader(
       )
       let remove_artifact_listener = artifact_frame_listener(
         () => scheduler.add(emit(ContentRendered)),
-        (owner, reference, payload) => {
-          guard owner == artifact_owner &&
-            @mention_context.artifact_snapshot(reference, payload)
-            is Some(snapshot) else {
-            return
+        (owner, snapshot) => {
+          if owner == artifact_owner {
+            scheduler.add(artifact_context(snapshot))
           }
-          scheduler.add(artifact_context(snapshot))
         },
       )
       Some({
