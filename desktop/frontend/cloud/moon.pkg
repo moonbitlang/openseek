@@ -10,7 +10,7 @@ import {
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/async/http",
   "moonbitlang/async",
-  "moonbitlang/async/js_async",
+  "moonbitlang/indexeddb",
   "moonbitlang/editor/base/browser" @base_browser,
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/composer",

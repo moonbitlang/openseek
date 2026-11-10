@@ -7,6 +7,7 @@ on:
     paths:
       - "desktop/**"
       - "editor/**"
+      - "indexeddb/**"
       - "protocol/**"
       - "share/artifact/**"
       - "agent_tool/edit_diff/**"
@@ -155,13 +156,15 @@ jobs:
       - name: Pull preinstalled Playwright browsers
         run: docker pull "$PLAYWRIGHT_IMAGE"
 
-      - name: Build Desktop browser application
+      - name: Build browser application and IndexedDB contracts
         working-directory: desktop
         # The Moon entrypoint remains a compatibility CLI. The browser build
         # never touches the window host, so CI calls the build program directly.
         # Each isolated test page loads this bundle, so use the smaller
         # production build instead of repeatedly transferring debug output.
-        run: node package/build.mjs browser --release
+        run: |
+          node package/build.mjs browser --release
+          moon test ../indexeddb --target js --build-only --include-skipped
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e

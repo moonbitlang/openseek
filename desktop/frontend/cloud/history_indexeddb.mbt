@@ -4,7 +4,7 @@ priv struct BrowserHistoryCache {
   mut epoch : Int32
   mut user : String?
   mut unavailable : Bool
-  mut running : HistoryTransaction?
+  mut running : @indexeddb.Transaction?
   deleted : Map[String, Unit]
 }
 
@@ -19,8 +19,8 @@ let indexed_history_store : BrowserHistoryCache = {
 }
 
 ///|
-fn HistoryTransaction::try_abort(self : HistoryTransaction) -> Unit {
-  history_binding(() => self.abort()) catch {
+fn abort_history_transaction(tx : @indexeddb.Transaction) -> Unit {
+  tx.abort() catch {
     _ => ()
   }
 }
@@ -33,26 +33,36 @@ async fn BrowserHistoryCache::access(
   write~ : Bool,
   valid~ : () -> Bool,
   cleanup~ : Bool = false,
-  operation : (HistoryTransaction) -> HistoryRequest,
+  operation : (@indexeddb.Transaction) -> @indexeddb.Request raise @indexeddb.IndexedDBError,
 ) -> Json {
   self.mutex.acquire()
   defer self.mutex.release()
   guard valid() && (!self.unavailable || cleanup) else { return Json::null() }
   @async.with_timeout(1000, () => {
-    let db = @js_async.run_promise(open_history_database)
+    let db = @indexeddb.open("seekmoon.cloud-history.v1", 1, upgrade=(
+      db,
+      _,
+      previous,
+    ) => {
+      if previous == 0 {
+        let store = db.create_store(
+          "pages",
+          key_path=Fields(["origin", "user", "session"]),
+        )
+        ignore(store.create_index("account", Fields(["origin", "user"])))
+      }
+    })
     defer db.close()
     guard valid() else { return Json::null() }
-    let tx = history_binding(() => db.transaction(write))
+    let tx = db.transaction(["pages"], if write { ReadWrite } else { ReadOnly })
     self.running = if cleanup { None } else { Some(tx) }
     defer {
       self.running = None
     }
-    errdefer tx.try_abort()
-    let query = history_binding(() => operation(tx))
-    tx.completion().wait(abort_controller=@js_async.AbortController::new())
-    query.value().to_json() catch {
-      _ => Json::null()
-    }
+    errdefer abort_history_transaction(tx)
+    let query = operation(tx)
+    tx.wait()
+    query.result().unwrap_or(Json::null())
   }) catch {
     _ => {
       if valid() {
@@ -69,7 +79,7 @@ fn State::cache_account_changed(self : State, previous : String?) -> @cmd.Cmd {
     guard !native_history_cache() else { return }
     let cache = indexed_history_store
     if cache.running is Some(tx) {
-      tx.try_abort()
+      abort_history_transaction(tx)
     }
     cache.epoch = self.epoch
     cache.user = self.user_id
@@ -77,8 +87,13 @@ fn State::cache_account_changed(self : State, previous : String?) -> @cmd.Cmd {
     if self.user_id is None && previous is Some(user) {
       @js.Promise::from_async(() => {
         ignore(
-          cache.access(write=true, valid=() => true, cleanup=true, store => {
-            store.clear_account(@cloud_client.CloudOrigin, user)
+          cache.access(write=true, valid=() => true, cleanup=true, tx => {
+            tx
+            .store("pages")
+            .index("account")
+            .delete_all(
+              key=Array([String(@cloud_client.CloudOrigin), String(user)]),
+            )
           }),
         )
       })
@@ -105,18 +120,6 @@ async fn State::indexed_history_cache(
   if action is Remove(session~) {
     cache.deleted[session] = ()
   }
-  let row = match action {
-    Write(session~, page~) =>
-      Some(
-        @js.Value::from_json({
-          "origin": @cloud_client.CloudOrigin,
-          "user": user,
-          "session": session,
-          "page": page.to_json(),
-        }),
-      )
-    _ => None
-  }
   let value = cache.access(
     write=action is (Write(..) | Remove(_)),
     cleanup=action is Remove(_),
@@ -127,17 +130,27 @@ async fn State::indexed_history_cache(
         !session.map_or(false, id => cache.deleted.contains(id))
       )
     },
-    store => {
-      let key : FixedArray[String] = [
-        @cloud_client.CloudOrigin,
-        user,
-        session.unwrap_or(""),
-      ]
+    tx => {
+      let store = tx.store("pages")
+      let key : @indexeddb.Key = Array([
+        String(@cloud_client.CloudOrigin),
+        String(user),
+        String(session.unwrap_or("")),
+      ])
       match action {
-        List => store.list(@cloud_client.CloudOrigin, user)
-        Read(_) => store.read(key)
-        Write(..) => store.write(row.unwrap())
-        Remove(_) => store.remove(key)
+        List =>
+          store
+          .index("account")
+          .get_all(key=Array([String(@cloud_client.CloudOrigin), String(user)]))
+        Read(_) => store.get(key)
+        Write(session~, page~) =>
+          store.put({
+            "origin": @cloud_client.CloudOrigin,
+            "user": user,
+            "session": session,
+            "page": page.to_json(),
+          })
+        Remove(_) => store.delete(key)
       }
     },
   ) catch {

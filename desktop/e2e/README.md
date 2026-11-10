@@ -62,6 +62,17 @@ transitions and animations disabled, so clicks do not wait for moving targets.
 Tag a test `{ tag: '@motion' }` when it checks motion itself, such as a running
 spinner, reduced-motion handling, or geometry during or after a transition.
 
+## IndexedDB module contracts
+
+`indexeddb.spec.js` runs the public-interface MoonBit tests from `indexeddb/`
+in Chromium and WebKit. The tests require real IndexedDB and are marked skipped
+in the Node test gate. `just test-browser` and CI compile them automatically.
+When running Playwright directly, first run this from the repository root:
+
+```sh
+moon test indexeddb --target js --build-only --include-skipped
+```
+
 ## Suite scope
 
 Keep E2E cases for browser integration: event wiring, focus, selection, real
