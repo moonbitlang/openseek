@@ -2998,40 +2998,46 @@ fn Model::chat_sidebar_sections(
 
 ///|
 fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  @html.section(class="cloud-home management-page", [
-    @html.h2(@sidebar_messages.text(model.locale, Chats)),
-    if model.is_local_console() && model.remote_error is Some(message) {
-      @html.div([
-        @html.p(message),
-        @html.button(
-          class="button",
-          on_click=dispatch(Console(RefreshClicked)),
-          shell_text(model.locale, TryAgain),
-        ),
-      ])
-    } else if model.console.auth is AuthChecking {
-      @html.div([
-        @html.p(
-          model.console.notice.unwrap_or(
-            shell_text(model.locale, CheckingSignIn),
-          ),
-        ),
-        if model.console.notice is Some(_) {
-          @html.button(
-            class="button",
-            on_click=dispatch(Console(RefreshClicked)),
-            shell_text(model.locale, TryAgain),
-          )
-        } else {
-          @html.nothing
-        },
-      ])
-    } else {
+  let locale = model.locale
+  let children : Array[@html.Html] = [
+    @html.div(class="empty-badge", [@icons.icon(@icons.icon_logo)]),
+    @html.h2(
+      class="empty-title",
+      @sidebar_messages.text(locale, CloudSignInHint),
+    ),
+  ]
+  let try_again = () => {
+    @html.button(
+      class="button primary",
+      type_="button",
+      on_click=dispatch(Console(RefreshClicked)),
+      shell_text(locale, TryAgain),
+    )
+  }
+  if model.is_local_console() && model.remote_error is Some(message) {
+    children.push(@html.p(class="empty-detail", message))
+    children.push(try_again())
+  } else if model.console.auth is AuthChecking {
+    children.push(
+      @html.p(
+        class="empty-detail",
+        model.console.notice.unwrap_or(shell_text(locale, CheckingSignIn)),
+      ),
+    )
+    if model.console.notice is Some(_) {
+      children.push(try_again())
+    }
+  } else {
+    children.push(
       @html.button(
         class="button primary",
+        type_="button",
         on_click=dispatch(RemoteConnectClicked),
-        shell_text(model.locale, SignInGitHub),
-      )
-    },
+        shell_text(locale, SignInGitHub),
+      ),
+    )
+  }
+  @html.section(class="cloud-home management-page", [
+    @html.div(class="empty", children),
   ])
 }

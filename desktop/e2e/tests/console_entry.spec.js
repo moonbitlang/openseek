@@ -112,7 +112,7 @@ test('Chat is the signed-out launch page and a saved Work preference cannot repl
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/index.html');
   await expect(page).toHaveURL(/\/cloud$/);
-  await expect(page.getByRole('main').getByRole('heading', { name: 'Chats', level: 2, exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Sign in to view conversations', level: 2, exact: true })).toBeVisible();
   await expect(page.getByRole('main').getByRole('button', { name: 'Sign in with GitHub' })).toBeEnabled();
   // Device choice lives in the signed-in sidebar, not on the Cloud home.
   await expect(page.getByRole('main').getByRole('link', { name: 'Choose a device' })).toHaveCount(0);
