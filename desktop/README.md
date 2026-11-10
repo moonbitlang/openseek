@@ -274,7 +274,8 @@ again.
 
 The conversation overview's **Connectors** card shows what that
 conversation's engine holds of its MCP servers, the host's own among them.
-Folded, it is one line — how many servers connected and how many failed;
+Folded, it is one line — how many servers are still connecting, how many
+failed, and how many connected;
 unfolded, each server is listed connecting, connected with its tool count,
 disconnected since it connected, no tools, failed with the reason, or skipped
 over the tool limit, after any configuration file the engine could not load;
