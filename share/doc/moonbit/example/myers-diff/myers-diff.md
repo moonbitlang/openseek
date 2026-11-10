@@ -91,7 +91,7 @@ In fact, it is one of the shortest edit sequences that can transform text a into
     set : RHTable[T, Unit]
   }
 +
-+ fn[T] RHSet::new(capacity : Int) -> RHSet[T] {
++ fn[T] RHSet::new(capacity : Int32) -> RHSet[T] {
 +  let set : RHTable[T, Unit]= RHTable::new(capacity)
 +  { set : set }
 + }
@@ -102,7 +102,7 @@ In fact, it is one of the shortest edit sequences that can transform text a into
     set : RHTable[T, Unit]
 + }
 +
-+ fn[T] RHSet::new(capacity : Int) -> RHSet[T] {
++ fn[T] RHSet::new(capacity : Int32) -> RHSet[T] {
 +  let set : RHTable[T, Unit]= RHTable::new(capacity)
 +  { set : set }
   }
@@ -205,13 +205,17 @@ You can see that in each round of searching, `k` is strictly within the range `[
 Let's first define the `Line` struct, which represents a line in the text.
 
 ```moonbit
+#derive(ToJson)
 struct Line {
-  number : Int // Line number
+  number : Int32 // Line number
   text : String // Does not include newline
-} derive(ToJson)
+}
 
 ///|
-fn Line::new(number : Int, text : String) -> Line {
+pub extend Line with ToJson::{to_json}
+
+///|
+fn Line::new(number : Int32, text : String) -> Line {
   Line::{ number, text }
 }
 ```
@@ -238,7 +242,7 @@ Next, we need to wrap the array so that it supports negative indexing because we
 struct BPArray[T](Array[T]) // BiPolar Array
 
 ///|
-fn[T] BPArray::make(capacity : Int, default : T) -> BPArray[T] {
+fn[T] BPArray::make(capacity : Int32, default : T) -> BPArray[T] {
   let arr = Array::make(capacity, default)
   BPArray(arr)
 }
@@ -251,7 +255,7 @@ fn[T] BPArray::copy(self : BPArray[T]) -> BPArray[T] {
 
 ///|
 #alias("_[_]")
-fn[T] BPArray::get(self : BPArray[T], idx : Int) -> T {
+fn[T] BPArray::get(self : BPArray[T], idx : Int32) -> T {
   let BPArray(arr) = self
   if idx < 0 {
     arr[arr.length() + idx]
@@ -262,7 +266,7 @@ fn[T] BPArray::get(self : BPArray[T], idx : Int) -> T {
 
 ///|
 #alias("_[_]=_")
-fn[T] BPArray::set(self : BPArray[T], idx : Int, elem : T) -> Unit {
+fn[T] BPArray::set(self : BPArray[T], idx : Int32, elem : T) -> Unit {
   let BPArray(arr) = self
   if idx < 0 {
     arr[arr.length() + idx] = elem
@@ -276,7 +280,7 @@ Now we can start writing the search function. Before searching for the complete 
 
 <!-- MANUAL CHECK -->
 ```moonbit
-fn shortest_edit(old~ : Array[Line], new~ : Array[Line]) -> Int {
+fn shortest_edit(old~ : Array[Line], new~ : Array[Line]) -> Int32 {
   let n = old.length()
   let m = new.length()
   let max = n + m
@@ -344,7 +348,7 @@ Combining all the steps above, we get the following code:
 
 ```moonbit
 ///
-fn shortest_edit(old~ : Array[Line], new~ : Array[Line]) -> Int {
+fn shortest_edit(old~ : Array[Line], new~ : Array[Line]) -> Int32 {
   let n = old.length()
   let m = new.length()
   let max = n + m
