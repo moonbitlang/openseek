@@ -277,11 +277,19 @@ pub fn update(
         Err(error) =>
           (@cmd.none, { ..state, listing: false, error: Some(error), })
         Ok(reply) => {
-          let jobs = if offset == 0 && reply.next_offset is None {
-            []
-          } else {
-            state.jobs.copy()
-          }
+          // The first page lists every running job. A loaded live row it no
+          // longer lists has settled or lost its engine, so the loaded history
+          // behind the first page is stale.
+          let reset = offset == 0 &&
+            (
+              reply.next_offset is None ||
+              state.jobs.any(view => {
+                view.controllable &&
+                !reply.jobs.any(fresh => same_job(fresh, view)) &&
+                !(reply.selected is Some(fresh) && same_job(fresh, view))
+              })
+            )
+          let jobs = if reset { [] } else { state.jobs.copy() }
           for view in reply.jobs {
             upsert_job(jobs, view)
           }
@@ -292,10 +300,7 @@ pub fn update(
           if offset == 0 {
             let ordered = reply.jobs.copy()
             for view in jobs {
-              if !ordered.any(existing => {
-                  existing.job.generation == view.job.generation &&
-                  existing.job.id == view.job.id
-                }) {
+              if !ordered.any(existing => same_job(existing, view)) {
                 ordered.push(view)
               }
             }
@@ -311,7 +316,7 @@ pub fn update(
               .map(view => (view.job.generation, view.job.id))
           }
           let next_offset = if offset == 0 &&
-            reply.next_offset is Some(_) &&
+            !reset &&
             state.jobs.length() > 100 {
             state.next_offset
           } else {
@@ -560,13 +565,17 @@ pub extend Owner with Eq::{equal, not_equal}
 pub extend State with Eq::{equal, not_equal}
 
 ///|
+fn same_job(a : @protocol.JobView, b : @protocol.JobView) -> Bool {
+  a.job.generation == b.job.generation && a.job.id == b.job.id
+}
+
+///|
 fn upsert_job(
   jobs : Array[@protocol.JobView],
   view : @protocol.JobView,
 ) -> Unit {
   for index in 0..<jobs.length() {
-    if jobs[index].job.generation == view.job.generation &&
-      jobs[index].job.id == view.job.id {
+    if same_job(jobs[index], view) {
       jobs[index] = view
       return
     }
