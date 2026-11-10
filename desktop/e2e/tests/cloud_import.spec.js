@@ -9,7 +9,7 @@ async function setup(page) {
   cloud.titles.set(importedSession, 'Imported chat');
   await cloud.install();
   await cloud.goto();
-  await page.locator('aside .sidebar-tools').getByRole('button', { name: 'Import conversation', exact: true }).click();
+  await page.locator('aside .sidebar-tools').getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import conversation', exact: true });
   await expect(dialog).toBeVisible();
   return { cloud, dialog };

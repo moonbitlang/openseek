@@ -482,7 +482,7 @@ fn SidebarDispatcher::section_secondary(
   action : @section.SecondaryAction,
 ) -> @cmd.Cmd {
   match (id.source(), action) {
-    ("cloud.chats", ImportConversation) => self.emit(OpenCloudImport)
+    ("cloud.chats", ImportConversation(..)) => self.emit(OpenCloudImport)
     (source, _) =>
       self.unroutable("section secondary action", "source \{source}")
   }

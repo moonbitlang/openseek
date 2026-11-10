@@ -17,8 +17,8 @@ pub(all) enum Message {
   Chats
   CloudSignInHint
   Projects
-  NewChat
-  AddProject
+  New
+  Import
   ShowMore
   ShowMoreChats
   MoreActions

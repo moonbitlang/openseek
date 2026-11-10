@@ -74,7 +74,7 @@ pub(all) struct Action {
 ///|
 #derive(Debug, Eq)
 pub(all) enum SecondaryAction {
-  ImportConversation
+  ImportConversation(disabled~ : Bool)
 }
 
 ///|
@@ -105,9 +105,9 @@ fn SecondaryAction::button(
   locale : @i18n.Locale,
 ) -> @html.Html {
   match self {
-    ImportConversation =>
+    ImportConversation(disabled~) =>
       tool_button(
-        { title: @messages.text(locale, ImportConversation), disabled: false, },
+        { title: @messages.text(locale, Import), disabled, },
         @icons.icon(@icons.icon_chat_import),
         (actions.secondary)(id, self),
       )

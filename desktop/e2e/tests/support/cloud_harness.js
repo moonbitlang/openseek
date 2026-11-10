@@ -659,7 +659,7 @@ export class CloudHarness {
   }
 
   async create() {
-    await this.page.locator('aside button[aria-label="New chat"]').click();
+    await this.page.locator('aside button[aria-label="New"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
     await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();

@@ -96,7 +96,7 @@ pub fn RenderedSection::not_equal(Self, Self) -> Bool
 
 #derive(Eq, @debug.Debug)
 pub(all) enum SecondaryAction {
-  ImportConversation
+  ImportConversation(disabled~ : Bool)
 }
 pub fn SecondaryAction::equal(Self, Self) -> Bool
 pub fn SecondaryAction::not_equal(Self, Self) -> Bool

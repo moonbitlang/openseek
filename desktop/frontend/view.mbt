@@ -530,7 +530,7 @@ fn Model::sidebar_component_sections(
       None
     },
     action: Some({
-      title: @sidebar_messages.text(self.locale, AddProject),
+      title: @sidebar_messages.text(self.locale, New),
       disabled: !self.can_pick_project(dev.channel),
     }),
     secondary_actions: [],
@@ -2989,14 +2989,12 @@ fn Model::chat_sidebar_sections(
     label: None,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
-      title: @sidebar_messages.text(self.locale, NewChat),
-      disabled: self.cloud.creating_session(),
+      title: @sidebar_messages.text(self.locale, New),
+      disabled: self.cloud_account() is None || self.cloud.creating_session(),
     }),
-    secondary_actions: if self.cloud_account() is Some(_) {
-      [ImportConversation]
-    } else {
-      []
-    },
+    secondary_actions: [
+      ImportConversation(disabled=self.cloud_account() is None),
+    ],
     entries,
   }
   [chats]

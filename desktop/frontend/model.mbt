@@ -1581,7 +1581,6 @@ priv struct Model {
   // broadcast), None until the first reply. Desktop-window-only UI.
   account : @protocol.AccountSession?
   account_epoch : Int32
-  account_login_create : Int32?
   account_preferences : AccountPreferences
   remote_access : RemoteAccess?
   // A pending account sign-in or sign-out.
@@ -2870,7 +2869,6 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     api_setup_dismissed: false,
     account: None,
     account_epoch: 0,
-    account_login_create: None,
     account_preferences: AccountPreferences::empty(),
     remote_access: None,
     remote_connecting: false,

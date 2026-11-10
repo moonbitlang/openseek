@@ -4338,7 +4338,7 @@ fn update_msg(
         set_remote_access(dispatch, enabled),
         { ..model, remote_access_error: None, },
       )
-    RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
+    RemoteConnectClicked => begin_account_login(dispatch, model)
     AccountRetryClicked => {
       guard !model.remote_connecting else { return (@cmd.none, model) }
       let epoch = model.account_epoch + 1
@@ -4406,7 +4406,7 @@ fn update_msg(
       if !connect_pending {
         return (
           fetch_account(dispatch, true, epoch),
-          { ..model, account_login: None, account_login_create: None, },
+          { ..model, account_login: None, },
         )
       }
       (
@@ -7298,7 +7298,7 @@ fn update_msg(
       let (login, model) = if message is @export_dialog.SignIn {
         // Leave the dialog retryable while the rejected account is clearing.
         guard !model.remote_connecting else { return (@cmd.none, model) }
-        begin_account_login(dispatch, model, create=false)
+        begin_account_login(dispatch, model)
       } else {
         (@cmd.none, model)
       }
