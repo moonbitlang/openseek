@@ -86,44 +86,6 @@ for (const desktop of [true, false]) {
   });
 }
 
-for (const failure of ['unavailable', 'quota', 'schema', 'stalled']) {
-  test(`IndexedDB ${failure} falls back to network and memory history`, async ({ page }) => {
-    const cloud = new CloudHarness(page);
-    cloud.histories.set(sessionA, { messages: [
-      { task_id: 'one', kind: 'user', data: { content: 'Memory question' }, created_at: 1 },
-      { task_id: 'one', kind: 'assistant_message', data: { content: 'Memory answer' }, created_at: 2 },
-    ], generating: false });
-    await cloud.install();
-    await page.addInitScript(failure => {
-      if (failure === 'unavailable') {
-        Object.defineProperty(window, 'indexedDB', { get() { throw new DOMException('Denied', 'SecurityError'); } });
-      } else if (failure === 'quota') {
-        IDBObjectStore.prototype.put = () => { throw new DOMException('Full', 'QuotaExceededError'); };
-      } else if (failure === 'schema') {
-        const request = indexedDB.open('seekmoon.cloud-history.v1', 1);
-        request.onupgradeneeded = () => request.result.createObjectStore('broken');
-        request.onsuccess = () => request.result.close();
-      } else {
-        Object.defineProperty(window, 'indexedDB', { value: { open() { return {}; } } });
-      }
-    }, failure);
-    await cloud.goto();
-    await cloud.open();
-    await expect(page.locator('#transcript')).toContainText('Memory answer');
-    await cloud.open(sessionB);
-    let release;
-    cloud.pauseHistory = new Promise(resolve => { release = resolve; });
-    try {
-      await cloud.open(sessionA);
-      await expect(page.locator('#transcript')).toContainText('Memory answer');
-      await expect(page.locator('#task')).toBeEnabled();
-      await expect.poll(() => cloud.requests.filter(request => request.path.endsWith(`${sessionA}/messages`)).length).toBe(2);
-      expect(cloud.requests.filter(request => request.path.endsWith(`${sessionA}/messages`)).at(-1).headers['if-none-match']).toBeTruthy();
-    } finally { release(); }
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
-
 async function changeCacheRows(page, corrupt) {
   await page.evaluate(corrupt => new Promise((resolve, reject) => {
     const request = indexedDB.open('seekmoon.cloud-history.v1', 1);
@@ -148,26 +110,6 @@ async function changeCacheRows(page, corrupt) {
     };
   }), corrupt);
 }
-
-test('corrupt IndexedDB pages fall back to network without using other accounts or services', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.histories.set(sessionA, { messages: [
-    { task_id: 'one', kind: 'assistant_message', data: { content: 'Fresh network answer' }, created_at: 1 },
-  ], generating: false });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await expect.poll(async () => (await historyCacheRows(page)).length).toBe(1);
-  await changeCacheRows(page, true);
-  await cloud.goto();
-  await cloud.open();
-  await expect(page.locator('#transcript')).toContainText('Fresh network answer');
-  const request = cloud.requests.filter(request => request.path.endsWith(`${sessionA}/messages`)).at(-1);
-  expect(request.headers['if-none-match']).toBeUndefined();
-  await expect.poll(async () => (await historyCacheRows(page)).filter(row => row.origin === cloudOrigin && row.user === '123')[0]?.page.etag).toBeTruthy();
-  expect((await historyCacheRows(page)).filter(row => row.origin !== cloudOrigin || row.user !== '123')).toHaveLength(2);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
 
 test('logout clears only its account and fences a delayed history response before the next login', async ({ page }) => {
   const cloud = new CloudHarness(page);

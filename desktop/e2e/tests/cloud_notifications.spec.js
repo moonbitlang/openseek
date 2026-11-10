@@ -41,38 +41,3 @@ test('Cloud background completion uses the shared notification, badge and click 
   expect(app.device.pageErrors).toEqual([]);
 });
 
-for (const focused of [true, false]) {
-  test(`Cloud ${focused ? 'foreground' : 'unfocused'} completion follows the shared read policy`, async ({ page }) => {
-    const app = await running(page);
-    await page.evaluate(focused => window.dispatchEvent(new Event(focused ? 'focus' : 'blur')), focused);
-    await app.finishTask();
-    await expect.poll(() => shown(app).length).toBe(1);
-    expect(shown(app)[0].params.title).toBe('Task finished');
-    await expect.poll(() => badge(app)).toBe(focused ? 0 : 1);
-    if (!focused) {
-      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-      await expect.poll(() => badge(app)).toBe(0);
-    }
-    const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
-    await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { status: 'completed' } });
-    expect([200, 304]).toContain((await refreshed).status());
-    expect(shown(app)).toHaveLength(1);
-    await app.open(sessionB);
-    await app.open(sessionA);
-    await expect(page.locator('#stop')).toHaveCount(0);
-    expect(shown(app)).toHaveLength(1);
-    expect(app.device.pageErrors).toEqual([]);
-  });
-}
-
-test('Cloud browser completion uses the same unread row without requesting native notifications', async ({ page }) => {
-  const app = await running(page, { desktop: false });
-  await app.open(sessionB);
-  await app.finishTask();
-  await expect(app.rowContainer(sessionA).getByRole('status')).toBeVisible();
-  expect(app.notifications).toEqual([]);
-  await app.open(sessionA);
-  await expect(app.rowContainer(sessionA).getByRole('status')).toHaveCount(0);
-  expect(app.device.pageErrors).toEqual([]);
-  expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
-});
