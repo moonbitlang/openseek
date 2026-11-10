@@ -195,28 +195,38 @@ fn ArtifactFileCache::apply_after_render(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
+      let owner_key = owner.key()
       for reference, state in self.0 {
         match state {
           ReadyArtifact(content) =>
             settle_artifact_frame(
               reference,
-              content,
               "",
-              owner.key(),
-              true,
-              owner.followup_enabled,
+              owner_key,
+              @js.Nullable::from_option(
+                Some(token => {
+                  artifact_frame_document(
+                    content,
+                    token,
+                    owner.followup_enabled,
+                  )
+                }),
+              ),
             )
           FailedArtifact(error) =>
             settle_artifact_frame(
               reference,
-              "",
               error,
-              owner.key(),
-              false,
-              false,
+              owner_key,
+              @js.Nullable::null(),
             )
           LoadingArtifact =>
-            settle_artifact_frame(reference, "", "", owner.key(), false, false)
+            settle_artifact_frame(
+              reference,
+              "",
+              owner_key,
+              @js.Nullable::null(),
+            )
         }
       }
     },
@@ -225,15 +235,91 @@ fn ArtifactFileCache::apply_after_render(
 }
 
 ///|
+fn artifact_frame_document(
+  content : String,
+  token : String,
+  followup_enabled : Bool,
+) -> String {
+  // This script runs inside the artifact document, across the iframe boundary.
+  let followup = if followup_enabled {
+    let script =
+      #|  window.openseekArtifact.sendFollowUpMessage = ({ prompt, title = "" }) => {
+      #|    parent.postMessage({ type: "openseek-artifact-followup", version: 1, token, prompt, title }, "*");
+      #|  };
+    script
+  } else {
+    ""
+  }
+  let document =
+    $|<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+    $|<meta name="referrer" content="no-referrer">
+    $|<script>
+    $|(() => {
+    $|  const token = \{Json::string(token).stringify()};
+    $|  window.openseekArtifact = {
+    $|    setState(title, state) {
+    $|      const packet = { type: "openseek-artifact-state", version: 1, token, title, state };
+    $|      try {
+    $|        parent.postMessage(packet, "*");
+    $|      } catch {
+    $|        parent.postMessage({ ...packet, title: "", state: null }, "*");
+    $|      }
+    $|    }
+    $|  };
+    $|\{followup}
+    $|})();
+    $|</script>\{content}<script>
+    $|(() => {
+    $|  const send = () => parent.postMessage({
+    $|    type: "openseek-artifact-height",
+    $|    height: Math.ceil(document.body?.scrollHeight || 420)
+    $|  }, "*");
+    $|  addEventListener("load", () => {
+    $|    new ResizeObserver(send).observe(document.body);
+    $|    send();
+    $|  });
+    $|})();
+    $|</script>
+  document
+}
+
+///|
+fn artifact_state_payload_valid(title : @js.Value, payload : String) -> Bool {
+  (@js.Cast::into(title) : String?) is Some(title) &&
+  !title.trim().is_empty() &&
+  title.length() <= 160 &&
+  @utf8.encode(payload).length() <= 12 * 1024
+}
+
+///|
+fn decode_artifact_followup(
+  reference : String,
+  payload : String,
+  message : @js.Value,
+) -> ArtifactInteraction? {
+  let prompt : String? = @js.Cast::into(message.get_with_string("prompt"))
+  let title : String? = @js.Cast::into(message.get_with_string("title"))
+  guard prompt is Some(prompt) && title is Some(title) else { return None }
+  let prompt = prompt.trim()
+  guard !prompt.is_empty() else { return None }
+  let snapshot = @mention_context.artifact_snapshot(reference, payload)
+  Some(
+    RequestFollowup(
+      prompt=prompt.to_owned(),
+      title=title.trim().to_owned(),
+      snapshot~,
+    ),
+  )
+}
+
+///|
 extern "js" fn settle_artifact_frame(
   reference : String,
-  content : String,
   error : String,
   owner : String,
-  ready : Bool,
-  followup_enabled : Bool,
+  render_document : @js.Nullable[(String) -> String],
 ) =
-  #|(reference, content, error, owner, ready, followupEnabled) => {
+  #|(reference, error, owner, renderDocument) => {
   #|  for (const node of document.querySelectorAll('[data-transcript-artifact]')) {
   #|    if (node.dataset.transcriptArtifact !== reference || node.dataset.artifactOwner !== owner) continue;
   #|    const frame = node.querySelector('iframe');
@@ -242,18 +328,12 @@ extern "js" fn settle_artifact_frame(
   #|    if (frame.dataset.artifactLoaded) { frame.removeAttribute('srcdoc'); delete frame.dataset.artifactLoaded; delete frame.dataset.artifactReference; delete frame.dataset.artifactToken; delete frame.__artifactSnapshot; frame.style.display = 'none'; if (button) button.style.display = 'none'; }
   #|    const fallback = node.querySelector('[data-artifact-fallback]');
   #|    if (error && node.title !== error) node.title = error;
-  #|    if (!ready) { if (fallback && fallback.style.display === 'none') fallback.style.display = ''; continue; }
-  #|    const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+  #|    if (!renderDocument) { if (fallback && fallback.style.display === 'none') fallback.style.display = ''; continue; }
   #|    const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   #|    frame.dataset.artifactToken = token;
   #|    delete frame.__artifactSnapshot;
   #|    if (button) button.style.display = 'none';
-  #|    const setState = 'setState(title,state){const packet={type:"openseek-artifact-state",version:1,token,title,state};try{parent.postMessage(packet,"*")}catch{parent.postMessage({...packet,title:"",state:null},"*")}}';
-  #|    const sendFollowUpMessage = ',sendFollowUpMessage({prompt,title=""}){parent.postMessage({type:"openseek-artifact-followup",version:1,token,prompt,title},"*")}';
-  #|    const bridge = '<script>(()=>{const token=' + JSON.stringify(token) +
-  #|      ';window.openseekArtifact={' + setState + (followupEnabled ? sendFollowUpMessage : '') + '};})();<\/script>';
-  #|    const resize = '<script>(()=>{const send=()=>parent.postMessage({type:"openseek-artifact-height",height:Math.ceil(document.body?.scrollHeight||420)},"*");addEventListener("load",()=>{new ResizeObserver(send).observe(document.body);send()})})();<\/script>';
-  #|    frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="' + policy + '"><meta name="referrer" content="no-referrer">' + bridge + content + resize;
+  #|    frame.srcdoc = renderDocument(token);
   #|    frame.dataset.artifactLoaded = owner;
   #|    frame.dataset.artifactReference = reference;
   #|    frame.style.display = 'block';
@@ -265,9 +345,10 @@ extern "js" fn settle_artifact_frame(
 extern "js" fn artifact_frame_listener(
   changed : () -> Unit,
   selected : (String, String, String) -> Unit,
-  followup : (String, String, String, String, String) -> Unit,
+  followup : (String, String, String, @js.Value) -> Unit,
+  valid_state : (@js.Value, String) -> Bool,
 ) -> () -> Unit =
-  #|(changed, selected, followup) => {
+  #|(changed, selected, followup, validState) => {
   #|  const jsonValue = (_key, value) => {
   #|    const type = typeof value;
   #|    if (value === null || type === 'object' || type === 'string' || type === 'boolean' || (type === 'number' && Number.isFinite(value))) return value;
@@ -286,19 +367,15 @@ extern "js" fn artifact_frame_listener(
   #|        if (!node || frame.dataset.artifactLoaded !== node.dataset.artifactOwner || frame.dataset.artifactReference !== node.dataset.transcriptArtifact) return;
   #|        if (data.type === 'openseek-artifact-followup') {
   #|          if (document.activeElement !== frame || !navigator.userActivation?.isActive) return;
-  #|          if (typeof data.prompt !== 'string' || typeof data.title !== 'string') return;
-  #|          const prompt = data.prompt.trim();
-  #|          if (!prompt) return;
-  #|          followup(node.dataset.artifactOwner, node.dataset.transcriptArtifact, frame.__artifactSnapshot ?? '', prompt, data.title.trim());
+  #|          followup(node.dataset.artifactOwner, node.dataset.transcriptArtifact, frame.__artifactSnapshot ?? '', data);
   #|          return;
   #|        }
   #|        if (data.type !== 'openseek-artifact-state') return;
   #|        const button = node.querySelector('.chat-artifact-context');
   #|        const clear = () => { delete frame.__artifactSnapshot; if (button && button.style.display !== 'none') button.style.display = 'none'; };
-  #|        if (typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160) { clear(); return; }
   #|        let payload;
   #|        try { payload = JSON.stringify({title:data.title,state:data.state}, jsonValue); } catch { clear(); return; }
-  #|        if (new TextEncoder().encode(payload).length > 12288) { clear(); return; }
+  #|        if (!validState(data.title, payload)) { clear(); return; }
   #|        frame.__artifactSnapshot = payload;
   #|        if (button && !button.disabled && button.style.display === 'none') button.style.display = '';
   #|      }

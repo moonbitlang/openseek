@@ -904,13 +904,15 @@ fn transcript_sub_loader(
           }
           scheduler.add(artifact_context(AttachState(snapshot)))
         },
-        (owner, reference, payload, prompt, title) => {
-          guard owner == artifact_owner else { return }
-          let snapshot = @mention_context.artifact_snapshot(reference, payload)
-          scheduler.add(
-            artifact_context(RequestFollowup(prompt~, title~, snapshot~)),
-          )
+        (owner, reference, payload, message) => {
+          guard owner == artifact_owner &&
+            decode_artifact_followup(reference, payload, message)
+            is Some(action) else {
+            return
+          }
+          scheduler.add(artifact_context(action))
         },
+        artifact_state_payload_valid,
       )
       Some({
         unload: scheduler => {

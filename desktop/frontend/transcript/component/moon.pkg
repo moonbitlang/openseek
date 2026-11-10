@@ -13,6 +13,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
