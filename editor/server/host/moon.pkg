@@ -5,19 +5,31 @@ import {
   "moonbitlang/editor-server/server",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/shell/workspace",
-  "moonbitlang/async",
-  "moonbitlang/async/aqueue",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/process",
-  "moonbitlang/async/socket",
-  "moonbitlang/async/websocket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/aqueue",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/socket",
+  "moonbitlang/core/async/websocket",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "test"
 
 supported_targets = "native+wasm"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/aqueue",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/process",
+    "moonbitlang/core/async/socket",
+    "moonbitlang/core/async/websocket",
+  ],
+)

@@ -1,8 +1,12 @@
 import {
   "moonbitlang/editor/scripts/mermaid_assets",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 supported_targets = "native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

@@ -9,7 +9,7 @@ async test "native host reads root-relative text files" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     }
     @fs.mkdir("\{root}/src", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/src/main.mbt",
       "pub fn main {}\n",
       create_mode=CreateOrTruncate,
@@ -44,17 +44,17 @@ async test "native host resolves one directory level with minted uris" {
     }
     @fs.mkdir("\{root}/src/lib", recursive=true)
     @fs.mkdir("\{root}/_build", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/moon.mod",
       "name = \"fixture\"\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/src/main.mbt",
       "pub fn main {}\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/src/lib/util.mbt",
       "pub fn util {}\n",
       create_mode=CreateOrTruncate,
@@ -125,7 +125,7 @@ async test "native host polling watch emits changed and deleted" {
     group.add_defer() <| () => {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/watched.mbt",
       "pub fn watched { 1 }\n",
       create_mode=CreateOrTruncate,
@@ -144,7 +144,7 @@ async test "native host polling watch emits changed and deleted" {
     @async.sleep(30)
     // Publish one change atomically: an in-place truncate followed by a write
     // can legitimately produce two Changed events before the later deletion.
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/replacement.mbt",
       "pub fn watched { 2 }\n",
       create_mode=CreateOrTruncate,

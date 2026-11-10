@@ -166,10 +166,7 @@ priv struct Engine {
 }
 
 ///|
-async fn[G] Engine::spawn(group : @async.TaskGroup[G]) -> Engine {
-  let (child_stdin, writer) = @process.write_to_process()
-  let (reader, child_stdout) = @process.read_from_process()
-  let (stderr_reader, child_stderr) = @process.read_from_process()
+async fn Engine::spawn(group : @async.TaskGroup) -> Engine {
   let parent = @env.get_env_vars()
   let child_env : Map[String, String] = Map([])
   for name in ["PATH", "HOME", "TMPDIR", "DEEPSEEK"] {
@@ -178,38 +175,34 @@ async fn[G] Engine::spawn(group : @async.TaskGroup[G]) -> Engine {
     }
   }
   child_env["OPENSEEK_GLOBAL_SKILLS_DIR"] = "/nonexistent/openseek-eval-no-skills"
-  let _proc = @process.spawn(
+  let proc = @process.spawn(
     group,
     "moon",
     ["run", "--target", "native", ".", "--", "serve"],
     inherit_env=false,
     extra_env=child_env,
-    stdin=child_stdin,
-    stdout=child_stdout,
-    stderr=child_stderr,
+    stdin=FeedFromParent,
+    stdout=Collect,
+    stderr=Discard,
     no_wait=true,
   )
-  group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-    for ;; {
-      if (stderr_reader.read_some(max_len=4096) catch { _ => None }) is None {
-        break
-      }
-    }
-  }
+  let reader = proc.stdout
   let events : @async.Queue[Json] = Queue(kind=Unbounded)
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-    @jsonl.each(reader, json => {
-      ignore(events.try_put(json) catch { _ => false })
-    })
+    while reader.text.read_until("\n") is Some(line) {
+      for json in @jsonl.parse(line) {
+        ignore(events.try_put(json) catch { _ => false })
+      }
+    }
     ignore(events.try_put({ "event": "__engine_eof" }) catch { _ => false })
   }
-  { writer, events, }
+  { writer: proc.stdin, events, }
 }
 
 ///|
 async fn Engine::prompt(self : Engine, text : String) -> Unit {
   let command : Json = { "command": "prompt", "text": Json(text) }
-  self.writer.write("\{command.stringify()}\n")
+  self.writer.write(@utf8.encode("\{command.stringify()}\n"))
 }
 
 ///|

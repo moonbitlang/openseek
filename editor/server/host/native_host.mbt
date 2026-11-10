@@ -123,7 +123,7 @@ async fn native_file_signature(path : String) -> String {
     return "missing"
   }
   match (Some(@fs.mtime(path)) catch { _ => None }) {
-    Some((seconds, nanos)) => "exists:\{seconds}:\{nanos}"
+    Some(mtime) => "exists:\{mtime.sec()}:\{mtime.nsec()}"
     None => "missing"
   }
 }
@@ -150,10 +150,7 @@ async fn read_native_disk_snapshot(
   guard validate_native_file(root, target) is None else { return None }
   let before = native_file_signature(target)
   guard before != "missing" else { return None }
-  guard (Some(@fs.read_file(target)) catch { _ => None }) is Some(data) else {
-    return None
-  }
-  guard (Some(data.text()) catch { _ => None }) is Some(text) else {
+  guard (Some(@fs.read_text(target)) catch { _ => None }) is Some(text) else {
     return None
   }
   guard !text.contains("\u{0}") else { return None }
@@ -339,7 +336,7 @@ pub async fn run_native_editor_server(
     for message in editor_server_listening_messages(host, port, network_host) {
       log(message)
     }
-    http_server.run_forever() <| ((request, _body, conn) => {
+    http_server.run_forever() <| ((request, conn) => {
       handle_native_editor_request(workspace, asset_dir, request, conn)
     })
   }
@@ -450,7 +447,7 @@ fn diagnostics_push_packet(
 async fn handle_native_editor_request(
   workspace : NativeWorkspace,
   asset_dir : String,
-  request : @http.Request,
+  request : @http.RequestHeader,
   conn : @http.ServerConnection,
 ) -> Unit {
   if request.path == "/protocol" {
@@ -463,11 +460,11 @@ async fn handle_native_editor_request(
 ///|
 async fn handle_protocol_connection(
   workspace : NativeWorkspace,
-  request : @http.Request,
+  request : @http.RequestHeader,
   conn : @http.ServerConnection,
 ) -> Unit {
   let session_server = workspace.remote_server.new_session()
-  let ws = @websocket.from_http_server(request, conn)
+  let ws = @websocket.Conn::from_http_server(request, conn)
   defer ws.close()
   // Watch tasks emit packets concurrently with request handling, and the
   // websocket connection rejects interleaved sends; one writer task owns
@@ -493,12 +490,12 @@ async fn handle_protocol_connection(
         let message = ws.recv()
         match message.kind {
           Text => {
-            let raw = message.read_all().text()
+            let raw = message.text.read_all()
             handle_protocol_message(
               workspace, session_server, session, outbox, raw, spawn_watch,
             )
           }
-          Binary => ignore(message.read_all().binary())
+          Binary => ignore(message.drop_all())
         }
       }
     } catch {
@@ -544,7 +541,7 @@ async fn handle_protocol_message(
 ///|
 async fn serve_static_route(
   asset_dir : String,
-  request : @http.Request,
+  request : @http.RequestHeader,
   conn : @http.ServerConnection,
 ) -> Unit {
   guard request.meth is Get else {
@@ -568,7 +565,7 @@ async fn serve_static_file(
     serve_not_found(conn)
     return
   }
-  let content = Some(@fs.read_file(file_path).binary()) catch { _ => None }
+  let content = Some(@fs.read_binary(file_path)) catch { _ => None }
   match content {
     Some(content) => {
       conn.send_response(200, "OK", extra_headers={

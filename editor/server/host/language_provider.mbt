@@ -39,15 +39,11 @@ async fn collect_moon_command_output(
   root : String,
   args : Array[String],
 ) -> (Int32, String)? {
-  let output = Some(@process.collect_stdout(command, args, cwd=root)) catch {
-    _ => None
+  let result = @process.run(command, args, stdout=Collect, cwd=root) catch {
+    _ => return None
   }
-  match output {
-    Some((exit_code, data)) =>
-      Some((exit_code, data.text())) catch {
-        _ => None
-      }
-    None => None
+  Some((result.exit_code, result.stdout_text())) catch {
+    _ => None
   }
 }
 
