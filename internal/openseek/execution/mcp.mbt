@@ -5,25 +5,34 @@ pub const McpClientVersion : String = "0.2.2"
 ///|
 /// What this engine holds of MCP: each configuration file and what came of
 /// reading it, and for each server of the merged configuration what
-/// connecting came to. Built once at startup and kept for the engine's life,
-/// because the connections are — it is what an `mcp_status` event reports.
+/// connecting came to, which settles in the background. Built once at startup
+/// and kept for the engine's life, because the connections are — it is what an
+/// `mcp_status` event reports.
 struct McpRegistry {
   configs : Array[@protocol.McpConfigStatus]
-  /// Each server of the merged configuration, in order.
-  servers : Array[@mcptools.ServerEntry]
+  /// Each server of the merged configuration, in order, being connected.
+  servers : Array[@mcptools.Server]
+  /// The task that reports `McpToolsRegistered` once every server has
+  /// settled; `None` when no configuration file loaded, which reports nothing.
+  registered : @async.Task[Unit]?
 }
 
 ///|
-/// Connect the servers of every configuration file in `config_paths`, in
-/// order; a later file's server replaces an earlier one of the same name.
-/// Nothing here fails the engine: a file that cannot be used and a server that
-/// cannot be reached are recorded in the registry and reported as the events
-/// they always were. The connections' reader/writer tasks run on `scope`'s
-/// group.
-pub async fn[X] connect_mcp(
+/// Read every configuration file in `config_paths`, in order — a later file's
+/// server replaces an earlier one of the same name — and start connecting the
+/// merged servers in the background on `scope`'s group, without waiting for
+/// any: a server that takes long to connect (or never does, like a headers
+/// helper waiting on the user) does not hold up the engine. `on_change` runs
+/// each time `status` may have changed since — a server settled, or a
+/// connected server's connection closed — and must not block. Once every
+/// server has settled, `McpToolsRegistered` is reported. Nothing here fails
+/// the engine: a file that cannot be used and a server that cannot be reached
+/// are recorded in the registry and reported as the events they always were.
+pub async fn[X] start_mcp(
   scope : @agent_runtime.AgentTaskScope[X],
   config_paths : Array[String],
   workspace_root~ : String,
+  on_change? : () -> Unit,
 ) -> McpRegistry {
   let configs : Array[@protocol.McpConfigStatus] = []
   let loaded : Array[Array[@mcpconfig.McpServer]] = []
@@ -49,33 +58,68 @@ pub async fn[X] connect_mcp(
   }
   // Preserve the single-file failure contract: no registration event when
   // every input failed to load. A valid empty config still registers normally.
-  guard !loaded.is_empty() else { return { configs, servers: [], } }
-  let servers = @mcpconfig.merge(loaded)
-  let entries = @mcptools.connect(
+  guard !loaded.is_empty() else {
+    return { configs, servers: [], registered: None, }
+  }
+  let servers = @mcptools.start(
     scope,
-    servers,
+    @mcpconfig.merge(loaded),
     client_name="openseek",
     client_version=McpClientVersion,
     workspace_root~,
   )
-  let names : Array[String] = []
-  for entry in entries {
-    for tool in entry.tools {
-      names.push("\{entry.server.name()}/\{tool.name}")
+  if on_change is Some(on_change) {
+    for server in servers {
+      scope
+      .group()
+      .spawn_bg(no_wait=true, () => {
+        let entry = server.connecting.wait()
+        // The close handler goes on first, so a connection that closes from
+        // here on reports itself, and one already closed shows as lost.
+        if entry.connection is Live(client) {
+          client.set_close_handler(on_change)
+        }
+        on_change()
+      })
     }
   }
-  @emit.emit(
-    McpToolsRegistered(servers=servers.length(), tools=names.length(), names~),
-  )
-  { configs, servers: entries, }
+  let registered = scope
+    .group()
+    .spawn(no_wait=true, () => {
+      let names : Array[String] = []
+      for server in servers {
+        for tool in server.connecting.wait().tools {
+          names.push("\{server.config.name()}/\{tool.name}")
+        }
+      }
+      @emit.emit(
+        McpToolsRegistered(
+          servers=servers.length(),
+          tools=names.length(),
+          names~,
+        ),
+      )
+    })
+  { configs, servers, registered: Some(registered), }
+}
+
+///|
+/// Wait until every server has settled and `McpToolsRegistered` has been
+/// reported — for a one-shot run, whose turn should see every tool there will
+/// be.
+pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
+  if self.registered is Some(registered) {
+    registered.wait()
+  }
 }
 
 ///|
 /// Serve these servers to scripts through an MCP host on `scope`'s group,
 /// which lives as long as the connections do. Calls go to the named server,
-/// and the catalog lists the servers as they stand now (a lost one as
-/// unavailable). Images in results are saved under `image_directory`. Without
-/// a configured server there is nothing to serve, and no host starts.
+/// and the catalog lists the servers as they stand now (a lost or
+/// still-connecting one as unavailable). Images in results are saved under
+/// `image_directory`. Without a configured server there is nothing to serve,
+/// and no host starts.
 pub async fn[X] McpRegistry::serve(
   self : McpRegistry,
   scope : @agent_runtime.AgentTaskScope[X],
@@ -87,7 +131,8 @@ pub async fn[X] McpRegistry::serve(
     @mcphost.Service::start(
       scope.group(),
       call=(server, tool, arguments) => {
-        match servers.search_by(entry => entry.server.name() == server) {
+        match
+          servers.search_by(configured => configured.config.name() == server) {
           Some(index) => servers[index].call(tool, arguments)
           None =>
             @agent_tool.respond(
@@ -103,50 +148,36 @@ pub async fn[X] McpRegistry::serve(
 }
 
 ///|
-/// Run `handler` each time a connected server's connection closes — the one
-/// way this registry's status changes after it is built. The handler must not
-/// block. A connection that closed before this call does not run it, so a
-/// caller reads `status` after installing and reports from there.
-pub fn McpRegistry::on_connection_closed(
-  self : McpRegistry,
-  handler : () -> Unit,
-) -> Unit {
-  for entry in self.servers {
-    if entry.connection is Live(client) {
-      client.set_close_handler(handler)
-    }
-  }
-}
-
-///|
 /// The registry as the `mcp_status` event reports it, with tools under the
 /// servers' own names. A server's state is read now, not remembered: one that
-/// connected at startup and has since lost its connection is `Lost`, with the
-/// tools it offered.
+/// connected and has since lost its connection is `Lost`, with the tools it
+/// offered.
 pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
   let servers : Array[@protocol.McpServerStatus] = []
-  for entry in self.servers {
-    let tools : Array[@protocol.McpTool] = entry.tools.map(tool => {
-      name: tool.name,
-      description: tool.description,
-    })
-    let state : @protocol.McpServerState = match entry.connection {
-      Live(client) =>
-        if client.is_closed() {
-          Lost(tools)
-        } else {
-          Connected(tools)
-        }
-      NoTools => NoTools
-      Failed(error) => Failed(error)
+  for configured in self.servers {
+    let server = configured.config
+    fn tools(entry : @mcptools.ServerEntry) -> Array[@protocol.McpTool] {
+      entry.tools.map(tool => {
+        name: tool.name,
+        description: tool.description,
+      })
+    }
+
+    let state : @protocol.McpServerState = match configured.try_wait() {
+      None => Connecting
+      Some({ connection: Live(client), .. } as entry) if client.is_closed() =>
+        Lost(tools(entry))
+      Some({ connection: Live(_), .. } as entry) => Connected(tools(entry))
+      Some({ connection: NoTools, .. }) => NoTools
+      Some({ connection: Failed(error), .. }) => Failed(error)
     }
     servers.push({
-      name: entry.server.name(),
-      transport: match entry.server {
+      name: server.name(),
+      transport: match server {
         Stdio(..) => Stdio
         Http(..) => Http
       },
-      target: entry.server.target(),
+      target: server.target(),
       state,
     })
   }

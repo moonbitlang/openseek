@@ -61,9 +61,9 @@ pub async fn search(
 const INVALID_CATALOG = "Invalid MCP catalog from the MCP host"
 
 ///|
-/// The catalog this script downloaded. The host's catalog changes only when a
-/// connection is lost, and a call to a lost server says so, so one download
-/// serves the whole script.
+/// The catalog this script downloaded. The host's catalog changes only as a
+/// server finishes connecting or loses its connection, and a call to a server
+/// still connecting or lost says so, so one download serves the whole script.
 let downloaded : Ref[@catalog.Catalog?] = Ref(None)
 
 ///|

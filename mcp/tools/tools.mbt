@@ -64,31 +64,73 @@ pub struct ServerEntry {
 }
 
 ///|
-/// Connect every configured server, in config order, and keep the outcome of
-/// each beside the tools it offers. Every failure it returns is also reported
-/// as the event it always was. The connections' reader/writer tasks run on
-/// `scope`'s group and live until it ends.
-pub async fn[X] connect(
+/// One configured server being connected in the background, with the task
+/// that connects it (see `start`). The task's result is what connecting came
+/// to.
+pub struct Server {
+  config : @config.McpServer
+  connecting : @async.Task[ServerEntry]
+}
+
+///|
+/// Start connecting every configured server at once, each in a task of its
+/// own on `scope`'s group, and return them in config order right away. A
+/// server that never settles (a stuck headers helper, say) holds back only its
+/// own task, which ends with the group. Every failure a task returns is also
+/// reported as the event it always was. The connections' reader/writer tasks
+/// run on `scope`'s group and live until it ends.
+pub fn[X] start(
   scope : @agent_runtime.AgentTaskScope[X],
   servers : Array[@config.McpServer],
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
-) -> Array[ServerEntry] {
-  let entries : Array[ServerEntry] = []
-  for server in servers {
-    let (connection, instructions, tools) = connect_server(
-      scope,
-      server,
-      client_name~,
-      client_version~,
-      workspace_root?,
-      discovery_timeout_ms~,
-    )
-    entries.push({ server, connection, instructions, tools, })
+) -> Array[Server] {
+  servers.map(server => {
+    config: server,
+    connecting: scope
+    .group()
+    .spawn(no_wait=true, () => {
+      connect_server(
+        scope,
+        server,
+        client_name~,
+        client_version~,
+        workspace_root?,
+        discovery_timeout_ms~,
+      )
+    }),
+  })
+}
+
+///|
+/// What connecting this server came to, or `None` while it is still
+/// connecting, as `Task::try_wait` reads its task — except that a task
+/// cancelled with its group, which only happens as the engine shuts down,
+/// reads as `None` rather than raising.
+pub fn Server::try_wait(self : Server) -> ServerEntry? {
+  self.connecting.try_wait() catch {
+    _ => None
   }
-  entries
+}
+
+///|
+/// Call `tool` of this server, as `ServerEntry::call` does once it has
+/// settled; until then the call is an error result saying so.
+pub async fn Server::call(
+  self : Server,
+  tool : String,
+  arguments : Json,
+) -> @agent_tool.ToolAction {
+  guard self.try_wait() is Some(entry) else {
+    let (message, _) = cap_serialized(
+      "MCP server `\{self.config.name()}` is still connecting; try again later",
+      MaxToolOutputChars,
+    )
+    @agent_tool.respond(message, is_error=true)
+  }
+  entry.call(tool, arguments)
 }
 
 ///|
@@ -135,29 +177,35 @@ pub async fn ServerEntry::call(
 /// an MCP host reply: descriptions, instructions, and errors are cut and marked, an
 /// arguments schema that is not an object or is oversized becomes the open
 /// object schema (the server still validates its arguments), and an oversized
-/// result schema is dropped, since it only helps whoever reads `data`.
-pub fn catalog_items(entries : Array[ServerEntry]) -> Array[Json] {
+/// result schema is dropped, since it only helps whoever reads `data`. A
+/// server still connecting is listed as unavailable, saying so, until it
+/// settles.
+pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
   let items : Array[Json] = []
-  for entry in entries {
-    let server = entry.server.name()
+  for configured in servers {
+    let server = configured.config.name()
     let fields : Map[String, Json] = { "server": Json(server) }
-    let error = match entry.connection {
-      Failed(error) => Some(error)
-      Live(client) if client.is_closed() => Some("the connection was lost")
-      Live(_) | NoTools => None
+    let settled = configured.try_wait()
+    let error = match settled {
+      None => Some("still connecting; search again from a later script")
+      Some({ connection: Failed(error), .. }) => Some(error)
+      Some({ connection: Live(client), .. }) if client.is_closed() =>
+        Some("the connection was lost")
+      Some(_) => None
     }
     match error {
       Some(error) =>
         fields["error"] = Json(cut(error, MaxServerTextChars, marked=true))
       None =>
-        if entry.instructions is Some(instructions) && !instructions.is_blank() {
+        if settled is Some({ instructions: Some(instructions), .. }) &&
+          !instructions.is_blank() {
           fields["instructions"] = Json(
             cut(instructions.trim().to_owned(), MaxServerTextChars, marked=true),
           )
         }
     }
     items.push(Json::object(fields))
-    guard error is None else { continue }
+    guard error is None && settled is Some(entry) else { continue }
     for tool in entry.tools {
       let record : Map[String, Json] = {
         "name": Json(tool.name),
@@ -206,8 +254,12 @@ async fn[X] connect_server(
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32,
-) -> (Connection, String?, Array[@mcp.McpTool]) {
+) -> ServerEntry {
   let name = server.name()
+  fn unavailable(connection : Connection) -> ServerEntry {
+    { server, connection, instructions: None, tools: [], }
+  }
+
   // A connected server, normalized across transports: the initialized client
   // and its initialization result; closing the client tears the transport
   // (and, for stdio, the process) down.
@@ -243,7 +295,7 @@ async fn[X] connect_server(
     error => {
       let error = "\{error}"
       @emit.emit(McpConnectFailed(server=name, error~))
-      return (Failed(error), None, [])
+      return unavailable(Failed(error))
     }
   }
   let discovered = try {
@@ -252,12 +304,12 @@ async fn[X] connect_server(
   } catch {
     @async.TimeoutError => {
       @emit.emit(McpListToolsTimeout(server=name))
-      return (Failed("timed out listing its tools"), None, [])
+      return unavailable(Failed("timed out listing its tools"))
     }
     error => {
       let error = "\{error}"
       @emit.emit(McpListToolsFailed(server=name, error~))
-      return (Failed("listing its tools failed: \{error}"), None, [])
+      return unavailable(Failed("listing its tools failed: \{error}"))
     }
   }
   // A server with nothing to offer is useless for the rest of the session:
@@ -265,9 +317,14 @@ async fn[X] connect_server(
   if discovered.is_empty() {
     @emit.emit(McpNoTools(server=name))
     client.close()
-    return (NoTools, None, [])
+    return unavailable(NoTools)
   }
-  (Live(client), init.instructions, discovered)
+  {
+    server,
+    connection: Live(client),
+    instructions: init.instructions,
+    tools: discovered,
+  }
 }
 
 ///|

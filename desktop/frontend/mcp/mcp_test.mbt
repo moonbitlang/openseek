@@ -179,3 +179,48 @@ test "a report from an engine the panel is not showing changes nothing" {
   )
   assert_true(remote == loaded)
 }
+
+///|
+test "the summary counts servers connecting, failed, and connected" {
+  let one = conversation("s-1")
+  fn shown(servers : Array[@wire.McpServerStatus]) -> String {
+    let (_, checking) = @mcp.update(quiet(), Opened(one), @mcp.State::initial())
+    let (_, loaded) = @mcp.update(
+      quiet(),
+      Checked(
+        serial=checking.serial,
+        Ok(
+          Running({
+            configs: [{ path: "/home/.openseek/mcp.json", state: Loaded, }],
+            servers,
+          }),
+        ),
+      ),
+      checking,
+    )
+    @mcp.summary(one, loaded)
+  }
+
+  let auth : @wire.McpServerStatus = {
+    name: "auth",
+    transport: Http,
+    target: "https://example.com/mcp",
+    state: Connecting,
+  }
+  assert_eq(shown([auth]), "1 connecting")
+  let notes : @wire.McpServerStatus = {
+    name: "notes",
+    transport: Stdio,
+    target: "notes-mcp",
+    state: Connected([{ name: "mcp__notes__read", description: "", }]),
+  }
+  assert_eq(shown([auth, notes]), "1 connecting · 1 connected")
+  let docs : @wire.McpServerStatus = {
+    name: "docs",
+    transport: Http,
+    target: "https://example.com/docs",
+    state: Failed("connection refused"),
+  }
+  assert_eq(shown([auth, docs]), "1 connecting · 1 failed")
+  assert_eq(shown([notes, docs]), "1 failed · 1 connected")
+}

@@ -274,13 +274,14 @@ again.
 
 The conversation overview's **Connectors** card shows what that
 conversation's engine holds of its MCP servers, the host's own among them.
-Folded, it is one line — how many servers connected and how many failed;
-unfolded, each server is listed connected with its tool count, disconnected
-since it connected, no tools, failed with the reason, or skipped over the
-tool limit, after any configuration file the engine could not load; how a
-server is reached and its tools are on hover. The host holds no MCP
-connections of its own. Each engine reports what it holds once it has
-connected its servers, and again whenever that changes (`mcp_status` on the
+Folded, it is one line — how many servers are still connecting, how many
+failed, and how many connected;
+unfolded, each server is listed connecting, connected with its tool count,
+disconnected since it connected, no tools, failed with the reason, or skipped
+over the tool limit, after any configuration file the engine could not load;
+how a server is reached and its tools are on hover. The host holds no MCP
+connections of its own. Each engine reports what it holds as soon as it
+starts, with its servers still connecting, and again whenever that changes (`mcp_status` on the
 serve protocol); the host keeps a conversation's latest report and the card
 shows it. Reading it starts nothing, so the card reads each time the
 overview comes on screen for a conversation, again whenever its
