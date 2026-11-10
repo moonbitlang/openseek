@@ -1,6 +1,6 @@
 ///|
 async test "initial and image-only steering input survive replay and reach the provider" {
-  let bytes = @fs.read_file("deepseek/client/testdata/two-colors.png").binary()
+  let bytes = @fs.read_binary("deepseek/client/testdata/two-colors.png")
   let image = @agent_session.Image::from_data_url(
     @agent_session.Image::from_bytes(bytes).data_url(),
   )
@@ -9,15 +9,15 @@ async test "initial and image-only steering input survive replay and reach the p
     group.add_defer(() => server.close())
     let requests : Array[Json] = []
     group.spawn_bg(no_wait=true) <| () => {
-      server.run_forever((request, body, connection) => {
-        let data = body.read_all()
+      server.run_forever((request, connection) => {
+        let data = connection.text.read_all()
         assert_eq(request.path, "/chat/completions")
-        let request = @json.parse(data.text())
+        let request = @json.parse(data)
         requests.push(request)
         connection.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        connection.write(
+        connection.write_string(
           "data: {\"choices\":[{\"delta\":{\"content\":\"seen\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
         )
       })

@@ -54,8 +54,8 @@ struct Service {
 /// MCP client; the engine supplies both. Images in call results are saved
 /// under `image_directory`, created on first use; without one they are
 /// dropped with a note.
-pub async fn[X] Service::start(
-  group : @async.TaskGroup[X],
+pub async fn Service::start(
+  group : @async.TaskGroup,
   call~ : async (String, String, Json) -> @agent_tool.ToolAction,
   items~ : () -> Array[Json],
   image_directory? : String,
@@ -115,15 +115,15 @@ pub async fn[X] Service::start(
       // which it does when it is stopped. Cancel what it asked for then, as
       // stopping a script cancels its PTC calls; the MCP client tells the
       // server the request is cancelled.
-      let reply = @async.with_task_group(request => {
-        request.spawn_bg(no_wait=true, () => {
-          ignore(socket.read_some(max_len=1)) catch {
+      let reply = @async.any([
+        () => service.answer(input),
+        () => {
+          ignore(socket.read_into(FixedArray::make(1, b'\x00'))) catch {
             _ => ()
           }
           raise ScriptGone
-        })
-        service.answer(input)
-      }) catch {
+        },
+      ]) catch {
         ScriptGone => return
         error => raise error
       }
@@ -372,7 +372,7 @@ async fn Service::save_image(
   let path = "\{directory}/mcp-image-\{@crypto.bytes_to_hex_string(entropy)}\{extension}"
   try {
     @fs.mkdir(directory, permission=0o700, recursive=true, allow_exist=true)
-    @fs.write_file(path, image.bytes, create_mode=CreateNew, permission=0o600)
+    @fs.write_binary(path, image.bytes, create_mode=CreateNew, permission=0o600)
   } catch {
     error => Err("\{error}")
   } noraise {
@@ -391,7 +391,7 @@ async fn send(conn : @http.ServerConnection, result : Json) -> Unit {
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": "application/json",
     })
-    conn.write(result)
+    conn.write_string(result.stringify())
     conn.end_response()
   })
 }

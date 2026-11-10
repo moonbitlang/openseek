@@ -138,7 +138,7 @@ fn Server::token(self : Server, session : String) -> String raise ServerError {
 
 ///|
 /// The conversation a request's bearer token was granted to.
-fn Server::caller(self : Server, request : @http.Request) -> String? {
+fn Server::caller(self : Server, request : @http.RequestHeader) -> String? {
   guard request.headers.get("authorization") is Some(value) &&
     value.strip_prefix("Bearer ") is Some(token) else {
     return None
@@ -234,7 +234,7 @@ priv enum Received {
 async fn read_body(conn : @http.ServerConnection) -> Bytes? {
   let buffer = @buffer.Buffer()
   for ;; {
-    guard conn.read_some(max_len=65536) is Some(chunk) else { break }
+    guard conn.read() is Some(chunk) else { break }
     guard buffer.length() + chunk.length() <= MaxRequestBytes else {
       return None
     }

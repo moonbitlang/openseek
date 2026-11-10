@@ -28,8 +28,8 @@ struct McpRegistry {
 /// server has settled, `McpToolsRegistered` is reported. Nothing here fails
 /// the engine: a file that cannot be used and a server that cannot be reached
 /// are recorded in the registry and reported as the events they always were.
-pub async fn[X] start_mcp(
-  scope : @agent_runtime.AgentTaskScope[X],
+pub async fn start_mcp(
+  scope : @agent_runtime.AgentTaskScope,
   config_paths : Array[String],
   workspace_root~ : String,
   on_change? : () -> Unit,
@@ -37,7 +37,7 @@ pub async fn[X] start_mcp(
   let configs : Array[@protocol.McpConfigStatus] = []
   let loaded : Array[Array[@mcpconfig.McpServer]] = []
   for path in config_paths {
-    let text = @fs.read_file(path).text() catch {
+    let text = @fs.read_text(path) catch {
       error => {
         let error = "\{error}"
         @emit.emit(McpConfigUnreadable(path~, error~))
@@ -120,9 +120,9 @@ pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
 /// still-connecting one as unavailable). Images in results are saved under
 /// `image_directory`. Without a configured server there is nothing to serve,
 /// and no host starts.
-pub async fn[X] McpRegistry::serve(
+pub async fn McpRegistry::serve(
   self : McpRegistry,
-  scope : @agent_runtime.AgentTaskScope[X],
+  scope : @agent_runtime.AgentTaskScope,
   image_directory? : String,
 ) -> @mcphost.Service? {
   guard !self.servers.is_empty() else { return None }

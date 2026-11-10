@@ -52,16 +52,15 @@ async test "a reviewer's deny refuses without asking the controller" {
 async test "an escalation goes to the controller when there is one" {
   let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
   let channel = review_channel(desk, Escalate, ask_on_escalate=true)
-  let outcome = @async.with_task_group(group => {
+  @async.with_task_group(group => {
     let asked = group.spawn(() => channel.ask(deletion_ask))
     await_standing(desk)
     guard desk.standing() is Some(id) else {
       fail("an escalated question should be standing")
     }
     desk.settle(id, true)
-    asked.wait()
+    assert_true(asked.wait() is AllowedOnce)
   })
-  assert_true(outcome is AllowedOnce)
   assert_eq(desk.pending.length(), 0)
 }
 

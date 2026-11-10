@@ -18,15 +18,15 @@ async fn bind_test_server(skip_message : String) -> @http.Server? {
 /// and the connection to answer on. Reports the skip and returns None where the
 /// sandbox forbids TCP binds.
 async fn serve_chat_completions(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   skip_message : String,
   max_connections~ : Int32,
-  handle : async (@http.Request, String, @http.ServerConnection) -> Unit,
+  handle : async (@http.RequestHeader, String, @http.ServerConnection) -> Unit,
 ) -> String? {
   guard bind_test_server(skip_message) is Some(server) else { return None }
   group.spawn_bg(no_wait=true) <| () => {
     server.run_forever(
-      (request, body, conn) => handle(request, body.read_all().text(), conn),
+      (request, conn) => handle(request, conn.text.read_all(), conn),
       max_connections~,
     )
   }

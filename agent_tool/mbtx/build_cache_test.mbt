@@ -34,7 +34,7 @@ async test "cache: consecutive inline snippets each run their own program" {
     // reclaimed as before, so nothing but the cache survives the calls.
     assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-0/_build"))
     assert_eq(
-      @fs.read_file("\{spill}/mbtx-cache/snippet/gen-0/snippet.mbtx").text(),
+      @fs.read_text("\{spill}/mbtx-cache/snippet/gen-0/snippet.mbtx"),
       "fn main { println(\"I AM ALICE\") }",
     )
     assert_eq(@fs.readdir(spill), ["mbtx-cache"])
@@ -52,7 +52,7 @@ async test "cache: a named script builds in one keyed dir and follows edits" {
     @fs.mkdir("\{ws}/scripts")
     let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
     let v1 = "fn main { println(\"hello v1\") }"
-    @fs.write_file("\{ws}/scripts/hello.mbtx", v1, create_mode=CreateOrTruncate)
+    @fs.write_text("\{ws}/scripts/hello.mbtx", v1, create_mode=CreateOrTruncate)
     let first = dispatch(definition, { "filename": "scripts/hello.mbtx" })
     assert_false(first.is_error, msg=first.content)
     assert_true(first.content.contains("hello v1"))
@@ -68,15 +68,15 @@ async test "cache: a named script builds in one keyed dir and follows edits" {
     })
     assert_eq(keyed.length(), 1)
     let stage = "\{spill}/mbtx-cache/\{keyed[0]}/gen-0"
-    assert_eq(@fs.read_file("\{stage}/snippet.mbtx").text(), v1)
+    assert_eq(@fs.read_text("\{stage}/snippet.mbtx"), v1)
     assert_true(@fs.exists("\{stage}/_build"))
     // Edit the script: the same directory is rebuilt, not a new one.
     let v2 = "fn main { println(\"hello v2\") }"
-    @fs.write_file("\{ws}/scripts/hello.mbtx", v2, create_mode=CreateOrTruncate)
+    @fs.write_text("\{ws}/scripts/hello.mbtx", v2, create_mode=CreateOrTruncate)
     let third = dispatch(definition, { "filename": "scripts/hello.mbtx" })
     assert_true(third.content.contains("hello v2"), msg=third.content)
     assert_false(third.content.contains("v1"))
-    assert_eq(@fs.read_file("\{stage}/snippet.mbtx").text(), v2)
+    assert_eq(@fs.read_text("\{stage}/snippet.mbtx"), v2)
     assert_eq(
       @fs.readdir("\{spill}/mbtx-cache")
       .filter(name => name.has_prefix("named-"))
@@ -95,12 +95,12 @@ async test "cache: same basename at different paths keys separately" {
     @fs.mkdir(spill)
     @fs.mkdir("\{ws}/a")
     @fs.mkdir("\{ws}/b")
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/a/run.mbtx",
       "fn main { println(\"from a\") }",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/b/run.mbtx",
       "fn main { println(\"from b\") }",
       create_mode=CreateOrTruncate,

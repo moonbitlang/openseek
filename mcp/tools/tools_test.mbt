@@ -110,8 +110,8 @@ fn image_reply(request : Json) -> Json? {
 }
 
 ///|
-fn[X] wire(
-  group : @async.TaskGroup[X],
+fn wire(
+  group : @async.TaskGroup,
   transport : FakeTransport,
   rpc : @jsonrpc.Client,
   reply? : (Json) -> Json?,
@@ -307,7 +307,7 @@ async fn respond_json(
   conn.send_response(200, "OK", extra_headers={
     "Content-Type": "application/json",
   })
-  conn.write(reply.stringify())
+  conn.write_string(reply.stringify())
 }
 
 ///|
@@ -326,8 +326,8 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
     }
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch { _ => null }
+        (_request, conn) => {
+          let message = @json.parse(conn.text.read_all()) catch { _ => null }
           let id = match message {
             { "id": id, .. } => id
             _ => null
@@ -471,11 +471,11 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
     ]
     for pair in requests {
       let (request, expected) = pair
-      let (response, body) = @http.post(url, request, headers={
+      let (response, body) = @http.post_text(url, request.stringify(), headers={
         "Authorization": "Bearer \{token}",
       })
       assert_eq(response.code, 200)
-      assert_eq(body.json(), expected)
+      assert_eq(@json.parse(body), expected)
     }
   }
 }
@@ -564,8 +564,8 @@ async test "connect keeps what each server came to, and a live one reports its l
 
 ///|
 /// Start connecting `servers` and wait for every one to settle.
-async fn[X] connect_all(
-  scope : @agent_runtime.AgentTaskScope[X],
+async fn connect_all(
+  scope : @agent_runtime.AgentTaskScope,
   servers : Array[@config.McpServer],
   client_name~ : String,
   client_version~ : String,
@@ -589,8 +589,8 @@ async fn[X] connect_all(
 
 ///|
 /// A configured server whose spawn fails, once it has settled.
-async fn[X] unavailable(
-  scope : @agent_runtime.AgentTaskScope[X],
+async fn unavailable(
+  scope : @agent_runtime.AgentTaskScope,
 ) -> Array[@tools.Server] {
   let servers = @tools.start(
     scope,
@@ -636,8 +636,8 @@ async test "start returns before a server settles, which its task then tells" {
     let gate : @async.Queue[Unit] = Queue(kind=Unbounded)
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
-        (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch { _ => null }
+        (_request, conn) => {
+          let message = @json.parse(conn.text.read_all()) catch { _ => null }
           let id = match message {
             { "id": id, .. } => id
             _ => null
@@ -698,6 +698,6 @@ async test "start returns before a server settles, which its task then tells" {
     }
     assert_false(output.is_error)
     assert_eq(output.content, "pong")
-    group.return_immediately(())
+    group.return_immediately()
   }
 }

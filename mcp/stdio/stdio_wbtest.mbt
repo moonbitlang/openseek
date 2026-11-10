@@ -41,16 +41,16 @@ async test "the MCP stack runs a handshake, list, and call over an ndjson pipe" 
     let (server_reads, client_writes) = @io.pipe()
     let (client_reads, server_writes) = @io.pipe()
     let client_transport = NdjsonTransport::NdjsonTransport(
-      client_reads,
-      client_writes,
+      @io.Utf8Reader(client_reads),
+      @io.Utf8Writer(client_writes),
       on_close=() => {
         client_reads.close()
         client_writes.close()
       },
     )
     let server_transport : &@jsonrpc.Transport = NdjsonTransport(
-      server_reads,
-      server_writes,
+      @io.Utf8Reader(server_reads),
+      @io.Utf8Writer(server_writes),
       on_close=() => {
         server_reads.close()
         server_writes.close()
@@ -79,29 +79,24 @@ async test "the MCP stack runs a handshake, list, and call over an ndjson pipe" 
 ///|
 async test "recv reads a JSON-RPC line from a real subprocess" {
   @async.with_task_group(group => {
-    let (child_stdin, stdin_writer) = @process.write_to_process()
-    let (stdout_reader, child_stdout) = @process.read_from_process()
     let line = "{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{\"ok\":true}}"
     // `sh -c "echo '<line>'"` prints the JSON-RPC line and exits.
     let process = @process.spawn(
       group,
       "sh",
       ["-c", "echo '\{line}'"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     ) catch {
-      // Spawning is forbidden in this sandbox: skip (close our pipe ends; the
-      // child ends are released by spawn's own cleanup).
-      _ => {
-        stdout_reader.close()
-        stdin_writer.close()
-        return
-      }
+      // Spawning is forbidden in this sandbox: skip.
+      _ => return
     }
+    let stdout_reader = process.stdout
+    let stdin_writer = process.stdin
     let transport : &@jsonrpc.Transport = NdjsonTransport(
-      stdout_reader,
-      stdin_writer,
+      stdout_reader.text,
+      stdin_writer.text,
       on_close=() => {
         stdout_reader.close()
         stdin_writer.close()

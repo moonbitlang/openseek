@@ -2,7 +2,7 @@
 /// Mock-endpoint harness for `run_approval_review`, which runs the review in
 /// this process exactly as `openseek run --kind approval` does.
 async fn approval_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   handle : (Json) -> String raise,
 ) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
@@ -14,14 +14,14 @@ async fn approval_test_server(
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
-      (request, body, conn) => {
+      (request, conn) => {
         assert_eq(request.path, "/chat/completions")
-        let payload = handle(@json.parse(body.read_all().text()))
+        let payload = handle(@json.parse(conn.text.read_all()))
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write("data: \{payload}\n\n")
-        conn.write("data: [DONE]\n\n")
+        conn.write_string("data: \{payload}\n\n")
+        conn.write_string("data: [DONE]\n\n")
       },
       max_connections=8,
     )

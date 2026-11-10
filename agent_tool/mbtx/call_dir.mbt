@@ -24,7 +24,7 @@ async fn fresh_call_dir(parent : String, prefix : String) -> String {
     let id = @uuid.v7()
     let dir = "\{parent}/\{prefix}\{id[id.length() - 8:]}"
     @fs.mkdir(dir, recursive=true) catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => continue
+      @os_error.OsError(AlreadyExists, ..) => continue
       error => raise error
     }
     return dir

@@ -111,7 +111,7 @@ async fn run_serve(
     now_ms=@env.now().reinterpret_as_int64(),
   )
   let approval_policy = @execution.approval_policy(matches, interactive=true)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let scope = @agent_runtime.AgentTaskScope(group)
     // All scheduling flows through one ordered queue with one consumer:
     // wire commands from the reader, plus the internal turn-completion and
@@ -258,7 +258,7 @@ async fn run_serve(
     }
     let pending : Array[PendingWork] = []
     let mut active_work : ActiveWork? = None
-    let mut prediction : (Int32, @async.Task[Unit])? = None
+    let mut prediction : (Int32, @core_async.Task[Unit])? = None
     // Preserve model and thinking mode: disabling thinking changes DeepSeek's
     // cached prefix even when the message array and tool schemas are identical.
     let prediction_client = @client.Client(
@@ -465,7 +465,7 @@ async fn run_serve(
     fn start_turn(
       content : @agent_session.Content,
       submission_id : String?,
-    ) -> @async.Task[Unit] {
+    ) -> @core_async.Task[Unit] {
       group.spawn() <| () => {
         errdefer {
           @emit.emit(AgentAborted(reason="interrupted"))
@@ -512,7 +512,9 @@ async fn run_serve(
       }
     }
 
-    fn start_compaction(current : @agent_session.Session) -> @async.Task[Unit] {
+    fn start_compaction(
+      current : @agent_session.Session,
+    ) -> @core_async.Task[Unit] {
       group.spawn() <| () => {
         errdefer {
           @emit.emit(CompactionFailed(error="cancelled"))

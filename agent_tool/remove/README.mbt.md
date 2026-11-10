@@ -83,7 +83,7 @@ async test "remove deletes an agent-created file through the registry" {
     let file_state = @agent_tool.FileStateMap::FileStateMap()
     file_state.record_created(
       path,
-      @agent_tool.content_digest(@fs.read_file(path).text()),
+      @agent_tool.content_digest(@fs.read_text(path)),
     )
     let tools = @agent_tool.Tools([@remove.definition(file_state~)])
     // Build the arguments as JSON and stringify: a Windows temp path would

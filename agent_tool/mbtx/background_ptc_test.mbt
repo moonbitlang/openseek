@@ -3,7 +3,7 @@ async test "default PTC survives background handoff and persists job-owned edit 
   @vfs.with_tmpdir(ws => {
     @async.with_timeout(30000, () => {
       @async.with_task_group(group => {
-        @fs.write_file("\{ws}/note.txt", "before\n")
+        @fs.write_text("\{ws}/note.txt", "before\n")
         let state = @agent_tool.FileStateMap()
         let tools = @agent_tool.Tools([
           state.serialize(@edit.definition(workspace_root=ws, file_state=state)),
@@ -44,7 +44,7 @@ async test "default PTC survives background handoff and persists job-owned edit 
         let foreground_count = foreground.length()
         jobs.wait_any([job.id])
         assert_eq(foreground.length(), foreground_count)
-        assert_eq(@fs.read_file("\{ws}/note.txt").text(), "after\n")
+        assert_eq(@fs.read_text("\{ws}/note.txt"), "after\n")
         assert_true(jobs.snapshot(job.id) is Some({ status: Exited(0), .. }))
         assert_true(
           jobs.read_output(job.id) is Some(text) &&
@@ -58,9 +58,9 @@ async test "default PTC survives background handoff and persists job-owned edit 
           ),
         )
         let saved = @json.parse(
-          @fs.read_file(
+          @fs.read_text(
             "\{ws}/\{@openseek_protocol.job_storage_name(job.id)}.json",
-          ).text(),
+          ),
         )
         let decoded : @openseek_protocol.JobRecord = @json.from_json(saved)
         assert_eq(decoded.data, record.data)
@@ -171,7 +171,7 @@ async test "background edits after foreground edits validate stale input and kee
   @vfs.with_tmpdir(ws => {
     @async.with_timeout(30000, () => {
       @async.with_task_group(group => {
-        @fs.write_file("\{ws}/note.txt", "before\n")
+        @fs.write_text("\{ws}/note.txt", "before\n")
         let state = @agent_tool.FileStateMap()
         let entered : @async.Queue[Unit] = Queue(kind=Unbounded)
         let release : @async.Queue[Unit] = Queue(kind=Unbounded)
@@ -246,7 +246,7 @@ async test "background edits after foreground edits validate stale input and kee
         release.put(())
         jobs.wait_any([job.id])
         assert_eq(current.val, foreground_trace)
-        assert_eq(@fs.read_file("\{ws}/note.txt").text(), "foreground\n")
+        assert_eq(@fs.read_text("\{ws}/note.txt"), "foreground\n")
         assert_true(
           jobs.read_output(job.id) is Some(text) &&
           text.contains("stale edit rejected"),
@@ -353,7 +353,7 @@ async test "handoff failure retains completed mutations and interrupts pending c
     @async.with_timeout(30000, () => {
       @async.with_task_group(group => {
         @fs.mkdir("\{ws}/logs")
-        @fs.write_file("\{ws}/note.txt", "before\n")
+        @fs.write_text("\{ws}/note.txt", "before\n")
         let state = @agent_tool.FileStateMap()
         let blocked = Ref(false)
         let sabotage = @agent_tool.AgentToolDefinition(
@@ -407,7 +407,7 @@ async test "handoff failure retains completed mutations and interrupts pending c
         )
         assert_true(blocked.val)
         assert_true(output.is_error, msg=output.content)
-        assert_eq(@fs.read_file("\{ws}/note.txt").text(), "after\n")
+        assert_eq(@fs.read_text("\{ws}/note.txt"), "after\n")
         assert_true(jobs.list().is_empty())
         assert_true(
           output.data

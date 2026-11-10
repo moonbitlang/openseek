@@ -4,6 +4,7 @@ async test "job files survive scope cleanup and a new runtime cannot overwrite t
   let root = @fs.tmpdir(prefix="openseek-retained-jobs-")
   defer @fs.rmdir(root, recursive=true)
   let run : async () -> String = () => {
+    let mut path = ""
     @async.with_timeout(5000, () => {
       @async.with_task_group(group => {
         let tools = @agent.build_tools(
@@ -20,23 +21,24 @@ async test "job files survive scope cleanup and a new runtime cannot overwrite t
           command="retained",
         )
         guard jobs.snapshot(id) is Some(snapshot) &&
-          snapshot.output_file is Some(path) else {
+          snapshot.output_file is Some(output_file) else {
           fail("job was announced without a file")
         }
-        assert_true(@fs.exists(path))
+        assert_true(@fs.exists(output_file))
         while jobs.read_output(id) != Some("retained") {
           @async.sleep(5)
         }
-        path
+        path = output_file
       })
     })
+    path
   }
   let first = run()
-  assert_eq(@fs.read_file(first).text(), "retained")
+  assert_eq(@fs.read_text(first), "retained")
   let second = run()
   assert_true(first != second)
-  assert_eq(@fs.read_file(first).text(), "retained")
-  assert_eq(@fs.read_file(second).text(), "retained")
+  assert_eq(@fs.read_text(first), "retained")
+  assert_eq(@fs.read_text(second), "retained")
 }
 
 ///|
@@ -63,9 +65,9 @@ async test "small foreground execution materializes all prior output at adoption
         snapshot.output_file is Some(path) else {
         fail("missing output file")
       }
-      assert_eq(@fs.read_file(path).text(), "before")
+      assert_eq(@fs.read_text(path), "before")
       assert_true(jobs.stop(id))
-      assert_eq(@fs.read_file(path).text(), "before")
+      assert_eq(@fs.read_text(path), "before")
     })
   })
 }
@@ -139,7 +141,7 @@ async test "concurrent first jobs prepare one canonical runtime directory" {
           fail("missing file")
         }
         assert_eq(@fs.realpath(path), path)
-        assert_true(@fs.read_file(path).text().has_suffix("\n"))
+        assert_true(@fs.read_text(path).has_suffix("\n"))
       }
     })
   })
@@ -192,7 +194,7 @@ async test "tiny foreground burst leaves no log files and concurrent noisy jobs 
             snapshot.output_file is Some(path) else {
             fail("missing log")
           }
-          assert_eq(@fs.read_file(path).text(), "x".repeat(262144))
+          assert_eq(@fs.read_text(path), "x".repeat(262144))
         })
       }
       ignore(@async.all(noisy))
@@ -233,7 +235,8 @@ async test "foreground-only runtime generations are removed after shutdown" {
 async test "failed metadata persistence never prunes an adopted job log" {
   let root = @fs.tmpdir(prefix="openseek-keep-failed-metadata-")
   defer @fs.rmdir(root, recursive=true)
-  let path = @async.with_task_group(group => {
+  let mut retained = ""
+  @async.with_task_group(group => {
     let tools = @agent.build_tools(
       AgentRuntime(),
       AgentTaskScope(group),
@@ -263,7 +266,7 @@ async test "failed metadata persistence never prunes an adopted job log" {
     assert_true(
       jobs.records().any(record => record.persistence_error is Some(_)),
     )
-    path
+    retained = path
   })
-  assert_eq(@fs.read_file(path).text(), "retained")
+  assert_eq(@fs.read_text(retained), "retained")
 }

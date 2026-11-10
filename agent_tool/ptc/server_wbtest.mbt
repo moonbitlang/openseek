@@ -5,6 +5,10 @@ async fn run(
   program : async (Map[String, String]) -> @agent_tool.ToolAction,
   on_trace~ : (Json) -> Unit = _ => (),
 ) -> @agent_tool.ToolAction {
+  let mut result = @agent_tool.respond(
+    "PTC run produced no result",
+    is_error=true,
+  )
   @async.with_task_group(group => {
     let service = Service::start(group, tools)
     let registration = service.register(on_trace~)
@@ -14,8 +18,9 @@ async fn run(
         @agent_tool.respond("PTC program failed: \{error}", is_error=true)
     }
     registration.close()
-    registration.result(action)
+    result = registration.result(action)
   })
+  result
 }
 
 ///|
@@ -75,17 +80,16 @@ async fn request(
   arguments : Json,
 ) -> Json {
   let (url, token) = capability(env)
-  let client = @http.post_stream(url, headers={
-    "Authorization": "Bearer \{token}",
-  })
+  let client = @http.post(url, headers={ "Authorization": "Bearer \{token}" })
   defer client.close()
-  let response = client
-    ..write(({ "version": 1, "name": name, "arguments": arguments } : Json))
-    .end_request()
+  client.text.write(
+    ({ "version": 1, "name": name, "arguments": arguments } : Json).stringify(),
+  )
+  let response = client.end_request()
   assert_eq(response.code, 200)
-  let body = client.read_all().json()
+  let body = @json.parse(client.text.read_all())
   client.enter_passthrough_mode()
-  guard client.read_some() is None else {
+  guard client.read() is None else {
     fail("PTC kept the connection open after its reply")
   }
   body
@@ -167,7 +171,7 @@ async test "PTC rejects unauthenticated unregistered and loop-control calls befo
       assert_true(request(env, name, {}) is { "is_error": true, .. })
     }
     let (url, _) = capability(env)
-    let (response, _) = @http.post(url, ({} : Json))
+    let (response, _) = @http.post_text(url, "{}")
     assert_eq(response.code, 403)
     @agent_tool.respond("ok")
   })
@@ -282,10 +286,10 @@ async test "PTC rejects malformed requests and enforces execution and result bud
         String::make(65537, 'x'),
         "{\"version\":2,\"name\":\"probe\",\"arguments\":{}}",
       ] {
-      let (_, body) = @http.post(url, invalid, headers={
+      let (_, body) = @http.post_text(url, invalid, headers={
         "Authorization": "Bearer \{token}",
       })
-      assert_true(body.json() is { "is_error": true, .. })
+      assert_true(@json.parse(body) is { "is_error": true, .. })
     }
     assert_eq(executions.val, 0)
     for _ in 0..<1024 {

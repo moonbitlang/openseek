@@ -10,22 +10,22 @@ import {
   "moonbitlang/openseek/agent_subrun",
   "moonbitlang/openseek/agent_subrun/inbox",
   "moonbitlang/core/argparse",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/openseek/cli",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/core/env",
   "moonbitlang/openseek/internal/openseek/execution",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/internal/openseek/options",
   "moonbitlang/openseek/internal/openseek/setup",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async/stdio",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/core/json",
   "moonbitlang/x/path",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
   "bobzhang/open_in_browser",
   "moonbitlang/core/encoding/percent",
   "moonbitlang/core/debug",
@@ -34,8 +34,8 @@ import {
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/internal/openseek/testkit",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
 } for "test"
 
@@ -46,3 +46,15 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+    "moonbitlang/core/async/socket",
+    "moonbitlang/core/async/stdio",
+  ],
+)

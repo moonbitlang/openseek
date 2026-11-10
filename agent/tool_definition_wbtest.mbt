@@ -28,8 +28,8 @@ async fn assert_handoff_keeps_guest_marker(
 /// spills into it, and an mbtx bound to both. The temp dir is removed when the
 /// group ends. The handoff bound is injected so a test does not have to outwait
 /// the real one.
-async fn[X] mbtx_fixture(
-  group : @async.TaskGroup[X],
+async fn mbtx_fixture(
+  group : @async.TaskGroup,
   prefix~ : String,
   auto_background_after_ms~ : Int32,
   approval? : @agent_runtime.ApprovalChannel,
@@ -177,7 +177,7 @@ async test "a handed-off job cleans builds but keeps result files until teardown
     let results = @fs.readdir("\{call_dir}/tmp")
     assert_eq(results.length(), 1)
     let result_path = "\{call_dir}/tmp/\{results[0]}/report.txt"
-    assert_eq(@fs.read_file(result_path).text(), "kept")
+    assert_eq(@fs.read_text(result_path), "kept")
     let build_dir = "\{call_dir}/build"
     // wait_any includes launcher cleanup and completion publication.
     assert_false(@fs.exists(build_dir))

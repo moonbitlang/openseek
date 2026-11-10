@@ -2,9 +2,9 @@ import {
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/deepseek",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/openseek/internal/workspace_path",
@@ -14,3 +14,11 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+  ],
+)

@@ -5,7 +5,7 @@
 /// happen in the test after the run, so a client retry shows up as a hard
 /// request-count mismatch instead of silently shifting the cadence.
 async fn goal_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   bodies : Array[String],
   probe_calls~ : Int32,
 ) -> String? {
@@ -19,15 +19,15 @@ async fn goal_test_server(
         "Content-Type": "text/event-stream",
       })
       if bodies.length() <= probe_calls {
-        conn.write(
+        conn.write_string(
           "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_\{bodies.length()}\",\"function\":{\"name\":\"probe\",\"arguments\":\"{}\"}}]}}]}\n\n",
         )
       } else {
-        conn.write(
+        conn.write_string(
           "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
         )
       }
-      conn.write("data: [DONE]\n\n")
+      conn.write_string("data: [DONE]\n\n")
     },
   )
 }

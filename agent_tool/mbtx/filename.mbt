@@ -52,9 +52,10 @@ async test "every share/workflow script is embedded verbatim and named in the hi
       bundled_workflow(name),
       // The generator normalizes CRLF, so a CRLF checkout compares equal.
       Some(
-        @fs.read_file("share/workflow/\{name}")
-        .text()
-        .replace_all(old="\r\n", new="\n"),
+        @fs.read_text("share/workflow/\{name}").replace_all(
+          old="\r\n",
+          new="\n",
+        ),
       ),
       msg="stale embedded copy of \{name}; run moon check to regenerate",
     )

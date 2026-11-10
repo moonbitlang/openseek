@@ -2,12 +2,12 @@
 package "moonbitlang/openseek/mcp/stdio"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/openseek/mcp",
 }
 
 // Values
-pub async fn[X] connect(@async.TaskGroup[X], command~ : String, args~ : Array[String], env? : Map[String, String], cwd? : String, client_name~ : String, client_version~ : String, handshake_timeout_ms? : Int32) -> StdioConnection
+pub async fn connect(@async.TaskGroup, command~ : String, args~ : Array[String], env? : Map[String, String], cwd? : String, client_name~ : String, client_version~ : String, handshake_timeout_ms? : Int32) -> StdioConnection
 
 // Errors
 

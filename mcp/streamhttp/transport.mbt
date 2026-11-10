@@ -342,7 +342,7 @@ async fn delete_session(url : String, headers : @http.Headers) -> Unit {
     Some((host, path)) => ("\{scheme}://\{host}", "/\{path}")
     None => (url, "/")
   }
-  let client = @http.Client(origin) catch { _ => return }
+  let client = @http.ClientConnection(origin) catch { _ => return }
   defer client.close()
   client.request(Delete, path, extra_headers=headers) catch {
     _ => return
@@ -471,12 +471,9 @@ async fn HttpTransport::exchange(
   deliver : (Json) -> Unit,
   answered~ : () -> Bool,
 ) -> Unit {
-  let client = @http.post_stream(
-    self.url,
-    headers=self.request_headers(message),
-  )
+  let client = @http.post(self.url, headers=self.request_headers(message))
   defer client.close()
-  client.write(message.stringify())
+  client.text.write(message.stringify())
   let response = client.end_request()
   // The spec assigns the session id on the initialize response only; capturing
   // it elsewhere would let a later (or misbehaving) response rebind the session.
@@ -491,7 +488,7 @@ async fn HttpTransport::exchange(
       }
       fail("MCP endpoint answered HTTP \{response.code}")
     }
-    let body = client.read_all().text()
+    let body = client.text.read_all()
     let parsed = @json.parse(body) catch { _ => Json::null() }
     let modern_error = parsed
       is { "error": { "code": Number(code, ..), .. }, .. } &&
@@ -526,7 +523,7 @@ async fn HttpTransport::exchange(
   if content_type.contains("text/event-stream") {
     read_sse_stream(client, deliver_success, answered~)
   } else if content_type.contains("application/json") {
-    let text = client.read_all().text()
+    let text = client.text.read_all()
     deliver_success(@json.parse(text))
   } else {
     // 202 Accepted (a notification/response was consumed) or an empty body.
@@ -540,7 +537,7 @@ async fn HttpTransport::exchange(
 /// `event:`/`id:`/comment lines are ignored. Raises on a read failure (which
 /// fails the owning request) rather than masking it as a clean end of stream.
 async fn read_sse_stream(
-  client : @http.Client,
+  client : @http.ClientConnection,
   deliver : (Json) -> Unit,
   answered~ : () -> Bool,
 ) -> Unit {
@@ -586,13 +583,13 @@ async fn read_sse_stream(
 }
 
 ///|
-/// Incremental SSE line reader over `read_some`, recognizing all three
+/// Incremental SSE line reader over `read`, recognizing all three
 /// terminators the SSE grammar allows — LF, CRLF, and lone CR — without
 /// waiting for an LF (a `read_until("\n")` on a held-open CR-only stream
 /// would stall until EOF). The buffer grows with unterminated input, matching
 /// `read_until`; the exchange deadline bounds a hostile stream.
 priv struct SseLineReader {
-  client : @http.Client
+  client : @http.ClientConnection
   buf : Array[Byte]
   mut start : Int32
   // Bytes in [start, scan) are known terminator-free, so a line spanning many
@@ -607,7 +604,9 @@ priv struct SseLineReader {
 const SseCompactAt : Int32 = 4096
 
 ///|
-fn SseLineReader::SseLineReader(client : @http.Client) -> SseLineReader {
+fn SseLineReader::SseLineReader(
+  client : @http.ClientConnection,
+) -> SseLineReader {
   { client, buf: [], start: 0, scan: 0, eof: false, }
 }
 
@@ -657,7 +656,7 @@ async fn SseLineReader::next_line(self : SseLineReader) -> String? {
       }
       return None
     }
-    match self.client.read_some() {
+    match self.client.read() {
       None => self.eof = true
       Some(chunk) => self.buf.push_iter(chunk.iter())
     }

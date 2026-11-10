@@ -72,8 +72,8 @@ async test "read workflow continues after distinct file errors and fails the cal
   let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.mkdir("\{ws}/directory")
-    @fs.write_file("\{ws}/invalid", b"\xff", create_mode=CreateOrTruncate)
-    @fs.write_file("\{ws}/ok", "still read", create_mode=CreateOrTruncate)
+    @fs.write_binary("\{ws}/invalid", b"\xff", create_mode=CreateOrTruncate)
+    @fs.write_text("\{ws}/ok", "still read", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "filename": filename,
       "args": ["missing", "directory", "invalid", "ok"],
@@ -96,8 +96,8 @@ async test "read workflow continues after distinct file errors and fails the cal
 async test "read workflow caps Unicode gutters and the whole foreground batch successfully" {
   let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
-    @fs.write_file("\{ws}/emoji", "A😀B", create_mode=CreateOrTruncate)
-    @fs.write_file(
+    @fs.write_text("\{ws}/emoji", "A😀B", create_mode=CreateOrTruncate)
+    @fs.write_text(
       "\{ws}/large",
       "界".repeat(50_000),
       create_mode=CreateOrTruncate,
@@ -182,7 +182,7 @@ async test "read workflow errors explain invalid selectors and arguments" {
 async test "read workflow parses colons from the right and has literal paths" {
   let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
-    @fs.write_file(
+    @fs.write_text(
       "\{ws}/C:\\src\\main.mbt",
       "drive\nselected",
       create_mode=CreateOrTruncate,
@@ -208,7 +208,7 @@ async test "read workflow reads absolute paths and sandbox wording as ordinary s
     @vfs.with_tmpdir(outside => {
       let path = "\{outside}/sample.mbt"
       let source = "Sandbox policy blocked file write: \"x.mbt\"\nOSError(\"@process.spawn(): Permission denied\")\nx.mbt: Operation not permitted"
-      @fs.write_file(path, source, create_mode=CreateOrTruncate)
+      @fs.write_text(path, source, create_mode=CreateOrTruncate)
       let out = dispatch(@mbtx.definition(workspace_root=ws, read_only=true), {
         "filename": filename,
         "args": [path],

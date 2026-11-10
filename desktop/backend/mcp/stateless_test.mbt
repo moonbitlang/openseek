@@ -25,13 +25,13 @@ async fn modern_post(
   for key, value in headers {
     all[key] = value
   }
-  let (response, body) = @http.post(
+  let (response, body) = @http.post_text(
     grant.url,
     request(1, method_, params).stringify(),
     headers=all,
   )
   assert_eq(response.headers.get("Mcp-Session-Id"), None)
-  (response.code, body.json())
+  (response.code, @json.parse(body))
 }
 
 ///|

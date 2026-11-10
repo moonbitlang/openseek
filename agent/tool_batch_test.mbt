@@ -1,5 +1,5 @@
 ///|
-async fn tool_batch_test_server(group : @async.TaskGroup[Unit]) -> String? {
+async fn tool_batch_test_server(group : @async.TaskGroup) -> String? {
   let mut requests = 0
   serve_chat_completions(
     group,
@@ -14,7 +14,7 @@ async fn tool_batch_test_server(group : @async.TaskGroup[Unit]) -> String? {
       if requests == 1 {
         assert_true(request_body.contains("\"name\":\"first_test\""))
         assert_true(request_body.contains("\"name\":\"second_test\""))
-        conn.write(
+        conn.write_string(
           (
             #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_first","type":"function","function":{"name":"first_test","arguments":"{}"}},{"index":1,"id":"call_second","type":"function","function":{"name":"second_test","arguments":"{}"}}]}}]}
             #|
@@ -24,7 +24,7 @@ async fn tool_batch_test_server(group : @async.TaskGroup[Unit]) -> String? {
       } else {
         assert_true(request_body.contains("first-result"))
         assert_true(request_body.contains("second-result"))
-        conn.write(
+        conn.write_string(
           (
             #|data: {"choices":[{"delta":{"content":"done"}}]}
             #|
@@ -32,7 +32,7 @@ async fn tool_batch_test_server(group : @async.TaskGroup[Unit]) -> String? {
           ),
         )
       }
-      conn.write("data: [DONE]\n\n")
+      conn.write_string("data: [DONE]\n\n")
     },
   )
 }
@@ -115,7 +115,7 @@ async test "agent executes each normal tool call in a response batch" {
 /// A stand-in that answers every request with a single `tool_name` call
 /// (id `call_id`), after checking the request advertised that tool.
 async fn one_tool_call_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   skip_message : String,
   tool_name~ : String,
   call_id~ : String,
@@ -129,10 +129,10 @@ async fn one_tool_call_server(
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": "text/event-stream",
     })
-    conn.write(
+    conn.write_string(
       "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"\{call_id}\",\"type\":\"function\",\"function\":{\"name\":\"\{tool_name}\",\"arguments\":\"{}\"}}]}}]}\n\n",
     )
-    conn.write("data: [DONE]\n\n")
+    conn.write_string("data: [DONE]\n\n")
   })
 }
 

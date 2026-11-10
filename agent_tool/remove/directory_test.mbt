@@ -76,7 +76,7 @@ async test "directory approval invalidates changed added removed renamed and rep
           state.with_access(() => {
             match change {
               "edit" =>
-                @fs.write_file(
+                @fs.write_text(
                   "\{dir}/tree/a",
                   "after",
                   create_mode=CreateOrTruncate,
@@ -99,8 +99,8 @@ async test "directory approval invalidates changed added removed renamed and rep
       )
       guard result is Respond(out) else { fail("expected response") }
       assert_true(out.is_error, msg=change)
-      assert_eq(@fs.read_file("\{dir}/tree/keep").text(), "keep")
-      assert_eq(@fs.read_file("\{dir}/outside").text(), "outside")
+      assert_eq(@fs.read_text("\{dir}/tree/keep"), "keep")
+      assert_eq(@fs.read_text("\{dir}/outside"), "outside")
     })
   }
 }
@@ -143,8 +143,8 @@ async test "directory deletion refuses workspace ancestors symlinks and scope es
       fail("expected response")
     }
     assert_true(out.is_error)
-    assert_eq(@fs.read_file("\{dir}/workspace/tree/keep").text(), "keep")
-    assert_eq(@fs.read_file("\{dir}/outside/file").text(), "outside")
+    assert_eq(@fs.read_text("\{dir}/workspace/tree/keep"), "keep")
+    assert_eq(@fs.read_text("\{dir}/outside/file"), "outside")
   })
 }
 
@@ -167,8 +167,8 @@ async test "directory approval cannot authorize a redirected parent with identic
     guard result is Respond(out) else { fail("expected response") }
     assert_true(out.is_error)
     assert_true(out.content.contains("changed while awaiting approval"))
-    assert_eq(@fs.read_file("\{dir}/first/tree/a").text(), "same")
-    assert_eq(@fs.read_file("\{dir}/second/tree/a").text(), "same")
+    assert_eq(@fs.read_text("\{dir}/first/tree/a"), "same")
+    assert_eq(@fs.read_text("\{dir}/second/tree/a"), "same")
   })
 }
 
@@ -202,7 +202,7 @@ async test "a complete agent-created directory tree is removed without approval"
     let nested = "\{root}/nested"
     let path = "\{nested}/report.txt"
     state.create_parent_directories(path)
-    @fs.write_file(path, "temporary report", create_mode=CreateNew)
+    @fs.write_text(path, "temporary report", create_mode=CreateNew)
     state.record_created(path, @agent_tool.content_digest("temporary report"))
     let asked = Ref(false)
     let definition = @remove.definition(

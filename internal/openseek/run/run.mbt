@@ -13,7 +13,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   // if this run dies before writing its own, the path is simply absent.
   if result_file is Some(path) && result_root is None {
     @fs.remove(path) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => ()
+      @os_error.OsError(NotFound, ..) => ()
       error => raise error
     }
   }
@@ -144,7 +144,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           }
         })
         group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-          while @stdio.stdin.read_until("\n") is Some(_) {
+          while @stdio.stdin.read_until(b"\n") is Some(_) {
             // Only EOF means anything; drain whatever else arrives.
           }
           work.cancel()
@@ -437,7 +437,7 @@ async fn write_result_file(
   result : @openseek_protocol.RunResult,
 ) -> Unit {
   let tmp_path = "\{path}.\{@setup.random_salt()}.tmp"
-  @fs.write_file(
+  @fs.write_text(
     tmp_path,
     result.to_json().stringify() + "\n",
     create_mode=CreateNew,

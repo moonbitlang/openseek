@@ -8,10 +8,10 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
     fail("missing MCP host handoff")
   }
   let request : Json = { "version": 1, "list": {} }
-  let (_, body) = @http.post(url, request, headers={
+  let (_, body) = @http.post_text(url, request.stringify(), headers={
     "Authorization": "Bearer \{token}",
   })
-  guard body.json() is { "data": { "items": Array(items), .. }, .. } else {
+  guard @json.parse(body) is { "data": { "items": Array(items), .. }, .. } else {
     fail("expected the whole catalog in one listing")
   }
   items
@@ -20,8 +20,8 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
 ///|
 /// Start connecting the servers of `config_paths` and wait until every one
 /// has settled.
-async fn[X] settled_mcp(
-  scope : @agent_runtime.AgentTaskScope[X],
+async fn settled_mcp(
+  scope : @agent_runtime.AgentTaskScope,
   config_paths : Array[String],
   workspace_root~ : String,
 ) -> @execution.McpRegistry {
@@ -46,8 +46,8 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       group.spawn_bg(no_wait=true, () => {
         server.run_forever(
-          (request, body, conn) => {
-            let message = @json.parse(body.read_all().text())
+          (request, conn) => {
+            let message = @json.parse(conn.text.read_all())
             guard message is { "id": id, "method": String(method_), .. } else {
               conn.send_response(202, "Accepted")
               return
@@ -87,7 +87,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
               "id": id,
               "result": result,
             }
-            conn.write(response.stringify())
+            conn.write_string(response.stringify())
           },
           max_connections=8,
           allow_failure=true,
@@ -103,9 +103,9 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       let later : Json = {
         "mcpServers": { "seekmoon": { "url": base + "/selected" } },
       }
-      @fs.write_file(first, earlier.stringify())
-      @fs.write_file(second, later.stringify())
-      @fs.write_file(broken, "invalid JSON")
+      @fs.write_text(first, earlier.stringify())
+      @fs.write_text(second, later.stringify())
+      @fs.write_text(broken, "invalid JSON")
       let mcp = settled_mcp(
         AgentTaskScope(group),
         [first, broken, missing, second],
@@ -230,7 +230,7 @@ async test "the MCP registry tells its owner as a server settles and when it is 
       },
     }
     let path = "\{dir}/mcp.json"
-    @fs.write_file(path, config.stringify(), create_mode=CreateOrTruncate)
+    @fs.write_text(path, config.stringify(), create_mode=CreateOrTruncate)
     let changed : @async.Queue[Unit] = Queue(kind=Unbounded)
     let registry = @execution.start_mcp(
       AgentTaskScope(group),

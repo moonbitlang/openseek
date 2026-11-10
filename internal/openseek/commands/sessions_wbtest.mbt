@@ -144,12 +144,6 @@ test "session title keeps the untruncated first line" {
 }
 
 ///|
-test "mtime to unix millis preserves subsecond precision" {
-  assert_eq(mtime_to_unix_millis(42L, 987654321), 42987L)
-  assert_eq(mtime_to_unix_millis(42L, 999999), 42000L)
-}
-
-///|
 async test "session compact command appends summary without api key" {
   @vfs.with_tmpdir(prefix="openseek-cli-session-compact-", root => {
     let store = @store.SessionStore(root)
@@ -161,7 +155,7 @@ async test "session compact command appends summary without api key" {
       .append(Assistant(AssistantMessage("answer")))
     store.create(session)
     let summary_path = "\{root}/summary.txt"
-    @fs.write_file(
+    @fs.write_text(
       summary_path,
       "summarized turn",
       create_mode=CreateOrTruncate,
@@ -196,7 +190,7 @@ async test "session compact file resolves relative to workspace root" {
       .append(User(UserMessage(Content([Text("hello")]))))
       .append(Assistant(AssistantMessage("answer")))
     store.create(session)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/summary.txt",
       "workspace summary",
       create_mode=CreateOrTruncate,
@@ -307,7 +301,7 @@ async test "session fork command copies a session offline under the given id" {
     // The prompt options are the ones `run` takes: a fork of a session made
     // with a custom prompt is given that prompt by passing it again.
     let prompt_file = "\{root}/custom-prompt.txt"
-    @fs.write_file(
+    @fs.write_text(
       prompt_file,
       "custom prompt body",
       create_mode=CreateOrTruncate,

@@ -428,7 +428,7 @@ async fn execute(
   let run_cwd = @workspace_path.resolve_cwd(workspace_root, input.cwd)
   if run_cwd is Some(c) {
     let kind = @fs.kind(c) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() =>
+      @os_error.OsError(NotFound, ..) =>
         return @agent_tool.respond(
           "error: mbtx cwd does not exist: \{c}",
           is_error=true,
@@ -603,7 +603,7 @@ async fn execute(
   // hit would silently drop the diagnostics the caller asked to see. Warning
   // runs are probes, and the recompile is the ~270ms case, not the cold one.
   if input.warning {
-    @fs.write_file(
+    @fs.write_text(
       "\{stage_dir}/snippet.mbtx",
       source,
       create_mode=CreateOrTruncate,
@@ -617,7 +617,7 @@ async fn execute(
   // prompt/steer/cancel commands (or block until the timeout). An empty temp
   // file is portable (no `/dev/null`/`NUL` special-casing).
   let empty_stdin = "\{build_dir}/stdin.empty"
-  @fs.write_file(empty_stdin, "", create_mode=CreateOrTruncate)
+  @fs.write_text(empty_stdin, "", create_mode=CreateOrTruncate)
   // moon's diagnostics point at the copied source under the build dir; the
   // canonical path anchors the diagnostic path rewrite below.
   let real = @fs.realpath(build_dir) catch { _ => build_dir }
@@ -672,7 +672,7 @@ async fn execute(
     workspace?=workspace_grant,
     inject=injected,
   )
-  @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
+  @fs.write_text(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   // Wrap each phase's command in sandbox-exec for the roles that need a rule
   // the wasm policy cannot state: "may not write source". The policy's `fs`
   // rules bind the snippet and stop at the process boundary, so a spawned
@@ -795,7 +795,7 @@ async fn execute(
   // at startup, so the copy also decouples job lifetime from the cache.
   let artifact = if cached {
     let copy = "\{build_dir}/snippet.wasm"
-    @fs.write_file(copy, @fs.read_file(built), create_mode=CreateOrTruncate) catch {
+    @fs.write_binary(copy, @fs.read_binary(built), create_mode=CreateOrTruncate) catch {
       error =>
         return @agent_tool.respond(
           "mbtx: the build succeeded but its artifact could not be copied out of the session cache (\{error}) — a filesystem fault, not a problem in `source`.",
@@ -840,7 +840,7 @@ async fn execute(
       OutputCapBytes,
       // Same EOF-on-stdin contract as every other path here: never hand the
       // snippet the engine's fd 0.
-      stdin=@process.redirect_from_file(empty_stdin),
+      stdin=FromFile(empty_stdin),
     )
     if program is Some(program) {
       exec.on_ending(() => program.stop())
@@ -979,26 +979,28 @@ async fn execute(
   let log = "\{build_dir}/output.log"
   // Pre-create the merged output file so both redirects open it; both append
   // so stdout and stderr interleave in write order.
-  @fs.write_file(log, "", create_mode=CreateOrTruncate)
+  @fs.write_text(log, "", create_mode=CreateOrTruncate)
   let result = @async.with_timeout_opt(foreground_timeout_ms, () => {
     defer (if program is Some(program) { program.stop() })
     let exit_code = @process.run(
-      prog,
-      argv,
-      cwd=run_cwd.unwrap_or("."),
-      inherit_env=true,
-      stdin=@process.redirect_from_file(empty_stdin),
-      stdout=@process.redirect_to_file(log, append=true),
-      stderr=@process.redirect_to_file(log, append=true),
-      no_console_window=true,
-      cancel_handler?=program.map(program => {
-        let CancellationHandler(cancel) = @process.graceful_cancel(timeout=5000)
-        CancellationHandler(pid => {
-          program.stop()
-          cancel(pid)
-        })
-      }),
-    )
+        prog,
+        argv,
+        cwd=run_cwd.unwrap_or("."),
+        inherit_env=true,
+        stdin=FromFile(empty_stdin),
+        stdout=AppendFile(log),
+        stderr=AppendFile(log),
+        no_console_window=true,
+        cancel_handler?=program.map(program => {
+          let CancellationHandler(cancel) = @process.graceful_cancel(
+            timeout=5000,
+          )
+          CancellationHandler(pid => {
+            program.stop()
+            cancel(pid)
+          })
+        }),
+      ).exit_code
     // Revoke the moment the child is gone, before the log read suspends: an
     // accepted call must be marked interrupted, not allowed to finish under
     // a capability whose process has exited. The defer above covers the
@@ -1137,19 +1139,19 @@ async fn build_snippet(
   // stream: warnings stay attributable to the build, and the run phase's
   // policy-refusal scan never reads build chatter.
   let build_log = "\{build_dir}/build.log"
-  @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
+  @fs.write_text(build_log, "", create_mode=CreateOrTruncate)
   errdefer mark_aborted()
   let result = @async.with_timeout_opt(build_timeout_ms, () => {
     let exit_code = @process.run(
-      prog,
-      argv,
-      cwd=run_cwd.unwrap_or("."),
-      inherit_env=true,
-      stdin=@process.redirect_from_file(empty_stdin),
-      stdout=@process.redirect_to_file(build_log, append=true),
-      stderr=@process.redirect_to_file(build_log, append=true),
-      no_console_window=true,
-    )
+        prog,
+        argv,
+        cwd=run_cwd.unwrap_or("."),
+        inherit_env=true,
+        stdin=FromFile(empty_stdin),
+        stdout=AppendFile(build_log),
+        stderr=AppendFile(build_log),
+        no_console_window=true,
+      ).exit_code
     (exit_code, read_capped(build_log))
   })
   guard result is Some((exit_code, raw)) else {
@@ -1981,5 +1983,5 @@ async fn read_script_snapshot(
   state : @agent_tool.FileStateMap,
   path : String,
 ) -> String {
-  state.with_access(() => @fs.read_file(path).text())
+  state.with_access(() => @fs.read_text(path))
 }

@@ -24,7 +24,7 @@ async fn show_in_viewer(session_root : String, session : String) -> Unit {
       session_root,
       wait_ms=inspect_wait_ms,
     ) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() =>
+      @os_error.OsError(NotFound, ..) =>
         start_viewer(
           ["moonx", inspect_package],
           session_root,
@@ -40,11 +40,13 @@ async fn show_in_viewer(session_root : String, session : String) -> Unit {
     Ok(link) => {
       // The link is printed first, so it is there to use whatever happens
       // to the browser.
-      @stdio.stderr.write("watch live: \{link}\n")
-      @stdio.stderr.write("\{browser_notice(@open_in_browser.open(link))}\n")
+      @stdio.stderr.text.write("watch live: \{link}\n")
+      @stdio.stderr.text.write(
+        "\{browser_notice(@open_in_browser.open(link))}\n",
+      )
     }
     Err(error) =>
-      @stdio.stderr.write(
+      @stdio.stderr.text.write(
         "could not start the session viewer (\{error}); the run goes on\n",
       )
   }
@@ -63,18 +65,17 @@ async fn start_viewer(
   let dir = @fs.tmpdir(prefix="openseek-inspect-")
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let out = "\{dir}/inspect.out"
-  // One handle for both streams, as `redirect_to_file` intends; opening the
-  // file twice kept the viewer's output from showing up on Windows.
-  let output = @process.redirect_to_file(out)
+  // One handle for both streams: opening the file twice kept the viewer's
+  // output from showing up on Windows.
   let _ = @process.spawn_orphan(
     command[0],
     [..command[1:], "--ensure", "--watch", "--session-root", session_root],
-    stdout=output,
-    stderr=output,
+    stdout=ToFile(out),
+    stderr=DuplicateStdout,
   )
   let result = @async.with_timeout_opt(wait_ms, () => {
     while true {
-      let text = @fs.read_file(out).text() catch { _ => "" }
+      let text = @fs.read_text(out) catch { _ => "" }
       match viewer_output(text) {
         Opened(url) => return Ok(url)
         Failed(message) => return Err(message)

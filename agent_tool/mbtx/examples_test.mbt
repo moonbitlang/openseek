@@ -4,7 +4,7 @@
 /// what the model is shown is what the host accepts. `dispatch` comes from
 /// mbtx_test.mbt.
 async fn example_source(name : String) -> String {
-  @fs.read_file(@fs.realpath("share/examples/\{name}")).text()
+  @fs.read_text(@fs.realpath("share/examples/\{name}"))
 }
 
 ///|
@@ -62,9 +62,7 @@ async test "ptc_guarded_edit example applies a clean fix and reports a reverted 
         applied.content.contains("applied; 1 warning(s) remain"),
         msg=applied.content,
       )
-      assert_true(
-        @fs.read_file(path).text().contains("len([1, 2, 3]) + length([4])"),
-      )
+      assert_true(@fs.read_text(path).contains("len([1, 2, 3]) + length([4])"))
       // A fix that leaves an unused binding behind is reverted by the host,
       // and the script reports the counts it was given.
       let reverted = @async.with_timeout(180000, () => {
@@ -86,9 +84,7 @@ async test "ptc_guarded_edit example applies a clean fix and reports a reverted 
         ),
         msg=reverted.content,
       )
-      assert_true(
-        @fs.read_file(path).text().contains("len([1, 2, 3]) + length([4])"),
-      )
+      assert_true(@fs.read_text(path).contains("len([1, 2, 3]) + length([4])"))
     })
   })
 }

@@ -26,7 +26,7 @@ async test "operation approval is one-shot for write and remove and never widens
     })
     for name in ["write", "remove"] {
       let path = "\{ws}/outside-\{name}.txt"
-      @fs.write_file(path, "old")
+      @fs.write_text(path, "old")
       let tool = match name {
         "write" =>
           @write.definition(
@@ -46,14 +46,14 @@ async test "operation approval is one-shot for write and remove and never widens
         _ => { "path": path, "reason": "cleanup" }
       }
       for _ in 0..<2 {
-        @fs.write_file(path, "old", create_mode=CreateOrTruncate)
+        @fs.write_text(path, "old", create_mode=CreateOrTruncate)
         let out = operation_result(tool, args)
         assert_false(out.is_error, msg=out.content)
         assert_true(scope.deny_reason(path) is Some(_))
         if name == "remove" {
           assert_false(@fs.exists(path))
         } else {
-          assert_eq(@fs.read_file(path).text(), "new")
+          assert_eq(@fs.read_text(path), "new")
         }
       }
     }
@@ -64,14 +64,14 @@ async test "operation approval is one-shot for write and remove and never widens
       { "path": new_path, "content": "created" },
     )
     assert_false(out.is_error, msg=out.content)
-    assert_eq(@fs.read_file(new_path).text(), "created")
+    assert_eq(@fs.read_text(new_path), "created")
   })
 }
 
 ///|
 async test "operation approval never asks for invalid arguments or invalid source" {
   @vfs.with_tmpdir(ws => {
-    @fs.write_file("\{ws}/a.txt", "old")
+    @fs.write_text("\{ws}/a.txt", "old")
     guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
       is Ok(scope) else {
       fail("scope")
@@ -99,7 +99,7 @@ async test "operation approval never asks for invalid arguments or invalid sourc
       assert_true(operation_result(tool, args).is_error)
     }
     assert_eq(asks.val, 0)
-    assert_eq(@fs.read_file("\{ws}/a.txt").text(), "old")
+    assert_eq(@fs.read_text("\{ws}/a.txt"), "old")
     assert_false(@fs.exists("\{ws}/bad.mbt"))
   })
 }
@@ -113,7 +113,7 @@ async test "operation approval preserves targets on rejection cancellation unava
       fail("scope")
     }
     for outcome in [@agent_runtime.Rejected, Cancelled, Unavailable] {
-      @fs.write_file(path, "old", create_mode=CreateOrTruncate)
+      @fs.write_text(path, "old", create_mode=CreateOrTruncate)
       let out = operation_result(
         @write.definition(
           write_scope=scope,
@@ -122,7 +122,7 @@ async test "operation approval preserves targets on rejection cancellation unava
         { "path": path, "content": "new" },
       )
       assert_true(out.is_error)
-      assert_eq(@fs.read_file(path).text(), "old")
+      assert_eq(@fs.read_text(path), "old")
     }
     let state = @agent_tool.FileStateMap()
     let tool = @write.definition(
@@ -130,7 +130,7 @@ async test "operation approval preserves targets on rejection cancellation unava
       write_scope=scope,
       approval=ApprovalChannel(_ => {
         state.with_access(() => {
-          @fs.write_file(path, "external", create_mode=CreateOrTruncate)
+          @fs.write_text(path, "external", create_mode=CreateOrTruncate)
         })
         AllowedOnce
       }),
@@ -140,7 +140,7 @@ async test "operation approval preserves targets on rejection cancellation unava
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("changed while awaiting approval"))
-    assert_eq(@fs.read_file(path).text(), "external")
+    assert_eq(@fs.read_text(path), "external")
   })
 }
 
@@ -232,8 +232,8 @@ async test "edit tools retain scope restrictions in direct and programmatic call
         let out = operation_result(tool, args)
         assert_true(out.is_error)
         assert_true(out.content.contains("write blocked"))
-        assert_eq(@fs.read_file("\{ws}/allowed/a").text(), "old")
-        assert_eq(@fs.read_file("\{ws}/outside").text(), "old")
+        assert_eq(@fs.read_text("\{ws}/allowed/a"), "old")
+        assert_eq(@fs.read_text("\{ws}/outside"), "old")
       }
     }
   })
@@ -245,7 +245,7 @@ async test "operation approval permits a validated full source replacement but n
     let path = "\{ws}/template.mbt"
     let before = "///|\nfn template() -> Int { 1 }\n"
     let after = "///|\nfn template() -> Int { 2 }\n"
-    @fs.write_file(path, before)
+    @fs.write_text(path, before)
     let asks = Ref(0)
     let tool = @write.definition(
       approval=ApprovalChannel(ask => {
@@ -261,10 +261,10 @@ async test "operation approval permits a validated full source replacement but n
     })
     assert_true(invalid.is_error)
     assert_eq(asks.val, 0)
-    assert_eq(@fs.read_file(path).text(), before)
+    assert_eq(@fs.read_text(path), before)
     let valid = operation_result(tool, { "path": path, "content": after })
     assert_false(valid.is_error, msg=valid.content)
     assert_eq(asks.val, 1)
-    assert_eq(@fs.read_file(path).text(), after)
+    assert_eq(@fs.read_text(path), after)
   })
 }

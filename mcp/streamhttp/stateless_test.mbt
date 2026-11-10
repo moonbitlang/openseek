@@ -8,7 +8,7 @@ async fn stateless_reply(
     "Content-Type": "application/json",
     "Mcp-Session-Id": "must-be-ignored",
   })
-  conn.write(
+  conn.write_string(
     ({ "jsonrpc": "2.0", "id": id, "result": result } : Json).stringify(),
   )
 }
@@ -19,14 +19,14 @@ async test "stateless HTTP has per-request metadata mirrored headers no initiali
     guard bind_test_server("TCP bind unavailable") is Some(server) else {
       return
     }
-    let requests : Array[(@http.Request, Json)] = []
+    let requests : Array[(@http.RequestHeader, Json)] = []
     let schema : Json = {
       "type": "object",
       "properties": { "tenant": { "type": "string", "x-mcp-header": "Tenant" } },
     }
     group.spawn_bg(no_wait=true, () => {
-      server.run_forever((request, body, conn) => {
-        let message = @json.parse(body.read_all().text())
+      server.run_forever((request, conn) => {
+        let message = @json.parse(conn.text.read_all())
         requests.push((request, message))
         guard message is { "id": id, "method": String(method_), .. } else {
           fail("unexpected notification")
@@ -162,8 +162,8 @@ async test "modern HTTP errors and authentication failures never trigger legacy 
       }
       let methods : Array[String] = []
       group.spawn_bg(no_wait=true, () => {
-        server.run_forever((_, body, conn) => {
-          let message = @json.parse(body.read_all().text())
+        server.run_forever((_, conn) => {
+          let message = @json.parse(conn.text.read_all())
           guard message is { "id": id, "method": String(method_), .. } else {
             fail("missing request")
           }
@@ -171,7 +171,7 @@ async test "modern HTTP errors and authentication failures never trigger legacy 
           conn.send_response(status, "Rejected", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write(
+          conn.write_string(
             (
               {
                 "jsonrpc": "2.0",
@@ -227,7 +227,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
         let conn = @http.ServerConnection::new(tcp)
         defer conn.close()
         let _ = conn.read_request()
-        let message = @json.parse(conn.read_all().text())
+        let message = @json.parse(conn.text.read_all())
         guard message is { "id": id, "method": String(method_), .. } else {
           fail("unexpected notification POST")
         }
@@ -244,17 +244,17 @@ async test "cancelling a modern HTTP call closes its stream while another call c
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
-          conn.write(": waiting\n\n")
+          conn.write_string(": waiting\n\n")
           conn.flush()
           started.put(())
-          tcp.read_some() |> ignore
+          tcp.read() |> ignore
           disconnected.put(())
         } else {
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
           // A forbidden peer request must not cause a response POST.
-          conn.write(
+          conn.write_string(
             "data: {\"jsonrpc\":\"2.0\",\"id\":\"peer\",\"method\":\"ping\"}\n\n",
           )
           let reply : Json = {
@@ -265,7 +265,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
               "content": [{ "type": "text", "text": "done" }],
             },
           }
-          conn.write("data: \{reply.stringify()}\n\n")
+          conn.write_string("data: \{reply.stringify()}\n\n")
         }
         conn.end_response()
       })

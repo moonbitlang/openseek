@@ -35,8 +35,8 @@ pub fn HttpConnection::shutdown(self : HttpConnection) -> Unit {
 /// the endpoint is unreachable, answers with an error, or the handshake fails
 /// or times out (`@async.TimeoutError`), closing the transport in every failure
 /// case. `headers` (e.g. `Authorization`) go on every request.
-pub async fn[X] connect(
-  group : @async.TaskGroup[X],
+pub async fn connect(
+  group : @async.TaskGroup,
   url~ : String,
   headers~ : Map[String, String] = Map([]),
   client_name~ : String,

@@ -8,11 +8,11 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
   // Spaces and shell syntax in the filename must survive argv unchanged.
   let filename = "headers $(never-execute); literal.json"
   let path = dir + "/" + filename
-  @fs.write_file(
+  @fs.write_text(
     dir + "/helper.sh",
     "moonx cli/cat@0.1.0 -\necho run >> invocations\nmoonx cli/cat@0.1.0 \"$1\"\n",
   )
-  @fs.write_file(
+  @fs.write_text(
     path, "{\"Authorization\":\"Bearer first\",\"MCP-Protocol-Version\":\"wrong\"}",
   )
   @async.with_task_group(group => {
@@ -25,9 +25,9 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
     }
     let seen : Array[@http.Headers] = []
     group.spawn_bg(no_wait=true, () => {
-      server.run_forever((request, body, conn) => {
+      server.run_forever((request, conn) => {
         seen.push(request.headers)
-        let message = @json.parse(body.read_all().text())
+        let message = @json.parse(conn.text.read_all())
         guard message is { "id": id, "method": String(method_), .. } else {
           fail("expected a stateless request")
         }
@@ -87,10 +87,10 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
     guard entries is [{ connection: Live(first), .. } as entry] else {
       fail("expected a connected server")
     }
-    assert_eq(@fs.read_file(dir + "/invocations").text(), "run\n")
+    assert_eq(@fs.read_text(dir + "/invocations"), "run\n")
     assert_true(!seen.is_empty())
     // Existing clients retain their resolved map, even after helper output changes.
-    @fs.write_file(
+    @fs.write_text(
       path,
       "{\"authorization\":\"Bearer second\"}",
       create_mode=CreateOrTruncate,
@@ -106,7 +106,7 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
       assert_eq(headers.get("MCP-Protocol-Version"), Some("2026-07-28"))
     }
     first.close()
-    assert_eq(@fs.read_file(dir + "/invocations").text(), "run\n")
+    assert_eq(@fs.read_text(dir + "/invocations"), "run\n")
     seen.clear()
     let entries = connect_all(
       scope,
@@ -124,7 +124,7 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
       assert_eq(headers.get("X-Static"), Some("preserved"))
     }
     second.close()
-    assert_eq(@fs.read_file(dir + "/invocations").text(), "run\nrun\n")
+    assert_eq(@fs.read_text(dir + "/invocations"), "run\nrun\n")
     assert_eq(configured_headers, {
       "authorization": "static",
       "X-Static": "preserved",
