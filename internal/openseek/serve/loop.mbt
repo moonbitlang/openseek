@@ -160,8 +160,6 @@ async fn run_serve(
       ),
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
-    // Connecting runs in the background, so a slow server (or a headers
-    // helper waiting on the user) never holds back reading commands.
     let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
@@ -175,12 +173,9 @@ async fn run_serve(
       api_url?,
     )
     // What this engine holds of its MCP servers goes out unasked: once now,
-    // with the servers still connecting, and again whenever it changes — a
-    // server settling, or a connection closing. Changes arrive from the
-    // connecting tasks and from a connection's own teardown, so they only wake
-    // the loop and the loop reports — which also means nothing is sent once
-    // the loop has stopped and the group is closing every connection on the
-    // way out.
+    // with the servers still connecting, and again on every `McpChanged`.
+    // Only the loop reports, so nothing is sent once it has stopped and the
+    // group is closing every connection on the way out.
     let mut reported_mcp = mcp.status()
     @emit.emit(McpStatus(status=reported_mcp))
     fn report_mcp_status() {

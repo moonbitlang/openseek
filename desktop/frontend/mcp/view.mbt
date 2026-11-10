@@ -13,16 +13,19 @@ pub fn summary(
     Loaded(Stopped) | Reloading(Stopped) => text(locale, NotRunning)
     Loaded(Connecting) | Reloading(Connecting) => text(locale, EngineConnecting)
     Loaded(Running(status)) | Reloading(Running(status)) => {
-      let connecting = status.servers
-        .filter(server => server.state is Connecting)
+      let mut connecting = 0
+      let mut failed = status.configs
+        .filter(config => config.state is Failed(_))
         .length()
-      let failed = status.servers
-        .filter(server => server.state is (Failed(_) | Lost(_)))
-        .length() +
-        status.configs.filter(config => config.state is Failed(_)).length()
-      let connected = status.servers
-        .filter(server => server.state is Connected(_))
-        .length()
+      let mut connected = 0
+      for server in status.servers {
+        match server.state {
+          Connecting => connecting += 1
+          Failed(_) | Lost(_) => failed += 1
+          Connected(_) => connected += 1
+          NoTools | Skipped => ()
+        }
+      }
       let parts : Array[String] = []
       if connecting > 0 {
         parts.push(text(locale, ConnectingCount(connecting)))

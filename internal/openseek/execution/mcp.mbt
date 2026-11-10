@@ -22,11 +22,9 @@ struct McpRegistry {
 /// helper waiting on the user) does not hold up the engine. `on_change` runs
 /// each time `status` may have changed since — a server settled, or a
 /// connected server's connection closed — and must not block. Once every
-/// server has settled, `McpToolsRegistered` is reported, unless no file could
-/// be used. Nothing here
-/// fails the engine: a file that cannot be used and a server that cannot be
-/// reached are recorded in the registry and reported as the events they always
-/// were.
+/// server has settled, `McpToolsRegistered` is reported. Nothing here fails
+/// the engine: a file that cannot be used and a server that cannot be reached
+/// are recorded in the registry and reported as the events they always were.
 pub async fn[X] start_mcp(
   scope : @agent_runtime.AgentTaskScope[X],
   config_paths : Array[String],
@@ -55,6 +53,9 @@ pub async fn[X] start_mcp(
     configs.push({ path, state: Loaded, })
     loaded.push(servers)
   }
+  // Preserve the single-file failure contract: no registration event when
+  // every input failed to load. A valid empty config still registers normally.
+  guard !loaded.is_empty() else { return { configs, servers: [], } }
   let servers = @mcptools.start(
     scope,
     @mcpconfig.merge(loaded),
@@ -86,10 +87,6 @@ pub async fn[X] start_mcp(
         names.push("\{server.config.name()}/\{tool.name}")
       }
     }
-    // Preserve the single-file failure contract: no registration event
-    // when every input failed to load. A valid empty config still
-    // registers normally.
-    guard !loaded.is_empty() else { return }
     @emit.emit(
       McpToolsRegistered(servers=servers.length(), tools=names.length(), names~),
     )
@@ -140,24 +137,20 @@ pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
   let servers : Array[@protocol.McpServerStatus] = []
   for configured in self.servers {
     let server = configured.config
+    fn tools(entry : @mcptools.ServerEntry) -> Array[@protocol.McpTool] {
+      entry.tools.map(tool => {
+        name: tool.name,
+        description: tool.description,
+      })
+    }
+
     let state : @protocol.McpServerState = match configured.try_wait() {
       None => Connecting
-      Some(entry) => {
-        let tools : Array[@protocol.McpTool] = entry.tools.map(tool => {
-          name: tool.name,
-          description: tool.description,
-        })
-        match entry.connection {
-          Live(client) =>
-            if client.is_closed() {
-              Lost(tools)
-            } else {
-              Connected(tools)
-            }
-          NoTools => NoTools
-          Failed(error) => Failed(error)
-        }
-      }
+      Some({ connection: Live(client), .. } as entry) if client.is_closed() =>
+        Lost(tools(entry))
+      Some({ connection: Live(_), .. } as entry) => Connected(tools(entry))
+      Some({ connection: NoTools, .. }) => NoTools
+      Some({ connection: Failed(error), .. }) => Failed(error)
     }
     servers.push({
       name: server.name(),

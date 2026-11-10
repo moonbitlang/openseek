@@ -1,7 +1,7 @@
 // What a running engine holds of the MCP servers it was configured with: the
 // payload of the `mcp_status` event, which the engine sends on its own once
-// it has started connecting them and whenever that state changes. It is the engine's
-// own state — the connections a conversation actually has, not what
+// it has started connecting them and whenever that state changes. It is the
+// engine's own state — the connections a conversation actually has, not what
 // connecting afresh would yield. An engine can be given several configuration
 // files; each is reported on its own, and the servers they contribute are
 // reported once, merged, each naming the file it came from.

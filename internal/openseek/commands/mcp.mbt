@@ -45,8 +45,8 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
   println("\{shown_path}: \{servers.length()} server(s)")
   @async.with_task_group() <| group => {
     let scope = @agent_runtime.AgentTaskScope(group)
-    // Connect exactly as serve/run do, so what is printed is what a script's
-    // `@mcp.search` would find.
+    // Connect as serve/run do, but wait for every server, so what is printed
+    // is what a script's `@mcp.search` finds once they have all settled.
     let entries = @mcptools.connect(
       scope,
       servers,
