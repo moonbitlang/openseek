@@ -12,6 +12,9 @@ struct McpRegistry {
   configs : Array[@protocol.McpConfigStatus]
   /// Each server of the merged configuration, in order, being connected.
   servers : Array[@mcptools.Server]
+  /// The task that reports `McpToolsRegistered` once every server has
+  /// settled; `None` when no configuration file loaded, which reports nothing.
+  registered : @async.Task[Unit]?
 }
 
 ///|
@@ -55,7 +58,9 @@ pub async fn[X] start_mcp(
   }
   // Preserve the single-file failure contract: no registration event when
   // every input failed to load. A valid empty config still registers normally.
-  guard !loaded.is_empty() else { return { configs, servers: [], } }
+  guard !loaded.is_empty() else {
+    return { configs, servers: [], registered: None, }
+  }
   let servers = @mcptools.start(
     scope,
     @mcpconfig.merge(loaded),
@@ -78,20 +83,34 @@ pub async fn[X] start_mcp(
       })
     }
   }
-  scope
-  .group()
-  .spawn_bg(no_wait=true, () => {
-    let names : Array[String] = []
-    for server in servers {
-      for tool in server.connecting.wait().tools {
-        names.push("\{server.config.name()}/\{tool.name}")
+  let registered = scope
+    .group()
+    .spawn(no_wait=true, () => {
+      let names : Array[String] = []
+      for server in servers {
+        for tool in server.connecting.wait().tools {
+          names.push("\{server.config.name()}/\{tool.name}")
+        }
       }
-    }
-    @emit.emit(
-      McpToolsRegistered(servers=servers.length(), tools=names.length(), names~),
-    )
-  })
-  { configs, servers, }
+      @emit.emit(
+        McpToolsRegistered(
+          servers=servers.length(),
+          tools=names.length(),
+          names~,
+        ),
+      )
+    })
+  { configs, servers, registered: Some(registered), }
+}
+
+///|
+/// Wait until every server has settled and `McpToolsRegistered` has been
+/// reported — for a one-shot run, whose turn should see every tool there will
+/// be.
+pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
+  if self.registered is Some(registered) {
+    registered.wait()
+  }
 }
 
 ///|

@@ -54,6 +54,9 @@ async fn run_task_turn(
       @options.mcp_config_paths(matches),
       workspace_root~,
     )
+    // A one-shot run has a single turn, so it waits for every server rather
+    // than start without tools that are about to arrive.
+    mcp.wait()
     let extra_tools = @execution.build_extra_tools(
       model~,
       api_key~,

@@ -19,19 +19,14 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
 
 ///|
 /// Start connecting the servers of `config_paths` and wait until every one
-/// has settled, as its owner hears.
+/// has settled.
 async fn[X] settled_mcp(
   scope : @agent_runtime.AgentTaskScope[X],
   config_paths : Array[String],
   workspace_root~ : String,
 ) -> @execution.McpRegistry {
-  let changed : @async.Queue[Unit] = Queue(kind=Unbounded)
-  let registry = @execution.start_mcp(scope, config_paths, workspace_root~, on_change=() => {
-    ignore(changed.try_put(()) catch { _ => false })
-  })
-  while registry.status().servers.any(server => server.state is Connecting) {
-    changed.get()
-  }
+  let registry = @execution.start_mcp(scope, config_paths, workspace_root~)
+  registry.wait()
   registry
 }
 
