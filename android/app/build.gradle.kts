@@ -57,7 +57,11 @@ val bundleConsole by tasks.registering(Sync::class) {
     val bundle = rootProject.layout.projectDirectory.dir("../desktop/dist/browser")
     // The document names the shared frontend under root-absolute /assets/
     // URLs, which the WebView answers from this bundle's assets directory.
-    from(bundle)
+    from(bundle) {
+        // The release archive's precompressed copies are for openseek-api;
+        // the WebView reads the APK's assets uncompressed.
+        exclude("**/*.br", "**/*.gz")
+    }
     into(layout.buildDirectory.dir("generated/consoleAssets"))
     doFirst {
         check(bundle.file("assets/frontend.js").asFile.isFile && bundle.file("index.html").asFile.isFile) {
