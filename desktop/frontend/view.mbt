@@ -1409,6 +1409,9 @@ fn api_settings_rows(
       ),
     )
   }
+  if api_balance_row(dispatch, model) is Some(row) {
+    rows.push(row)
+  }
   rows
 }
 

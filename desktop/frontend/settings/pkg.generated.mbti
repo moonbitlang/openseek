@@ -86,6 +86,14 @@ pub(all) enum Message {
   ApiKey
   SaveApiKey
   KeyStorageDescription
+  Balance
+  CheckingBalance
+  BalanceExhausted
+  OpenRouterBalanceDescription
+  OpenRouterUncapped
+  LowBalanceNotice(String, String)
+  ExhaustedBalanceNotice(String)
+  ViewBalance
   Language
   LanguageDescription
   System

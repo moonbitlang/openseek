@@ -127,6 +127,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     }
     context.push(@composer.ApiSetupNotice(text~))
   }
+  if self.balance_notice() is Some(notice) {
+    context.push(notice)
+  }
   // First among the notices, because it is the only one the turn is waiting
   // on: everything else here is advice, and this is a question with a tool
   // blocked behind it.

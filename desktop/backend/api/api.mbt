@@ -680,6 +680,7 @@ pub fn endpoints(
       state.schedules.action(payload)
     }),
     Endpoint(@commands.settings_get, _ => @engine.settings_status(state.manager)),
+    Endpoint(@commands.settings_balance, _ => @engine.api_balance(state.manager)),
     @endpoint.Endpoint::sync(@commands.app_info, _ => {
       version: state.app_version,
       console_url: state.console_url,
