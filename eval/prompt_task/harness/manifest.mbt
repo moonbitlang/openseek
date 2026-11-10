@@ -137,7 +137,7 @@ pub fn manifest_path(out_dir : String) -> String {
 ///|
 /// Write the run manifest to `run_manifest.json`.
 async fn write_manifest(manifest : RunManifest) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     manifest_path(manifest.out_dir),
     ToJson::to_json(manifest).stringify(),
     create_mode=CreateOrTruncate,
@@ -147,7 +147,7 @@ async fn write_manifest(manifest : RunManifest) -> Unit {
 ///|
 /// Read a run manifest from `run_manifest.json` under `out_dir`.
 async fn read_manifest(out_dir : String) -> RunManifest {
-  let text = @fs.read_file(manifest_path(out_dir)).text()
+  let text = @fs.read_text(manifest_path(out_dir))
   RunManifest::from_json(@json.parse(text))
 }
 

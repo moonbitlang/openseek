@@ -6,7 +6,7 @@
 pub async fn run_experiments(config : Config) -> RunManifest {
   require_api_access(config.api_key, config.model)
   @runner.prepare_output_dir(config.out_dir)
-  let task_template = @fs.read_file(config.task_file).text()
+  let task_template = @fs.read_text(config.task_file)
   let trials = @runner.run_indexed_with_concurrency(
     config.runs,
     config.concurrency,
@@ -76,15 +76,18 @@ async fn run_trial(
     args.push(@fs.realpath(config.system_prompt_addendum_file))
   }
   args.push(task)
-  let (exit_code, output) = @process.collect_output_merged(
+  let result = @process.run(
     program,
     args,
     extra_env=trial_extra_env(config, real_workspace),
     inherit_env=true,
     cwd=repo_root,
+    stdout=Collect,
+    stderr=DuplicateStdout,
   )
+  let exit_code = result.exit_code
   let log_path = "\{config.out_dir}/logs/\{trial_name}.log"
-  @fs.write_file(log_path, output.text(), create_mode=CreateOrTruncate)
+  @fs.write_text(log_path, result.stdout_text(), create_mode=CreateOrTruncate)
   let events_path = discover_session_events(
     real_workspace,
     session_id,

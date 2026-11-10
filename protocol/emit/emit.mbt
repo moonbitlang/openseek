@@ -77,7 +77,7 @@ pub async fn drain(write : async (@protocol.Event) -> Unit) -> Unit {
 /// Write the open sink's events to stdout as the JSONL wire, one
 /// `Event::to_json` line each. See `drain` for the lifecycle.
 pub async fn drain_stdout() -> Unit {
-  drain(event => @stdio.stdout.write("\{event.to_json().stringify()}\n"))
+  drain(event => @stdio.stdout.text.write("\{event.to_json().stringify()}\n"))
 }
 
 ///|

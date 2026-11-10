@@ -189,7 +189,7 @@ async fn main {
       fail("could not locate index.html shell (pass --web-dir)")
     }
     let html = build_export_html(rows, shell_html, bundle_js)
-    @fs.write_file(config.export_path, html, create_mode=CreateOrTruncate)
+    @fs.write_text(config.export_path, html, create_mode=CreateOrTruncate)
     // Name the embedded bundle: a stale artifact silently shadowing a
     // fresh build is invisible in the output file, but not in this line.
     println(
@@ -212,7 +212,7 @@ async fn main {
     _ => fail("invalid --host/--port: \{config.host}:\{config.port}")
   }
   let server = @http.Server(addr, reuse_addr=true) catch {
-    @os_error.OSError(_) as error => {
+    @os_error.OsError(_, ..) as error => {
       // The port is taken. If an `inspect` for these same sessions holds it,
       // point at that one rather than fail: starting a second is never wanted.
       let probe_host = if config.host == "0.0.0.0" {
@@ -338,12 +338,12 @@ async fn serve(
           if reason is Some(why) {
             println("openseek viz: \{why}; exiting")
             on_exit()
-            group.return_immediately(())
+            group.return_immediately()
           }
         }
       }
     }
-    server.run_forever((request, _body, conn) => {
+    server.run_forever((request, conn) => {
       last_request.val = @async.now()
       handle(request, conn, catalog, assets, access?)
     })
@@ -448,7 +448,7 @@ fn session_file_name(id : String) -> String {
 /// connection mid-body — is swallowed: the response was already started, so
 /// retrying would double-send. `run_forever` keeps serving other connections.
 async fn handle(
-  request : @http.Request,
+  request : @http.RequestHeader,
   conn : @http.ServerConnection,
   catalog : SessionCatalog,
   assets : ViewerAssets,
@@ -489,7 +489,7 @@ async fn handle(
 
 ///|
 async fn build_reply_or_500(
-  request : @http.Request,
+  request : @http.RequestHeader,
   catalog : SessionCatalog,
   assets : ViewerAssets,
 ) -> Reply {
@@ -517,7 +517,7 @@ async fn send_reply(
 
 ///|
 async fn build_reply(
-  request : @http.Request,
+  request : @http.RequestHeader,
   catalog : SessionCatalog,
   assets : ViewerAssets,
 ) -> Reply {
@@ -646,7 +646,7 @@ async fn session_envelope_reply(path : String, known_bytes? : Int64) -> Reply {
       "events_bytes": Json(known.to_double()),
     })
   }
-  let bytes = @fs.read_file(path).binary()
+  let bytes = @fs.read_binary(path)
   json_reply({
     "found": true,
     "events": @utf8.decode_lossy(bytes),
@@ -735,7 +735,7 @@ async fn file_mtime(path : String) -> (Int64, Int32)? {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return None }
   defer file.close()
   let stamp = file.mtime() catch { _ => return None }
-  Some(stamp)
+  Some((stamp.sec(), stamp.nsec()))
 }
 
 ///|
@@ -1023,9 +1023,9 @@ async fn unique_roots(roots : Array[SessionRoot]) -> Array[SessionRoot] {
 async fn first_prompt_in_log(path : String) -> String {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
-  let _ = file.read_until("\n") catch { _ => return "" }
+  let _ = file.text.read_until("\n") catch { _ => return "" }
   for _ in 0..<first_prompt_scan_limit {
-    let next = file.read_until("\n") catch { _ => return "" }
+    let next = file.text.read_until("\n") catch { _ => return "" }
     guard next is Some(line) else { break }
     if line.is_blank() {
       continue
@@ -1150,8 +1150,7 @@ fn session_id_from_file_name(name : String) -> String? {
 ///|
 async fn session_file_stamp(path : String) -> (Int64?, Int32) {
   let stamp = @fs.mtime(path) catch { _ => return (None, 0) }
-  let (seconds, nanoseconds) = stamp
-  (Some(seconds), nanoseconds)
+  (Some(stamp.sec()), stamp.nsec())
 }
 
 ///|
@@ -1313,7 +1312,7 @@ async fn asset_reply(path : String, content_type : String) -> Reply {
 /// keeps that prefix, and the torn final line then fails to parse client-side
 /// and is reported as a benign truncated tail.
 async fn read_text_lossy(path : String) -> String {
-  @utf8.decode_lossy(@fs.read_file(path).binary())
+  @utf8.decode_lossy(@fs.read_binary(path))
 }
 
 ///|
@@ -1504,11 +1503,11 @@ async test "locate_bundle prefers the freshest artifact; explicit wins" {
   let root = @fs.tmpdir(prefix="openseek-viz-bundle-")
   let old_path = "\{root}/old.js"
   let new_path = "\{root}/new.js"
-  @fs.write_file(old_path, "old", create_mode=CreateOrTruncate)
+  @fs.write_text(old_path, "old", create_mode=CreateOrTruncate)
   // Written after a settling delay, so strictly newer even on filesystems with
   // coarse timestamp granularity (CI containers are not always APFS).
   @async.sleep(20)
-  @fs.write_file(new_path, "new", create_mode=CreateOrTruncate)
+  @fs.write_text(new_path, "new", create_mode=CreateOrTruncate)
   // No explicit bundle: recency beats candidate order.
   assert_eq(locate_bundle(["", old_path, new_path]), Some(new_path))
   assert_eq(locate_bundle(["", new_path, old_path]), Some(new_path))

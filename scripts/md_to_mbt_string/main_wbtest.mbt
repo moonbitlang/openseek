@@ -6,19 +6,14 @@
 /// we cannot import the testkit/filesystem package here.
 async fn[T] with_tmpdir(f : async (String) -> T) -> T {
   let dir = @fs.tmpdir(prefix="")
-  async fn rmdir() {
-    @fs.rmdir(dir, recursive=true) catch {
-      _ => ()
-    }
-  }
-  defer rmdir()
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   f(dir)
 }
 
 ///|
 async test "CRLF markdown still expands example links" {
   with_tmpdir(dir => {
-    @fs.write_file("\{dir}/ex.mbtx", "fn main {\n  ()\n}\n")
+    @fs.write_text("\{dir}/ex.mbtx", "fn main {\n  ()\n}\n")
     inspect(
       expand_example_links("a\r\n[x](ex.mbtx)\r\nb\r\n", dir),
       content=(
@@ -38,7 +33,7 @@ async test "CRLF markdown still expands example links" {
 ///|
 async test "an expanded example survives comment stripping and a missing final newline" {
   with_tmpdir(dir => {
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/ex.mbtx",
       "fn main {\n  println(\"<!-- kept: code -->\")\n}",
     )
@@ -77,7 +72,7 @@ async test "output match detects unchanged generated file" {
     let path = "\{dir}/output-match.mbt"
     // The fresh directory guarantees the file is absent to start with.
     assert_false(output_matches(path, "same"))
-    @fs.write_file(path, "same", create_mode=CreateOrTruncate)
+    @fs.write_text(path, "same", create_mode=CreateOrTruncate)
     assert_true(output_matches(path, "same"))
     assert_false(output_matches(path, "different"))
   })
@@ -86,7 +81,7 @@ async test "output match detects unchanged generated file" {
 ///|
 async test "whole-line example links expand into fenced blocks" {
   with_tmpdir(dir => {
-    @fs.write_file("\{dir}/ex.mbtx", "fn main {\n  ()\n}\n")
+    @fs.write_text("\{dir}/ex.mbtx", "fn main {\n  ()\n}\n")
     let markdown = "a\n[x](ex.mbtx)\nsee [y](ex.mbtx) inline\n"
     inspect(
       expand_example_links(markdown, dir),

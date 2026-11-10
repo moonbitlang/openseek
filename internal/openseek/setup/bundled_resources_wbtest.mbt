@@ -8,7 +8,7 @@ async test "resource layout is sorted, directory-only, skips build output and tu
     @fs.mkdir("\{root}/.hidden")
     @fs.mkdir("\{root}/workflow/_build/wasm", recursive=true)
     @fs.mkdir("\{root}/doc/moonbit/gmachine-tutorial")
-    @fs.write_file("\{root}/doc/moonbit/index.md", "docs")
+    @fs.write_text("\{root}/doc/moonbit/index.md", "docs")
     inspect(
       resource_layout(root),
       content=(

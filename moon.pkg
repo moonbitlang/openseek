@@ -1,6 +1,6 @@
 import {
   "moonbitlang/openseek/internal/openseek" @app,
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 warnings = "+unnecessary_annotation"
@@ -8,3 +8,7 @@ warnings = "+unnecessary_annotation"
 supported_targets = "+wasm+native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)
