@@ -77,7 +77,7 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
     guard servers is [Http(headers=configured_headers, ..)] else {
       fail("expected an HTTP configuration")
     }
-    let entries = @tools.connect(
+    let entries = connect_all(
       scope,
       servers,
       client_name="test",
@@ -108,7 +108,7 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
     first.close()
     assert_eq(@fs.read_file(dir + "/invocations").text(), "run\n")
     seen.clear()
-    let entries = @tools.connect(
+    let entries = connect_all(
       scope,
       servers,
       client_name="test",
