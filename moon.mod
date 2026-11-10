@@ -11,7 +11,7 @@ import {
   "moonbit-community/rabbita@0.16.4",
   "Lampese/office-viewer@0.2.6",
   "moonbitlang/editor@0.4.6",
-  "moonbitlang/workflow@0.10.0",
+  "moonbitlang/workflow@0.11.0",
   "Yoorkin/multipart@0.1.3",
 }
 
