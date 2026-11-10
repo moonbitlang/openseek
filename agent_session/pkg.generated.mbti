@@ -34,6 +34,8 @@ pub fn goal_baseline_notice(sha~ : String, dirty~ : Bool) -> String
 
 pub fn goal_marker(String) -> GoalMarker?
 
+pub fn image_refs(Array[ModelMessage]) -> Array[@openseek_protocol.ImageRef]
+
 pub fn parse_goal_baseline(String) -> GoalBaseline?
 
 // Errors
@@ -71,7 +73,7 @@ pub struct ModelMessage {
   reasoning_content : String?
 }
 pub fn ModelMessage::ModelMessage(@deepseek.Role, content~ : Array[@openseek_protocol.ContentPart], tool_calls? : Array[@deepseek.ToolCall], reasoning_content? : String) -> Self
-pub fn ModelMessage::to_chat_message(Self) -> @deepseek.ChatMessage
+pub fn ModelMessage::to_chat_message(Self, Map[String, @deepseek.ContentPart]) -> @deepseek.ChatMessage raise
 pub fn ModelMessage::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
@@ -93,6 +95,7 @@ pub fn Session::fork(Self, SessionId, system_prompt~ : String, through? : Int32)
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int32
 pub fn Session::last_terminal(Self) -> TurnTerminal?
+pub async fn Session::map_content(Self, async (@openseek_protocol.Content) -> @openseek_protocol.Content) -> Self
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
 pub impl @json.FromJson for Session
@@ -102,6 +105,7 @@ pub impl @json.ToJson for Session
 type SessionEvent
 pub fn SessionEvent::is_agent_step(Self) -> Bool
 pub fn SessionEvent::item(Self) -> SessionItem
+pub async fn SessionEvent::map_content(Self, async (@openseek_protocol.Content) -> @openseek_protocol.Content) -> Self
 pub fn SessionEvent::sequence(Self) -> Int32
 pub fn SessionEvent::unix_ms(Self) -> Int64
 

@@ -244,6 +244,11 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// a fresh registry for this call only. `api_url`, `retry_attempts` and
 /// `retry_backoff_ms` are forwarded to the DeepSeek clients this turn builds;
 /// omitting a retry argument leaves that client default in place.
+/// Images are saved through `attachments` before their User/Tool items are
+/// constructed, and every model request of the turn, auto-compaction included,
+/// resolves image references through the same store; it defaults to
+/// `~/.openseek/attachments`. Reusable Files API upload records and their lock
+/// file live at the root of the same store.
 /// The caller owns the lifetime of `runtime`, `scope`, and any shared
 /// `tools` registry passed here. Provider reasoning fragments always join the
 /// transient event stream; consumers choose whether and how to present them.
@@ -262,6 +267,7 @@ pub async fn run_turn_in_scope(
   retry_attempts? : Int32,
   retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
+  attachments~ : @attachments.AttachmentStore = @attachments.AttachmentStore::default(),
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {
   let client = @client.Client(
@@ -280,6 +286,7 @@ pub async fn run_turn_in_scope(
     retry_attempts?,
     retry_backoff_ms?,
   )
+  let content = attachments.admit(content)
   let session = session
     |> append_item(User(UserMessage(content, submission_id?)))
   let tools = try {
@@ -303,6 +310,7 @@ pub async fn run_turn_in_scope(
     append_item~,
     session~,
     on_goal_met?,
+    attachments~,
   ).run(session, max_steps)
 }
 

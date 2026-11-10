@@ -43,13 +43,15 @@ fn compaction_messages(
 /// Generate a handoff summary of the session's projected history through one
 /// model call, failing when the endpoint returns an empty summary. Pass a
 /// `thinking=No` client where the model honors the control (Kimi models
-/// ignore it): a checkpoint summary needs no reasoning budget.
+/// ignore it): a checkpoint summary needs no reasoning budget. Images in the
+/// history resolve through `attachments`, the user-level store by default.
 pub async fn generate_compaction_summary(
   client~ : @client.Client,
+  attachments? : @attachments.AttachmentStore,
   session : @agent_session.Session,
 ) -> String {
   let messages = compaction_messages(session)
-  let response = client.chat(messages.map(message => message.to_chat_message()))
+  let response = @request.chat(client, messages, attachments?)
   let summary = response.content.trim().to_owned()
   if summary.is_empty() {
     fail("compaction summary was empty")

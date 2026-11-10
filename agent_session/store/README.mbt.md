@@ -19,15 +19,16 @@ Each session lives under:
   session-title            (only once a user title is set)
 ```
 
-`openseek_session-<session-id>.jsonl` is the whole durable session: its first
+`openseek_session-<session-id>.jsonl` contains the event log: its first
 line is a header record (`{"version":1,"id":...,"system_prompt":...}`) and
 every following line is one typed `SessionEvent`. Events are append-only.
 Loading replays the event lines into an immutable `agent_session.Session`.
 Message `content` is written as a string for one text part, and as an ordered
 array for all other content, including images. Loading accepts both forms,
 including files mixing strings and arrays.
-Normal append leaves existing complete lines unchanged; full snapshot writes
-and torn-tail repair use the same string-or-array encoding.
+Normal append leaves existing complete lines unchanged, including when the
+first image reference is added. Full snapshot writes and torn-tail repair use
+the same version-1 header and string-or-array encoding.
 The file name carries the session id so files collected out of their
 directories — for cross-session visualization or comparison — stay
 self-naming.
@@ -415,3 +416,14 @@ same lock):
 
 These rules keep persistence concerns out of `agent_session.Session` while
 giving CLI, TUI, serve mode, and visualization code one shared durable boundary.
+
+## Image attachments
+
+Callers admit images to the user-level `~/.openseek/attachments` store before
+constructing session items. Append, snapshot writes, forks, and tail repair
+preserve supplied content without converting images.
+`SessionStore::migrate_images` explicitly converts legacy
+inline images while preserving sequence numbers and timestamps. Reads never
+rewrite history. Forks retain shared references; deletion does not collect
+shared objects. Migration requires an `attachments` store supplied by the caller;
+its root determines where converted image bytes are saved.

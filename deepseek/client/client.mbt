@@ -255,7 +255,8 @@ async fn[T] Client::with_retries(
     max_retry=self.retry_attempts - 1,
     fatal_error=error => {
       let stopped = bail(error)
-      let fatal = stopped || error is (Failure::_ | @http.URIParseError::_)
+      let fatal = stopped ||
+        error is (Failure::_ | @http.URIParseError::_ | RejectedImageFile(_))
       if progress is Some(progress) {
         progress.stop_reason = if stopped {
           StreamStarted
@@ -289,7 +290,8 @@ async fn[T] Client::with_retries(
 /// response as the return value. `max_tokens` optionally caps generated tokens
 /// for auxiliary requests; omitted requests retain the provider default.
 /// Streaming failures include request progress in the Failure message after
-/// retries stop. Cancellation propagates unchanged.
+/// retries stop. A rejected Files API reference raises `RejectedImageFile`
+/// without retrying. Cancellation propagates unchanged.
 pub async fn Client::chat(
   self : Client,
   messages : Array[@deepseek.ChatMessage],
@@ -334,6 +336,7 @@ pub async fn Client::chat(
             }
           },
         ) catch {
+          RejectedImageFile(_) as error => raise error
           error => fail(progress.failure_message(self, error))
         }
       }
@@ -361,6 +364,7 @@ async fn Client::chat_attempt(
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
+    check_rejected_file(resp.code, text)
     fail("DeepSeek API error \{resp.code}: \{text}")
   }
   // A 2xx body that fails to parse or decode is a final verdict, not a
@@ -410,6 +414,7 @@ async fn Client::chat_stream_attempt(
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
+    check_rejected_file(resp.code, text)
     fail("DeepSeek API error \{resp.code}: \{text}")
   }
   // The stream reader finalizes malformed SSE payloads at its parse site

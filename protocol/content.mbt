@@ -40,7 +40,7 @@ pub fn Content::text(self : Content) -> String {
   .filter_map(part => {
     match part {
       Text(text) => Some(text)
-      Image(_) => None
+      Image(_) | ImageRef(_) => None
     }
   })
   .join("")
@@ -72,12 +72,14 @@ pub fn Content::iter(self : Content) -> Iter[ContentPart] {
 pub(all) enum ContentPart {
   Text(String)
   Image(Image)
+  ImageRef(ImageRef)
 }
 
 ///|
 impl ToJson for ContentPart with fn to_json(self) {
   match self {
     Text(text) => { "type": "text", "text": text }
+    ImageRef(reference) => reference.to_json()
     Image(image) =>
       {
         "type": "image",
@@ -100,6 +102,8 @@ pub impl FromJson for ContentPart with fn from_json(json, path) {
           path=path.add_key("text"),
         ),
       )
+    Some(String("image")) if fields.contains("attachment_id") =>
+      ImageRef(@json.from_json(json, path~))
     Some(String("image")) => {
       let media_type : String = @json.from_json(
         fields.get("media_type").unwrap_or(null),

@@ -14,11 +14,9 @@ fn prompt_content(draft : @composer.Draft) -> @wire.Content raise RequestError {
   let parts : Array[@wire.ContentPart] = [Text(draft.prompt())]
   for image in draft.images {
     parts.push(
-      Image(
-        @wire.Image::from_data_url(image.url) catch {
-          _ => raise @cloud_client.RequestError(InvalidImage)
-        },
-      ),
+      @wire.ContentPart::from_image_url(image.url) catch {
+        _ => raise @cloud_client.RequestError(InvalidImage)
+      },
     )
   }
   Content(parts)
@@ -59,6 +57,11 @@ async fn prepare_submission(
     }
   }
   for image in draft.images {
+    if @wire.is_attachment_url(image.url) {
+      // Queued content already belongs to this session's attachment store;
+      // `prompt_content` validates the address.
+      continue
+    }
     let image_data = @wire.Image::from_data_url(image.url) catch {
       _ => raise @cloud_client.RequestError(InvalidImage)
     }

@@ -32,36 +32,52 @@ timestamp, and one `SessionItem` payload:
 Appending never mutates the receiver. It returns a new session that shares the
 old log structure.
 
-User and tool message content uses
-`Content(Array[ContentPart])`, with ordered `Text(text)` and `Image(image)`
-parts. Constructors accept arrays; `.content().text()` concatenates text parts
-when a caller needs plain text. Projection preserves the full ordered content.
-Assistant content, runtime notices, summaries, reasoning, and terminal status
-text remain strings.
+User and tool content uses ordered `Text`, inline `Image`, and durable
+`ImageRef` parts. Text extraction excludes images. The agent admits initial
+input, steering input, and tool results through the attachment store before
+constructing their session items. The admitted content is shared by history
+and the live model-request buffer; session append never transforms it.
+Images retain their original PNG/JPEG/GIF/WebP bytes and the existing 5 MiB
+limit; this path does not resize or transcode them.
 
-JSON encoding writes a single `Text` part as a string, preserving compatibility
-with older readers for those records. Empty content, multiple text parts, and
-content containing images use arrays. Readers accept both forms; strings decode
-as one `Text` part. An image part has the shape
-`{"type":"image","media_type":"image/png","data":"<canonical padded base64>"}`.
-Image constructors retain original bytes, check PNG/JPEG/GIF/WebP signatures and
-limit decoded size to 5 MiB. They do not decode pixels, resize, or re-encode.
-Malformed base64 and mismatched MIME types fail decoding; unknown parts are not
-silently dropped. Provider-only `file` parts are not durable content: an expired
-provider ID cannot recover the original bytes. Legacy string records remain
-readable.
+New durable images have the form
+`{"type":"image","attachment_id":"sha256:...","media_type":"image/png","bytes":123}`.
+Their bytes live in the executing host's
+`~/.openseek/attachments/v1/objects/<first-two-hex-digits>/<sha256>` and are shared
+across sessions and worktrees. Hash, size and MIME are verified on read.
+Legacy inline base64 records remain readable; migrate them explicitly with
+`openseek sessions migrate-images <id> --dir <workspace>` to reduce existing
+logs. Normal history reads do not rewrite files. Migration preserves sequences
+and timestamps. Session headers remain version 1 for both inline images and
+attachment references; the content decoder distinguishes them by the presence
+of `attachment_id`. Single text content still serializes as a string.
 
-`Content`, `ContentPart`, and `Image` are re-exported from the shared protocol
-module; `SteerApplied` receipts preserve the same ordered content.
+`Session::chat_messages()` preserves order and returns `ModelMessage` values
+whose content keeps durable parts, so references stay local in every buffer.
+`ModelMessage::to_chat_message` builds the wire message for one request from a
+map of resolved image parts; legacy inline records become data URLs until
+migrated. `agent_session/request.chat` resolves the references of one request
+through the Files API (`Client::upload_attachments`) and sends
+`File(file_id=...)` parts. Normal turns, compaction, and prediction share it.
 
-`Session::chat_messages()` returns `ModelMessage` values, which keep durable
-content in part order. `ModelMessage::to_chat_message` builds the
-`@deepseek.ChatMessage` for a request, projecting images into `image_url` parts
-containing base64 data URLs. `deepseek/client` checks image support when encoding
-each request; the DeepSeek encoder restricts images to user/tool roles.
-Both normal turns and resumed sessions send the image bytes directly; no Files
-API upload, provider ID, expiry handling, or upload cache is involved. Images
-never require their original filesystem path or a separate attachment directory.
+Upload mappings are persisted alongside the image objects in
+`~/.openseek/attachments/files-v1.json`, scoped by a digest of endpoint and
+credentials plus the image identity. The index is a cache: a missing or
+unreadable index means no reusable uploads. Cached IDs are reused without
+reading the image; misses are read, verified, and uploaded up to four at a time.
+Uploads request a one-day lifetime and refresh when fewer than five minutes
+remain. One short file lock covers reread, merge and replacement; it never
+covers network IO. Concurrent duplicate uploads reuse the committed winner;
+unused remote duplicates expire naturally. An explicit provider
+file-not-found/expired/invalid-ID error forgets the request's cached IDs and
+allows one refresh attempt, before any completion has started. There is no
+automatic deletion of local shared attachments.
+
+Desktop loads referenced thumbnails on demand from the owning authenticated
+host. Message edits retain the reference. Forks share attachments without
+copying them into worktrees. A raw JSONL is no longer a portable image bundle:
+when moving it to another host, also copy the referenced attachment objects.
+Standalone HTML exports embed image bytes to stay self-contained.
 
 The agent loop and compaction call the provider client directly. Desktop
 accepts selected, pasted, or dropped images, carries them through initial prompts,
@@ -83,7 +99,7 @@ flowchart LR
   compact["agent_session/compact"] -->|"chat_messages()"| session
   compact -->|"optional durable summary"| store
 
-  session -->|"projects to"| model["ModelMessage[]"]
+  session -->|"projects to"| deepseek["deepseek.ChatMessage[]"]
 ```
 
 The core data model is an immutable session with an append-only event log.
@@ -236,7 +252,7 @@ test "append_event returns the durable event" {
 ## Model Projection
 
 `Session::chat_messages` converts the durable session into the messages sent to
-the model; `ModelMessage::to_chat_message` encodes each one for a request. Projection is where session-specific repair and
+the model, with image references resolved per request. Projection is where session-specific repair and
 compaction rules are applied:
 
 - The first message is always the stored system prompt.
@@ -279,7 +295,7 @@ flowchart TD
 
   loop --> done["end"]
   done --> finalFlush["flush remaining pending tool calls"]
-  finalFlush --> messages["ModelMessage[]"]
+  finalFlush --> messages["DeepSeek ChatMessage[]"]
 ```
 
 ```mbt check

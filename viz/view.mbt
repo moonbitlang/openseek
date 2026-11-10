@@ -2465,6 +2465,12 @@ fn model_content_view(content : @agent_session.Content) -> Array[@html.Html] {
   .filter_map(part => {
     match part {
       Text(text) => if text.is_blank() { None } else { Some(text_block(text)) }
+      ImageRef(reference) =>
+        Some(
+          text_block(
+            "[Image: \{reference.media_type}, \{reference.bytes} bytes]",
+          ),
+        )
       Image(image) =>
         Some(
           text_block(
@@ -3254,7 +3260,7 @@ fn request_content_view(
             out.push(text_block(text))
           }
         }
-      Image(_) => out.push(text_block("[Image]"))
+      Image(_) | ImageRef(_) => out.push(text_block("[Image]"))
     }
   }
   out

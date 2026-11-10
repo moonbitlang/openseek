@@ -3,12 +3,13 @@ package "moonbitlang/openseek/agent_session/prediction"
 
 import {
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client",
 }
 
 // Values
-pub async fn generate(@client.Client, @agent_session.Session, tools~ : Array[@deepseek.ToolDefinition]) -> GenerationResult
+pub async fn generate(@client.Client, @agent_session.Session, tools~ : Array[@deepseek.ToolDefinition], attachments? : @attachments.AttachmentStore) -> GenerationResult
 
 // Errors
 

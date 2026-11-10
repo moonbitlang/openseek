@@ -622,10 +622,11 @@ fn prompt_content(
 ) -> @wire.Content raise EngineError {
   let parts : Array[@wire.ContentPart] = [Text(text)]
   for url in images {
-    let image = @wire.Image::from_data_url(url) catch {
-      error => raise EngineError("Invalid image: \{@debug.Repr(error)}")
-    }
-    parts.push(Image(image))
+    parts.push(
+      @wire.ContentPart::from_image_url(url) catch {
+        error => raise EngineError("Invalid image: \{error}")
+      },
+    )
   }
   Content(parts)
 }

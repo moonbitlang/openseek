@@ -126,6 +126,7 @@ async fn AgentLoop::checkpoint_at_ceiling(
   @emit.emit(AutoCompactionStarted(from_sequence=1, to_sequence~))
   let summary = @compact.generate_compaction_summary(
     client=self.summary_client,
+    attachments=self.attachments,
     covered,
   ) catch {
     error => {

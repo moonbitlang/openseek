@@ -29,7 +29,7 @@ async test "realworld inline user and tool images are recognized" {
   @async.with_timeout(120_000, () => {
     for history in histories {
       let response = client.chat(
-        history.map(message => message.to_chat_message()),
+        history.map(message => message.to_chat_message({})),
         response_format=JsonObject,
       )
       let answer = @json.parse(response.content)

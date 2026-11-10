@@ -1,6 +1,7 @@
 ///|
 priv struct AgentLoop {
   runtime : @agent_runtime.AgentRuntime
+  attachments : @attachments.AttachmentStore
   client : @client.Client
   /// Client for auto-compaction checkpoint summaries: thinking=No where the
   /// model honors the control — a handoff summary needs no reasoning budget.
@@ -39,10 +40,12 @@ fn AgentLoop::AgentLoop(
   tools~ : @agent_tool.Tools,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   session~ : @agent_session.Session,
+  attachments~ : @attachments.AttachmentStore,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> AgentLoop {
   {
     runtime,
+    attachments,
     client,
     summary_client,
     tools,
@@ -415,13 +418,15 @@ async fn AgentLoop::apply_steer_inputs(
 ) -> @agent_session.Session {
   for input in inputs; current = session {
     let steer : SteerMessage = match input {
-      Prompt(content, submission_id~) =>
+      Prompt(content, submission_id~) => {
+        let content = self.attachments.admit(content)
         {
           kind: "prompt",
           content,
           submission_id,
           item: User(UserMessage(content, submission_id?)),
         }
+      }
       Notice(text) =>
         {
           kind: "notice",
@@ -506,8 +511,10 @@ async fn AgentLoop::prepare_step(
 ///|
 async fn AgentLoop::chat(self : Self, step : Int32) -> @deepseek.ChatResponse {
   @emit.emit(AgentStep(step=step + 1))
-  let response = self.client.chat(
-    self.messages.map(message => message.to_chat_message()),
+  let response = @request.chat(
+    self.client,
+    self.messages,
+    attachments=self.attachments,
     tools=self.tools.function_tools(),
     stream=StreamHandler(
       on_content_delta=delta => {
@@ -1182,24 +1189,28 @@ async fn AgentLoop::record_tool_result(
   brief? : String,
   data? : Json,
 ) -> @agent_session.Session {
-  let parts : Array[@protocol.ContentPart] = [
-    Text(clamp_tool_result_content(content)),
-    ..images.map(image => @protocol.ContentPart::Image(image)),
-  ]
+  let content = self.attachments.admit(
+    Content(
+      [
+        Text(clamp_tool_result_content(content)),
+        ..images.map(image => @protocol.ContentPart::Image(image)),
+      ],
+    ),
+  )
   let session = self.append(
     session,
     Tool(
       ToolResult(
         tool_call_id~,
         tool_name~,
-        content=parts,
+        content=content.0,
         is_error~,
         brief?,
         data?,
       ),
     ),
   )
-  self.messages.push(ModelMessage(Tool(tool_call_id), content=parts))
+  self.messages.push(ModelMessage(Tool(tool_call_id), content=content.0))
   session
 }
 

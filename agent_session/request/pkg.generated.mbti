@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_session/request"
+
+import {
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/attachments",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
+}
+
+// Values
+pub async fn chat(@client.Client, Array[@agent_session.ModelMessage], attachments? : @attachments.AttachmentStore, tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, max_tokens? : Int32, stream? : @client.StreamHandler) -> @deepseek.ChatResponse
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
