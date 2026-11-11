@@ -35,7 +35,18 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   let store = state.auth
   // Publish the resulting state on success, failure, and cancellation alike;
   // sign_out serializes the local clear with persistence.
-  defer state.hub.publish(AuthChanged(store.status()))
+  let clients = state.cloud_clients.iter().collect()
+  defer {
+    for (account, client) in clients {
+      if state.cloud_clients
+        .get(account)
+        .map_or(false, current => physical_equal(current, client)) &&
+        store.account().map(account => account.token) != Some(client.token) {
+        state.cloud_clients.remove(account)
+      }
+    }
+    state.hub.publish(AuthChanged(store.status()))
+  }
   store.sign_out() catch {
     @auth.AuthError(message) => raise @host.HostError(message)
     error => raise @host.HostError("sign-out failed: \{error}")
