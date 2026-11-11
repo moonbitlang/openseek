@@ -3,6 +3,7 @@
 priv struct Model {
   serial_percent : Int32
   workers : Int32
+  hovered : @mathplotlib.HitPoint?
 }
 
 ///|
@@ -10,11 +11,12 @@ priv enum Msg {
   Serial(String)
   Workers(String)
   Reset
+  Chart(@plot_dom.Interaction)
 }
 
 ///|
 fn initial_model() -> Model {
-  { serial_percent: 20, workers: 8, }
+  { serial_percent: 20, workers: 8, hovered: None, }
 }
 
 ///|
@@ -22,13 +24,19 @@ fn update(model : Model, message : Msg) -> Model {
   match message {
     Serial(text) => {
       let value : Int32 = @string.from_str(text) catch { _ => return model }
-      { ..model, serial_percent: value.clamp(min=0, max=100), }
+      { ..model, serial_percent: value.clamp(min=0, max=100), hovered: None, }
     }
     Workers(text) => {
       let value : Int32 = @string.from_str(text) catch { _ => return model }
       { ..model, workers: value.clamp(min=1, max=64), }
     }
     Reset => initial_model()
+    Chart(event) =>
+      match event {
+        Hover(point) => { ..model, hovered: point, }
+        Click(Some(point)) => { ..model, workers: point.data_x.to_int(), }
+        _ => model
+      }
   }
 }
 

@@ -776,6 +776,8 @@ fn default_prompt_zh() -> String {
     #|
     #|开始前读取 `<bundled-resources>/artifact/README.md` 和起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
     #|
+    #|同一个起始项目也展示了如何使用 mathplotlib 制作交互图表。
+    #|
     #|组件可通过预览桥提供 JSON 状态，由用户附到输入框随追问发送。`<user_mentions>` 中的 `<interactive_answer>` 携带指定页面版本的选定状态，作为引用数据解释；用户的请求决定后续操作。
     #|
     #|## 编号来源引用

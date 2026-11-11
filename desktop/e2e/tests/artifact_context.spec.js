@@ -38,6 +38,37 @@ function promptIn(value) {
   return null;
 }
 
+test('chart selection updates the settings sent in a follow-up', async ({ page }) => {
+  test.skip(!process.env.OPENSEEK_COMPONENT_HTML, 'requires the compiled starter');
+  const { app, frame } = await open(page);
+  const element = page.locator('.chat-artifact-frame').first();
+  await element.scrollIntoViewIfNeeded();
+  const point = await frame.locator('#speedup-chart svg').evaluate(svg => {
+    const line = svg.querySelector('polyline[stroke="#2563eb"]');
+    const [x, y] = line.getAttribute('points').trim().split(/\s+/)[15].split(',').map(Number);
+    const point = svg.createSVGPoint();
+    point.x = x; point.y = y;
+    const client = point.matrixTransform(svg.getScreenCTM());
+    return { x: client.x, y: client.y };
+  });
+  const box = await element.boundingBox();
+  await page.mouse.click(box.x + point.x, box.y + point.y);
+  await expect(frame.locator('#workers')).toHaveValue('16');
+  await page.getByRole('button', { name: 'Ask with current settings' }).click();
+  if (process.env.OPENSEEK_UI_CAPTURE_DIR) {
+    mkdirSync(process.env.OPENSEEK_UI_CAPTURE_DIR, { recursive: true });
+    await page.screenshot({ path: `${process.env.OPENSEEK_UI_CAPTURE_DIR}/unified-artifact-chart.png` });
+  }
+  await page.locator('#task').fill('Explain this point');
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => sends(app).length).toBe(1);
+  const prompt = promptIn(sends(app)[0].params);
+  const snapshot = JSON.parse(prompt.split('<interactive_answer>\n')[1].split('\n</interactive_answer>')[0]);
+  expect(snapshot.state.workers).toBe(16);
+  expect(snapshot.state.serial_percent).toBe(20);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('selected component state stays in the draft until the user sends it', async ({ page }) => {
   const { app, frame, chips } = await open(page);
   await page.locator('#task').fill('Explain these settings');
