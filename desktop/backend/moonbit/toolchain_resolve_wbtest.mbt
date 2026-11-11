@@ -255,3 +255,83 @@ async test "explicit seed selection checks platform and fails without fallback" 
     })
   })
 }
+
+///|
+/// Lay out a packaged engine beside a completed seed and return the engine
+/// command. Preparing this seed would fail: its `moon` cannot bundle.
+async fn fake_packaged_engine(root : @pathx.Absolute) -> String {
+  let resources = root.join("seekmoon")
+  let seed = resources.join("toolchains/moonbit/macos-arm64")
+  @fs.mkdir(seed.join("bin").to_string(), recursive=true)
+  @fs.write_text(
+    seed.join(MoonbitSeedVersionFile).to_string(),
+    "test-version",
+    create_mode=CreateOrTruncate,
+  )
+  resources.join("bin/openseek").to_string()
+}
+
+///|
+async fn touch_fake_executable(path : @pathx.Path) -> Unit {
+  @fsx.ensure_dir(path.dirname())
+  @fs.write_text(
+    path.to_string(),
+    "",
+    create_mode=CreateOrTruncate,
+    permission=0o755,
+  )
+}
+
+///|
+async test "a user toolchain with moonx wins over the bundled seed" {
+  with_toolchain_test_tree(root => {
+    let engine = fake_packaged_engine(root)
+    let user_bin = root.join("user/bin")
+    touch_fake_executable(user_bin.join("moon" + ExecutableSuffix).to_path())
+    touch_fake_executable(user_bin.join("moonx" + ExecutableSuffix).to_path())
+    let runtime = root.join("runtime")
+    let toolchain = desktop_toolchain(
+      engine,
+      runtime_dir=runtime.to_path(),
+      path_env=user_bin.to_string(),
+      home_dir=root.join("home").to_path(),
+    )
+    assert_eq(toolchain.bin_dir.to_string(), user_bin.to_string())
+    assert_false(@fsx.exists(runtime.join("toolchains").to_path()))
+  })
+}
+
+///|
+async test "a user moon without moonx falls back to the bundled seed" {
+  with_toolchain_test_tree(root => {
+    let engine = fake_packaged_engine(root)
+    let user_bin = root.join("user/bin")
+    touch_fake_executable(user_bin.join("moon" + ExecutableSuffix).to_path())
+    let runtime = root.join("runtime")
+    let payload = runtime.join("toolchains/moonbit/macos-arm64").to_path()
+    for
+      file in [
+        moonbit_command(payload),
+        moonbit_compiler_command(payload),
+        moonbit_native_bundle_probe_path(payload),
+        moonbit_wasm_gc_bundle_probe_path(payload),
+      ] {
+      touch_fake_executable(file)
+    }
+    @fs.write_text(
+      moonbit_bundle_stamp_path(payload).to_string(),
+      "version=test-version",
+      create_mode=CreateOrTruncate,
+    )
+    let toolchain = desktop_toolchain(
+      engine,
+      runtime_dir=runtime.to_path(),
+      path_env=user_bin.to_string(),
+      home_dir=root.join("home").to_path(),
+    )
+    assert_eq(
+      toolchain.bin_dir.to_string(),
+      moonbit_bin_dir(payload).to_string(),
+    )
+  })
+}
