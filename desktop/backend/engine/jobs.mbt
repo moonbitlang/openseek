@@ -364,10 +364,12 @@ async fn job_history_page(
 }
 
 ///|
-/// Order one generation's jobs newest first by job id.
+/// Order one generation's jobs newest first by job id. Length is compared
+/// before content so historical counters order numerically (`bg-10` after
+/// `bg-9`) regardless of how `String::compare` orders same-prefix strings.
 fn[T] newest_first(items : Array[T], id : (T) -> String) -> Array[T] {
   let ordered = items.map(item => (job_id_order_key(id(item)), item))
-  ordered.sort_by((a, b) => b.0.compare(a.0))
+  ordered.sort_by((a, b) => (b.0.length(), b.0).compare((a.0.length(), a.0)))
   ordered.map(entry => entry.1)
 }
 
