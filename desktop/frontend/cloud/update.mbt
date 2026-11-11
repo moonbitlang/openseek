@@ -259,15 +259,18 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
 
 ///|
 /// A running engine keeps the policy it started with, so the server refuses
-/// a change until the turn ends. A session the server has not created yet
-/// has no mode to change, and a save in flight holds the picker.
+/// a change until the turn ends. A draft keeps its choice until creation;
+/// creation and metadata saves in flight hold the picker.
 pub fn State::can_choose_approval(self : State, id : String) -> Bool {
   !self.retired.contains(id) &&
   !self.deletions.contains(id) &&
   !self.metadata_saves.contains(id) &&
-  self.sessions.any(session => {
-    session.id == id && !session.archived && !session.generating
-  }) &&
+  (
+    self.is_draft(id) ||
+    self.sessions.any(session => {
+      session.id == id && !session.archived && !session.generating
+    })
+  ) &&
   self.conversations
   .get(id)
   .map_or(true, conversation => {
@@ -278,9 +281,11 @@ pub fn State::can_choose_approval(self : State, id : String) -> Bool {
 }
 
 ///|
-/// The mode the session's next engine starts with. Before the server creates
-/// the session, and on servers without approval modes, engines ask.
+/// The mode the session's next engine starts with, including a draft's choice.
 pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+  if self.creation is Some({ id: draft, approval, .. }) && draft == id {
+    return approval
+  }
   match self.sessions.iter().find_first(session => session.id == id) {
     Some(session) => session.approval
     None => ApprovalAsk
@@ -567,7 +572,7 @@ pub fn update(
       let next = {
         ..state,
         sequence: request,
-        creation: Some({ id, request, navigation, }),
+        creation: Some({ id, request, navigation, approval: ApprovalAsk, }),
         notice: None,
       }.replace(id, {
         ..Conversation::empty(),
@@ -612,7 +617,7 @@ pub fn update(
           updated_at: None,
           generating: false,
           archived: false,
-          approval: ApprovalAsk,
+          approval: creation.approval,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -673,6 +678,19 @@ pub fn update(
       (next, @cmd.none, None)
     }
     Edit(account~, session=id, edit~) => {
+      if state.creation is Some(creation) && creation.id == id {
+        guard state.user_id == Some(account) &&
+          token is Some(_) &&
+          edit is SetApproval(approval) &&
+          state.can_choose_approval(id) else {
+          return (state, @cmd.none, None)
+        }
+        return (
+          { ..state, creation: Some({ ..creation, approval, }), },
+          @cmd.none,
+          None,
+        )
+      }
       let edit = match edit {
         Rename(title) => Rename(title.trim().to_owned())
         other => other

@@ -555,9 +555,9 @@ test "approval mode saves only between turns and holds sending until saved" {
       "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
     ),
   )
-  // A conversation the server has not created yet has no mode to change.
+  // A draft can choose its first engine policy before the server creates it.
   let drafting = metadata_update(initial, Create)
   guard drafting.creation is Some(creation) else { fail("expected a draft") }
-  assert_false(drafting.can_choose_approval(creation.id))
+  assert_true(drafting.can_choose_approval(creation.id))
   assert_true(drafting.approval(creation.id) is ApprovalAsk)
 }
