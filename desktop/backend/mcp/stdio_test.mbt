@@ -344,17 +344,21 @@ async test "concurrent stdio replies stay whole under pipe backpressure" {
 }
 
 ///|
-async test "blocked stderr cannot hold a tool error reply" {
-  let (diagnostics, sink) = @pipe.pipe()
-  defer diagnostics.close()
-  defer sink.close()
-  // Fill an OS pipe without a reader, then use it as the stderr text sink.
-  let filled = @async.with_timeout_opt(50, () => {
-    sink.write(Bytes::make(4 * 1024 * 1024, b'x'))
-  })
-  assert_true(filled is None)
-  @stdio.stderr.text.set_inner(sink)
-  defer @stdio.stderr.text.set_inner(@stdio.stderr)
+struct TestLogHandler(Array[@xlog.Entry])
+
+///|
+impl @xlog.Handler for TestLogHandler with fn handle(
+  self : TestLogHandler,
+  entry : @xlog.Entry,
+) -> Unit {
+  self.0.push(entry)
+}
+
+///|
+async test "tool errors use the host logger separately from stdio replies" {
+  let entries : Array[@xlog.Entry] = []
+  @xlog.global().set_handler(TestLogHandler(entries))
+  defer @xlog.global().set_handler(@xlog.Stdout())
   let dispatcher = @mcp.Dispatcher(test_tools(), version="test")
   with_stdio(dispatcher, "host-session", (responses, requests) => {
     let reader = @io.Utf8Reader(responses)
@@ -374,6 +378,22 @@ async test "blocked stderr cannot hold a tool error reply" {
         }
       ),
     )
+    assert_eq(entries.length(), 1)
+    assert_true(entries[0].level is Warn)
+    assert_true(entries[0].category is Some("mcp"))
+    assert_eq(entries[0].fields.get("event"), Some(Json("mcp_tool_failed")))
+    assert_eq(entries[0].fields.get("tool"), Some(Json("broken")))
+    assert_eq(entries[0].fields.get("session"), Some(Json("host-session")))
+    assert_eq(
+      entries[0].fields.get("error"),
+      Some(Json("the page is gone; open it again")),
+    )
+    send_stdio_request(requests, request(2, "ping", {}))
+    assert_eq(read_stdio_reply(reader), {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {},
+    })
   })
 }
 

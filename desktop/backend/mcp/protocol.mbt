@@ -28,10 +28,6 @@ fn supported_legacy_version(version : String) -> Bool {
 const CallTimeoutMs : Int32 = 150000
 
 ///|
-/// Diagnostic backpressure must not hold the tool result indefinitely.
-const DiagnosticWriteTimeoutMs : Int32 = 100
-
-///|
 const InvalidRequest : Int32 = -32600
 
 ///|
@@ -213,21 +209,13 @@ async fn Dispatcher::call_tool(
   let (content, is_error) = match outcome {
     Ok(content) => (content, false)
     Err(error) => {
-      // Diagnostics never share a protocol output stream. Logging remains
-      // best effort, so a blocked or closed stderr cannot hold the tool result.
-      @async.with_timeout(DiagnosticWriteTimeoutMs, () => {
-        @stdio.stderr.text.write(
-          Json({
-            "event": "mcp_tool_failed",
-            "tool": name,
-            "session": session,
-            "error": error,
-          }).stringify() +
-          "\n",
-        )
-      }) catch {
-        _ => ()
-      }
+      @xlog.warn(category="mcp") <?
+        {
+          "event": "mcp_tool_failed",
+          "tool": name,
+          "session": session,
+          "error": error,
+        }
       ([Text(error)], true)
     }
   }

@@ -75,9 +75,11 @@ receive loop waits before starting another task. Response writes are serialized
 so frames cannot interleave. Input EOF drains accepted requests. I/O failures,
 cancellation, or an input line exceeding
 the one-megabyte limit end the adapter and propagate to its owner. The caller
-closes both streams. Dispatcher tool-failure diagnostics go to stderr with a
-100-millisecond write deadline, so a blocked diagnostic sink cannot hold the
-tool result indefinitely. Protocol output contains only JSON-RPC responses.
+closes both streams. Dispatcher tool-failure diagnostics use the host's xlog
+handler, as they do over HTTP. The desktop host writes these logs to
+`openseek-desktop.log`. A host using process stdout for MCP must configure
+xlog to write to a file or stderr before serving; xlog defaults to stdout.
+The adapter writes only JSON-RPC responses to its supplied output stream.
 
 ## Configuration
 

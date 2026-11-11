@@ -8,7 +8,7 @@ import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
-  "moonbitlang/core/async/stdio",
+  "tonyfettes/xlog",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
@@ -28,6 +28,5 @@ options(
     "moonbitlang/core/async/io",
     "moonbitlang/core/async/pipe",
     "moonbitlang/core/async/socket",
-    "moonbitlang/core/async/stdio",
   ],
 )
