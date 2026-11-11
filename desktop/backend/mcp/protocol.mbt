@@ -1,6 +1,6 @@
 // The MCP methods this server answers, as JSON-RPC messages in and out. The
-// HTTP layer in `server.mbt` hands every authenticated POST body here and
-// writes back whatever this returns.
+// transports provide a trusted conversation identity and write each reply
+// using their own framing.
 //
 // Scope: the tool surface only — `initialize`, `ping`, `tools/list`, and
 // `tools/call`. Resources, prompts, and server-initiated requests are not
@@ -51,15 +51,19 @@ fn failure(id : Json, code : Int32, message : String) -> Json {
 }
 
 ///|
-/// Answer one inbound message sent for `session`. `None` when the
-/// message expects no reply: a notification, or a response to a request —
+/// Answer one inbound message for the conversation authenticated by the host.
+/// `session` and `groups` come from trusted host context, never the message.
+/// `None` when the message expects no reply: a notification, or a response —
 /// which this server never sends, so there is nothing to match it to.
-async fn Server::dispatch(
-  self : Server,
-  session : String,
+pub async fn Dispatcher::dispatch(
+  self : Dispatcher,
   message : Json,
-  groups : Array[String],
+  session~ : String,
+  groups~ : Array[String] = [],
 ) -> Json? {
+  if validate_modern(message) is Some(error) {
+    return Some(error)
+  }
   guard message is Object(fields) else {
     // JSON-RPC answers an unidentifiable request under a null id.
     return Some(failure(null, InvalidRequest, "Invalid Request"))
@@ -106,7 +110,7 @@ async fn Server::dispatch(
 }
 
 ///|
-fn Server::initialize_result(self : Server, params : Json) -> Json {
+fn Dispatcher::initialize_result(self : Dispatcher, params : Json) -> Json {
   let version = match params {
     { "protocolVersion": String(requested), .. } if supported_legacy_version(
         requested,
@@ -121,7 +125,7 @@ fn Server::initialize_result(self : Server, params : Json) -> Json {
 }
 
 ///|
-fn Server::tool_list(self : Server, groups : Array[String]) -> Json {
+fn Dispatcher::tool_list(self : Dispatcher, groups : Array[String]) -> Json {
   let tools : Array[Json] = [
     for _, tool in self.tools if offered(tool.name, groups) => {
       {
@@ -138,8 +142,8 @@ fn Server::tool_list(self : Server, groups : Array[String]) -> Json {
 /// Run one tool for `session`. An unknown tool is a protocol error; a
 /// handler that raises or outruns its deadline is a tool result with
 /// `isError`, which the model reads like any other output.
-async fn Server::call_tool(
-  self : Server,
+async fn Dispatcher::call_tool(
+  self : Dispatcher,
   session : String,
   id : Json,
   params : Json,
@@ -168,13 +172,19 @@ async fn Server::call_tool(
   let (content, is_error) = match outcome {
     Ok(content) => (content, false)
     Err(error) => {
-      @xlog.warn(category="mcp") <?
-        {
+      // Diagnostics never share a protocol output stream. Logging remains
+      // best effort, so a closed stderr cannot discard the tool result.
+      @stdio.stderr.text.write(
+        Json({
           "event": "mcp_tool_failed",
           "tool": name,
           "session": session,
           "error": error,
-        }
+        }).stringify() +
+        "\n",
+      ) catch {
+        _ => ()
+      }
       ([Text(error)], true)
     }
   }

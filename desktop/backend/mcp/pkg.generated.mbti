@@ -31,9 +31,17 @@ pub(all) enum Content {
   Image(mime~ : String, data~ : String)
 }
 
+pub struct Dispatcher {
+  // private fields
+}
+pub fn Dispatcher::Dispatcher(Array[Tool], version~ : String) -> Self
+pub fn Dispatcher::add_tools(Self, Array[Tool]) -> Unit raise ServerError
+pub async fn Dispatcher::dispatch(Self, @json.Json, session~ : String, groups? : Array[String]) -> @json.Json?
+
 type Server
 pub async fn Server::Server(Array[Tool], version~ : String) -> Self
 pub fn Server::add_tools(Self, Array[Tool]) -> Unit raise ServerError
+pub fn Server::dispatcher(Self) -> Dispatcher
 pub fn Server::grant(Self, String) -> Map[String, String] raise ServerError
 pub async fn Server::run(Self) -> Unit
 pub fn Server::url(Self) -> String
