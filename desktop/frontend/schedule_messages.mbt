@@ -16,7 +16,6 @@ priv enum UiMessage {
   TimedOutLabel
   InterruptedLabel
   ScheduledTasks
-  ScheduleDescription
   NewSchedule
   RefreshLabel
   RunLog
@@ -25,8 +24,6 @@ priv enum UiMessage {
   EditSchedule
   NameLabel
   WorkingDirectory
-  AutomaticDirectoryDescription
-  ProjectDirectoryDescription
   TaskLabel
   ScheduleLabel
   EveryLabel
@@ -34,8 +31,6 @@ priv enum UiMessage {
   MinutesLabel
   TimeoutMinutes
   ModelDefault
-  SchedulePermissions
-  RunNowDescription
   SaveRunNow
   SaveSchedule
   CancelLabel
@@ -170,16 +165,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ScheduledTasks) => "定时任务"
     (TraditionalChinese, ScheduledTasks) => "定時任務"
     (Japanese, ScheduledTasks) => "スケジュールタスク"
-    (English, ScheduleDescription) =>
-      "Run tasks automatically while this host is running. A time that passes while the host is off or asleep is skipped."
-    (Spanish, ScheduleDescription) =>
-      "Ejecuta tareas automáticamente mientras este host está en marcha. Se omite una hora que pasa mientras el host está apagado o en reposo."
-    (SimplifiedChinese, ScheduleDescription) =>
-      "在此主机运行期间自动执行任务。主机关闭或休眠期间错过的时间会被跳过。"
-    (TraditionalChinese, ScheduleDescription) =>
-      "在此主機執行期間自動執行任務。主機關閉或休眠期間錯過的時間會被略過。"
-    (Japanese, ScheduleDescription) =>
-      "このホストの実行中にタスクを自動で実行します。ホストの停止中やスリープ中に過ぎた時刻はスキップされます。"
     (English, NewSchedule) => "New schedule"
     (Spanish, NewSchedule) => "Nueva programación"
     (SimplifiedChinese, NewSchedule) => "新建计划"
@@ -220,26 +205,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, WorkingDirectory) => "工作目录"
     (TraditionalChinese, WorkingDirectory) => "工作目錄"
     (Japanese, WorkingDirectory) => "作業ディレクトリ"
-    (English, AutomaticDirectoryDescription) =>
-      "OpenSeek creates a dedicated folder on the first run and reuses it to save this task's files and results."
-    (Spanish, AutomaticDirectoryDescription) =>
-      "OpenSeek crea una carpeta dedicada en la primera ejecución y la reutiliza para guardar los archivos y resultados de esta tarea."
-    (SimplifiedChinese, AutomaticDirectoryDescription) =>
-      "OpenSeek 会在首次运行时创建专用文件夹，并继续用它保存此任务的文件和结果。"
-    (TraditionalChinese, AutomaticDirectoryDescription) =>
-      "OpenSeek 會在首次執行時建立專用資料夾，並繼續用它儲存此任務的檔案和結果。"
-    (Japanese, AutomaticDirectoryDescription) =>
-      "OpenSeek は初回実行時に専用フォルダーを作成し、以降もタスクのファイルと結果の保存に使用します。"
-    (English, ProjectDirectoryDescription) =>
-      "This task runs in the selected project folder and can read and update its files."
-    (Spanish, ProjectDirectoryDescription) =>
-      "Esta tarea se ejecuta en la carpeta del proyecto seleccionado y puede leer y actualizar sus archivos."
-    (SimplifiedChinese, ProjectDirectoryDescription) =>
-      "此任务在所选项目文件夹中运行，可读取和更新其中的文件。"
-    (TraditionalChinese, ProjectDirectoryDescription) =>
-      "此任務在所選專案資料夾中執行，可讀取和更新其中的檔案。"
-    (Japanese, ProjectDirectoryDescription) =>
-      "このタスクは選択したプロジェクトフォルダーで実行され、その中のファイルを読み取り・更新できます。"
     (English, TaskLabel) => "Task"
     (Spanish, TaskLabel) => "Tarea"
     (SimplifiedChinese, TaskLabel) => "任务"
@@ -279,26 +244,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "模型（留空使用主機預設值）"
     (Japanese, ModelDefault) =>
       "モデル（空欄でホストの既定値を使用）"
-    (English, SchedulePermissions) =>
-      "Uses this host's API settings. Permission escalation is refused in unattended runs."
-    (Spanish, SchedulePermissions) =>
-      "Usa la configuración de API de este host. No se permite ampliar permisos en ejecuciones desatendidas."
-    (SimplifiedChinese, SchedulePermissions) =>
-      "使用此主机的 API 设置。无人值守运行时不允许提升权限。"
-    (TraditionalChinese, SchedulePermissions) =>
-      "使用此主機的 API 設定。無人值守執行時不允許提升許可權。"
-    (Japanese, SchedulePermissions) =>
-      "このホストの API 設定を使用します。無人実行時の権限昇格は許可されません。"
-    (English, RunNowDescription) =>
-      "Save and run now executes once immediately without changing the schedule."
-    (Spanish, RunNowDescription) =>
-      "Guardar y ejecutar ahora ejecuta la tarea una vez de inmediato sin cambiar la programación."
-    (SimplifiedChinese, RunNowDescription) =>
-      "“保存并立即运行”会立即执行一次，不改变计划时间。"
-    (TraditionalChinese, RunNowDescription) =>
-      "“儲存並立即執行”會立即執行一次，不改變計劃時間。"
-    (Japanese, RunNowDescription) =>
-      "「保存して今すぐ実行」はスケジュール時刻を変更せず、一度実行します。"
     (English, SaveRunNow) => "Save and run now"
     (Spanish, SaveRunNow) => "Guardar y ejecutar ahora"
     (SimplifiedChinese, SaveRunNow) => "保存并立即运行"

@@ -29,7 +29,6 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let content : Array[@html.Html] = [
     @html.div(class="page-header", [
       @html.div(class="page-eyebrow", model.focused_device_name()),
-      @html.p(class="page-subtitle", ui(locale, ScheduleDescription)),
     ]),
     @html.div(class="schedule-toolbar", [
       @html.button(
@@ -338,14 +337,6 @@ fn schedule_form_view(
         options,
       ),
     ]),
-    @html.p(
-      class="page-subtitle",
-      if form.workspace is None {
-        ui(locale, AutomaticDirectoryDescription)
-      } else {
-        ui(locale, ProjectDirectoryDescription)
-      },
-    ),
     @html.label(class="schedule-field", [
       @html.span(ui(locale, TaskLabel)),
       @html.textarea(
@@ -376,8 +367,6 @@ fn schedule_form_view(
       field(ui(locale, TimeoutMinutes), value => Timeout(value), form.timeout),
     ]),
     field(ui(locale, ModelDefault), value => Model(value), form.model),
-    @html.p(class="page-subtitle", ui(locale, SchedulePermissions)),
-    @html.p(class="page-subtitle", ui(locale, RunNowDescription)),
     @html.div(class="schedule-toolbar", [
       @html.button(
         class="button primary",
