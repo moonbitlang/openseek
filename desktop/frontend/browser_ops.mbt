@@ -24,11 +24,17 @@ fn open_browser_tab(
   cloud_preview~ : Bool = false,
 ) -> (@cmd.Cmd, Model) {
   // `owner` names the Host conversation for the native view; without one the
-  // tab joins the strip on screen, which may be a Cloud conversation's.
+  // tab joins the strip on screen, which may be a Cloud conversation's. A
+  // side chat's tab joins its conversation's strip.
   let target_owner = owner
-    .map(owner => @interop.Host(owner))
+    .map(owner => dock_home(@interop.Host(owner)))
     .unwrap_or(model.dock_owner())
-  let (id, model) = model.add_browser_tab(target_owner, url?, cloud_preview~)
+  let (id, model) = model.add_browser_tab(
+    target_owner,
+    url?,
+    cloud_preview~,
+    page_owner?=owner,
+  )
   let cmd = if url is Some(url) {
     browser_open(
       dispatch,
@@ -51,8 +57,14 @@ fn Model::add_browser_tab(
   url? : String,
   resolve_picker~ : Bool = false,
   cloud_preview~ : Bool = false,
+  page_owner? : @interop.ConversationKey,
 ) -> (Int32, Model) {
-  let (preview, id) = @preview.open_page(self.preview, url?, cloud_preview~)
+  let (preview, id) = @preview.open_page(
+    self.preview,
+    url?,
+    cloud_preview~,
+    owner?=page_owner,
+  )
   let dock = self.dock_state_for(owner)
   let dock = if resolve_picker && dock.active is Some(FilePicker) {
     @dock.resolve_pick(dock, Browser(id~))
@@ -69,6 +81,19 @@ fn Model::add_browser_tab(
       right_panel_menu_open: self.right_panel_menu_open && !on_screen,
     },
   )
+}
+
+///|
+/// The conversation page `id` belongs to, which every host operation on it
+/// names: the one it was opened for, else the dock's on screen.
+fn Model::browser_page_owner(
+  self : Model,
+  id : Int32,
+) -> @interop.ConversationKey? {
+  match @preview.page(self.preview, id) {
+    Some({ owner: Some(owner), .. }) => Some(owner)
+    _ => self.dock_owner().host()
+  }
 }
 
 ///|

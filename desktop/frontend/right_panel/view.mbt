@@ -8,6 +8,7 @@ fn panel_view(
   actions : Actions,
   semantic_review~ : @html.Html = @html.nothing,
   tab_menu~ : @html.Html = @html.nothing,
+  side_chat~ : @html.Html = @html.nothing,
 ) -> @html.Html {
   let chips : Array[@dock.TabChip] = input.dock.tabs.map(tab => {
     match tab {
@@ -16,7 +17,7 @@ fn panel_view(
           Some(doc) => (doc.name, doc.state is TabDeleted)
           None => (@resource.label(path), false)
         }
-        { tab, label, title: path.path, missing, }
+        { tab, label, title: path.path, missing, mark: Unmarked, }
       }
       GitDiff(diff~) => {
         let short = @fileeditor.short_commit(diff.commit)
@@ -25,6 +26,7 @@ fn panel_view(
           label: "\{@fileeditor.basename(diff.path)} (\{short})",
           title: "\{diff.path.0} at \{diff.commit}",
           missing: false,
+          mark: Unmarked,
         }
       }
       Browser(id~) => {
@@ -35,7 +37,7 @@ fn panel_view(
           }
           None => (ui(locale, NewTab), ui(locale, NewTab))
         }
-        { tab, label, title, missing: false, }
+        { tab, label, title, missing: false, mark: Unmarked, }
       }
       Github =>
         {
@@ -43,6 +45,7 @@ fn panel_view(
           label: "GitHub",
           title: "GitHub pull requests and issues",
           missing: false,
+          mark: Unmarked,
         }
       Jobs =>
         {
@@ -50,6 +53,7 @@ fn panel_view(
           label: ui(locale, JobsLabel),
           title: ui(locale, JobsHint),
           missing: false,
+          mark: Unmarked,
         }
       Workflows =>
         {
@@ -57,6 +61,7 @@ fn panel_view(
           label: ui(locale, WorkflowsLabel),
           title: ui(locale, WorkflowsHint),
           missing: false,
+          mark: Unmarked,
         }
       FilePicker => {
         let (label, title) = match input.file_panel.explorer_mode {
@@ -64,7 +69,16 @@ fn panel_view(
           ExplorerSearch => (ui(locale, SearchLabel), ui(locale, SearchHint))
           ExplorerFiles => (ui(locale, OpenFile), ui(locale, OpenFileHint))
         }
-        { tab, label, title, missing: false, }
+        { tab, label, title, missing: false, mark: Unmarked, }
+      }
+      SideChat(owner~) => {
+        let (label, mark) = match
+          input.side_chats.iter().find_first(chat => chat.owner == owner) {
+          Some(chat) =>
+            ("\{ui(locale, SideChatLabel)} \{chat.number}", chat.mark)
+          None => (ui(locale, SideChatLabel), @dock.Unmarked)
+        }
+        { tab, label, title: label, missing: false, mark, }
       }
     }
   })
@@ -99,6 +113,7 @@ fn panel_view(
     Some(Jobs) => "mode-jobs"
     Some(Github) => "mode-github"
     Some(Workflows) => "mode-workflows"
+    Some(SideChat(_)) => "mode-side-chat"
   }
   let active_page : @preview.PageState = match
     @dock.active_browser(input.dock) {
@@ -208,6 +223,9 @@ fn panel_view(
         actions.github_events,
         actions.open_link,
       ),
+      // Always mounted, like every body here; empty unless a side-chat tab is
+      // active, when the root hands in that conversation's pane.
+      @html.div(class="side-chat-pane", [side_chat]),
       tab_menu,
     ],
   )
@@ -221,4 +239,5 @@ let blank_browser_page : @preview.PageState = {
   loading: false,
   failure: None,
   cloud_preview: false,
+  owner: None,
 }

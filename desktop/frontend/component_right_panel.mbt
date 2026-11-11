@@ -1,8 +1,9 @@
 ///|
 /// Project durable panel data into the independent right-panel package.
 fn Model::right_panel_input(self : Model) -> @right_panel.Input {
+  let dock = self.dock_state()
   @right_panel.Input(
-    dock=self.dock_state(),
+    dock~,
     jobs=self.jobs,
     github=self.github,
     file_panel=self.file_panel,
@@ -51,5 +52,15 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
       .active_conversation()
       .map(conv => conv.workflows)
       .unwrap_or([]),
+    // Numbered by their place among the strip's side-chat tabs.
+    side_chats=@dock.side_chats(dock).mapi((index, owner) => {
+      let mark : @dock.TabMark = match
+        self.find_conversation(owner.channel, owner.session) {
+        Some(conv) if conv.is_running() => Running
+        Some(conv) if conv.unseen_finish => Unread
+        _ => Unmarked
+      }
+      ({ owner, number: index + 1, mark, } : @right_panel.SideChatTab)
+    }),
   )
 }

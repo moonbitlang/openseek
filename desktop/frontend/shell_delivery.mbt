@@ -1,4 +1,17 @@
 ///|
+/// Which composer holds `owner`'s draft: a side chat's is the dock's, every
+/// other conversation's is the column's.
+fn command_result_surface(
+  owner : @interop.ConversationIdentity,
+) -> @interop.ChatSurface {
+  match owner {
+    @interop.Host(key) if @protocol.side_chat_parent(key.session) is Some(_) =>
+      Dock
+    _ => Column
+  }
+}
+
+///|
 /// Resolve the owning composer without changing navigation or borrowing a
 /// different host's credentials.
 fn Model::command_result_input(
@@ -6,6 +19,8 @@ fn Model::command_result_input(
   owner : @interop.ConversationIdentity,
 ) -> @composer.Input? {
   match owner {
+    @interop.Host(key) if command_result_surface(owner) is Dock =>
+      Some(self.side_chat_composer_input(key))
     @interop.Host(key) => {
       guard self.find_conversation(key.channel, key.session) is Some(conv) else {
         return None

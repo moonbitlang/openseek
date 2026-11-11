@@ -1336,7 +1336,7 @@ fn transcript_view(
       .class("transcript")
       // Text selected here gets the shell's floating reply, addressed to the
       // composer on the same surface.
-      .data_set("context-quote", "")
+      .data_set("context-quote", input.surface.quote_source())
       .data_set("transcript-session", input.active_session)
       .data_set(
         "transcript-theme",

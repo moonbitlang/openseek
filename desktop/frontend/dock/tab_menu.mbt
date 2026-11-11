@@ -40,6 +40,7 @@ fn tab_menu_target(
     Workflows => "workflows"
     Github => "github"
     Jobs => "jobs"
+    SideChat(owner~) => "side-chat:\{owner.session.length()}:\{owner.session}"
   }
   "dock:\{owner}:\{identity}"
 }

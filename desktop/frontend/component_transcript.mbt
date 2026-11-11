@@ -198,32 +198,45 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
       streaming_identity: "idle",
     }
   } else if self.active_conversation() is Some(conversation) {
-    let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
-    {
-      source: OpenSeek,
-      session: self.active_session,
-      project: Some(conversation.project()),
-      root: self
-      .conversation_placement(conversation)
-      .bind(value => value.checkout_root()),
-      items: conversation.visible_transcript_rows(),
-      streaming_response: conversation.turn.live.response,
-      streaming_reasoning,
-      reasoning_complete,
-      streaming_identity: conversation.streaming_render_identity(),
-    }
+    self.conversation_content(conversation)
   } else {
-    {
-      source: OpenSeek,
-      session: self.active_session,
-      project: None,
-      root: None,
-      items: [],
-      streaming_response: None,
-      streaming_reasoning: None,
-      reasoning_complete: false,
-      streaming_identity: "",
-    }
+    TranscriptContent::empty(self.active_session)
+  }
+}
+
+///|
+/// What an OpenSeek conversation's transcript shows: its history and live turn.
+fn Model::conversation_content(
+  self : Model,
+  conv : Conversation,
+) -> TranscriptContent {
+  let (streaming_reasoning, reasoning_complete) = conv.reasoning_for_render()
+  {
+    source: OpenSeek,
+    session: conv.session_id,
+    project: Some(conv.project()),
+    root: self.conversation_placement(conv).bind(value => value.checkout_root()),
+    items: conv.visible_transcript_rows(),
+    streaming_response: conv.turn.live.response,
+    streaming_reasoning,
+    reasoning_complete,
+    streaming_identity: conv.streaming_render_identity(),
+  }
+}
+
+///|
+/// A transcript with nothing to show yet for `session`.
+fn TranscriptContent::empty(session : String) -> TranscriptContent {
+  {
+    source: OpenSeek,
+    session,
+    project: None,
+    root: None,
+    items: [],
+    streaming_response: None,
+    streaming_reasoning: None,
+    reasoning_complete: false,
+    streaming_identity: "",
   }
 }
 
@@ -355,4 +368,123 @@ fn Model::project_display_label(self : Model, project : @common.Uri) -> String? 
   } else {
     Some(@resource.label(project))
   }
+}
+
+///|
+/// The side chat the dock shows with its transcript and composer: the active
+/// tab of the shown dock, on the Chat screen. Never the conversation in the
+/// column — one conversation is on screen once.
+fn Model::mounted_side_chat(self : Model) -> Conversation? {
+  guard self.screen is Chat &&
+    self.file_panel_visible() &&
+    @dock.active_side_chat(self.dock_state()) is Some(owner) &&
+    !(owner.channel == self.focused && owner.session == self.active_session) else {
+    return None
+  }
+  self.find_conversation(owner.channel, owner.session)
+}
+
+///|
+/// What the dock's side-chat pane shows around its composer.
+#derive(Eq)
+priv enum SideChatPane {
+  /// It never loaded, so the pane says so and offers a retry.
+  Unloaded(chat~ : @interop.ConversationKey)
+  Loaded(chat~ : @interop.ConversationKey, questions~ : QuestionRegion?)
+}
+
+///|
+fn SideChatPane::chat(self : SideChatPane) -> @interop.ConversationKey {
+  match self {
+    Unloaded(chat~) | Loaded(chat~, ..) => chat
+  }
+}
+
+///|
+/// The pane of the side chat `mounted_side_chat` names.
+fn Model::side_chat_pane(self : Model) -> SideChatPane? {
+  self
+  .mounted_side_chat()
+  .map(conv => {
+    if conv.side_chat_unloaded() {
+      Unloaded(chat=conv.key())
+    } else {
+      Loaded(chat=conv.key(), questions=self.question_region_of(conv))
+    }
+  })
+}
+
+///|
+/// Which side chat `mounted_side_chat` names, as the dock keys it.
+fn Model::mounted_side_chat_owner(self : Model) -> @interop.ConversationKey? {
+  self.mounted_side_chat().map(conv => conv.key())
+}
+
+///|
+/// The key the dock's transcript is remembered and addressed by. It never
+/// equals a column slot's key, so the column and the dock each keep where
+/// their own reader left off.
+fn side_chat_slot_key(owner : @interop.ConversationKey) -> String {
+  "side-chat\u{0}" + owner.channel.uri_authority() + "\u{0}" + owner.session
+}
+
+///|
+/// The transcript of side chat `conv` in the dock: its own history and live
+/// turn, read-only toward the conversation it was forked from. A side chat is
+/// not forked or edited from here, and it has no project to choose.
+///
+/// The dock may recompute this while disposing the side chat's branch, after
+/// the conversation has gone; that reads as an empty transcript.
+fn Model::side_chat_transcript_input(
+  self : Model,
+  owner : @interop.ConversationKey,
+) -> @transcript_component.Input {
+  let content = match self.find_conversation(owner.channel, owner.session) {
+    Some(conv) => self.conversation_content(conv)
+    None => TranscriptContent::empty(owner.session)
+  }
+  @transcript_component.Input(
+    surface=Dock,
+    locale=self.locale,
+    dark_mode=self.theme.is_dark(self.system_dark),
+    minimal=self.minimal_transcript_effective(),
+    source=content.source,
+    focused=owner.channel,
+    active_session=content.session,
+    scroll=self.transcript_scroll
+      .get(side_chat_slot_key(owner))
+      .unwrap_or(Pinned),
+    current_project=content.project,
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=content.root,
+    items=content.items,
+    streaming_response=content.streaming_response,
+    streaming_reasoning?=content.streaming_reasoning,
+    reasoning_complete=content.reasoning_complete,
+    streaming_identity=content.streaming_identity,
+  )
+}
+
+///|
+/// The side chat whose dock transcript `slot` names, as the checkout a file
+/// opened from it resolves in. Its tab lands in the dock on screen, its
+/// conversation's, while the side chat stays what opened it.
+fn Model::side_chat_slot_source(self : Model, slot : String) -> ActiveCheckout? {
+  guard self.mounted_side_chat() is Some(conv) &&
+    side_chat_slot_key(conv.key()) == slot else {
+    return None
+  }
+  Some(self.checkout_of(conv))
+}
+
+///|
+/// Whether the transcript keyed `slot` is on screen: the column's, or the
+/// side chat's in the dock. An action from a transcript that has left is
+/// dropped, as its conversation is no longer the one the reader acts on.
+fn Model::transcript_on_screen(self : Model, slot : String) -> Bool {
+  self.transcript_slot().map(current => current.key()) == Some(slot) ||
+  self.mounted_side_chat_owner().map(side_chat_slot_key) == Some(slot)
 }

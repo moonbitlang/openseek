@@ -11,10 +11,7 @@ import {
   "openseek_desktop/frontend/workflow",
   "openseek_desktop/frontend/fileeditor",
   "openseek_desktop/frontend/preview",
+  "openseek_desktop/frontend/interop",
 }
 
 supported_targets = "js"
-
-import {
-  "openseek_desktop/frontend/interop",
-} for "wbtest"

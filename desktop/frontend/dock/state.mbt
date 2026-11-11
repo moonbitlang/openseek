@@ -43,6 +43,10 @@ pub(all) enum DockTab {
   Workflows
   Github
   Jobs
+  // A side chat of the conversation that owns this strip: a fork of it,
+  // shown here with its own transcript and composer. Closing its tab deletes
+  // it, and its tab closes when its record goes (see `close_gone_side_chats`).
+  SideChat(owner~ : @interop.ConversationKey)
 }
 
 ///|
@@ -100,6 +104,23 @@ pub fn active_history_diff(state : DockState) -> GitHistoryDiff? {
 pub fn active_browser(state : DockState) -> Int32? {
   match state.active {
     Some(Browser(id~)) => Some(id)
+    _ => None
+  }
+}
+
+///|
+/// The strip's side chats, in strip order.
+pub fn side_chats(state : DockState) -> Array[@interop.ConversationKey] {
+  [
+    for tab in state.tabs if tab is SideChat(owner~) => owner
+  ]
+}
+
+///|
+/// The active tab's side chat, when the active tab is a side chat.
+pub fn active_side_chat(state : DockState) -> @interop.ConversationKey? {
+  match state.active {
+    Some(SideChat(owner~)) => Some(owner)
     _ => None
   }
 }

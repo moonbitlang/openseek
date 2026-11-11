@@ -179,6 +179,15 @@ priv enum QuoteTarget {
 }
 
 ///|
+/// Where text selected in a transcript goes: the column's composer, or the
+/// composer of the side chat in the dock.
+#derive(Eq)
+priv enum SelectionComposer {
+  ColumnComposer(QuoteTarget)
+  DockComposer(@composer.Identity)
+}
+
+///|
 /// Which composer, if any, is shown with a transcript right now. A read-only
 /// conversation shows its transcript without one.
 fn Model::quote_screen(self : Model) -> QuoteScreen? {
@@ -576,6 +585,9 @@ fn main {
     let codex_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
       @cmd.Emit(_ => @cmd.none),
     )
+    let side_chat_result : Ref[@cmd.Emit[@composer.CommandResult]] = Ref(
+      @cmd.Emit(_ => @cmd.none),
+    )
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
@@ -584,6 +596,15 @@ fn main {
         let (cmd, next) = match msg {
           ComposerReply(reply) => ((composer_reply.val)(reply), model)
           ComposerCommandResult(result) => {
+            let owner = match result {
+              @composer.Ready(input, _, _) | @composer.Restore(input, _) =>
+                input.identity.owner
+              @composer.Settled(owner, _, _) => owner
+            }
+            let deliver = match command_result_surface(owner) {
+              Column => composer_result.val
+              Dock => side_chat_result.val
+            }
             let result = match result {
               @composer.Ready(input, id, text) =>
                 model
@@ -595,10 +616,7 @@ fn main {
                 .map(input => @composer.Restore(input, text))
               other => Some(other)
             }
-            (
-              result.map_or(@cmd.none, result => (composer_result.val)(result)),
-              model,
-            )
+            (result.map_or(@cmd.none, result => deliver(result)), model)
           }
           TranscriptArtifactContextRequested(slot~, snapshot) =>
             match model.artifact_quote_target(slot) {
@@ -774,41 +792,6 @@ fn main {
         @sub.batch(subs)
       },
     )
-    let right_panel_input = state.map(model => model.right_panel_input())
-    let right_panel_html = @right_panel.component(
-      state.map(model => model.locale),
-      right_panel_input,
-      {
-        dock: emit.map(msg => Dock(msg)),
-        file_editor: emit.map(msg => FileEditor(msg)),
-        browser_tab: emit(BrowserTabRequested),
-        search: emit(ExplorerRequested(ExplorerSearch)),
-        files: emit(ExplorerRequested(ExplorerFiles)),
-        review: emit(ExplorerRequested(ExplorerChanges)),
-        workflows: emit(WorkflowsRequested),
-        jobs: emit(JobsRequested),
-        github: emit(GithubRequested),
-        github_events: emit.map(msg => Github(msg)),
-        open_link: url => emit(ExternalLinkClicked(url)),
-        job_events: emit.map(msg => Jobs(msg)),
-        open_child: child => emit(OpenSessionHere(child)),
-        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
-        browser_input: emit.map(value => BrowserAddressEdited(value)),
-        browser_submit: emit(BrowserNavigateSubmitted),
-        browser_back: emit(BrowserBack),
-        browser_forward: emit(BrowserForward),
-        browser_reload: emit(BrowserReload),
-        browser_open_external: emit(BrowserOpenExternal),
-        reveal_file: path => emit(RevealFile(path)),
-        share_file: path => emit(ShareFile(path)),
-        preview_file: path => emit(PreviewFile(path)),
-        toggle_menu: emit(ToggleRightPanelMenu),
-        toggle_expanded: emit(ToggleRightPanelExpanded),
-        close_tabs: emit.map(selection => CloseDockTabs(selection)),
-        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
-        close_menu: emit(CloseRightPanelMenu),
-      },
-    )
     let terminal_input = state.map(model => model.terminal_input())
     let terminal_state = state.map(model => model.terminal)
     let terminal_emit = emit.map(msg => Terminal(msg))
@@ -892,6 +875,123 @@ fn main {
       emit.map(action => CodexComposerAction(action)),
     )
     codex_reply.val = codex_composer_quote
+    // A side chat in the dock gets a transcript and a composer of its own.
+    // The transcript is built per side chat like the column's and disposed
+    // when its tab stops being the one on screen. The composer lives as long
+    // as the page, like the column's: its drafts are kept per side chat in the
+    // component, so hiding the dock or switching tabs loses no typing.
+    let side_chat_composer_input = state.map(model => {
+      model.dock_composer_input()
+    })
+    let (side_chat_composer, side_chat_quote, side_chat_composer_result) = @composer.component(
+      state.map(model => model.locale),
+      side_chat_composer_input,
+      emit.map(action => ComposerAction(action)),
+      surface=Dock,
+    )
+    side_chat_result.val = side_chat_composer_result
+    // The pane is projected to data first, so the dock re-renders only when
+    // the side chat's pane changes rather than on every message.
+    let side_chat_pane = state.map(model => model.side_chat_pane())
+    let side_chat_quote_target = side_chat_pane.map2(side_chat_composer_input, (
+      pane,
+      input,
+    ) => {
+      guard pane is Some(pane) &&
+        input.identity.owner == @interop.Host(pane.chat()) else {
+        return None
+      }
+      input.quote_target()
+    })
+    // Built only once the side chat has something to show, so a side chat
+    // that loads after a retry mounts its transcript as a fresh one.
+    let side_chat_transcript = side_chat_pane
+      .map(pane => {
+        if pane is Some(Loaded(chat~, ..)) {
+          Some(chat)
+        } else {
+          None
+        }
+      })
+      .switch_by(
+        owner => {
+          guard owner is Some(owner) else {
+            return @rabbita.Val::constant(@html.nothing)
+          }
+          @transcript_component.component(
+            state.map(model => model.side_chat_transcript_input(owner)),
+            transcript_actions(side_chat_slot_key(owner)),
+          )
+        },
+        by=owner => owner.map_or("", side_chat_slot_key),
+      )
+    // A question its agent asks sits between them, as in the column. A side
+    // chat that never loaded shows why in their place, as the column does.
+    let side_chat_html = state
+      .map(model => model.locale)
+      .map2(side_chat_pane, (locale, pane) => {
+        pane.map(pane => {
+          match pane {
+            Unloaded(chat~) =>
+              Err(
+                conversation_load_failed_view(
+                  locale~,
+                  retry=emit(SideChatRetried(chat~)),
+                ),
+              )
+            Loaded(questions~, ..) =>
+              Ok(question_region_view(questions, locale, emit))
+          }
+        })
+      })
+      .map3(side_chat_transcript, side_chat_composer, (
+        pane,
+        transcript,
+        composer,
+      ) => {
+        match pane {
+          Some(Ok(questions)) =>
+            @html.div(class="side-chat", [transcript, questions, composer])
+          Some(Err(failed)) => @html.div(class="side-chat", [failed])
+          None => @html.nothing
+        }
+      })
+    let right_panel_input = state.map(model => model.right_panel_input())
+    let right_panel_html = @right_panel.component(
+      state.map(model => model.locale),
+      right_panel_input,
+      side_chat=side_chat_html,
+      {
+        dock: emit.map(msg => Dock(msg)),
+        file_editor: emit.map(msg => FileEditor(msg)),
+        browser_tab: emit(BrowserTabRequested),
+        search: emit(ExplorerRequested(ExplorerSearch)),
+        files: emit(ExplorerRequested(ExplorerFiles)),
+        review: emit(ExplorerRequested(ExplorerChanges)),
+        workflows: emit(WorkflowsRequested),
+        jobs: emit(JobsRequested),
+        github: emit(GithubRequested),
+        github_events: emit.map(msg => Github(msg)),
+        open_link: url => emit(ExternalLinkClicked(url)),
+        job_events: emit.map(msg => Jobs(msg)),
+        open_child: child => emit(OpenSessionHere(child)),
+        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
+        browser_input: emit.map(value => BrowserAddressEdited(value)),
+        browser_submit: emit(BrowserNavigateSubmitted),
+        browser_back: emit(BrowserBack),
+        browser_forward: emit(BrowserForward),
+        browser_reload: emit(BrowserReload),
+        browser_open_external: emit(BrowserOpenExternal),
+        reveal_file: path => emit(RevealFile(path)),
+        share_file: path => emit(ShareFile(path)),
+        preview_file: path => emit(PreviewFile(path)),
+        toggle_menu: emit(ToggleRightPanelMenu),
+        toggle_expanded: emit(ToggleRightPanelExpanded),
+        close_tabs: emit.map(selection => CloseDockTabs(selection)),
+        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
+        close_menu: emit(CloseRightPanelMenu),
+      },
+    )
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(
       sidebar_input,
@@ -1066,23 +1166,55 @@ fn main {
     let selection_actions_html = file_feedback.map2(
       @action_menu.selection_component(
         state.map(model => model.locale),
-        quote_target,
+        state
+        .map(model => model.can_open_side_chat())
+        .map3(quote_target, side_chat_quote_target, (side_chat, column, dock) => {
+          let targets : Array[@action_menu.SelectionTarget[SelectionComposer]] = []
+          if column is Some(target) {
+            targets.push({
+              source: @interop.ChatSurface::Column.quote_source(),
+              target: ColumnComposer(target),
+              side_chat: side_chat && target is ChatComposer(_),
+            })
+          }
+          if dock is Some(identity) {
+            targets.push({
+              source: @interop.ChatSurface::Dock.quote_source(),
+              target: DockComposer(identity),
+              side_chat: false,
+            })
+          }
+          targets
+        }),
         reply => {
+          let content = @composer.Text(
+            quote=Some(reply.quote),
+            comment=reply.comment,
+          )
           let (quote, identity) = match reply.target {
-            ChatComposer(identity) => (composer_quote, identity)
-            CodexComposer(identity) => (codex_composer_quote, identity)
+            ColumnComposer(ChatComposer(identity)) => (composer_quote, identity)
+            ColumnComposer(CodexComposer(identity)) =>
+              (codex_composer_quote, identity)
+            DockComposer(identity) => (side_chat_quote, identity)
           }
           quote({
             identity,
-            content: @composer.Text(
-              quote=Some(reply.quote),
-              comment=reply.comment,
-            ),
+            content,
             images: [],
             send: reply.send,
             accepted: reply.accepted,
             declined: reply.declined,
           })
+        },
+        side_chat=(target, quote) => {
+          match target {
+            ColumnComposer(ChatComposer(identity)) =>
+              match identity.owner.host() {
+                Some(owner) => emit(SideChatRequested(owner~, quote~))
+                None => @cmd.none
+              }
+            _ => @cmd.none
+          }
         },
       ),
       (_, selection_actions) => selection_actions,
