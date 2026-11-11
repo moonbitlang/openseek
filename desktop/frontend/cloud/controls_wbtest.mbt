@@ -6,6 +6,8 @@ fn controls_fixture() -> State {
     epoch: 1,
     sessions: [
       {
+        model: V4Flash,
+        thinking: ThinkingHigh,
         id: "session",
         title: None,
         updated_at: None,

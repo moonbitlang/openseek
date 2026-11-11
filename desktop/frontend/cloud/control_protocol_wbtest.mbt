@@ -570,6 +570,7 @@ async test "Cloud control HTTP and SSE preserve operation and ownership contract
   check_control_failures()
   check_control_state_requests()
   check_approval_mode_requests()
+  check_model_settings_requests()
 }
 
 ///|
@@ -597,4 +598,40 @@ async fn check_approval_mode_requests() -> Unit {
     _ => false
   }
   assert_true(busy)
+}
+
+///|
+async fn check_model_settings_requests() -> Unit {
+  let requests = []
+  let restore = mock_control_http(204, "", (url, method_, auth, body) => {
+    requests.push((url, method_, auth, body))
+  })
+  defer restore()
+  edit_session(
+    "fixture",
+    "session/?",
+    SetInference(model=V4Pro, thinking=ThinkingMax),
+  )
+  assert_eq(requests.length(), 1)
+  assert_eq(requests[0].0, CloudOrigin + "/v1/sessions/session%2F%3F")
+  assert_eq(requests[0].1, "PATCH")
+  assert_eq(requests[0].2, "Bearer fixture")
+  assert_eq(@json.parse(requests[0].3), {
+    "model": "deepseek-v4-pro",
+    "thinking": "max",
+  })
+  let failed = mock_control_http(500, "", (_, _, _, _) => ())
+  defer failed()
+  let rejected = try {
+    edit_session(
+      "fixture",
+      "session",
+      SetInference(model=V4Flash, thinking=ThinkingOff),
+    )
+    false
+  } catch {
+    @cloud_client.RequestError(Http(500)) => true
+    _ => false
+  }
+  assert_true(rejected)
 }

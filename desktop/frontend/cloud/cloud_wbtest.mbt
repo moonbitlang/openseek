@@ -74,6 +74,8 @@ test "Cloud list preserves nullable and long backend titles" {
 ///|
 fn live_test_session() -> Session {
   {
+    model: V4Flash,
+    thinking: ThinkingHigh,
     id: "session",
     title: None,
     updated_at: None,

@@ -77,6 +77,7 @@ fn State::update_command(
     is (@engine_session.EditGoal | @engine_session.CloseGoal)
   guard local_edit ||
     (
+      self.inference_ready(session) &&
       token is Some(_) &&
       (
         self.is_draft(session) ||

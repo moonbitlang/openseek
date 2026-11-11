@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/sub",
   "moonbitlang/async/http",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/composer",
@@ -201,8 +202,8 @@ pub(all) struct Conversation {
 }
 pub fn Conversation::awaits_approval(Self) -> Bool
 pub fn Conversation::can_load_older_history(Self) -> Bool
-pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
-pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
+pub fn Conversation::control_context(Self, sending_enabled? : Bool) -> Array[@composer.ContextComponent]
+pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit, sending_enabled? : Bool) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
 pub fn Conversation::extends_history_backward(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
@@ -219,6 +220,8 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   approval : @protocol.OpenSeekApproval
+  model : @deepseek.DsVariant
+  thinking : @protocol.OpenSeekThinking
 }
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
@@ -270,6 +273,7 @@ pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
+  error : @cloud_client.Failure?
 }
 pub fn MetadataSave::equal(Self, Self) -> Bool
 pub fn MetadataSave::not_equal(Self, Self) -> Bool
@@ -373,6 +377,8 @@ pub(all) struct Session {
   generating : Bool
   archived : Bool
   approval : @protocol.OpenSeekApproval
+  model : @deepseek.DsVariant
+  thinking : @protocol.OpenSeekThinking
 }
 pub fn Session::equal(Self, Self) -> Bool
 pub fn Session::not_equal(Self, Self) -> Bool
@@ -382,6 +388,7 @@ pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
   SetApproval(@protocol.OpenSeekApproval)
+  SetInference(model~ : @deepseek.DsVariant, thinking~ : @protocol.OpenSeekThinking)
 }
 pub fn SessionEdit::equal(Self, Self) -> Bool
 pub fn SessionEdit::not_equal(Self, Self) -> Bool
@@ -416,6 +423,7 @@ pub(all) struct State {
 }
 pub fn State::approval(Self, String) -> @protocol.OpenSeekApproval
 pub fn State::can_choose_approval(Self, String) -> Bool
+pub fn State::can_choose_inference(Self, String) -> Bool
 pub fn State::can_compose(Self, String) -> Bool
 pub fn State::can_delete(Self, String) -> Bool
 pub fn State::can_edit(Self, String, SessionEdit) -> Bool
@@ -424,10 +432,13 @@ pub fn State::creating_session(Self) -> Bool
 pub fn State::draft_identity(Self) -> @interop.ConversationIdentity?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::inference(Self, String) -> (@deepseek.DsVariant, @protocol.OpenSeekThinking)
+pub fn State::inference_ready(Self, String) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
 pub fn State::mark_read(Self, String) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::replace(Self, String, Conversation) -> Self
+pub fn State::saving_metadata(Self, String) -> Bool
 pub fn State::sidebar_sessions(Self) -> Array[Session]
 
 #derive(Eq)
