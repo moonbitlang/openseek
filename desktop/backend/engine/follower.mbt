@@ -51,7 +51,7 @@ priv enum FollowerMsg {
   // with no record file retire as an empty drain. The completed generation
   // is a drain barrier: no scan is in flight and none will start, so the
   // record can be moved.
-  Stop(final_scan~ : Bool, writer_exited~ : Bool, generation~ : Int32)
+  Stop(writer_exited~ : Bool, generation~ : Int32)
 }
 
 ///|
@@ -132,20 +132,19 @@ async fn SessionFollower::scan(
   self : SessionFollower,
   sink : EventSink,
 ) -> Unit {
+  // The root this follower reads from is the store half of the durable
+  // identity — broadcast it so clients place the session without guessing.
+  let session_root = self.root.resource_path()
   for event in self.tail.poll() {
     if event.sequence <= self.watermark {
       continue
     }
-    emit(
-      sink,
+    sink(
       SessionCommit({
         session: self.session,
         sequence: event.sequence,
         event,
-        // The root this follower reads from is the store half of the durable
-        // identity — broadcast it so clients place the session without
-        // guessing.
-        session_root: self.root.resource_path(),
+        session_root,
       }),
     )
     self.watermark = event.sequence
@@ -247,32 +246,28 @@ async fn SessionFollower::run(
           }
           reply.put(failure)
         }
-        Stop(final_scan~, writer_exited~, generation~) => {
-          let failure = if final_scan {
-            try {
-              // Everything the departed writer persisted is broadcast
-              // before this generation can retire successfully.
-              follower.scan(sink)
-              None
-            } catch {
-              // A first prompt can be cancelled after a partial stdin write
-              // but before the engine creates its durable record. Once the
-              // caller has proved the writer exited, a record that was never
-              // created and a zero watermark together prove there is no
-              // durable tail to drain. Every other failure — a malformed
-              // record, one that vanished after this follower read it, a
-              // store root that is not a directory — keeps the follower
-              // active for a later retry.
-              @session_record.Absent(detail) =>
-                if writer_exited && follower.watermark == 0 {
-                  None
-                } else {
-                  Some(detail)
-                }
-              error => Some("\{error}")
-            }
-          } else {
+        Stop(writer_exited~, generation~) => {
+          let failure = try {
+            // Everything the departed writer persisted is broadcast
+            // before this generation can retire successfully.
+            follower.scan(sink)
             None
+          } catch {
+            // A first prompt can be cancelled after a partial stdin write
+            // but before the engine creates its durable record. Once the
+            // caller has proved the writer exited, a record that was never
+            // created and a zero watermark together prove there is no
+            // durable tail to drain. Every other failure — a malformed
+            // record, one that vanished after this follower read it, a
+            // store root that is not a directory — keeps the follower
+            // active for a later retry.
+            @session_record.Absent(detail) =>
+              if writer_exited && follower.watermark == 0 {
+                None
+              } else {
+                Some(detail)
+              }
+            error => Some("\{error}")
           }
           if failure is Some(detail) {
             // A failed final scan is not a drain. Keep the actor installed
@@ -381,7 +376,7 @@ async fn ensure_follower(
   for ;; {
     match manager.followers.get(session) {
       Some(follower) => {
-        if !follower.stopping && follower.root.to_string() == root.to_string() {
+        if !follower.stopping && follower.root == root {
           return None
         }
         // Join an in-flight drain, or retire an active follower attached to
@@ -438,10 +433,9 @@ async fn stop_follower(
   manager : EngineManager,
   session : String,
   writer_exited~ : Bool,
-  final_scan~ : Bool = true,
 ) -> Unit {
   guard manager.followers.get(session) is Some(follower) else { return }
-  stop_follower_instance(manager, follower, writer_exited~, final_scan~)
+  stop_follower_instance(manager, follower, writer_exited~)
 }
 
 ///|
@@ -452,7 +446,6 @@ async fn stop_follower_instance(
   manager : EngineManager,
   follower : SessionFollower,
   writer_exited~ : Bool,
-  final_scan~ : Bool = true,
 ) -> Unit {
   let session = follower.session
   guard manager.followers.get(session) is Some(current) &&
@@ -468,9 +461,7 @@ async fn stop_follower_instance(
     follower.stopping = true
     follower.stop_generation += 1
     let generation = follower.stop_generation
-    let queued = follower.inbox.try_put(
-      Stop(final_scan~, writer_exited~, generation~),
-    ) catch {
+    let queued = follower.inbox.try_put(Stop(writer_exited~, generation~)) catch {
       _ => false
     }
     if !queued {

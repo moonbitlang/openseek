@@ -82,13 +82,7 @@ async fn session_group(
     cache.retain((path, _) => paths.contains(path))
     // Match store listings: newest first with full timestamp precision;
     // directories without readable timestamps remain visible at the end.
-    entries.sort_by((a, b) => {
-      if a.1 != b.1 {
-        b.1.compare(a.1)
-      } else {
-        b.2.compare(a.2)
-      }
-    })
+    entries.sort_by((a, b) => (b.1, b.2).compare((a.1, a.2)))
     [ for entry in entries => entry.0 ]..append(unstamped)
   } catch {
     error => return failed("session list failed: \{error}")

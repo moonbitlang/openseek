@@ -30,7 +30,7 @@ async fn SessionExport::SessionExport(
   } else {
     live
   }
-  guard @fs.exists(root.join("sessions").join(session).to_string()) else {
+  guard @fsx.exists(root.join("sessions").join(session).to_path()) else {
     raise EngineError(
       if payload.archived {
         "no archived record for this conversation"

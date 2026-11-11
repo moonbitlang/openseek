@@ -103,20 +103,7 @@ pub async fn submit_session_message(
           ) else {
             raise EngineError("conversation stopped accepting messages")
           }
-          live.phase = Running(run_id~, compact_queued=false)
-          live.steer_runs.begin_run()
-          emit(
-            sink,
-            Started({
-              run_id,
-              submission_id: Some(submission_id),
-              engine: Some(live.engine_name),
-              model: Some(live.model),
-              max_steps: Some(live.max_steps),
-              session,
-              session_root: live.session_root.map(root => root.resource_path()),
-            }),
-          )
+          live.open_run(sink, run_id, Some(submission_id))
           return live.watch_message(
             run_id,
             submission_id,

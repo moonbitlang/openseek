@@ -415,10 +415,7 @@ pub async fn archive_session(
   force~ : Bool = false,
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.ArchiveReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   let refusal = archive_session_commit(
     manager,
     session,
@@ -449,11 +446,7 @@ async fn archive_session_commit(
   defer manager.archive_commit_lock.release()
   // The other half, for a second host attached to this project: its archive
   // of a conversation sharing the checkout has to wait here as well.
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   family.refuse_new_members(session)
   // The checkout goes with the conversation. A dirty refusal
@@ -493,10 +486,7 @@ pub async fn unarchive_session(
   session : String,
   on_committed : (String, String) -> Unit,
 ) -> @protocol.SessionsReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   unarchive_session_commit(manager, session, on_committed)
   archived_sessions()
 }
@@ -511,11 +501,7 @@ async fn unarchive_session_commit(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   move_session_family(family, to_archive=false, on_committed)
 }
@@ -531,10 +517,7 @@ pub async fn delete_archived_session(
   on_committed : (String, String) -> Unit,
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionsReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   delete_archived_session_commit(
     manager,
     session,
@@ -567,11 +550,7 @@ async fn delete_archived_session_commit(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   family.delete_records(archived=true, on_committed, on_worktree_changed?)
   // Physical erasure happens after the commit: the records are already
@@ -601,10 +580,7 @@ pub async fn delete_session(
   edit_replacement? : EditReplacement,
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionDeleteReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   let family = manager.claim_session_family_move(
     session,
@@ -614,11 +590,7 @@ pub async fn delete_session(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   family.refuse_new_members(session)
 
@@ -684,10 +656,7 @@ pub async fn delete_session_check(
   session : String,
   workspace : String,
 ) -> @protocol.SessionDeleteCheckReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   {
     checkout: @worktree.WorktreeOwner::openseek(session).checkout_removal(
@@ -740,9 +709,7 @@ async fn SessionFamilyMove::delete_records(
       for session_id in order {
         // A condemned leftover with the same id only blocks this rename and
         // is itself already scheduled for erasure.
-        if @fsx.exists(deleting.join(session_id).to_path()) {
-          @fs.rmdir(deleting.join(session_id).to_string(), recursive=true)
-        }
+        @fsx.remove_if_exists(deleting.join(session_id).to_path())
         move_session_record(source.join(session_id), deleting, session_id)
         moved.push(session_id)
       }
@@ -1214,4 +1181,26 @@ async test "a claimed child prevents a partial family archive" {
   assert_true(@fsx.is_dir(Path(store + "/sessions/chat-sr-1")))
   assert_false(@fsx.exists(Path(store + "/archived/sessions")))
   assert_true(manager.record_guards.is_empty())
+}
+
+///|
+/// A request's session id, trimmed and refused unless it names one record
+/// directory.
+fn checked_session_id(raw : String) -> String raise EngineError {
+  let session = raw.trim().to_owned()
+  guard @session_store.safe_session_id(session) else {
+    raise EngineError("invalid session id")
+  }
+  session
+}
+
+///|
+/// Take the cross-host lock on `root`'s archived store: every host's
+/// archive, unarchive, delete and side-chat fork serialize on it.
+async fn lock_archived_store(
+  root : @pathx.Absolute,
+) -> @fsx.FileLock raise EngineError {
+  @fsx.FileLock::acquire(@session_store.archived_root(root).to_path()) catch {
+    error => raise EngineError("could not lock the archived store: \{error}")
+  }
 }

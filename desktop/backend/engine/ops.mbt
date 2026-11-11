@@ -109,20 +109,7 @@ pub async fn start_run(
   guard live.submit(command, failure_reason="engine write failed") else {
     raise EngineError("engine changed before the prompt was submitted")
   }
-  live.phase = Running(run_id~, compact_queued=false)
-  live.steer_runs.begin_run()
-  emit(
-    sink,
-    Started({
-      run_id,
-      submission_id,
-      engine: Some(config.engine),
-      model: Some(config.model),
-      max_steps: Some(config.max_steps),
-      session: config.session,
-      session_root: config.session_root.map(root => root.resource_path()),
-    }),
-  )
+  live.open_run(sink, run_id, submission_id)
   { run_id, status: "accepted", exit_code: 0, }
 }
 
@@ -154,9 +141,6 @@ pub fn cancel_run(
 ) -> @protocol.CancelReply raise EngineError {
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
     live.phase is Running(run_id~, ..) else {
-    return { run_id: None, }
-  }
-  if payload.run_id is Some(expected) && run_id != expected {
     return { run_id: None, }
   }
   guard live.submit(
@@ -503,9 +487,6 @@ pub fn steer_run(
     live.phase is Running(run_id~, ..) else {
     return { steered: false, run_id: None, }
   }
-  if payload.run_id is Some(expected) && run_id != expected {
-    return { steered: false, run_id: None, }
-  }
   if !payload.images.is_empty() && !live.supports_images {
     return { steered: false, run_id: Some(run_id), }
   }
@@ -548,11 +529,7 @@ pub fn queue_run(
     | QueueSteer(id~) => id.trim().to_owned()
   }
   guard !id.is_empty() else { return { accepted: false, } }
-  guard open_run_engine(manager, run_id=payload.run_id) is Some(live) &&
-    live.phase is Running(run_id~, ..) else {
-    return { accepted: false, }
-  }
-  if run_id != payload.run_id {
+  guard open_run_engine(manager, run_id=payload.run_id) is Some(live) else {
     return { accepted: false, }
   }
   match payload.action {
@@ -631,11 +608,7 @@ pub fn approve_run(
   payload : @protocol.ApprovalPayload,
 ) -> @protocol.ApprovalReply {
   guard !payload.id.is_blank() else { return { delivered: false, } }
-  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
-    live.phase is Running(run_id~, ..) else {
-    return { delivered: false, }
-  }
-  if payload.run_id is Some(expected) && run_id != expected {
+  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
     return { delivered: false, }
   }
   guard live.submit(
@@ -750,11 +723,7 @@ pub async fn load_session(
   // about what has been committed. The reply's watermark tells the client
   // which commits its snapshot already contains.
   if follower_snapshot(manager, session, root) is Some(document) {
-    return {
-      session: document,
-      watermark: Some(session_max_sequence(document)),
-      prediction: load_prediction(root, session, session_max_sequence(document)),
-    }
+    return loaded_session_reply(root, session, document)
   }
   // A record that moved to an archived twin is a different answer than one
   // that was never written: say so, rather than reporting this store's
@@ -771,10 +740,22 @@ pub async fn load_session(
     @session_record.Absent(_) => return empty_session_reply(session)
     error => raise EngineError("session load failed: \{error}")
   }
+  loaded_session_reply(root, session, document)
+}
+
+///|
+/// The reply for a read `document`: its watermark plus any prediction
+/// recorded at exactly that watermark.
+async fn loaded_session_reply(
+  root : @pathx.Absolute,
+  session : String,
+  document : @protocol.SessionDocument,
+) -> @protocol.LoadSessionReply {
+  let watermark = session_max_sequence(document)
   {
     session: document,
-    watermark: Some(session_max_sequence(document)),
-    prediction: load_prediction(root, session, session_max_sequence(document)),
+    watermark: Some(watermark),
+    prediction: load_prediction(root, session, watermark),
   }
 }
 
@@ -818,10 +799,7 @@ pub async fn load_archived_session(
     }
     Some(@session_store.archived_root(@workspaces.store_root(workspace)))
   } else {
-    match @session_store.archived_root_of(session) {
-      Some(root) => Some(@session_store.archived_root(root))
-      None => None
-    }
+    @session_store.archived_root_of(session).map(@session_store.archived_root)
   }
   guard root is Some(root) else {
     if @session_store.live_root_of(session) is Some(_) {
@@ -840,11 +818,7 @@ pub async fn load_archived_session(
   let document = @session_record.read_document(root, session) catch {
     error => raise EngineError("archived session load failed: \{error}")
   }
-  {
-    session: document,
-    watermark: Some(session_max_sequence(document)),
-    prediction: load_prediction(root, session, session_max_sequence(document)),
-  }
+  loaded_session_reply(root, session, document)
 }
 
 ///|
@@ -859,7 +833,7 @@ async fn follower_snapshot(
     guard manager.followers.get(session) is Some(follower) else { return None }
     // Session ids can exist in several stores. Never return a snapshot from
     // a follower attached to a different root than the requested record.
-    if follower.root.to_string() != root.to_string() {
+    if follower.root != root {
       return None
     }
     if follower.stopping {

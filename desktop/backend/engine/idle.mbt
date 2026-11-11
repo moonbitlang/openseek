@@ -80,12 +80,7 @@ async fn ServeEngine::jobs_hold_engine(
   now~ : Int64,
   idle_ms~ : Int64,
 ) -> Bool {
-  let reply = try {
-    let request_id = @uuid.mint()
-    self.job_request(request_id, JobsSnapshot(request_id~))
-  } catch {
-    _ => return true
-  }
+  let reply = self.jobs_snapshot() catch { _ => return true }
   guard reply is JobsSnapshot(jobs~, ..) else { return true }
   jobs.any(job => {
     guard job.state.is_terminal() && job.finished_at_ms is Some(finished) else {

@@ -67,8 +67,10 @@ pub async fn edit_session(
   }
   // agent.start acknowledges queueing, not persistence. Wait only for this
   // prompt's durable receipt before invoking the existing delete lifecycle.
+  // One tail across the wait reads only what each poll appended.
+  let tail = @session_record.Tail(selected.root, reply.session)
   @async.with_timeout(10000, () => {
-    while !edited_message_saved(selected.root, replacement) {
+    while !edited_message_saved(tail, submission_id) {
       @async.sleep(20)
     }
   })
@@ -83,19 +85,19 @@ pub async fn edit_session(
 }
 
 ///|
+/// Whether the events `tail` newly read include the User item carrying
+/// `submission_id`. A failed poll rewinds the tail, so the next one reports
+/// the whole record again and nothing is missed.
 async fn edited_message_saved(
-  root : @pathx.Absolute,
-  payload : EditReplacement,
+  tail : @session_record.Tail,
+  submission_id : String,
 ) -> Bool {
-  let document = @session_record.read_document(root, payload.replacement) catch {
+  let events = tail.poll() catch {
     @session_record.Absent(_) => return false
     error => raise error
   }
-  document.events
-  .unwrap_or([])
-  .any(event => {
-    event.item is User(message) &&
-    message.submission_id == Some(payload.submission_id)
+  events.any(event => {
+    event.item is User(message) && message.submission_id == Some(submission_id)
   })
 }
 
