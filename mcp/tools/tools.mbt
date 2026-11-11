@@ -126,12 +126,9 @@ pub fn Server::try_wait(self : Server) -> ServerEntry? {
 
 ///|
 /// What connecting this server came to, waiting up to `timeout_ms` for it to
-/// settle: `None` when it is still connecting by then, or when its task was
-/// cancelled with its group, which only happens as the engine shuts down.
+/// settle: `None` when it is still connecting by then.
 async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
-  @async.with_timeout_opt(timeout_ms, () => self.connecting.wait()) catch {
-    _ => None
-  }
+  @async.with_timeout_opt(timeout_ms, () => self.connecting.wait())
 }
 
 ///|
@@ -153,9 +150,7 @@ pub async fn settle(
   ignore(
     @async.with_timeout_opt(timeout_ms, () => {
       for configured in waiting {
-        ignore(configured.connecting.wait()) catch {
-          _ => ()
-        }
+        ignore(configured.connecting.wait())
       }
     }),
   )
