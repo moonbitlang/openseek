@@ -73,6 +73,8 @@ export class CloudHarness {
     this.generating = new Set();
     this.archived = new Set();
     this.approvals = new Map();
+    this.inference = new Map();
+    this.taskInference = new Map();
     this.histories = new Map();
     this.historyTurns = new Map();
     this.nativeNotices = new Map();
@@ -392,7 +394,9 @@ export class CloudHarness {
       if (request.method() === 'POST') {
         if (this.pauseCreate) await this.pauseCreate;
         if (this.createStatus !== 201) return json({}, this.createStatus);
-        this.approvals.set(sessionC, request.postDataJSON().approval);
+        const { approval, model, thinking } = request.postDataJSON();
+        this.approvals.set(sessionC, approval);
+        this.inference.set(sessionC, { model, thinking });
         this.sessionIds = [sessionC, ...this.sessionIds.filter(id => id !== sessionC)];
         return json({ id: sessionC }, 201);
       }
@@ -400,7 +404,7 @@ export class CloudHarness {
       if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask' })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask', ...this.modelSettings(id) })) }, status);
     }
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();
@@ -412,6 +416,7 @@ export class CloudHarness {
       if (body.archived === true) this.archived.add(session);
       if (body.archived === false) this.archived.delete(session);
       if (body.approval !== undefined) this.approvals.set(session, body.approval);
+      if (body.model !== undefined || body.thinking !== undefined) this.inference.set(session, { ...this.modelSettings(session), ...body });
       return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
@@ -471,6 +476,7 @@ export class CloudHarness {
     const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
     if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
+    this.taskInference.set(task, this.modelSettings(session));
     const data = this.manualTasks ? [['task_started', {}]] : this.streamEvents || [
       ['task_started', {}],
       ['tool_call', { id: `calc-${task}`, name: 'mbtx', arguments: '{"source":"println(2)"}' }],
@@ -552,6 +558,7 @@ export class CloudHarness {
     const event = { session_id: session, task_id: task, seq: seq ?? old.seq + 1, kind, data };
     let queueAdvanced = false;
     if (kind === 'task_started') {
+      this.taskInference.set(task, this.modelSettings(session));
       const queued = old.data.queue.find(item => item.id === data.submission_id);
       if (queued) {
         queueAdvanced = true;
@@ -687,11 +694,15 @@ export class CloudHarness {
     await this.page.locator('#task').waitFor();
   }
 
+  modelSettings(session) {
+    return this.inference.get(session) ?? { model: 'deepseek-flash', thinking: 'high' };
+  }
+
   async create() {
     await this.page.locator('aside button[aria-label="New"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
-    await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+    await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
     await expect(this.page.locator('#task')).toBeEnabled();
   }
 

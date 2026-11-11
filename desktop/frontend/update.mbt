@@ -2694,6 +2694,69 @@ fn update_msg(
               model,
             )
           }
+          @composer.ModelMenuToggled(identity~)
+          | @composer.ReasoningMenuToggled(identity~) => {
+            guard selected &&
+              model.cloud.can_choose_inference(identity.owner.session()) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              ToggleSelectMenu(
+                if action is @composer.ModelMenuToggled(..) {
+                  OpenSeekModelMenu
+                } else {
+                  OpenSeekReasoningMenu
+                },
+              ),
+              model,
+            )
+          }
+          @composer.ModelSelected(identity~, value~, ..) => {
+            guard ModelChoice::parse(value)
+              is Some(OpenSeekModel(Deepseek(engine_model))) else {
+              return (@cmd.none, model)
+            }
+            let (_, thinking) = model.cloud.inference(identity.owner.session())
+            return model.set_cloud_inference(
+              dispatch,
+              identity.owner,
+              engine_model,
+              thinking,
+            )
+          }
+          @composer.ReasoningSelected(identity~, value~) => {
+            guard @protocol.OpenSeekThinking::parse(value) is Some(thinking) else {
+              return (@cmd.none, model)
+            }
+            let (engine_model, _) = model.cloud.inference(
+              identity.owner.session(),
+            )
+            return model.set_cloud_inference(
+              dispatch,
+              identity.owner,
+              engine_model,
+              thinking,
+            )
+          }
+          @composer.SettingsSaveRetried(identity~) => {
+            guard model.cloud.metadata_saves.get(identity.owner.session())
+              is Some(
+                {
+                  edit: @cloud.SetInference(model=engine_model, thinking~),
+                  error: Some(_),
+                  ..
+                }
+              ) else {
+              return (@cmd.none, model)
+            }
+            return model.set_cloud_inference(
+              dispatch,
+              identity.owner,
+              engine_model,
+              thinking,
+            )
+          }
           // Drafts keep the mode locally until creation. Existing sessions
           // save it on the server and lock it while a turn is running.
           @composer.ApprovalMenuToggled(identity~) => {
@@ -2750,6 +2813,7 @@ fn update_msg(
         | @composer.ApprovalMenuToggled(..)
         | @composer.ApprovalSelected(..)
         | @composer.ApiSetupRequested(..)
+        | @composer.SettingsSaveRetried(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
         | @composer.QueuedInputDeleteRequested(..)
@@ -2764,6 +2828,7 @@ fn update_msg(
             return (@cmd.none, model)
           }
           match action {
+            @composer.SettingsSaveRetried(..) => (@cmd.none, model)
             @composer.ModelMenuToggled(..) =>
               update_msg(dispatch, ToggleSelectMenu(OpenSeekModelMenu), model)
             @composer.ReasoningMenuToggled(..) =>

@@ -296,6 +296,11 @@ fn update_cloud(
       approval_owner is Some(owner) &&
       !cloud.can_choose_approval(owner.session()) {
       None
+    } else if model.select_menu
+      is Some(OpenSeekModelMenu | OpenSeekReasoningMenu) &&
+      approval_owner is Some(owner) &&
+      !cloud.can_choose_inference(owner.session()) {
+      None
     } else {
       model.select_menu
     },
@@ -472,6 +477,15 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
+  let (model, thinking) = self.cloud.inference(owner.session())
+  let model = @deepseek.Deepseek(model)
+  let reasoning = match thinking {
+    ThinkingOff => ReasoningOff
+    ThinkingHigh => ReasoningHigh
+    ThinkingMax => ReasoningMax
+  }
+  let settings_enabled = self.cloud.can_choose_inference(owner.session())
+  let sending_enabled = self.cloud.inference_ready(owner.session())
   let native_users = Map([])
   for event in conversation.document.events.unwrap_or([]) {
     if event.item is @protocol.User(user) {
@@ -568,7 +582,17 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     presentation: {
       images_enabled: true,
       context: {
-        let context = conversation.control_context()
+        let context = conversation.control_context(sending_enabled~)
+        if self.cloud.metadata_saves.get(owner.session())
+          is Some({ edit: @cloud.SetInference(..), error: Some(error), .. }) {
+          context.push(
+            @composer.SettingsSaveFailed(
+              text=notice_text(self.locale, SaveSettings(error.label())) +
+                " " +
+                notice_text(self.locale, CloudSettingsUnconfirmed),
+            ),
+          )
+        }
         if !conversation.shell_commands.is_empty() {
           context.push(
             @composer.ShellCommandsRunning(
@@ -591,18 +615,22 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       },
       status: [
         @composer.ModelStatus({
-          id: "model",
-          groups: [
-            {
-              label: "Cloud",
-              options: [{ value: "deepseek-flash", label: "DeepSeek Flash", }],
-            },
-          ],
-          selected: "deepseek-flash",
-          disabled: true,
-          open: false,
-          title: "DeepSeek Flash",
+          id: "openseek-model-picker",
+          groups: [{ ..openseek_model_group(Deepseek, model), label: "Cloud", }],
+          selected: ModelChoice::OpenSeekModel(model).wire(),
+          disabled: !settings_enabled,
+          open: self.select_menu is Some(OpenSeekModelMenu),
+          title: model.label(),
         }),
+        @composer.ReasoningStatus(
+          openseek_reasoning_control(
+            model,
+            reasoning,
+            locale=self.locale,
+            open=self.select_menu is Some(OpenSeekReasoningMenu),
+            disabled=!settings_enabled,
+          ),
+        ),
         @composer.ApprovalStatus({
           mode: self.cloud.approval(owner.session()),
           open: self.select_menu is Some(OpenSeekApprovalMenu),
@@ -615,6 +643,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         conversation.sending ||
         conversation.queue_edit is Some(_) {
         conversation.control_primary_action(
+          sending_enabled~,
           if self.followup_behavior() is FollowupQueue {
             @composer.Queue
           } else {
@@ -674,7 +703,7 @@ fn Model::cloud_chat_rows(
         }) ||
         item.generating ||
         self.cloud.deletions.contains(item.id) ||
-        self.cloud.metadata_saves.contains(item.id),
+        self.cloud.saving_metadata(item.id),
         openable: true,
         rename: if confirmed {
           self.conversation_rename_input(id)
@@ -722,4 +751,32 @@ fn Model::cloud_chat_rows(
       },
     )
   })
+}
+
+///|
+fn Model::set_cloud_inference(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationIdentity,
+  engine_model : @deepseek.DsVariant,
+  thinking : @protocol.OpenSeekThinking,
+) -> (@cmd.Cmd, Model) {
+  guard owner is @interop.Cloud(account~, session~) &&
+    (
+      self.cloud_identity() == Some(owner) ||
+      self.cloud_draft_identity() == Some(owner)
+    ) else {
+    return (@cmd.none, self)
+  }
+  let (close, closed) = update_msg(dispatch, CloseSelectMenu, self)
+  let (save, next) = update_cloud(
+    dispatch,
+    @cloud.Edit(
+      account~,
+      session~,
+      edit=SetInference(model=engine_model, thinking~),
+    ),
+    closed,
+  )
+  (@cmd.batch([close, save]), next)
 }

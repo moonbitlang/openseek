@@ -449,6 +449,19 @@ fn ContextComponent::render(
           ),
         ]),
       )
+    SettingsSaveFailed(text~) =>
+      Some(
+        @html.div(class="composer-context-row composer-notice", [
+          @html.span(class="composer-notice-text", text),
+          @html.button(
+            class="composer-notice-btn",
+            type_="button",
+            title=ui(locale, RetryLabel),
+            on_click=action_emit(SettingsSaveRetried(identity~)),
+            ui(locale, RetryLabel),
+          ),
+        ]),
+      )
     ApprovalRequest(approval) =>
       Some(approval.render(locale~, identity, action_emit))
     CodexRequests(requests~) => {
