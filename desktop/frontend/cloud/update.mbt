@@ -450,6 +450,7 @@ pub fn update(
       let cache_catalog = user_id is Some(_) && token is Some(_)
       let next = {
         ..State::empty(),
+        client_tools,
         user_id,
         epoch: state.epoch + 1,
         sequence: state.sequence,
