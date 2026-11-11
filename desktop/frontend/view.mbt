@@ -993,17 +993,20 @@ fn remote_access_rows(
   if model.is_desktop && model.console_url is Some(url) {
     rows.push(
       @ui.form_row(
-        "Local console",
+        @settings.text(model.locale, LocalConsole),
         [
           @html.a(
             class="button secondary setting-link",
             href=url,
             target=Blank,
             rel="noopener noreferrer",
-            [icon(icon_link_external), @html.span("Open")],
+            [
+              icon(icon_link_external),
+              @html.span(@settings.text(model.locale, Open)),
+            ],
           ),
         ],
-        desc="Development build — open the console this host serves in a browser on this machine.",
+        desc=@settings.text(model.locale, LocalConsoleDescription),
       ),
     )
   }

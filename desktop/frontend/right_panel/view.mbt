@@ -38,12 +38,7 @@ fn panel_view(
         { tab, label, title, missing: false, }
       }
       Github =>
-        {
-          tab,
-          label: "GitHub",
-          title: "GitHub pull requests and issues",
-          missing: false,
-        }
+        { tab, label: "GitHub", title: ui(locale, GithubHint), missing: false, }
       Jobs =>
         {
           tab,

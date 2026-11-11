@@ -42,6 +42,8 @@ pub(all) enum Message {
   OpenLocalApiSettings
   LocalApiFallbackDescription
   RemoteControl
+  LocalConsole
+  LocalConsoleDescription
   HelpImproveSeekMoon
   ContentImprovementDescription
   PreferencesReadFailed(String)

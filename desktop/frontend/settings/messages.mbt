@@ -33,6 +33,8 @@ pub(all) enum Message {
   OpenLocalApiSettings
   LocalApiFallbackDescription
   RemoteControl
+  LocalConsole
+  LocalConsoleDescription
   HelpImproveSeekMoon
   ContentImprovementDescription
   PreferencesReadFailed(String)
@@ -427,6 +429,21 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "優先使用遠端 API 設定。此電腦提供備用 API 金鑰；遠端供應商、端點和模型保持不變。修改本機金鑰後請重新連線。"
     (Japanese, LocalApiFallbackDescription) =>
       "リモートの API 設定が優先されます。このコンピュータは予備の API キーを提供し、リモートのプロバイダー、エンドポイント、モデルは変更されません。ローカルのキーを変更した後は再接続してください。"
+    (English, LocalConsole) => "Local console"
+    (Spanish, LocalConsole) => "Consola local"
+    (SimplifiedChinese, LocalConsole) => "本机控制台"
+    (TraditionalChinese, LocalConsole) => "本機主控台"
+    (Japanese, LocalConsole) => "ローカルコンソール"
+    (English, LocalConsoleDescription) =>
+      "Development build — open the console this host serves in a browser on this machine."
+    (Spanish, LocalConsoleDescription) =>
+      "Versión de desarrollo: abre la consola de este host en un navegador de este equipo."
+    (SimplifiedChinese, LocalConsoleDescription) =>
+      "开发版本：在此计算机的浏览器中打开本机提供的控制台。"
+    (TraditionalChinese, LocalConsoleDescription) =>
+      "開發版本：在此電腦的瀏覽器中開啟本機提供的主控台。"
+    (Japanese, LocalConsoleDescription) =>
+      "開発ビルド — このホストのコンソールを、このコンピュータのブラウザで開きます。"
     (English, RemoteControl) => "Remote control"
     (Spanish, RemoteControl) => "Control remoto"
     (SimplifiedChinese, RemoteControl) => "远程控制"
