@@ -60,6 +60,7 @@ async test "stdio pipes initialize, discover and call the host's tools" {
       "jsonrpc": "2.0",
       "method": "notifications/initialized",
     })
+    send_stdio_request(requests, { "jsonrpc": "2.0", "id": 99, "result": {} })
     send_stdio_request(requests, request(2, "tools/list", {}))
     assert_true(
       read_stdio_reply(reader)
@@ -106,6 +107,11 @@ async test "stdio pipes initialize, discover and call the host's tools" {
         },
         ..
       },
+    )
+    send_stdio_request(requests, Json::empty_object())
+    assert_true(
+      read_stdio_reply(reader)
+      is { "id": Null, "error": { "code": -32600, .. }, .. },
     )
     requests.write(b"{invalid json}\n")
     assert_true(
@@ -288,28 +294,37 @@ async test "stdio rejects an oversized line before dispatching it" {
 ///|
 async test "concurrent stdio replies stay whole under pipe backpressure" {
   let text = String::make(131072, 'x')
+  let started : @async.Queue[Unit] = Queue(kind=Unbounded)
   let dispatcher = @mcp.Dispatcher(
     [
       {
         name: "large",
         description: "A reply larger than the pipe buffer.",
         input_schema: { "type": "object" },
-        call: _ => [Text(text)],
+        call: _ => {
+          started.put(())
+          [Text(text)]
+        },
       },
     ],
     version="test",
   )
   with_stdio(dispatcher, "host-session", (responses, requests) => {
     let reader = @io.Utf8Reader(responses)
-    for id in 1..<=3 {
+    for id in 1..<=20 {
       send_stdio_request(
         requests,
         request(id, "tools/call", { "name": "large" }),
       )
     }
     requests.close()
+    // Completed calls still occupy a slot while their replies await a reader.
+    for _ in 0..<16 {
+      started.get() |> ignore
+    }
+    assert_true(@async.with_timeout_opt(50, () => started.get()) is None)
     let replies : Map[Int32, Unit] = Map([])
-    for _ in 0..<3 {
+    for _ in 0..<20 {
       guard read_stdio_reply(reader)
         is {
           "id": Number(id, ..),
@@ -321,8 +336,8 @@ async test "concurrent stdio replies stay whole under pipe backpressure" {
       assert_eq(received, text)
       replies[id.to_int()] = ()
     }
-    assert_eq(replies.length(), 3)
-    for id in 1..<=3 {
+    assert_eq(replies.length(), 20)
+    for id in 1..<=20 {
       assert_true(replies.contains(id))
     }
   })

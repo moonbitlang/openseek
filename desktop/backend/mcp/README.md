@@ -65,10 +65,15 @@ session objects. The HTTP bearer-token grant and Origin checks still apply
 to HTTP requests; stdio relies on the host's authenticated stream binding.
 
 Each input line is a UTF-8 JSON-RPC message; each response is one JSON line.
-Notifications have no response. Malformed JSON returns a parse error and the
-adapter continues with the next line. Multiple requests may execute concurrently,
-and response writes are serialized so frames cannot interleave. Input EOF
-drains accepted requests. I/O failures, cancellation, or an input line exceeding
+The receive loop parses and classifies messages before scheduling. Notifications
+and peer responses are ignored without starting tasks. Invalid messages are
+answered directly, including a parse error for malformed JSON, and the adapter
+continues with the next line. Up to 16 requests may be in flight per connection.
+A request keeps its slot until its response is written, so a slow response
+reader also bounds completed results waiting to be sent. At capacity, the
+receive loop waits before starting another task. Response writes are serialized
+so frames cannot interleave. Input EOF drains accepted requests. I/O failures,
+cancellation, or an input line exceeding
 the one-megabyte limit end the adapter and propagate to its owner. The caller
 closes both streams. Dispatcher tool-failure diagnostics go to stderr with a
 100-millisecond write deadline, so a blocked diagnostic sink cannot hold the

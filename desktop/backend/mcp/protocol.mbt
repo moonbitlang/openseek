@@ -55,28 +55,34 @@ fn failure(id : Json, code : Int32, message : String) -> Json {
 }
 
 ///|
-/// Answer one inbound message for the conversation authenticated by the host.
-/// `session` and `groups` come from trusted host context, never the message.
-/// `None` when the message expects no reply: a notification, or a response —
-/// which this server never sends, so there is nothing to match it to.
-pub async fn Dispatcher::dispatch(
-  self : Dispatcher,
-  message : Json,
-  session~ : String,
-  groups~ : Array[String] = [],
-) -> Json? {
+priv struct Request {
+  id : Json
+  method_ : String
+  params : Json
+  modern : Bool
+}
+
+///|
+priv enum InboundMessage {
+  Request(Request)
+  Answer(Json)
+  Ignore
+}
+
+///|
+/// Validate and classify without executing a handler or starting a task.
+fn classify_message(message : Json) -> InboundMessage {
   if validate_modern(message) is Some(error) {
-    return Some(error)
+    return Answer(error)
   }
   guard message is Object(fields) else {
-    // JSON-RPC answers an unidentifiable request under a null id.
-    return Some(failure(null, InvalidRequest, "Invalid Request"))
+    return Answer(failure(null, InvalidRequest, "Invalid Request"))
   }
   guard fields.get("method") is Some(String(method_)) else {
     if fields.contains("result") || fields.contains("error") {
-      return None
+      return Ignore
     }
-    return Some(
+    return Answer(
       failure(
         fields.get("id").unwrap_or(null),
         InvalidRequest,
@@ -84,9 +90,40 @@ pub async fn Dispatcher::dispatch(
       ),
     )
   }
-  guard fields.get("id") is Some(id) else { return None }
-  let params = fields.get("params").unwrap_or(Json::empty_object())
-  let modern = @wire.request_version(message) is Some(_)
+  guard fields.get("id") is Some(id) else { return Ignore }
+  Request({
+    id,
+    method_,
+    params: fields.get("params").unwrap_or(Json::empty_object()),
+    modern: @wire.request_version(message) is Some(_),
+  })
+}
+
+///|
+/// Answer one inbound message for the conversation authenticated by the host.
+/// `session` and `groups` come from trusted host context, never the message.
+/// Notifications and responses return `None`.
+pub async fn Dispatcher::dispatch(
+  self : Dispatcher,
+  message : Json,
+  session~ : String,
+  groups~ : Array[String] = [],
+) -> Json? {
+  match classify_message(message) {
+    Ignore => None
+    Answer(answer) => Some(answer)
+    Request(request) => Some(self.execute_request(request, session~, groups~))
+  }
+}
+
+///|
+async fn Dispatcher::execute_request(
+  self : Dispatcher,
+  request : Request,
+  session~ : String,
+  groups~ : Array[String],
+) -> Json {
+  let { id, method_, params, modern, } = request
   let answer = match method_ {
     "server/discover" if modern =>
       reply(id, {
@@ -110,7 +147,7 @@ pub async fn Dispatcher::dispatch(
       },
     }
   }
-  Some(answer)
+  answer
 }
 
 ///|
