@@ -169,7 +169,6 @@ async fn fork_session_in(
         engine_mcp_args(
           mcp_config,
           manager.runtime_dir,
-          @sys.get_env_vars(),
           host_mcp=manager.mcp.server is Some(_),
         ),
       )

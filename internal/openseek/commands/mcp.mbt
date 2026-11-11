@@ -55,7 +55,7 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
       workspace_root~,
     )
     for server in connecting {
-      let entry = server.connecting.wait()
+      let entry = server.settled()
       let label = server_label(entry.server)
       // The name is a config key — arbitrary JSON text — so guard it like the
       // rest of the displayed metadata.

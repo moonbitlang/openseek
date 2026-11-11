@@ -15,6 +15,8 @@ priv enum UiMessage {
   LostReason
   Skipped
   SkippedReason
+  Idle
+  IdleReason
   NotRunning
   ConnectingCount(Int32)
   ConnectedCount(Int32)
@@ -133,5 +135,20 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
       "未啟動：排在前面的伺服器已經用完了工具數量上限。"
     (Japanese, SkippedReason) =>
       "起動していません。先のサーバーでツール数の上限に達しました。"
+    (English, Idle) => "On first use"
+    (Spanish, Idle) => "Al primer uso"
+    (SimplifiedChinese, Idle) => "用到时连接"
+    (TraditionalChinese, Idle) => "用到時連線"
+    (Japanese, Idle) => "初回使用時"
+    (English, IdleReason) =>
+      "A skill brings this server. It connects when the agent first uses it."
+    (Spanish, IdleReason) =>
+      "Una skill aporta este servidor. Se conecta cuando el agente lo usa por primera vez."
+    (SimplifiedChinese, IdleReason) =>
+      "这个服务器由 skill 提供，agent 第一次用到它时才会连接。"
+    (TraditionalChinese, IdleReason) =>
+      "這個伺服器由 skill 提供，agent 第一次用到它時才會連線。"
+    (Japanese, IdleReason) =>
+      "このサーバーはスキルが提供します。エージェントが初めて使うときに接続します。"
   }
 }

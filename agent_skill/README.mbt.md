@@ -26,9 +26,13 @@ their YAML values. Missing, unclosed or malformed frontmatter falls back to the
 file stem and an empty description; a missing directory is simply an empty
 library.
 
-Two libraries feed the listing: the user-level (global) one under
-`$HOME/.openseek/skills` (`%USERPROFILE%/.openseek/skills` on Windows;
-override with `--global-skills-dir` / `OPENSEEK_GLOBAL_SKILLS_DIR`) and the
-workspace one under `.openseek/skills`. `merge_skills` combines them with
-workspace skills shadowing same-named global ones, so a project can specialize
-a shared playbook without renaming it.
+Libraries feed the listing in order: any `--skills-dir` given, the user-level
+(global) one under `$HOME/.openseek/skills` (`%USERPROFILE%/.openseek/skills`
+on Windows; override with `--global-skills-dir` /
+`OPENSEEK_GLOBAL_SKILLS_DIR`), and the workspace one under `.openseek/skills`.
+`merge_skills` combines them, each shadowing same-named skills of the ones
+before it, so a project can specialize a shared playbook without renaming it.
+
+A `<name>/SKILL.md` skill may keep an `mcp.json` beside it naming MCP servers
+it brings; `Skill::mcp_config` is its path. The engine connects those servers
+when a script first reaches them (see the repository README).

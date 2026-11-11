@@ -410,7 +410,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
       client_version="0.1",
     )
     guard configured is [connecting] else { fail("expected one server") }
-    let remote = connecting.connecting.wait()
+    let remote = connecting.settled()
     assert_eq([ for tool in remote.tools => tool.name ], ["ping", "big"])
     // The catalog caps what the server supplied, so any item fits a reply.
     guard @tools.catalog_items(configured)
@@ -578,7 +578,7 @@ async fn connect_all(
       workspace_root?,
       discovery_timeout_ms?,
     ) {
-    entries.push(server.connecting.wait())
+    entries.push(server.settled())
   }
   entries
 }
@@ -602,7 +602,7 @@ async fn unavailable(
     client_version="0.1",
   )
   for server in servers {
-    ignore(server.connecting.wait())
+    ignore(server.settled())
   }
   servers
 }

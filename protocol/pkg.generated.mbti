@@ -286,6 +286,7 @@ pub impl @json.ToJson for McpConfigStatus
 
 #derive(Eq, @debug.Debug)
 pub(all) enum McpServerState {
+  Idle
   Connecting
   Connected(Array[McpTool])
   Lost(Array[McpTool])

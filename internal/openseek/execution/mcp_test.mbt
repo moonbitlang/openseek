@@ -275,3 +275,46 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     assert_eq(catalog(registry.serve(AgentTaskScope(group))), [lost])
   })
 }
+
+///|
+async test "a skill's MCP server stays idle until a script reaches it" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.rmdir(dir, recursive=true)
+  let skill = "\{dir}/skills/tracker"
+  @fs.mkdir(skill, recursive=true)
+  @fs.write_text(
+    "\{skill}/SKILL.md",
+    "---\nname: tracker\n---\n",
+    create_mode=CreateOrTruncate,
+  )
+  // A command that does not exist settles at once as failed, whether or not
+  // the sandbox allows spawning.
+  let config : Json = {
+    "mcpServers": {
+      "tracker": { "command": "${OPENSEEK_SKILL_DIR}/no-such-server" },
+    },
+  }
+  @fs.write_text(
+    "\{skill}/mcp.json",
+    config.stringify(),
+    create_mode=CreateOrTruncate,
+  )
+  @async.with_timeout(10000, () => {
+    @async.with_task_group(group => {
+      let registry = @execution.start_mcp(
+        AgentTaskScope(group),
+        [],
+        skills=@agent_skill.discover_skills("\{dir}/skills"),
+        workspace_root=dir,
+      )
+      registry.wait()
+      guard registry.status().servers is [{ target, state: Idle, .. }] else {
+        fail("a skill's server waits for a script to reach it")
+      }
+      assert_eq(target, "\{skill}/no-such-server")
+      ignore(catalog(registry.serve(AgentTaskScope(group))))
+      assert_true(registry.status().servers is [{ state: Failed(_), .. }])
+      group.return_immediately()
+    })
+  })
+}

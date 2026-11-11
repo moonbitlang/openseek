@@ -177,6 +177,7 @@ async fn run_serve(
     let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
+      skills=@setup.skill_library(matches, workspace_root~),
       workspace_root~,
       on_change=() => ignore(steps.try_put(McpChanged) catch { _ => false }),
     )

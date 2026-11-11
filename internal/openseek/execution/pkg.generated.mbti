@@ -5,6 +5,7 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_skill",
   "moonbitlang/openseek/agent_subrun",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/subagent",
@@ -15,6 +16,8 @@ import {
 
 // Values
 pub const McpClientVersion : String = "0.2.2"
+
+pub const SkillDirEnv : String = "OPENSEEK_SKILL_DIR"
 
 pub fn approval_channel(ApprovalPolicy, ApprovalDesk, reviewer~ : ApprovalReviewer) -> @agent_runtime.ApprovalChannel?
 
@@ -28,7 +31,7 @@ pub fn build_extra_tools(model~ : @deepseek.Model, api_key~ : String, deepseek_a
 
 pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, review_deadline_ms? : Int32, child_session? : @agent_subrun.ChildSession) -> async (String, @agent_session.GoalBaseline?) -> String?
 
-pub async fn start_mcp(@agent_runtime.AgentTaskScope, Array[String], workspace_root~ : String, on_change? : () -> Unit) -> McpRegistry
+pub async fn start_mcp(@agent_runtime.AgentTaskScope, Array[String], skills? : Array[@agent_skill.Skill], workspace_root~ : String, on_change? : () -> Unit) -> McpRegistry
 
 pub fn subagent_kinds() -> Array[@subagent.Kind]
 

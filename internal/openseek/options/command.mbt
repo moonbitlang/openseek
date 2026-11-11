@@ -45,12 +45,19 @@ fn prompt_options() -> Array[@argparse.OptionArg] {
       about="User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows.",
     ),
     OptionArg(
+      "skills-dir",
+      long="skills-dir",
+      action=Append,
+      default_values=[""],
+      about="Another skills directory, advertised alongside the user-level and workspace ones, which shadow its same-named skills. Repeat to add more; empty values are ignored.",
+    ),
+    OptionArg(
       "mcp-config",
       long="mcp-config",
       action=Append,
       env="OPENSEEK_MCP_CONFIG",
       default_values=[""],
-      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP.",
+      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. A skill directory may bring servers of its own in an mcp.json beside its SKILL.md; those connect when a script first reaches them. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP.",
     ),
   ]
 }

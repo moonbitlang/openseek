@@ -23,7 +23,7 @@ pub fn summary(
           Connecting => connecting += 1
           Failed(_) | Lost(_) => failed += 1
           Connected(_) => connected += 1
-          NoTools | Skipped => ()
+          Idle | NoTools | Skipped => ()
         }
       }
       let parts : Array[String] = []
@@ -157,6 +157,14 @@ fn server_row(
   }
   let reached = "\{transport} · \{server.target}"
   match server.state {
+    Idle =>
+      item(
+        tone="",
+        name=server.name,
+        note=Some(text(locale, Idle)),
+        detail=None,
+        title="\{reached}\n\{text(locale, IdleReason)}",
+      )
     Connecting =>
       item(
         tone="",
