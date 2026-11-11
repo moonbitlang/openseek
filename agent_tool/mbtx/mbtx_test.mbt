@@ -1804,11 +1804,7 @@ async test "an unhosted snippet sees no handoff, even one its host inherited" {
 ///|
 async test "a sandboxed snippet gets the MCP host's handoff" {
   @async.with_task_group(group => {
-    let host = @mcphost.Service::start(
-      group,
-      call=(_, _, _) => @agent_tool.respond("unused"),
-      items=_ => [],
-    )
+    let host = @mcphost.Service::start(group, [])
     @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
       let definition = @mbtx.definition(workspace_root=ws, mcp_service=host)
       let out = dispatch(definition, {

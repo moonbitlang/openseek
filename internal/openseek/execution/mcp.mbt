@@ -115,41 +115,17 @@ pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
 
 ///|
 /// Serve these servers to scripts through an MCP host on `scope`'s group,
-/// which lives as long as the connections do. A call waits for its server to
-/// settle, then goes to it. A listing waits for the server a scoped search
-/// names, or for every server, then lists the servers as they stand (a lost
-/// one, or one still connecting when the bounded wait ends, as unavailable).
-/// Images in results are saved under
-/// `image_directory`. Without a configured server there is nothing to serve,
-/// and no host starts.
+/// which lives as long as the connections do; calls and listings wait, a
+/// bounded time, for the servers they need (see `@mcphost.Service::start`).
+/// Images in results are saved under `image_directory`. Without a configured
+/// server there is nothing to serve, and no host starts.
 pub async fn McpRegistry::serve(
   self : McpRegistry,
   scope : @agent_runtime.AgentTaskScope,
   image_directory? : String,
 ) -> @mcphost.Service? {
   guard !self.servers.is_empty() else { return None }
-  let servers = self.servers
-  Some(
-    @mcphost.Service::start(
-      scope.group(),
-      call=(server, tool, arguments) => {
-        match
-          servers.search_by(configured => configured.config.name() == server) {
-          Some(index) => servers[index].call(tool, arguments)
-          None =>
-            @agent_tool.respond(
-              "no MCP server `\{@agent_tool.brief_line(server, limit=128)}`; list them with `@mcp.search()`",
-              is_error=true,
-            )
-        }
-      },
-      items=server => {
-        @mcptools.settle(servers, server?)
-        @mcptools.catalog_items(servers)
-      },
-      image_directory?,
-    ),
-  )
+  Some(@mcphost.Service::start(scope.group(), self.servers, image_directory?))
 }
 
 ///|

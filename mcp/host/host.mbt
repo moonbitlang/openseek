@@ -33,35 +33,26 @@ priv suberror ScriptGone
 struct Service {
   server : @socket.TcpServer
   token : String
-  /// Call `tool` of `server`.
-  call : async (String, String, Json) -> @agent_tool.ToolAction
-  /// The catalog's items once the servers a new listing waits for have
-  /// settled: the one it names, or every server when it names none.
-  items : async (String?) -> Array[Json]
-  /// The catalogs recent listings started from, oldest first: every page of
-  /// a listing comes from the one it started from, so a catalog that changes
-  /// meanwhile cannot shift its pages.
-  snapshots : Array[Snapshot]
-  mut next_snapshot : Int32
+  /// The configured servers, in configuration order, being connected.
+  servers : Array[@mcptools.Server]
+  snapshots : Snapshots
   /// Where a result's images are saved, when there is anywhere.
   image_directory : String?
   mut stop : (async () -> Unit)?
 }
 
 ///|
-/// Serve MCP servers' tools on the session's task group until it ends:
-/// `call` calls `tool` of `server`, and `items(server)` is the catalog once
-/// the servers a new listing waits for have settled (`server` when a
-/// scoped search names it, otherwise every server), each item small enough
-/// for a reply on its own. Both wait for servers still connecting, so both
-/// must bound that wait within the SDK's 125-second request deadline. This
-/// package knows no MCP client; the engine supplies both. Images in call results are saved
-/// under `image_directory`, created on first use; without one they are
-/// dropped with a note.
+/// Serve the tools of `servers` on the session's task group until it ends.
+/// A call goes to the server it names once that server has settled
+/// (`Server::call`). A new listing waits for the server a scoped search
+/// names, or for every server (`@mcptools.settle`), then lists the catalog
+/// (`@mcptools.catalog_items`). Both waits are bounded, so a server that
+/// never settles cannot outlast the SDK's request deadline. Images in call
+/// results are saved under `image_directory`, created on first use; without
+/// one they are dropped with a note.
 pub async fn Service::start(
   group : @async.TaskGroup,
-  call~ : async (String, String, Json) -> @agent_tool.ToolAction,
-  items~ : async (String?) -> Array[Json],
+  servers : Array[@mcptools.Server],
   image_directory? : String,
 ) -> Service {
   guard @env.rand(32) is Some(entropy) else {
@@ -71,10 +62,8 @@ pub async fn Service::start(
   let service : Service = {
     server,
     token: @crypto.bytes_to_hex_string(entropy),
-    call,
-    items,
-    snapshots: [],
-    next_snapshot: 0,
+    servers,
+    snapshots: { kept: [], next: 0, },
     image_directory,
     stop: None,
   }
@@ -187,16 +176,19 @@ async fn Service::answer(self : Service, input : Json) -> Json {
       },
       ..
     } => {
-      let reply = match (self.call)(server, tool, arguments) {
-        Respond(output) => self.call_reply(output)
-        Control(_) => error_result("MCP tool returned unsupported loop control")
+      let action = match
+        self.servers.search_by(configured => configured.config.name() == server) {
+        Some(index) => self.servers[index].call(tool, arguments)
+        None =>
+          @agent_tool.respond(
+            "no MCP server `\{@agent_tool.brief_line(server, limit=128)}`; list them with `@mcp.search()`",
+            is_error=true,
+          )
       }
-      if reply.stringify().length() > MaxReplyChars {
-        error_result(
-          "MCP tool executed, but its result exceeded the 64K character limit. Do not retry a mutation merely to retrieve output.",
-        )
-      } else {
-        reply
+      match action {
+        Respond(output) =>
+          deliverable(call_reply(output, image_directory?=self.image_directory))
+        Control(_) => error_result("MCP tool returned unsupported loop control")
       }
     }
     _ =>
@@ -219,8 +211,7 @@ priv suberror InvalidList {
 async fn Service::list(self : Service, fields : Map[String, Json]) -> Json {
   let cursor = index(fields, "cursor").unwrap_or(0)
   let snapshot = if index(fields, "snapshot") is Some(id) {
-    guard self.snapshots.iter().find_first(snapshot => snapshot.id == id)
-      is Some(snapshot) else {
+    guard self.snapshots.find(id) is Some(snapshot) else {
       raise InvalidList(
         "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
       )
@@ -232,7 +223,8 @@ async fn Service::list(self : Service, fields : Map[String, Json]) -> Json {
       Some(String(server)) => Some(server)
       _ => raise InvalidList("MCP host list requires a string server")
     }
-    self.snapshot(server)
+    @mcptools.settle(self.servers, server?)
+    self.snapshots.take(@mcptools.catalog_items(self.servers))
   }
   list_reply(snapshot, cursor)
 }
@@ -250,19 +242,33 @@ fn index(fields : Map[String, Json], key : String) -> Int32? raise InvalidList {
 }
 
 ///|
-/// The catalog once `server` (every server when `None`) has settled, as a
-/// snapshot a listing can page through: the latest one when the catalog has
-/// not changed since.
-async fn Service::snapshot(self : Service, server : String?) -> Snapshot {
-  let items = (self.items)(server)
-  if self.snapshots.last() is Some(latest) && latest.items == items {
+/// The catalogs recent listings started from, oldest first: every page of a
+/// listing comes from the one it started from, so a catalog that changes
+/// meanwhile cannot shift its pages.
+priv struct Snapshots {
+  kept : Array[Snapshot]
+  mut next : Int32
+}
+
+///|
+/// The kept snapshot with this id, if it is still kept.
+fn Snapshots::find(self : Snapshots, id : Int32) -> Snapshot? {
+  self.kept.iter().find_first(snapshot => snapshot.id == id)
+}
+
+///|
+/// `items` as a snapshot a new listing can page through: the latest one when
+/// the catalog has not changed since, otherwise a new one, which pushes out
+/// the oldest once more than `MaxSnapshots` are kept.
+fn Snapshots::take(self : Snapshots, items : Array[Json]) -> Snapshot {
+  if self.kept.last() is Some(latest) && latest.items == items {
     return latest
   }
-  let snapshot = { id: self.next_snapshot, items, }
-  self.next_snapshot += 1
-  self.snapshots.push(snapshot)
-  if self.snapshots.length() > MaxSnapshots {
-    ignore(self.snapshots.remove(0))
+  let snapshot = { id: self.next, items, }
+  self.next += 1
+  self.kept.push(snapshot)
+  if self.kept.length() > MaxSnapshots {
+    ignore(self.kept.remove(0))
   }
   snapshot
 }
@@ -317,15 +323,15 @@ fn list_reply(snapshot : Snapshot, cursor : Int32) -> Json raise InvalidList {
 /// A tool's result as a script receives it. A reply is JSON, so images
 /// cannot travel in it: each is saved to a file, its path is named in the
 /// text and listed in `images`, and the script shows it to the model with
-/// `read_image`.
-async fn Service::call_reply(
-  self : Service,
+/// `read_image`. Images are saved under `image_directory`.
+async fn call_reply(
   output : @agent_tool.ToolOutput,
+  image_directory? : String,
 ) -> Json {
   let notes : Array[String] = []
   let paths : Array[Json] = []
   for image in output.images {
-    match self.save_image(image) {
+    match save_image(image, image_directory?) {
       Ok(path) => {
         notes.push(
           "[image \{image.media_type} saved to \{path}; show it to the model with read_image]",
@@ -358,14 +364,14 @@ async fn Service::call_reply(
 }
 
 ///|
-/// Save `image` in a file of its own, readable only by the user, or say why
-/// it was not. The call has already run, so a failure here only loses the
-/// image.
-async fn Service::save_image(
-  self : Service,
+/// Save `image` in a file of its own under `image_directory`, readable only
+/// by the user, or say why it was not. The call has already run, so a
+/// failure here only loses the image.
+async fn save_image(
   image : @protocol.Image,
+  image_directory? : String,
 ) -> Result[String, String] {
-  guard self.image_directory is Some(directory) else {
+  guard image_directory is Some(directory) else {
     return Err("this session has no directory to save images in")
   }
   guard @env.rand(16) is Some(entropy) else {
@@ -386,6 +392,20 @@ async fn Service::save_image(
     error => Err("\{error}")
   } noraise {
     _ => Ok(path)
+  }
+}
+
+///|
+/// `reply` as a script receives it: an explicit error in its place when it is
+/// over `MaxReplyChars` once serialized. The call has already run, so the
+/// error says not to run it again for its output.
+fn deliverable(reply : Json) -> Json {
+  if reply.stringify().length() > MaxReplyChars {
+    error_result(
+      "MCP tool executed, but its result exceeded the 64K character limit. Do not retry a mutation merely to retrieve output.",
+    )
+  } else {
+    reply
   }
 }
 
