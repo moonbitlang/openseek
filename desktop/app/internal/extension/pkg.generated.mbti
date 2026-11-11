@@ -30,8 +30,9 @@ pub fn view_event_payload(Int32, @proton.WebContentsEvent) -> @protocol.BrowserE
 
 // Types and methods
 type BrowserViews
-pub async fn BrowserViews::BrowserViews(previews? : @static_preview.Server) -> Self
+pub async fn BrowserViews::BrowserViews(previews? : @static_preview.Server, runtime_dir? : String) -> Self
 pub fn BrowserViews::page_attached(Self, async (@protocol.BrowserEventPayload) -> Unit) -> Unit
+pub async fn BrowserViews::run_background_rendering(Self, @proton.WindowHandle, async () -> Unit noraise) -> Unit noraise
 pub fn BrowserViews::start_previews(Self, @async.TaskGroup) -> Unit
 pub fn BrowserViews::view_event(Self, Int32, @proton.WebContentsEvent) -> Unit
 pub fn BrowserViews::window_closed(Self) -> Unit
@@ -40,6 +41,7 @@ pub async fn[T] BrowserViews::with_cdp(Self, Int32, async (@cdp.Connection) -> T
 
 type DesktopBridgeActor
 pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState, askpass? : String?) -> Self
+pub async fn DesktopBridgeActor::notify_background_rendering_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::notify_browser_event(Self, @protocol.BrowserEventPayload) -> Unit
 pub async fn DesktopBridgeActor::notify_system_appearance_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::notify_window_chrome_changed(Self) -> Unit

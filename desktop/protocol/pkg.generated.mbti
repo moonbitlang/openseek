@@ -309,6 +309,33 @@ pub impl @json.FromJson for AuthUserPayload
 pub impl @json.ToJson for AuthUserPayload
 
 #derive(Eq, @debug.Debug)
+pub(all) struct BackgroundRenderingSetPayload {
+  enabled : Bool
+}
+pub fn BackgroundRenderingSetPayload::equal(Self, Self) -> Bool
+pub fn BackgroundRenderingSetPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BackgroundRenderingSetPayload::not_equal(Self, Self) -> Bool
+pub fn BackgroundRenderingSetPayload::to_json(Self) -> @json.Json
+pub fn BackgroundRenderingSetPayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for BackgroundRenderingSetPayload
+pub impl @json.ToJson for BackgroundRenderingSetPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct BackgroundRenderingSettings {
+  supported : Bool
+  enabled : Bool
+  launch_enabled : Bool
+  error : String?
+}
+pub fn BackgroundRenderingSettings::equal(Self, Self) -> Bool
+pub fn BackgroundRenderingSettings::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BackgroundRenderingSettings::not_equal(Self, Self) -> Bool
+pub fn BackgroundRenderingSettings::to_json(Self) -> @json.Json
+pub fn BackgroundRenderingSettings::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for BackgroundRenderingSettings
+pub impl @json.ToJson for BackgroundRenderingSettings
+
+#derive(Eq, @debug.Debug)
 pub(all) struct BrowseDirectoryPayload {
   path : String?
 }

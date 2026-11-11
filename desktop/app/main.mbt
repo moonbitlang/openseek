@@ -108,7 +108,10 @@ async fn main {
   // The dock's browser tabs: native web contents views, owned by the
   // window and commanded over bridge-local `browser.*` ops.
   let previews = @static_preview.Server(engine~, runtime_dir?)
-  let views = @extension.BrowserViews(previews~)
+  let views = @extension.BrowserViews(
+    previews~,
+    runtime_dir?=runtime_dir.map(dir => dir.to_string()),
+  )
   // The server through which the agents this host runs reach its tools — the
   // browser tabs above, to begin with. It binds now so every engine can be
   // granted its address from the first spawn; the backend serves it with its
@@ -199,6 +202,15 @@ async fn main {
         bridge.window_closed()
       })
       bridge.window_ready(context.events())
+      context
+      .task_group()
+      .spawn_bg(() => {
+        views.run_background_rendering(context.handle(), () => {
+          bridge.notify_background_rendering_changed() catch {
+            _ => ()
+          }
+        })
+      })
     })
     // The OS preference is independent of CEF and the explicit window theme.
     ..on_system_appearance_change(async fn(_) noraise {

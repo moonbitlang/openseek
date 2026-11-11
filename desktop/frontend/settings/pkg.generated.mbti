@@ -12,6 +12,10 @@ pub fn text(@i18n.Locale, Message) -> String
 
 // Types and methods
 pub(all) enum Message {
+  Experimental
+  BackgroundRendering
+  BackgroundRenderingDescription
+  RestartRequired
   DevicePageDescription(String, String)
   RegisterServer(String)
   UpdateTo(String)

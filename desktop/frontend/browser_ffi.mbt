@@ -28,3 +28,9 @@ extern "js" fn titlebar_error(message : String) -> Unit = "message => console.er
 ///|
 extern "js" fn window_titlebar_overlay_visible() -> Bool =
   #| () => document.documentElement.classList.contains("native-titlebar-overlay")
+
+///|
+extern "js" fn subscribe_background_rendering_changes(
+  bridge : @js.Value,
+  refresh : () -> Unit,
+) -> () -> Unit = "(bridge, refresh) => bridge.events.on('openseek.app.background_rendering_changed', refresh)"

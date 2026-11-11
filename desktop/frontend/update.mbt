@@ -2332,6 +2332,46 @@ fn update_msg(
       expire_account(dispatch, model)
     }
     Console(msg) => update_console_msg(dispatch, msg, model)
+    BackgroundRenderingLoaded(status) => {
+      let previous = model.background_rendering.bind(value => value.error)
+      let next = {
+        ..model,
+        background_rendering: Some(status),
+        background_rendering_error: None,
+      }
+      if status.error is Some(message) && previous != status.error {
+        next.notify_error(dispatch, message)
+      } else {
+        (@cmd.none, next)
+      }
+    }
+    BackgroundRenderingLoadFailed(message) =>
+      (@cmd.none, { ..model, background_rendering_error: Some(message), })
+    BackgroundRenderingChanged(enabled) => {
+      guard model.background_rendering is Some(status) &&
+        status.supported &&
+        !model.background_rendering_saving else {
+        return (@cmd.none, model)
+      }
+      (
+        save_background_rendering(dispatch, enabled),
+        { ..model, background_rendering_saving: true, },
+      )
+    }
+    BackgroundRenderingSaved(status) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          background_rendering: Some(status),
+          background_rendering_error: None,
+          background_rendering_saving: false,
+        },
+      )
+    BackgroundRenderingSaveFailed(message) =>
+      { ..model, background_rendering_saving: false, }.notify_error(
+        dispatch, message,
+      )
     LanguageLoaded(preference, languages) => {
       let language = preference.unwrap_or(@i18n.Preference::System)
       let locale = language.resolve(languages)
@@ -4662,7 +4702,11 @@ fn update_msg(
       )
     SettingsSectionSelected(section) =>
       (
-        @cmd.none,
+        if section == SystemSettings && model.is_desktop {
+          load_background_rendering(dispatch)
+        } else {
+          @cmd.none
+        },
         {
           ..model,
           management_dialog: Some(Settings(section)),
