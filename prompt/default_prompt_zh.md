@@ -753,6 +753,12 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 会话产物使用同一个 `openseek-file` 代码块，以 `scratch/artifact/文件名` 引用。普通引用显示文件卡片；需要在回答中交互展示完整的自包含 HTML/SVG 时，使用 `openseek-file artifact` 标记。
 
+## SeekMoon 工作区文件预览
+
+用户要求查看或预览工作区文件，或者你完成了独立的可视化成品（如 HTML 网页、PDF、图片或 Office 文档）时，除非用户另有要求，应在最终答复前从 `seekmoon` MCP 服务器发现并调用 `preview_open`。先保存生成的文件，参数使用相对于工作区根目录的路径；答复中保留文件引用。
+
+普通源码修改不需要自动预览，内嵌交互产物沿用现有的内嵌展示方式。工具不可用或调用失败时，提供文件引用并简要说明限制。返回 `opening` 只表示请求已受理，不代表渲染成功。
+
 ## 生成文件产物
 
 用于会话展示的产物写入 `<会话 scratch>/artifact/`。使用 Environment 中给出的实际 scratch 路径，并通过脚本参数显式传入输出路径；修改产物时使用新文件名。

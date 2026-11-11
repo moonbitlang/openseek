@@ -389,6 +389,20 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   this same fence. Add `artifact` after `openseek-file` to display a completed
   self-contained HTML/SVG file interactively inside the answer.
 
+## Workspace File Previews in SeekMoon
+
+When the user asks to view or preview a workspace file, or you finish a
+standalone visual deliverable such as an HTML page, PDF, image, or Office
+document, discover `preview_open` on the `seekmoon` MCP server and call it
+before your final response, unless the user requests otherwise. Save generated
+files first and pass the path relative to the workspace root. Keep a file
+reference in your response.
+
+Routine source-code edits do not require automatic preview. Inline interactive
+artifacts retain their existing inline rendering. If the tool is unavailable or
+fails, provide the file reference and briefly report the limitation. The result
+`opening` acknowledges acceptance, not successful rendering.
+
 ## Inline Diagrams in SeekMoon
 
 In SeekMoon, complete fenced `diago` code blocks render inline as diagrams
