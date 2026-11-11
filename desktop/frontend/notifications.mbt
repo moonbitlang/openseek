@@ -13,7 +13,25 @@ const NotificationLifetimeMs : Int32 = 6000
 #derive(Eq)
 priv struct Notification {
   id : Int32
-  message : String
+  message : NotificationMessage
+}
+
+///|
+#derive(Eq)
+priv enum NotificationMessage {
+  Raw(String)
+  FileFailure(@fileeditor.Failure)
+}
+
+///|
+fn NotificationMessage::text(
+  self : NotificationMessage,
+  locale : @i18n.Locale,
+) -> String {
+  match self {
+    Raw(message) => message
+    FileFailure(failure) => failure.text(locale)
+  }
 }
 
 ///|
@@ -55,6 +73,24 @@ fn Model::notify_error(
   self : Model,
   dispatch : @cmd.Emit[Msg],
   message : String,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, Raw(message))
+}
+
+///|
+fn Model::notify_file_error(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  failure : @fileeditor.Failure,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, FileFailure(failure))
+}
+
+///|
+fn Model::notify(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  message : NotificationMessage,
 ) -> (@cmd.Cmd, Model) {
   let toast : Notification = { id: self.notification_seq, message, }
   let notifications = self.notifications.copy()

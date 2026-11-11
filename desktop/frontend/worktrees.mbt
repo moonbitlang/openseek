@@ -1391,7 +1391,7 @@ test "a worktree list failure stays unresolved and ignores stale errors" {
   )
   assert_true(failed.conversation_placement(failed.active()) is None)
   assert_eq(failed.notifications.length(), 1)
-  assert_true(failed.notifications[0].message.contains("offline"))
+  assert_true(failed.notifications[0].message.text(English).contains("offline"))
   let (_, loaded) = update_dev(
     dispatch,
     WorktreesLoaded(
@@ -1571,7 +1571,7 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   // that never reached `agent.start` leaves nothing waiting for a receipt.
   assert_true(repeated.active().pending_prompt is None)
   assert_eq(repeated.notifications.length(), 1)
-  assert_eq(repeated.notifications[0].message, message)
+  assert_eq(repeated.notifications[0].message.text(English), message)
   assert_eq(
     repeated.dev().worktrees_request_generation,
     rejected.dev().worktrees_request_generation,
@@ -1580,7 +1580,7 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   // an agent-style transcript error. The exact prompt returns to the composer.
   assert_eq(rejected.active().task, "go")
   assert_eq(rejected.notifications.length(), 1)
-  assert_eq(rejected.notifications[0].message, message)
+  assert_eq(rejected.notifications[0].message.text(English), message)
   // The next submit re-enters the create-then-start chain instead of silently
   // running in the workspace root.
   assert_true(rejected.active().worktree_mode)

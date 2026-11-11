@@ -231,7 +231,7 @@ test "Cloud notice refreshes and stale activations show loading without changing
   let path = ctx.resource(Relative("retry.txt")).unwrap()
   let ctx = { ..ctx, open_files: [path], active_file: Some(path), }
   let (state, _) = sync(test_emit(), State::empty(), ctx)
-  for previous in [TabBinary, TabOversized, TabReadFailed("failed")] {
+  for previous in [TabBinary, TabOversized, TabReadFailed(Diagnostic("failed"))] {
     let state = {
       ..state,
       docs: Map([

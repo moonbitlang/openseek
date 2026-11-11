@@ -2697,10 +2697,7 @@ fn update_inner(
       }
     OfficeCitationLocated(navigation, found) =>
       if navigation.is_current(state, ctx) && !found {
-        (
-          @cmd.none,
-          { ..state, error: Some(ui(ctx.locale, OfficeCitationUnavailable)), },
-        )
+        (@cmd.none, { ..state, error: Some(OfficeCitationUnavailable), })
       } else {
         (@cmd.none, state)
       }
@@ -4172,25 +4169,14 @@ fn update_inner(
           Raster(url~, sig~) => TabImage(url~, sig~)
           Office(data_base64~, media_type~, sig~) =>
             if media_type == "application/pdf" {
-              match
-                decode_pdf_document(
-                  locale=ctx.locale,
-                  data_base64,
-                  state.pdf_generation + 1,
-                ) {
+              match decode_pdf_document(data_base64, state.pdf_generation + 1) {
                 Ok(document) => TabPdf(document~, sig~)
-                Err(message) => TabReadFailed(message)
+                Err(failure) => TabReadFailed(failure)
               }
             } else {
-              match
-                render_office_document(
-                  locale=ctx.locale,
-                  name,
-                  path,
-                  data_base64,
-                ) {
+              match render_office_document(name, path, data_base64) {
                 Ok(document) => TabState::TabOffice(document~, sig~)
-                Err(message) => TabState::TabReadFailed(message)
+                Err(failure) => TabState::TabReadFailed(failure)
               }
             }
           Binary => TabBinary
@@ -4681,7 +4667,7 @@ fn update_inner(
                 }
                 let failed = {
                   ..doc,
-                  state: TabReadFailed(message),
+                  state: TabReadFailed(Diagnostic(message)),
                   review,
                   stale: false,
                 }
@@ -5790,14 +5776,14 @@ test "review failures settle precisely and missing rename sources stay unavailab
       path=file,
       file_link_generation=None,
       review_generation=Some(1),
-      message="file disappeared",
+      message=Diagnostic("file disappeared"),
     ),
     failed,
     ctx,
   )
   assert_true(
     read_failed.docs.get(file)
-    is Some({ state: TabReadFailed("file disappeared"), .. }),
+    is Some({ state: TabReadFailed(Diagnostic("file disappeared")), .. }),
   )
   assert_true(read_failed.error is None)
 }
@@ -7639,7 +7625,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
       path=file,
       file_link_generation=None,
       review_generation=None,
-      message="late symlink read",
+      message=Diagnostic("late symlink read"),
     ),
     fenced,
     ctx,
@@ -9163,7 +9149,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
     changes_generation: 1,
-    error: Some("file read failed"),
+    error: Some(Diagnostic("file read failed")),
   }
   let (_, failed) = update(
     emit,
@@ -9176,7 +9162,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
     test_ctx(),
   )
   assert_true(failed.changes is ChangeListFailed("git failed"))
-  assert_true(failed.error == Some("file read failed"))
+  assert_true(failed.error == Some(Diagnostic("file read failed")))
   // A watcher event does not hammer an already-failed request. A settled run
   // or an explicit Changes click remains the retry boundary.
   let (_, still_failed) = update(
@@ -9265,7 +9251,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   let failed_docs : Map[@common.Uri, Doc] = Map([])
   failed_docs[test_file(failed_path.0)] = {
     name: "failed.mbt",
-    state: TabReadFailed("temporary failure"),
+    state: TabReadFailed(Diagnostic("temporary failure")),
     review: Some({
       generation: 4,
       working_generation: 4,
@@ -9391,7 +9377,13 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   // notice would otherwise have appeared.
   assert_true(
     next.docs.get(test_file("a.mbt"))
-    is Some({ state: TabReadFailed("permission denied"), stale: false, .. }),
+    is Some(
+      {
+        state: TabReadFailed(Diagnostic("permission denied")),
+        stale: false,
+        ..
+      }
+    ),
   )
   // A read in flight settles the document itself.
   assert_true(
@@ -9401,7 +9393,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   // a failed read of a present path, not a confirmed deletion.
   assert_true(
     next.docs.get(test_file("c.mbt"))
-    is Some({ state: TabReadFailed("permission denied"), .. }),
+    is Some({ state: TabReadFailed(Diagnostic("permission denied")), .. }),
   )
   // A selected deletion row keeps its HEAD preview: the object at the path
   // belongs to a separate untracked row.
@@ -9417,7 +9409,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
     next.docs.get(test_file(reviewed_path.0))
     is Some(
       {
-        state: TabReadFailed("permission denied"),
+        state: TabReadFailed(Diagnostic("permission denied")),
         review: Some(
           {
             generation: 7,
@@ -9637,7 +9629,7 @@ test "a vanished review retries a failed ordinary read" {
   let docs : Map[@common.Uri, Doc] = Map([])
   docs[file] = {
     name: "committed.mbt",
-    state: TabReadFailed("temporary failure"),
+    state: TabReadFailed(Diagnostic("temporary failure")),
     review: Some({
       generation: 7,
       working_generation: 7,

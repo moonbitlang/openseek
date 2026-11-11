@@ -2774,7 +2774,7 @@ fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         class="notification",
         title=shell_text(model.locale, DismissLabel),
         on_click=dispatch(DismissNotification(toast.id)),
-        toast.message,
+        toast.message.text(model.locale),
       ),
     )
   }

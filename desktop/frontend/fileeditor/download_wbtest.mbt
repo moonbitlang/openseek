@@ -32,7 +32,7 @@ test "download caches preserve original UTF-8 and binary source bytes" {
       TabLoading,
       TabBinary,
       TabOversized,
-      TabReadFailed("no preview"),
+      TabReadFailed(Diagnostic("no preview")),
       TabDeleted,
       TabLoaded(content="text", sig=""),
       TabImage(url="blob:preview", sig="etag"),
@@ -60,7 +60,7 @@ test "download completions are fenced by account epoch and owner" {
     auth_epoch=4,
     generation=pending.download_generation,
     path~,
-    result=Err("HTTP 403"),
+    result=Err(Diagnostic("HTTP 403")),
   )
   let (_, rejected) = update(test_emit(), failed, pending, {
     ..ctx,

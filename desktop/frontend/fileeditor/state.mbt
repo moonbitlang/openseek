@@ -61,7 +61,7 @@ pub(all) enum TabState {
   // The host could not read this file. Unlike `TabDeleted`, this keeps the
   // failure reason without guessing whether the cause was removal,
   // permissions, or a transient filesystem error.
-  TabReadFailed(String)
+  TabReadFailed(Failure)
   // Git proved that the path is not an ordinary file the editor may open
   // (currently a symlink, submodule, or directory). Keep the tab as a bookmark
   // without retaining source that belonged to an earlier regular file.
@@ -657,7 +657,7 @@ pub(all) struct State {
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[@pathx.Relative, Array[FileEntry]]
   // Parallel directory replies clear only their own failures.
-  directory_errors : Map[@pathx.Relative, String]
+  directory_errors : Map[@pathx.Relative, Failure]
   // Each open document, keyed by device-bound absolute URI. The key set
   // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
   // adds an entry when it opens a tab and drops it when the tab closes.
@@ -683,7 +683,7 @@ pub(all) struct State {
   index : FileIndex
   // The last file operation failure, surfaced in the panel header;
   // `None` while nothing has failed.
-  error : String?
+  error : Failure?
 }
 
 ///|
@@ -990,7 +990,7 @@ pub(all) enum Msg {
     auth_epoch~ : Int32,
     generation~ : Int32,
     path~ : @common.Uri,
-    result~ : Result[Unit, String]
+    result~ : Result[Unit, Failure]
   )
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
   OfficeCitationLaidOut(OfficeCitationNavigation)
@@ -1123,7 +1123,7 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @pathx.Relative,
-    message~ : String
+    message~ : Failure
   )
   // A workspace snapshot reply. The owner/epoch pair rejects a result that
   // outlived a conversation or concrete-root transition.
@@ -1359,7 +1359,7 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     file_link_generation~ : Int32?,
     review_generation~ : Int32?,
-    message~ : String
+    message~ : Failure
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
   // generation identifies the exact watcher configuration that produced it.

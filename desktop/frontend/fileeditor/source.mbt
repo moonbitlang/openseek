@@ -71,7 +71,7 @@ fn State::accepts_surface_epoch(
 
 ///|
 priv suberror SourceError {
-  SourceError(String)
+  SourceError(Failure)
 }
 
 ///|
@@ -85,12 +85,12 @@ async fn check_source(
     cloud is Some(cloud) &&
     @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
     @resource.relative_to(path, root) is Some(relative) else {
-    raise SourceError("Cloud file no longer belongs to this conversation.")
+    raise SourceError(CloudFileOwnershipLost)
   }
   @cloud.file_unchanged(cloud.token, session, relative.0, sig) catch {
     @cloud.RequestError::RequestError(failure) =>
-      raise SourceError(failure.label())
-    _ => raise SourceError(@cloud.Failure::Unreachable.label())
+      raise SourceError(Cloud(failure))
+    _ => raise SourceError(Cloud(@cloud.Failure::Unreachable))
   }
 }
 
@@ -104,26 +104,27 @@ async fn read_source(
   match owner {
     Host(owner) => {
       guard @resource.belongs_to(path, owner.channel) else {
-        raise SourceError("file root moved to another host before file read")
+        raise SourceError(HostFileOwnerChanged)
       }
       @interop.bridge_request(owner.channel, @commands.fs_read_file, {
         max_bytes: None,
         path: path.path,
         root: None,
       }) catch {
-        error => raise SourceError(@interop.bridge_error_text(error))
+        error =>
+          raise SourceError(Diagnostic(@interop.bridge_error_text(error)))
       }
     }
     Cloud(account~, session~) => {
       guard cloud is Some(cloud) &&
         @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
         @resource.relative_to(path, root) is Some(relative) else {
-        raise SourceError("Cloud file no longer belongs to this conversation.")
+        raise SourceError(CloudFileOwnershipLost)
       }
       @cloud.read_file(cloud.token, session, relative.0, allow_large~) catch {
         @cloud.RequestError::RequestError(failure) =>
-          raise SourceError(failure.label())
-        _ => raise SourceError(@cloud.Failure::Unreachable.label())
+          raise SourceError(Cloud(failure))
+        _ => raise SourceError(Cloud(@cloud.Failure::Unreachable))
       }
     }
   }
@@ -155,27 +156,24 @@ async fn read_directory_source(
   match owner {
     Host(owner) => {
       guard @resource.belongs_to(root, owner.channel) else {
-        raise SourceError(
-          "file root moved to another host before directory read",
-        )
+        raise SourceError(HostDirectoryOwnerChanged)
       }
       @interop.bridge_request(owner.channel, @commands.fs_read_directory, {
         path: @resource.join_relative(root, path).path,
       }) catch {
-        error => raise SourceError(@interop.bridge_error_text(error))
+        error =>
+          raise SourceError(Diagnostic(@interop.bridge_error_text(error)))
       }
     }
     Cloud(account~, session~) => {
       guard cloud is Some(cloud) &&
         @resource.cloud_root(@cloud.CloudOrigin, account, session) == Some(root) else {
-        raise SourceError(
-          "Cloud directory no longer belongs to this conversation.",
-        )
+        raise SourceError(CloudDirectoryOwnershipLost)
       }
       @cloud.read_directory(cloud.token, session, path.0) catch {
         @cloud.RequestError::RequestError(failure) =>
-          raise SourceError(failure.label())
-        _ => raise SourceError(@cloud.Failure::Unreachable.label())
+          raise SourceError(Cloud(failure))
+        _ => raise SourceError(Cloud(@cloud.Failure::Unreachable))
       }
     }
   }

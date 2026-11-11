@@ -729,7 +729,7 @@ test "a failed navigation keeps the listing and pops a toast" {
   assert_true(picker == before)
   inspect(failed.notifications.length(), content="1")
   inspect(
-    failed.notifications[0].message,
+    failed.notifications[0].message.text(English),
     content="Cannot open folder: no such directory: /gone",
   )
   // A failure answering a superseded navigation stays silent: its toast
@@ -805,7 +805,7 @@ test "a project list failure preserves inventory and pending additions" {
   assert_true(next == repeated)
   assert_eq(next.notifications.length(), 1)
   assert_eq(
-    next.notifications[0].message,
+    next.notifications[0].message.text(English),
     "Workspace error: workspace list is malformed",
   )
   assert_true(
@@ -842,7 +842,7 @@ test "a workspace failure pops a toast" {
   )
   inspect(next.notifications.length(), content="1")
   inspect(
-    next.notifications[0].message,
+    next.notifications[0].message.text(English),
     content="Workspace error: not a directory",
   )
 }

@@ -3826,7 +3826,7 @@ fn update_msg(
         file_ctx(model).owner == @interop.Host(owner) else {
         return (@cmd.none, model)
       }
-      if model.notifications.any(toast => toast.message == message) {
+      if model.notifications.any(toast => toast.message == Raw(message)) {
         (@cmd.none, model)
       } else {
         model.notify_error(dispatch, message)
@@ -3855,7 +3855,7 @@ fn update_msg(
       if panel.watch_error is Some(err) &&
         err == message &&
         model.file_panel.watch_error != Some(message) &&
-        !model.notifications.any(toast => toast.message == message) {
+        !model.notifications.any(toast => toast.message == Raw(message)) {
         let (toast, next) = next.notify_error(dispatch, message)
         (@cmd.batch([cmd, toast]), next)
       } else {
@@ -6522,7 +6522,7 @@ fn update_msg(
         file_ctx(model),
       )
       if msg is @fileeditor.FileDownloaded(result=Err(message), ..) {
-        let (notice, next) = { ..model, file_panel: panel, }.notify_error(
+        let (notice, next) = { ..model, file_panel: panel, }.notify_file_error(
           dispatch, message,
         )
         return (@cmd.batch([cmd, notice]), next)
@@ -12679,7 +12679,7 @@ test "sessions failure pops a toast without touching the transcript" {
   )
   inspect(next.notifications.length(), content="1")
   inspect(
-    next.notifications[0].message,
+    next.notifications[0].message.text(English),
     content="Session list unavailable: engine exploded",
   )
   inspect(next.active().messages.length(), content="1")
@@ -13788,7 +13788,7 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   assert_true(next.loading_conversation is None)
   inspect(next.notifications.length(), content="1")
   inspect(
-    next.notifications[0].message,
+    next.notifications[0].message.text(English),
     content="Transcript refresh failed repeatedly. New commits are buffered; reopen the conversation or wait for the next update to retry. (failed to load session desktop-a: no such file)",
   )
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-a")
@@ -13797,7 +13797,9 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   }
   assert_true(failed.sync is ReloadFailed(..))
   assert_true(
-    next.notifications[0].message.has_prefix(TranscriptRefreshFailedNotice),
+    next.notifications[0].message
+    .text(English)
+    .has_prefix(TranscriptRefreshFailedNotice),
   )
   // The conversation on screen keeps its transcript and status untouched.
   inspect(next.active().messages.length(), content="0")
@@ -13813,7 +13815,10 @@ test "a host action failure pops a toast" {
     test_model(),
   )
   inspect(next.notifications.length(), content="1")
-  inspect(next.notifications[0].message, content="open path failed: no opener")
+  inspect(
+    next.notifications[0].message.text(English),
+    content="open path failed: no opener",
+  )
 }
 
 ///|
@@ -13840,7 +13845,10 @@ test "a file-link host failure is visible only for the latest navigation" {
     newer,
   )
   inspect(current.notifications.length(), content="1")
-  inspect(current.notifications[0].message, content="current path failed")
+  inspect(
+    current.notifications[0].message.text(English),
+    content="current path failed",
+  )
 }
 
 ///|
@@ -13879,7 +13887,10 @@ test "a Codex file-link failure is fenced by the selected Codex task" {
   let (_, first) = update(dispatch, message, model)
   let (_, second) = update(dispatch, message, model)
   inspect(first.notifications.length(), content="1")
-  inspect(first.notifications[0].message, content="Codex path failed")
+  inspect(
+    first.notifications[0].message.text(English),
+    content="Codex path failed",
+  )
   assert_true(first.notifications == second.notifications)
   assert_eq(first.notification_seq, second.notification_seq)
 }
@@ -13944,7 +13955,9 @@ test "a process-exit error reports its host diagnostics as a toast" {
   // The record will never carry this text, so the transcript is the wrong
   // place for it: no durable event can ever say where it belongs.
   inspect(next.notifications.length(), content="1")
-  assert_true(next.notifications[0].message.contains("fatal stderr"))
+  assert_true(
+    next.notifications[0].message.text(English).contains("fatal stderr"),
+  )
 }
 
 ///|
@@ -14503,7 +14516,10 @@ test "a start failure cannot close a run opened by a winning push" {
   )
   inspect(failed.active().task, content="my competing prompt")
   inspect(failed.notifications.length(), content="1")
-  inspect(failed.notifications[0].message, content="start was rejected")
+  inspect(
+    failed.notifications[0].message.text(English),
+    content="start was rejected",
+  )
   guard failed.active().sync is Reloading(generation=1, ..) else {
     fail("the raced start failure did not catch up the transcript")
   }
@@ -15384,7 +15400,7 @@ test "a failed Stop becomes retryable instead of staying Stopping" {
   assert_true(next.active().run is Open(run_id="r7", stage=AtStep(None)))
   assert_true(
     next.notifications.any(item => {
-      item.message.contains("cancel transport failed")
+      item.message.text(English).contains("cancel transport failed")
     }),
   )
 }
@@ -15577,7 +15593,9 @@ test "steer_dropped settles the pending steer with a visible notice" {
   inspect(next.active().pending_steers.length(), content="0")
   inspect(next.active().task, content="go left")
   inspect(next.notifications.length(), content="1")
-  assert_true(next.notifications[0].message.contains("back in the composer"))
+  assert_true(
+    next.notifications[0].message.text(English).contains("back in the composer"),
+  )
 }
 
 ///|
@@ -19737,7 +19755,7 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
   )
   inspect(failed.notifications.length(), content="1")
   inspect(
-    failed.notifications[0].message,
+    failed.notifications[0].message.text(English),
     content="Archive failed: zip missing",
   )
   let id = failed.notifications[0].id
@@ -19752,7 +19770,7 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
   let (_, expired) = update(dispatch, NotificationExpired(id), again)
   inspect(expired.notifications.length(), content="1")
   inspect(
-    expired.notifications[0].message,
+    expired.notifications[0].message.text(English),
     content="Archive failed: still missing",
   )
 }
@@ -20566,7 +20584,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
         path=main_file,
         file_link_generation=Some(3),
         review_generation=None,
-        message="newer ordinary read failed",
+        message=@fileeditor.Diagnostic("newer ordinary read failed"),
       ),
     ),
     ordinary_pending,
@@ -20574,7 +20592,12 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(
     ordinary_failed.file_panel.docs.get(main_file)
     is Some(
-      { state: @fileeditor.TabReadFailed("newer ordinary read failed"), .. }
+      {
+        state: @fileeditor.TabReadFailed(
+          @fileeditor.Diagnostic("newer ordinary read failed")
+        ),
+        ..
+      }
     ),
   )
   let (_, old_after_failure) = update(
@@ -20630,7 +20653,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
         path=main_file,
         file_link_generation=Some(1),
         review_generation=None,
-        message="old read failed",
+        message=@fileeditor.Diagnostic("old read failed"),
       ),
     ),
     first,
@@ -20638,7 +20661,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(old_file_failure.file_panel.error is None)
   assert_true(
     old_file_failure.file_panel.docs.get(main_file)
-    is Some({ state: @fileeditor.TabReadFailed("old read failed"), .. }),
+    is Some(
+      {
+        state: @fileeditor.TabReadFailed(
+          @fileeditor.Diagnostic("old read failed")
+        ),
+        ..
+      }
+    ),
   )
   // The current failure is authoritative even if the stale success filled the
   // cache first, so the superseded snapshot cannot survive the failed read.
@@ -20651,7 +20681,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
         path=main_file,
         file_link_generation=Some(2),
         review_generation=None,
-        message="current read failed",
+        message=@fileeditor.Diagnostic("current read failed"),
       ),
     ),
     old_file_reply,
@@ -20659,7 +20689,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(current_file_failure.file_panel.error is None)
   assert_true(
     current_file_failure.file_panel.docs.get(main_file)
-    is Some({ state: @fileeditor.TabReadFailed("current read failed"), .. }),
+    is Some(
+      {
+        state: @fileeditor.TabReadFailed(
+          @fileeditor.Diagnostic("current read failed")
+        ),
+        ..
+      }
+    ),
   )
   let (_, current_file_reply) = update(
     dispatch,
@@ -21652,7 +21689,7 @@ test "rejected compact delivery clears the queued notice and reports the error" 
   )
   assert_true(next.active().controls.compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
-  inspect(next.notifications[0].message, content="no engine")
+  inspect(next.notifications[0].message.text(English), content="no engine")
 }
 
 ///|
@@ -21711,7 +21748,7 @@ test "an unavailable startup update reports why without offering Update" {
     )
     assert_eq(result.notifications.length(), 1)
     inspect(
-      result.notifications[0].message,
+      result.notifications[0].message.text(English),
       content="Move SeekMoon.app to Applications.",
     )
     assert_eq(result.notification_seq, 1)
@@ -21789,7 +21826,9 @@ test "a broken package entry is loud even when the app asked" {
     test_model(),
   )
   assert_eq(model.notifications.length(), 1)
-  assert_true(model.notifications[0].message.contains("url is not https"))
+  assert_true(
+    model.notifications[0].message.text(English).contains("url is not https"),
+  )
   assert_true(model.update_ux is UpdateCheckFailed(..))
 }
 
@@ -21912,7 +21951,9 @@ test "a failed download says why and restores the offer" {
     downloading,
   )
   assert_eq(failed.notifications.length(), 1)
-  assert_true(failed.notifications[0].message.contains("digest mismatch"))
+  assert_true(
+    failed.notifications[0].message.text(English).contains("digest mismatch"),
+  )
   assert_true(
     failed.update_ux is UpdateAvailable(version="0.2.0", installable=true),
   )
@@ -21930,7 +21971,9 @@ test "a failed apply says why and withdraws the offer" {
   let (_, replayed) = update(dispatch, msg, restarting)
   for failed in [first, replayed] {
     assert_eq(failed.notifications.length(), 1)
-    assert_true(failed.notifications[0].message.contains("read-only"))
+    assert_true(
+      failed.notifications[0].message.text(English).contains("read-only"),
+    )
     assert_eq(failed.notification_seq, 1)
     assert_true(
       failed.update_ux is UpdateAvailable(version="0.2.0", installable=false),
@@ -23261,7 +23304,7 @@ test "language request failures toast once and remain conversation fenced" {
   assert_eq(first.notification_seq, same_input.notification_seq)
   assert_eq(first.notifications.length(), 1)
   assert_eq(
-    first.notifications[0].message,
+    first.notifications[0].message.text(English),
     "Go to definition failed: workspace index is unavailable",
   )
   let (_, repeated) = update(dispatch, msg, first)
@@ -23333,7 +23376,7 @@ test "file watcher failures toast once and retain lifecycle state" {
   let (_, failed) = update(dispatch, failure, model)
   assert_eq(failed.file_panel.watch_error, Some(message))
   assert_eq(failed.notifications.length(), 1)
-  assert_eq(failed.notifications[0].message, message)
+  assert_eq(failed.notifications[0].message.text(English), message)
   // The same current-generation notification neither mutates watcher state
   // again nor stacks another toast while the first one is still visible.
   let (_, repeated) = update(dispatch, failure, failed)

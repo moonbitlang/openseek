@@ -76,10 +76,8 @@ fn start_download(
           match reply {
             Saved(revealed=true, ..) => ()
             Saved(path=local_path, revealed=false) =>
-              raise SourceError(
-                "Saved to \{local_path}, but could not show the downloaded file.",
-              )
-            Failed(message~) => raise SourceError(message)
+              raise SourceError(SavedButNotRevealed(local_path))
+            Failed(message~) => raise SourceError(Diagnostic(message))
           }
         } else {
           let bytes = if cached is Some((etag, bytes)) &&
@@ -97,9 +95,9 @@ fn start_download(
         }
         Ok(())
       } catch {
-        @cloud.RequestError::RequestError(failure) => Err(failure.label())
+        @cloud.RequestError::RequestError(failure) => Err(Cloud(failure))
         SourceError(message) => Err(message)
-        error => Err(@interop.bridge_error_text(error))
+        error => Err(Diagnostic(@interop.bridge_error_text(error)))
       }
       scheduler.add(
         dispatch(
@@ -152,7 +150,7 @@ pub fn browser_download(
       )
       Ok(())
     } catch {
-      _ => Err("Could not start the browser download.")
+      _ => Err(BrowserDownloadFailed)
     }
     scheduler.add(
       dispatch(FileDownloaded(owner~, auth_epoch~, generation~, path~, result~)),

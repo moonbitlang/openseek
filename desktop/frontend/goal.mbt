@@ -1004,7 +1004,7 @@ test "a failed durable append is reported, not inferred from" {
   guard reported.notifications.last() is Some(toast) else {
     fail("the failure should be reported")
   }
-  assert_true(toast.message.has_suffix("disk full"))
+  assert_true(toast.message.text(English).has_suffix("disk full"))
   // It names what failed, not which command asked for it, and the idle
   // appender is shared — so this may have been some other item and the goal's
   // own append may still land. The request keeps waiting; the goal row's own

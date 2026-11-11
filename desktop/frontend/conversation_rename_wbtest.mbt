@@ -74,7 +74,7 @@ test "a failed save closes the field and reports through a toast" {
   )
   assert_true(failed.conversation_rename is None)
   assert_true(
-    failed.notifications is [{ message: "Rename failed: offline", .. }],
+    failed.notifications is [{ message: Raw("Rename failed: offline"), .. }],
   )
 }
 

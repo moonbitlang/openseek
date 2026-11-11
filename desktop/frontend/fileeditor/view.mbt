@@ -599,7 +599,7 @@ fn viewer_notice(
               } else {
                 dynamic_text(
                   locale,
-                  DReadFailed(doc.name.to_string(), message.to_string()),
+                  DReadFailed(doc.name.to_string(), message.text(locale)),
                 )
               }
             TabUnavailable(message) => message
@@ -693,10 +693,10 @@ fn tree_pane(
   } else {
     let errors = []
     if state.error is Some(message) {
-      errors.push(message)
+      errors.push(message.text(locale))
     }
     for _, message in state.directory_errors {
-      errors.push(message)
+      errors.push(message.text(locale))
     }
     errors.sort()
     if errors.is_empty() {
@@ -3315,7 +3315,7 @@ fn breadcrumb_picker(
           class="breadcrumb-picker-empty breadcrumb-picker-failed",
           match state.directory_errors.get(directory) {
             Some(message) =>
-              dynamic_text(locale, DFolderFailed(message.to_string()))
+              dynamic_text(locale, DFolderFailed(message.text(locale)))
             None => ui(locale, CannotLoadFolder)
           },
         ),

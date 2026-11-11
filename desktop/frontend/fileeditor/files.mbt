@@ -26,7 +26,7 @@ fn read_directory(
         error => {
           let message = match error {
             SourceError(message) => message
-            _ => @interop.bridge_error_text(error)
+            _ => Diagnostic(@interop.bridge_error_text(error))
           }
           scheduler.add(dispatch(DirFailed(owner~, epoch~, path~, message~)))
           return
@@ -120,7 +120,7 @@ fn read_file(
         path~,
         file_link_generation~,
         review_generation~,
-        message="file root moved to another host before file read",
+        message=HostFileOwnerChanged,
       ),
     )
   }
@@ -141,7 +141,7 @@ fn read_file(
         error => {
           let message = match error {
             SourceError(message) => message
-            _ => @interop.bridge_error_text(error)
+            _ => Diagnostic(@interop.bridge_error_text(error))
           }
           scheduler.add(
             dispatch(
@@ -318,13 +318,12 @@ fn is_office_media_type(media_type : String) -> Bool {
 /// pipeline used by the standalone viewer. Parsing errors become a normal
 /// tab read failure so a malformed package cannot leave a stale surface up.
 fn render_office_document(
-  locale~ : @i18n.Locale = English,
   name : String,
   path : @common.Uri,
   data_base64 : String,
-) -> Result[@office_viewer.RenderedDocument, String] {
+) -> Result[@office_viewer.RenderedDocument, Failure] {
   let bytes = @base64.decode(data_base64) catch {
-    _ => return Err(ui(locale, OfficePreviewFailed))
+    _ => return Err(OfficePreviewFailed)
   }
   let rendered = @office_viewer.render_document(name, path.path, bytes)
   match rendered {
@@ -334,7 +333,7 @@ fn render_office_document(
         surface_html: scope_excel_styles(document.surface_html),
       })
     Ok(document) => Ok(document)
-    Err(_) => Err(ui(locale, OfficePreviewFailed))
+    Err(_) => Err(OfficePreviewFailed)
   }
 }
 
@@ -511,7 +510,7 @@ test "a cross-host file read settles through its generation-fenced failure" {
         path~,
         file_link_generation=None,
         review_generation=Some(7),
-        message="file root moved to another host before file read"
+        message=HostFileOwnerChanged
       )
     ) &&
     path == test_file("src/main.mbt"),

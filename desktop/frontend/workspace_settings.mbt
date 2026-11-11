@@ -631,7 +631,9 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     chosen,
   )
   inspect(failed.notifications.length(), content="1")
-  assert_true(failed.notifications[0].message.contains("disk full"))
+  assert_true(
+    failed.notifications[0].message.text(English).contains("disk full"),
+  )
   inspect(
     failed.dev().workspace_settings_request_generation,
     content="\{minted + 1}",
