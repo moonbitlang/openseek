@@ -220,37 +220,6 @@ test "slug validation rejects anything that could escape the library" {
 }
 
 ///|
-test "frontmatter parsing mirrors the engine's rules" {
-  let (name, description) = parse_frontmatter(
-    (
-      $|---
-      $|name: meta-skill
-      $|description: Create MoonBit WASM skills.
-      $|---
-      $|
-      $|# body
-    ),
-    "fallback",
-  )
-  assert_eq(name, "meta-skill")
-  assert_eq(description, "Create MoonBit WASM skills.")
-  let (name, description) = parse_frontmatter("# no frontmatter", "fallback")
-  assert_eq(name, "fallback")
-  assert_eq(description, "")
-  // A blank name keeps the fallback; unknown keys are ignored.
-  let (name, _) = parse_frontmatter(
-    (
-      $|---
-      $|name:
-      $|license: MIT
-      $|---
-    ),
-    "fallback",
-  )
-  assert_eq(name, "fallback")
-}
-
-///|
 test "sidecar decoding renders the install source" {
   assert_eq(
     decode_sidecar(

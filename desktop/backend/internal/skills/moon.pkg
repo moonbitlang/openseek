@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/async/fs",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/agent_skill",
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/fsx",
   "openseek_desktop/backend/internal/home",

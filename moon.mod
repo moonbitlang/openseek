@@ -13,6 +13,7 @@ import {
   "moonbitlang/editor@0.4.6",
   "moonbitlang/workflow@0.11.0",
   "Yoorkin/multipart@0.1.3",
+  "moonbit-community/yaml@0.0.8",
 }
 
 readme = "README.md"

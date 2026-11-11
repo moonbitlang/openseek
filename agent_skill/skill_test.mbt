@@ -62,19 +62,82 @@ async test "discovery reads flat files and SKILL.md directories, sorted" {
 ///|
 async test "a malformed frontmatter never hides the skill" {
   @vfs.with_tmpdir(prefix="openseek-skills-malformed-", dir => {
-    // Opening --- with no closing fence: keys still parse until EOF.
+    // An unclosed header and invalid YAML both list the skill under its
+    // file stem.
     write_skill(
       "\{dir}/open.md",
       (
         #|---
-        #|name: still-found
-        #|no colon line
+        #|name: not-a-header
+        #|Body without a closing fence.
+      ),
+    )
+    write_skill(
+      "\{dir}/broken.md",
+      (
+        #|---
+        #|name: [unclosed
+        #|---
       ),
     )
     let skills = @agent_skill.discover_skills(dir)
-    assert_eq(skills.length(), 1)
-    assert_eq(skills[0].name(), "still-found")
+    assert_eq(skills.map(skill => skill.name()), ["open", "broken"])
+    assert_eq(skills.map(skill => skill.description()), ["", ""])
   })
+}
+
+///|
+test "frontmatter reads YAML as the registry publishes it" {
+  // Quotes, comments and block scalars are YAML syntax, not part of values;
+  // a nested `name` belongs to its own mapping.
+  assert_eq(
+    @agent_skill.parse_frontmatter(
+      (
+        #|---
+        #|name: "alpha" # the registry name
+        #|description: >-
+        #|  Folded across
+        #|  two lines.
+        #|metadata:
+        #|  name: other
+        #|---
+        #|# body
+      ),
+      "fallback",
+    ),
+    ("alpha", "Folded across two lines."),
+  )
+  assert_eq(
+    @agent_skill.parse_frontmatter(
+      (
+        #|---
+        #|name: 'beta'
+        #|description: |
+        #|  Kept lines
+        #|  become one.
+        #|---
+      ),
+      "fallback",
+    ),
+    ("beta", "Kept lines become one."),
+  )
+  // Non-string values and blank names fall back.
+  assert_eq(
+    @agent_skill.parse_frontmatter(
+      (
+        #|---
+        #|name: ""
+        #|description: 42
+        #|---
+      ),
+      "fallback",
+    ),
+    ("fallback", ""),
+  )
+  assert_eq(
+    @agent_skill.parse_frontmatter("# no frontmatter", "fallback"),
+    ("fallback", ""),
+  )
 }
 
 ///|
