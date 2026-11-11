@@ -16,7 +16,6 @@ priv enum UiMessage {
   TimedOutLabel
   InterruptedLabel
   ScheduledTasks
-  ScheduleDescription
   NewSchedule
   RefreshLabel
   RunLog
@@ -25,8 +24,6 @@ priv enum UiMessage {
   EditSchedule
   NameLabel
   WorkingDirectory
-  AutomaticDirectoryDescription
-  ProjectDirectoryDescription
   TaskLabel
   ScheduleLabel
   EveryLabel
@@ -34,8 +31,6 @@ priv enum UiMessage {
   MinutesLabel
   TimeoutMinutes
   ModelDefault
-  SchedulePermissions
-  RunNowDescription
   SaveRunNow
   SaveSchedule
   CancelLabel
@@ -43,7 +38,8 @@ priv enum UiMessage {
   OnceLabel
   NextLabel
   WaitingLabel
-  PausedFinished
+  PausedStatus
+  FinishedStatus
   QueuedLabel
   AutomaticDirectory
   RunNow
@@ -169,16 +165,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ScheduledTasks) => "定时任务"
     (TraditionalChinese, ScheduledTasks) => "定時任務"
     (Japanese, ScheduledTasks) => "スケジュールタスク"
-    (English, ScheduleDescription) =>
-      "Run independent OpenSeek tasks while this host is open. Missed times are skipped. Up to 4 tasks can run together; each plan runs one task at a time."
-    (Spanish, ScheduleDescription) =>
-      "Ejecuta tareas independientes de OpenSeek mientras este host esté abierto. Se omiten las ejecuciones perdidas. Pueden ejecutarse hasta 4 tareas a la vez; cada programación ejecuta una tarea a la vez."
-    (SimplifiedChinese, ScheduleDescription) =>
-      "在此主机运行期间执行独立的 OpenSeek 任务。已错过的执行时间会跳过。最多可同时运行 4 个任务，每个计划一次运行一个任务。"
-    (TraditionalChinese, ScheduleDescription) =>
-      "在此主機執行期間執行獨立的 OpenSeek 任務。已錯過的執行時間會跳過。最多可同時執行 4 個任務，每個計劃一次執行一個任務。"
-    (Japanese, ScheduleDescription) =>
-      "このホストの起動中に独立した OpenSeek タスクを実行します。過ぎた実行時刻はスキップします。同時に最大 4 タスク、各スケジュールにつき 1 タスクを実行できます。"
     (English, NewSchedule) => "New schedule"
     (Spanish, NewSchedule) => "Nueva programación"
     (SimplifiedChinese, NewSchedule) => "新建计划"
@@ -219,26 +205,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, WorkingDirectory) => "工作目录"
     (TraditionalChinese, WorkingDirectory) => "工作目錄"
     (Japanese, WorkingDirectory) => "作業ディレクトリ"
-    (English, AutomaticDirectoryDescription) =>
-      "OpenSeek creates a dedicated folder on the first run and reuses it to save this task's files and results."
-    (Spanish, AutomaticDirectoryDescription) =>
-      "OpenSeek crea una carpeta dedicada en la primera ejecución y la reutiliza para guardar los archivos y resultados de esta tarea."
-    (SimplifiedChinese, AutomaticDirectoryDescription) =>
-      "OpenSeek 会在首次运行时创建专用文件夹，并继续用它保存此任务的文件和结果。"
-    (TraditionalChinese, AutomaticDirectoryDescription) =>
-      "OpenSeek 會在首次執行時建立專用資料夾，並繼續用它儲存此任務的檔案和結果。"
-    (Japanese, AutomaticDirectoryDescription) =>
-      "OpenSeek は初回実行時に専用フォルダーを作成し、以降もタスクのファイルと結果の保存に使用します。"
-    (English, ProjectDirectoryDescription) =>
-      "This task runs in the selected project folder and can read and update its files."
-    (Spanish, ProjectDirectoryDescription) =>
-      "Esta tarea se ejecuta en la carpeta del proyecto seleccionado y puede leer y actualizar sus archivos."
-    (SimplifiedChinese, ProjectDirectoryDescription) =>
-      "此任务在所选项目文件夹中运行，可读取和更新其中的文件。"
-    (TraditionalChinese, ProjectDirectoryDescription) =>
-      "此任務在所選專案資料夾中執行，可讀取和更新其中的檔案。"
-    (Japanese, ProjectDirectoryDescription) =>
-      "このタスクは選択したプロジェクトフォルダーで実行され、その中のファイルを読み取り・更新できます。"
     (English, TaskLabel) => "Task"
     (Spanish, TaskLabel) => "Tarea"
     (SimplifiedChinese, TaskLabel) => "任务"
@@ -278,26 +244,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "模型（留空使用主機預設值）"
     (Japanese, ModelDefault) =>
       "モデル（空欄でホストの既定値を使用）"
-    (English, SchedulePermissions) =>
-      "Uses this host's API settings. Permission escalation is refused in unattended runs."
-    (Spanish, SchedulePermissions) =>
-      "Usa la configuración de API de este host. No se permite ampliar permisos en ejecuciones desatendidas."
-    (SimplifiedChinese, SchedulePermissions) =>
-      "使用此主机的 API 设置。无人值守运行时不允许提升权限。"
-    (TraditionalChinese, SchedulePermissions) =>
-      "使用此主機的 API 設定。無人值守執行時不允許提升許可權。"
-    (Japanese, SchedulePermissions) =>
-      "このホストの API 設定を使用します。無人実行時の権限昇格は許可されません。"
-    (English, RunNowDescription) =>
-      "Save and run now executes once immediately without changing the schedule."
-    (Spanish, RunNowDescription) =>
-      "Guardar y ejecutar ahora ejecuta la tarea una vez de inmediato sin cambiar la programación."
-    (SimplifiedChinese, RunNowDescription) =>
-      "“保存并立即运行”会立即执行一次，不改变计划时间。"
-    (TraditionalChinese, RunNowDescription) =>
-      "“儲存並立即執行”會立即執行一次，不改變計劃時間。"
-    (Japanese, RunNowDescription) =>
-      "「保存して今すぐ実行」はスケジュール時刻を変更せず、一度実行します。"
     (English, SaveRunNow) => "Save and run now"
     (Spanish, SaveRunNow) => "Guardar y ejecutar ahora"
     (SimplifiedChinese, SaveRunNow) => "保存并立即运行"
@@ -338,11 +284,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, WaitingLabel) => "等待中"
     (TraditionalChinese, WaitingLabel) => "等待中"
     (Japanese, WaitingLabel) => "待機中"
-    (English, PausedFinished) => "Paused / finished"
-    (Spanish, PausedFinished) => "En pausa / finalizado"
-    (SimplifiedChinese, PausedFinished) => "已暂停 / 已结束"
-    (TraditionalChinese, PausedFinished) => "已暫停 / 已結束"
-    (Japanese, PausedFinished) => "一時停止 / 終了"
+    (English, PausedStatus) => "Paused"
+    (Spanish, PausedStatus) => "En pausa"
+    (SimplifiedChinese, PausedStatus) => "已暂停"
+    (TraditionalChinese, PausedStatus) => "已暫停"
+    (Japanese, PausedStatus) => "一時停止中"
+    (English, FinishedStatus) => "Finished"
+    (Spanish, FinishedStatus) => "Finalizado"
+    (SimplifiedChinese, FinishedStatus) => "已结束"
+    (TraditionalChinese, FinishedStatus) => "已結束"
+    (Japanese, FinishedStatus) => "終了"
     (English, QueuedLabel) => "Queued"
     (Spanish, QueuedLabel) => "En cola"
     (SimplifiedChinese, QueuedLabel) => "已排队"
@@ -565,4 +516,81 @@ fn schedule_refusal_text(
       StopBeforeDelete => RefusedStopBeforeDelete
     },
   )
+}
+
+///|
+/// A repeating interval in the largest whole unit that fits it: "Every day",
+/// not "Every 1440 min".
+fn schedule_interval_text(locale : @i18n.Locale, minutes : Int32) -> String {
+  let week = 7 * 24 * 60
+  let day = 24 * 60
+  if minutes % week == 0 {
+    let n = minutes / week
+    match (locale, n) {
+      (English, 1) => "Every week"
+      (English, _) => "Every \{n} weeks"
+      (Spanish, 1) => "Cada semana"
+      (Spanish, _) => "Cada \{n} semanas"
+      (SimplifiedChinese, 1) => "每周"
+      (SimplifiedChinese, _) => "每 \{n} 周"
+      (TraditionalChinese, 1) => "每週"
+      (TraditionalChinese, _) => "每 \{n} 週"
+      (Japanese, 1) => "毎週"
+      (Japanese, _) => "\{n} 週間ごと"
+    }
+  } else if minutes % day == 0 {
+    let n = minutes / day
+    match (locale, n) {
+      (English, 1) => "Every day"
+      (English, _) => "Every \{n} days"
+      (Spanish, 1) => "Cada día"
+      (Spanish, _) => "Cada \{n} días"
+      (SimplifiedChinese, 1) => "每天"
+      (SimplifiedChinese, _) => "每 \{n} 天"
+      (TraditionalChinese, 1) => "每天"
+      (TraditionalChinese, _) => "每 \{n} 天"
+      (Japanese, 1) => "毎日"
+      (Japanese, _) => "\{n} 日ごと"
+    }
+  } else if minutes % 60 == 0 {
+    let n = minutes / 60
+    match (locale, n) {
+      (English, 1) => "Every hour"
+      (English, _) => "Every \{n} hours"
+      (Spanish, 1) => "Cada hora"
+      (Spanish, _) => "Cada \{n} horas"
+      (SimplifiedChinese, 1) => "每小时"
+      (SimplifiedChinese, _) => "每 \{n} 小时"
+      (TraditionalChinese, 1) => "每小時"
+      (TraditionalChinese, _) => "每 \{n} 小時"
+      (Japanese, 1) => "1 時間ごと"
+      (Japanese, _) => "\{n} 時間ごと"
+    }
+  } else {
+    match locale {
+      English => "Every \{minutes} min"
+      Spanish => "Cada \{minutes} min"
+      SimplifiedChinese => "每 \{minutes} 分钟"
+      TraditionalChinese => "每 \{minutes} 分鐘"
+      Japanese => "\{minutes} 分ごと"
+    }
+  }
+}
+
+///|
+/// The question a schedule card asks before deleting it. The host keeps the
+/// schedule's run history and working folder.
+fn schedule_delete_question(locale : @i18n.Locale, name : String) -> String {
+  match locale {
+    English =>
+      "Delete “\{name}”? Its run history and working folder are kept."
+    Spanish =>
+      "¿Eliminar «\{name}»? Se conservan su historial de ejecuciones y su carpeta de trabajo."
+    SimplifiedChinese =>
+      "删除“\{name}”？其运行记录和工作目录会保留。"
+    TraditionalChinese =>
+      "刪除「\{name}」？其執行記錄和工作目錄會保留。"
+    Japanese =>
+      "「\{name}」を削除しますか？実行履歴と作業ディレクトリは残ります。"
+  }
 }

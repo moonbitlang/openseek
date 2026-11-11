@@ -47,6 +47,8 @@ priv struct SchedulePage {
   sequence : Int32
   error : String?
   log : (String, String)?
+  // The schedule whose card is asking whether to delete it.
+  confirm_delete : String?
 }
 
 ///|
@@ -59,6 +61,7 @@ fn SchedulePage::empty() -> SchedulePage {
     sequence: 0,
     error: None,
     log: None,
+    confirm_delete: None,
   }
 }
 
@@ -105,6 +108,8 @@ priv enum SchedulePageMsg {
   CloseForm
   Save(Bool)
   Action(String, @protocol.ScheduleAction)
+  AskDelete(String)
+  CancelDelete
   Loaded(@interop.ChannelId, Int32, Bool, ScheduleOutcome)
   Log(String)
   LogLoaded(@interop.ChannelId, String, Result[String, String])
@@ -439,7 +444,18 @@ fn update_schedules(
       }
     }
     Action(id, action) =>
-      request_schedules(dispatch, model, Action({ id, action, }))
+      request_schedules(
+        dispatch,
+        { ..model, schedules: { ..page, confirm_delete: None, }, },
+        Action({ id, action, }),
+      )
+    AskDelete(id) =>
+      (
+        @cmd.none,
+        { ..model, schedules: { ..page, confirm_delete: Some(id), }, },
+      )
+    CancelDelete =>
+      (@cmd.none, { ..model, schedules: { ..page, confirm_delete: None, }, })
     CloseLog => (@cmd.none, { ..model, schedules: { ..page, log: None, }, })
     Log(path) => {
       let channel = model.focused
