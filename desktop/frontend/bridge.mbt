@@ -186,6 +186,7 @@ fn device_msg(
     AgentConnected({ protocol: Some(revision), }) if revision ==
       @protocol.HostProtocolRevision => Some(BridgeReady)
     AgentConnected(_) => Some(HostMismatched)
+    PreviewOpen(payload) => Some(PreviewRequested(payload))
     CloudMcp(payload) => Some(CloudMcpEvent(payload))
     UserQuestions(payload) => Some(QuestionsChanged(payload))
     AgentApprovals(payload) =>

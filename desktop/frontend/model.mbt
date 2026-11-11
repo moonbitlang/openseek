@@ -1273,6 +1273,10 @@ priv enum ChatSelection {
 ///|
 #derive(Eq)
 priv struct Model {
+  pending_previews : Map[
+    @interop.ConversationIdentity,
+    Array[@protocol.PreviewOpenRequest],
+  ]
   cloud_questions : @user_questions.Model
   cloud : @cloud.State
   chat_navigation_generation : Int32
@@ -1982,6 +1986,8 @@ priv enum Msg {
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
   ShareFile(String)
+  PreviewOpenRequested(@protocol.PreviewOpenRequest)
+  OpenNextPreview
   PreviewFile(String)
   CloudFilePreviewCreated(
     owner~ : @interop.ConversationIdentity,
@@ -2230,6 +2236,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
+  PreviewRequested(@protocol.PreviewOpenRequest)
   CloudMcpEvent(@protocol.CloudMcpEvent)
   QuestionsChanged(@protocol.UserQuestionSnapshot)
   ApprovalsChanged(ApprovalMirror)
@@ -2744,6 +2751,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     // The desktop window owns its host outright, so its one channel is in
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
+    pending_previews: Map([]),
     cloud_questions: @user_questions.Model(),
     cloud: @cloud.State::empty(),
     chat_navigation_generation: 0,

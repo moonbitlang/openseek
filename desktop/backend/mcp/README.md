@@ -285,8 +285,8 @@ never replays old calls or replies.
 
 The desktop-only `cloud.mcp` command passes the authenticated account and the
 socket's session to a separate `Dispatcher` catalog containing just
-`browser_open` and `ask_user`. It reuses the existing native browser tool and
-question service. Explicit browser opens join the owning Cloud conversation's
+`browser_open`, `preview_open`, and `ask_user`. It reuses the existing native
+browser tool, file viewers, and question service. Explicit browser opens join the owning Cloud conversation's
 dock and use its existing native-view positioning and visibility rules.
 Ordinary Cloud links keep their behavior.
 
@@ -301,3 +301,23 @@ the current host process and account login.
 Known follow-ups are marked beside their owners: bounded broadcast dispatch,
 acknowledgement across frontend disconnects, and manual retry after a delayed
 answer's delivery fails. Failed or ambiguous inputs are not replayed on reconnect.
+
+## Showing workspace files
+
+`preview_open({"path":"reports/result.html"})` asks SeekMoon to show a generated
+workspace file to the user. It uses the caller's trusted conversation and
+workspace, rather than the currently selected chat. The tool is available to
+Local agents and Desktop Cloud client MCP; filtered Local clients must include
+the `preview` tool group.
+
+HTML/HTM uses the existing HTTP preview and Browser tab. PDF, images, Office,
+code, and text use the existing file panel. The response
+`{"status":"opening","path":"reports/result.html"}` acknowledges acceptance,
+not file existence or completed rendering. It does not return file contents;
+use `browser_open` for external websites.
+
+A background conversation's requests are retained in memory until the user
+returns to it, without switching chat focus. Cloud sign-out and session deletion
+clear the corresponding requests. A Local request is discarded if its original
+workspace no longer matches. Requests are not durable across app restarts or
+frontend disconnections (see the TODO at the publish boundary).
