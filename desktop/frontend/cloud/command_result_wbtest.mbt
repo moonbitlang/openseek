@@ -23,6 +23,9 @@ test "terminal control results do not consume or restore the user's editable dra
   let input = pending.control_inputs[0]
   let accepted = pending.acknowledge_control(input.key)
   assert_eq(accepted.submission_sequence, before.submission_sequence)
-  let rejected = accepted.reject_control(input.key, Some("rejected"))
+  let rejected = accepted.reject_control(
+    input.key,
+    Some(EngineDetail("rejected")),
+  )
   assert_eq(rejected.initial_submission, before.initial_submission)
 }

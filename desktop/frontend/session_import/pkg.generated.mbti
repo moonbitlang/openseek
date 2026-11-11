@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -15,6 +16,16 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq)
+pub(all) enum Failure {
+  Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
+  Diagnostic(String)
+  FileTooLarge
+}
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+
 #derive(Eq, @debug.Debug)
 pub(all) struct HostTarget {
   channel : @interop.ChannelId
@@ -26,14 +37,13 @@ pub fn HostTarget::equal(Self, Self) -> Bool
 pub fn HostTarget::not_equal(Self, Self) -> Bool
 pub fn HostTarget::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 type Model
 pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, Target) -> (@cmd.Cmd, Self)
-pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(Self, @cmd.Emit[Msg], Msg, account? : @protocol.AccountSession) -> (@cmd.Cmd, Self, (Target, String)?)
 pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
 
@@ -42,8 +52,8 @@ pub(all) enum Msg {
   PickFile
   LinkChanged(String)
   ImportLink
-  Picked(Int32, Result[String?, String])
-  Imported(Int32, @protocol.SessionImportReply)
+  Picked(Int32, Result[String?, Failure])
+  Imported(Int32, Result[String, Failure])
 }
 
 #derive(Eq, @debug.Debug)

@@ -52,7 +52,7 @@ test "preferences wait for confirmation, reject duplicates and retain saved valu
     saving,
   )
   assert_eq(failed.account_preferences.value, Some(false))
-  assert_eq(failed.account_preferences.error, Some(@cloud_client.Http(400)))
+  assert_true(failed.account_preferences.error is Some(@cloud_client.Http(400)))
   assert_false(failed.account_preferences.pending)
   let (_, saving) = update(dispatch, AccountPreferencesChanged(true), failed)
   let request = saving.account_preferences.request
@@ -62,7 +62,7 @@ test "preferences wait for confirmation, reject duplicates and retain saved valu
     saving,
   )
   assert_eq(saved.account_preferences.value, Some(true))
-  assert_eq(saved.account_preferences.error, None)
+  assert_true(saved.account_preferences.error is None)
   let (_, stale) = update(
     dispatch,
     AccountPreferencesLoaded(request, Ok(false)),

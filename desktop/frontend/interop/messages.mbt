@@ -1,5 +1,5 @@
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 pub(all) enum BridgeProblem {
   Unavailable
   MalformedReply(String)
@@ -14,9 +14,6 @@ pub(all) enum BridgeProblem {
 
 ///|
 pub extend BridgeProblem with Eq::{equal, not_equal}
-
-///|
-pub extend BridgeProblem with Debug::{to_repr}
 
 ///|
 pub fn BridgeProblem::text(

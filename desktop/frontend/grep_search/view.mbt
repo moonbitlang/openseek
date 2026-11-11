@@ -505,7 +505,7 @@ fn search_message(
           [
             @html.div(class="search-empty-title", heading),
             @html.div(class="search-empty-detail", [
-              @html.span(message),
+              @html.span(message.text(locale)),
               if page.mode is Semantic &&
                 (code == "invalid_pattern" || code == "search_failed") {
                 @html.button(

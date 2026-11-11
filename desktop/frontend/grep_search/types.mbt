@@ -13,13 +13,13 @@ const InitialVisibleSearchLines : Int32 = 500
 const VisibleSearchLineStep : Int32 = 500
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 enum Phase {
   Idle
   Debouncing
   Loading
   Ready
-  Failed(code~ : String, message~ : String)
+  Failed(code~ : String, message~ : RequestFailure)
 }
 
 ///|
@@ -267,7 +267,7 @@ pub(all) enum Msg {
     root~ : String,
     generation~ : Int32,
     code~ : String,
-    message~ : String
+    message~ : RequestFailure
   )
 }
 
@@ -294,9 +294,6 @@ pub extend SemanticResultFilter with Debug::{to_repr}
 
 ///|
 pub extend Page with Eq::{equal, not_equal}
-
-///|
-pub extend Phase with Debug::{to_repr}
 
 ///|
 pub extend Phase with Eq::{equal, not_equal}

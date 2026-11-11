@@ -10131,7 +10131,7 @@ test "same-root conversation switch fences every old watcher push" {
     emit, current_failure, after_previous_page_failure, next_ctx,
   )
   let (_, second) = update(emit, current_failure, ready, next_ctx)
-  assert_eq(first.watch_error, Some(Diagnostic("current watcher stopped")))
+  assert_true(first.watch_error is Some(Diagnostic("current watcher stopped")))
   assert_true(first.watch_error == second.watch_error)
 }
 

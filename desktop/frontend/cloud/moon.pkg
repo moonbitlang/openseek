@@ -2,6 +2,7 @@ import {
   "openseek_desktop/frontend/engine_session",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/cloud_client",
+  "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",

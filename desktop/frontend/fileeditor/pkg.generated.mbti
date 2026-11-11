@@ -242,7 +242,7 @@ pub(all) enum ExplorerMode {
 pub fn ExplorerMode::equal(Self, Self) -> Bool
 pub fn ExplorerMode::not_equal(Self, Self) -> Bool
 
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 pub(all) enum Failure {
   CloudFileOwnershipLost
   CloudDirectoryOwnershipLost
@@ -267,7 +267,6 @@ pub(all) enum Failure {
 pub fn Failure::equal(Self, Self) -> Bool
 pub fn Failure::not_equal(Self, Self) -> Bool
 pub fn Failure::text(Self, @i18n.Locale) -> String
-pub fn Failure::to_repr(Self) -> @debug.Repr
 
 #derive(Eq)
 pub(all) enum FileChange {

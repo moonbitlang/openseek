@@ -23,6 +23,7 @@ priv enum NotificationMessage {
   FileFailure(@fileeditor.Failure)
   Notice(NoticeMessage)
   CloudFailure(@cloud_client.Failure)
+  ShellUnavailable
 }
 
 ///|
@@ -35,6 +36,7 @@ fn NotificationMessage::text(
     FileFailure(failure) => failure.text(locale)
     Notice(message) => notice_text(locale, message)
     CloudFailure(failure) => failure.text(locale)
+    ShellUnavailable => shell_text(locale, ShellTerminalUnavailable)
   }
 }
 

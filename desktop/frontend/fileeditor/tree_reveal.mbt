@@ -196,18 +196,18 @@ test "directory contents failure still reveals its row after the parent loads" {
     ctx,
   )
   let (revealed, _) = loaded.sync_tree_reveal(emit, ctx)
-  assert_eq(
-    revealed.directory_errors.get(target),
-    Some(Diagnostic("Permission denied")),
+  assert_true(
+    revealed.directory_errors.get(target)
+    is Some(Diagnostic("Permission denied")),
   )
   assert_eq(revealed.tree_focus, Some(target))
   assert_true(
     revealed.tree_reveal is TreeRevealDirectorySettled(path) && path == target,
   )
   let (_, retrying) = update(emit, DirExpand(target), revealed, ctx)
-  assert_eq(
-    retrying.directory_errors.get(target),
-    Some(Diagnostic("Permission denied")),
+  assert_true(
+    retrying.directory_errors.get(target)
+    is Some(Diagnostic("Permission denied")),
   )
   assert_true(retrying.loading.contains(target))
 }
@@ -235,14 +235,14 @@ test "parallel directory failures clear independently on successful replies" {
     state,
     ctx,
   )
-  assert_eq(root_loaded.directory_errors.get(root), None)
-  assert_eq(
-    root_loaded.directory_errors.get(child),
-    Some(Diagnostic("Child unavailable")),
+  assert_true(root_loaded.directory_errors.get(root) is None)
+  assert_true(
+    root_loaded.directory_errors.get(child)
+    is Some(Diagnostic("Child unavailable")),
   )
-  assert_eq(
-    root_loaded.directory_errors.get(@pathx.Relative("src/nested")),
-    Some(Diagnostic("Nested unavailable")),
+  assert_true(
+    root_loaded.directory_errors.get(@pathx.Relative("src/nested"))
+    is Some(Diagnostic("Nested unavailable")),
   )
   let (_, recovered) = update(
     emit,
@@ -304,9 +304,9 @@ test "parallel directory failures clear independently on successful replies" {
     retrying,
     ctx,
   )
-  assert_eq(
-    new_failure.directory_errors.get(child),
-    Some(Diagnostic("Permission denied")),
+  assert_true(
+    new_failure.directory_errors.get(child)
+    is Some(Diagnostic("Permission denied")),
   )
   // A repeated link while the invalidated read drains queues exactly one new
   // read, including when ancestors are still reloading.
@@ -371,8 +371,8 @@ test "parallel directory failures clear independently on successful replies" {
     parent_failed,
     ctx,
   )
-  assert_eq(
-    child_failed.directory_errors.get(child),
-    Some(Diagnostic("Permission denied")),
+  assert_true(
+    child_failed.directory_errors.get(child)
+    is Some(Diagnostic("Permission denied")),
   )
 }

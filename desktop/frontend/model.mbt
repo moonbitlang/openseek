@@ -1988,7 +1988,7 @@ priv enum Msg {
   CloudFilePreviewCreated(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,
-    result~ : Result[String, String]
+    result~ : Result[String, @fileeditor.Failure]
   )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)

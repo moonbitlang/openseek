@@ -7122,7 +7122,7 @@ fn update_msg(
             shell,
             message,
           )
-        None => cloud_shell_not_started(dispatch, model, shell, message)
+        None => cloud_shell_not_started(dispatch, model, shell, Raw(message))
       }
     RunShellCommand(channel~, session~, id~, command~, attempt~) =>
       run_shell_command(dispatch, model, channel, session, id, command, attempt)
@@ -7171,7 +7171,7 @@ fn update_msg(
       }
       match result {
         Ok(url) => open_user_link(dispatch, model, url, cloud_preview=true)
-        Err(message) => model.notify_error(dispatch, message)
+        Err(failure) => model.notify_file_error(dispatch, failure)
       }
     }
     DownloadFile(path) => {
@@ -23319,7 +23319,7 @@ test "file watcher failures toast once and retain lifecycle state" {
     ),
   )
   let (_, failed) = update(dispatch, failure, model)
-  assert_eq(failed.file_panel.watch_error, Some(message))
+  assert_true(failed.file_panel.watch_error == Some(message))
   assert_eq(failed.notifications.length(), 1)
   assert_eq(
     failed.notifications[0].message.text(English),
@@ -23328,7 +23328,7 @@ test "file watcher failures toast once and retain lifecycle state" {
   // The same current-generation notification neither mutates watcher state
   // again nor stacks another toast while the first one is still visible.
   let (_, repeated) = update(dispatch, failure, failed)
-  assert_eq(repeated.file_panel.watch_error, Some(message))
+  assert_true(repeated.file_panel.watch_error == Some(message))
   assert_eq(repeated.notifications.length(), 1)
   // The file-editor package rejects a failure from another concrete watcher;
   // the root therefore has no accepted failure to announce.
@@ -23344,7 +23344,7 @@ test "file watcher failures toast once and retain lifecycle state" {
     ),
     repeated,
   )
-  assert_eq(stale.file_panel.watch_error, Some(message))
+  assert_true(stale.file_panel.watch_error == Some(message))
   assert_eq(stale.notifications.length(), 1)
 }
 

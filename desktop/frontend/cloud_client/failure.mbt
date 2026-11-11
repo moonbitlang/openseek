@@ -1,5 +1,5 @@
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 pub(all) enum Failure {
   Unauthorized
   Busy
@@ -9,19 +9,12 @@ pub(all) enum Failure {
   ExportUnavailable
   ServiceNotConfigured
   SignInFailed(String)
+  RemoteMessage(String)
   InvalidImage
 }
 
 ///|
 pub extend Failure with Eq::{equal, not_equal}
-
-///|
-pub extend Failure with Debug::{to_repr}
-
-///|
-pub fn Failure::label(self : Failure) -> String {
-  self.text(English)
-}
 
 ///|
 pub(all) suberror RequestError {

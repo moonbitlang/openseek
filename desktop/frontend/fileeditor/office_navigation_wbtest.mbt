@@ -11,7 +11,7 @@ test "Office navigation waits for a document and consumes only the current click
   let state = { ..state, office_navigation: Some(navigation), }
   let (_, done) = state.sync_office_navigation(test_emit(), ctx)
   assert_eq(done.office_navigation, None)
-  assert_eq(done.error, None)
+  assert_true(done.error is None)
   let docs = state.docs.copy()
   docs[path] = { ..docs[path], state: TabLoading, }
   let (_, loading) = { ..state, docs, }.sync_office_navigation(test_emit(), ctx)
@@ -29,7 +29,7 @@ test "Office navigation waits for a document and consumes only the current click
     ] {
     let (_, retired) = retired.sync_office_navigation(test_emit(), ctx)
     assert_eq(retired.office_navigation, None)
-    assert_eq(retired.error, None)
+    assert_true(retired.error is None)
   }
   let (_, switched) = state.sync_office_navigation(test_emit(), {
     ..ctx,
@@ -61,7 +61,7 @@ test "PDF citations wait for readiness and never clamp a missing page" {
   })
   let (_, done) = ready.sync_office_navigation(test_emit(), ctx)
   assert_eq(done.office_navigation, None)
-  assert_eq(done.error, None)
+  assert_true(done.error is None)
   let invalid = {
     ..ready,
     office_navigation: Some({ ..navigation, target: PdfPage(3), }),
@@ -98,7 +98,7 @@ test "stale navigation results do not show errors in a newer destination" {
     state,
     ctx,
   )
-  assert_eq(ignored.error, None)
+  assert_true(ignored.error is None)
 }
 
 ///|
@@ -123,7 +123,7 @@ test "a laid-out sheet re-arms only the current Excel navigation" {
     ctx,
   )
   assert_eq(rearmed.office_navigation, Some(navigation))
-  assert_eq(rearmed.error, None)
+  assert_true(rearmed.error is None)
   for
     stale in [
       { ..navigation, generation: navigation.generation - 1, },
@@ -137,7 +137,7 @@ test "a laid-out sheet re-arms only the current Excel navigation" {
       ctx,
     )
     assert_eq(ignored.office_navigation, None)
-    assert_eq(ignored.error, None)
+    assert_true(ignored.error is None)
   }
   let (_, closed) = update(
     test_emit(),

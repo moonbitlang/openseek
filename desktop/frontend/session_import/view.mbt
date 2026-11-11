@@ -85,7 +85,7 @@ pub fn Model::view(
             Reading =>
               label(locale, "Choose a JSON file…", "请选择 JSON 文件…")
             Importing => label(locale, "Importing…", "正在导入…")
-            Failed(message) => message
+            Failed(failure) => failure.text(locale)
           },
         ),
       ]),

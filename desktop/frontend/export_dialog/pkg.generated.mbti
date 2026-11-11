@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/account_failure",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -16,6 +17,23 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq)
+pub(all) enum Failure {
+  Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
+  Diagnostic(String)
+  SignInChanged
+  ShareAuthorizationHttp(Int32)
+  InvalidUploadPermission
+  DownloadFromFilePanel
+  SignInToExport
+  AccountSignInExpired
+  LocalConversationSharingUnavailable
+  LocalFileSharingUnavailable
+}
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+
 #derive(Eq, @debug.Debug)
 pub(all) enum FileSource {
   HostFile(@interop.ChannelId, @protocol.ReadFilePayload)
@@ -25,7 +43,7 @@ pub fn FileSource::equal(Self, Self) -> Bool
 pub fn FileSource::not_equal(Self, Self) -> Bool
 pub fn FileSource::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 type Model
 pub fn Model::Model(id_prefix? : String) -> Self
 pub fn Model::account_changed(Self, Result[Unit, @account_failure.Failure]) -> (@cmd.Cmd, Self)
@@ -36,7 +54,6 @@ pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, @protocol.SessionExportPayload, channel? : @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn Model::open_cloud(Self, session~ : String) -> (@cmd.Cmd, Self)
 pub fn Model::open_file(Self, FileSource) -> (@cmd.Cmd, Self)
-pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(Self, @cmd.Emit[Msg], Msg, account? : @protocol.AccountSession, desktop? : Bool, sign_in? : @cmd.Cmd) -> (@cmd.Cmd, Self)
 pub fn Model::view(locale? : @i18n.Locale, Self, @cmd.Emit[Msg]) -> @html.Html
 
@@ -45,10 +62,10 @@ pub(all) enum Msg {
   Download
   Share
   SignIn
-  Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, String])
+  Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, Failure])
   Progress(@protocol.SessionShareProgress)
   HostProgress(@interop.ChannelId, @protocol.SessionShareProgress)
-  Published(generation~ : Int32, @protocol.SessionShareReply)
+  Published(generation~ : Int32, Result[@protocol.SessionShareReply, Failure])
   SignedIn(generation~ : Int32, Result[Unit, @account_failure.Failure])
   ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }

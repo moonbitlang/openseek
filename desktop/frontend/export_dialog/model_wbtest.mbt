@@ -17,8 +17,8 @@ test "dialog updates are pure and late replies cannot cross openings" {
     Share,
     SignIn,
     Close,
-    Published(generation=first.generation, SignInRequired),
-    Downloaded(generation=first.generation, Err("failed")),
+    Published(generation=first.generation, Ok(SignInRequired)),
+    Downloaded(generation=first.generation, Err(Diagnostic("failed"))),
     SignedIn(generation=first.generation, Ok(())),
     ClipboardFinished(generation=first.generation, Ok(())),
   ]
@@ -36,7 +36,7 @@ test "dialog updates are pure and late replies cannot cross openings" {
   let (_, closed) = pending.advance(emit, Close)
   let reply = Published(
     generation=pending.generation,
-    Shared(url="https://shares.test/v1/shares/a"),
+    Ok(Shared(url="https://shares.test/v1/shares/a")),
   )
   let (_, late) = closed.advance(emit, reply)
   assert_true(late == closed)
@@ -69,7 +69,7 @@ test "share login failure success and clipboard feedback transitions" {
       @protocol.Failed(message="Storage unavailable"),
       @protocol.Shared(url="http://shares.test/a"),
     ] {
-    let msg = Published(generation=pending.generation, reply)
+    let msg = Published(generation=pending.generation, Ok(reply))
     let (_, first) = pending.advance(emit, msg)
     let (_, again) = pending.advance(emit, msg)
     assert_true(first == again)
@@ -91,7 +91,7 @@ test "share login failure success and clipboard feedback transitions" {
             guard done.content is Some({ operation: SignInFailed(detail), .. }) else {
               fail("expected sign-in failure with its diagnostic")
             }
-            assert_eq(detail, message)
+            assert_true(detail == message)
             let (_, retry) = done.advance(emit, SignIn)
             assert_true(retry.content is Some({ operation: SigningIn, .. }))
           }
@@ -129,7 +129,7 @@ test "share login failure success and clipboard feedback transitions" {
           )
         }
       }
-      Some({ operation: Failed("Storage unavailable"), .. }) => {
+      Some({ operation: Failed(Diagnostic("Storage unavailable")), .. }) => {
         let (_, retry) = first.advance(emit, Share)
         assert_true(retry.content is Some({ operation: Sharing(_), .. }))
       }
@@ -153,7 +153,7 @@ test "download cancellation and saved but not opened remain distinct" {
       Ok(@protocol.SessionExportReply::{ path: None, opened: false, }),
       Ok({ path: Some("/exports/a.html"), opened: false, }),
       Ok({ path: Some("/exports/a.html"), opened: true, }),
-      Err("No access"),
+      Err(Diagnostic("No access")),
     ] {
     let msg = Downloaded(generation=pending.generation, result)
     let (_, done) = pending.advance(emit, msg)
@@ -172,7 +172,8 @@ test "download cancellation and saved but not opened remain distinct" {
         )
       Err(_) =>
         assert_true(
-          done.content is Some({ operation: Failed("No access"), .. }),
+          done.content
+          is Some({ operation: Failed(Diagnostic("No access")), .. }),
         )
     }
   }
@@ -209,7 +210,7 @@ test "sharing without an account requests login and never uploads automatically"
   let (_, retired) = ready.account_changed(Ok(()))
   assert_false(
     retired.account_expired(
-      Published(generation=opened.generation, @protocol.SignInRequired),
+      Published(generation=opened.generation, Ok(@protocol.SignInRequired)),
     ),
   )
   assert_false(retired.is_open())
@@ -251,7 +252,10 @@ test "progress is pure and belongs only to the current upload" {
   })
   let (_, failed) = pending.update(
     emit,
-    Published(generation=pending.generation, Failed(message="offline")),
+    Published(
+      generation=pending.generation,
+      Ok(@protocol.Failed(message="offline")),
+    ),
   )
   let (_, retry) = failed.advance(emit, Share)
   let (_, ignored) = retry.advance(emit, late)
@@ -261,7 +265,10 @@ test "progress is pure and belongs only to the current upload" {
   assert_true(ignored == closed)
   let (_, done) = pending.update(
     emit,
-    Published(generation=pending.generation, Shared(url="https://share.test/a")),
+    Published(
+      generation=pending.generation,
+      Ok(Shared(url="https://share.test/a")),
+    ),
   )
   let (_, ignored) = done.advance(emit, late)
   assert_true(ignored == done)
@@ -319,7 +326,7 @@ test "the local debug console explains sharing is unsupported without requesting
   let (_, refused) = opened.update(emit, Share, desktop=false)
   assert_true(
     refused.content is Some({ operation: Failed(message), .. }) &&
-    message.contains("SeekMoonDev.app"),
+    message.text(English).contains("SeekMoonDev.app"),
   )
   let (_, downloading) = refused.update(emit, Download, desktop=false)
   assert_true(downloading.content is Some({ operation: Downloading, .. }))
@@ -347,7 +354,7 @@ test "file sharing survives dismissal and reopening without starting another ope
     emit,
     Published(
       generation=hidden.generation,
-      Shared(url="https://shares.test/file"),
+      Ok(Shared(url="https://shares.test/file")),
     ),
   )
   assert_false(finished.is_open())
@@ -373,7 +380,10 @@ test "file share failures allow explicit retry and account changes fence hidden 
   let (_, pending) = opened.advance(emit, Share)
   let (_, failed) = pending.advance(
     emit,
-    Published(generation=pending.generation, Failed(message="offline")),
+    Published(
+      generation=pending.generation,
+      Ok(@protocol.Failed(message="offline")),
+    ),
   )
   assert_false(failed.file_pending())
   let (_, retry) = failed.advance(emit, Share)
@@ -384,7 +394,7 @@ test "file share failures allow explicit retry and account changes fence hidden 
     emit,
     Published(
       generation=retry.generation,
-      Shared(url="https://shares.test/old"),
+      Ok(Shared(url="https://shares.test/old")),
     ),
   )
   assert_true(late == changed)

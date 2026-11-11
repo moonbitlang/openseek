@@ -593,7 +593,7 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
 fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   let notices : Array[String] = []
   if self.cloud.notice is Some(notice) {
-    notices.push(notice)
+    notices.push(notice.text(self.locale))
   }
   if self.focused_device() is Some({ chat_root: Some(Err(message)), .. }) {
     notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))

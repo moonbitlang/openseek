@@ -69,7 +69,7 @@ pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
       "クラウドモデルの認証情報が設定されていません。サービス管理者にお問い合わせください。"
     (Spanish, ServiceNotConfigured) =>
       "Las credenciales del modelo de Cloud no están configuradas. Contacta con el administrador del servicio."
-    (_, SignInFailed(detail)) => detail
+    (_, SignInFailed(detail)) | (_, RemoteMessage(detail)) => detail
     (English, InvalidImage) =>
       "Choose a valid PNG, JPEG, GIF or WebP image up to 5 MiB."
     (SimplifiedChinese, InvalidImage) =>

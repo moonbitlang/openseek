@@ -1157,5 +1157,5 @@ test "a late browser logout result cannot clear a newer account" {
     model,
   )
   assert_true(unchanged.console.access_error is None)
-  assert_eq(unchanged.account_error, None)
+  assert_true(unchanged.account_error is None)
 }

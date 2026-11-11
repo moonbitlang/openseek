@@ -94,7 +94,7 @@ pub fn Model::view(
             ui(locale, RetrySignIn),
           ),
         ])
-      Failed(message) => @html.div(class="export-error", message)
+      Failed(failure) => @html.div(class="export-error", failure.text(locale))
       Saved(path~, opened~) =>
         @html.div(
           if opened {

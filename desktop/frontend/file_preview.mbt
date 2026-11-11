@@ -17,12 +17,12 @@ fn Model::preview_file(
     let auth_epoch = access.epoch
     let command = @cmd.custom_cmd(scheduler => {
       @js.Promise::from_async(() => {
-        let result : Result[String, String] = Ok(
+        let result : Result[String, @fileeditor.Failure] = Ok(
           @cloud_client.create_preview(access.token, session, relative.0),
         ) catch {
           @cloud_client.RequestError::RequestError(failure) =>
-            Err(failure.label())
-          error => Err(@interop.bridge_error_text(error))
+            Err(@fileeditor.Cloud(failure))
+          error => Err(@fileeditor.Bridge(@interop.bridge_problem(error)))
         }
         scheduler.add(
           dispatch(CloudFilePreviewCreated(owner~, auth_epoch~, result~)),

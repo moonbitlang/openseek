@@ -436,7 +436,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       }
       let phase = match reply.error {
         None => Ready
-        Some(error) => Failed(code=error.code, message=error.message)
+        Some(error) =>
+          Failed(code=error.code, message=Diagnostic(error.message))
       }
       {
         ..self,
@@ -474,7 +475,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       }
       let phase = match reply.error {
         None => Ready
-        Some(error) => Failed(code=error.code, message=error.message)
+        Some(error) =>
+          Failed(code=error.code, message=Diagnostic(error.message))
       }
       {
         ..self,
@@ -1227,5 +1229,5 @@ test "invalid regex replies retain their actionable Host error" {
     fail("expected invalid regex phase")
   }
   assert_eq(code, "invalid_regex")
-  assert_eq(message, "regex parse error")
+  assert_true(message is Diagnostic("regex parse error"))
 }

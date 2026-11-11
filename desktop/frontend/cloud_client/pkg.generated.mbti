@@ -3,7 +3,6 @@ package "openseek_desktop/frontend/cloud_client"
 
 import {
   "moonbitlang/async/http",
-  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
@@ -50,7 +49,7 @@ pub(all) struct Access {
 pub fn Access::equal(Self, Self) -> Bool
 pub fn Access::not_equal(Self, Self) -> Bool
 
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 pub(all) enum Failure {
   Unauthorized
   Busy
@@ -60,13 +59,12 @@ pub(all) enum Failure {
   ExportUnavailable
   ServiceNotConfigured
   SignInFailed(String)
+  RemoteMessage(String)
   InvalidImage
 }
 pub fn Failure::equal(Self, Self) -> Bool
-pub fn Failure::label(Self) -> String
 pub fn Failure::not_equal(Self, Self) -> Bool
 pub fn Failure::text(Self, @i18n.Locale) -> String
-pub fn Failure::to_repr(Self) -> @debug.Repr
 
 pub struct SseParser {
   mut event : String

@@ -135,7 +135,7 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
       settled,
     )
     assert_false(cancelled.remote_connecting)
-    assert_eq(cancelled.account_error, None)
+    assert_true(cancelled.account_error is None)
     let (_, retried) = begin_account_login(test_dispatch(), cancelled)
     assert_eq(retried.account_epoch, epoch + 1)
     let stale_replies = [
@@ -158,7 +158,7 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
       assert_true(late.remote_connecting)
       assert_true(late.account_login is Some(Waiting))
       assert_true(late.account is None)
-      assert_eq(late.account_error, None)
+      assert_true(late.account_error is None)
     }
   }
 }
@@ -189,7 +189,7 @@ test "account sign-in timeout is localized and restores the retry action" {
     assert_true(expired.account_error is Some(SignInTimedOut))
     let (_, retried) = begin_account_login(test_dispatch(), expired)
     assert_true(retried.remote_connecting)
-    assert_eq(retried.account_error, None)
+    assert_true(retried.account_error is None)
   }
 }
 
@@ -211,10 +211,10 @@ test "a failed account cancellation keeps the waiting sign-in cancellable" {
   )
   assert_true(failed.remote_connecting)
   assert_true(failed.account_login is Some(Waiting))
-  assert_eq(failed.account_error, Some(Diagnostic("bridge disconnected")))
+  assert_true(failed.account_error is Some(Diagnostic("bridge disconnected")))
   let (_, retried) = update(test_dispatch(), RemoteCancelClicked, failed)
   assert_true(retried.account_login is Some(Cancelling(..)))
-  assert_eq(retried.account_error, None)
+  assert_true(retried.account_error is None)
 }
 
 ///|

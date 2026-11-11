@@ -354,7 +354,12 @@ fn update_cloud(
     before.conversations.get(creation.id)
     is Some({ outgoing: Some({ input: @cloud.Terminal(shell), .. }), .. }) {
     if shell is Some(shell) {
-      return cloud_shell_not_started(dispatch, next, shell.id, failure.label())
+      return cloud_shell_not_started(
+        dispatch,
+        next,
+        shell.id,
+        CloudFailure(failure),
+      )
     }
     let (report, next) = next.notify_cloud_error(dispatch, failure)
     return (@cmd.batch([command, ..file_commands, report]), next)

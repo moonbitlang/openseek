@@ -74,7 +74,7 @@ pub(all) enum Msg {
   Loaded(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, reply~ : @protocol.SearchTextReply)
   SemanticLoaded(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, reply~ : @protocol.SearchSemanticReply)
   SemanticProgress(root~ : String, session_key~ : String, generation~ : Int32, matches~ : Array[@protocol.SemanticSearchHit], match_count~ : Int32, file_count~ : Int32)
-  RequestFailed(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, code~ : String, message~ : String)
+  RequestFailed(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, code~ : String, message~ : RequestFailure)
 }
 
 #derive(Eq)
@@ -88,11 +88,19 @@ pub fn PatternRepairPhase::equal(Self, Self) -> Bool
 pub fn PatternRepairPhase::not_equal(Self, Self) -> Bool
 pub fn PatternRepairPhase::to_repr(Self) -> @debug.Repr
 
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 type Phase
 pub fn Phase::equal(Self, Self) -> Bool
 pub fn Phase::not_equal(Self, Self) -> Bool
-pub fn Phase::to_repr(Self) -> @debug.Repr
+
+#derive(Eq)
+pub(all) enum RequestFailure {
+  Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
+  Diagnostic(String)
+}
+pub fn RequestFailure::equal(Self, Self) -> Bool
+pub fn RequestFailure::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 type SearchRequestIdentity

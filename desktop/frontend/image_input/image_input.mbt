@@ -8,8 +8,8 @@ pub(all) enum Event {
     documents~ : Array[Document]
   )
   // Picking does not read bytes; cancellation must not settle a browser read.
-  NativePicked(Result[String?, String])
-  Failed(String)
+  NativePicked(Result[String?, Failure])
+  Failed(Failure)
 }
 
 ///|
@@ -156,16 +156,10 @@ fn Selection::dragged(event : @dom.DragEvent) -> Unit {
 
 ///|
 /// Open only when this command executes in response to the user's click.
-pub fn pick(
-  locale~ : @i18n.Locale = English,
-  allow_images~ : Bool = true,
-  emit : @cmd.Emit[Event],
-) -> @cmd.Cmd {
+pub fn pick(allow_images~ : Bool = true, emit : @cmd.Emit[Event]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     Selection::pick(
-      files => {
-        scheduler.add(Selection(files).read(locale~, allow_images~, emit))
-      },
+      files => scheduler.add(Selection(files).read(allow_images~, emit)),
       allow_images~,
     )
   })
@@ -175,22 +169,20 @@ pub fn pick(
 /// Event adapters are called only inside DOM callbacks, never by update/view.
 /// Capturing files is synchronous; byte reads and result delivery are commands.
 pub fn pasted(
-  locale~ : @i18n.Locale = English,
   allow_images~ : Bool = true,
   event : @dom.ClipboardEvent,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
-  Selection(Selection::pasted(event)).read(locale~, allow_images~, emit)
+  Selection(Selection::pasted(event)).read(allow_images~, emit)
 }
 
 ///|
 pub fn dropped(
-  locale~ : @i18n.Locale = English,
   allow_images~ : Bool = true,
   event : @dom.DragEvent,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
-  Selection(Selection::dropped(event)).read(locale~, allow_images~, emit)
+  Selection(Selection::dropped(event)).read(allow_images~, emit)
 }
 
 ///|
@@ -203,7 +195,6 @@ pub fn dragged(event : @dom.DragEvent) -> @cmd.Cmd {
 /// Bound allocations before reading. A failed batch adds no partial selection;
 /// previously attached images remain editable and can still be submitted.
 fn Selection::read(
-  locale~ : @i18n.Locale = English,
   allow_images~ : Bool = true,
   self : Selection,
   emit : @cmd.Emit[Event],
@@ -214,23 +205,9 @@ fn Selection::read(
   @cmd.custom_cmd(scheduler => {
     scheduler.add(emit(Reading))
     @js.Promise::from_async(() => {
-      let result = self.load(locale~, allow_images~) catch {
+      let result = self.load(allow_images~) catch {
         error => {
-          scheduler.add(
-            emit(
-              Failed(
-                match locale {
-                  SimplifiedChinese => "无法读取附件：\{error}"
-                  TraditionalChinese => "無法讀取附件：\{error}"
-                  Japanese =>
-                    "添付ファイルを読み取れません：\{error}"
-                  English => "Could not read attachments: \{error}"
-                  Spanish =>
-                    "No se pudieron leer los archivos adjuntos: \{error}"
-                },
-              ),
-            ),
-          )
+          scheduler.add(emit(Failed(ReadAttachmentsFailed("\{error}"))))
           return
         }
       }
@@ -242,7 +219,6 @@ fn Selection::read(
 
 ///|
 async fn Selection::load(
-  locale~ : @i18n.Locale = English,
   allow_images~ : Bool = true,
   self : Selection,
 ) -> Event {
@@ -250,80 +226,22 @@ async fn Selection::load(
     let blob = file.blob()
     if document_name(file.name()) {
       if blob.get_size() == 0 || blob.get_size() > 20 * 1024 * 1024 {
-        return Failed(
-          match locale {
-            SimplifiedChinese =>
-              "文档不能为空且不得超过 20 MiB：\{file.name()}"
-            TraditionalChinese =>
-              "文件不能為空且不得超過 20 MiB：\{file.name()}"
-            Japanese =>
-              "文書は空でなく、20 MiB 以下にしてください：\{file.name()}"
-            English =>
-              "Documents must be nonempty and 20 MiB or smaller: \{file.name()}"
-            Spanish =>
-              "Los documentos deben tener contenido y ocupar 20 MiB o menos: \{file.name()}"
-          },
-        )
+        return Failed(InvalidDocumentSize(file.name()))
       }
       continue
     }
     if !allow_images {
-      return Failed(
-        match locale {
-          SimplifiedChinese =>
-            "当前模型不支持图片，请选择 PDF、DOCX、XLSX 或 PPTX 文档。"
-          TraditionalChinese =>
-            "目前模型不支援圖片，請選擇 PDF、DOCX、XLSX 或 PPTX 文件。"
-          Japanese =>
-            "このモデルは画像をサポートしていません。PDF、DOCX、XLSX、PPTX の文書を選択してください。"
-          English =>
-            "This model does not support images. Choose PDF, DOCX, XLSX or PPTX documents."
-          Spanish =>
-            "Este modelo no admite imágenes. Elige documentos PDF, DOCX, XLSX o PPTX."
-        },
-      )
+      return Failed(ImagesUnsupported)
     }
     if blob.get_size() > 5 * 1024 * 1024 {
-      return Failed(
-        match locale {
-          SimplifiedChinese => "每张图片不得超过 5 MiB：\{file.name()}"
-          TraditionalChinese =>
-            "每張圖片不得超過 5 MiB：\{file.name()}"
-          Japanese =>
-            "画像は 1 枚あたり 5 MiB 以下にしてください：\{file.name()}"
-          English => "Each image must be 5 MiB or smaller: \{file.name()}"
-          Spanish => "Cada imagen debe ocupar 5 MiB o menos: \{file.name()}"
-        },
-      )
+      return Failed(ImageTooLarge(file.name()))
     }
     if blob.get_size() == 0 {
-      return Failed(
-        match locale {
-          SimplifiedChinese => "图片为空：\{file.name()}"
-          TraditionalChinese => "圖片為空：\{file.name()}"
-          Japanese => "画像が空です：\{file.name()}"
-          English => "Image is empty: \{file.name()}"
-          Spanish => "La imagen está vacía: \{file.name()}"
-        },
-      )
+      return Failed(EmptyImage(file.name()))
     }
     match blob.get_type() {
       "image/png" | "image/jpeg" | "image/webp" | "image/gif" => ()
-      _ =>
-        return Failed(
-          match locale {
-            SimplifiedChinese =>
-              "请选择 PNG、JPEG、WebP、GIF 图片或 PDF、DOCX、XLSX、PPTX 文档：\{file.name()}"
-            TraditionalChinese =>
-              "請選擇 PNG、JPEG、WebP、GIF 圖片或 PDF、DOCX、XLSX、PPTX 文件：\{file.name()}"
-            Japanese =>
-              "PNG、JPEG、WebP、GIF の画像、または PDF、DOCX、XLSX、PPTX の文書を選択してください：\{file.name()}"
-            English =>
-              "Choose PNG, JPEG, WebP or GIF images, or PDF, DOCX, XLSX or PPTX documents: \{file.name()}"
-            Spanish =>
-              "Elige imágenes PNG, JPEG, WebP o GIF, o documentos PDF, DOCX, XLSX o PPTX: \{file.name()}"
-          },
-        )
+      _ => return Failed(UnsupportedFormat(file.name()))
     }
   }
   let images : Array[(String, String)] = []

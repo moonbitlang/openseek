@@ -246,16 +246,15 @@ test "history recovery clears a send error only when the pending submission was 
         conversation.pending is None && !conversation.history_required,
       )
       assert_eq(conversation.submission_sequence, if admitted { 1 } else { 0 })
-      assert_eq(
-        conversation.notice,
-        if admitted {
-          None
-        } else {
-          Some(error.label())
-        },
-      )
+      let expected_notice = if admitted {
+        None
+      } else {
+        Some(Notice::Failure(error))
+      }
+      assert_true(conversation.notice == expected_notice)
       assert_true(
-        conversation.items().any(item => item.kind is Failure(_)) == !admitted,
+        conversation.items(English).any(item => item.kind is Failure(_)) ==
+        !admitted,
       )
       let (retry, _, _) = update(
         recovered,
@@ -345,7 +344,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     }),
   )
   assert_true(
-    full.conversations["session"].items()[1].kind
+    full.conversations["session"].items(English)[1].kind
     is Assistant(prose=Some("你好 🌙"), ..),
   )
   let tool = advance(full, 5, "tool_call", {

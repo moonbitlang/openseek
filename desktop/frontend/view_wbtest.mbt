@@ -11,7 +11,10 @@ test "sidebar preserves the focused host storage error in desktop and browser vi
     let base = {
       ..test_model(),
       is_desktop: desktop,
-      cloud: { ..test_model().cloud, notice: Some("cloud notice"), },
+      cloud: {
+        ..test_model().cloud,
+        notice: Some(EngineDetail("cloud notice")),
+      },
       devices: test_model().devices +
       [
         {

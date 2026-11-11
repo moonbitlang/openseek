@@ -1004,10 +1004,10 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   let attrs = if self.images is Some(emit) {
     attrs
     .on_paste(event => {
-      @image_input.pasted(locale~, allow_images=self.allow_images, event, emit)
+      @image_input.pasted(allow_images=self.allow_images, event, emit)
     })
     .on_drop(event => {
-      @image_input.dropped(locale~, allow_images=self.allow_images, event, emit)
+      @image_input.dropped(allow_images=self.allow_images, event, emit)
     })
     .on_dragover(event => @image_input.dragged(event))
   } else {

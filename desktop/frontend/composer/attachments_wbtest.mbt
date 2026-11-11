@@ -25,7 +25,7 @@ test "native picker results preserve concurrent browser reads and remain pure" {
       result in [
         Ok(None),
         Ok(Some("/Downloads/report.pdf")),
-        Err("picker failed"),
+        Err(@image_input.Bridge(@interop.External("picker failed"))),
       ] {
       let msg = ImageRead(
         input.identity,
@@ -47,7 +47,12 @@ test "native picker results preserve concurrent browser reads and remain pure" {
           assert_false(next.active(input).can_send(input))
         }
         Err(_) => {
-          assert_eq(next.active(input).image_error, Some("picker failed"))
+          assert_true(
+            next.active(input).image_error
+            is Some(
+              Image(@image_input.Bridge(@interop.External("picker failed")))
+            ),
+          )
           assert_true(next.active(input).attachment_requests.is_empty())
         }
       }
@@ -246,11 +251,14 @@ test "document upload starts only once after confirmation and rejects late cance
       input.identity,
       request.root,
       request.id,
-      Err("disk full"),
+      Err(Bridge(@interop.External("disk full"))),
     ),
   )
   assert_eq(failure.active(input).draft, input.draft)
-  assert_eq(failure.active(input).image_error, Some("disk full"))
+  assert_true(
+    failure.active(input).image_error
+    is Some(Bridge(@interop.External("disk full"))),
+  )
   assert_true(failure.active(input).can_send(input))
 }
 
@@ -444,7 +452,7 @@ test "Cloud import failures keep the selected bytes for an explicit retry" {
       input.identity,
       input.root,
       entry.attachment_requests[0].id,
-      Err("offline"),
+      Err(Cloud(@cloud_client.Unreachable)),
     ),
   )
   assert_eq(failed.active(input).attachment_requests[0].source, source)
@@ -452,7 +460,9 @@ test "Cloud import failures keep the selected bytes for an explicit retry" {
     failed.active(input).attachment_requests[0].phase
     is AttachmentConfirming(name="report.pdf"),
   )
-  assert_eq(failed.active(input).image_error, Some("offline"))
+  assert_true(
+    failed.active(input).image_error is Some(Cloud(@cloud_client.Unreachable)),
+  )
   let refreshed = {
     ..input,
     cloud_access: Some({ token: "new-fixture", epoch: 2, }),
@@ -522,7 +532,7 @@ test "running follow-ups submit staged attachments with mixed or attachment-only
             AttachmentConfirming(name="report.pdf"),
           ),
           entry.with_attachment_phase(1, AttachmentImporting),
-          entry.attachment_failed(1, "offline"),
+          entry.attachment_failed(1, Cloud(Unreachable)),
         ] {
         let unready = model.with_entry(blocked_entry)
         assert_true(

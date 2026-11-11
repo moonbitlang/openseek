@@ -79,7 +79,7 @@ pub(all) enum BridgeFailure {
   Unknown
 }
 
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 pub(all) enum BridgeProblem {
   Unavailable
   MalformedReply(String)
@@ -94,7 +94,6 @@ pub(all) enum BridgeProblem {
 pub fn BridgeProblem::equal(Self, Self) -> Bool
 pub fn BridgeProblem::not_equal(Self, Self) -> Bool
 pub fn BridgeProblem::text(Self, @i18n.Locale) -> String
-pub fn BridgeProblem::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, Hash, @debug.Debug)
 pub(all) enum ChannelId {

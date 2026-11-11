@@ -2,7 +2,6 @@
 package "openseek_desktop/frontend/account_failure"
 
 import {
-  "moonbitlang/core/debug",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
@@ -13,7 +12,7 @@ import {
 // Errors
 
 // Types and methods
-#derive(Eq, @debug.Debug)
+#derive(Eq)
 pub(all) enum Failure {
   StorageUnavailable
   StorageReadFailed(String)
@@ -31,7 +30,6 @@ pub(all) enum Failure {
 pub fn Failure::equal(Self, Self) -> Bool
 pub fn Failure::not_equal(Self, Self) -> Bool
 pub fn Failure::text(Self, @i18n.Locale) -> String
-pub fn Failure::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
