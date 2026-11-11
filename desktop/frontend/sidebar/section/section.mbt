@@ -72,29 +72,45 @@ pub(all) struct Action {
 }
 
 ///|
-/// A secondary section action, listed in the heading's menu.
 #derive(Debug, Eq)
-pub(all) enum MenuAction {
-  ImportConversation
+pub(all) enum SecondaryAction {
+  ImportConversation(disabled~ : Bool)
 }
 
 ///|
-fn MenuAction::entry(
-  self : MenuAction,
+fn tool_button(
+  action : Action,
+  icon : @html.Html,
+  command : @cmd.Cmd,
+) -> @html.Html {
+  @html.button(
+    class="sidebar-button sidebar-tool-button",
+    type_="button",
+    title=action.title,
+    disabled=action.disabled,
+    attrs=@html.Attrs::build().aria_label(action.title),
+    on_click=command,
+    [
+      @html.span(class="sidebar-icon", icon),
+      @html.span(class="sidebar-label", action.title),
+    ],
+  )
+}
+
+///|
+fn SecondaryAction::button(
+  self : SecondaryAction,
   id : Id,
   actions : Actions,
   locale : @i18n.Locale,
-) -> @action_menu.Entry {
+) -> @html.Html {
   match self {
-    ImportConversation =>
-      Action({
-        label: @messages.text(locale, ImportConversation),
-        title: "",
-        icon: Some(@icons.icon(@icons.icon_chat_import)),
-        enabled: true,
-        destructive: false,
-        command: (actions.menu)(id, self),
-      })
+    ImportConversation(disabled~) =>
+      tool_button(
+        { title: @messages.text(locale, Import), disabled, },
+        @icons.icon(@icons.icon_chat_import),
+        (actions.secondary)(id, self),
+      )
   }
 }
 
@@ -109,8 +125,7 @@ pub(all) struct Input {
   // `@project.Input.activation`.
   activation : String?
   action : Action?
-  // Empty hides the heading's menu.
-  menu : Array[MenuAction]
+  secondary_actions : Array[SecondaryAction]
   entries : Array[Entry]
 }
 
@@ -122,7 +137,7 @@ pub fn Input::id(self : Input) -> Id {
 ///|
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
-  menu : (Id, MenuAction) -> @cmd.Cmd
+  secondary : (Id, SecondaryAction) -> @cmd.Cmd
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
@@ -232,13 +247,20 @@ fn Actions::entry_component(
 }
 
 ///|
+#derive(Eq)
+pub(all) struct RenderedSection {
+  tools : @html.Html
+  rows : Array[(String, @html.Html)]
+}
+
+///|
 /// Keyed entries retain their component state across insertion and reorder.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[RenderedSection] {
   let entry_inputs = input.map3(locale, search, (input, locale, search) => {
     @vector.from_array(input.entries.map(entry => (locale, entry, search)))
   })
@@ -253,30 +275,7 @@ pub fn component(
     },
     by=entry => entry.1.key(),
   )
-  let menu = input
-    .map2(locale, (input, locale) => (input, locale))
-    .switch_by(
-      pair => {
-        let (input, locale) = pair
-        if input.menu.is_empty() {
-          return @rabbita.Val::constant(@html.nothing)
-        }
-        let label = @messages.text(locale, MoreActions)
-        @action_menu.dropdown(
-          input.id.key(),
-          {
-            label,
-            entries: input.menu.map(action => {
-              action.entry(input.id, actions, locale)
-            }),
-          },
-          class="section-primary-action section-menu-button",
-          @icons.icon(@icons.icon_more),
-        )
-      },
-      by=pair => Repr::Repr((pair.0.id, pair.0.menu, pair.1)).to_string(),
-    )
-  input.map3(entry_rows, menu, (input, entry_rows, menu) => {
+  input.map3(entry_rows, locale, (input, entry_rows, locale) => {
     let mut class = "sidebar-heading section-heading"
     if input.activation is Some(_) {
       class += " active"
@@ -285,10 +284,6 @@ pub fn component(
       let children : Array[@html.Html] = [
         @html.span(class="sidebar-label section-label", label),
       ]
-      // Menu first, primary action last, matching project rows.
-      if !input.menu.is_empty() {
-        children.push(menu)
-      }
       if input.action is Some(action) {
         children.push(
           @html.button(
@@ -306,27 +301,46 @@ pub fn component(
     } else {
       @html.nothing
     }
+    let tools : Array[@html.Html] = []
+    if input.label is None && input.action is Some(action) {
+      tools.push(
+        tool_button(
+          action,
+          @icons.icon(@icons.icon_add),
+          (actions.primary)(input.id),
+        ),
+      )
+    }
+    for action in input.secondary_actions {
+      tools.push(action.button(input.id, actions, locale))
+    }
     let rows : Map[String, @html.Html] = Map([])
     for group in entry_rows {
       for row in group {
         rows[row.0] = row.1
       }
     }
-    [
-      (
-        input.id.key(),
-        @html.div(class="sidebar-group", [
-          heading,
-          @html.div(
-            id=input.id.key() + ":content",
-            class="sidebar-group-content",
-            rows,
-          ),
-        ]),
-      ),
-    ]
+    {
+      tools: @html.fragment(tools),
+      rows: [
+        (
+          input.id.key(),
+          @html.div(class="sidebar-group", [
+            heading,
+            @html.div(
+              id=input.id.key() + ":content",
+              class="sidebar-group-content",
+              rows,
+            ),
+          ]),
+        ),
+      ],
+    }
   })
 }
+
+///|
+pub extend RenderedSection with Eq::{equal, not_equal}
 
 ///|
 pub extend Action with Debug::{to_repr}
@@ -356,10 +370,10 @@ pub extend Input with Debug::{to_repr}
 pub extend Input with Eq::{equal, not_equal}
 
 ///|
-pub extend MenuAction with Debug::{to_repr}
+pub extend SecondaryAction with Debug::{to_repr}
 
 ///|
-pub extend MenuAction with Eq::{equal, not_equal}
+pub extend SecondaryAction with Eq::{equal, not_equal}
 
 ///|
 pub extend Placeholder with Debug::{to_repr}

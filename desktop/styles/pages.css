@@ -283,21 +283,6 @@ button.archived-chat-open:hover .archived-chat-title {
   font-size: var(--font-size-md);
 }
 
-.form-row-controls .setting-font-size-slider {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--color-accent);
-}
-
-.setting-font-size-value {
-  min-width: 4ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
-}
-
 .setting-select {
   width: 100%;
 }

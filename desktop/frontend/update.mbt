@@ -2394,9 +2394,10 @@ fn update_msg(
       let theme = theme
         .map(value => Theme::parse(value, model.theme))
         .unwrap_or(model.theme)
-      let app_font_size = font_size
-        .map(value => AppFontSize::parse(value, model.app_font_size))
-        .unwrap_or(model.app_font_size)
+      let app_font_size = match font_size.bind(AppFontSize::parse) {
+        Some(size) => Some(size)
+        None => model.app_font_size
+      }
       // Startup runs before any conversation exists, so adopting the stored
       // tiers here is enough — every conversation minted afterwards reads
       // them.
@@ -2473,7 +2474,7 @@ fn update_msg(
       (
         @cmd.batch([
           theme.apply(model.system_dark, model.is_desktop, dispatch),
-          app_font_size.apply(),
+          apply_app_font_size(app_font_size),
           codex_cmd,
           codex_effort_cmd,
         ]),
@@ -4338,7 +4339,7 @@ fn update_msg(
         set_remote_access(dispatch, enabled),
         { ..model, remote_access_error: None, },
       )
-    RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
+    RemoteConnectClicked => begin_account_login(dispatch, model)
     AccountRetryClicked => {
       guard !model.remote_connecting else { return (@cmd.none, model) }
       let epoch = model.account_epoch + 1
@@ -4406,7 +4407,7 @@ fn update_msg(
       if !connect_pending {
         return (
           fetch_account(dispatch, true, epoch),
-          { ..model, account_login: None, account_login_create: None, },
+          { ..model, account_login: None, },
         )
       }
       (
@@ -6189,22 +6190,31 @@ fn update_msg(
         )
       }
     }
-    FontSizeAdjusted(delta) => {
-      let size = (model.app_font_size.base_pixels() + delta).clamp(
-        min=AppFontSizeMinPixels,
-        max=AppFontSizeMaxPixels,
+    FontSizeAdjusted(delta) =>
+      (
+        @cmd.custom_cmd(scheduler => {
+          let size = (AppFontSize::current().base_pixels() + delta).clamp(
+            min=AppFontSizeMinPixels,
+            max=AppFontSizeMaxPixels,
+          )
+          scheduler.add(dispatch(FontSizeChanged(size.to_string())))
+        }),
+        model,
       )
-      update(dispatch, FontSizeChanged(size.to_string()), model)
-    }
     FontSizeChanged(value) => {
-      let app_font_size = AppFontSize::parse(value, model.app_font_size)
       let model = { ..model, select_menu: None, }
-      if app_font_size == model.app_font_size {
+      guard AppFontSize::parse(value) is Some(app_font_size) else {
+        return (@cmd.none, model)
+      }
+      if Some(app_font_size) == model.app_font_size {
         (@cmd.none, model)
       } else {
         (
-          @cmd.batch([app_font_size.apply(), app_font_size.save()]),
-          { ..model, app_font_size, },
+          @cmd.batch([
+            apply_app_font_size(Some(app_font_size)),
+            app_font_size.save(),
+          ]),
+          { ..model, app_font_size: Some(app_font_size), },
         )
       }
     }
@@ -7298,7 +7308,7 @@ fn update_msg(
       let (login, model) = if message is @export_dialog.SignIn {
         // Leave the dialog retryable while the rejected account is clearing.
         guard !model.remote_connecting else { return (@cmd.none, model) }
-        begin_account_login(dispatch, model, create=false)
+        begin_account_login(dispatch, model)
       } else {
         (@cmd.none, model)
       }
@@ -16027,7 +16037,7 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
-  assert_eq(restored.app_font_size, AppFontSize(15))
+  assert_eq(restored.app_font_size, Some(AppFontSize(15)))
   assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
@@ -16065,7 +16075,6 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
-  assert_eq(unknown.app_font_size, AppFontSize(14))
   assert_true(unknown.default_model is Deepseek(V4Flash))
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)

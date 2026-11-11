@@ -17,8 +17,6 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   await expect(menu).toBeHidden();
   await expect(newChat).toBeHidden();
   const idle = await row.boundingBox();
-  const hostBounds = await host.boundingBox();
-  expect(idle.x + idle.width - hostBounds.x - hostBounds.width).toBeCloseTo(8, 0);
   const titleBounds = await disclosure.boundingBox();
 
   await row.hover();

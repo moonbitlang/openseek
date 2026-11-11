@@ -12,7 +12,7 @@ test "the sidebar input keeps peer sections in one component value" {
         label: None,
         activation: None,
         action: None,
-        menu: [],
+        secondary_actions: [],
         entries: [],
       },
       {
@@ -20,7 +20,7 @@ test "the sidebar input keeps peer sections in one component value" {
         label: Some("Archived chats"),
         activation: Some("desktop-test"),
         action: None,
-        menu: [],
+        secondary_actions: [],
         entries: [],
       },
     ],

@@ -479,8 +479,6 @@ test('PowerPoint opens every slide with searchable text, cropped images and page
   await expect(slides.nth(1)).toHaveCSS('zoom', '1.1');
   await pinchZoom(page, slides.nth(1).locator('svg text').first());
   await expect(slides.nth(1)).toHaveCSS('zoom', '1.22');
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
   await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('');
   await thumbnails.nth(1).click();
   const box = await slides.nth(1).boundingBox();

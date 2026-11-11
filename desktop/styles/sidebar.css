@@ -96,16 +96,13 @@
   overflow-y: auto;
   overflow-x: hidden;
   border-top: 1px solid var(--color-border);
-  /* Subtract the measured scrollbar lane from the inset so overlay and
-     classic scrollbars leave the same space beside rows. */
-  padding-top: 0;
+  padding-top: var(--space-3);
   padding-bottom: 0.8em;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
 .sidebar-section {
   display: grid;
-  /* Preserve the 1px gap at the default 14px type size, scaling with it. */
   --sidebar-row-gap: calc(1em / 14);
   gap: var(--sidebar-row-gap);
   min-width: 0;
@@ -185,7 +182,7 @@
   gap: var(--space-3);
   min-width: 0;
   min-height: 2em;
-  padding: 0 var(--space-2) 0 var(--space-4);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
@@ -208,7 +205,7 @@
   align-items: center;
   align-self: stretch;
   flex: 1 1 auto;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 .conversation-content > .sidebar-label,
@@ -551,13 +548,13 @@
   color: var(--color-text-primary);
 }
 .conversation-row.nested {
-  padding-left: var(--space-6);
+  padding-left: var(--space-5);
 }
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  /* Align beneath titles: 2.5rem includes the leading twisty cell. */
-  padding: 0 var(--space-4) 0 2.5rem;
+  /* Match nested titles: row inset, twisty cell, then content gap. */
+  padding: 0 var(--space-4) 0 calc(var(--space-5) + 1rem + var(--space-2));
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -615,11 +612,11 @@ button.row-twisty:hover {
 }
 
 .conversation-row.subrun {
-  padding-left: 2rem;
+  padding-left: calc(2rem - var(--space-2));
   color: var(--color-text-muted);
 }
 .conversation-row.subrun.nested {
-  padding-left: 2.5rem;
+  padding-left: calc(2.5rem - var(--space-2));
 }
 
 #project-picker-dialog {
@@ -1164,7 +1161,11 @@ button.row-twisty:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.sidebar-new-project:focus-visible {
+.sidebar-tool-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.sidebar-tool-button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }

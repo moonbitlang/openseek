@@ -16,8 +16,6 @@ test('the approval mode is chosen per conversation and reaches agent.start', asy
   const ask = menu.getByRole('option', { name: /Request approval/ });
   const review = menu.getByRole('option', { name: /Auto-review/ });
   await expect(review).toHaveAttribute('aria-selected', 'true');
-  await expect(ask).toContainText('You answer every permission request yourself');
-  await expect(review).toContainText('asks you only when unsure');
   await ask.click();
   await expect(menu).toHaveCount(0);
   await expect(trigger).toHaveText('Request approval');

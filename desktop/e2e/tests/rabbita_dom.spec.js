@@ -784,18 +784,6 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
   expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
-
-  // OpenRouter uses the ordinary chat model selector and persisted preference.
-  await app.openSession();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
-    .toBe('deepseek-v4-pro');
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'DS Flash', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
-    .toBe('deepseek-flash');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -976,48 +964,3 @@ test('workspace settings dialog opens and persists per-workspace choices', async
 
   expect(app.pageErrors).toEqual([]);
 });
-
-{
-  const modifier = 'Meta';
-
-  test('font size shortcuts clamp and persist', async ({ page }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
-      Object.defineProperty(navigator, 'userAgentData', { get: () => undefined });
-    });
-    const app = new DesktopBrowserHarness(page);
-    await app.install();
-    await app.goto();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const slider = page.getByRole('slider', { name: 'Font size' });
-    await slider.focus();
-    await page.keyboard.press(`${modifier}+Equal`);
-    await expect(slider).toHaveValue('15');
-    await page.keyboard.press(`${modifier}+Shift+Equal`);
-    await expect(slider).toHaveValue('16');
-    await page.keyboard.press(`${modifier}+Minus`);
-    await expect(slider).toHaveValue('15');
-    await page.keyboard.press(`${modifier}+Alt+Equal`);
-    await expect(slider).toHaveValue('15');
-    // Capture must prevent the browser's zoom even for held-key repeats.
-    const prevented = await slider.evaluate((element, modifier) => {
-      const event = new KeyboardEvent('keydown', {
-        key: '+', code: 'Equal', shiftKey: true,
-        metaKey: modifier === 'Meta', ctrlKey: modifier === 'Control',
-        repeat: true, bubbles: true, cancelable: true,
-      });
-      element.dispatchEvent(event);
-      return event.defaultPrevented;
-    }, modifier);
-    expect(prevented).toBe(true);
-    await expect(slider).toHaveValue('16');
-    for (let i = 0; i < 5; i++) await page.keyboard.press(`${modifier}+Equal`);
-    await expect(slider).toHaveValue('18');
-    for (let i = 0; i < 9; i++) await page.keyboard.press(`${modifier}+Minus`);
-    await expect(slider).toHaveValue('12');
-    await expect(page.locator('body')).toHaveCSS('font-size', '12px');
-    await page.reload();
-    await expect(page.locator('body')).toHaveCSS('font-size', '12px');
-    expect(app.pageErrors).toEqual([]);
-  });
-}

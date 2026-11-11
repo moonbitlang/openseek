@@ -1,34 +1,31 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, sessionA } from './support/cloud_harness.js';
 
-for (const desktop of [false, true]) {
-
-  test(`${desktop ? 'desktop' : 'browser'} creates Cloud on first send through the existing composer and unified account`, async ({ page, context }) => {
-    const cloud = new CloudHarness(page, { desktop, cached: false });
-    cloud.device.hostSettings.has_deepseek_key = false;
-    await context.addCookies([{ name: 'session', value: 'fixture-account', url: authOrigin }]);
-    await cloud.install();
-    await cloud.goto();
-    await cloud.create();
-    await expect(page.getByRole('menuitem', { name: 'Local', exact: true })).toHaveCount(0);
-    expect(cloud.device.requests.some(request => request.method === 'fs.create_unnamed_workspace')).toBe(false);
-    expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-    await page.locator('#task').fill('Calculate 1 + 1');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
-    await expect(page.locator('#task')).toHaveValue('');
-    expect(cloud.exchangeCount).toBe(0);
-    const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
-    expect(JSON.parse(send.body)).toEqual({ command: { command: 'prompt', content: 'Calculate 1 + 1' } });
-    expect(cloud.hostRequests.filter(request => request.method === 'cloud.key')).toEqual([]);
-    expect(send.headers.cookie).toBeUndefined();
-    expect(send.headers.authorization).toMatch(/^Bearer ts_fixture-/);
-    expect(cloud.requests.filter(request => request.path.startsWith('/v1/auth/cloud/'))).toEqual([]);
-    expect(cloud.hostRequests.filter(request => request.method === 'cloud.authorize')).toEqual([]);
-    expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
+test('browser creates Cloud on first send through the existing composer and unified account', async ({ page, context }) => {
+  const cloud = new CloudHarness(page, { cached: false });
+  cloud.device.hostSettings.has_deepseek_key = false;
+  await context.addCookies([{ name: 'session', value: 'fixture-account', url: authOrigin }]);
+  await cloud.install();
+  await cloud.goto();
+  await cloud.create();
+  await expect(page.getByRole('menuitem', { name: 'Local', exact: true })).toHaveCount(0);
+  expect(cloud.device.requests.some(request => request.method === 'fs.create_unnamed_workspace')).toBe(false);
+  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+  await page.locator('#task').fill('Calculate 1 + 1');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
+  await expect(page.locator('#task')).toHaveValue('');
+  expect(cloud.exchangeCount).toBe(0);
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+  expect(JSON.parse(send.body)).toEqual({ command: { command: 'prompt', content: 'Calculate 1 + 1' } });
+  expect(cloud.hostRequests.filter(request => request.method === 'cloud.key')).toEqual([]);
+  expect(send.headers.cookie).toBeUndefined();
+  expect(send.headers.authorization).toMatch(/^Bearer ts_fixture-/);
+  expect(cloud.requests.filter(request => request.path.startsWith('/v1/auth/cloud/'))).toEqual([]);
+  expect(cloud.hostRequests.filter(request => request.method === 'cloud.authorize')).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
+  expect(cloud.device.pageErrors).toEqual([]);
+});
 
 test('Cloud list retry recovers after a network failure without resending or losing the draft', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -82,4 +79,3 @@ test('browser account sign-out clears Cloud and never signs out the computer', a
   expect(cloud.requests.filter(request => request.path === '/v2/auth/logout')).toHaveLength(1);
   expect(cloud.hostRequests.filter(request => request.method === 'auth.disconnect')).toEqual([]);
 });
-

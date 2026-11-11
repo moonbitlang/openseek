@@ -530,10 +530,10 @@ fn Model::sidebar_component_sections(
       None
     },
     action: Some({
-      title: @sidebar_messages.text(self.locale, AddProject),
+      title: @sidebar_messages.text(self.locale, New),
       disabled: !self.can_pick_project(dev.channel),
     }),
-    menu: [],
+    secondary_actions: [],
     entries: projects,
   }
   sections.push(work)
@@ -1619,31 +1619,24 @@ fn settings_general_group(
     @ui.form_row(
       @settings.text(locale, FontSize),
       [
-        @html.input(
-          input_type=@html.InputType::Range,
-          id="font-size-slider",
-          list="font-size-ticks",
-          class="setting-font-size-slider",
-          min=AppFontSizeMinPixels,
-          max=AppFontSizeMaxPixels,
-          step=1,
-          value=model.app_font_size.wire(),
-          on_input=dispatch.map(value => FontSizeChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label(@settings.text(locale, FontSize))
-            .aria_valuetext("\{model.app_font_size.wire()}px"),
-        ),
-        @html.datalist(
-          id="font-size-ticks",
-          [
+        FontSizeMenu.setting_control(
+          dispatch,
+          model,
+          id="font-size-select",
+          options=[
             for size in AppFontSizeMinPixels..<=AppFontSizeMaxPixels => {
-              @html.option(value=size.to_string(), "")
+              @select_control.ViewOption(
+                value=size.to_string(),
+                label="\{size}px",
+              )
             }
           ],
+          selected=model.app_font_size
+            .unwrap_or_else(AppFontSize::current)
+            .wire(),
+          aria_label=@settings.text(locale, FontSize),
+          change=dispatch.map(value => FontSizeChanged(value)),
         ),
-        @html.span(class="setting-font-size-value", [
-          @html.text("\{model.app_font_size.wire()}px"),
-        ]),
       ],
       desc=@settings.text(locale, FontSizeDescription),
     ),
@@ -2986,17 +2979,15 @@ fn Model::chat_sidebar_sections(
   // Archived Cloud chats live on Settings' archived page.
   let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
-    label: Some(@sidebar_messages.text(self.locale, Chats)),
+    label: None,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
-      title: @sidebar_messages.text(self.locale, NewChat),
-      disabled: self.cloud.creating_session(),
+      title: @sidebar_messages.text(self.locale, New),
+      disabled: self.cloud_account() is None || self.cloud.creating_session(),
     }),
-    menu: if self.cloud_account() is Some(_) {
-      [ImportConversation]
-    } else {
-      []
-    },
+    secondary_actions: [
+      ImportConversation(disabled=self.cloud_account() is None),
+    ],
     entries,
   }
   [chats]

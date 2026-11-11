@@ -121,10 +121,6 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
     window.desktopEvent('openseek.window.chrome_changed', {});
   });
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await expect.poll(async () => {
-    const box = await toggle.boundingBox();
-    return box.y + box.height / 2;
-  }).toBe(23);
   const original = await toggle.elementHandle();
   for (const name of ['Hide sidebar', 'Show sidebar']) {
     await expect(toggle).toHaveAccessibleName(name);
@@ -168,20 +164,6 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
     width: desktopToggle.width,
     height: desktopToggle.height,
   });
-  await expect.poll(async () => {
-    const box = await toggle.boundingBox();
-    // `--app-header-height` is a calc() over the app font size, and a custom
-    // property's computed value stays unresolved text; resolve it as a length.
-    const headerHeight = await toggle.evaluate(button => {
-      const probe = document.createElement('div');
-      probe.style.height = 'var(--app-header-height)';
-      button.closest('.app').append(probe);
-      const height = probe.getBoundingClientRect().height;
-      probe.remove();
-      return height;
-    });
-    return box.y + box.height / 2 - headerHeight / 2;
-  }).toBe(0);
   await page.getByRole('dialog', { name: 'Settings', exact: true })
     .getByRole('button', { name: 'Dismiss', exact: true }).click();
   // A real click must reach the fixed control above the narrow drawer.

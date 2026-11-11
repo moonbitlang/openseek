@@ -14,8 +14,8 @@ fn parse_engine_model(value : StringView) -> @deepseek.Model? {
 /// The product-facing model name shown on the composer chip.
 fn @deepseek.Model::label(self : @deepseek.Model) -> String {
   match self {
-    Deepseek(V4Pro) => "DS Pro"
-    Deepseek(V4Flash) => "DS Flash"
+    Deepseek(V4Pro) => "DeepSeek Pro"
+    Deepseek(V4Flash) => "DeepSeek Flash"
     Glm(G53) => "GLM 5.3"
     Glm(G53Flash) => "GLM 5.3 Flash"
     Kimi(_) => self.to_string()
@@ -155,14 +155,7 @@ fn conversation_model_key(
 
 ///|
 test "engine models round-trip their wire names" {
-  inspect(
-    parse_engine_model("deepseek-v4-pro").unwrap().label(),
-    content="DS Pro",
-  )
-  inspect(
-    parse_engine_model("deepseek-flash").unwrap().label(),
-    content="DS Flash",
-  )
+  assert_true(parse_engine_model("deepseek-v4-pro") is Some(Deepseek(V4Pro)))
   inspect(
     parse_engine_model("deepseek-flash").unwrap().to_string(),
     content="deepseek-flash",
@@ -171,14 +164,9 @@ test "engine models round-trip their wire names" {
   // selecting the flash model — and is re-registered under the canonical
   // wire name the next time it is saved.
   inspect(
-    parse_engine_model("deepseek-v4-flash").unwrap().label(),
-    content="DS Flash",
-  )
-  inspect(
     parse_engine_model("deepseek-v4-flash").unwrap().to_string(),
     content="deepseek-flash",
   )
-  inspect(parse_engine_model("glm-5.3").unwrap().label(), content="GLM 5.3")
   inspect(
     parse_engine_model("glm-5.3-flash").unwrap().to_string(),
     content="glm-5.3-flash",
@@ -354,13 +342,12 @@ const AppFontSizeMinPixels : Int32 = 12
 const AppFontSizeMaxPixels : Int32 = 18
 
 ///|
-/// Invalid ephemeral localStorage values retain the current readable choice.
-fn AppFontSize::parse(value : String, fallback : AppFontSize) -> AppFontSize {
-  let pixels = @string.parse_int(value) catch { _ => return fallback }
+fn AppFontSize::parse(value : String) -> AppFontSize? {
+  let pixels = @string.parse_int(value) catch { _ => return None }
   if pixels >= AppFontSizeMinPixels && pixels <= AppFontSizeMaxPixels {
-    AppFontSize(pixels)
+    Some(AppFontSize(pixels))
   } else {
-    fallback
+    None
   }
 }
 
@@ -1217,6 +1204,7 @@ priv enum SelectMenu {
   PromptMenu
   FollowupBehaviorMenu
   ThemeMenu
+  FontSizeMenu
   LanguageMenu
   NotificationCornerMenu
   TreeLayoutMenu
@@ -1380,8 +1368,8 @@ priv struct Model {
   theme : Theme
   language : @i18n.Preference
   locale : @i18n.Locale
-  // The Settings type scale shared by app chrome, editor text, and terminals.
-  app_font_size : AppFontSize
+  // No preference leaves the shared app/editor/terminal type scale to CSS.
+  app_font_size : AppFontSize?
   // One local display preference shared by OpenSeek and Codex transcripts.
   minimal_transcript : Bool
   fps_overlay_enabled : Bool
@@ -1581,7 +1569,6 @@ priv struct Model {
   // broadcast), None until the first reply. Desktop-window-only UI.
   account : @protocol.AccountSession?
   account_epoch : Int32
-  account_login_create : Int32?
   account_preferences : AccountPreferences
   remote_access : RemoteAccess?
   // A pending account sign-in or sign-out.
@@ -2789,7 +2776,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     theme: System,
     language: System,
     locale: English,
-    app_font_size: AppFontSize(14),
+    app_font_size: None,
     fps_overlay_enabled: false,
     minimal_transcript: true,
     narrow,
@@ -2870,7 +2857,6 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     api_setup_dismissed: false,
     account: None,
     account_epoch: 0,
-    account_login_create: None,
     account_preferences: AccountPreferences::empty(),
     remote_access: None,
     remote_connecting: false,

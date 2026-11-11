@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness } from './support/cloud_harness.js';
 
-for (const entry of ['sidebar', 'Settings', 'new chat']) {
+for (const entry of ['sidebar', 'Settings']) {
   test(`desktop sign-in from ${entry} stays cancellable and permits a fresh attempt`, async ({ page }, testInfo) => {
     const cloud = new CloudHarness(page, { desktop: true, cached: false });
     cloud.authorization = Promise.withResolvers();
@@ -16,9 +16,7 @@ for (const entry of ['sidebar', 'Settings', 'new chat']) {
     const account = page.getByRole('region', { name: 'Account', exact: true });
     if (entry === 'Settings') await openAccount();
     const scope = entry === 'Settings' ? account : page.locator('aside .cloud-sign-in');
-    const start = () => entry === 'new chat'
-      ? page.getByRole('button', { name: 'New chat', exact: true }).click()
-      : scope.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const start = () => scope.getByRole('button', { name: 'Sign in', exact: true }).click();
 
     await start();
     await expect(scope).toContainText('Finish signing in in your browser…');

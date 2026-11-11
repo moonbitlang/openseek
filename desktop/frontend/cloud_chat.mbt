@@ -122,8 +122,8 @@ fn update_cloud(
     )
     return (command, { ..model, terminal, })
   }
-  if message is @cloud.Create && model.account is None {
-    return begin_account_login(dispatch, model, create=true)
+  if message is @cloud.Create && model.cloud_account() is None {
+    return (@cmd.none, model)
   }
   let before = model.cloud
   let (cloud, command, selected) = @cloud.update(

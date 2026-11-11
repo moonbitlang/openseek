@@ -64,14 +64,28 @@ fn Theme::apply(
 }
 
 ///|
-/// Apply one type scale to CSS and both measured text widgets. The root token
-/// changes ordinary app text; editor and terminal commands apply the visually
-/// matched monospace size and recompute glyph geometry immediately.
-fn AppFontSize::apply(self : AppFontSize) -> @cmd.Cmd {
-  let wire = self.wire()
+/// The mounted document's root size comes from our integer-pixel CSS scale,
+/// including when no user preference overrides the stylesheet default.
+fn AppFontSize::current() -> AppFontSize {
+  let root = @dom.document().get_document_element().unwrap()
+  let size = @dom.window()
+    .get_computed_style(root)
+    .get_property_value("font-size")
+    .trim()
+    .to_owned()
+  AppFontSize::parse(size.strip_suffix("px").unwrap().to_owned()).unwrap()
+}
+
+///|
+/// Keep measured text widgets aligned with CSS even when there is no saved
+/// preference: their pre-mount caches cannot inherit the stylesheet default.
+fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard @dom.document().get_document_element() is Some(root) else { return }
-    root.set_attribute("data-font-size", wire)
+    match font_size {
+      Some(size) => root.set_attribute("data-font-size", size.wire())
+      None => root.remove_attribute("data-font-size")
+    }
     // The registered <length> resolves rem/calc to pixels, just as it does
     // when a new terminal mounts. Read after applying the root setting.
     let size = @dom.window()

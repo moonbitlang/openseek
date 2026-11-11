@@ -170,8 +170,6 @@ test('Files scrolls below the view tabs and keeps desktop row height on narrow s
   const tabs = page.getByRole('tablist', { name: 'Explorer views' });
   await tabs.getByRole('tab', { name: 'Files', exact: true }).click();
   const tree = page.locator('.workspace-file-list');
-  // The first row starts directly below the view tabs, without a second title.
-  expect((await tree.locator('.tree-file').first().boundingBox()).y - (await tree.boundingBox()).y).toBe(4);
   const desktopRowHeight = (await tree.locator('.tree-file').first().boundingBox()).height;
   const tabsBefore = await tabs.boundingBox();
   await tree.locator('.tree-file').last().scrollIntoViewIfNeeded();

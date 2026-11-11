@@ -146,7 +146,7 @@ fn Actions::section_component(
   input : @rabbita.Val[@section.Input],
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[@section.RenderedSection] {
   @section.component(input, self.section, locale, search)
 }
 
@@ -227,7 +227,7 @@ pub fn component(
       )
     }
     for group in section_rows {
-      for row in group {
+      for row in group.rows {
         rows[row.0] = row.1
       }
     }
@@ -380,22 +380,8 @@ pub fn component(
     let tools : Array[@html.Html] = [
       input.search.view(input.locale, actions.search),
     ]
-    for section in input.sections {
-      if section.label is None && section.action is Some(action) {
-        tools.push(
-          @html.button(
-            class="sidebar-button sidebar-new-project",
-            type_="button",
-            title=action.title,
-            disabled=action.disabled,
-            on_click=(actions.section.primary)(section.id),
-            [
-              @html.span(class="sidebar-icon", @icons.icon(@icons.icon_add)),
-              @html.span(class="sidebar-label", action.title),
-            ],
-          ),
-        )
-      }
+    for section in section_rows {
+      tools.push(section.tools)
     }
     @html.aside([
       // The leading edge stays clear for the shell-owned fixed toggle and
