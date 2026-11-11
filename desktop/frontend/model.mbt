@@ -1925,6 +1925,7 @@ priv enum Msg {
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
+  SendArtifactFollowup
   // `Send` for a conversation that is not the one on screen (a `!` command
   // finishing in the background): the same submission, without scrolling the
   // transcript the user is reading.

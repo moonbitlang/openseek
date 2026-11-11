@@ -45,7 +45,7 @@ fn confirm_artifact_followup(
   // keeps its own draft, including while this submission awaits a receipt.
   let (command, submitted) = update_msg(
     dispatch,
-    Send,
+    SendArtifactFollowup,
     closed.replace_conversation({
       ..conversation,
       task: followup.prompt,

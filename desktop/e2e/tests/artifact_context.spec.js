@@ -203,3 +203,17 @@ test('a component question sends the confirmed snapshot and preserves the compos
   await expect(chips).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a refused artifact follow-up leaves the composer draft available', async ({ page }) => {
+  const { app, frame, chips } = await open(page);
+  app.rpcErrors.set('agent.start', 'Follow-up refused');
+  const draft = page.locator('#task');
+  await draft.fill('A separate draft');
+  await frame.getByRole('button', { name: 'Explain this speedup' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Explain this speedup' });
+  await dialog.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('.notification').filter({ hasText: 'Follow-up refused' })).toBeVisible();
+  await expect(draft).toHaveValue('A separate draft');
+  await expect(chips).toHaveCount(0);
+  expect(sends(app)).toHaveLength(1);
+});

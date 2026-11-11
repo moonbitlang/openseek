@@ -4985,7 +4985,7 @@ fn update_msg(
       }
       (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
-    Send | SendFollowup(_) | SendInBackground => {
+    Send | SendFollowup(_) | SendInBackground | SendArtifactFollowup => {
       // Re-pinning is for the reader of this conversation's transcript.
       let scroll = if msg is SendInBackground {
         @cmd.none
@@ -5024,6 +5024,13 @@ fn update_msg(
         .prompt()
         .trim()
         .to_owned()
+      // A failed artifact follow-up can be retried from its button. Only
+      // composer submissions have a draft to restore after a refusal.
+      let (draft, draft_mentions) = if msg is SendArtifactFollowup {
+        ("", [])
+      } else {
+        (conv.task, conv.mentions)
+      }
       let sendable = conv.prompt_ready() &&
         conv.draft_sendable() &&
         model.bridge_state() is Connected &&
@@ -5102,8 +5109,8 @@ fn update_msg(
             submission_id,
             Some(run_id),
             task,
-            conv.task,
-            conv.mentions,
+            draft,
+            draft_mentions,
             followup_behavior,
             images=conv.images,
           )
@@ -5166,8 +5173,8 @@ fn update_msg(
           ..conv,
           pending_prompt: Some({
             submission_id,
-            draft: conv.task,
-            mentions: conv.mentions.copy(),
+            draft,
+            mentions: draft_mentions.copy(),
             images: conv.images,
           }),
         }
