@@ -297,6 +297,20 @@ async test "a server that cannot start is recorded as failed" {
 }
 
 ///|
+/// The MCP host's reply to `request`, sent as a script sends it.
+async fn post_host(host : @mcphost.Service, request : Json) -> Json {
+  guard @json.parse(host.env()["OPENSEEK_MCP"])
+    is { "url": String(url), "token": String(token), .. } else {
+    fail("missing MCP host handoff")
+  }
+  let (response, body) = @http.post_text(url, request.stringify(), headers={
+    "Authorization": "Bearer \{token}",
+  })
+  assert_eq(response.code, 200)
+  @json.parse(body)
+}
+
+///|
 /// Answer one mock-endpoint request with a JSON-RPC success body.
 async fn respond_json(
   conn : @http.ServerConnection,
@@ -428,20 +442,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
     assert_true(missing.content.contains("has no tool `pong`"))
     // Through the real MCP host: a call to the server, and to one that is not
     // configured.
-    let host = @mcphost.Service::start(
-      group,
-      call=(server, tool, arguments) => {
-        guard server == "remote" else {
-          return @agent_tool.respond("no MCP server `\{server}`", is_error=true)
-        }
-        remote.call(tool, arguments)
-      },
-      items=() => @tools.catalog_items(configured),
-    )
-    guard @json.parse(host.env()["OPENSEEK_MCP"])
-      is { "url": String(url), "token": String(token), .. } else {
-      fail("missing MCP host handoff")
-    }
+    let host = @mcphost.Service::start(group, configured)
     let requests : Array[(Json, Json)] = [
       (
         {
@@ -461,22 +462,18 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
         },
         { "version": 1, "content": "ping failed", "is_error": true },
       ),
-      (
-        {
-          "version": 1,
-          "call": { "server": "other", "tool": "ping", "arguments": {} },
-        },
-        { "version": 1, "content": "no MCP server `other`", "is_error": true },
-      ),
     ]
     for pair in requests {
       let (request, expected) = pair
-      let (response, body) = @http.post_text(url, request.stringify(), headers={
-        "Authorization": "Bearer \{token}",
-      })
-      assert_eq(response.code, 200)
-      assert_eq(@json.parse(body), expected)
+      assert_eq(post_host(host, request), expected)
     }
+    assert_true(
+      post_host(host, {
+        "version": 1,
+        "call": { "server": "other", "tool": "ping", "arguments": {} },
+      })
+      is { "is_error": true, .. },
+    )
   }
 }
 
@@ -623,81 +620,210 @@ async test "the catalog lists an unavailable server with its error and no tools"
 }
 
 ///|
-async test "start returns before a server settles, which its task then tells" {
-  @async.with_task_group() <| group => {
-    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-      error if "\{error}".contains("Operation not permitted") => {
-        println("local TCP bind unavailable; skipping deferred connect test")
-        return
+async test "a call or search before a server settles gets the real result, and a server that never settles a bounded error" {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group() <| group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
+        error if "\{error}".contains("Operation not permitted") => {
+          println("local TCP bind unavailable; skipping deferred connect test")
+          return
+        }
+        error => raise error
       }
-      error => raise error
-    }
-    // The handshake waits here until the test lets it through.
-    let gate : @async.Queue[Unit] = Queue(kind=Unbounded)
-    group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-      server.run_forever(
-        (_request, conn) => {
-          let message = @json.parse(conn.text.read_all()) catch { _ => null }
-          let id = match message {
-            { "id": id, .. } => id
-            _ => null
-          }
-          match message {
-            { "method": "server/discover", .. } =>
-              conn.send_response(400, "Bad Request")
-            { "method": "initialize", .. } => {
-              gate.get()
-              respond_json(conn, id, { "protocolVersion": "2025-11-25" })
+      // `slow`'s handshake waits here until the test lets it through; `stuck`
+      // never gets an answer.
+      let gate : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let never : @async.Queue[Unit] = Queue(kind=Unbounded)
+      group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
+        server.run_forever(
+          (request, conn) => {
+            let message = @json.parse(conn.text.read_all()) catch { _ => null }
+            if request.path == "/stuck" {
+              never.get()
             }
-            { "method": "tools/list", .. } =>
-              respond_json(conn, id, {
-                "tools": [
-                  { "name": "ping", "inputSchema": { "type": "object" } },
-                ],
-              })
-            { "method": "tools/call", .. } =>
-              respond_json(conn, id, {
-                "content": [{ "type": "text", "text": "pong" }],
-              })
-            _ => conn.send_response(202, "Accepted")
-          }
-        },
-        max_connections=8,
+            let id = match message {
+              { "id": id, .. } => id
+              _ => null
+            }
+            match message {
+              { "method": "server/discover", .. } =>
+                conn.send_response(400, "Bad Request")
+              { "method": "initialize", .. } => {
+                gate.get()
+                respond_json(conn, id, { "protocolVersion": "2025-11-25" })
+              }
+              { "method": "tools/list", .. } =>
+                respond_json(conn, id, {
+                  "tools": [
+                    { "name": "ping", "inputSchema": { "type": "object" } },
+                  ],
+                })
+              { "method": "tools/call", .. } =>
+                respond_json(conn, id, {
+                  "content": [{ "type": "text", "text": "pong" }],
+                })
+              _ => conn.send_response(202, "Accepted")
+            }
+          },
+          max_connections=8,
+        )
+      }
+      let base = "http://127.0.0.1:\{server.addr.port()}"
+      let servers = @tools.start(
+        AgentTaskScope(group),
+        [
+          Http(
+            name="slow",
+            url="\{base}/slow",
+            headers=Map([]),
+            headers_helper=None,
+          ),
+          Http(
+            name="stuck",
+            url="\{base}/stuck",
+            headers=Map([]),
+            headers_helper=None,
+          ),
+        ],
+        client_name="openseek",
+        client_version="0.1",
       )
+      guard servers is [slow, stuck] else { fail("expected two servers") }
+      let host = @mcphost.Service::start(group, servers)
+      // A script's call and search scoped to `slow`, both sent before it
+      // settles.
+      let called = group.spawn(() => {
+        post_host(host, {
+          "version": 1,
+          "call": { "server": "slow", "tool": "ping", "arguments": {} },
+        })
+      })
+      let searched = group.spawn(() => {
+        post_host(host, { "version": 1, "list": { "server": "slow" } })
+      })
+      @async.sleep(200)
+      assert_true(slow.try_wait() is None)
+      gate.put(())
+      assert_eq(called.wait(), {
+        "version": 1,
+        "content": "pong",
+        "is_error": false,
+      })
+      // The search waited for `slow` alone: it lists `slow`'s tools while
+      // `stuck` is still connecting.
+      guard searched.wait()
+        is {
+          "data": {
+            "items": [
+              { "server": "slow", .. } as listed,
+              { "server": "slow", "tool": { "name": "ping", .. }, .. },
+              { "server": "stuck", "error": String(_), .. },
+            ],
+            ..
+          },
+          ..
+        } &&
+        !(listed is { "error": _, .. }) else {
+        fail("expected `slow`'s tools and `stuck` unavailable")
+      }
+      // A server that never settles ends a call's and a search's wait at
+      // their bounds.
+      guard stuck.call("ping", {}, wait_ms=100) is Respond(late) else {
+        fail("expected a respond action")
+      }
+      assert_true(late.is_error)
+      @tools.settle(servers, timeout_ms=100)
+      assert_true(stuck.try_wait() is None)
+      group.return_immediately()
     }
-    let servers = @tools.start(
-      AgentTaskScope(group),
-      [
-        Http(
-          name="slow",
-          url="http://127.0.0.1:\{server.addr.port()}/mcp",
-          headers=Map([]),
-          headers_helper=None,
-        ),
-      ],
-      client_name="openseek",
-      client_version="0.1",
-    )
-    guard servers is [slow] else { fail("expected one server") }
-    assert_true(slow.try_wait() is None)
-    let connecting : Json = {
-      "server": "slow",
-      "error": "still connecting; search again from a later script",
+  })
+}
+
+///|
+async test "a script that stops mid-call cancels the call on its server" {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group() <| group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
+        error if "\{error}".contains("Operation not permitted") => {
+          println("local TCP bind unavailable; skipping cancellation test")
+          return
+        }
+        error => raise error
+      }
+      // Over Streamable HTTP, a cancelled call aborts its POST, which the
+      // server sees as its event stream failing.
+      let aborted : @async.Queue[Unit] = Queue(kind=Unbounded)
+      group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
+        server.run_forever(
+          (_request, conn) => {
+            let message = @json.parse(conn.text.read_all()) catch { _ => null }
+            let id = match message {
+              { "id": id, .. } => id
+              _ => null
+            }
+            match message {
+              { "method": "server/discover", .. } =>
+                respond_json(conn, id, {
+                  "resultType": "complete",
+                  "supportedVersions": ["2026-07-28"],
+                  "_meta": {
+                    "io.modelcontextprotocol/serverInfo": {
+                      "name": "test",
+                      "version": "1",
+                    },
+                  },
+                  "capabilities": { "tools": {} },
+                })
+              { "method": "tools/list", .. } =>
+                respond_json(conn, id, {
+                  "tools": [
+                    { "name": "hang", "inputSchema": { "type": "object" } },
+                  ],
+                })
+              // Never answered: keep-alives until the client goes away.
+              { "method": "tools/call", .. } => {
+                conn.send_response(200, "OK", extra_headers={
+                  "Content-Type": "text/event-stream",
+                })
+                try {
+                  for ;; {
+                    conn.write_string(": waiting\n\n")
+                    @async.sleep(20)
+                  }
+                } catch {
+                  _ => aborted.put(())
+                }
+              }
+              _ => conn.send_response(202, "Accepted")
+            }
+          },
+          max_connections=8,
+        )
+      }
+      let servers = @tools.start(
+        AgentTaskScope(group),
+        [
+          Http(
+            name="slow",
+            url="http://127.0.0.1:\{server.addr.port()}/mcp",
+            headers=Map([]),
+            headers_helper=None,
+          ),
+        ],
+        client_name="openseek",
+        client_version="0.1",
+      )
+      let host = @mcphost.Service::start(group, servers)
+      // The script stops while its call runs, which closes its connection.
+      let stopped = @async.with_timeout_opt(500, () => {
+        post_host(host, {
+          "version": 1,
+          "call": { "server": "slow", "tool": "hang", "arguments": {} },
+        })
+      })
+      assert_true(stopped is None)
+      aborted.get()
+      group.return_immediately()
     }
-    assert_eq(@tools.catalog_items(servers), [connecting])
-    guard slow.call("ping", {}) is Respond(early) else {
-      fail("expected a respond action")
-    }
-    assert_true(early.is_error)
-    assert_true(early.content.contains("still connecting"))
-    gate.put(())
-    assert_true(slow.connecting.wait() is { connection: Live(_), .. })
-    assert_true(slow.try_wait() is Some({ connection: Live(_), .. }))
-    guard slow.call("ping", {}) is Respond(output) else {
-      fail("expected a respond action")
-    }
-    assert_false(output.is_error)
-    assert_eq(output.content, "pong")
-    group.return_immediately()
-  }
+  })
 }

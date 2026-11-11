@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/mcp/tools" @mcptools,
   "moonbitlang/openseek/internal/loopback_http",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/core/async",

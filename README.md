@@ -321,9 +321,12 @@ moon run . -- mcp --mcp-config mcp.json
 ```
 
 A running engine connects those servers in the background, so a slow server
-does not hold up the session: until a server has finished connecting, a script
-that searches the catalog sees it as unavailable, still connecting, and a call
-to it is an error saying so.
+does not hold up the session. A script that reaches a server still connecting
+waits for it: a call waits for its server, a search naming a server waits for
+that one, and any other search waits for every server. Each wait ends after 60
+seconds, since a server may never finish connecting (a headers helper waiting
+on the user, say); a call then is an error saying so, and a search lists the
+server as unavailable, still connecting.
 
 A running `serve` engine reports what it holds of those servers without being
 asked. It emits an `mcp_status` event as soon as it starts, and again each time
