@@ -288,8 +288,13 @@ fn DiffEditorWidget::install_line_action(self : DiffEditorWidget) -> Unit {
   let button = @rdom.document().create_element("button")
   button.set_attribute("class", "moonbit-diff-line-action")
   button.set_attribute("type", "button")
-  button.set_attribute("aria-label", "Add line comment")
-  button.set_attribute("title", "Add line comment")
+  self.lifetime.push(
+    self.localization.bind(language => {
+      let label = diff_text(language, AddLineComment)
+      button.set_attribute("aria-label", label)
+      button.set_attribute("title", label)
+    }),
+  )
   button.set_attribute("hidden", "")
   let icon = @rdom.document().create_element("span")
   icon.set_attribute("class", "codicon codicon-add")
