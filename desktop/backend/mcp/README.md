@@ -103,23 +103,28 @@ there is no SSE stream and no server-initiated request.
 
 ## Cross-conversation messages
 
-The backend registers `session` alongside the window's browser tools. Include
-`session` in `X-SeekMoon-Tool-Groups` if a configured client filters groups.
-Its actions are `list`, `read`, `send`, `status`, and `cancel`. These operate on
-OpenSeek conversations attached to this host, not Codex threads or independent
-CLI processes.
+The backend registers one tool per action alongside the window's browser
+tools: `session_list`, `session_read`, `session_send`, `session_status`, and
+`session_cancel`. They form the `session` group; include `session` in
+`X-SeekMoon-Tool-Groups` if a configured client filters groups. These operate
+on OpenSeek conversations attached to this host, not Codex threads or
+independent CLI processes.
 
-`list` returns a flat `sessions` array containing only `id`, `title` (or
-`null`), and `workspace`, plus `next_offset` (`null` at the end). Pass the
-returned offset to the next `list` call. `limit` defaults to 20 and allows
-1–50; a serialized size budget may end a page earlier. Offsets refer to the
+`session_list` takes optional `offset` and `limit`. It returns a flat
+`sessions` array containing only `id`, `title` (or `null`), and `workspace`,
+plus `next_offset` (`null` at the end). Pass the returned offset to the next
+`session_list` call. `limit` defaults to 20 and allows 1–50; a serialized size
+budget may end a page earlier. Offsets refer to the
 current inventory, so concurrent additions/removals can change pagination.
 Listing failures use the tool error channel. There is no title/ID search
 parameter; inspect the pages, and ask the user to choose or create a chat if
 the intended one is absent. The sidebar keeps its existing grouped format.
 
-`send` takes `target`, the exact `text`, and a caller-generated `request_id`.
-The sender comes from the bearer grant. Identical retries of that request id
+`session_read` takes a `session` id and returns that conversation's saved
+history.
+
+`session_send` takes `target`, the exact `text`, and a caller-generated
+`request_id`. The sender comes from the bearer grant. Identical retries of that request id
 recover the original request; changing the target or text requires a new id
 and another approval. The user reviews the destination and full message in the
 sender's approval card. Approval may steer a running conversation or start a
@@ -134,9 +139,9 @@ approval returns `pending_approval` with an `id` and remains actionable. Both
 waits are bounded below the ordinary MCP deadlines: 120 seconds for the agent
 bridge and 150 seconds for the HTTP exchange and host handler. Cancelling or
 timing out a waiter also transfers its final result to background notification;
-it does not cancel the host-owned message delivery. `status` reads the current
-outcome; `cancel` withdraws an unapproved request. Neither action creates another
-delivery.
+it does not cancel the host-owned message delivery. `session_status` takes the
+returned `id` and reads the current outcome; `session_cancel` takes it and
+withdraws an unapproved request. Neither creates another delivery.
 After a background decision, the host actively delivers the final result to
 the sender's agent context, steering its current turn or starting a new one.
 Rejections and delivery failures are reported too. A result-notification
@@ -156,8 +161,8 @@ existing turn-bound lifetime and have priority when both need attention.
 Configure the HTTP `seekmoon` entry above (replace an old stdio entry of the
 same name), then start a new OpenSeek turn so its engine reloads the MCP
 configuration. Use two saved OpenSeek chats on the same host. In the sender,
-ask the agent to use `mcp__seekmoon__session` to list chats, find the intended
-target, and send an exact test message. The source chat shows a `session.send`
+ask the agent to use the `seekmoon` `session_*` tools to list chats, find the
+intended target, and send an exact test message. The source chat shows a `session.send`
 approval with the destination and message.
 
 - Approve within 30 seconds: the tool returns `sent` after the target records
