@@ -1,7 +1,7 @@
 ///|
 /// Validate the metadata of this request, without consulting any previous call.
 /// Legacy requests keep their existing handshake and header semantics.
-fn Server::validate_modern(
+fn Server::validate_http_metadata(
   self : Server,
   headers : @http.Headers,
   message : Json,
@@ -35,20 +35,8 @@ fn Server::validate_modern(
       ),
     )
   }
-  guard version == @wire.ModernVersion else {
-    return Some({
-      "jsonrpc": "2.0",
-      "id": id,
-      "error": {
-        "code": -32022,
-        "message": "Unsupported protocol version",
-        "data": { "requested": version, "supported": [@wire.ModernVersion] },
-      },
-    })
-  }
-  guard params.get("_meta")
-    is Some({ "io.modelcontextprotocol/clientCapabilities": Object(_), .. }) else {
-    return Some(failure(id, InvalidParams, "Missing clientCapabilities"))
+  if validate_modern(message) is Some(error) {
+    return Some(error)
   }
   if method_ == "tools/call" {
     guard params.get("name") is Some(String(name)) else {
@@ -64,7 +52,7 @@ fn Server::validate_modern(
     guard matches else {
       return Some(failure(id, -32020, "Missing or mismatched Mcp-Name"))
     }
-    if self.tools.get(name) is Some(tool) {
+    if self.dispatcher.tools.get(name) is Some(tool) {
       let (names, expected) = (
         @wire.parameter_header_names(tool.input_schema),
         @wire.parameter_headers(
@@ -92,6 +80,45 @@ fn Server::validate_modern(
         }
       }
     }
+  }
+  None
+}
+
+///|
+/// Stateless request metadata shared by every transport. HTTP additionally
+/// checks the mirrored headers before calling the dispatcher.
+fn validate_modern(message : Json) -> Json? {
+  guard message
+    is {
+      "params": {
+        "_meta": { "io.modelcontextprotocol/protocolVersion": _, .. },
+        ..
+      },
+      ..
+    } else {
+    return None
+  }
+  guard message
+    is { "id": id, "method": String(_), "params": Object(params), .. } else {
+    return Some(failure(null, InvalidRequest, "Invalid stateless request"))
+  }
+  guard @wire.request_version(message) is Some(version) else {
+    return Some(failure(id, -32020, "Missing protocol version"))
+  }
+  guard version == @wire.ModernVersion else {
+    return Some({
+      "jsonrpc": "2.0",
+      "id": id,
+      "error": {
+        "code": -32022,
+        "message": "Unsupported protocol version",
+        "data": { "requested": version, "supported": [@wire.ModernVersion] },
+      },
+    })
+  }
+  guard params.get("_meta")
+    is Some({ "io.modelcontextprotocol/clientCapabilities": Object(_), .. }) else {
+    return Some(failure(id, InvalidParams, "Missing clientCapabilities"))
   }
   None
 }

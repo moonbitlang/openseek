@@ -16,10 +16,6 @@
 // SSE are not offered: the server sends no requests of its own.
 
 ///|
-/// Reported as `serverInfo.name`.
-const ServerName = "seekmoon"
-
-///|
 /// The two variables a grant travels in. The host sets them on every engine
 /// it starts, and everything that engine runs inherits them.
 pub const UrlEnv : String = "OPENSEEK_DESKTOP_TOOLS_URL"
@@ -58,9 +54,7 @@ pub extend ServerError with Show::{output, to_string}
 ///|
 struct Server {
   listener : @http.Server
-  // Reported as `serverInfo.version`.
-  version : String
-  tools : Map[String, Tool]
+  dispatcher : Dispatcher
   // Bearer token to the conversation it was granted to, and back. A grant
   // lasts for the launch: a conversation's engine is respawned many times
   // (model change, idle retirement), and every one of them is the same caller.
@@ -75,8 +69,7 @@ struct Server {
 pub async fn Server::Server(tools : Array[Tool], version~ : String) -> Server {
   {
     listener: Server(@socket.Addr::parse("127.0.0.1:0")),
-    version,
-    tools: Map::from_array(tools.map(tool => (tool.name, tool))),
+    dispatcher: Dispatcher(tools, version~),
     sessions: Map([]),
     tokens: Map([]),
   }
@@ -95,16 +88,14 @@ pub fn Server::add_tools(
   self : Server,
   tools : Array[Tool],
 ) -> Unit raise ServerError {
-  let names : Map[String, Unit] = Map([])
-  for tool in tools {
-    if self.tools.contains(tool.name) || names.contains(tool.name) {
-      raise ServerError("duplicate host tool: \{tool.name}")
-    }
-    names[tool.name] = ()
-  }
-  for tool in tools {
-    self.tools[tool.name] = tool
-  }
+  self.dispatcher.add_tools(tools)
+}
+
+///|
+/// The shared tool dispatcher, also usable with host-owned stdio streams.
+/// It retains the catalog used by this HTTP server, including later additions.
+pub fn Server::dispatcher(self : Server) -> Dispatcher {
+  self.dispatcher
 }
 
 ///|
@@ -199,11 +190,11 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
           return
         }
       }
-      if self.validate_modern(headers, message) is Some(error) {
+      if self.validate_http_metadata(headers, message) is Some(error) {
         respond_json(conn, 400, "Bad Request", error)
         return
       }
-      match self.dispatch(session, message, groups) {
+      match self.dispatcher.dispatch(message, session~, groups~) {
         Some(answer) =>
           if @wire.request_version(message) is Some(_) &&
             answer is { "error": { "code": -32601, .. }, .. } {

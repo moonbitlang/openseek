@@ -1,9 +1,9 @@
 # Host tools
 
-How agents connect to capabilities contributed by a desktop host. The host
-can run an HTTP MCP server; the engine connects directly using the root
-module's `mcp/streamhttp` client. This package supplies the server infrastructure;
-the host chooses which tools to register.
+How agents connect to capabilities contributed by a desktop host. A shared
+`Dispatcher` handles JSON-RPC messages over HTTP or host-supplied stdio streams.
+The engine's existing connection uses HTTP through the root module's
+`mcp/streamhttp` client. The host chooses which tools to register.
 
 It depends on async HTTP and core codecs, not on Proton, the engine, or any
 package that contributes tools. Dependencies point inward: a package that owns
@@ -27,9 +27,59 @@ continues to negotiate `2025-11-25` and earlier supported revisions.
   and the arguments). A handler returns the `Content` blocks the agent reads,
   text or base64 images, sent as the result's `content` in order; raising makes
   the call a tool-level failure the agent also reads.
-- `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
-  and `tools/call`. Nothing else is offered.
+- `dispatcher.mbt` and `protocol.mbt` — the shared tool catalog and JSON-RPC
+  dispatch for `initialize`, `ping`, `tools/list`, and `tools/call`, plus
+  stateless `server/discover`.
 - `server.mbt` — the listener, the grants, and one task per request.
+- `stdio.mbt` — newline-delimited JSON-RPC over streams supplied by the host.
+
+## Host-owned streams
+
+`Dispatcher(tools, version~)` creates a tool catalog without binding a port.
+`dispatch(message, session~, groups~)` answers one parsed JSON-RPC message,
+returning `None` for a notification or response. The host supplies the
+authenticated conversation and permitted tool groups. These values never come
+from the message or its tool arguments. Omitting `groups` offers all tools.
+
+An existing HTTP server exposes this same dispatcher through
+`server.dispatcher()`. Tool registrations through either object are shared.
+To serve a pipe pair, the host can start:
+
+```mbt nocheck
+group.spawn_bg(() => {
+  server.dispatcher().serve_stdio(
+    input,
+    output,
+    session=trusted_session,
+    groups=["browser"],
+  )
+})
+```
+
+`input` and `output` implement `async/io.BinaryReader` and `BinaryWriter`.
+The host owns their creation, authentication, closure and task lifetime.
+The adapter does not claim process stdin or stdout, so a host can dedicate
+pipes to MCP while retaining its application log channel. All tool handlers
+continue to execute in that host process, with their existing browser and
+session objects. The HTTP bearer-token grant and Origin checks still apply
+to HTTP requests; stdio relies on the host's authenticated stream binding.
+
+Each input line is a UTF-8 JSON-RPC message; each response is one JSON line.
+The receive loop parses and classifies messages before scheduling. Notifications
+and peer responses are ignored without starting tasks. Invalid messages are
+answered directly, including a parse error for malformed JSON, and the adapter
+continues with the next line. Up to 16 requests may be in flight per connection.
+A request keeps its slot until its response is written, so a slow response
+reader also bounds completed results waiting to be sent. At capacity, the
+receive loop waits before starting another task. Response writes are serialized
+so frames cannot interleave. Input EOF drains accepted requests. I/O failures,
+cancellation, or an input line exceeding
+the one-megabyte limit end the adapter and propagate to its owner. The caller
+closes both streams. Dispatcher tool-failure diagnostics use the host's xlog
+handler, as they do over HTTP. The desktop host writes these logs to
+`openseek-desktop.log`. A host using process stdout for MCP must configure
+xlog to write to a file or stderr before serving; xlog defaults to stdout.
+The adapter writes only JSON-RPC responses to its supplied output stream.
 
 ## Configuration
 
@@ -97,9 +147,9 @@ against, per `desktop/AGENTS.md`.
 
 ## Limits
 
-One megabyte per request body, ten seconds to deliver a request, and 150
-seconds per tool handler. Every reply is a single `application/json` body:
-there is no SSE stream and no server-initiated request.
+HTTP allows one megabyte per request body and ten seconds to deliver a request.
+Every HTTP reply is a single `application/json` body. Each tool handler has a
+150-second deadline on either transport. The server sends no requests of its own.
 
 ## Cross-conversation messages
 
