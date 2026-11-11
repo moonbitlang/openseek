@@ -327,3 +327,37 @@ async test "concurrent stdio replies stay whole under pipe backpressure" {
     }
   })
 }
+
+///|
+async test "blocked stderr cannot hold a tool error reply" {
+  let (diagnostics, sink) = @pipe.pipe()
+  defer diagnostics.close()
+  defer sink.close()
+  // Fill an OS pipe without a reader, then use it as the stderr text sink.
+  let filled = @async.with_timeout_opt(50, () => {
+    sink.write(Bytes::make(4 * 1024 * 1024, b'x'))
+  })
+  assert_true(filled is None)
+  @stdio.stderr.text.set_inner(sink)
+  defer @stdio.stderr.text.set_inner(@stdio.stderr)
+  let dispatcher = @mcp.Dispatcher(test_tools(), version="test")
+  with_stdio(dispatcher, "host-session", (responses, requests) => {
+    let reader = @io.Utf8Reader(responses)
+    send_stdio_request(requests, request(1, "tools/call", { "name": "broken" }))
+    let response = @async.with_timeout_opt(1000, () => read_stdio_reply(reader))
+    assert_true(
+      response
+      is Some(
+        {
+          "id": 1,
+          "result": {
+            "content": [{ "text": "the page is gone; open it again", .. }],
+            "isError": true,
+            ..
+          },
+          ..
+        }
+      ),
+    )
+  })
+}

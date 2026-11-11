@@ -70,8 +70,9 @@ adapter continues with the next line. Multiple requests may execute concurrently
 and response writes are serialized so frames cannot interleave. Input EOF
 drains accepted requests. I/O failures, cancellation, or an input line exceeding
 the one-megabyte limit end the adapter and propagate to its owner. The caller
-closes both streams. Dispatcher tool-failure diagnostics go to stderr; protocol
-output contains only JSON-RPC responses.
+closes both streams. Dispatcher tool-failure diagnostics go to stderr with a
+100-millisecond write deadline, so a blocked diagnostic sink cannot hold the
+tool result indefinitely. Protocol output contains only JSON-RPC responses.
 
 ## Configuration
 
