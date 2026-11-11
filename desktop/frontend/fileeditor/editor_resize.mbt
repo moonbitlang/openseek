@@ -142,15 +142,15 @@ let tree_width : Ref[Int32?] = Ref(None)
 /// CSSOM preserves sizes owned by other panels, including the terminal height;
 /// setting one shared `style` attribute here would erase those values.
 fn sync_root_style() -> Unit {
-  guard document_element() is Some(root) else { return }
-  let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
+  guard @dom.document().get_document_element() is Some(root) &&
+    root.to_html_element() is Some(html) else {
+    return
+  }
+  let style = html.get_style()
   // One `style` handle, one `setProperty` per set size, in the same order.
   fn set_px(name : String, size : Int32?) -> Unit {
     if size is Some(px) {
-      let _ : @js.Value = style.apply_with_string("setProperty", [
-        @js.Value::cast_from(name),
-        @js.Value::cast_from("\{px}px"),
-      ])
+      style.set_property(name, "\{px}px")
     }
   }
 
@@ -180,14 +180,9 @@ fn set_tree_width(width : Int32) -> Unit {
 ///|
 /// Toggle a class on the document element (empty string clears it).
 fn set_root_class(class_name : String) -> Unit {
-  if document_element() is Some(root) {
+  if @dom.document().get_document_element() is Some(root) {
     root.set_attribute("class", class_name)
   }
-}
-
-///|
-fn document_element() -> @dom.Element? {
-  @dom.document().query_selector("html").to_option()
 }
 
 ///|

@@ -16,7 +16,7 @@ async fn bind_test_server(skip_message : String) -> @http.Server? {
 
 ///|
 async fn worker_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   handle : (Json) -> String raise,
 ) -> String? {
   guard bind_test_server("local TCP bind unavailable; skipping worker test")
@@ -25,14 +25,14 @@ async fn worker_test_server(
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
-      (request, body, conn) => {
+      (request, conn) => {
         assert_eq(request.path, "/chat/completions")
-        let payload = handle(@json.parse(body.read_all().text()))
+        let payload = handle(@json.parse(conn.text.read_all()))
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write("data: \{payload}\n\n")
-        conn.write("data: [DONE]\n\n")
+        conn.write_string("data: \{payload}\n\n")
+        conn.write_string("data: [DONE]\n\n")
       },
       max_connections=8,
     )
@@ -143,7 +143,7 @@ async test "run_child runs a confined worker to a captured report" {
       guard input is { "worker_root": String(worker_root), .. } else {
         fail("fixture input")
       }
-      assert_eq(@fs.read_file("\{worker_root}/lib/a.txt").text(), "fixed\n")
+      assert_eq(@fs.read_text("\{worker_root}/lib/a.txt"), "fixed\n")
     }
   })
 }
@@ -203,7 +203,7 @@ async test "run_child wires the write scope into the file tools" {
       guard input is { "worker_root": String(worker_root), .. } else {
         fail("fixture input")
       }
-      assert_eq(@fs.read_file("\{worker_root}/outside.txt").text(), "keep\n")
+      assert_eq(@fs.read_text("\{worker_root}/outside.txt"), "keep\n")
     }
   })
 }

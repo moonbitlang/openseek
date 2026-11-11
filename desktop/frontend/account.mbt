@@ -76,7 +76,6 @@ fn fetch_account(
 fn begin_account_login(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  create~ : Bool,
 ) -> (@cmd.Cmd, Model) {
   guard !model.remote_connecting else { return (@cmd.none, model) }
   let epoch = model.account_epoch + 1
@@ -90,15 +89,130 @@ fn begin_account_login(
     {
       ..model,
       account_epoch: epoch,
-      account_login_create: if create {
-        Some(model.chat_navigation_generation)
-      } else {
-        None
-      },
       remote_connecting: true,
-      remote_error: None,
+      account_login: Some(Waiting),
+      account_error: None,
     },
   )
+}
+
+///|
+test "account sign-in cancellation waits for both replies and ignores stale attempts" {
+  for connect_first in [true, false] {
+    let initial = { ..test_model(), is_desktop: true, account: None, }
+    let (_, pending) = begin_account_login(test_dispatch(), initial)
+    let epoch = pending.account_epoch
+    let (_, cancelling) = update(test_dispatch(), RemoteCancelClicked, pending)
+    let connect_reply = AccountLoginCancelled(epoch)
+    let cancel_reply = AccountCancelFinished(epoch)
+    let (_, first) = update(
+      test_dispatch(),
+      if connect_first {
+        connect_reply
+      } else {
+        cancel_reply
+      },
+      cancelling,
+    )
+    assert_true(first.remote_connecting)
+    assert_true(first.account_login is Some(Cancelling(..)))
+    let (_, settled) = update(
+      test_dispatch(),
+      if connect_first {
+        cancel_reply
+      } else {
+        connect_reply
+      },
+      first,
+    )
+    assert_true(settled.remote_connecting)
+    assert_true(settled.account_login is None)
+    let (_, cancelled) = update(
+      test_dispatch(),
+      AccountLoaded(epoch, Ok(None)),
+      settled,
+    )
+    assert_false(cancelled.remote_connecting)
+    assert_eq(cancelled.account_error, None)
+    let (_, retried) = begin_account_login(test_dispatch(), cancelled)
+    assert_eq(retried.account_epoch, epoch + 1)
+    let stale_replies = [
+      connect_reply,
+      cancel_reply,
+      AccountLoginTimedOut(epoch),
+      AccountCancelFailed(epoch, "old cancellation failed"),
+      AccountLoaded(
+        epoch,
+        Ok(
+          Some({
+            token: "old-account-token",
+            user: { user_id: "old-user", login: "old-login", avatar_url: "", },
+          }),
+        ),
+      ),
+    ]
+    for reply in stale_replies {
+      let (_, late) = update(test_dispatch(), reply, retried)
+      assert_true(late.remote_connecting)
+      assert_true(late.account_login is Some(Waiting))
+      assert_true(late.account is None)
+      assert_eq(late.account_error, None)
+    }
+  }
+}
+
+///|
+test "account sign-in timeout is localized and restores the retry action" {
+  let locales : Array[@i18n.Locale] = [
+    English,
+    Spanish,
+    SimplifiedChinese,
+    TraditionalChinese,
+    Japanese,
+  ]
+  for locale in locales {
+    let (_, pending) = begin_account_login(test_dispatch(), {
+      ..test_model(),
+      is_desktop: true,
+      account: None,
+      locale,
+    })
+    let (_, expired) = update(
+      test_dispatch(),
+      AccountLoginTimedOut(pending.account_epoch),
+      pending,
+    )
+    assert_false(expired.remote_connecting)
+    assert_true(expired.account_login is None)
+    assert_eq(
+      expired.account_error,
+      Some(@settings.text(locale, SignInTimedOut)),
+    )
+    let (_, retried) = begin_account_login(test_dispatch(), expired)
+    assert_true(retried.remote_connecting)
+    assert_eq(retried.account_error, None)
+  }
+}
+
+///|
+test "a failed account cancellation keeps the waiting sign-in cancellable" {
+  let (_, pending) = begin_account_login(test_dispatch(), {
+    ..test_model(),
+    is_desktop: true,
+    account: None,
+  })
+  let (_, cancelling) = update(test_dispatch(), RemoteCancelClicked, pending)
+  let (_, failed) = update(
+    test_dispatch(),
+    AccountCancelFailed(pending.account_epoch, "bridge disconnected"),
+    cancelling,
+  )
+  assert_true(failed.remote_connecting)
+  assert_true(failed.account_login is Some(Waiting))
+  assert_eq(failed.account_error, Some("bridge disconnected"))
+  let (_, retried) = update(test_dispatch(), RemoteCancelClicked, failed)
+  assert_true(retried.account_login is Some(Cancelling(..)))
+  assert_eq(retried.account_error, None)
 }
 
 ///|
@@ -109,6 +223,25 @@ fn account_loaded(
   result : Result[@protocol.AccountSession?, String],
 ) -> (@cmd.Cmd, Model) {
   guard epoch == model.account_epoch else { return (@cmd.none, model) }
+  if model.account_login is Some(Cancelling(cancel_pending~, ..)) {
+    if cancel_pending {
+      return (
+        @cmd.none,
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=false, cancel_pending=true),
+          ),
+        },
+      )
+    }
+    // Both operations settled. Read the host's final account in case sign-in
+    // committed just before cancellation reached it.
+    return (
+      fetch_account(dispatch, true, epoch),
+      { ..model, account_login: None, },
+    )
+  }
   let account = match result {
     Ok(account) => account
     Err(message) => {
@@ -125,18 +258,13 @@ fn account_loaded(
           export_dialog,
           file_share_dialog,
           remote_connecting: false,
-          account_login_create: None,
-          remote_error: Some(message),
-          console: if model.is_desktop || model.is_local_console() {
-            model.console
-          } else {
-            { ..model.console, notice: Some(message), }
-          },
+          account_login: None,
+          account_checked: true,
+          account_error: Some(message),
         },
       )
     }
   }
-  let intent = model.account_login_create
   let changed = model.account.map(account => account.token) !=
     account.map(account => account.token)
   let (export_command, export_dialog) = if changed {
@@ -152,12 +280,18 @@ fn account_loaded(
   let next = {
     ..model,
     account,
+    cloud_questions: if changed {
+      @user_questions.Model()
+    } else {
+      model.cloud_questions
+    },
     export_dialog,
     file_share_dialog,
-    account_login_create: None,
     remote_connecting: false,
-    remote_error: None,
-    console: { ..model.console, busy: false, notice: None, },
+    account_login: None,
+    account_checked: true,
+    account_error: None,
+    console: { ..model.console, busy: false, },
   }
   let (retire_command, next) = if changed &&
     !model.is_desktop &&
@@ -214,10 +348,6 @@ fn account_loaded(
     export_command, file_command, retire_command, command, persistence, console_command,
     remote_status,
   ])
-  if account is Some(_) && intent == Some(model.chat_navigation_generation) {
-    let (create, next) = update_cloud(dispatch, @cloud.Create, next)
-    return (@cmd.batch([command, create]), next)
-  }
   (command, next)
 }
 
@@ -232,7 +362,8 @@ fn sign_out_account(
       sign_out(dispatch, token?=model.account.map(account => account.token)),
       {
         ..model,
-        console: { ..model.console, busy: true, notice: None, },
+        account_error: None,
+        console: { ..model.console, busy: true, access_error: None, },
         account_preferences: AccountPreferences::empty(
           request=model.account_preferences.request + 1,
         ),
@@ -248,7 +379,7 @@ fn sign_out_account(
   )
   (
     @cmd.batch([reset, disconnect_remote(dispatch, epoch)]),
-    { ..next, account_login_create: None, remote_connecting: true, },
+    { ..next, remote_connecting: true, },
   )
 }
 

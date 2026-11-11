@@ -5,7 +5,11 @@ import {
 
 import {
   "moonbitlang/openseek/agent_runtime",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "test"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

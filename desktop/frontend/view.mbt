@@ -389,11 +389,13 @@ fn Model::sidebar_component_sections(
       []
     }
   }
-  let listed = (id : String) => dev.sessions.any(item => item.id == id)
+  let listed_ids = Set::from_iter(dev.sessions.iter().map(item => item.id))
+  let listed = (id : String) => listed_ids.contains(id)
   // An archived record has moved out of the live store, so the live list
   // normally cannot contain it; the filter covers the moment between the
   // archive reply and the list refetch that follows it.
-  let archived = (id : String) => dev.archived.any(item => item.id == id)
+  let archived_ids = Set::from_iter(dev.archived.iter().map(item => item.id))
+  let archived = (id : String) => archived_ids.contains(id)
   let chat_selected = !self.cloud_selected() &&
     self.screen is Chat &&
     dev.channel == self.focused
@@ -519,7 +521,7 @@ fn Model::sidebar_component_sections(
   )
   let work : @section.Input = {
     id: @section.Id(source="openseek.projects", channel~),
-    label: @sidebar_messages.text(self.locale, Projects),
+    label: None,
     activation: if openseek_section_activation is Some(_) {
       openseek_section_activation
     } else if codex_context is Some(context) && context.selected {
@@ -528,9 +530,10 @@ fn Model::sidebar_component_sections(
       None
     },
     action: Some({
-      title: @sidebar_messages.text(self.locale, AddProject),
+      title: @sidebar_messages.text(self.locale, New),
       disabled: !self.can_pick_project(dev.channel),
     }),
+    secondary_actions: [],
     entries: projects,
   }
   sections.push(work)
@@ -669,7 +672,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     login: identity.0,
     avatar: identity.1,
     busy: self.console.busy,
-    notice: self.console.notice,
+    notice: self.account_error,
     page: if self.console.page_device is Some(id) {
       DevicePage(
         id~,
@@ -894,9 +897,18 @@ fn settings_account_rows(
   } else if model.remote_connecting {
     [
       @html.span(
+        class="conversation-load-spinner",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        "",
+      ),
+      @html.span(
         class="form-row-description",
         attrs=@html.Attrs::build().role("status"),
-        @settings.text(model.locale, WaitingBrowser),
+        if model.account_login is Some(Cancelling(..)) {
+          shell_text(model.locale, StatusCancelling)
+        } else {
+          @settings.text(model.locale, WaitingBrowser)
+        },
       ),
     ]
   } else {
@@ -908,10 +920,11 @@ fn settings_account_rows(
       ),
     ]
   }
-  if model.remote_connecting && model.is_desktop {
+  if model.is_desktop && model.account_login is Some(_) {
     controls.push(
       @html.button(
         class="button secondary",
+        disabled=model.account_login is Some(Cancelling(..)),
         on_click=dispatch(RemoteCancelClicked),
         @settings.text(model.locale, Cancel),
       ),
@@ -958,7 +971,7 @@ fn settings_account_rows(
       ),
     )
   }
-  if model.settings_section() == Account && model.remote_error is Some(message) {
+  if model.settings_section() == Account && model.account_error is Some(message) {
     rows.push(
       @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
     )
@@ -1058,7 +1071,7 @@ fn remote_access_rows(
     }
   }
   if model.settings_section() == Connections &&
-    model.remote_error is Some(message) {
+    model.remote_access_error is Some(message) {
     rows.push(
       @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
     )
@@ -1190,7 +1203,7 @@ fn provider_hint(model : Model, provider : ApiProvider) -> String {
 /// provider, so a key (official) or an endpoint URL (custom) must be
 /// configured first. The steps follow the selected provider.
 fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let provider = model.api_provider
+  let provider = model.api_provider()
   // Account setup belongs in the user's system browser, even while this
   // guide is displayed over Chat. Bypass Rabbita's dock URL routing.
   let provider_link = (url, label) => {
@@ -1321,16 +1334,16 @@ fn api_settings_rows(
               label=@settings.text(model.locale, CustomUrl),
             ),
           ],
-          selected=model.api_provider.wire(),
+          selected=model.api_provider().wire(),
           aria_label=@settings.text(model.locale, ApiEndpoint),
           change=dispatch.map(value => ProviderChanged(value)),
           disabled=!settings_loaded,
         ),
       ],
-      desc=provider_hint(model, model.api_provider),
+      desc=provider_hint(model, model.api_provider()),
     ),
   ]
-  if model.api_provider is Custom {
+  if model.api_provider() is Custom {
     rows.push(
       @ui.form_row(
         @settings.text(model.locale, EndpointUrl),
@@ -1338,7 +1351,10 @@ fn api_settings_rows(
           @html.input(
             class="setting-input field-surface",
             input_type=@html.InputType::Text,
-            value=model.custom_api_url,
+            value=model
+              .host_settings()
+              .map(settings => settings.endpoint.custom_api_url)
+              .unwrap_or(""),
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
             attrs=@html.Attrs::build()
@@ -1354,14 +1370,13 @@ fn api_settings_rows(
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
-    let (key_label, key_saved) = match model.api_provider {
-      Deepseek =>
-        (@settings.text(model.locale, DeepseekApiKey), model.deepseek_key_saved)
-      Glm => (@settings.text(model.locale, GlmApiKey), model.glm_key_saved)
-      OpenRouter =>
-        (@settings.text(model.locale, OpenRouterApiKey), model.custom_key_saved)
-      Custom =>
-        (@settings.text(model.locale, CustomApiKey), model.custom_key_saved)
+    let key_saved = model.host_settings() is Some({ endpoint, .. }) &&
+      endpoint.key_saved()
+    let key_label = match model.api_provider() {
+      Deepseek => @settings.text(model.locale, DeepseekApiKey)
+      Glm => @settings.text(model.locale, GlmApiKey)
+      OpenRouter => @settings.text(model.locale, OpenRouterApiKey)
+      Custom => @settings.text(model.locale, CustomApiKey)
     }
     rows.push(
       @ui.form_row(
@@ -1408,7 +1423,7 @@ fn settings_runtime_groups(
   // All providers use the composer's model selector; API setup only chooses
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
-    ..if model.host_settings_error is Some(error) {
+    ..if model.host_settings_error() is Some(error) {
       [
         @ui.form_row(
           @settings.text(locale, LoadingSettings),
@@ -1428,7 +1443,7 @@ fn settings_runtime_groups(
       locale,
       dispatch.map(msg => Prompt(msg)),
       ready=settings_loaded,
-      saving=model.settings_saves > 0,
+      saving=model.host_settings_saving(),
       open=model.select_menu is Some(PromptMenu),
       toggle=dispatch(ToggleSelectMenu(PromptMenu)),
       dismiss=dispatch(CloseSelectMenu),
@@ -1449,31 +1464,7 @@ fn settings_runtime_groups(
       ],
       desc=@settings.text(locale, MaxStepsDescription),
     ),
-    @ui.form_row(
-      @settings.text(locale, Followup),
-      [
-        FollowupBehaviorMenu.setting_control(
-          dispatch,
-          model,
-          id="followup-behavior-select",
-          options=[
-            @select_control.ViewOption(
-              value="steer",
-              label=@settings.text(locale, Steer),
-            ),
-            @select_control.ViewOption(
-              value="queue",
-              label=@settings.text(locale, Queue),
-            ),
-          ],
-          selected=model.followup_behavior.wire(),
-          aria_label=@settings.text(locale, Followup),
-          change=dispatch.map(value => FollowupBehaviorChanged(value)),
-          disabled=!settings_loaded,
-        ),
-      ],
-      desc=@settings.text(locale, FollowupDescription),
-    ),
+    settings_followup_row(dispatch, model),
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(
     dispatch,
@@ -1492,12 +1483,47 @@ fn settings_runtime_groups(
 }
 
 ///|
+/// A host owns this preference once its settings load; device-less Cloud keeps
+/// it in the browser.
+fn settings_followup_row(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
+  let locale = model.locale
+  @ui.form_row(
+    @settings.text(locale, Followup),
+    [
+      FollowupBehaviorMenu.setting_control(
+        dispatch,
+        model,
+        id="followup-behavior-select",
+        options=[
+          @select_control.ViewOption(
+            value="steer",
+            label=@settings.text(locale, Steer),
+          ),
+          @select_control.ViewOption(
+            value="queue",
+            label=@settings.text(locale, Queue),
+          ),
+        ],
+        selected=model.followup_behavior().wire(),
+        aria_label=@settings.text(locale, Followup),
+        change=dispatch.map(value => FollowupBehaviorChanged(value)),
+        disabled=model.has_host() && !model.host_settings_loaded(),
+      ),
+    ],
+    desc=@settings.text(locale, FollowupDescription),
+  )
+}
+
+///|
 fn settings_general_group(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> @html.Html {
   let locale = model.locale
-  @ui.form_section(icon_layout, @settings.text(locale, General), [
+  let rows : Array[@html.Html] = [
     @ui.form_row(
       @settings.text(locale, TranscriptView),
       [
@@ -1555,6 +1581,13 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, LanguageDescription),
     ),
+    // Without a host the Engine section is absent, so the Cloud preference is
+    // offered here.
+    ..if model.has_host() {
+      []
+    } else {
+      [settings_followup_row(dispatch, model)]
+    },
     @ui.form_row(
       @settings.text(locale, Theme),
       [
@@ -1586,31 +1619,24 @@ fn settings_general_group(
     @ui.form_row(
       @settings.text(locale, FontSize),
       [
-        @html.input(
-          input_type=@html.InputType::Range,
-          id="font-size-slider",
-          list="font-size-ticks",
-          class="setting-font-size-slider",
-          min=AppFontSizeMinPixels,
-          max=AppFontSizeMaxPixels,
-          step=1,
-          value=model.app_font_size.wire(),
-          on_input=dispatch.map(value => FontSizeChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label(@settings.text(locale, FontSize))
-            .aria_valuetext("\{model.app_font_size.wire()}px"),
-        ),
-        @html.datalist(
-          id="font-size-ticks",
-          [
+        FontSizeMenu.setting_control(
+          dispatch,
+          model,
+          id="font-size-select",
+          options=[
             for size in AppFontSizeMinPixels..<=AppFontSizeMaxPixels => {
-              @html.option(value=size.to_string(), "")
+              @select_control.ViewOption(
+                value=size.to_string(),
+                label="\{size}px",
+              )
             }
           ],
+          selected=model.app_font_size
+            .unwrap_or_else(AppFontSize::current)
+            .wire(),
+          aria_label=@settings.text(locale, FontSize),
+          change=dispatch.map(value => FontSizeChanged(value)),
         ),
-        @html.span(class="setting-font-size-value", [
-          @html.text("\{model.app_font_size.wire()}px"),
-        ]),
       ],
       desc=@settings.text(locale, FontSizeDescription),
     ),
@@ -1670,7 +1696,8 @@ fn settings_general_group(
       ],
       desc=@settings.text(locale, FileTreeDescription),
     ),
-  ])
+  ]
+  @ui.form_section(icon_layout, @settings.text(locale, General), rows)
 }
 
 ///|
@@ -1745,10 +1772,7 @@ fn Model::overview_environment(
     project: @resource.label(project),
     path: project.path,
     branch: conv.branch.filter(branch => !branch.is_empty()),
-    worktree: match conv.workspace {
-      Worktree(name~, ..) => Some(name)
-      Project(..) => None
-    },
+    worktree: conv.worktree_name(),
   }
 }
 
@@ -1811,17 +1835,19 @@ fn overview_view(
       model.changes,
     ).map(summary => {
       summary,
-      rows: @session_changes.rows(
-        locale=model.locale,
-        key,
-        checkout,
-        model.changes,
-        dispatch.map(msg => Changes(msg)),
-      ),
+      rows: () => {
+        @session_changes.rows(
+          locale=model.locale,
+          key,
+          checkout,
+          model.changes,
+          dispatch.map(msg => Changes(msg)),
+        )
+      },
     }),
     connectors={
       summary: @mcp.summary(locale=model.locale, key, model.mcp),
-      rows: @mcp.rows(locale=model.locale, key, model.mcp),
+      rows: () => @mcp.rows(locale=model.locale, key, model.mcp),
       refresh: if @mcp.checking(key, model.mcp) {
         None
       } else {
@@ -1980,13 +2006,22 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// authentication gets its own progress/retry states, and a signed-in page
 /// stays here until its one query-selected device is available. A host built
 /// for another protocol revision stays here until the page is reloaded.
+/// `account_error` is the Cloud account's failure: on the relay that account
+/// is the page's sign-in, so the gate shows it where a page-access failure
+/// would go.
 fn console_gate_view(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
+  account_error~ : String?,
   host_incompatible~ : Bool = false,
 ) -> @html.Html {
   let card : Array[@html.Html] = []
+  let error = if console.access_error is Some(_) {
+    console.access_error
+  } else {
+    account_error
+  }
   if console.page_device is Some(_) &&
     console.auth is AuthSignedIn(..) &&
     host_incompatible {
@@ -1995,15 +2030,8 @@ fn console_gate_view(
   } else if console.page_device is Some(id) {
     match console.auth {
       AuthChecking => {
-        card.push(
-          @html.p(
-            match console.notice {
-              Some(notice) => notice
-              None => shell_text(locale, CheckingSignIn)
-            },
-          ),
-        )
-        if console.notice is Some(_) {
+        card.push(@html.p(error.unwrap_or(shell_text(locale, CheckingSignIn))))
+        if error is Some(_) {
           card.push(
             @html.button(
               class="button primary",
@@ -2090,8 +2118,8 @@ fn console_gate_view(
         },
       ),
     )
-    if console.notice is Some(notice) {
-      card.push(@html.p(notice))
+    if error is Some(message) {
+      card.push(@html.p(message))
     }
   }
   @html.section(class="portal", [
@@ -2305,6 +2333,7 @@ fn view(
             locale=model.locale,
             dispatch,
             model.console,
+            account_error=model.account_error,
             host_incompatible=model.host_incompatible(),
           ),
         ]
@@ -2313,6 +2342,18 @@ fn view(
           CloudTranscript(..) =>
             [
               transcript_html,
+              if model.is_desktop &&
+                model.cloud_identity()
+                is Some(@interop.Cloud(account~, session~)) {
+                model.cloud_questions.view(
+                  session,
+                  model.locale,
+                  true,
+                  dispatch.map(msg => CloudQuestions(account~, msg)),
+                )
+              } else {
+                @html.nothing
+              },
               if model.cloud_archived() &&
                 model.cloud_identity()
                 is Some(@interop.Cloud(account~, session~)) {
@@ -2383,7 +2424,6 @@ fn view(
               } else {
                 composer_html
               },
-              // Last, so showing it never shifts the composer's position.
               if model.overview_open {
                 overview_view(dispatch, model, conv)
               } else {
@@ -2412,6 +2452,7 @@ fn view(
         locale=model.locale,
         dispatch,
         model.console,
+        account_error=model.account_error,
         host_incompatible=true,
       ),
     ]
@@ -2465,13 +2506,8 @@ fn view(
     file_ctx(model).cloud_files is Some(_)
   } else {
     file_panel_visible ||
-    (
-      !model.narrow &&
-      (
-        model.screen is Codex ||
-        (model.screen is Chat && model.active_conversation() is Some(_))
-      )
-    )
+    (model.screen is Chat && model.active_conversation() is Some(_)) ||
+    (!model.narrow && model.screen is Codex)
   }
   let panel_toggle_label = if file_panel_visible {
     shell_text(model.locale, HidePanel)
@@ -2697,7 +2733,7 @@ fn update_confirm_modal(
 /// the session; the composer's BYOK notice keeps the reminder — and the way
 /// back here — visible.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let title = match model.api_provider {
+  let title = match model.api_provider() {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
     Glm => shell_text(model.locale, SetupGlm)
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
@@ -2896,14 +2932,33 @@ fn Model::chat_sidebar_sections(
   if self.account is None {
     entries.push(
       @section.Placeholder({
-        id: "cloud-sign-in",
-        label: @sidebar_messages.text(self.locale, CloudSignInHint),
+        id: if self.is_desktop && self.account_login is Some(_) {
+          "cloud-sign-in-cancel"
+        } else {
+          "cloud-sign-in"
+        },
+        label: match self.account_login {
+          Some(Cancelling(..)) => shell_text(self.locale, StatusCancelling)
+          Some(Waiting) => @settings.text(self.locale, WaitingBrowser)
+          None => @sidebar_messages.text(self.locale, CloudSignInHint)
+        },
         class_name: "cloud-sign-in",
         nested: false,
         openable: false,
         action: Some({
-          title: @settings.text(self.locale, SignIn),
-          disabled: self.remote_connecting,
+          title: @settings.text(
+            self.locale,
+            if self.is_desktop && self.account_login is Some(_) {
+              Cancel
+            } else {
+              SignIn
+            },
+          ),
+          disabled: if self.is_desktop && self.account_login is Some(_) {
+            self.account_login is Some(Cancelling(..))
+          } else {
+            self.remote_connecting
+          },
         }),
       }),
     )
@@ -2937,12 +2992,15 @@ fn Model::chat_sidebar_sections(
   // Archived Cloud chats live on Settings' archived page.
   let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
-    label: @sidebar_messages.text(self.locale, Chats),
+    label: None,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
-      title: @sidebar_messages.text(self.locale, NewChat),
-      disabled: self.cloud.creating_session(),
+      title: @sidebar_messages.text(self.locale, New),
+      disabled: self.cloud_account() is None || self.cloud.creating_session(),
     }),
+    secondary_actions: [
+      ImportConversation(disabled=self.cloud_account() is None),
+    ],
     entries,
   }
   [chats]
@@ -2950,40 +3008,39 @@ fn Model::chat_sidebar_sections(
 
 ///|
 fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  @html.section(class="cloud-home management-page", [
-    @html.h2(@sidebar_messages.text(model.locale, Chats)),
-    if model.is_local_console() && model.remote_error is Some(message) {
-      @html.div([
-        @html.p(message),
-        @html.button(
-          class="button",
-          on_click=dispatch(Console(RefreshClicked)),
-          shell_text(model.locale, TryAgain),
-        ),
-      ])
-    } else if model.console.auth is AuthChecking {
-      @html.div([
-        @html.p(
-          model.console.notice.unwrap_or(
-            shell_text(model.locale, CheckingSignIn),
-          ),
-        ),
-        if model.console.notice is Some(_) {
-          @html.button(
-            class="button",
-            on_click=dispatch(Console(RefreshClicked)),
-            shell_text(model.locale, TryAgain),
-          )
-        } else {
-          @html.nothing
-        },
-      ])
-    } else {
+  let locale = model.locale
+  let children : Array[@html.Html] = [
+    @html.div(class="empty-badge", [@icons.icon(@icons.icon_logo)]),
+    @html.h2(
+      class="empty-title",
+      @sidebar_messages.text(locale, CloudSignInHint),
+    ),
+  ]
+  if model.account_error is Some(message) {
+    children.push(@html.p(class="empty-detail", message))
+    children.push(
       @html.button(
         class="button primary",
+        type_="button",
+        on_click=dispatch(AccountRetryClicked),
+        shell_text(locale, TryAgain),
+      ),
+    )
+  } else if !model.account_checked {
+    children.push(
+      @html.p(class="empty-detail", shell_text(locale, CheckingSignIn)),
+    )
+  } else {
+    children.push(
+      @html.button(
+        class="button primary",
+        type_="button",
         on_click=dispatch(RemoteConnectClicked),
-        shell_text(model.locale, SignInGitHub),
-      )
-    },
+        shell_text(locale, SignInGitHub),
+      ),
+    )
+  }
+  @html.section(class="cloud-home management-page", [
+    @html.div(class="empty", children),
   ])
 }

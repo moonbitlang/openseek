@@ -37,13 +37,26 @@ async fn jobs_directory(scope : @protocol.JobsScope) -> String {
 fn EngineManager::jobs_engine(
   self : EngineManager,
   scope : @protocol.JobsScope,
+  directory : String,
 ) -> ServeEngine? {
+  // Verify workspace placement as well as the session id: duplicate session
+  // ids in different stores must stay isolated.
   guard !scope.archived &&
     self.pump is Serving(sessions~) &&
-    sessions.get(scope.session) is Some(slot) else {
+    sessions.get(scope.session) is Some(slot) &&
+    slot.live() is Some(engine) &&
+    engine.session_root is Some(root) &&
+    directory == jobs_store_path(root, scope.session) else {
     return None
   }
-  slot.live()
+  Some(engine)
+}
+
+///|
+/// The engine's authoritative live job list.
+async fn ServeEngine::jobs_snapshot(self : ServeEngine) -> @wire.Event {
+  let request_id = @uuid.mint()
+  self.job_request(request_id, JobsSnapshot(request_id~))
 }
 
 ///|
@@ -160,27 +173,21 @@ pub async fn list_jobs(
   let errors : Array[String] = []
   let records : Map[String, @wire.JobRecord] = Map([])
   let mut refresh_failed = false
-  if manager.jobs_engine(scope) is Some(engine) {
-    // Verify workspace placement as well as the session id before requesting
-    // live data; duplicate session ids in different stores must stay isolated.
-    if engine.session_root is Some(root) &&
-      directory == jobs_store_path(root, scope.session) {
-      let request_id = @uuid.mint()
-      try engine.job_request(request_id, JobsSnapshot(request_id~)) catch {
-        error => {
-          refresh_failed = true
-          errors.push("Live job refresh failed: \{error}")
+  if manager.jobs_engine(scope, directory) is Some(engine) {
+    try engine.jobs_snapshot() catch {
+      error => {
+        refresh_failed = true
+        errors.push("Live job refresh failed: \{error}")
+      }
+    } noraise {
+      JobsSnapshot(jobs~, ..) =>
+        for job in jobs {
+          let key = "\{job.generation}/\{job.id}"
+          records[key] = job
         }
-      } noraise {
-        JobsSnapshot(jobs~, ..) =>
-          for job in jobs {
-            let key = "\{job.generation}/\{job.id}"
-            records[key] = job
-          }
-        _ => {
-          refresh_failed = true
-          errors.push("Unexpected job snapshot reply")
-        }
+      _ => {
+        refresh_failed = true
+        errors.push("Unexpected job snapshot reply")
       }
     }
   }
@@ -222,6 +229,8 @@ pub async fn list_jobs(
 /// Enumerate lightweight names, then decode only the requested page. Runtime
 /// creation stamps and monotonic UUIDv7 ids (or legacy bg-N ids) keep completed records in stable
 /// order; output writes and terminal metadata updates cannot reshuffle pages.
+/// Jobs the live engine still runs list on the first page instead of at their
+/// positions (see `@protocol.JobsListReply`).
 async fn job_history_page(
   directory : String,
   live : Map[String, @wire.JobRecord],
@@ -231,7 +240,7 @@ async fn job_history_page(
 ) -> @protocol.JobsListReply {
   guard offset >= 0 else { raise EngineError("invalid history offset") }
   let names = @fs.readdir(directory) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => []
+    @os_error.OsError(NotFound, ..) => []
     error => {
       errors.push("Cannot list job history: \{error}")
       []
@@ -257,8 +266,8 @@ async fn job_history_page(
     // discard readable metadata or the authoritative live-engine overlay.
     let stamp = match kind {
       Some(Directory) =>
-        Some(@fs.mtime("\{directory}/\{name}/owner.lock")) catch {
-          @os_error.OSError(_) as error if error.is_ENOENT() => None
+        Some(file_stamp(@fs.mtime("\{directory}/\{name}/owner.lock"))) catch {
+          @os_error.OsError(NotFound, ..) => None
           error => {
             errors.push("Cannot inspect runtime \{name}: \{error}")
             None
@@ -277,26 +286,28 @@ async fn job_history_page(
   }
   generations.sort_by((a, b) => {
     match (a.1, b.1) {
-      (Some(x), Some(y)) => {
-        let seconds = y.0.compare(x.0)
-        if seconds != 0 {
-          seconds
-        } else {
-          let nanos = y.1.compare(x.1)
-          if nanos != 0 {
-            nanos
-          } else {
-            b.0.compare(a.0)
-          }
-        }
-      }
+      (Some(x), Some(y)) => (y.0, y.1, b.0).compare((x.0, x.1, a.0))
       (Some(_), None) => -1
       (None, Some(_)) => 1
       (None, None) => b.0.compare(a.0)
     }
   })
-  let candidates : Array[(String, String)] = []
-  let mut skipped = 0
+  let running : Array[@wire.JobRecord] = []
+  for (generation, _) in generations {
+    let records = [
+      for _, record in live if record.generation == generation &&
+      !record.state.is_terminal() => record
+    ]
+    running.append(newest_first(records, record => record.id))
+  }
+  let jobs : Array[@protocol.JobView] = []
+  if offset == 0 {
+    for record in running {
+      jobs.push(job_view(directory, record, true, refresh_failed~))
+    }
+  }
+  let mut position = 0
+  let mut more = false
   scan~: for (generation, _) in generations {
     let files = @fs.readdir("\{directory}/\{generation}") catch {
       error => {
@@ -314,54 +325,52 @@ async fn job_history_page(
         ids.push(record.id)
       }
     }
-    let ordered = ids.map(id => (job_id_order_key(id), id))
-    ordered.sort_by((a, b) => {
-      let a = a.0
-      let b = b.0
-      let length = b.length().compare(a.length())
-      if length != 0 {
-        length
-      } else {
-        b.compare(a)
-      }
-    })
-    for (_, id) in ordered {
-      if skipped < offset {
-        skipped += 1
-        continue
-      }
-      candidates.push((generation, id))
-      if candidates.length() > 100 {
+    for id in newest_first(ids, id => id) {
+      if position - offset == 100 {
+        more = true
         break scan~
       }
-    }
-  }
-  let jobs : Array[@protocol.JobView] = []
-  for index in 0..<candidates.length().min(100) {
-    let (generation, id) = candidates[index]
-    let key = "\{generation}/\{id}"
-    let record = match live.get(key) {
-      Some(record) => record
-      None =>
-        read_job_record(directory, generation, id) catch {
-          error => {
-            errors.push("Cannot read job \{key}: \{error}")
-            continue
+      position += 1
+      if position <= offset ||
+        running.any(record => record.generation == generation && record.id == id) {
+        continue
+      }
+      let key = "\{generation}/\{id}"
+      let record = match live.get(key) {
+        Some(record) => record
+        None =>
+          read_job_record(directory, generation, id) catch {
+            error => {
+              errors.push("Cannot read job \{key}: \{error}")
+              continue
+            }
           }
-        }
+      }
+      jobs.push(
+        job_view(directory, record, live.contains(key), refresh_failed~),
+      )
     }
-    jobs.push(job_view(directory, record, live.contains(key), refresh_failed~))
   }
   {
     jobs,
     errors,
     selected: None,
-    next_offset: if candidates.length() > 100 {
+    next_offset: if more {
       Some(offset + 100)
     } else {
       None
     },
   }
+}
+
+///|
+/// Order one generation's jobs newest first by job id. Length is compared
+/// before content so historical counters order numerically (`bg-10` after
+/// `bg-9`) regardless of how `String::compare` orders same-prefix strings.
+fn[T] newest_first(items : Array[T], id : (T) -> String) -> Array[T] {
+  let ordered = items.map(item => (job_id_order_key(id(item)), item))
+  ordered.sort_by((a, b) => (b.0.length(), b.0).compare((a.0.length(), a.0)))
+  ordered.map(entry => entry.1)
 }
 
 ///|
@@ -438,13 +447,10 @@ pub async fn read_job(
     metadata_error => {
       // A failed first metadata write must not make a retained live log
       // unreadable. Only the exact owning engine may supply this fallback.
-      guard manager.jobs_engine(scope) is Some(engine) &&
-        engine.session_root is Some(root) &&
-        directory == jobs_store_path(root, scope.session) else {
+      guard manager.jobs_engine(scope, directory) is Some(engine) else {
         raise metadata_error
       }
-      let request_id = @uuid.mint()
-      match engine.job_request(request_id, JobsSnapshot(request_id~)) {
+      match engine.jobs_snapshot() {
         JobsSnapshot(jobs~, ..) => {
           guard jobs
             .iter()
@@ -515,9 +521,7 @@ pub async fn stop_job(
   let record_guard = manager.begin_record_read(target.scope.session)
   defer manager.end_record_read(target.scope.session, record_guard)
   let directory = jobs_directory(target.scope)
-  guard manager.jobs_engine(target.scope) is Some(engine) &&
-    engine.session_root is Some(root) &&
-    directory == jobs_store_path(root, target.scope.session) else {
+  guard manager.jobs_engine(target.scope, directory) is Some(engine) else {
     raise EngineError("job controls require its current live engine")
   }
   let request_id = @uuid.mint()

@@ -34,12 +34,12 @@ priv enum PatternRepairValidation {
 async fn validate_pattern_repair_candidate(
   root : @pathx.Absolute,
   pattern : String,
-  provider : @search.ResolvedMoonxProvider,
+  provider : @moonbit.ResolvedMoonxProvider,
 ) -> PatternRepairValidation {
   if !PatternRepairValidationEnabled {
     PatternRepairUnavailable
   } else {
-    let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+    let result = @processx.collect_output_no_stdin(
       provider.command,
       pattern_repair_provider_args(pattern),
       extra_env=provider.environment,
@@ -51,13 +51,14 @@ async fn validate_pattern_repair_candidate(
           "Cannot validate Pattern Repair candidate: \{error}",
         )
     }
+    let code = result.exit_code
     if code == 0 {
       PatternRepairValid
     } else {
-      let detail = if !stderr.text().trim().is_empty() {
-        stderr.text()
+      let detail = if !result.stderr_text().trim().is_empty() {
+        result.stderr_text()
       } else {
-        stdout.text()
+        result.stdout_text()
       }
       PatternRepairInvalid(pattern_repair_diagnostic(detail))
     }

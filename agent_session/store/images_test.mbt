@@ -1,6 +1,6 @@
 ///|
 async test "resumed inline images are sent directly in user and tool content" {
-  let bytes = @fs.read_file("deepseek/client/testdata/two-colors.png").binary()
+  let bytes = @fs.read_binary("deepseek/client/testdata/two-colors.png")
   let image = @agent_session.Image::from_bytes(bytes)
   let original = @agent_session.Session(
       SessionId("images"),
@@ -44,12 +44,12 @@ async test "resumed inline images are sent directly in user and tool content" {
     group.add_defer(() => server.close())
     let chats : Array[Json] = []
     group.spawn_bg(no_wait=true) <| () => {
-      server.run_forever((request, body, connection) => {
-        let data = body.read_all()
+      server.run_forever((request, connection) => {
+        let data = connection.text.read_all()
         assert_eq(request.path, "/chat/completions")
-        chats.push(@json.parse(data.text()))
+        chats.push(@json.parse(data))
         connection.send_response(200, "OK")
-        connection.write(
+        connection.write_string(
           (
             {
               "choices": [

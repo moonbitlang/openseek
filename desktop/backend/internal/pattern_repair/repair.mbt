@@ -54,7 +54,7 @@ fn pattern_repair_trace_push(trace : Array[String], value : String) -> Unit {
 
 ///|
 /// Run the child and wait for it, within the wall timeout. Its stdout is text
-/// for people and is drained unread; what it did is in its session, and how
+/// for people and is discarded; what it did is in its session, and how
 /// it ended is in its result file.
 async fn run_pattern_repair_process(
   command : String,
@@ -63,55 +63,45 @@ async fn run_pattern_repair_process(
   cwd : String,
   env : Map[String, String],
 ) -> PatternRepairProcessOutcome {
-  let result = @async.with_timeout_opt(PatternRepairWallTimeoutMs, () => {
+  let mut outcome : PatternRepairProcessOutcome = TimedOut
+  @async.with_timeout_opt(PatternRepairWallTimeoutMs, () => {
     @async.with_task_group(group => {
-      let (stdin_reader, stdin_writer) = @process.write_to_process()
-      let (stdout_reader, child_stdout) = @process.read_from_process()
-      let (stderr_reader, child_stderr) = @process.read_from_process()
       let process = @process.spawn(
         group,
         command,
         args,
         inherit_env=false,
         extra_env=env,
-        stdin=stdin_reader,
-        stdout=child_stdout,
-        stderr=child_stderr,
+        stdin=FeedFromParent,
+        stdout=Discard,
+        stderr=Collect,
         cwd~,
         no_console_window=true,
         cancel_handler=@process.graceful_cancel(timeout=3000),
         no_wait=true,
       )
+      let stdin_writer = process.stdin
+      let stderr_reader = process.stderr
       errdefer {
         stdin_writer.close()
         process.cancel()
       }
       // One request line; stdin stays open until the child exits, because the
       // child treats its closing as cancellation.
-      stdin_writer.write(input)
-      let stdout_task = group.spawn(() => {
-        defer stdout_reader.close()
-        while (stdout_reader.read_some(max_len=4096) catch { _ => None })
-              is Some(_) {
-
-        }
-      })
+      stdin_writer.text.write(input)
       let stderr_task = group.spawn(() => {
         defer stderr_reader.close()
-        stderr_reader.read_all().text() catch {
+        stderr_reader.text.read_all() catch {
           _ => ""
         }
       })
       let code = process.wait()
       stdin_writer.close()
-      stdout_task.wait()
-      (code, stderr_task.wait())
+      outcome = Finished(code, stderr_task.wait())
     })
   })
-  match result {
-    Some((code, stderr)) => Finished(code, stderr)
-    None => TimedOut
-  }
+  |> ignore
+  outcome
 }
 
 ///|
@@ -169,8 +159,8 @@ fn pattern_repair_trace_of(session : @agent_session.Session) -> Array[String] {
 async fn pattern_repair_result(
   path : String,
 ) -> Result[(String, String), String]? {
-  let text = @fs.read_file(path).text() catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+  let text = @fs.read_text(path) catch {
+    @os_error.OsError(NotFound, ..) => return None
     error =>
       return Some(
         Err("The Pattern Repair Agent's result is unreadable: \{error}"),
@@ -237,7 +227,7 @@ test "pattern repair trace remains bounded and retains recent events" {
 async fn request_pattern_repair_candidate(
   engine : String,
   agent_env : Map[String, String],
-  provider : @search.ResolvedMoonxProvider,
+  provider : @moonbit.ResolvedMoonxProvider,
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
@@ -350,7 +340,7 @@ fn pattern_repair_failure(
 /// provider preparation and the child's lifetime belong to this operation.
 pub async fn repair(
   engine : String,
-  provider : @search.MoonxProvider,
+  provider : @moonbit.MoonxProvider,
   environment : @engine.PatternRepairEnvironment,
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {
@@ -446,7 +436,7 @@ async test "pattern repair reads its candidate, or why there is none, from the r
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let path = "\{dir}/result.json"
   async fn read(result : String) -> Result[(String, String), String]? {
-    @fs.write_file(path, result, create_mode=CreateOrTruncate)
+    @fs.write_text(path, result, create_mode=CreateOrTruncate)
     pattern_repair_result(path)
   }
   assert_eq(

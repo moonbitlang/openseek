@@ -90,16 +90,7 @@ async fn fork_session_in(
   // this lock on the store's archive and re-read the family under it, so
   // holding it until the side chat exists means the move either takes the
   // side chat along or finds its conversation gone here first.
-  let shared = if side_chat {
-    Some(
-      @fsx.FileLock::acquire(@session_store.archived_root(root).to_path()) catch {
-        error =>
-          raise EngineError("could not lock the archived store: \{error}")
-      },
-    )
-  } else {
-    None
-  }
+  let shared = if side_chat { Some(lock_archived_store(root)) } else { None }
   defer (if shared is Some(lock) { lock.release() })
   guard !side_chat || store.exists(SessionId(payload.session)) else {
     raise EngineError("this conversation was archived or deleted")
@@ -171,7 +162,7 @@ async fn fork_session_in(
       if notice is Some(text) {
         args.push("--notice=\{text}")
       }
-      if resolved_global_skills_dir() is Some(skills) {
+      if @skills.global_library_dir() is Some(skills) {
         args.append(["--global-skills-dir", skills.to_string()])
       }
       args.append(
@@ -291,7 +282,7 @@ async test "fork validates its request before spawning and releases its reader l
   @sys.set_env_var("HOME", dir + "/home")
   @fs.mkdir(dir + "/home/.openseek", recursive=true)
   @fs.mkdir(workspace + "/.openseek", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     dir + "/home/.openseek/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
   )
@@ -323,7 +314,7 @@ async test "fork validates its request before spawning and releases its reader l
   // A worktree conversation's fork starts from its checkout's HEAD, so one
   // whose checkout is gone is refused before anything is spawned or made.
   let registry = workspace + "/.openseek/worktrees.json"
-  @fs.write_file(
+  @fs.write_text(
     registry,
     (
       {
@@ -337,7 +328,7 @@ async test "fork validates its request before spawning and releases its reader l
         ],
       } : Json).stringify(),
   )
-  let unbound = @fs.read_file(registry).text()
+  let unbound = @fs.read_text(registry)
   let missing = try {
     ignore(
       fork_session(manager, payload, on_created=_ => (), on_worktree_changed=(
@@ -356,7 +347,7 @@ async test "fork validates its request before spawning and releases its reader l
       "worktree example for this conversation is gone; rebuild it or archive the conversation",
     ),
   )
-  assert_eq(@fs.read_file(registry).text(), unbound)
+  assert_eq(@fs.read_text(registry), unbound)
   assert_true(manager.record_guards.get("source") is None)
   for session in ["source-sr-1", "source-sr-1-sr-2"] {
     let child = try {

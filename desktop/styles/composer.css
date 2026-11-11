@@ -1,5 +1,4 @@
 
-/* ---------- composer ---------- */
 .composer {
   position: relative;
   background: var(--color-bg-canvas);
@@ -9,11 +8,8 @@
   padding: 0 var(--space-7) var(--space-4);
 }
 
-/* The transcript clips at this boundary, so a line of text stops on a hard
-   edge with nothing between it and the composer. Bleed the canvas colour up
-   over the last few pixels so it fades instead. Painted as an overlay rather
-   than a shadow on the bar: `.transcript` is positioned, so it would draw
-   above a sibling's box-shadow and hide the bleed under its text. */
+/* Fade the clipped transcript edge with an overlay: the positioned transcript
+   would paint over a sibling's box-shadow. */
 .composer::before {
   content: "";
   position: absolute;
@@ -24,8 +20,6 @@
   pointer-events: none;
 }
 
-/* Archived transcripts occupy the composer's grid row but expose only their
-   immutable state and the explicit action that returns the record to live. */
 .archived-read-only-bar {
   display: flex;
   align-items: center;
@@ -64,8 +58,6 @@
 .content.terminal-open .composer {
   display: flex;
   flex-direction: column;
-  /* Compact shared gaps leave room for the draft and actions when the
-     terminal reduces main to its minimum height. */
   gap: var(--space-2);
   max-height: calc(100cqh - var(--topbar-height));
   padding: 0 var(--space-7) var(--space-2);
@@ -101,8 +93,6 @@
   box-shadow: var(--shadow-surface);
 }
 
-/* One row: the attachment button, the draft, and the send/stop actions. The
-   buttons sit on the draft's last line as it grows. */
 .composer-inner {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
@@ -122,11 +112,8 @@
   grid-column: 3;
 }
 
-/* A narrow pane cannot also fit a running turn's stop button and follow-up
-   picker beside the draft. The draft takes its own full row and the buttons
-   drop to a row below it; the actions span the flexible column, so the
-   follow-up picker's label, not the card, gives up width. Beside an open
-   terminal the card also reserves that second row. */
+/* Give running-turn actions a separate row in narrow panes. Spanning the
+   flexible column lets the follow-up label shrink instead of widening the card. */
 @container main-pane (width < 520px) {
   .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
     row-gap: var(--space-3);
@@ -175,22 +162,16 @@
   min-height: 0;
 }
 
-/* Shrink the draft beside a tall terminal, but keep its content-sized minimum:
-   one textarea line, plus the mention row while chips are present. Long draft
-   text still contracts inside the remaining input space and owns its
-   scrollbar. Both upward-opening menus are siblings outside the scrolled
-   context. */
+/* Keep a single-line draft usable beside a tall terminal; long drafts scroll
+   inside the input rather than pushing the composer out of the pane. */
 .content.terminal-open .composer-inner {
   flex: 0 1 auto;
-  /* Match the ordinary single-line draft and attachment button. Keep a
-     compact floor while long drafts shrink beside a tall terminal. */
   grid-template-rows: minmax(2.25rem, 1fr);
   min-height: 3.5rem;
   width: 100%;
 }
 
 .content.terminal-open .composer-inner:has(.mention-tray:not(:empty)) {
-  /* One mention row above the line. */
   grid-template-rows: minmax(4.5rem, 1fr);
   min-height: 5.75rem;
 }
@@ -223,8 +204,6 @@
   flex: 0 1 auto;
 }
 
-/* mention chips ($ skills, # symbols) above the textarea; the tray is
-   always in the DOM and collapses to nothing when there are no chips */
 .mention-tray {
   display: flex;
   align-items: flex-start;
@@ -300,9 +279,7 @@
 .mention-remove:hover {
   background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
-/* chips re-rendered inside a sent message (parsed back out of its
-   <user_mentions> envelope): same chip chrome, no remove button, so the
-   padding evens out; a small gap before the typed text below */
+/* Sent mentions have no remove button, so their padding is symmetric. */
 .user-bubble .mention-tray {
   margin: 0 0 var(--space-3);
 }
@@ -310,7 +287,6 @@
   padding: var(--space-1) var(--space-4);
 }
 
-/* slash/skill completion menu, floated above the composer */
 .completion-menu {
   position: absolute;
   left: 0;
@@ -347,33 +323,14 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
-/* state line for a # menu whose results are still loading or empty */
 .completion-empty {
   padding: var(--space-4) var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
 
-/* transient notice docked above the composer (e.g. compaction) */
-/* the console's connection banner: a permanent composer child whose
-   class flips visibility, so the textarea's index never shifts */
-.composer-banner {
-  max-width: 820px;
-  margin: 0 auto var(--space-4);
-  padding: var(--space-3) var(--space-5);
-  border: 1px solid var(--color-seam);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  overflow-wrap: anywhere;
-}
-/* The open turn's heartbeat, docked directly above the textarea. Aligned to
-   the same 820px column as the notices but deliberately without their card:
-   it is the only row up here that repaints every second, and a bordered box
-   doing that reads as an alarm. The mark's pulse is the signal; the text is
-   detail for whoever looks. */
+/* Ordinary heartbeat rows stay unboxed; retry rows opt into the shared
+   composer-context-row surface. */
 .composer-running {
   display: flex;
   align-items: center;
@@ -396,28 +353,12 @@
   min-width: 0;
 }
 
-.composer-notice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  max-width: 820px;
-  margin: 0 auto var(--space-4);
-  padding: var(--space-3) var(--space-5);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-}
 .composer-notice-icon {
   --icon-size: var(--icon-md);
   flex: none;
   display: inline-flex;
   align-items: center;
 }
-/* The notice's own text/action split, used by the vanished-worktree banner:
-   the sentence takes the slack so the actions stay right-aligned. Metrics
-   live here because this compact inline control is not an ordinary `.button`. */
 .composer-notice-text {
   flex: 1;
   min-width: 0;
@@ -435,16 +376,10 @@
   background: var(--color-bg-subtle);
 }
 
-/* A permission question the turn is blocked on: an ordinary composer notice,
-   no louder than its neighbours. What marks it out is the pair of decisions on
-   its right. Blue is reserved for selection, so the container takes no accent
-   of its own. */
 .composer-approval-tool {
   color: var(--color-text-primary);
   font-weight: 600;
 }
-/* With a program attached the card stops being a one-line row: the question
-   and its decisions keep the row, and the code sits under them. */
 .composer-approval-full {
   display: block;
 }
@@ -453,14 +388,8 @@
   align-items: center;
   gap: var(--space-4);
 }
-/* The program the decision is actually about, highlighted by the same helper
-   the transcript's mbtx card uses. Token colours come from the
-   `--vscode-token-*` bindings in `viewer_theme.css`, which is why this class
-   is named in that file's theme-bridge selector; nothing here sets `color`,
-   or it would override them.
-
-   Inside the expandable approval details, keep the full program scrollable
-   rather than truncating it so the complete operation can be inspected. */
+/* viewer_theme.css supplies source-token colors. Keep the complete program
+   scrollable so approvals never hide part of the proposed operation. */
 .composer-approval-body {
   margin: var(--space-4) 0 0;
   padding: var(--space-4) var(--space-5);
@@ -477,18 +406,6 @@
 .composer-approval-message {
   font-family: inherit;
 }
-/* The decisions wear the composer chip's shape, not a dialog button's: no
-   border, a plain fill that lifts on hover. The chips they match sit one row
-   below this card, which is the comparison a reader actually makes.
-
-   The fill is `--color-bg-surface` rather than the chips' own
-   `--color-control-surface`. That token is `--color-bg-subtle` at 74% alpha,
-   which separates against the composer card it was made for and vanishes here,
-   where the notice background IS `--color-bg-subtle`. Same intent — a control
-   that reads as raised — spelled for the surface it actually sits on.
-
-   The global `button` rule already supplies the transparent border, the
-   radius, and the cursor. */
 .composer-approval-action {
   flex: none;
   padding: var(--space-2) var(--space-5);
@@ -501,10 +418,8 @@
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-/* Told apart by emphasis, never by hue: the grant carries the primary colour
-   and weight, the refusal recedes. Deliberately NOT red — refusing is the
-   conservative answer here, and dressing it as the destructive one gets the
-   stakes backwards. */
+/* Refusing permission is not a destructive action; distinguish allow by weight
+   rather than giving refusal a danger color. */
 .composer-approval-allow {
   color: var(--color-text-primary);
   font-weight: 600;
@@ -516,28 +431,9 @@
   white-space: nowrap;
 }
 
-/* steering input not yet folded into the running turn: a panel docked
-   above the composer until the engine settles it */
-.pending-steers {
-  max-width: 820px;
-  margin: 0 auto var(--space-4);
-  border: 1px solid var(--color-border);
+.pending-steers,
+.queued-inputs {
   border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
-  padding: var(--space-2) var(--space-5);
-}
-.pending-steer-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-2) 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
-}
-.pending-steer-row + .pending-steer-row {
-  border-top: 1px solid var(--color-divider);
 }
 .pending-steer-icon {
   color: var(--color-text-secondary);
@@ -556,29 +452,6 @@
   font-size: var(--font-size-xs);
 }
 
-/* Queued follow-ups are composer state until the engine promotes them into
-   the conversation. Keep them in the same centered lane as pending steers. */
-.queued-inputs {
-  max-width: 820px;
-  margin: 0 auto var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
-  padding: var(--space-2) var(--space-5);
-}
-.queued-input-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-2) 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
-}
-.queued-input-row + .queued-input-row {
-  border-top: 1px solid var(--color-divider);
-}
 .queued-input-icon {
   flex: none;
   color: var(--color-text-secondary);
@@ -638,8 +511,6 @@
 
 .composer textarea,
 .composer-textarea {
-  /* Grow with wrapped or explicit lines; once the cap is reached, keep the
-     composer stable and scroll the textarea's contents instead. */
   field-sizing: content;
   width: 100%;
   min-height: 2em;
@@ -659,10 +530,7 @@
   padding: var(--space-2) var(--space-3);
 }
 
-/* The settings for the next turn, under the card in its column: how the turn
-   may act (approvals, worktree, git) leads, the model and reasoning trail.
-   The row is the containing block and size container for the menus its
-   controls open, so they measure against the composer's width. */
+/* Menus measure against the toolbar's width, not their trigger's width. */
 .composer-toolbar {
   position: relative;
   container-type: inline-size;
@@ -700,8 +568,36 @@
   margin-left: auto;
 }
 
-/* Toolbar controls are quiet text that lifts on hover; only state (a
-   worktree launch, a failing check, full access) keeps its colour. */
+.composer-worktree {
+  --icon-size: var(--icon-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-control-surface);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  white-space: nowrap;
+}
+button.composer-worktree {
+  cursor: pointer;
+}
+button.composer-worktree:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.composer-worktree.on {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
 .composer-toolbar :is(
   .composer-model,
   .composer-git-button,
@@ -713,8 +609,6 @@
   font-size: var(--font-size-sm);
 }
 
-/* A worktree launch is the one toolbar mode that changes where the turn
-   runs, so it stays a filled chip rather than coloured text. */
 .composer-toolbar .composer-worktree.on {
   border-color: var(--color-accent-border);
   border-radius: var(--radius-md);
@@ -722,7 +616,6 @@
   color: var(--color-accent);
 }
 
-/* Toolbar pickers read as their selected value alone. */
 .composer-toolbar :is(.composer-model-glyph, .composer-model-chevron) {
   display: none;
 }
@@ -746,7 +639,6 @@
   color: var(--color-text-muted);
 }
 
-/* A flex box, so the picker inside can shrink its label in a narrow row. */
 .composer-followup {
   display: flex;
   min-width: 0;
@@ -756,10 +648,8 @@
   display: none;
 }
 
-/* The git chip. It deliberately does *not* establish a containing block: the
-   popover anchors to `.composer-toolbar` instead, so its width is the
-   composer's business rather than the chip's position along the row. See
-   `.composer-git-menu`. */
+/* Do not establish a containing block here: .composer-git-menu must measure
+   against .composer-toolbar. */
 .composer-git {
   min-width: 0;
   flex: 0 1 auto;
@@ -777,7 +667,6 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
-  /* Same box as `.composer-model`, so the two chips sit at one height. */
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-control-surface);
@@ -788,8 +677,6 @@
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-/* Same hover as the model chip beside it: two adjacent buttons that light up
-   differently read as an accident. */
 .composer-git-button:hover,
 .composer-git-button.open {
   background: var(--color-bg-subtle);
@@ -809,9 +696,7 @@
   align-items: center;
   flex: none;
 }
-/* The chip is tinted by CI, which is the part that changes while nobody is
-   looking. Which pull request it is, and whether it is a draft, are in the
-   label — one mark carrying two meanings is what made the old chip unreadable. */
+/* Glyph color represents CI status, not the pull request's lifecycle state. */
 .composer-git-button.passed .composer-git-glyph,
 .composer-git-glyph.passed {
   color: var(--color-success);
@@ -829,14 +714,8 @@
   color: var(--color-text-muted);
 }
 
-/* Opens upward, from the composer's left edge: the composer sits at the bottom
-   of the window, and `main` clips anything wider than it.
-
-   Sized against the composer rather than the viewport, because the two come
-   apart — dragging the editor panel wide squeezes the chat column to its 240px
-   floor on a screen of any width, and a menu measured in `vw` would spill out
-   of it and be cut off with no way to scroll to the rest. `100%` here is the
-   composer, which by construction fits. */
+/* Limit width to the toolbar, not the viewport: the editor can narrow the
+   conversation even in a wide window, and main clips overflowing menus. */
 .composer-git-menu {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -878,7 +757,6 @@
   white-space: nowrap;
   color: var(--color-text-primary);
 }
-/* Secondary text is pushed to the right and gives up its width first. */
 .composer-git-note {
   flex: 0 1 auto;
   min-width: 0;
@@ -979,7 +857,6 @@
   margin: calc(-1 * var(--space-2)) var(--space-1) 0 var(--space-2);
   border-right: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
-  color: var(--color-text-muted);
   transform: rotate(45deg);
 }
 
@@ -1077,7 +954,7 @@
   min-width: 2.25rem;
   height: 2.25rem;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: transparent;
   padding: 0;
   position: relative;
@@ -1094,7 +971,6 @@
 .composer-attach:focus-within {
   outline: 2px solid var(--color-text-primary);
   outline-offset: 3px;
-  border-radius: 3px;
 }
 .composer-image-notice {
   font-size: var(--font-size-sm);
@@ -1204,7 +1080,7 @@
 }
 
 .changes-popup-header, .changes-popup-heading, .changes-popup-footer,
-.changes-excerpt-header, .changes-file-header {
+.changes-excerpt-header {
   display: flex;
   align-items: center;
   gap: var(--space-5);
@@ -1242,6 +1118,7 @@
   display: grid;
   grid-template-columns: var(--icon-sm) minmax(0, 1fr) auto auto;
   align-items: start;
+  gap: var(--space-5);
   width: 100%;
   border: 0;
   padding: var(--space-5) 0;
@@ -1358,9 +1235,6 @@
   text-decoration: none;
 }
 
-/* Shell mode: a draft that begins with `!` is a shell command. The card
-   takes the accent border, the command reads as monospace, and the mode chip
-   sits beside the textarea (Backspace in an empty command leaves the mode). */
 .composer-inner:has(> .composer-input.shell-mode) {
   border-color: var(--color-accent-border);
 }
@@ -1380,13 +1254,8 @@
   display: none;
 }
 
-/* The `!` that makes the draft a command is drawn in red. A textarea cannot
-   color one character, so in shell mode its text is painted through its
-   background: a red patch exactly one character wide and one line tall sits
-   over the first cell, above a layer in the ordinary text color, and both are
-   clipped to the glyphs. `local` keeps the patch on the first line when a
-   long command scrolls. The 6px and 4px are the textarea's own left and top
-   padding. */
+/* A textarea cannot style individual characters. Clip two background layers
+   to its glyphs to color the leading !; local attachment follows text scrolling. */
 .composer-input.shell-mode > textarea {
   font-family: var(--font-family-mono);
   color: transparent;

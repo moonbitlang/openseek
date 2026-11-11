@@ -7,7 +7,6 @@ pub(all) enum Failure {
   Malformed
   ExportUnavailable
   ServiceNotConfigured
-  CredentialServiceUnavailable
   SignInFailed(String)
   InvalidImage
 }
@@ -26,8 +25,6 @@ pub fn Failure::label(self : Failure) -> String {
       "Cloud model credentials are not configured. Contact the service administrator."
     SignInFailed(message) => message
     InvalidImage => "Choose a valid PNG, JPEG, GIF or WebP image up to 5 MiB."
-    CredentialServiceUnavailable =>
-      "The sign-in service is unavailable. Try again."
   }
 }
 

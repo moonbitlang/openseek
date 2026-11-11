@@ -41,7 +41,7 @@ pub async fn materialize_semantic_selection(
     // `recursive=true` only creates missing parents; an existing artifact
     // directory is the normal steady state. A file squatting on this path
     // surfaces as the write below failing.
-    @os_error.OSError(_) as error if error.is_EEXIST() => ()
+    @os_error.OsError(AlreadyExists, ..) => ()
     error => raise error
   }
   let header : Json = {
@@ -84,8 +84,8 @@ pub async fn materialize_semantic_selection(
     let suffix = if index == 0 { "" } else { "-\{index}" }
     let relative_path = "\{relative_dir}/\{payload.artifact_id}\{suffix}.jsonl"
     let target = root.join(relative_path)
-    @fs.write_file(target.to_string(), content, create_mode=CreateNew) catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => continue
+    @fs.write_text(target.to_string(), content, create_mode=CreateNew) catch {
+      @os_error.OsError(AlreadyExists, ..) => continue
       // Do not remove the path on an unknown write error: another process
       // may own it, and preserving an old snapshot is more important than
       // cleaning an unreferenced partial file. A later retry will choose a
@@ -134,7 +134,7 @@ async test "semantic selections materialize as bounded JSONL below the checkout"
   )
   assert_eq(reply.match_count, 1)
   assert_eq(reply.file_count, 1)
-  let written = @fs.read_file(@pathx.Path(dir).join(reply.path).to_string()).text()
+  let written = @fs.read_text(@pathx.Path(dir).join(reply.path).to_string())
   assert_true(written.contains("\"kind\":\"semantic-search-selection\""))
   assert_true(written.contains("inspect(value)"))
 }
@@ -152,7 +152,7 @@ async test "semantic selection accepts an existing artifact directory" {
     ".openseek/agent-context/semantic-search",
   )
   @fs.mkdir(artifact_dir.to_string(), recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     artifact_dir.join("previous.jsonl").to_string(),
     "old snapshot\n",
     create_mode=CreateNew,
@@ -168,7 +168,7 @@ async test "semantic selection accepts an existing artifact directory" {
   assert_true(reply.path.contains("semantic-search-existing"))
   assert_true(@fs.exists(@pathx.Path(dir).join(reply.path).to_string()))
   assert_eq(
-    @fs.read_file(artifact_dir.join("previous.jsonl").to_string()).text(),
+    @fs.read_text(artifact_dir.join("previous.jsonl").to_string()),
     "old snapshot\n",
   )
 }
@@ -229,7 +229,7 @@ async test "semantic selection materialization never replaces an old snapshot" {
   }
   let first = materialize_semantic_selection(payload)
   let first_path = @pathx.Path(dir).join(first.path).to_string()
-  let first_content = @fs.read_file(first_path).text()
+  let first_content = @fs.read_text(first_path)
   let second = materialize_semantic_selection({
     ..payload,
     matches: [
@@ -241,9 +241,9 @@ async test "semantic selection materialization never replaces an old snapshot" {
     ],
   })
   assert_true(second.path != first.path)
-  assert_eq(@fs.read_file(first_path).text(), first_content)
+  assert_eq(@fs.read_text(first_path), first_content)
   let second_path = @pathx.Path(dir).join(second.path).to_string()
-  assert_true(@fs.read_file(second_path).text().contains("inspect(second)"))
+  assert_true(@fs.read_text(second_path).contains("inspect(second)"))
 }
 
 ///|
@@ -319,14 +319,13 @@ pub async fn read_file(
   if source.size() > size_limit.to_int64() {
     return Oversized
   }
-  let data = source.read_all()
+  let bytes = source.read_all()
   // The change-detection baseline, from the same open handle as the content
   // so the two cannot disagree about which version of the file was read.
   let sig = file_stamp(source.mtime(), source.ctime(), source.size())
   // Classify the bytes already read from this handle. The shared policy trusts
   // raster signatures rather than extensions and returns decoded text without
   // making callers perform a second UTF-8 pass.
-  let bytes = data.binary()
   match office_media_type {
     Some(media_type) =>
       BinaryContent(data_base64=@base64.encode(bytes), media_type~, sig~)
@@ -374,7 +373,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
   let bytes = @utf8.encode("%PDF-1.7\n" + "x".repeat(MaxEditorFileBytes + 1))
   for name in ["report.PDF", "report-without-extension"] {
     let file = "\{dir}/\{name}"
-    @fs.write_file(file, bytes, create_mode=CreateOrTruncate)
+    @fs.write_binary(file, bytes, create_mode=CreateOrTruncate)
     let absolute = @pathx.Path(@fs.realpath(file))
       .to_absolute()
       .unwrap()
@@ -388,7 +387,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
       }
       _ => fail("PDF reads must retain the original binary payload")
     }
-    @fs.write_file(
+    @fs.write_text(
       file,
       "%PDF-1.7\n" + "x".repeat(MaxOfficeFileBytes),
       create_mode=TruncateExisting,
@@ -408,7 +407,11 @@ async test "binary file reads expose only recognized raster signatures" {
   }
   @fs.mkdir(dir, recursive=true)
   let image = "\{dir}/image.png"
-  @fs.write_file(image, b"\x89PNG\r\n\x1a\nsmall", create_mode=CreateOrTruncate)
+  @fs.write_binary(
+    image,
+    b"\x89PNG\r\n\x1a\nsmall",
+    create_mode=CreateOrTruncate,
+  )
   let absolute = @pathx.Path(@fs.realpath(image))
     .to_absolute()
     .unwrap()
@@ -436,7 +439,7 @@ async test "binary file reads expose only recognized raster signatures" {
     ),
   )
   let disguised = "\{dir}/not-an-image.png"
-  @fs.write_file(disguised, b"\xffnot an image", create_mode=CreateOrTruncate)
+  @fs.write_binary(disguised, b"\xffnot an image", create_mode=CreateOrTruncate)
   let disguised_absolute = @pathx.Path(@fs.realpath(disguised))
     .to_absolute()
     .unwrap()
@@ -458,7 +461,7 @@ async test "Office file reads return original package bytes and media type" {
   @fs.mkdir(dir, recursive=true)
   let xlsx = "\{dir}/example.xlsx"
   let package_bytes = b"PK\x03\x04office fixture"
-  @fs.write_file(xlsx, package_bytes, create_mode=CreateOrTruncate)
+  @fs.write_binary(xlsx, package_bytes, create_mode=CreateOrTruncate)
   let absolute = @pathx.Path(@fs.realpath(xlsx))
     .to_absolute()
     .unwrap()
@@ -508,8 +511,7 @@ async fn file_signature(absolute : String) -> @protocol.FileSignature {
     let target = @fs.realpath(absolute)
     file_stamp(@fs.mtime(target), @fs.ctime(target), @fs.file_size(target))
   } catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() || error.is_ENOTDIR() =>
-      return Missing
+    @os_error.OsError(NotFound | NotDirectory, ..) => return Missing
     error => {
       @xlog.warn(category="filesystem") <?
         { "event": "stat_failed", "path": absolute, "error": "\{error}" }
@@ -521,11 +523,11 @@ async fn file_signature(absolute : String) -> @protocol.FileSignature {
 
 ///|
 fn file_stamp(
-  mtime : (Int64, Int32),
-  ctime : (Int64, Int32),
+  mtime : @fs.Timestamp,
+  ctime : @fs.Timestamp,
   size : Int64,
 ) -> String {
-  "\{mtime.0}:\{mtime.1}:\{ctime.0}:\{ctime.1}:\{size}"
+  "\{mtime.sec()}:\{mtime.nsec()}:\{ctime.sec()}:\{ctime.nsec()}:\{size}"
 }
 
 ///|
@@ -544,5 +546,5 @@ pub async fn capture(payload : @protocol.ReadFilePayload) -> (String, Bytes) {
   guard source.kind() is Regular else {
     raise InvalidRequest("Only files can be shared.")
   }
-  (file.to_path().basename().to_owned(), source.read_all().binary())
+  (file.to_path().basename().to_owned(), source.read_all())
 }

@@ -186,6 +186,8 @@ fn device_msg(
     AgentConnected({ protocol: Some(revision), }) if revision ==
       @protocol.HostProtocolRevision => Some(BridgeReady)
     AgentConnected(_) => Some(HostMismatched)
+    PreviewOpen(payload) => Some(PreviewRequested(payload))
+    CloudMcp(payload) => Some(CloudMcpEvent(payload))
     UserQuestions(payload) => Some(QuestionsChanged(payload))
     AgentApprovals(payload) =>
       Some(
@@ -614,7 +616,7 @@ fn fetch_runs(
       let recovered = reply.runs.filter_map(item => {
         RecoveredRun::from_started(channel, item)
       })
-      let recovered_settlements = reply.settled.filter_map(
+      let recovered_settlements = reply.settled.map(
         RecoveredSettlement::from_reply,
       )
       // Standing questions come back unfiltered: unlike a settlement, which is
@@ -689,32 +691,16 @@ fn started_msg(
   // malformed and dropped. The durable `session_root` is genuinely optional,
   // and the host resolved it itself, so this is the decode boundary where its
   // absolute provenance is collapsed into the type.
-  let session = payload.session
-  guard !session.is_empty() &&
-    payload.model is Some(model) &&
-    parse_engine_model(model) is Some(model) &&
-    payload.max_steps is Some(max_steps) else {
-    return None
-  }
-  let session_root = match payload.session_root {
-    Some(path) => {
-      guard @resource.of_path(channel, path) is Some(absolute) else {
-        return None
-      }
-      Some(absolute)
-    }
-    None => None
-  }
-  Some(
+  RecoveredRun::from_started(channel, payload).map(run => {
     Started(
-      run_id=payload.run_id,
-      session~,
-      model~,
-      max_steps~,
-      session_root~,
-      submission_id=payload.submission_id,
-    ),
-  )
+      run_id=run.run_id,
+      session=run.session,
+      model=run.model,
+      max_steps=run.max_steps,
+      session_root=run.session_root,
+      submission_id=run.submission_id,
+    )
+  })
 }
 
 ///|
@@ -758,13 +744,13 @@ fn RecoveredRun::from_started(
 /// transcript read answers, not one this reply has to prove.
 fn RecoveredSettlement::from_reply(
   payload : @protocol.RunSettlementPayload,
-) -> RecoveredSettlement? {
-  Some({
+) -> RecoveredSettlement {
+  {
     run_id: payload.run_id,
     session: payload.session,
     submission_id: payload.submission_id,
     status: payload.status,
-  })
+  }
 }
 
 ///|

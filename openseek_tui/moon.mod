@@ -8,7 +8,7 @@ import {
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/displaytext@0.1.6",
   "moonbit-community/tty@0.6.2",
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.7",
   "bobzhang/open_in_browser@0.1.0",
   "moonbitlang/x@0.4.50",
 }

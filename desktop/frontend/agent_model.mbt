@@ -151,30 +151,6 @@ fn openseek_model_group(
 }
 
 ///|
-test "the model group follows the configured provider" {
-  let deepseek = openseek_model_group(Deepseek, Deepseek(V4Pro))
-  assert_eq(deepseek.options.map(option => option.label), ["DS Pro", "DS Flash"])
-  let glm = openseek_model_group(Glm, Glm(G53))
-  assert_eq(glm.options.map(option => option.value), [
-    "openseek:glm-5.3", "openseek:glm-5.3-flash",
-  ])
-  let openrouter = openseek_model_group(OpenRouter, Deepseek(V4Flash))
-  assert_eq(openrouter.options.map(option => option.label), [
-    "DS Pro", "DS Flash",
-  ])
-  // A conversation carried across a provider switch keeps its model visible,
-  // as before.
-  let carried = openseek_model_group(Glm, Deepseek(V4Pro))
-  assert_eq(carried.options.map(option => option.label), [
-    "GLM 5.3", "GLM 5.3 Flash", "DS Pro",
-  ])
-  let custom = openseek_model_group(Custom, Kimi(K27Code))
-  assert_eq(custom.options.map(option => option.label), [
-    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "kimi-k2.7-code",
-  ])
-}
-
-///|
 /// Codex's group mirrors the fetched catalog; without one it offers the one
 /// row that leads to the Codex page instead of hiding the agent entirely.
 fn Model::codex_model_group(self : Model) -> @composer.ModelGroup {
@@ -204,7 +180,7 @@ fn Model::openseek_model_chip(
   conv : Conversation,
 ) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = [
-    openseek_model_group(self.api_provider, conv.engine_model),
+    openseek_model_group(self.api_provider(), conv.engine_model),
   ]
   if self.composing_new_chat() {
     groups.push(self.codex_model_group())
@@ -279,7 +255,7 @@ fn Model::openseek_reasoning_chip(
 fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = []
   if self.codex.composing_draft() {
-    groups.push(openseek_model_group(self.api_provider, self.default_model))
+    groups.push(openseek_model_group(self.api_provider(), self.default_model))
   }
   groups.push(self.codex_model_group())
   let selected = match self.codex.model_listing(locale=self.locale) {

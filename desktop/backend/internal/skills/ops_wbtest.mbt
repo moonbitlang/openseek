@@ -19,8 +19,8 @@ async test "manual installation clears its startup failure before notifying clie
   let base = "http://127.0.0.1:\{registry.addr.port()}"
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => {
-      registry.run_forever((request, body, conn) => {
-        ignore(body.read_all())
+      registry.run_forever((request, conn) => {
+        ignore(conn.read_all())
         match request.path {
           "/api/v0/skills" => conn.send_response(503, "Service Unavailable")
           "/api/v0/skills/moonbitlang/office-cli%401.0.0" => {

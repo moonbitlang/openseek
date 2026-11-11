@@ -12,7 +12,7 @@ async test "each provider response's usage is recorded on its assistant item" {
             "Content-Type": "text/event-stream",
           })
           if requests == 1 {
-            conn.write(
+            conn.write_string(
               (
                 #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"probe","arguments":"{}"}}]}}],"usage":{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110,"prompt_cache_hit_tokens":60,"prompt_cache_miss_tokens":40}}
                 #|
@@ -20,7 +20,7 @@ async test "each provider response's usage is recorded on its assistant item" {
               ),
             )
           } else {
-            conn.write(
+            conn.write_string(
               (
                 #|data: {"choices":[{"delta":{"content":"done"}}],"usage":{"prompt_tokens":200,"completion_tokens":20,"total_tokens":220,"prompt_cache_hit_tokens":150,"prompt_cache_miss_tokens":50}}
                 #|
@@ -28,7 +28,7 @@ async test "each provider response's usage is recorded on its assistant item" {
               ),
             )
           }
-          conn.write("data: [DONE]\n\n")
+          conn.write_string("data: [DONE]\n\n")
         },
       )
       is Some(url) else {

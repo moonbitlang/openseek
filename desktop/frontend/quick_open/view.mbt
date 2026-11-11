@@ -22,10 +22,9 @@ fn focus_after_render() -> @cmd.Cmd {
     @cmd.custom_cmd(
       _ => {
         if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
-          let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
-            "focus",
-            ([] : FixedArray[@js.Value]),
-          )
+          if input.to_html_element() is Some(element) {
+            element.focus()
+          }
         }
       },
       kind=@cmd.after_render,
@@ -179,7 +178,13 @@ fn dialog_view(
     .aria_controls(ListId)
     .aria_expanded("true")
     .aria_autocomplete("list")
-    .aria_keyshortcuts("Meta+P Control+P Meta+T Control+T")
+    .aria_keyshortcuts(
+      if open.owner is @interop.Cloud(..) {
+        "Meta+P Control+P"
+      } else {
+        "Meta+P Control+P Meta+T Control+T"
+      },
+    )
     .data_set("focus-owner", "")
   let input_attrs = if active_id.is_empty() {
     base_input_attrs

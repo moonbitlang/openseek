@@ -8,8 +8,8 @@ pub(all) enum Message {
   Chats
   CloudSignInHint
   Projects
-  NewChat
-  AddProject
+  New
+  Import
   ShowMore
   ShowMoreChats
   MoreActions
@@ -72,16 +72,16 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Projects) => "项目"
     (TraditionalChinese, Projects) => "專案"
     (Japanese, Projects) => "プロジェクト"
-    (English, NewChat) => "New chat"
-    (Spanish, NewChat) => "Nueva conversación"
-    (SimplifiedChinese, NewChat) => "新建对话"
-    (TraditionalChinese, NewChat) => "新建對話"
-    (Japanese, NewChat) => "新しいチャット"
-    (English, AddProject) => "Add a project"
-    (Spanish, AddProject) => "Añadir un proyecto"
-    (SimplifiedChinese, AddProject) => "添加项目"
-    (TraditionalChinese, AddProject) => "新增專案"
-    (Japanese, AddProject) => "プロジェクトを追加"
+    (English, New) => "New"
+    (Spanish, New) => "Nuevo"
+    (SimplifiedChinese, New) => "新建"
+    (TraditionalChinese, New) => "新增"
+    (Japanese, New) => "新規"
+    (English, Import) => "Import"
+    (Spanish, Import) => "Importar"
+    (SimplifiedChinese, Import) => "导入"
+    (TraditionalChinese, Import) => "匯入"
+    (Japanese, Import) => "インポート"
     (English, ShowMore) => "Show more"
     (Spanish, ShowMore) => "Mostrar más"
     (SimplifiedChinese, ShowMore) => "显示更多"

@@ -25,32 +25,32 @@ pub async fn is_executable_file(path : @pathx.Path) -> Bool {
 
 ///|
 pub async fn try_read_text(path : @pathx.Path) -> String? {
-  Some(@fs.read_file(path.to_string()).text()) catch {
+  Some(@fs.read_text(path.to_string())) catch {
     _ => None
   }
 }
 
 ///|
 pub async fn read_text(path : @pathx.Path) -> String {
-  @fs.read_file(path.to_string()).text()
+  @fs.read_text(path.to_string())
 }
 
 ///|
 pub async fn read_text_if_exists(path : @pathx.Path) -> String? {
-  Some(@fs.read_file(path.to_string()).text()) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => None
+  Some(@fs.read_text(path.to_string())) catch {
+    @os_error.OsError(NotFound, ..) => None
     error => raise error
   }
 }
 
 ///|
 pub async fn write_text(path : @pathx.Path, content : String) -> Unit {
-  @fs.write_file(path.to_string(), content, create_mode=CreateOrTruncate)
+  @fs.write_text(path.to_string(), content, create_mode=CreateOrTruncate)
 }
 
 ///|
 pub async fn write_bytes(path : @pathx.Path, content : Bytes) -> Unit {
-  @fs.write_file(path.to_string(), content, create_mode=CreateOrTruncate)
+  @fs.write_binary(path.to_string(), content, create_mode=CreateOrTruncate)
 }
 
 ///|
@@ -61,8 +61,7 @@ pub async fn write_bytes(path : @pathx.Path, content : Bytes) -> Unit {
 /// an absence nobody observed.
 pub async fn is_dir(path : @pathx.Path) -> Bool {
   try @fs.kind(path.to_string()) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() ||
-      os_error.is_ENOTDIR() => false
+    @os_error.OsError(NotFound | NotDirectory, ..) => false
     error => raise error
   } noraise {
     kind => kind is Directory
@@ -75,9 +74,9 @@ pub async fn copy_file(source : @pathx.Path, destination : @pathx.Path) -> Unit 
   let source = source.to_string()
   let destination = destination.to_string()
   let permission = if @fs.can_execute(source) { 0o755 } else { 0o644 }
-  @fs.write_file(
+  @fs.write_binary(
     destination,
-    @fs.read_file(source),
+    @fs.read_binary(source),
     create_mode=CreateOrTruncate,
     permission~,
   )
@@ -121,7 +120,7 @@ async fn chmod(path : StringView, permission : Int32) -> Unit {
 ///|
 pub async fn ensure_dir(path : @pathx.Path) -> Unit {
   @fs.mkdir(path.to_string(), recursive=true) catch {
-    @os_error.OSError(_) as os_error if os_error.is_EEXIST() => ()
+    @os_error.OsError(AlreadyExists, ..) => ()
     error => raise error
   }
 }
@@ -130,7 +129,7 @@ pub async fn ensure_dir(path : @pathx.Path) -> Unit {
 pub async fn remove_if_exists(path : @pathx.Path) -> Unit {
   let path = path.to_string()
   try @fs.kind(path) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => ()
+    @os_error.OsError(NotFound, ..) => ()
     error => raise error
   } noraise {
     Directory => @fs.rmdir(path, recursive=true)

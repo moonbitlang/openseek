@@ -9,6 +9,8 @@ import {
   "moonbitlang/core/encoding/base64",
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/async/http",
+  "moonbitlang/async",
+  "moonbitlang/indexeddb",
   "moonbitlang/editor/base/browser" @base_browser,
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/composer",
@@ -20,11 +22,3 @@ import {
 }
 
 supported_targets = "js"
-
-import {
-  "moonbitlang/async",
-} for "test"
-
-import {
-  "moonbitlang/async",
-} for "wbtest"

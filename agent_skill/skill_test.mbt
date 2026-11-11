@@ -1,6 +1,6 @@
 ///|
 async fn write_skill(path : String, text : String) -> Unit {
-  @fs.write_file(path, text, create_mode=CreateOrTruncate)
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
 }
 
 ///|

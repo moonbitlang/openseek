@@ -1,6 +1,6 @@
 import {
   "moonbitlang/editor-server/host",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
 }
@@ -8,3 +8,7 @@ import {
 supported_targets = "native+wasm"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

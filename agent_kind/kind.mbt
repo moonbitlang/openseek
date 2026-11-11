@@ -61,8 +61,8 @@ pub async fn[T] execute_kind(
     }
   })
   let runtime = @agent_runtime.AgentRuntime(workspace_root~, external_input?)
-  let _ : @agent_session.Session = @async.with_task_group() <| group => {
-    @agent.run_turn_in_scope(
+  @async.with_task_group() <| group => {
+    let _ : @agent_session.Session = @agent.run_turn_in_scope(
       runtime~,
       scope=AgentTaskScope(group),
       api_key~,

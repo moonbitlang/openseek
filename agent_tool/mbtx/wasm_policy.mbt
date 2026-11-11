@@ -265,27 +265,20 @@ let spawn_notes : Map[String, String] = {
 /// narrower grant than the verb alone and reads as one; a program admitted
 /// with an empty prefix renders as taking any arguments.
 fn spawn_list_markdown() -> String {
-  let order : Array[String] = []
+  // `Map` iterates in insertion order, which is the table's first-appearance
+  // order.
   let by_program : Map[String, Array[Array[String]]] = Map([])
   for entry in spawnable_commands {
     let (program, args_prefix) = entry
-    match by_program.get(program) {
-      Some(prefixes) => prefixes.push(args_prefix)
-      None => {
-        order.push(program)
-        by_program[program] = [args_prefix]
-      }
-    }
+    by_program.get_or_init(program, () => []).push(args_prefix)
   }
-  let lines = StringBuilder()
-  for index, program in order {
-    guard by_program.get(program) is Some(prefixes) else { continue }
+  let bullets : Array[String] = []
+  for program, prefixes in by_program {
     let singles : Array[String] = []
     // Multi-token prefixes, grouped under their shared first token in the
     // order the table lists them: `submodule update` and `submodule status`
     // become one `submodule update|status` entry rather than two bullets
     // repeating the verb.
-    let heads : Array[String] = []
     let tails : Map[String, Array[String]] = Map([])
     let mut any_arguments = false
     for args_prefix in prefixes {
@@ -302,13 +295,7 @@ fn spawn_list_markdown() -> String {
             },
           )
         [head, .. rest] =>
-          match tails.get(head) {
-            Some(seen) => seen.push(rest.join(" "))
-            None => {
-              heads.push(head)
-              tails[head] = [rest.join(" ")]
-            }
-          }
+          tails.get_or_init(head, () => []).push(rest.join(" "))
       }
     }
     let parts : Array[String] = []
@@ -319,8 +306,7 @@ fn spawn_list_markdown() -> String {
       parts.push(singles.join(", "))
     }
     let grouped : Array[String] = []
-    for head in heads {
-      guard tails.get(head) is Some(rest) else { continue }
+    for head, rest in tails {
       grouped.push("`\{head} \{rest.join("|")}`")
     }
     if grouped.length() > 0 {
@@ -330,14 +316,9 @@ fn spawn_list_markdown() -> String {
       Some(text) => " " + text
       None => ""
     }
-    if index > 0 {
-      lines.write_string("\n")
-    }
-    lines.write_string(
-      wrap_bullet("- `\{program}` — \{parts.join(", ")}.\{note}"),
-    )
+    bullets.push(wrap_bullet("- `\{program}` — \{parts.join(", ")}.\{note}"))
   }
-  lines.to_string()
+  bullets.join("\n")
 }
 
 ///|
@@ -449,16 +430,6 @@ fn wasm_policy_document(
       write_rules.push({ "glob": "!\{glob}" })
     }
   }
-  let allow : Array[Json] = []
-  for entry in spawnable_commands {
-    let (program, args_prefix) = entry
-    let rule : Json = if args_prefix.is_empty() {
-      { "program": program }
-    } else {
-      { "program": program, "args_prefix": json_strings(args_prefix) }
-    }
-    allow.push(rule)
-  }
   {
     // A policy run BUILDS the guest environment rather than inheriting one, so
     // an empty list means an empty environment — `moon` could not even be
@@ -493,7 +464,7 @@ fn wasm_policy_document(
       "connect": ["*:*"],
       "bind": ["127.0.0.1:*", "[::1]:*"],
     },
-    "process": { "allow": Json(allow) },
+    "process": { "allow": spawn_allow_rules },
   }
 }
 
@@ -533,14 +504,25 @@ fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] 
 }
 
 ///|
-/// The variable `moonbitlang/workflow/hosted` reads its handoff from.
-const HostHandoffVar = "WORKFLOW_HOST"
+/// `spawnable_commands` as the policy's `process.allow` rules. The table is
+/// constant, so the rules are built once rather than per run.
+let spawn_allow_rules : Json = Json(
+  [
+    for entry in spawnable_commands => {
+      let (program, args_prefix) = entry
+      let rule : Json = if args_prefix.is_empty() {
+        { "program": program }
+      } else {
+        { "program": program, "args_prefix": Json(args_prefix) }
+      }
+      rule
+    }
+  ],
+)
 
 ///|
-/// A JSON array of strings, for the path lists the policy is mostly made of.
-fn json_strings(values : Array[String]) -> Json {
-  Json([ for value in values => Json(value) ])
-}
+/// The variable `moonbitlang/workflow/hosted` reads its handoff from.
+const HostHandoffVar = "WORKFLOW_HOST"
 
 ///|
 /// `pattern` with each ASCII letter widened to a two-case class (`mbt` →

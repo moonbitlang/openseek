@@ -2,7 +2,7 @@
 package "openseek_desktop/backend/broadcast"
 
 import {
-  "moonbitlang/async/aqueue",
+  "moonbitlang/core/async/aqueue",
 }
 
 // Values

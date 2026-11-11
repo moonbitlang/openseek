@@ -3,7 +3,7 @@ async test "job log pages follow byte cursors across multibyte output and no new
   let root = @fs.tmpdir(prefix="job-page-")
   defer @fs.rmdir(root, recursive=true)
   let path = "\{root}/job.out"
-  @fs.write_file(path, "a你好🙂tail")
+  @fs.write_text(path, "a你好🙂tail")
   let first = read_job_page(path, Some(0L), 5)
   assert_eq(first.text, "a你")
   assert_eq(first.next_offset, 4L)
@@ -14,11 +14,11 @@ async test "job log pages follow byte cursors across multibyte output and no new
   let tail = read_job_page(path, None, 7)
   assert_eq(tail.text, "tail")
   assert_eq(tail.next_offset, 15L)
-  @fs.write_file(path, "more", append=true, create_mode=OpenOrCreate)
+  @fs.write_text(path, "more", append=true, create_mode=OpenOrCreate)
   let more = read_job_page(path, Some(tail.next_offset), 65536)
   assert_eq(more.text, "more")
   assert_false(more.more)
-  @fs.write_file(path, "short")
+  @fs.write_text(path, "short")
   try read_job_page(path, Some(more.next_offset), 65536) catch {
     EngineError(message) => assert_true(message.contains("truncated"))
     error => fail("unexpected error: \{error}")
@@ -27,7 +27,7 @@ async test "job log pages follow byte cursors across multibyte output and no new
   }
   @fs.remove(path)
   try read_job_page(path, None, 65536) catch {
-    @os_error.OSError(_) as error => assert_true(error.is_ENOENT())
+    @os_error.OsError(kind, ..) => assert_true(kind is NotFound)
     error => fail("unexpected error: \{error}")
   } noraise {
     _ => fail("missing log must not read as empty")
@@ -39,7 +39,7 @@ async test "job output pages are bounded for a large retained file" {
   let root = @fs.tmpdir(prefix="job-large-")
   defer @fs.rmdir(root, recursive=true)
   let path = "\{root}/large.out"
-  @fs.write_file(path, "x".repeat(200000))
+  @fs.write_text(path, "x".repeat(200000))
   let page = read_job_page(path, Some(0L), 65536)
   assert_eq(page.text.length(), 65536)
   assert_true(page.more)
@@ -83,7 +83,7 @@ async test "job history distinguishes dead owner from disconnected client and ma
   defer @fs.rmdir(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   let record = job_record_fixture()
-  @fs.write_file("\{root}/gen-1/bg-1.json", record.to_json().stringify())
+  @fs.write_text("\{root}/gen-1/bg-1.json", record.to_json().stringify())
   assert_eq(read_job_record(root, "gen-1", "bg-1"), record)
   let unknown = job_view(root, record, false)
   assert_true(unknown.error is Some(_))
@@ -111,7 +111,7 @@ async test "job history distinguishes dead owner from disconnected client and ma
   assert_true(interrupted.job.state is Interrupted)
   let live = job_view(root, record, true)
   assert_true(live.controllable)
-  @fs.write_file("\{root}/gen-1/bg-1.json", "{}")
+  @fs.write_text("\{root}/gen-1/bg-1.json", "{}")
   try read_job_record(root, "gen-1", "bg-1") catch {
     _ => ()
   } noraise {
@@ -124,14 +124,14 @@ async test "history decodes only its requested page and preserves runtime job or
   let root = @fs.tmpdir(prefix="job-history-pages-")
   defer @fs.rmdir(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
-  @fs.write_file("\{root}/gen-1/owner.lock", "")
+  @fs.write_text("\{root}/gen-1/owner.lock", "")
   for index in 1..<=101 {
     let record = {
       ..job_record_fixture(),
       id: "bg-\{index}",
       state: Exited(0),
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/gen-1/bg-\{index}.json",
       if index == 1 {
         "corrupt old metadata"
@@ -170,7 +170,7 @@ async test "history decodes only its requested page and preserves runtime job or
   // Use an otherwise empty root so pagination cannot hide a second error.
   let broken_root = @fs.tmpdir(prefix="job-broken-runtime-")
   defer @fs.rmdir(broken_root, recursive=true)
-  @fs.write_file("\{broken_root}/stray-file", "not a runtime directory")
+  @fs.write_text("\{broken_root}/stray-file", "not a runtime directory")
   let broken = job_history_page(broken_root, Map([]), 0, [])
   assert_eq(broken.errors.length(), 1)
   assert_true(broken.errors[0].contains("stray-file"))
@@ -198,7 +198,7 @@ async test "owner lock inspection failures preserve durable and live jobs" {
   defer @fs.rmdir(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   let record = job_record_fixture()
-  @fs.write_file("\{root}/gen-1/bg-1.json", record.to_json().stringify())
+  @fs.write_text("\{root}/gen-1/bg-1.json", record.to_json().stringify())
   // A symlink loop produces a non-ENOENT stat failure even when run as root.
   @fs.symlink(target="owner.lock", "\{root}/gen-1/owner.lock")
   let durable = job_history_page(root, Map([]), 0, [])
@@ -257,7 +257,7 @@ async test "a tail at byte zero rejects corrupt leading UTF8 instead of hiding i
   let root = @fs.tmpdir(prefix="job-invalid-tail-")
   defer @fs.rmdir(root, recursive=true)
   let path = "\{root}/output"
-  @fs.write_file(path, b"\x80a")
+  @fs.write_binary(path, b"\x80a")
   try read_job_page(path, None, 65536) catch {
     _ => ()
   } noraise {
@@ -295,8 +295,6 @@ async test "correlated job replies reach their waiter but never the stream sink"
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (input, writer) = @process.write_to_process()
-    let (reader, output) = @process.read_from_process()
     let snapshot : @wire.Event = JobsSnapshot(request_id="private", jobs=[])
     let stopped : @wire.Event = JobStopResult(
       request_id="late",
@@ -308,9 +306,11 @@ async test "correlated job replies reach their waiter but never the stream sink"
       group,
       "/bin/echo",
       [snapshot.to_json().stringify() + "\n" + stopped.to_json().stringify()],
-      stdin=input,
-      stdout=output,
+      stdin=FeedFromParent,
+      stdout=Collect,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "reply-test",
       writer,
@@ -331,7 +331,7 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
   let root = @fs.tmpdir(prefix="job-uuid-pages-")
   defer @fs.rmdir(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
-  @fs.write_file("\{root}/gen-1/owner.lock", "")
+  @fs.write_text("\{root}/gen-1/owner.lock", "")
   let ids : Array[String] = []
   for index in 0..<101 {
     let hex = index.to_string(radix=16)
@@ -350,13 +350,13 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
     }
     ids.push(id)
     let record = { ..job_record_fixture(), id, state: Exited(0), }
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/gen-1/\{@wire.job_storage_name(id)}.json",
       record.to_json().stringify(),
     )
   }
   // An out-of-page corrupt file must not get decoded until its page is read.
-  @fs.write_file("\{root}/gen-1/\{@wire.job_storage_name(ids[0])}.json", "{}")
+  @fs.write_text("\{root}/gen-1/\{@wire.job_storage_name(ids[0])}.json", "{}")
   let errors : Array[String] = []
   let first = job_history_page(root, Map([]), 0, errors)
   assert_eq(errors, [])
@@ -370,7 +370,7 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
     state: Exited(7),
     revision: 2,
   }
-  @fs.write_file(
+  @fs.write_text(
     "\{root}/gen-1/\{@wire.job_storage_name(ids[1])}.json",
     updated.to_json().stringify(),
   )
@@ -384,4 +384,71 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
   assert_eq(second.next_offset, None)
   assert_eq(errors.length(), 1)
   assert_true(errors[0].contains(ids[0]))
+}
+
+///|
+async test "the first page lists every running job and paging never skips one" {
+  let root = @fs.tmpdir(prefix="job-history-running-")
+  defer @fs.rmdir(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  @fs.write_text("\{root}/gen-1/owner.lock", "")
+  for index in 1..<=250 {
+    let record = {
+      ..job_record_fixture(),
+      id: "bg-\{index}",
+      state: Exited(0),
+    }
+    @fs.write_text(
+      "\{root}/gen-1/bg-\{index}.json",
+      record.to_json().stringify(),
+    )
+  }
+  // bg-1 and bg-120 still run behind 100 or more newer finished jobs, bg-249
+  // runs among the newest, and bg-250 has finished in the live engine.
+  let live : Map[String, @wire.JobRecord] = Map([])
+  for index in [1, 120, 249] {
+    live["gen-1/bg-\{index}"] = { ..job_record_fixture(), id: "bg-\{index}", }
+  }
+  live["gen-1/bg-250"] = {
+    ..job_record_fixture(),
+    id: "bg-250",
+    state: Exited(0),
+  }
+  let first = job_history_page(root, live, 0, [])
+  assert_eq(first.jobs[:3].to_owned().map(view => view.job.id), [
+    "bg-249", "bg-120", "bg-1",
+  ])
+  assert_true(first.jobs[:3].iter().all(view => view.controllable))
+  assert_eq(first.jobs[3].job.id, "bg-250")
+  assert_eq(first.jobs[4].job.id, "bg-248")
+  assert_eq(first.jobs.length(), 102)
+  assert_eq(first.next_offset, Some(100))
+  let ids = (pages : Array[@protocol.JobsListReply]) => {
+    let ids : Array[String] = []
+    for page in pages {
+      ids.append(page.jobs.map(view => view.job.id))
+    }
+    ids
+  }
+  let second = job_history_page(root, live, 100, [])
+  let third = job_history_page(root, live, 200, [])
+  assert_eq(third.next_offset, None)
+  let seen = ids([first, second, third])
+  assert_eq(seen.length(), 250)
+  assert_eq(Set::from_array(seen).length(), 250)
+  // bg-1 settles before the last page: it lists again there, and no other
+  // job moves out of the page it was due on.
+  live["gen-1/bg-1"] = { ..job_record_fixture(), id: "bg-1", state: Exited(0), }
+  let settled = job_history_page(root, live, 200, [])
+  assert_eq(settled.jobs.length(), 50)
+  let seen = ids([first, second, settled])
+  assert_eq(seen.length(), 251)
+  assert_eq(Set::from_array(seen).length(), 250)
+  // The first page holds every running job, even more than a page of them.
+  for index in 2..<=110 {
+    live["gen-1/bg-\{index}"] = { ..job_record_fixture(), id: "bg-\{index}", }
+  }
+  let crowded = job_history_page(root, live, 0, [])
+  assert_true(crowded.jobs[:111].iter().all(view => view.controllable))
+  assert_eq(crowded.jobs.length(), 111 + 99)
 }

@@ -8,7 +8,7 @@ test "session_root defaults to .openseek beside the workspace" {
 async test "complete system prompts load verbatim and saved sessions keep their prompt" {
   @vfs.with_tmpdir(prefix="openseek-prompt-", root => {
     let store = @store.SessionStore("\{root}/store")
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/AGENTS.md",
       "project rule",
       create_mode=CreateOrTruncate,
@@ -26,7 +26,7 @@ async test "complete system prompts load verbatim and saved sessions keep their 
     ]
     for i, base in choices {
       if base is Some(text) {
-        @fs.write_file("\{root}/custom.md", text, create_mode=CreateOrTruncate)
+        @fs.write_text("\{root}/custom.md", text, create_mode=CreateOrTruncate)
       }
       let parsed = @testkit.run_matches(
         argv=[
@@ -55,7 +55,7 @@ async test "complete system prompts load verbatim and saved sessions keep their 
       )
       assert_true(session.system_prompt().contains("project rule"))
       ignore(store.append(session, User(UserMessage(Content([Text("hello")])))))
-      @fs.write_file(
+      @fs.write_text(
         "\{root}/custom.md",
         "Changed instructions",
         create_mode=CreateOrTruncate,
@@ -138,7 +138,7 @@ async test "load_or_new_session defers first durable write until append" {
     let store = @store.SessionStore(root)
     let id : @agent_session.SessionId = SessionId("cli-test")
     let prompt_path = "\{root}/prompt.md"
-    @fs.write_file(prompt_path, "system", create_mode=CreateOrTruncate)
+    @fs.write_text(prompt_path, "system", create_mode=CreateOrTruncate)
     let parsed = @testkit.run_matches(
       argv=[
         "--session-root", root, "--session", "cli-test", "--system-prompt-file",
@@ -185,7 +185,7 @@ async test "new durable session header persists project layout" {
       (".openseek/ignored", "x"),
       ("_build/out/x", "x"),
     ]).write_to(workspace)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/prompt.md",
       "system",
       create_mode=CreateOrTruncate,
@@ -234,12 +234,12 @@ async test "new durable session stores AGENTS.md instructions" {
   @vfs.with_tmpdir(prefix="openseek-cli-session-agents-", root => {
     let workspace = "\{root}/workspace"
     @fs.mkdir(workspace, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/AGENTS.md",
       "workspace instructions",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/prompt.md",
       "system",
       create_mode=CreateOrTruncate,
@@ -293,7 +293,7 @@ async test "load_or_new_session recovers empty interrupted session directory" {
     let id : @agent_session.SessionId = SessionId("cli-test")
     @fs.mkdir("\{root}/sessions/\{id.value()}", recursive=true)
     let prompt_path = "\{root}/prompt.md"
-    @fs.write_file(prompt_path, "system", create_mode=CreateOrTruncate)
+    @fs.write_text(prompt_path, "system", create_mode=CreateOrTruncate)
     let parsed = @testkit.run_matches(
       argv=[
         "--session-root",
@@ -341,13 +341,13 @@ async test "resuming an existing session preserves its prompt and stored file" {
       User(UserMessage(Content([Text("keep history")]))),
     )
     store.create(old)
-    let before = @fs.read_file(store.session_file(id)).binary()
+    let before = @fs.read_binary(store.session_file(id))
     let parsed = @testkit.run_matches(
       argv=["--system-prompt-file", "missing-prompt.md", "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
     let resumed = @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro))
     assert_eq(resumed, old)
-    assert_eq(@fs.read_file(store.session_file(id)).binary(), before)
+    assert_eq(@fs.read_binary(store.session_file(id)), before)
   })
 }

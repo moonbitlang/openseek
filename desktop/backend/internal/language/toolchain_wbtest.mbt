@@ -7,7 +7,7 @@ async test "language and semantic tools execute the explicit host toolchain" {
   let runtime = root.join("runtime")
   let payload = runtime.join("toolchains/moonbit/linux-x64")
   @fs.mkdir(seed.to_string(), recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     seed.join(".openseek-moonbit-seed-version").to_string(),
     "fixture",
     create_mode=CreateOrTruncate,
@@ -19,14 +19,14 @@ async test "language and semantic tools execute the explicit host toolchain" {
     ] {
     let file = payload.join(name)
     @fsx.ensure_dir(file.to_path().dirname())
-    @fs.write_file(
+    @fs.write_text(
       file.to_string(),
       "#!/bin/sh\nprintf 'selected-toolchain'\n",
       create_mode=CreateOrTruncate,
       permission=0o755,
     )
   }
-  @fs.write_file(
+  @fs.write_text(
     payload.join(".openseek-moonbit-bundle-version").to_string(),
     "version=fixture",
     create_mode=CreateOrTruncate,
@@ -52,15 +52,16 @@ async test "language and semantic tools execute the explicit host toolchain" {
   assert_eq(state.run_moon([], root), Some((0, "selected-toolchain", "")))
   let ide = moonide_spawn_config(state)
   assert_eq(ide.executable, expected)
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     ide.executable,
     [],
     inherit_env=false,
     extra_env?=ide.extra_env,
   )
+  let code = result.exit_code
   assert_eq(code, 0)
-  assert_eq(stdout.text(), "selected-toolchain")
-  let provider = @search.MoonxProvider(
+  assert_eq(result.stdout_text(), "selected-toolchain")
+  let provider = @moonbit.MoonxProvider(
     engine="unbundled-engine",
     runtime_dir=Some(runtime.to_path()),
     source~,
@@ -72,14 +73,15 @@ async test "language and semantic tools execute the explicit host toolchain" {
   let selected = provider.resolve(env~)
   assert_eq(selected.command, payload.join("bin/moonx").to_string())
   assert_eq(selected.environment["MOON_HOME"], "registry-home")
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     selected.command,
     @search.moongrep_args([]),
     inherit_env=false,
     extra_env=selected.environment,
   )
+  let code = result.exit_code
   assert_eq(code, 0)
-  assert_eq(stdout.text(), "selected-toolchain")
+  assert_eq(result.stdout_text(), "selected-toolchain")
   // Reuse the prepared payload and the moonx alias without replacing either.
   let again = provider.resolve(env~)
   assert_eq(again.command, selected.command)

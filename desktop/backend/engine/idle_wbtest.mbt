@@ -36,8 +36,8 @@ const FakeIdleEngineSh : String =
 /// task whose completion is retirement. `jobs` is what it reports when asked;
 /// `last_activity_ms` defaults to the epoch, i.e. idle since forever.
 #cfg(not(platform="windows"))
-async fn[G] start_fake_idle_engine(
-  group : @async.TaskGroup[G],
+async fn start_fake_idle_engine(
+  group : @async.TaskGroup,
   manager : EngineManager,
   sessions : Map[String, SessionSlot],
   session : String,
@@ -47,8 +47,6 @@ async fn[G] start_fake_idle_engine(
   phase~ : EnginePhase = Idle(last_run=None),
   last_activity_ms~ : Int64 = 0,
 ) -> ServeEngine {
-  let (child_stdin, writer) = @process.write_to_process()
-  let (reader, child_stdout) = @process.read_from_process()
   let snapshot : @wire.Event = JobsSnapshot(request_id="__RID__", jobs~)
   let other : @wire.Event = BackgroundNotice(content="a job finished")
   let process = @process.spawn(
@@ -62,10 +60,12 @@ async fn[G] start_fake_idle_engine(
       snapshot_delay,
       other.to_json().stringify(),
     ],
-    stdin=child_stdin,
-    stdout=child_stdout,
+    stdin=FeedFromParent,
+    stdout=Collect,
     no_wait=true,
   )
+  let writer = process.stdin
+  let reader = process.stdout
   let engine = test_serve_engine(
     session,
     writer,
@@ -386,12 +386,12 @@ async test "a conversation resumes on a fresh engine after an idle stop" {
   let snapshot : @wire.Event = JobsSnapshot(request_id="__RID__", jobs=[])
   // A prompt commits one durable Terminal and reports the turn finished; a
   // jobs snapshot request is answered with no jobs; stdin EOF ends the loop.
-  @fs.write_file(
+  @fs.write_text(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do\n  case \"$line\" in\n    *jobs_snapshot*)\n      id=$(printf '%s\\n' \"$line\" | sed 's/.*\"request_id\": *\"\\([^\"]*\\)\".*/\\1/')\n      printf '%s\\n' '\{snapshot.to_json().stringify()}' | sed \"s/__RID__/$id/\"\n      ;;\n    *)\n\{commit_terminal_sh()}      printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\n      ;;\n  esac\ndone\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]).exit_code, 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
@@ -459,6 +459,6 @@ async test "a conversation resumes on a fresh engine after an idle stop" {
     assert_false(physical_equal(first, second))
     assert_not_eq(first.process.pid, second.process.pid)
     assert_eq(committed(), [1, 2])
-    group.return_immediately(())
+    group.return_immediately()
   })
 }

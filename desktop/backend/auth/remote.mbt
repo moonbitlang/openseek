@@ -1,6 +1,6 @@
 ///|
 /// Account authority is always issued by the canonical authentication origin.
-pub const AccountOrigin : String = "https://openseek-api.moonbitlang.cn"
+pub const AccountOrigin : String = "https://seekmoon.moonbitlang.com"
 
 ///|
 /// Enable or retire only this computer's device permission. Registration is
@@ -96,7 +96,7 @@ async fn register_device(session : AuthSession) -> DeviceRegistration {
   let name = @platform.machine_hostname().unwrap_or("Desktop")
   guard @async.with_timeout_opt(ExchangeTimeoutMs, () => {
       let body : Json = { "name": name, "hostname": name }
-      @http.post(session.server_url + "/v2/devices", body, headers={
+      @http.post_text(session.server_url + "/v2/devices", body.stringify(), headers={
         "Authorization": "Bearer " + session.account.token,
       })
     })
@@ -109,7 +109,7 @@ async fn register_device(session : AuthSession) -> DeviceRegistration {
   guard response.code is (200 | 201) else {
     raise AuthError("device registration answered HTTP \{response.code}")
   }
-  guard body.json()
+  guard @json.parse(body)
     is {
       "device_token": String(token),
       "device": { "id": String(id), "name": String(name), .. },

@@ -31,7 +31,7 @@ async test "native draft storage reports corruption and I/O failures instead of 
   let url = "https://github.example/owner/repo/pull/42"
   let path = github_drafts_path(Some(dir), url)
   @fsx.ensure_dir(path.dirname())
-  @fs.write_file(path.to_string(), "{broken")
+  @fs.write_text(path.to_string(), "{broken")
   try read_drafts(Some(dir), { url, }) catch {
     _ => ()
   } noraise {

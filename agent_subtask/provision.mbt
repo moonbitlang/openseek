@@ -105,9 +105,9 @@ async fn provision_locked(
   }
   // 4. Keep .worktrees/ out of status noise, idempotently.
   let exclude = "\{geometry.common_git_dir}/info/exclude"
-  let existing_exclude = @fs.read_file(exclude).text() catch { _ => "" }
+  let existing_exclude = @fs.read_text(exclude) catch { _ => "" }
   if !existing_exclude.split("\n").any(line => line == ".worktrees/") {
-    @fs.write_file(
+    @fs.write_text(
       exclude,
       "\{existing_exclude}\{if existing_exclude == "" || existing_exclude.has_suffix("\n") { "" } else { "\n" }}.worktrees/\n",
       create_mode=CreateOrTruncate,
@@ -235,7 +235,7 @@ async fn copy_mooncakes(origin : String, worker_root : String) -> Unit {
     ["-R", source, "\{worker_root}/.mooncakes"],
     inherit_env=true,
   ) catch {
-    _ => 1
+    _ => return
   }
 }
 

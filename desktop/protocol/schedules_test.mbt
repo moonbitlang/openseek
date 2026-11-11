@@ -61,7 +61,7 @@ test "one-time schedule roundtrips millisecond timestamps" {
         },
         enabled: true,
         run_requested: false,
-        notice: None,
+        skipped: None,
         next_at: Some(1770000000000L),
       },
     ],
@@ -118,4 +118,72 @@ test "automatic schedule workspace and immediate save have explicit codecs" {
     }
     assert_true(rejected)
   }
+}
+
+///|
+test "schedule change replies, actions and skips have explicit codecs" {
+  let refused : @protocol.ScheduleChangeReply = Refused(AlreadyQueued)
+  assert_eq(refused.to_json(), {
+    "status": "refused",
+    "reason": "already_queued",
+  })
+  let changed : @protocol.ScheduleChangeReply = Changed({
+    entries: [],
+    runs: [],
+  })
+  assert_eq(changed.to_json(), {
+    "status": "changed",
+    "state": { "entries": [], "runs": [] },
+  })
+  for reply in [refused, changed] {
+    let decoded : @protocol.ScheduleChangeReply = @json.from_json(
+      reply.to_json(),
+    )
+    assert_eq(decoded, reply)
+  }
+  // The action keeps the wire strings it had as free text.
+  let payload : @protocol.ScheduleActionPayload = @json.from_json({
+    "id": "plan",
+    "action": "resume",
+  })
+  assert_eq(payload.action, Resume)
+  assert_eq(payload.to_json(), { "id": "plan", "action": "resume" })
+  let unknown : Array[Json] = [
+    { "id": "plan", "action": "restart" },
+    { "status": "refused", "reason": "busy" },
+    { "status": "pending" },
+  ]
+  let rejected = unknown.map(json => {
+    try {
+      if json is { "action": _, .. } {
+        let _ : @protocol.ScheduleActionPayload = @json.from_json(json)
+      } else {
+        let _ : @protocol.ScheduleChangeReply = @json.from_json(json)
+      }
+      false
+    } catch {
+      _ => true
+    }
+  })
+  assert_eq(rejected, [true, true, true])
+  // An entry saved before skip reasons existed loses only its free text.
+  let entry : @protocol.ScheduleEntry = @json.from_json({
+    "id": "plan",
+    "spec": {
+      "name": "Check",
+      "task": "check",
+      "timing": { "kind": "every", "minutes": 30 },
+      "timeout_minutes": 10,
+    },
+    "enabled": true,
+    "run_requested": false,
+    "notice": "Skipped: the previous run is still active",
+  })
+  assert_eq(entry.skipped, None)
+  let skipped = { ..entry, skipped: Some(CapacityFull), }
+  guard skipped.to_json() is { "skipped": "capacity_full", .. } else {
+    fail("a skip reason is encoded as its wire tag")
+  }
+  let decoded : @protocol.ScheduleEntry = @json.from_json(skipped.to_json())
+  assert_eq(decoded, skipped)
 }

@@ -2,9 +2,6 @@
 package "openseek_desktop/backend/engine"
 
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/openseek/viz_export",
   "openseek_desktop/backend/internal/worktree",
@@ -64,7 +61,7 @@ pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply 
 
 pub async fn read_job(EngineManager, @protocol.JobReadPayload) -> @protocol.JobReadReply
 
-pub async fn remote_server_base(EngineManager) -> String?
+pub fn remote_server_base() -> String
 
 pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
 
@@ -152,20 +149,12 @@ pub enum PatternRepairEnvironment {
 }
 pub fn PatternRepairEnvironment::to_repr(Self) -> @debug.Repr
 
-pub struct Schedules {
-  manager : EngineManager
-  directory : @pathx.Path?
-  lock : @async.Mutex
-  mut ownership : @fs.File?
-  mut state : @protocol.SchedulesReply?
-  processes : Map[String, @process.Process]
-  stopped : Map[String, Unit]
-}
+type Schedules
 pub fn Schedules::Schedules(EngineManager, @pathx.Path?) -> Self
-pub async fn Schedules::action(Self, @protocol.ScheduleActionPayload) -> @protocol.SchedulesReply
+pub async fn Schedules::action(Self, @protocol.ScheduleActionPayload) -> @protocol.ScheduleChangeReply
 pub async fn Schedules::list(Self) -> @protocol.SchedulesReply
 pub async fn Schedules::run(Self, on_run_changed~ : (@protocol.ScheduleRun) -> Unit, sink~ : EventSink, on_workspaces~ : (Array[String]) -> Unit) -> Unit
-pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.SchedulesReply
+pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.ScheduleChangeReply
 
 pub(all) struct SettingsPatch {
   provider : String?

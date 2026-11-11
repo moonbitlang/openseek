@@ -51,7 +51,15 @@ pub fn Model::view(
         } else {
           share_progress_view(locale, progress)
         }
-      SigningIn => @html.span(ui(locale, CompleteBrowserSignIn))
+      SigningIn =>
+        @html.div(class="account-sign-in", [
+          @html.span(ui(locale, CompleteBrowserSignIn)),
+          @html.button(
+            class="button secondary",
+            on_click=emit(Close),
+            ui(locale, CancelSignIn),
+          ),
+        ])
       SignInRequired =>
         @html.div([
           @html.p(

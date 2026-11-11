@@ -114,8 +114,8 @@ pub async fn HostState::sync_builtin_skills(
 /// connection-owned filesystem watcher tasks start in `HostConnection::run`.
 /// Every background task is best-effort: a language-service hiccup degrades
 /// that feature, never the connection.
-pub fn[G] spawn_host_pumps(
-  group : @async.TaskGroup[G],
+pub fn spawn_host_pumps(
+  group : @async.TaskGroup,
   state : HostState,
   emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {

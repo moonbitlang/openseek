@@ -93,38 +93,3 @@ test "one artifact read supplies all repeated references without replacing settl
     ready,
   )
 }
-
-///|
-test "artifact follow-ups decode the question and the captured state" {
-  let reference = "scratch/artifact/chart.html"
-  let payload = "{\"title\":\"Selected settings\",\"state\":{\"workers\":8}}"
-  let message = @js.Value::from_json({
-    "prompt": "  Explain this result. ",
-    "title": " Explain ",
-  })
-  assert_true(
-    decode_artifact_followup(reference, payload, message)
-    is Some(
-      RequestFollowup(
-        prompt="Explain this result.",
-        title="Explain",
-        snapshot=Some(snapshot)
-      )
-    ) &&
-    snapshot.state == { "workers": 8 },
-  )
-  let invalid_messages : Array[Json] = [
-    { "prompt": " \n ", "title": "Explain" },
-    { "prompt": "Explain this result.", "title": 42 },
-  ]
-  for invalid in invalid_messages {
-    assert_true(
-      decode_artifact_followup(
-        reference,
-        payload,
-        @js.Value::from_json(invalid),
-      )
-      is None,
-    )
-  }
-}

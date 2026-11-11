@@ -1,9 +1,9 @@
 import {
-  "moonbitlang/async/semaphore",
-  "moonbitlang/async/socket",
-  "moonbitlang/async/stdio",
-  "moonbitlang/async/http",
-  "moonbitlang/async/websocket",
+  "moonbitlang/core/async/semaphore",
+  "moonbitlang/core/async/socket",
+  "moonbitlang/core/async/stdio",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/websocket",
   "moonbitlang/core/encoding/utf8",
   "openseek_desktop/protocol",
   "openseek_desktop/backend/pathx",
@@ -11,10 +11,10 @@ import {
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/uuid",
   "moonbitlang/openseek/jsonrpc",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/core/json",
   "moonbitlang/core/env",
 }
@@ -23,10 +23,24 @@ supported_targets = "+native+wasm"
 
 import {
   "openseek_desktop/protocol",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/env",
 } for "test"
 
 import {
   "openseek_desktop/backend/internal/processx",
 } for "wbtest"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/os_error",
+    "moonbitlang/core/async/process",
+    "moonbitlang/core/async/semaphore",
+    "moonbitlang/core/async/socket",
+    "moonbitlang/core/async/stdio",
+    "moonbitlang/core/async/websocket",
+  ],
+)

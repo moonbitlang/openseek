@@ -2,7 +2,7 @@
 package "openseek_desktop/backend/host"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/engine",
@@ -31,7 +31,7 @@ pub async fn open_path_preview(@protocol.OpenPathPayload) -> @protocol.OpenPathR
 
 pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
-pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
+pub fn spawn_host_pumps(@async.TaskGroup, HostState, async (@protocol.Notification) -> Unit) -> Unit
 
 // Errors
 #derive(@debug.Debug)

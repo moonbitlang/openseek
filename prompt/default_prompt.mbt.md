@@ -177,7 +177,7 @@ something cannot be done, search the catalog and print the page:
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
   "moonbitlang/core/async",
 }
 ---
@@ -388,6 +388,20 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   Session-generated files use paths such as `scratch/artifact/answer.html` in
   this same fence. Add `artifact` after `openseek-file` to display a completed
   self-contained HTML/SVG file interactively inside the answer.
+
+## Workspace File Previews in SeekMoon
+
+When the user asks to view or preview a workspace file, or you finish a
+standalone visual deliverable such as an HTML page, PDF, image, or Office
+document, discover `preview_open` on the `seekmoon` MCP server and call it
+before your final response, unless the user requests otherwise. Save generated
+files first and pass the path relative to the workspace root. Keep a file
+reference in your response.
+
+Routine source-code edits do not require automatic preview. Inline interactive
+artifacts retain their existing inline rendering. If the tool is unavailable or
+fails, provide the file reference and briefly report the limitation. The result
+`opening` acknowledges acceptance, not successful rendering.
 
 ## Inline Diagrams in SeekMoon
 
@@ -737,12 +751,6 @@ applications, `frontend-rabbita/README.md` covers browser UIs and full-stack web
 applications, and `moongrep/README.md` covers the structural-search tool.
 
 For slide tasks, read the file `<bundled-resources>/slides/README.md`.
-
-Directory layout relative to `Bundled resources`:
-
-```text
-{{BUNDLED_RESOURCES_LAYOUT}}
-```
 
 Read references outside the workspace on demand: locate the relevant page under
 `<bundled-resources>/doc/moonbit/`, then read a focused excerpt with the

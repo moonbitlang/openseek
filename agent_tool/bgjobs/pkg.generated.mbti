@@ -2,7 +2,7 @@
 package "moonbitlang/openseek/agent_tool/bgjobs"
 
 import {
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/openseek/agent_runtime",
@@ -18,7 +18,7 @@ pub async fn earlier_job_records(String, own~ : String) -> Array[@openseek_proto
 
 // Types and methods
 type BgJobRuntime
-pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, persistent_logs? : Bool, prepare_output_dir? : async () -> String, hard_output_cap? : Int32, hard_timeout_ms? : Int32, on_job_exit? : (BgJobSnapshot) -> Unit, on_job_event? : (@openseek_protocol.JobEventKind, @openseek_protocol.JobRecord) -> Unit) -> Self
+pub fn BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope, spill_dir? : String, persistent_logs? : Bool, prepare_output_dir? : async () -> String, hard_output_cap? : Int32, hard_timeout_ms? : Int32, on_job_exit? : (BgJobSnapshot) -> Unit, on_job_event? : (@openseek_protocol.JobEventKind, @openseek_protocol.JobRecord) -> Unit) -> Self
 pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> @json.Json, image_output? : () -> ImageOutput, pinned? : () -> Bool) -> String
 pub async fn BgJobRuntime::finalize(Self) -> Unit
 pub fn BgJobRuntime::generation(Self) -> String
@@ -31,8 +31,8 @@ pub async fn BgJobRuntime::read_output_tail(Self, String, Int32) -> String?
 pub fn BgJobRuntime::records(Self) -> Array[@openseek_protocol.JobRecord]
 pub async fn BgJobRuntime::request_stop(Self, String) -> Bool
 pub fn BgJobRuntime::snapshot(Self, String) -> BgJobSnapshot?
-pub async fn BgJobRuntime::spawn_foreground_retained(Self, String, Array[String], String?, Int32, stdin? : &@process.ProcessInput) -> @shell_exec.ShellExecution
-pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, description? : String, cwd? : String, max_output_chars? : Int32, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, stdin? : &@process.ProcessInput, cancel_handler? : @process.CancellationHandler, extra_env? : Map[String, String], on_end? : async (JobEnd) -> Unit, on_published? : () -> Unit, subagent? : () -> @openseek_protocol.SubagentInfo, reaped? : Bool) -> String
+pub async fn BgJobRuntime::spawn_foreground_retained(Self, String, Array[String], String?, Int32, stdin? : @process.ProcessInput) -> @shell_exec.ShellExecution
+pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, description? : String, cwd? : String, max_output_chars? : Int32, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, stdin? : @process.ProcessInput, cancel_handler? : @process.CancellationHandler, extra_env? : Map[String, String], on_end? : async (JobEnd) -> Unit, on_published? : () -> Unit, subagent? : () -> @openseek_protocol.SubagentInfo, reaped? : Bool) -> String
 pub async fn BgJobRuntime::stop(Self, String) -> Bool
 pub fn BgJobRuntime::stop_requested(Self, String) -> Bool
 pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?

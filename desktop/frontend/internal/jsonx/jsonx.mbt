@@ -13,20 +13,6 @@ pub fn json_text(fields : Map[String, Json], key : String) -> String? {
 }
 
 ///|
-/// The field's text, falling back to a legacy field name when the current one
-/// is absent.
-pub fn json_first_text(
-  fields : Map[String, Json],
-  key : String,
-  legacy : String,
-) -> String? {
-  match json_text(fields, key) {
-    Some(value) => Some(value)
-    None => json_text(fields, legacy)
-  }
-}
-
-///|
 /// `key`'s numeric value truncated to `Int`, or `None` when the field is
 /// absent or not a JSON number.
 pub fn json_int(fields : Map[String, Json], key : String) -> Int32? {

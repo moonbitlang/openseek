@@ -1,7 +1,7 @@
 import {
   "moonbitlang/openseek_protocol" @protocol,
-  "moonbitlang/async",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/stdio",
 }
 
 import {
@@ -11,3 +11,10 @@ import {
 supported_targets = "+wasm+native"
 
 warnings = "+unnecessary_annotation"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/stdio",
+  ],
+)

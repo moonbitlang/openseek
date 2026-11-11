@@ -10,11 +10,11 @@ import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/eval/report",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "test"
 
 warnings = "+unnecessary_annotation"
@@ -24,3 +24,10 @@ supported_targets = "+native"
 // so they do not compete with one another for the compiler's build budget.
 
 max_concurrent_tests = 1
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

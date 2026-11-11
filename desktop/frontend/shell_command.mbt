@@ -206,15 +206,16 @@ fn shell_command_finished(
       .iter()
       .find_first(p => p.id == shell)
       .unwrap()
-    let conversations = model.cloud.conversations.copy()
-    conversations[session] = {
-      ..conv,
-      shell_commands: conv.shell_commands.filter(p => p.id != shell),
-    }
     (
       @interop.Cloud(account~, session~),
       pending,
-      { ..model, cloud: { ..model.cloud, conversations, }, },
+      {
+        ..model,
+        cloud: model.cloud.replace(session, {
+          ..conv,
+          shell_commands: conv.shell_commands.filter(p => p.id != shell),
+        }),
+      },
     )
   } else {
     return (@cmd.none, model)

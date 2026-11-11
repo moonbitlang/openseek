@@ -174,7 +174,7 @@ async fn inspect_node(
   match @fs.kind(path, follow_symlink=false) {
     Regular => {
       let canonical = @fs.realpath(path)
-      let bytes = @fs.read_file(path).binary()
+      let bytes = @fs.read_binary(path)
       File({
         canonical,
         digest: @crypto.bytes_to_hex_string(@crypto.sha256(bytes)),

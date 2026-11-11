@@ -48,7 +48,7 @@ class ExportHarness extends DesktopBrowserHarness {
       if (request.method === 'auth.cancel') { this.signInCancelled = true; return { connected: false }; }
       if (request.method === 'auth.connect') {
         if (this.pendingSignIn) await this.pendingSignIn;
-        if (this.signInError || this.signInCancelled) throw new Error(this.signInError || 'Sign-in cancelled');
+        if (this.signInError || this.signInCancelled) throw new Error(this.signInError || 'the sign-in was cancelled');
         this.accountSignedIn = true;
         return { connected: false };
       }
@@ -75,7 +75,7 @@ class ExportHarness extends DesktopBrowserHarness {
           get: (_, method) => async params => {
             if (method === 'host.connect') {
               for (const callback of listeners.get('openseek.agent.connected') || []) {
-                callback({ payload: { protocol: 5 } });
+                callback({ payload: { protocol: 6 } });
               }
             }
             return window.desktopRequest({ method, params });
@@ -194,24 +194,27 @@ test('sign-in errors preserve their cause and offer recovery', async ({ page }) 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('closing the dialog cancels a sign-in it started', async ({ page }) => {
-  const app = new ExportHarness(page);
-  app.accountSignedIn = false;
-  let finish;
-  app.pendingSignIn = new Promise(resolve => { finish = resolve; });
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect.poll(() => app.count('auth.connect')).toBe(1);
-  await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await expect.poll(() => app.count('auth.cancel')).toBe(1);
-  finish();
-  await app.openExport();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
-});
+for (const cancel of ['Escape', 'button']) {
+  test(`closing the dialog with ${cancel} cancels a sign-in it started`, async ({ page }) => {
+    const app = new ExportHarness(page);
+    app.accountSignedIn = false;
+    let finish;
+    app.pendingSignIn = new Promise(resolve => { finish = resolve; });
+    await app.openDesktop();
+    const dialog = await app.openExport();
+    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect.poll(() => app.count('auth.connect')).toBe(1);
+    if (cancel === 'Escape') await page.keyboard.press('Escape');
+    else await dialog.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect.poll(() => app.count('auth.cancel')).toBe(1);
+    finish();
+    await app.openExport();
+    await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+    expect(app.pageErrors).toEqual([]);
+  });
+}
 
 test('browser Work sharing captures the selected host but publishes as the browser account', async ({ page }) => {
   const app = new ExportHarness(page);

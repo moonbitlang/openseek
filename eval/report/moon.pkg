@@ -1,13 +1,20 @@
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
 }
 
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
 } for "test"
 
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

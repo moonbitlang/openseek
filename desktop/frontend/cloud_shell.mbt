@@ -14,15 +14,16 @@ fn submit_cloud_shell(
   }
   let (model, id) = model.allocate_submission_id()
   let shell : ShellCommand = { id, command, }
-  let conversations = model.cloud.conversations.copy()
-  conversations[session] = {
-    ..conv,
-    shell_commands: [..conv.shell_commands, shell],
-    submission_sequence: conv.submission_sequence + 1,
-    initial_submission: None,
-    initial_attachments: [],
+  let model = {
+    ..model,
+    cloud: model.cloud.replace(session, {
+      ..conv,
+      shell_commands: [..conv.shell_commands, shell],
+      submission_sequence: conv.submission_sequence + 1,
+      initial_submission: None,
+      initial_attachments: [],
+    }),
   }
-  let model = { ..model, cloud: { ..model.cloud, conversations, }, }
   if model.cloud.draft_identity() == Some(owner) {
     update_cloud(dispatch, @cloud.TerminalRequested(owner, Some(shell)), model)
   } else {
@@ -80,12 +81,13 @@ fn cloud_shell_not_started(
     conv.shell_commands.iter().find_first(p => p.id == id) is Some(pending) else {
     return (@cmd.none, model)
   }
-  let conversations = model.cloud.conversations.copy()
-  conversations[session] = {
-    ..conv,
-    shell_commands: conv.shell_commands.filter(p => p.id != id),
+  let model = {
+    ..model,
+    cloud: model.cloud.replace(session, {
+      ..conv,
+      shell_commands: conv.shell_commands.filter(p => p.id != id),
+    }),
   }
-  let model = { ..model, cloud: { ..model.cloud, conversations, }, }
   let owner = @interop.Cloud(account~, session~)
   let restore = model
     .command_result_input(owner)

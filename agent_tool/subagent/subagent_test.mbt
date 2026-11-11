@@ -40,8 +40,8 @@ fn kinds() -> Array[@subagent.Kind] {
 }
 
 ///|
-async fn[X] tool_and_runtime(
-  group : @async.TaskGroup[X],
+async fn tool_and_runtime(
+  group : @async.TaskGroup,
   max_live? : Int32,
   script? : String,
 ) -> (@agent_tool.AgentToolDefinition, @bgjobs.BgJobRuntime) {
@@ -171,7 +171,7 @@ async test "subagent bounds every child's step budget by its kind's ceiling" {
         }
         @async.sleep(25)
       }
-      let request = @json.parse(@fs.read_file("\{seen}/request.json").text())
+      let request = @json.parse(@fs.read_text("\{seen}/request.json"))
       assert_true(
         request is { "limits": { "max_steps": Number(steps, ..), .. }, .. } &&
         steps == expected.to_double(),

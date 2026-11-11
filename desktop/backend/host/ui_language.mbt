@@ -39,7 +39,7 @@ async fn write_ui_language(
   let unique_path : @pathx.Path = unique_dir
   let temp = path.join(unique_path.basename().to_owned())
   defer @async.protect_from_cancel(() => @fsx.remove_if_exists(temp))
-  @fs.write_file(
+  @fs.write_text(
     temp.to_string(),
     preference.to_json().stringify(),
     create_mode=CreateOrTruncate,

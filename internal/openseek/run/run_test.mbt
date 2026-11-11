@@ -22,10 +22,7 @@ async test "an invalid review deadline is rejected before the workspace is creat
 ///|
 /// Serve every chat request with the one streamed `delta`, and return the
 /// endpoint URL — `None` where local TCP binds are not permitted.
-async fn scripted_provider(
-  group : @async.TaskGroup[Unit],
-  delta : Json,
-) -> String? {
+async fn scripted_provider(group : @async.TaskGroup, delta : Json) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
     error if "\{error}".contains("Operation not permitted") => {
       println("local TCP bind unavailable; skipping run exit test")
@@ -39,13 +36,13 @@ async fn scripted_provider(
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
-      (_request, body, conn) => {
-        ignore(body.read_all())
+      (_request, conn) => {
+        ignore(conn.read_all())
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write("data: \{chunk.stringify()}\n\n")
-        conn.write("data: [DONE]\n\n")
+        conn.write_string("data: \{chunk.stringify()}\n\n")
+        conn.write_string("data: [DONE]\n\n")
       },
       max_connections=8,
     )
@@ -70,7 +67,7 @@ fn one_step_run(
 
 ///|
 async fn read_result(path : String) -> @openseek_protocol.RunResult {
-  @openseek_protocol.parse_run_result(@json.parse(@fs.read_file(path).text()))
+  @openseek_protocol.parse_run_result(@json.parse(@fs.read_text(path)))
 }
 
 ///|
@@ -92,7 +89,7 @@ async test "a single run exits successfully only when its turn completes" {
         return
       }
       // A stale result from an earlier run is replaced, never trusted.
-      @fs.write_file(result_file, "stale", create_mode=CreateOrTruncate)
+      @fs.write_text(result_file, "stale", create_mode=CreateOrTruncate)
       @run.run_task_command(
         one_step_run("\{root}/complete", url, extra=[
           "--result-file", result_file,

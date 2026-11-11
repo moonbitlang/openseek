@@ -215,7 +215,7 @@ pub async fn suite_config_from_file(
   system_prompt_file~ : String,
   system_prompt_addendum_file~ : String,
 ) -> SuiteConfig {
-  let text = @fs.read_file(path).text()
+  let text = @fs.read_text(path)
   let base_dir = dirname(path)
   suite_config_from_json(
     @json.parse(text),
@@ -390,7 +390,7 @@ async fn run_suite_job(
   suite : SuiteConfig,
   job : SuiteJob,
 ) -> SuiteTrialArtifact {
-  let task_template = @fs.read_file(job.problem.task_file).text()
+  let task_template = @fs.read_text(job.problem.task_file)
   let config = Config(
     api_key=suite.api_key,
     model=job.model,
@@ -529,7 +529,7 @@ fn relocate_suite_combo(
 
 ///|
 async fn write_suite_manifest(manifest : SuiteManifest) -> Unit {
-  @fs.write_file(
+  @fs.write_text(
     suite_manifest_path(manifest.out_dir),
     ToJson::to_json(manifest).stringify(),
     create_mode=CreateOrTruncate,
@@ -538,7 +538,7 @@ async fn write_suite_manifest(manifest : SuiteManifest) -> Unit {
 
 ///|
 async fn read_suite_manifest(out_dir : String) -> SuiteManifest {
-  let text = @fs.read_file(suite_manifest_path(out_dir)).text()
+  let text = @fs.read_text(suite_manifest_path(out_dir))
   SuiteManifest::from_json(@json.parse(text))
 }
 

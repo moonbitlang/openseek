@@ -42,20 +42,26 @@ priv struct InstalledSource {
 }
 
 ///|
-/// Where the library lives: `OPENSEEK_GLOBAL_SKILLS_DIR`, else the user's
-/// home directory (`HOME`, or `USERPROFILE` on Windows) plus
-/// `/.openseek/skills`. Deliberately resolved like the engine resolves it:
-/// installing somewhere the engine never reads would be a silent no-op.
-fn library_dir_from_env() -> @pathx.Path raise SkillsError {
+/// Where the global library lives: `OPENSEEK_GLOBAL_SKILLS_DIR`, else the
+/// user's home directory (`HOME`, or `USERPROFILE` on Windows) plus
+/// `/.openseek/skills`; `None` when neither is set. The desktop host hands
+/// this same directory to every engine it spawns, so the panel installs
+/// exactly where the engine reads.
+pub fn global_library_dir() -> @pathx.Path? {
   if @env.get("OPENSEEK_GLOBAL_SKILLS_DIR") is Some(dir) {
-    return dir
+    return Some(dir)
   }
-  if @home.dir() is Some(home) {
-    return home.join(".openseek/skills")
+  @home.dir().map(home => home.join(".openseek/skills"))
+}
+
+///|
+fn library_dir_from_env() -> @pathx.Path raise SkillsError {
+  guard global_library_dir() is Some(dir) else {
+    raise SkillsError(
+      "cannot locate the skills library; set OPENSEEK_GLOBAL_SKILLS_DIR",
+    )
   }
-  raise SkillsError(
-    "cannot locate the skills library; set OPENSEEK_GLOBAL_SKILLS_DIR",
-  )
+  dir
 }
 
 ///|

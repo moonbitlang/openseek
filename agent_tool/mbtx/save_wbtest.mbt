@@ -9,10 +9,10 @@ async test "saved script reads wait for a shared edit and rollback to settle" {
         let release : @async.Queue[Unit] = Queue(kind=Unbounded)
         let edit = group.spawn(() => {
           state.with_access(() => {
-            @fs.write_file(path, "transient source")
+            @fs.write_text(path, "transient source")
             entered.put(())
             release.get()
-            @fs.write_file(path, "settled source")
+            @fs.write_text(path, "settled source")
           })
         })
         entered.get()

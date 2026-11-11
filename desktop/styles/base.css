@@ -53,8 +53,6 @@ textarea {
   font: inherit;
 }
 
-/* Every app button starts from the same neutral chrome. Feature styles add
-   their own geometry and intent; the shared action variants live in pages.css. */
 button {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -191,8 +189,10 @@ samp,
   min-width: 140px;
 }
 
-.custom-select-menu:popover-open {
+.custom-select-menu:popover-open,
+.custom-select-group {
   display: grid;
+  gap: var(--space-2);
 }
 
 .custom-select-group + .custom-select-group {
@@ -230,6 +230,7 @@ samp,
 
 .menu-option {
   grid-template-columns: minmax(0, 1fr) 16px;
+  padding-block: 0.7em;
 }
 
 [id="conversation-transfer:actions"] .action-menu-item {
@@ -255,10 +256,9 @@ samp,
   text-align: center;
 }
 
-/* A described row stacks its label over a quieter explanation. */
 .custom-select-option-text {
   display: grid;
-  gap: 1px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -272,25 +272,15 @@ samp,
   background: var(--color-text-selection);
 }
 
-/* The app's one say over native scrollbars: the thumb color. Everything else
-   — the bar's width, and whether it overlays the content or takes a lane out
-   of it — belongs to the platform. Panes that need to know which of those
-   they got read `--scrollbar-lane`, measured at startup by
-   frontend/dom_helpers.mbt.
-
-   Do not reach for `::-webkit-scrollbar` to take any of that back: Chromium
-   drops those rules for any element with a non-initial `scrollbar-color`, and
-   this declaration inherits to every element in the page. Rules written there
-   would apply nowhere and quietly mislead whoever reads them next. */
+/* Preserve native scrollbar geometry; dom_helpers.mbt measures its occupied
+   width as --scrollbar-lane. Chromium ignores ::-webkit-scrollbar styling
+   where the inherited scrollbar-color is non-auto. */
 html {
   font-size: var(--font-size-base);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
 
-/* Inline SVG icons (vscode-codicons). They take the surrounding control's
-   color via currentColor and its size via `--icon-size`, which the control
-   declares from the `--icon-*` scale in tokens.css. Large is the default,
-   so only controls that want a smaller glyph say anything. */
+/* Controls set --icon-size on the wrapper; SVG and font icons share it. */
 .icon {
   display: inline-flex;
   flex: none;
@@ -312,10 +302,7 @@ html {
   content: "\eba5";
 }
 
-/* The heartbeat shared by every "still working" mark: the sub-run lanes in
-   the transcript tail and the composer's running row. One definition so two
-   components that can be on screen at once never pulse out of step, and so
-   neither sheet silently owns the other's animation. */
+/* Shared by the composer's running mark and live sub-run marks. */
 @keyframes lane-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
@@ -349,12 +336,8 @@ html {
   }
 }
 
-/* Register progress as a number so CSS can interpolate between 0 and 1.
-   Layout size = requested size * opening progress: a 320px pane occupies
-   0px when closed, 160px at progress 0.5, and 320px when fully open.
-   Only toggling or expanding a pane animates progress. A resize changes the
-   requested size directly, without starting a new transition. These local
-   numbers do not inherit into nested panes. */
+/* Animate opening progress, not the saved pane dimensions, so dragging does
+   not start a transition. Non-inheriting properties isolate nested panes. */
 @property --sidebar-open-progress {
   syntax: "<number>";
   inherits: false;
@@ -379,6 +362,22 @@ html {
   initial-value: 0;
 }
 
+:is(
+  .sidebar-resize-handle,
+  .editor-resize-handle,
+  .tree-resize-handle,
+  .terminal-resize-handle,
+  .review-split-handle
+):hover,
+.review-split-handle:focus-visible,
+html.is-resizing :is(.sidebar-resize-handle, .editor-resize-handle),
+html:is(.is-resizing-row, .is-resizing-col) .tree-resize-handle,
+html.is-resizing-terminal .terminal-resize-handle,
+html.is-resizing-review .review-split-handle {
+  background: linear-gradient(var(--color-accent), var(--color-accent)) center /
+    var(--resize-handle-line-size, 2px 100%) no-repeat;
+}
+
 .app {
   /* Vertical and horizontal resize handles share one hit-area size per axis.
      Component styles consume the dimension that matches their seam. */
@@ -392,15 +391,17 @@ html {
       2 * var(--sidebar-mode-padding)
   );
   --sidebar-min-width: max(
-    220px,
+    calc(1rem * 220 / 15),
     calc(var(--sidebar-toggle-reserved-width) + var(--sidebar-mode-width) + 13px)
   );
   --sidebar-column-width: calc(
-    clamp(var(--sidebar-min-width), var(--sidebar-width, 264px), 480px) * var(--sidebar-open-progress)
+    clamp(
+      var(--sidebar-min-width),
+      var(--sidebar-width, calc(1rem * 264 / 15)),
+      calc(1rem * 480 / 15)
+    ) * var(--sidebar-open-progress)
   );
-  --sidebar-drawer-width: min(320px, 86vw);
-  /* Follow the app type scale while preserving the 14px default geometry.
-     Native window insets below remain independent platform measurements. */
+  --sidebar-drawer-width: min(calc(1rem * 320 / 15), 86vw);
   --titlebar-icon-size: var(--icon-md);
   --titlebar-control-size: calc(var(--titlebar-icon-size) * 24 / 14);
   --titlebar-control-gap: calc(var(--titlebar-icon-size) * 4 / 14);
@@ -429,11 +430,6 @@ html {
     calc(var(--sidebar-toggle-reserved-width) - var(--sidebar-column-width))
   );
   display: grid;
-  /* The sidebar track reads `--sidebar-width`, set as the user drags the
-     handle on the aside's right edge (see frontend/sidebar_resize.mbt); it
-     defaults to the old fixed maximum and is clamped so the sidebar keeps
-     enough room for its header while the content column keeps the rest. The clamp also
-     re-fits the panel on window resize without any script. */
   grid-template-columns: var(--sidebar-column-width) minmax(0, 1fr);
   /* Track #app's content box (which already accounts for any scrollbar)
      rather than 100vh, so the two height bases can't disagree. */
@@ -443,9 +439,8 @@ html {
     var(--drawer-easing);
 }
 
-/* Collapsed: the sidebar column folds to zero and the conversation
-   takes the full width. The aside stays in the DOM (merely unmounted
-   from layout) so reopening keeps its scroll position. */
+/* Keep the sidebar mounted to preserve scroll position; hide it after the
+   column finishes collapsing. */
 .app.sidebar-collapsed {
   --sidebar-open-progress: 0;
 }
@@ -481,10 +476,7 @@ html.native-titlebar-overlay .app
   -webkit-app-region: no-drag;
 }
 
-/* The conversation (left) and the editor (right) live side by side as two
-   independent parts. The editor track is zero-width until the panel
-   opens, so the viewer host element stays in the DOM but takes no
-   space. */
+/* Keep the viewer mounted in a zero-width track while the editor is closed. */
 .content {
   --main-titlebar-trailing-inset: calc(
     var(--topbar-inline-padding) +
@@ -516,8 +508,6 @@ html.native-titlebar-overlay .app
     --terminal-open-progress var(--drawer-duration) var(--drawer-easing);
 }
 
-/* Opening the terminal carves a resizable second row out of the conversation
-   column. The editor keeps the full height in its own column. */
 /* Office pages need more horizontal room than a source-code pane. A saved
    drag width still wins, and the conversation retains its existing floor. */
 .content:has(> .editor.office-reading) {
@@ -536,12 +526,6 @@ html.native-titlebar-overlay .app
   grid-column: 2;
 }
 
-/* Open: the conversation and the editor share the content area. The
-   editor's width is `--editor-width`, set as the user drags the handle on
-   its left edge (see editor_resize.mbt); it defaults to half and is
-   clamped against the content area (`100%`, sidebar excluded) so the
-   editor floors at 360px while the conversation keeps at least 240px. The
-   clamp also re-fits the panel on window resize without any script. */
 .content.panel-open {
   --editor-open-progress: 1;
 }
@@ -553,88 +537,7 @@ html.native-titlebar-overlay .app
   --editor-expand-progress: 1;
 }
 
-/* The expanded editor occupies the main column and inherits its reservation. */
+/* Expansion must retain space for the shell's leading titlebar controls. */
 .content.panel-expanded .editor-tabsbar {
   padding-inline-start: var(--main-titlebar-leading-inset);
 }
-
-
-
-
-/* SSH identity is separate from the executable command. */
-.ssh-host-row { display: flex; align-items: center; gap: 1rem; padding: var(--space-6) 0; border-bottom: 1px solid var(--color-divider); }
-.ssh-host-icon { display: flex; padding: var(--space-5); border-radius: 10px; background: var(--color-bg-subtle); color: var(--color-text-secondary); }
-.ssh-host-copy { flex: 1; min-width: 0; }
-.ssh-host-title { padding: 0; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ssh-host-address, .ssh-help, .ssh-subtitle, .ssh-settings-footer > span { color: var(--color-text-secondary); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
-.ssh-host-address { margin: var(--space-2) 0 var(--space-4); }
-.ssh-host-actions, .ssh-auth-actions, .ssh-settings-footer { display: flex; align-items: center; gap: var(--space-4); }
-.ssh-more { display: flex; padding: var(--space-3); }
-.ssh-settings-footer { justify-content: space-between; padding: var(--space-6) 0; gap: var(--space-6); }
-.ssh-settings-footer button { display: flex; align-items: center; gap: var(--space-3); }
-.ssh-empty { padding: var(--space-4) 0; color: var(--color-text-secondary); }
-.ssh-status { display: inline-flex; gap: var(--space-3); align-items: center; color: var(--color-text-secondary); font-size: var(--font-size-caption); flex-shrink: 0; }
-.ssh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.ssh-status.online .ssh-dot { background: #43876a; }
-.ssh-dot.pending { background: #bd8b36; animation: ssh-pulse 1.4s ease-in-out infinite; }
-@keyframes ssh-pulse { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .ssh-dot.pending { animation: none; } }
-.ssh-locations { display: flex; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-5) var(--space-7); border-bottom: 1px solid var(--color-divider); }
-.ssh-location { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); min-width: 0; max-width: 100%; border: 1px solid var(--color-border); font-size: var(--font-size-xs); }
-.ssh-location > span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ssh-location small { color: var(--color-text-secondary); }
-.ssh-location.selected { background: var(--color-bg-subtle); border-color: var(--color-text-secondary); }
-.ssh-location.add { border-style: dashed; color: var(--color-text-secondary); }
-/* OpenSSH output includes fingerprints and fixed-column warning banners.
-   Preserve its lines; scrolling must not reflow them into misleading fragments. */
-.ssh-output, .ssh-error {
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: 100%;
-  max-height: min(280px, 35vh);
-  overflow: auto;
-  white-space: pre;
-  overflow-wrap: normal;
-  word-break: normal;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  font-weight: 400;
-  line-height: 1.6;
-  padding: var(--space-5);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg-subtle);
-  user-select: text;
-}
-.ssh-error { color: var(--color-danger, #c74949); }
-.ssh-subtitle { margin: var(--space-4) 0 var(--space-7); font-size: var(--font-size-sm); }
-.ssh-field { display: flex; flex-direction: column; gap: var(--space-4); margin: var(--space-6) 0; font-size: var(--font-size-xs); font-weight: 500; }
-.ssh-field input { width: 100%; box-sizing: border-box; font-weight: 400; }
-#ssh-command { font-family: var(--font-family-mono); font-size: var(--font-size-xs); }
-.ssh-preview { display: flex; align-items: center; gap: var(--space-5); padding: var(--space-5) 1rem; margin: var(--space-6) 0 var(--space-5); background: var(--color-bg-subtle); border: 1px solid var(--color-border); border-radius: 8px; min-width: 0; }
-.ssh-preview > div { min-width: 0; flex: 1; }
-.ssh-preview-title { font-weight: 600; font-size: var(--font-size-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ssh-preview .ssh-host-address { margin: var(--space-1) 0 0; }
-.ssh-preview small { color: var(--color-text-secondary); font-size: var(--font-size-micro); }
-.ssh-help { line-height: 1.6; margin: var(--space-5) 0 var(--space-6); }
-.ssh-auth-actions { justify-content: flex-end; margin-top: var(--space-6); flex-wrap: wrap; }
-.ssh-detail-identity { display: flex; gap: var(--space-4); align-items: center; margin: var(--space-6) 0 var(--space-5); overflow-wrap: anywhere; }
-.ssh-command-details { margin-top: var(--space-7); padding-top: var(--space-6); border-top: 1px solid var(--color-divider); }
-.ssh-command-details summary { cursor: pointer; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.ssh-command-details pre { font-size: var(--font-size-xs); padding: var(--space-5); background: var(--color-bg-subtle); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.ssh-context { display: inline-flex; align-items: center; gap: var(--space-4); padding-right: var(--space-5); border-right: 1px solid var(--color-divider); min-width: 0; max-width: 100%; flex: 0 0 auto; }
-.ssh-context-host { max-width: 100px; display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: var(--color-text-secondary); font-size: var(--font-size-xs); padding: 0; }
-.ssh-context-host > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ssh-context .button { flex: 0 0 auto; white-space: nowrap; margin-left: auto; font-size: var(--font-size-caption); padding: var(--space-2) var(--space-4); }
-
-.terminal-host-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-
-.ssh-auth { border-top: 1px solid var(--color-divider); margin-top: var(--space-6); padding-top: var(--space-4); }
-.ssh-auth-heading { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.ssh-auth-prompt { font-family: var(--font-family-mono); }
-.ssh-field .ssh-auth-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
-.ssh-secret { display: flex; gap: var(--space-4); align-items: center; }
-.ssh-secret input { min-width: 0; flex: 1; }
-.ssh-auth-keys { text-align: right; font-size: var(--font-size-caption); color: var(--color-text-secondary); margin: var(--space-4) 0 0; }
-.ssh-auth .ssh-field { margin: var(--space-5) 0 var(--space-4); }
-.ssh-auth .ssh-auth-heading { margin: var(--space-4) 0 var(--space-5); }

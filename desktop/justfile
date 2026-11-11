@@ -11,6 +11,7 @@ build-scripts-check:
     node --test package/notarization.test.mjs
     node --test package/office_fonts.test.mjs
     node --test package/office_pdf.test.mjs
+    node --test package/precompress.test.mjs
     node --check scripts/release.mjs
     node --test scripts/release.test.mjs
 
@@ -47,4 +48,5 @@ console-proxy *args:
 # Use the CI bundle: a debug resource can exceed Chromium's mocked-response limit.
 test-browser:
     node package/build.mjs browser --release
+    moon test ../indexeddb --target js --build-only --include-skipped
     {{ if os() == "windows" { "npm.cmd" } else { "npm" } }} --prefix e2e test

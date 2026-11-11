@@ -20,9 +20,8 @@ async test "Cloud downloads validate cached bytes and fetch changed originals wi
         defer server.close()
         let origin = "http://127.0.0.1:\{server.addr.port()}"
         group.spawn_bg(() => {
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           defer conn.close()
-          let request = conn.read_request()
           assert_true(request.meth is Head)
           assert_eq(
             request.path,
@@ -37,9 +36,8 @@ async test "Cloud downloads validate cached bytes and fetch changed originals wi
           ..send_response(if unchanged { 304 } else { 200 }, "OK")
           .end_response()
           if !unchanged {
-            let (conn, _) = server.accept()
+            let (conn, request) = accept_request(server)
             defer conn.close()
-            let request = conn.read_request()
             assert_true(request.meth is Get)
             assert_eq(
               request.path,
@@ -101,9 +99,8 @@ async test "downloads without preview bytes use the raw endpoint and fence accou
         let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
         defer server.close()
         group.spawn_bg(() => {
-          let (conn, _) = server.accept()
+          let (conn, request) = accept_request(server)
           defer conn.close()
-          let request = conn.read_request()
           assert_eq(
             request.path,
             "/v1/sessions/session/files/download?path=unsupported.bin",
@@ -152,9 +149,8 @@ async test "download failures create no saved file and never reveal a partial do
         let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
         defer server.close()
         group.spawn_bg(() => {
-          let (conn, _) = server.accept()
+          let (conn, _) = accept_request(server)
           defer conn.close()
-          ignore(conn.read_request())
           conn..send_response(status, "Failed").end_response()
         })
         let reply = download_cloud_file(

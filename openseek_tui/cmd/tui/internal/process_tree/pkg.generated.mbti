@@ -2,12 +2,12 @@
 package "moonbitlang/openseek_tui/cmd/tui/internal/process_tree"
 
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
 }
 
 // Values
-pub fn[G] contain(@async.TaskGroup[G], @process.Process) -> Unit
+pub fn contain(@async.TaskGroup, @process.Process) -> Unit
 
 // Errors
 

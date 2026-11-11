@@ -122,8 +122,8 @@ fn update_cloud(
     )
     return (command, { ..model, terminal, })
   }
-  if message is @cloud.Create && model.account is None {
-    return begin_account_login(dispatch, model, create=true)
+  if message is @cloud.Create && model.cloud_account() is None {
+    return (@cmd.none, model)
   }
   let before = model.cloud
   let (cloud, command, selected) = @cloud.update(
@@ -132,7 +132,7 @@ fn update_cloud(
     dispatch.map(message => CloudAction(message)),
     token?=model.account.map(account => account.token),
     navigation=model.chat_navigation_generation,
-    desktop_history=model.is_desktop,
+    client_tools=model.is_desktop,
   )
   let completion = if model.account.map(account => account.user.user_id) ==
     before.user_id {
@@ -149,13 +149,12 @@ fn update_cloud(
     []
   }
   let cloud = if completion is Some((id, _)) {
-    let conversations = cloud.conversations.copy()
-    conversations[id] = {
-      ..conversations[id],
+    let conv = cloud.conversations[id]
+    cloud.replace(id, {
+      ..conv,
       unseen_finish: true,
-      last_finished_task: conversations[id].task,
-    }
-    { ..cloud, conversations, }
+      last_finished_task: conv.task,
+    })
   } else {
     cloud
   }
@@ -244,11 +243,17 @@ fn update_cloud(
   }
   let mut file_panel = model.file_panel
   let docks = model.docks.copy()
+  let pending_previews = model.pending_previews.copy()
   let file_commands : Array[@cmd.Cmd] = []
   if before.epoch != cloud.epoch && before.user_id is Some(account) {
     let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
     file_panel = panel
     file_commands.push(clear)
+    for owner in pending_previews.keys().to_array() {
+      if owner is @interop.Cloud(account=current, ..) && current == account {
+        pending_previews.remove(owner)
+      }
+    }
     for owner in docks.keys().to_array() {
       if owner is @interop.Cloud(account=current, ..) && current == account {
         docks.remove(owner)
@@ -265,11 +270,13 @@ fn update_cloud(
       file_panel = panel
       file_commands.push(clear)
       docks.remove(@interop.Cloud(account~, session~))
+      pending_previews.remove(@interop.Cloud(account~, session~))
     }
   }
   let next = {
     ..model,
     docks,
+    pending_previews,
     file_panel,
     screen: if message is @cloud.Create {
       Chat
@@ -603,7 +610,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         conversation.sending ||
         conversation.queue_edit is Some(_) {
         conversation.control_primary_action(
-          if self.followup_behavior is FollowupQueue {
+          if self.followup_behavior() is FollowupQueue {
             @composer.Queue
           } else {
             @composer.Steer

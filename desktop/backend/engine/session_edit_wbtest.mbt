@@ -79,7 +79,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
   manager.pump = Serving(sessions=Map([]))
   let created = @worktree.create(
     manager.worktree_host(),
-    repo.to_string(),
+    repo,
     @worktree.WorktreeOwner::openseek("original"),
     _ => (),
   )
@@ -90,7 +90,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
     ),
   )
   let dirty = repo.join(".worktrees").join(created.name).join("unsaved.txt")
-  @fs.write_file(dirty.to_string(), b"keep me", create_mode=CreateOrTruncate)
+  @fs.write_text(dirty.to_string(), "keep me", create_mode=CreateOrTruncate)
   let prepared = prepare_session_edit(
     manager,
     {
@@ -135,7 +135,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
     is Deleted,
   )
   assert_false(store.exists(SessionId(lost.session)))
-  guard @worktree.list(repo.to_string()).worktrees is [before_send] else {
+  guard @worktree.list(repo).worktrees is [before_send] else {
     fail("checkout")
   }
   assert_false(before_send.sessions.contains(lost.session))
@@ -161,9 +161,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
     is Deleted,
   )
   assert_true(@fsx.exists(dirty.to_path()))
-  guard @worktree.list(repo.to_string()).worktrees is [kept] else {
-    fail("checkout")
-  }
+  guard @worktree.list(repo).worktrees is [kept] else { fail("checkout") }
   assert_true(kept.present)
   assert_false(store.exists(SessionId("original")))
   assert_true(store.exists(SessionId(prepared.session)))

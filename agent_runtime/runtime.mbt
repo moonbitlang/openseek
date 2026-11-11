@@ -47,7 +47,7 @@ struct AgentRuntime {
   /// lossy event bus: a noisy watcher may fill `events` and cause later runtime
   /// updates to be ignored, but user-visible input must never be the casualty.
   steers : @aqueue.Queue[SteerInput]
-  user_input_changed : @async.CondVar
+  user_input_changed : @async.Cond
   mut user_input_pending : Bool
   /// Where a tool's permission question goes, when anything can answer one
   /// (see `approval_channel`). `None` is the fail-closed default, and it is
@@ -113,13 +113,13 @@ pub fn AgentRuntime::workspace_root(self : AgentRuntime) -> String {
 ///|
 /// Structured-concurrency handle exposed to stateful tools.
 ///
-/// `AgentTaskScope[X]` wraps the `@async.TaskGroup[X]` owned by the enclosing
+/// `AgentTaskScope` wraps the `@async.TaskGroup` owned by the enclosing
 /// agent loop. Tools use it to spawn background tasks that must terminate when
 /// the loop's task group exits. The type parameter `X` is the return type of
 /// that enclosing task group; it is carried through so MoonBit's task-group type
 /// remains precise.
-struct AgentTaskScope[X] {
-  group : @async.TaskGroup[X]
+struct AgentTaskScope {
+  group : @async.TaskGroup
 }
 
 ///|
@@ -128,9 +128,9 @@ struct AgentTaskScope[X] {
 /// This constructor does not create a task group. Call it inside
 /// `@async.with_task_group` and pass the active group. The resulting scope is a
 /// thin capability object: whoever receives it can spawn work in that group.
-pub fn[X] AgentTaskScope::AgentTaskScope(
-  group : @async.TaskGroup[X],
-) -> AgentTaskScope[X] {
+pub fn AgentTaskScope::AgentTaskScope(
+  group : @async.TaskGroup,
+) -> AgentTaskScope {
   { group, }
 }
 
@@ -141,9 +141,7 @@ pub fn[X] AgentTaskScope::AgentTaskScope(
 /// spawned through this group follow the normal `@async.with_task_group`
 /// lifetime and failure rules; `AgentTaskScope` does not add its own
 /// cancellation or error handling.
-pub fn[X] AgentTaskScope::group(
-  self : AgentTaskScope[X],
-) -> @async.TaskGroup[X] {
+pub fn AgentTaskScope::group(self : AgentTaskScope) -> @async.TaskGroup {
   self.group
 }
 

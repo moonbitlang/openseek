@@ -4,9 +4,10 @@ moon uses a package file to identify and describe a package. The legacy format
 is `moon.pkg.json`, and the new format is `moon.pkg`. For full JSON schema,
 please check [moon's repository](https://github.com/moonbitlang/moon/blob/main/crates/moonbuild/template/pkg.schema.json).
 
-Support for `moon.pkg.json` is deprecated. New projects should use `moon.pkg`;
-existing JSON configuration can be migrated with `moon fmt` as described
-below.
+`moon.pkg.json` is no longer accepted by ordinary toolchain commands.
+Use `moon fmt` to migrate existing JSON manifests before checking or building.
+The JSON examples below are migration references, not configurations for new
+projects.
 
 ## New format (`moon.pkg`)
 
@@ -42,15 +43,15 @@ import {
 }
 ```
 
-Most fields from `moon.pkg.json` can be represented in an `options(...)` block.
-Stable declarations such as `formatter` and `pkgtype` have dedicated top-level
-forms. Legacy keys that contain `-` must be quoted when they are used inside
-`options`.
+Simple package settings can be written directly, using underscore-separated
+names, for example `proof_enabled = true` or `regex_backend = "table"`.
+Declarations such as `formatter`, `pkgtype`, and `virtual` have dedicated
+top-level forms. `moon fmt` migrates supported settings from `options(...)`
+to these forms. Legacy keys that remain inside `options` and contain `-`
+must be quoted.
 
 ```moonbit
-options(
-  "virtual": { "has-default": true },
-)
+virtual(has_default: true)
 ```
 
 The `moon.pkg` format allows comments `//...`.
@@ -74,6 +75,27 @@ expr ::= array | object | apply | STRING | INT | "true" | "false"
 array ::= "[" (expr ",")* expr? "]"
 object ::= "{" (field ",")* field? "}"
 ```
+
+## Conditional Imports
+
+Use `#cfg` on an import block to select dependencies for a backend. Different
+dependencies can share an alias when their conditions do not overlap:
+
+```moonbit
+#cfg(target = "native")
+import { "example/app/native_impl" @platform }
+
+#cfg(target = "js")
+import { "example/app/js_impl" @platform }
+```
+
+The same syntax applies to imports marked `for "test"` or `for "wbtest"`.
+
+## Experimental Packages
+
+Set `experimental = true` in a package's `moon.pkg` to warn direct consumers
+that its API is experimental. Consumers can opt in with
+`options("allow-experimental-packages": true)`.
 
 ## Name
 
@@ -125,18 +147,14 @@ public, non-generic function in generated Wasm, JavaScript, or C output:
 
 ```moonbit
 #export_name("attr_add")
-pub fn add_by_attr(n : Int) -> Int {
+pub fn add_by_attr(n : Int32) -> Int32 {
   n + 42
 }
 ```
 
-MoonBit currently requires export names to be valid C symbol identifiers and
-unique within the package, regardless of the selected backend.
-
-#### WARNING
-Known compiler issue: `#export_name` currently applies its C-symbol-identifier
-restriction to every backend. WebAssembly export names are UTF-8 strings and
-are not limited to C identifiers.
+Export names must be unique within the package. Name restrictions depend on
+the backend: native requires valid C symbol identifiers, while WebAssembly
+export names are UTF-8 strings and are not limited to C identifiers.
 
 The attribute cannot be used on generic functions or functions with optional
 arguments. Prefer `#export_name` over backend-specific `exports` link
@@ -149,9 +167,10 @@ downstream package's artifact. Define and export a wrapper in the exporting
 package to expose dependency functionality.
 
 #### NOTE
-The native backend does not currently support exporting a `foreign_library`
-package as a linkable library artifact, including shared libraries such as a
-`.dll` or `.so`.
+The native backend produces a static archive (`.a`, or `.lib` on Windows),
+not a shared library such as a `.dll` or `.so`. See
+[Native Static Libraries](https://docs.moonbitlang.com/en/latest/language/ffi.html#native-static-libraries) for host
+initialization and linking.
 
 <a id="is-main"></a>
 
@@ -219,7 +238,7 @@ import {
 
 Most core packages are not special here: if you use `@json`, `@test`, or other
 ordinary core aliases, add the corresponding `moonbitlang/core/...` package to
-`import` to avoid `core_package_not_imported` warnings.
+`import`; otherwise, the compiler reports E4037 (package not imported).
 
 `prelude` is the exception. It is available by default, so the names it exposes
 do not need an explicit package import.
@@ -1114,7 +1133,7 @@ missing_pattern_arguments  Some arguments of constructor are omitted in pattern.
 ambiguous_block            Ambiguous block.                                                22 warn
 unused_try                 Useless try expression.                                         23 warn
 unused_error_type          Useless error type.                                             24 warn
-test_unqualified_package   Using implicitly imported API in test.                          25 off
+test_unqualified_package   Using implicitly imported API in test.                          25 warn
 unused_catch_all           Useless catch all.                                              26 warn
 deprecated_syntax          Deprecated syntax.                                              27 warn
 todo                       Todo                                                            28 warn
@@ -1161,8 +1180,8 @@ unqualified_local_using    unqualified local using                              
 unnecessary_annotation     unnecessary type annotation                                     73 off
 missing_doc                Missing documentation for public definition                     74 off
 unnecessary_view_op        Unnecessary `[:]` view operator                                 75 off
-result_error_return        Using `Result[T, E]` where `E` is an error type.                78 off
-implicit_impl_as_method    `impl` implicitly promoted as method                            79 off
+result_error_return        Using `Result[T, E]` where `E` is an error type.                78 warn
+implicit_impl_as_method    `impl` implicitly promoted as method                            79 warn
 regex_match_missing_before Missing `before` binding in `regex match`.                      80 warn
 regex_match_missing_after  Missing `after` binding in `regex match`.                       81 warn
 ambiguous_braces           Ambiguous `{}` braces.                                          82 warn
@@ -1176,6 +1195,12 @@ guard_redundant_else       Redundant `else` on an exhaustive `guard`.           
 unused_lexcase             `lexmatch`/`lexscan` branch that can never be selected because other branches takes precedence or its pattern matches nothing.  90 warn
 unused_errdefer            unused `errdefer` statement                                     91 warn
 fragile_catch_all          fragile `catch` handler that can be converted to `defer` or `errdefer`  92 warn
+unknown_constr_pat_on_exhaustive_type using `TypeName::..` pattern on a type not marked with `#non_exhaustive`  93 warn
+unknown_intrinsic          `#intrinsic` attribute names an unknown intrinsic.              94 warn
+nan_pattern                Pattern on a NaN constant, which never matches.                 95 warn
+unfenced_import            Deprecated import declarations outside frontmatter.             96 warn
+regex_runtime_fallback     Regex match over the compile limits, which runs on the runtime engine.  97 off
+cancellable_defer          Fragile cancellable async code inside `defer`/`errdefer`        98 warn
 all                        all warnings
 state: warn = enabled, error = promoted to error, off = disabled
 note: default alert exceptions: alert_unsafe=off
@@ -1224,11 +1249,7 @@ For example, the following declares a virtual package with default implementatio
 ### moon.pkg
 
 ```moonbit
-options(
-  virtual: {
-    "has-default": true,
-  },
-)
+virtual(has_default: true)
 ```
 
 ### moon.pkg.json
@@ -1243,16 +1264,15 @@ options(
 
 ### Implementations
 
-The `implement` field is used to declare the virtual package to be implemented by the current package.
+Use `virtual(implement: "package/path")` to declare the virtual package
+implemented by the current package.
 
 For example, the following implements a virtual package:
 
 ### moon.pkg
 
 ```moonbit
-options(
-  implement: "moonbitlang/core/abort",
-)
+virtual(implement: "moonbitlang/core/abort")
 ```
 
 ### moon.pkg.json

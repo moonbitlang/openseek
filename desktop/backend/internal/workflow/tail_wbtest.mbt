@@ -103,16 +103,16 @@ async test "a file tail reads appended lines exactly once" {
   let tail : FileTail = { path, offset: 0, carry: b"", }
   // Nothing yet: not an error, just nothing.
   assert_eq(tail.poll(), [])
-  @fs.write_file(path, "one\ntwo\n", create_mode=CreateOrTruncate)
+  @fs.write_text(path, "one\ntwo\n", create_mode=CreateOrTruncate)
   assert_eq(tail.poll(), ["one", "two"])
   assert_eq(tail.poll(), [])
   // A partial line waits for its newline.
-  @fs.write_file(path, "thr", append=true, create_mode=OpenOrCreate)
+  @fs.write_text(path, "thr", append=true, create_mode=OpenOrCreate)
   assert_eq(tail.poll(), [])
-  @fs.write_file(path, "ee\n", append=true, create_mode=OpenOrCreate)
+  @fs.write_text(path, "ee\n", append=true, create_mode=OpenOrCreate)
   assert_eq(tail.poll(), ["three"])
   // Replaced by something shorter: re-read from the head.
-  @fs.write_file(path, "new\n", create_mode=CreateOrTruncate)
+  @fs.write_text(path, "new\n", create_mode=CreateOrTruncate)
   assert_eq(tail.poll(), ["new"])
 }
 
@@ -139,12 +139,12 @@ async test "follow_run reports launches, finishes and ledger rows in file order"
     })
     let started : String =
       #|{"event":"agent_started","child":"run7-sr-6","kind":"explore","label":"scout:y"}
-    @fs.write_file(events, started + "\n", create_mode=CreateOrTruncate)
+    @fs.write_text(events, started + "\n", create_mode=CreateOrTruncate)
     @async.sleep(2200)
     let ended : String =
       #|{"event":"agent_finished","child":"run7-sr-6","status":"captured","steps":7,"tokens":16}
-    @fs.write_file(events, ended + "\n", append=true, create_mode=OpenOrCreate)
-    @fs.write_file(journal, finished_line + "\n", create_mode=CreateOrTruncate)
+    @fs.write_text(events, ended + "\n", append=true, create_mode=OpenOrCreate)
+    @fs.write_text(journal, finished_line + "\n", create_mode=CreateOrTruncate)
     @async.sleep(2200)
     tail.cancel()
   }

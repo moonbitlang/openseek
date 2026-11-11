@@ -4,10 +4,10 @@ This quickstart shows a simple but proper MoonBit CLI layout:
 
 - keep argument parsing and business logic in a library package
 - keep `cmd/main` small
-- use `moonbitlang/core/async` for native IO
+- use `moonbitlang/async` for native IO
 - test the pure parts without touching the network
 
-This example uses `moonbitlang/core/async`, which currently supports the native backend best.
+This example uses `moonbitlang/async`, which currently supports the native backend best.
 
 ## Create the project
 
@@ -16,16 +16,20 @@ Start with a normal MoonBit module:
 ```bash
 moon new download_cli
 cd download_cli
+moon add moonbitlang/async@0.20.2
 ```
 
-`argparse` and `moonbitlang/core/async` are part of the standard library, so no registry dependency is needed.
+`argparse` is already part of the standard library, so this quickstart only adds `moonbitlang/async`.
 
 Set the preferred target to native in `moon.mod` so `moon run` and `moon build`
-default to the backend that `moonbitlang/core/async` supports best:
+default to the backend that `moonbitlang/async` supports best:
 
 ```moonbit
 name = "username/download_cli"
 version = "0.1.0"
+import {
+  "moonbitlang/async@0.20.2",
+}
 preferred_target = "native"
 ```
 
@@ -49,10 +53,14 @@ download_cli
 The root package defines the CLI contract. It owns the command shape and turns argv into a typed config value:
 
 ```moonbit
+#derive(Eq)
 pub struct Config {
   url : String
   output : String?
-} derive(Eq)
+}
+
+///|
+pub extend Config with Eq::{not_equal, equal}
 
 ///|
 pub fn command() -> @argparse.Command {
@@ -96,9 +104,9 @@ The package descriptor imports `argparse` from `moonbitlang/core` and the async 
 ```moonbit
 import {
   "moonbitlang/core/argparse",
-  "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/http",
-  "moonbitlang/core/async/stdio",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/stdio",
 }
 
 import {
@@ -124,7 +132,7 @@ pub async fn run(config : Config) -> Unit {
       let file = @fs.create(path, permission=0o644)
       defer file.close()
       file.write_reader(body)
-      @stdio.stderr.text.write("saved \{config.url} to \{path}\n")
+      @stdio.stderr.write("saved \{config.url} to \{path}\n")
     }
     None => @stdio.stdout.write_reader(body)
   }
@@ -139,7 +147,7 @@ pub async fn run(config : Config) -> Unit {
 import {
   "moonbit-community/cli-quickstart-doc" @app,
   "moonbitlang/core/env",
-  "moonbitlang/core/async",
+  "moonbitlang/async",
 }
 
 pkgtype(kind: "executable")
@@ -180,14 +188,16 @@ The parser and config shaping logic stay easy to test because they do not perfor
 ```moonbit
 ///|
 test "parse config for stdout" {
-  let config = parse_config(["https://example.com/feed.xml"])
+  let config = @cli-quickstart-doc.parse_config(["https://example.com/feed.xml"])
   assert_eq(config.url, "https://example.com/feed.xml")
   @test.assert_eq(config.output, None)
 }
 
 ///|
 test "parse config for file output" {
-  let config = parse_config(["https://example.com/feed.xml", "-o", "feed.xml"])
+  let config = @cli-quickstart-doc.parse_config([
+    "https://example.com/feed.xml", "-o", "feed.xml",
+  ])
   assert_eq(config.url, "https://example.com/feed.xml")
   guard config.output is Some(path) else { fail("expected an output path") }
   assert_eq(path, "feed.xml")

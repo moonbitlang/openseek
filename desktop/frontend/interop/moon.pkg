@@ -1,7 +1,7 @@
 import {
   "moonbitlang/editor/base/browser" @base_browser,
   "openseek_desktop/uri",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
   "moonbitlang/core/deque",
@@ -12,3 +12,7 @@ import {
 }
 
 supported_targets = "js"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

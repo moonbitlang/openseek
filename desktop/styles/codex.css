@@ -1,8 +1,3 @@
-/* ---------- Codex conversations ---------- */
-/* Codex is another conversation source in the existing navigation, not a
-   second app shell. Project and conversation geometry comes from the same
-   root sidebar row renderers as OpenSeek. */
-
 .codex-connection {
   color: var(--color-text-secondary);
 }
@@ -18,8 +13,6 @@
   gap: var(--space-4);
 }
 
-/* Approval controls own their geometry instead of borrowing the settings-page
-   button modifiers. This keeps every advertised decision visibly clickable. */
 .codex-request-action {
   display: inline-flex;
   flex: 0 1 auto;
@@ -160,9 +153,6 @@
   display: none;
 }
 
-/* Codex's approval mode menu is the shared headed select. Full access keeps
-   its danger tone: on the trigger while it is the mode, and on its row, the
-   menu's last. */
 .codex-permission-control {
   display: flex;
   flex: 0 1 auto;
@@ -207,5 +197,11 @@
   .composer {
     padding-left: var(--space-5);
     padding-right: var(--space-5);
+  }
+
+  /* The scroller already insets the stream here; a full 2em on top leaves
+     phone text far inside the composer card's edge. */
+  .stream {
+    padding-inline: var(--space-2);
   }
 }

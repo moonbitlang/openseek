@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/static_preview"
+
+import {
+  "moonbitlang/core/async",
+  "openseek_desktop/backend/pathx",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Server {
+  // private fields
+}
+pub fn Server::Server(engine? : String, runtime_dir? : @pathx.Path) -> Self
+pub fn Server::clear(Self) -> Unit
+pub fn Server::close(Self, Int32) -> Unit
+pub async fn Server::open(Self, Int32, String, root? : String) -> String
+pub fn Server::start(Self, @async.TaskGroup) -> Unit
+
+// Type aliases
+
+// Traits

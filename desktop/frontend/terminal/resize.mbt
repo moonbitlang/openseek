@@ -72,9 +72,7 @@ fn TerminalResizer::start(self : TerminalResizer, event : @dom.Event) -> Unit {
   }
   event.prevent_default()
   self.active.val = true
-  guard @dom.document().query_selector("html").to_option() is Some(root) else {
-    return
-  }
+  guard @dom.document().get_document_element() is Some(root) else { return }
   let classes : @js.Value = @js.Value::cast_from(root).get_with_string(
     "classList",
   )
@@ -99,14 +97,11 @@ fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
   let ceiling = max.max(floor)
   let raw = rect.get_bottom() - mouse.get_client_y()
   let height = raw.clamp(min=floor, max=ceiling)
-  guard @dom.document().query_selector("html").to_option() is Some(root) else {
+  guard @dom.document().get_document_element() is Some(root) &&
+    root.to_html_element() is Some(html) else {
     return
   }
-  let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
-  let _ : @js.Value = style.apply_with_string("setProperty", [
-    @js.Value::cast_from("--terminal-height"),
-    @js.Value::cast_from("\{height.to_int()}px"),
-  ])
+  html.get_style().set_property("--terminal-height", "\{height.to_int()}px")
 }
 
 ///|
@@ -114,9 +109,7 @@ fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
 fn TerminalResizer::finish(self : TerminalResizer) -> Unit {
   guard self.active.val else { return }
   self.active.val = false
-  guard @dom.document().query_selector("html").to_option() is Some(root) else {
-    return
-  }
+  guard @dom.document().get_document_element() is Some(root) else { return }
   let classes : @js.Value = @js.Value::cast_from(root).get_with_string(
     "classList",
   )

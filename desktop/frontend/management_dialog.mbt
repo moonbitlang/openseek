@@ -60,6 +60,7 @@ fn management_dialog_view(
               locale=model.locale,
               dispatch,
               model.console,
+              account_error=model.account_error,
               host_incompatible=true,
             )
           } else {

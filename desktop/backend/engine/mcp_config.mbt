@@ -227,11 +227,16 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
         #|  read -r resume
         #|  printf '{"event":"mcp_config_invalid","path":"%s.late","error":"late"}\n' "$3"
         #|fi
-        #|printf '{"event":"mcp_tools_registered","servers":1,"tools":0,"names":[]}\n'
+        #|configs=$(printf '{"path":"%s","state":"loaded"}' "$3")
+        #|if [ -n "$2" ]; then
+        #|  configs=$(printf '{"path":"%s","state":"failed","error":"%s"}' "$3" "$2")
+        #|fi
+        #|if [ -n "$4" ]; then
+        #|  configs=$(printf '%s,{"path":"%s.other","state":"failed","error":"%s"}' "$configs" "$3" "$4")
+        #|fi
+        #|printf '{"event":"mcp_status","status":{"configs":[%s],"servers":[]}}\n' "$configs"
         #|printf '{"event":"mcp_connect_failed","server":"%s","error":"marker"}\n' "$1"
         #|cat >/dev/null
-      let (child_stdin, writer) = @process.write_to_process()
-      let (reader, child_stdout) = @process.read_from_process()
       let process = @process.spawn(
         group,
         "/bin/sh",
@@ -245,10 +250,12 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
           second_error,
           delayed.to_string(),
         ],
-        stdin=child_stdin,
-        stdout=child_stdout,
+        stdin=FeedFromParent,
+        stdout=Collect,
         no_wait=true,
       )
+      let writer = process.stdin
+      let reader = process.stdout
       let engine_id = @uuid.mint()
       manager.mcp.current_engine_id = Some(engine_id)
       let engine = test_serve_engine(
@@ -303,12 +310,12 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
     start("s-10", Some("worse"), "worse")
     @debug.assert_eq(reported(), ["bad", "worse", "worse", "worse", "worse"])
     // An older engine has read the broken file but is still connecting when
-    // a newer launch loads the repair. Its late errors and registration must
+    // a newer launch loads the repair. Its late errors and status must
     // neither notify again nor restore its obsolete error snapshot.
     let older = launch("s-old", Some("worse"), "worse", true)
     start("s-repaired", None, "")
     assert_true(manager.mcp.errors.is_empty())
-    older.writer.write("resume\n")
+    older.writer.write(b"resume\n")
     @async.with_timeout(10000, () => {
       while !finished("s-old") {
         @async.sleep(20)
@@ -324,7 +331,7 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
     // without any MCP events. Late reports cannot revive the old owner.
     let reporter = launch("s-reporter", None, "", true)
     manager.mcp.current_engine_id = Some(@uuid.mint())
-    reporter.writer.write("resume\n")
+    reporter.writer.write(b"resume\n")
     @async.with_timeout(10000, () => {
       while !finished("s-reporter") {
         @async.sleep(20)
@@ -449,16 +456,16 @@ async test "MCP status is the live engine's latest report" {
     #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","transport":"stdio","target":"a","state":"lost","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
     #|cat >/dev/null
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", script],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-live",
       writer,

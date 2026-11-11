@@ -9,8 +9,7 @@ async fn ci_child(dir : String) -> Unit {
     assert_eq(args[3], "https://github.com/example/repo/pull/42")
   }
   append(calls, Json(args).stringify())
-  guard @json.parse(@fs.read_file(dir + "/fixture.json").text())
-    is Array(sequence) &&
+  guard @json.parse(@fs.read_text(dir + "/fixture.json")) is Array(sequence) &&
     !sequence.is_empty() else {
     fail("Missing fixture sequence")
   }

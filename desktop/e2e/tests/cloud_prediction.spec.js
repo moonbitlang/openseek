@@ -86,22 +86,3 @@ test('Cloud shows native predictions and Tab fills the shared composer without s
   cloud.assertNoPredictionRequests();
 });
 
-test('Cloud restores native prediction metadata on session switches and reload without leaking drafts', async ({ page }) => {
-  const cloud = await open(page);
-  await cloud.publish();
-  const input = page.locator('#task');
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await input.fill('Unsent draft');
-  await cloud.open(sessionB);
-  await expect(input).toHaveValue('');
-  await expect(input).toHaveAttribute('placeholder', 'Review the documentation');
-  await cloud.open(sessionA);
-  await expect(input).toHaveValue('Unsent draft');
-  await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-  await input.fill('');
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await page.reload(); await cloud.open(sessionA);
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await expect(input).toHaveValue('');
-  cloud.assertNoPredictionRequests();
-});

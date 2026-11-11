@@ -28,7 +28,9 @@ export default defineConfig({
   workers: isCI ? 4 : '50%',
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
-    { name: 'webkit-mobile', testMatch: '**/mobile_browser.spec.js', use: { browserName: 'webkit' } },
+    { name: 'webkit-indexeddb', testMatch: '**/indexeddb.spec.js', use: { browserName: 'webkit' } },
+    // WebKit covers the phone layout; transport and keyboard behavior is engine-neutral.
+    { name: 'webkit-mobile', testMatch: '**/mobile_browser.spec.js', grep: /@webkit-layout/, use: { browserName: 'webkit' } },
     // Safari's grid sizing can hide question cards even when Chromium passes.
     {
       name: 'webkit-questions',

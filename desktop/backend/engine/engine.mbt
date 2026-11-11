@@ -347,7 +347,7 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
   let mut failure : String? = None
   for ;; {
     let command = self.commands.get() catch { _ => break }
-    self.writer.write(command.command.to_jsonl()) catch {
+    self.writer.write(@utf8.encode(command.command.to_jsonl())) catch {
       error => {
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
@@ -781,17 +781,11 @@ fn EngineManager::record_guard(
   self : EngineManager,
   session : String,
 ) -> SessionRecordGuard {
-  if self.record_guards.get(session) is Some(state) {
-    state
-  } else {
-    let state : SessionRecordGuard = {
-      readers: 0,
-      active_ops: 0,
-      moving: false,
-    }
-    self.record_guards[session] = state
-    state
-  }
+  self.record_guards.get_or_init(session, () => {
+    readers: 0,
+    active_ops: 0,
+    moving: false,
+  })
 }
 
 ///|
@@ -933,13 +927,7 @@ pub fn EngineManager::worktree_host(
 ///|
 /// This conversation's slot, created empty on first touch.
 fn slot_for(sessions : Map[String, SessionSlot], key : String) -> SessionSlot {
-  if sessions.get(key) is Some(slot) {
-    slot
-  } else {
-    let slot : SessionSlot = { pending: None, engine: None, }
-    sessions.set(key, slot)
-    slot
-  }
+  sessions.get_or_init(key, () => { pending: None, engine: None, })
 }
 
 ///|
@@ -967,56 +955,26 @@ async fn EngineManager::close_engines_for_workspace(
   workspace : @pathx.Absolute,
 ) -> Unit {
   guard self.pump is Serving(sessions~) else { return }
-  let root = @workspaces.store_root(workspace).to_string()
-  let idle : Array[ServeEngine] = []
-  for _, slot in sessions {
-    if slot.pending is Some(_) {
-      raise EngineError(
-        "another conversation operation is still being prepared; wait for it to finish",
-      )
-    }
-    if slot.engine is Some(engine) &&
-      engine.session_root is Some(session_root) &&
-      session_root.to_string() == root {
-      match engine.phase {
-        Running(..) =>
-          raise EngineError(
-            "a conversation in this workspace is still running; stop it first",
-          )
-        Compacting(..) =>
-          raise EngineError(
-            "a conversation in this workspace is compacting; wait for it to finish",
-          )
-        Idle(..) => idle.push(engine)
-      }
-    }
-  }
-  for engine in idle {
-    engine.close_and_wait()
-    // EOF cleanup deliberately keeps a follower alive when its final scan
-    // fails, so another lifecycle operation can retry instead of pretending
-    // the durable tail was drained. Join that exact generation once more and
-    // propagate a repeated failure: hiding the workspace while its actor is
-    // still rooted there would leave a permanent orphan watcher.
-    if engine.follower is Some(follower) {
-      stop_follower_instance(self, follower, writer_exited=true)
-    }
-  }
-  // An abrupt EOF removes its dead ServeEngine after publishing lifecycle,
-  // even when the final durable scan failed. The retryable follower then has
-  // no slot owner for the idle-engine pass above to discover. Drain every
-  // exact follower still rooted in this workspace before the registry commit;
-  // replacement/start cannot install another one while the lifecycle lock is
-  // held, and identity checks make already-retired captures harmless.
-  let retained : Array[SessionFollower] = []
-  for _, follower in self.followers {
-    if follower.root.to_string() == root {
-      retained.push(follower)
-    }
-  }
-  for follower in retained {
-    stop_follower_instance(self, follower, writer_exited=true)
-  }
+  let root = @workspaces.store_root(workspace)
+  self.drain_idle_engines(
+    sessions.values().collect(),
+    place="workspace",
+    owns=engine => {
+      engine.session_root is Some(session_root) && session_root == root
+    },
+    // An abrupt EOF removes its dead ServeEngine after publishing lifecycle,
+    // even when the final durable scan failed. The retryable follower then
+    // has no slot owner for the idle-engine pass to discover. Drain every
+    // exact follower still rooted in this workspace before the registry
+    // commit; replacement/start cannot install another one while the
+    // lifecycle lock is held, and identity checks make already-retired
+    // captures harmless.
+    leftovers=() => {
+      [
+        for _, follower in self.followers if follower.root == root => follower
+      ]
+    },
+  )
 }
 
 ///|
@@ -1032,23 +990,50 @@ async fn EngineManager::close_engines_for_sessions(
   ids : Array[String],
 ) -> Unit {
   guard self.pump is Serving(sessions~) else { return }
+  self.drain_idle_engines(
+    [
+      for id in ids if sessions.get(id) is Some(slot) => slot
+    ],
+    place="worktree",
+    owns=_ => true,
+    // Followers are keyed by session id, so the mapped ids find the
+    // retryable leftovers directly.
+    leftovers=() => {
+      [
+        for id in ids if self.followers.get(id) is Some(follower) => follower
+      ]
+    },
+  )
+}
+
+///|
+/// The drain shared by workspace and worktree removal. Refuse any pending
+/// operation among `slots` and any busy engine they hold that `owns`
+/// selects; close the idle ones, then join the final scan of every follower
+/// `leftovers` names once those closes are done.
+async fn EngineManager::drain_idle_engines(
+  self : EngineManager,
+  slots : Array[SessionSlot],
+  place~ : String,
+  owns~ : (ServeEngine) -> Bool,
+  leftovers~ : () -> Array[SessionFollower],
+) -> Unit {
   let idle : Array[ServeEngine] = []
-  for id in ids {
-    guard sessions.get(id) is Some(slot) else { continue }
+  for slot in slots {
     if slot.pending is Some(_) {
       raise EngineError(
         "another conversation operation is still being prepared; wait for it to finish",
       )
     }
-    if slot.engine is Some(engine) {
+    if slot.engine is Some(engine) && owns(engine) {
       match engine.phase {
         Running(..) =>
           raise EngineError(
-            "a conversation in this worktree is still running; stop it first",
+            "a conversation in this \{place} is still running; stop it first",
           )
         Compacting(..) =>
           raise EngineError(
-            "a conversation in this worktree is compacting; wait for it to finish",
+            "a conversation in this \{place} is compacting; wait for it to finish",
           )
         Idle(..) => idle.push(engine)
       }
@@ -1056,18 +1041,17 @@ async fn EngineManager::close_engines_for_sessions(
   }
   for engine in idle {
     engine.close_and_wait()
+    // EOF cleanup deliberately keeps a follower alive when its final scan
+    // fails, so another lifecycle operation can retry instead of pretending
+    // the durable tail was drained. Join that exact generation once more and
+    // propagate a repeated failure: hiding the store while its actor is
+    // still rooted there would leave a permanent orphan watcher.
     if engine.follower is Some(follower) {
       stop_follower_instance(self, follower, writer_exited=true)
     }
   }
-  // As in the workspace drain: an abrupt EOF can retire the ServeEngine
-  // while a retryable follower stays rooted in the store, with no slot owner
-  // for the idle-engine pass above to discover. Followers are keyed by
-  // session id, so the mapped ids find them directly.
-  for id in ids {
-    if self.followers.get(id) is Some(follower) {
-      stop_follower_instance(self, follower, writer_exited=true)
-    }
+  for follower in leftovers() {
+    stop_follower_instance(self, follower, writer_exited=true)
   }
 }
 
@@ -1251,7 +1235,7 @@ async fn EngineActor::run_generation(
 
   manager.pump = Serving(sessions~)
   defer reset()
-  emit(sink, Connected({ protocol: Some(@protocol.HostProtocolRevision), }))
+  sink(Connected({ protocol: Some(@protocol.HostProtocolRevision), }))
   @async.with_task_group(group => {
     // A permanent deletion whose physical cleanup failed or was interrupted
     // leaves its condemned records under `archived/deleting`. Erase them once
@@ -1319,9 +1303,9 @@ fn reset_engine_generation(
 /// Install one spawn request without touching its ack. The caller owns ack
 /// completion so cancellation can defer it until the entire pump task group
 /// has unwound; ordinary success/failure replies immediately.
-async fn[G] handle_spawn_command(
+async fn handle_spawn_command(
   sink~ : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
   manager~ : EngineManager,
   sessions~ : Map[String, SessionSlot],
   claim~ : PendingClaim,
@@ -1369,20 +1353,6 @@ async fn[G] handle_spawn_command(
   }
   guard claim.is_current(manager) && slot.live() is Some(_) else {
     return Some(EngineError("engine host restarted before engine commit"))
-  }
-  None
-}
-
-///|
-/// The desktop host owns the Skills panel's library writes, so every serve
-/// engine gets the same resolved global library instead of falling back to
-/// whatever HOME means inside that engine host.
-fn resolved_global_skills_dir() -> @pathx.Path? {
-  if @env.get("OPENSEEK_GLOBAL_SKILLS_DIR") is Some(dir) {
-    return Some(Path(dir))
-  }
-  if @home.dir() is Some(dir) {
-    return Some(dir.join(".openseek/skills"))
   }
   None
 }
@@ -1461,7 +1431,10 @@ async fn engine_process_env(
   env["OPENSEEK_MODEL"] = config.model
   env["OPENSEEK_THINKING"] = config.thinking.wire()
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
-  if resolved_global_skills_dir() is Some(dir) {
+  // The desktop host owns the Skills panel's library writes, so every serve
+  // engine gets the same resolved global library instead of falling back to
+  // whatever HOME means inside that engine host.
+  if @skills.global_library_dir() is Some(dir) {
     env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir.to_string()
   }
   // The official endpoint leaves `api_url` unset; an `OPENSEEK_API_URL`
@@ -1527,9 +1500,9 @@ async fn engine_process_args(
 /// stream tasks: the stdout reader feeding the queue, the stderr drain, and
 /// the consumer that forwards events to the webview for the engine's
 /// lifetime.
-async fn[G] start_serve_engine(
+async fn start_serve_engine(
   sink~ : EventSink,
-  group~ : @async.TaskGroup[G],
+  group~ : @async.TaskGroup,
   manager~ : EngineManager,
   slot~ : SessionSlot,
   config~ : RunConfig,
@@ -1566,9 +1539,6 @@ async fn[G] start_serve_engine(
       discard_follower_startup(manager, follower)
     }
   })
-  let (child_stdin, writer) = @process.write_to_process()
-  let (reader, child_stdout) = @process.read_from_process()
-  let (stderr_reader, child_stderr) = @process.read_from_process()
   let env = engine_process_env(
     config,
     manager.runtime_dir,
@@ -1607,9 +1577,9 @@ async fn[G] start_serve_engine(
     args,
     inherit_env=false,
     extra_env=env,
-    stdin=child_stdin,
-    stdout=child_stdout,
-    stderr=child_stderr,
+    stdin=FeedFromParent,
+    stdout=Collect,
+    stderr=Collect,
     cwd?=config.cwd.map(cwd => cwd.to_string().clamped_view()),
     // The GUI-subsystem host has no console, so a console-subsystem child
     // would otherwise open its own visible conhost window on Windows.
@@ -1625,6 +1595,9 @@ async fn[G] start_serve_engine(
     }),
     no_wait=true,
   )
+  let writer = process.stdin
+  let reader = process.stdout
+  let stderr_reader = process.stderr
   @xlog.info() <?
     {
       "event": "desktop_engine_spawned",
@@ -1673,7 +1646,7 @@ async fn[G] start_serve_engine(
   group.spawn_bg(no_wait=true, allow_failure=true, () => engine.write_commands())
   slot.engine = Some(engine)
   let stderr_task = group.spawn(no_wait=true) <| () => {
-    stderr_reader.read_all().text() catch {
+    stderr_reader.text.read_all() catch {
       _ => ""
     }
   }
@@ -1816,10 +1789,10 @@ async fn ServeEngine::consume(
 ) -> Int32 {
   let engine = self
   let sink = self.sink
-  let mcp_errors : Map[String, String] = Map([])
   // The read end belongs to this task for its whole life, so every way out —
   // EOF, a stream this host cannot read, cancellation — closes it here.
   defer reader.close()
+  let mut exit_code = -1
   // Sub-run probes are children of this task: one per running child, spawned
   // at its `subrun_started` bracket and cancelled at the finish. `no_wait`
   // makes the engine's own EOF their backstop — a child whose finish bracket
@@ -1832,8 +1805,38 @@ async fn ServeEngine::consume(
     // child gets — so the lane dock and the child's own probe need no new
     // path — and its journal into `workflow.entry` pushes.
     let tails : Map[String, @async.Task[Unit]] = Map([])
+    // Start `id`'s probe unless one is already running. The probe locates
+    // the child's transcript under the store, so an engine without a store
+    // root gets the brackets but no live activity.
+    fn start_probe(id : String) {
+      guard engine.session_root is Some(root) && probes.get(id) is None else {
+        return
+      }
+      probes[id] = group.spawn(no_wait=true, allow_failure=true, () => {
+        @subrun.follow_progress(root~, parent_session=engine.session_key, id~, publish=payload => {
+          sink(SubrunProgress(payload))
+        })
+      })
+    }
+
+    fn stop_probe(id : String) {
+      if probes.get(id) is Some(probe) {
+        probes.remove(id)
+        probe.cancel()
+      }
+    }
+
+    // A bracket a workflow tail synthesized, routed like the engine's own.
+    fn forward_bracket(event : @wire.Event) {
+      let run_id = engine.steer_runs.route_event(
+        event~,
+        latest_run?=engine.phase.latest_run(),
+      )
+      sink(StreamEvent({ run_id, session: engine.session_key, event, }))
+    }
+
     for ;; {
-      guard reader.read_until("\n") is Some(line) else { break }
+      guard reader.text.read_until("\n") is Some(line) else { break }
       for json in @jsonl.parse(line) {
         // Every stdout event is a hint that the engine may just have
         // appended to the durable record — the follower's low-latency
@@ -1841,32 +1844,38 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
-          // Partial success still reports registration. Remember failures by
-          // source path until a later engine successfully loads that file.
+          // A configuration file's failure is forwarded once per distinct
+          // error, remembered by source path until a later engine reports
+          // that file again.
           Some(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
-            if manager.mcp.current_engine_id != Some(engine.id) {
-              continue
-            }
-            mcp_errors[path] = error
-            if manager.mcp.errors.get(path) == Some(error) {
+            if manager.mcp.current_engine_id != Some(engine.id) ||
+              manager.mcp.errors.get(path) == Some(error) {
               continue
             }
             manager.mcp.errors[path] = error
           }
-          Some(McpToolsRegistered(..)) =>
-            if manager.mcp.current_engine_id == Some(engine.id) {
-              manager.mcp.errors = mcp_errors
-            }
           // Kept for `mcp.status`, and still forwarded: a page showing this
-          // conversation's status reads it again when it sees one.
-          Some(McpStatus(status~)) => engine.mcp_status = Some(status)
+          // conversation's status reads it again when it sees one. Its
+          // configs are what this engine made of each file, which replace
+          // the failures earlier engines reported.
+          Some(McpStatus(status~)) => {
+            engine.mcp_status = Some(status)
+            if manager.mcp.current_engine_id == Some(engine.id) {
+              let errors : Map[String, String] = Map([])
+              for config in status.configs {
+                if config.state is Failed(error) {
+                  errors[config.path] = error
+                }
+              }
+              manager.mcp.errors = errors
+            }
+          }
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {
-              emit(
-                sink,
+              sink(
                 PredictionReady({
                   session: engine.session_key,
                   prediction: { source_sequence, outcome, },
@@ -1892,22 +1901,8 @@ async fn ServeEngine::consume(
         // the probe in between reads the child's own record, which is the
         // only place its progress is visible to this process.
         match wire_event {
-          Some(SubrunStarted(id~, ..)) =>
-            if engine.session_root is Some(root) && probes.get(id) is None {
-              probes[id] = group.spawn(no_wait=true, allow_failure=true, () => {
-                @subrun.follow_progress(
-                  root~,
-                  parent_session=engine.session_key,
-                  id~,
-                  publish=payload => emit(sink, SubrunProgress(payload)),
-                )
-              })
-            }
-          Some(SubrunFinished(id~, ..)) =>
-            if probes.get(id) is Some(probe) {
-              probes.remove(id)
-              probe.cancel()
-            }
+          Some(SubrunStarted(id~, ..)) => start_probe(id)
+          Some(SubrunFinished(id~, ..)) => stop_probe(id)
           // A subagent is a background job: its record says when it runs, so
           // its probe lives from its first live record to its terminal one.
           Some(JobChanged(job={ subagent: Some(info), state, .. }, ..)) =>
@@ -1916,20 +1911,9 @@ async fn ServeEngine::consume(
               parent == engine.session_key {
               let id = "sr-\{ordinal}"
               if state.is_terminal() {
-                if probes.get(id) is Some(probe) {
-                  probes.remove(id)
-                  probe.cancel()
-                }
-              } else if engine.session_root is Some(root) &&
-                probes.get(id) is None {
-                probes[id] = group.spawn(no_wait=true, allow_failure=true, () => {
-                  @subrun.follow_progress(
-                    root~,
-                    parent_session=engine.session_key,
-                    id~,
-                    publish=payload => emit(sink, SubrunProgress(payload)),
-                  )
-                })
+                stop_probe(id)
+              } else {
+                start_probe(id)
               }
             }
           Some(
@@ -1960,40 +1944,14 @@ async fn ServeEngine::consume(
                       return
                     }
                     let sr = "sr-\{ordinal}"
-                    let event : @wire.Event = SubrunStarted(
-                      id=sr,
-                      kind=started.kind,
-                      label=@workflow.display_label(started.label),
+                    forward_bracket(
+                      SubrunStarted(
+                        id=sr,
+                        kind=started.kind,
+                        label=@workflow.display_label(started.label),
+                      ),
                     )
-                    let run_id = engine.steer_runs.route_event(
-                      event~,
-                      latest_run?=engine.phase.latest_run(),
-                    )
-                    emit(
-                      sink,
-                      StreamEvent({
-                        run_id,
-                        session: engine.session_key,
-                        event,
-                      }),
-                    )
-                    if engine.session_root is Some(root) &&
-                      probes.get(sr) is None {
-                      probes[sr] = group.spawn(
-                        no_wait=true,
-                        allow_failure=true,
-                        () => {
-                          @subrun.follow_progress(
-                            root~,
-                            parent_session=engine.session_key,
-                            id=sr,
-                            publish=payload => {
-                              emit(sink, SubrunProgress(payload))
-                            },
-                          )
-                        },
-                      )
-                    }
+                    start_probe(sr)
                   },
                   on_child_finished=finished => {
                     guard @wire.split_child_session_id(finished.child)
@@ -2005,32 +1963,19 @@ async fn ServeEngine::consume(
                     // The sidecar reports the spend as one figure; the
                     // bracket wants it split, and the lane only ever shows
                     // the sum.
-                    let event : @wire.Event = SubrunFinished(
-                      id=sr,
-                      status=finished.status,
-                      steps=finished.steps,
-                      prompt_tokens=finished.tokens,
-                      completion_tokens=0,
-                      unaccounted=finished.unaccounted,
+                    forward_bracket(
+                      SubrunFinished(
+                        id=sr,
+                        status=finished.status,
+                        steps=finished.steps,
+                        prompt_tokens=finished.tokens,
+                        completion_tokens=0,
+                        unaccounted=finished.unaccounted,
+                      ),
                     )
-                    let run_id = engine.steer_runs.route_event(
-                      event~,
-                      latest_run?=engine.phase.latest_run(),
-                    )
-                    emit(
-                      sink,
-                      StreamEvent({
-                        run_id,
-                        session: engine.session_key,
-                        event,
-                      }),
-                    )
-                    if probes.get(sr) is Some(probe) {
-                      probes.remove(sr)
-                      probe.cancel()
-                    }
+                    stop_probe(sr)
                   },
-                  on_entry=entry => emit(sink, WorkflowEntry(entry)),
+                  on_entry=entry => sink(WorkflowEntry(entry)),
                 )
               })
             }
@@ -2089,10 +2034,7 @@ async fn ServeEngine::consume(
             // (no id recorded yet) that close cannot happen, so the raw
             // event is the report.
             if !host_reports_terminal_error(event) || run_id is None {
-              emit(
-                sink,
-                StreamEvent({ run_id, session: engine.session_key, event, }),
-              )
+              sink(StreamEvent({ run_id, session: engine.session_key, event, }))
             }
             match event {
               // A compaction queued behind an open turn begins only now, so
@@ -2145,22 +2087,7 @@ async fn ServeEngine::consume(
                   failure_reason="failed to promote queued prompt",
                 ) {
                 ignore(engine.queued_runs.remove(0))
-                engine.phase = Running(run_id=next.run_id, compact_queued=false)
-                engine.steer_runs.begin_run()
-                emit(
-                  sink,
-                  Started({
-                    run_id: next.run_id,
-                    submission_id: Some(next.id),
-                    engine: Some(engine.engine_name),
-                    model: Some(engine.model),
-                    max_steps: Some(engine.max_steps),
-                    session: engine.session_key,
-                    session_root: engine.session_root.map(root => {
-                      root.resource_path()
-                    }),
-                  }),
-                )
+                engine.open_run(sink, next.run_id, Some(next.id))
               }
             }
           }
@@ -2178,10 +2105,9 @@ async fn ServeEngine::consume(
     // does not finish until the child has actually terminated, but the task's
     // result is `Cancelled` rather than an exit code; normalize that reaped
     // outcome to -1 so retirement can still publish the EOF latch.
-    engine.process.wait() catch {
-      _ => -1
-    }
+    exit_code = engine.process.wait() catch { _ => -1 }
   }
+  exit_code
 }
 
 ///|
@@ -2271,8 +2197,12 @@ async fn ServeEngine::retire(
       // only a terminal compaction event clears the frontend's queued
       // notice, so synthesize the failure it can no longer send.
       if compact_queued {
-        emit_compaction_failed(
-          sink, engine, "engine exited before the queued compaction started",
+        emit_on_behalf(
+          sink,
+          engine,
+          CompactionFailed(
+            error="engine exited before the queued compaction started",
+          ),
         )
       }
     }
@@ -2291,7 +2221,7 @@ async fn ServeEngine::retire(
       } else {
         "\{cause}:\n\{diagnostics}"
       }
-      emit_compaction_failed(sink, engine, reason)
+      emit_on_behalf(sink, engine, CompactionFailed(error=reason))
     }
     // A clean exit after a terminal event (session switch, app shutdown)
     // has no cause and reports nothing. One that died holding a cause still
@@ -2303,7 +2233,7 @@ async fn ServeEngine::retire(
     // idle engine has no run id to route by.
     Idle(..) =>
       if engine.pending_failure is Some(cause) {
-        emit_session_error(sink, engine, cause)
+        emit_on_behalf(sink, engine, SessionError(error=cause))
       }
   }
   // Keep this exact dead handle in its slot through the final scan and
@@ -2326,50 +2256,51 @@ async fn ServeEngine::retire(
 }
 
 ///|
-/// A synthetic `compaction_failed` stream event for a compaction whose
-/// engine died before reporting one itself, so the frontend's one decoder
-/// clears its compacting notice either way. Routed like every compaction
-/// event: by the engine's session, with the latest run id as the frontend's
-/// fallback.
-///
-/// The payload is built from `@protocol.Event` rather than written by hand.
-/// It used to be a literal keyed `reason`, under a comment claiming it was
-/// "the same wire shape the engine emits" — which it was not: the engine
-/// emits `error`. Nothing caught it because the frontend's decoder happened
-/// to accept either spelling, so a host-made event and an engine-made one
-/// had quietly different shapes. Going through the type makes that class of
-/// claim checkable instead of aspirational.
-/// The engine's "something this session asked for was not persisted", sent on
-/// its behalf once it can no longer send anything. It names the failure but
-/// not the command that asked, which is exactly what the client does with it:
-/// the word gets out, and nothing is settled on it.
-fn emit_session_error(
+/// Open `run_id` on an engine its prompt was just written to and announce
+/// it. Synchronous on purpose: callers submit the prompt and call this with
+/// no suspension in between, so no other command can interleave between the
+/// prompt and the phase it opens, and a peer that steers on seeing Started
+/// necessarily lands behind the complete prompt.
+fn ServeEngine::open_run(
+  self : ServeEngine,
   sink : EventSink,
-  engine : ServeEngine,
-  reason : String,
-) -> Unit {
-  emit(
-    sink,
-    StreamEvent({
-      run_id: engine.phase.latest_run(),
-      session: engine.session_key,
-      event: SessionError(error=reason),
+  run_id : String,
+  submission_id : String?,
+) -> Unit raise {
+  self.phase = Running(run_id~, compact_queued=false)
+  self.steer_runs.begin_run()
+  sink(
+    Started({
+      run_id,
+      submission_id,
+      engine: Some(self.engine_name),
+      model: Some(self.model),
+      max_steps: Some(self.max_steps),
+      session: self.session_key,
+      session_root: self.session_root.map(root => root.resource_path()),
     }),
   )
 }
 
 ///|
-fn emit_compaction_failed(
+/// Publish a stream event the engine can no longer send itself because it
+/// died: a `compaction_failed` for a compaction that never reported one, or
+/// a `session_error` for a command written between turns. Routed like every
+/// engine event — by the engine's session, with the latest run id as the
+/// frontend's fallback (an idle engine has none).
+///
+/// Payloads are built from `@wire.Event` rather than written by hand, so
+/// a host-made event cannot quietly differ in shape from an engine-made one.
+fn emit_on_behalf(
   sink : EventSink,
   engine : ServeEngine,
-  reason : String,
+  event : @wire.Event,
 ) -> Unit {
-  emit(
-    sink,
+  sink(
     StreamEvent({
       run_id: engine.phase.latest_run(),
       session: engine.session_key,
-      event: CompactionFailed(error=reason),
+      event,
     }),
   )
 }
@@ -2431,18 +2362,18 @@ async test "a failed pump closes its open run and retires the slot" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // Unreadable output, then a child that would otherwise outlive the pump:
     // the kill is what ends it, not a cooperative exit.
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf 'not json\\n'; sleep 30"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-consumer-died",
       writer,
@@ -2491,8 +2422,6 @@ async test "an engine that dies between turns still reports why" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // Malformed stdout from an engine holding no open turn: the pump cannot
     // go on reading it, so the consumer's catch stashes the cause and forces
     // retirement from `Idle`.
@@ -2500,10 +2429,12 @@ async test "an engine that dies between turns still reports why" {
       group,
       "/bin/sh",
       ["-c", "printf '%s\\n' 'not json'"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-idle-death",
       writer,
@@ -2531,7 +2462,7 @@ async test "an engine that dies between turns still reports why" {
       }
     }
     assert_true(reported.contains("the engine's event consumer failed"))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -2547,18 +2478,18 @@ async test "a failed turn reports its own reason exactly once" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // A turn that fails and exits: `turn_failed` is both the run's close and
     // the only place its reason is written down.
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"boom\"}'"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-turn-failed",
       writer,
@@ -2594,7 +2525,7 @@ async test "a failed turn reports its own reason exactly once" {
     assert_eq(finishes, 1)
     assert_eq(forwarded, 0)
     assert_eq(cause, "turn failed: boom")
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -2608,18 +2539,18 @@ async test "a failed command leaves settlement to the EOF retirement" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    let (reader, child_stdout) = @process.read_from_process()
     // A child that is already gone, so the first write hits a closed pipe
     // and the pump reaches EOF on its first read.
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 0"],
-      stdin=child_stdin,
-      stdout=child_stdout,
+      stdin=FeedFromParent,
+      stdout=Collect,
       no_wait=true,
     )
+    let writer = process.stdin
+    let reader = process.stdout
     let engine = test_serve_engine(
       "s-write-failed",
       writer,
@@ -2678,7 +2609,7 @@ async test "a failed command leaves settlement to the EOF retirement" {
     }
     assert_eq(finishes, 1)
     assert_true(cause.has_prefix("failed to write the goal"))
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -2708,14 +2639,14 @@ async test "a run's close spares the commands queued to outlive its turn" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "sleep 30"],
-      stdin=child_stdin,
+      stdin=FeedFromParent,
       no_wait=true,
     )
+    let writer = process.stdin
     let engine = test_serve_engine(
       "s-outlive",
       writer,
@@ -2767,7 +2698,7 @@ async test "a run's close spares the commands queued to outlive its turn" {
       @protocol.compact(),
       @protocol.goal_set("ship it", auto=false),
     ])
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
@@ -3205,7 +3136,7 @@ async fn prepare_fake_moonbit_seed(
   write_fake_executable(seed.join("bin/moon"))
   write_fake_executable(seed.join("bin/moonc"))
   write_fake_file(seed.join("lib/core/moon.mod"))
-  @fs.write_file(
+  @fs.write_text(
     seed.join(".openseek-moonbit-seed-version").to_string(),
     version,
     create_mode=CreateOrTruncate,
@@ -3218,7 +3149,7 @@ async fn prepare_fake_bundled_moonbit_home(
   version~ : String,
 ) -> Unit {
   prepare_fake_moonbit_seed(moon_home, version~)
-  @fs.write_file(
+  @fs.write_text(
     moon_home.join(".openseek-moonbit-bundle-version").to_string(),
     "version=\{version}",
     create_mode=CreateOrTruncate,
@@ -3234,7 +3165,7 @@ async fn prepare_fake_bundled_moonbit_home(
 ///|
 async fn write_fake_file(path : @pathx.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
-  @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
+  @fs.write_text(path.to_string(), "", create_mode=CreateOrTruncate)
 }
 
 ///|
@@ -3242,7 +3173,7 @@ async fn write_fake_file(path : @pathx.Path) -> Unit {
 /// and initialization executes `moonc`, so both fakes must carry the bit.
 async fn write_fake_executable(path : @pathx.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
-  @fs.write_file(
+  @fs.write_text(
     path.to_string(),
     "",
     create_mode=CreateOrTruncate,
@@ -3256,12 +3187,12 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   let dir = @fs.tmpdir(prefix="openseek-engine-startup-")
   defer @fs.rmdir(dir, recursive=true)
   let baseline_engine = dir + "/baseline.sh"
-  @fs.write_file(
+  @fs.write_text(
     baseline_engine,
     "#!/bin/sh\nprintf '%s' '{\"events\":[]}'\n",
     create_mode=CreateOrTruncate,
   )
-  assert_eq(@process.run("chmod", ["+x", baseline_engine]), 0)
+  assert_eq(@process.run("chmod", ["+x", baseline_engine]).exit_code, 0)
   let manager = new_engine_manager(baseline_engine)
   let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }

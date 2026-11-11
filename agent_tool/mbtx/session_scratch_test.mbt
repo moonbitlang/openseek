@@ -33,8 +33,8 @@ async test "session scratch permits raw file IO and script saving outside the wo
       "ptc": false,
     })
     assert_false(saved.is_error, msg=saved.content)
-    assert_eq(@fs.read_file("\{scratch}/data/value.bin").binary(), b"\x00\xff")
-    assert_true(@fs.read_file("\{scratch}/version.txt").text().contains("moon"))
+    assert_eq(@fs.read_binary("\{scratch}/data/value.bin"), b"\x00\xff")
+    assert_true(@fs.read_text("\{scratch}/version.txt").contains("moon"))
     let reopened = @mbtx.definition(
       workspace_root=workspace,
       scratch_dir=scratch,
@@ -67,7 +67,7 @@ async test "session scratch permits raw file IO and script saving outside the wo
       "filename": "\{scratch}/helper.mbtx",
     })
     assert_true(changed.is_error)
-    assert_eq(@fs.read_file("\{scratch}/helper.mbtx").text(), source)
+    assert_eq(@fs.read_text("\{scratch}/helper.mbtx"), source)
   })
 }
 

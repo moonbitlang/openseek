@@ -556,25 +556,25 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, ApprovalMode) => "審批模式"
     (Japanese, ApprovalMode) => "承認モード"
     (English, RequestApprovalDescription) =>
-      "You answer every permission request yourself"
+      "You confirm every permission request"
     (Spanish, RequestApprovalDescription) =>
-      "Respondes tú mismo a cada solicitud de permiso"
+      "Confirmas cada solicitud de permiso"
     (SimplifiedChinese, RequestApprovalDescription) =>
-      "每个权限请求都由你亲自回答"
+      "每个权限请求都由你确认"
     (TraditionalChinese, RequestApprovalDescription) =>
-      "每個權限請求都由你親自回答"
+      "每個權限請求都由你確認"
     (Japanese, RequestApprovalDescription) =>
-      "すべての権限リクエストに自分で回答します"
+      "権限リクエストを毎回確認します"
     (English, AutoReviewDescription) =>
-      "A reviewer handles permission requests and asks you only when unsure"
+      "Review permission requests automatically. You confirm any unclear cases."
     (Spanish, AutoReviewDescription) =>
-      "Un revisor atiende las solicitudes de permiso y solo te pregunta si duda"
+      "Las solicitudes de permiso se revisan automáticamente; tú confirmas los casos dudosos"
     (SimplifiedChinese, AutoReviewDescription) =>
-      "审查器处理权限请求，拿不准时才询问你"
+      "自动审核权限请求，无法判断时由你确认"
     (TraditionalChinese, AutoReviewDescription) =>
-      "審查器處理權限請求，拿不準時才詢問你"
+      "自動審核權限請求，無法判斷時由你確認"
     (Japanese, AutoReviewDescription) =>
-      "レビュアーが権限リクエストを処理し、判断できない場合のみ確認します"
+      "権限リクエストを自動で審査し、判断できない場合は手動で確認します"
     (English, ApprovalLocked) =>
       "The approval mode cannot change while a turn is running"
     (Spanish, ApprovalLocked) =>

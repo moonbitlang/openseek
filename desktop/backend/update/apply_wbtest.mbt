@@ -39,9 +39,9 @@ async test "an unavailable destination stops apply before any mutation" {
     @fs.mkdir(bundle)
     @fs.mkdir(staged)
     @fs.mkdir(aside)
-    @fs.write_file("\{bundle}/version", "current", create_mode=CreateOrTruncate)
-    @fs.write_file("\{staged}/version", "staged", create_mode=CreateOrTruncate)
-    @fs.write_file("\{aside}/version", "parked", create_mode=CreateOrTruncate)
+    @fs.write_text("\{bundle}/version", "current", create_mode=CreateOrTruncate)
+    @fs.write_text("\{staged}/version", "staged", create_mode=CreateOrTruncate)
+    @fs.write_text("\{aside}/version", "parked", create_mode=CreateOrTruncate)
     @fs.chmod(root, 0o500)
     try apply_staged(staged_app=staged, bundle_path=bundle) catch {
       UpdateError(message) =>
@@ -50,9 +50,9 @@ async test "an unavailable destination stops apply before any mutation" {
     } noraise {
       _ => fail("apply unexpectedly accepted an unwritable destination")
     }
-    assert_eq(@fs.read_file("\{bundle}/version").text(), "current")
-    assert_eq(@fs.read_file("\{staged}/version").text(), "staged")
-    assert_eq(@fs.read_file("\{aside}/version").text(), "parked")
+    assert_eq(@fs.read_text("\{bundle}/version"), "current")
+    assert_eq(@fs.read_text("\{staged}/version"), "staged")
+    assert_eq(@fs.read_text("\{aside}/version"), "parked")
   }
 }
 

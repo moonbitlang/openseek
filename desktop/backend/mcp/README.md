@@ -1,9 +1,9 @@
 # Host tools
 
-How agents connect to capabilities contributed by a desktop host. The host
-can run an HTTP MCP server; the engine connects directly using the root
-module's `mcp/streamhttp` client. This package supplies the server infrastructure;
-the host chooses which tools to register.
+How agents connect to capabilities contributed by a desktop host. A shared
+`Dispatcher` handles JSON-RPC messages over HTTP or host-supplied stdio streams.
+The engine's existing connection uses HTTP through the root module's
+`mcp/streamhttp` client. The host chooses which tools to register.
 
 It depends on async HTTP and core codecs, not on Proton, the engine, or any
 package that contributes tools. Dependencies point inward: a package that owns
@@ -27,9 +27,59 @@ continues to negotiate `2025-11-25` and earlier supported revisions.
   and the arguments). A handler returns the `Content` blocks the agent reads,
   text or base64 images, sent as the result's `content` in order; raising makes
   the call a tool-level failure the agent also reads.
-- `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
-  and `tools/call`. Nothing else is offered.
+- `dispatcher.mbt` and `protocol.mbt` — the shared tool catalog and JSON-RPC
+  dispatch for `initialize`, `ping`, `tools/list`, and `tools/call`, plus
+  stateless `server/discover`.
 - `server.mbt` — the listener, the grants, and one task per request.
+- `stdio.mbt` — newline-delimited JSON-RPC over streams supplied by the host.
+
+## Host-owned streams
+
+`Dispatcher(tools, version~)` creates a tool catalog without binding a port.
+`dispatch(message, session~, groups~)` answers one parsed JSON-RPC message,
+returning `None` for a notification or response. The host supplies the
+authenticated conversation and permitted tool groups. These values never come
+from the message or its tool arguments. Omitting `groups` offers all tools.
+
+An existing HTTP server exposes this same dispatcher through
+`server.dispatcher()`. Tool registrations through either object are shared.
+To serve a pipe pair, the host can start:
+
+```mbt nocheck
+group.spawn_bg(() => {
+  server.dispatcher().serve_stdio(
+    input,
+    output,
+    session=trusted_session,
+    groups=["browser"],
+  )
+})
+```
+
+`input` and `output` implement `async/io.BinaryReader` and `BinaryWriter`.
+The host owns their creation, authentication, closure and task lifetime.
+The adapter does not claim process stdin or stdout, so a host can dedicate
+pipes to MCP while retaining its application log channel. All tool handlers
+continue to execute in that host process, with their existing browser and
+session objects. The HTTP bearer-token grant and Origin checks still apply
+to HTTP requests; stdio relies on the host's authenticated stream binding.
+
+Each input line is a UTF-8 JSON-RPC message; each response is one JSON line.
+The receive loop parses and classifies messages before scheduling. Notifications
+and peer responses are ignored without starting tasks. Invalid messages are
+answered directly, including a parse error for malformed JSON, and the adapter
+continues with the next line. Up to 16 requests may be in flight per connection.
+A request keeps its slot until its response is written, so a slow response
+reader also bounds completed results waiting to be sent. At capacity, the
+receive loop waits before starting another task. Response writes are serialized
+so frames cannot interleave. Input EOF drains accepted requests. I/O failures,
+cancellation, or an input line exceeding
+the one-megabyte limit end the adapter and propagate to its owner. The caller
+closes both streams. Dispatcher tool-failure diagnostics use the host's xlog
+handler, as they do over HTTP. The desktop host writes these logs to
+`openseek-desktop.log`. A host using process stdout for MCP must configure
+xlog to write to a file or stderr before serving; xlog defaults to stdout.
+The adapter writes only JSON-RPC responses to its supplied output stream.
 
 ## Configuration
 
@@ -97,29 +147,34 @@ against, per `desktop/AGENTS.md`.
 
 ## Limits
 
-One megabyte per request body, ten seconds to deliver a request, and 150
-seconds per tool handler. Every reply is a single `application/json` body:
-there is no SSE stream and no server-initiated request.
+HTTP allows one megabyte per request body and ten seconds to deliver a request.
+Every HTTP reply is a single `application/json` body. Each tool handler has a
+150-second deadline on either transport. The server sends no requests of its own.
 
 ## Cross-conversation messages
 
-The backend registers `session` alongside the window's browser tools. Include
-`session` in `X-SeekMoon-Tool-Groups` if a configured client filters groups.
-Its actions are `list`, `read`, `send`, `status`, and `cancel`. These operate on
-OpenSeek conversations attached to this host, not Codex threads or independent
-CLI processes.
+The backend registers one tool per action alongside the window's browser
+tools: `session_list`, `session_read`, `session_send`, `session_status`, and
+`session_cancel`. They form the `session` group; include `session` in
+`X-SeekMoon-Tool-Groups` if a configured client filters groups. These operate
+on OpenSeek conversations attached to this host, not Codex threads or
+independent CLI processes.
 
-`list` returns a flat `sessions` array containing only `id`, `title` (or
-`null`), and `workspace`, plus `next_offset` (`null` at the end). Pass the
-returned offset to the next `list` call. `limit` defaults to 20 and allows
-1–50; a serialized size budget may end a page earlier. Offsets refer to the
+`session_list` takes optional `offset` and `limit`. It returns a flat
+`sessions` array containing only `id`, `title` (or `null`), and `workspace`,
+plus `next_offset` (`null` at the end). Pass the returned offset to the next
+`session_list` call. `limit` defaults to 20 and allows 1–50; a serialized size
+budget may end a page earlier. Offsets refer to the
 current inventory, so concurrent additions/removals can change pagination.
 Listing failures use the tool error channel. There is no title/ID search
 parameter; inspect the pages, and ask the user to choose or create a chat if
 the intended one is absent. The sidebar keeps its existing grouped format.
 
-`send` takes `target`, the exact `text`, and a caller-generated `request_id`.
-The sender comes from the bearer grant. Identical retries of that request id
+`session_read` takes a `session` id and returns that conversation's saved
+history.
+
+`session_send` takes `target`, the exact `text`, and a caller-generated
+`request_id`. The sender comes from the bearer grant. Identical retries of that request id
 recover the original request; changing the target or text requires a new id
 and another approval. The user reviews the destination and full message in the
 sender's approval card. Approval may steer a running conversation or start a
@@ -134,9 +189,9 @@ approval returns `pending_approval` with an `id` and remains actionable. Both
 waits are bounded below the ordinary MCP deadlines: 120 seconds for the agent
 bridge and 150 seconds for the HTTP exchange and host handler. Cancelling or
 timing out a waiter also transfers its final result to background notification;
-it does not cancel the host-owned message delivery. `status` reads the current
-outcome; `cancel` withdraws an unapproved request. Neither action creates another
-delivery.
+it does not cancel the host-owned message delivery. `session_status` takes the
+returned `id` and reads the current outcome; `session_cancel` takes it and
+withdraws an unapproved request. Neither creates another delivery.
 After a background decision, the host actively delivers the final result to
 the sender's agent context, steering its current turn or starting a new one.
 Rejections and delivery failures are reported too. A result-notification
@@ -156,8 +211,8 @@ existing turn-bound lifetime and have priority when both need attention.
 Configure the HTTP `seekmoon` entry above (replace an old stdio entry of the
 same name), then start a new OpenSeek turn so its engine reloads the MCP
 configuration. Use two saved OpenSeek chats on the same host. In the sender,
-ask the agent to use `mcp__seekmoon__session` to list chats, find the intended
-target, and send an exact test message. The source chat shows a `session.send`
+ask the agent to use the `seekmoon` `session_*` tools to list chats, find the
+intended target, and send an exact test message. The source chat shows a `session.send`
 approval with the destination and message.
 
 - Approve within 30 seconds: the tool returns `sent` after the target records
@@ -218,3 +273,51 @@ against the latest list, preserving unrelated concurrent additions.
 These tools belong to the `artifacts` group. If the configuration filters
 groups with `X-SeekMoon-Tool-Groups`, include `artifacts` (for example
 `browser,artifacts`).
+
+## Cloud client tools (Desktop)
+
+An opened Cloud conversation keeps an account-bound WebSocket to the current
+Cloud service's `/v1/sessions/{id}/mcp` until sign-out (or session deletion).
+The frontend sends the account token only in the initial auth frame and waits
+for `ready` before dispatching JSON-RPC or handing off a new prompt. Switching
+conversations keeps the socket alive; reconnect starts a fresh connection and
+never replays old calls or replies.
+
+The desktop-only `cloud.mcp` command passes the authenticated account and the
+socket's session to a separate `Dispatcher` catalog containing just
+`browser_open`, `preview_open`, and `ask_user`. It reuses the existing native
+browser tool, file viewers, and question service. Explicit browser opens join the owning Cloud conversation's
+dock and use its existing native-view positioning and visibility rules.
+Ordinary Cloud links keep their behavior.
+
+Cloud questions use the existing question cards, drafts, 30-second waiter and
+XML answer envelope. They do not load Local history or create Local sessions.
+Timely answers return over MCP. After timeout or socket detachment, later
+answers use the existing Cloud command transport: steer into the active task,
+or submit a prompt when idle. Every device owns its own questions and answers;
+there is no cross-device question settlement. Question state lasts only for
+the current host process and account login.
+
+Known follow-ups are marked beside their owners: bounded broadcast dispatch,
+acknowledgement across frontend disconnects, and manual retry after a delayed
+answer's delivery fails. Failed or ambiguous inputs are not replayed on reconnect.
+
+## Showing workspace files
+
+`preview_open({"path":"reports/result.html"})` asks SeekMoon to show a generated
+workspace file to the user. It uses the caller's trusted conversation and
+workspace, rather than the currently selected chat. The tool is available to
+Local agents and Desktop Cloud client MCP; filtered Local clients must include
+the `preview` tool group.
+
+HTML/HTM uses the existing HTTP preview and Browser tab. PDF, images, Office,
+code, and text use the existing file panel. The response
+`{"status":"opening","path":"reports/result.html"}` acknowledges acceptance,
+not file existence or completed rendering. It does not return file contents;
+use `browser_open` for external websites.
+
+A background conversation's requests are retained in memory until the user
+returns to it, without switching chat focus. Cloud sign-out and session deletion
+clear the corresponding requests. A Local request is discarded if its original
+workspace no longer matches. Requests are not durable across app restarts or
+frontend disconnections (see the TODO at the publish boundary).

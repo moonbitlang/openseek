@@ -38,6 +38,9 @@ not silently choose another installation. The selected `bin` directory is
 prepended to child PATH. `MOON_HOME` remains untouched because it owns registry
 credentials and caches, not compiler selection.
 
+`MoonxProvider` supplies the selected executable and child environment to text
+search, semantic search, Pattern Repair, and Local HTML previews.
+
 Semantic search uses the selected toolchain's `moonx` when configured with a
 `moonx` command, and keeps the pinned moongrep package arguments. SDK payloads
 without the installer's alias gain a `moonx` copy beside `moon`, under the same

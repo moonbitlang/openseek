@@ -1,0 +1,69 @@
+/* The base owns ordinary labeled-action geometry. Intent classes only paint a
+   recognized action, so an icon control may use `danger` without inheriting
+   this component's dimensions. */
+.button {
+  --button-color: var(--color-text-primary);
+  --button-border-color: transparent;
+  --button-background: transparent;
+  --button-hover-color: var(--button-color);
+  --button-hover-border-color: var(--button-border-color);
+  --button-hover-background: var(--button-background);
+  --button-disabled-opacity: 0.5;
+
+  padding: 0.5em 1em;
+  border: 1px solid var(--button-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--button-background);
+  color: var(--button-color);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  cursor: pointer;
+
+  &:where(.compact) {
+    min-height: 2.25em;
+    padding: 0.25em 0.75em;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &:not(:disabled):hover {
+    border-color: var(--button-hover-border-color);
+    background: var(--button-hover-background);
+    color: var(--button-hover-color);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: var(--button-disabled-opacity);
+  }
+
+  &:where(.secondary) {
+    --button-border-color: var(--color-border);
+    --button-background: var(--color-bg-surface);
+    --button-hover-background: var(--color-bg-subtle);
+  }
+
+  &:where(.primary) {
+    --button-color: var(--color-on-accent);
+    --button-border-color: var(--color-accent);
+    --button-background: var(--color-accent);
+    --button-hover-color: var(--color-on-accent);
+    --button-hover-border-color: var(--color-accent);
+    --button-hover-background: var(--color-accent);
+    --button-disabled-opacity: 0.7;
+  }
+
+  &:where(.danger) {
+    --button-color: var(--color-danger);
+    --button-border-color: var(--color-danger-border);
+    --button-background: var(--color-danger-soft);
+    --button-hover-background: color-mix(
+      in srgb,
+      var(--color-danger-soft) 75%,
+      var(--color-bg-surface)
+    );
+  }
+}

@@ -5,27 +5,30 @@
 async fn merged_output_text(
   command : @sandbox.SandboxedCommand,
 ) -> (Int32, String) {
+  let mut exit_code = 0
+  let mut text = ""
   @async.with_task_group() <| group => {
     let (reader, writer) = @process.read_from_process()
     defer reader.close()
-    let (stdin_reader, stdin_writer) = @process.write_to_process()
-    stdin_writer.close()
     let args = command.args()
-    let child = @process.spawn(
-      group,
-      command.program(),
-      args,
-      stdin=stdin_reader,
-      stdout=writer,
-      stderr=writer,
-      no_wait=true,
-    )
-    let mut text = ""
-    while reader.read_some(max_len=4096) is Some(chunk) {
+    let child = {
+      defer writer.close()
+      @process.spawn(
+        group,
+        command.program(),
+        args,
+        stdin=Empty,
+        stdout=Shared(writer),
+        stderr=Shared(writer),
+        no_wait=true,
+      )
+    }
+    while reader.read() is Some(chunk) {
       text += @utf8.decode_lossy(chunk)
     }
-    (child.wait(), text)
+    exit_code = child.wait()
   }
+  (exit_code, text)
 }
 
 ///|
@@ -151,7 +154,7 @@ async fn create_raises(root : String, writable_subtree~ : String) -> Bool {
 async test "profile subjects flow into denial reporting" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-subjects-", dir => {
     @fs.mkdir("\{dir}/pkg")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/pkg/x.mbt",
       "pub fn x() -> Int { 1 }\n",
       create_mode=CreateOrTruncate,
@@ -194,10 +197,10 @@ async test "a writable lab cannot overwrite or remove its sandbox profile" {
         is Some(command) else {
         return
       }
-      let before = @fs.read_file(profile_path).text()
+      let before = @fs.read_text(profile_path)
       let (exit_code, _) = merged_output_text(command)
       assert_true(exit_code != 0)
-      assert_eq(@fs.read_file(profile_path).text(), before)
+      assert_eq(@fs.read_text(profile_path), before)
     }
     guard @sandbox.SandboxedCommand::create_if_available(
         workspace_root=workspace,
@@ -211,7 +214,7 @@ async test "a writable lab cannot overwrite or remove its sandbox profile" {
     }
     let (exit_code, _) = merged_output_text(command)
     assert_eq(exit_code, 0)
-    assert_eq(@fs.read_file("\{lab}/scratch.mbt").text(), "scratch")
+    assert_eq(@fs.read_text("\{lab}/scratch.mbt"), "scratch")
   })
 }
 
@@ -220,7 +223,7 @@ async test "source directory cannot be moved outside the protected workspace" {
   @vfs.with_tmpdir(prefix="sandbox-directory-rename-", dir => {
     let workspace = "\{dir}/workspace"
     @fs.mkdir("\{workspace}/src", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/src/main.mbt",
       "source",
       create_mode=CreateOrTruncate,
@@ -236,7 +239,7 @@ async test "source directory cannot be moved outside the protected workspace" {
     }
     let (exit_code, _) = merged_output_text(command)
     assert_true(exit_code != 0)
-    assert_eq(@fs.read_file("\{workspace}/src/main.mbt").text(), "source")
+    assert_eq(@fs.read_text("\{workspace}/src/main.mbt"), "source")
     assert_false(@fs.exists("\{dir}/escaped"))
   })
 }
@@ -276,7 +279,7 @@ async test "directory writes are denied in the workspace; files and _build are n
     }
     let (exit_code, text) = merged_output_text(command)
     assert_eq(exit_code, 0, msg=text)
-    assert_eq(@fs.read_file("\{workspace}/assets/report.txt").text(), "data")
-    assert_eq(@fs.read_file("\{workspace}/_build/wasm/gen.mbt").text(), "gen")
+    assert_eq(@fs.read_text("\{workspace}/assets/report.txt"), "data")
+    assert_eq(@fs.read_text("\{workspace}/_build/wasm/gen.mbt"), "gen")
   })
 }

@@ -278,7 +278,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
 }
 
 ///|
-test "completed turn summaries show the first three captions and track failure status" {
+test "tool group summaries show the first three captions and track failure status" {
   let pending : MinimalCall = {
     call_id: "pending",
     tool_name: "read",
@@ -301,10 +301,6 @@ test "completed turn summaries show the first three captions and track failure s
   let status = MinimalToolStatus::from_activities(group.activities())
   assert_eq((status.failed, status.pending), (1, 1))
   assert_eq(group.summary(), "Read project files · Read project files")
-  assert_eq(
-    MinimalContent::Completed([{ identity: "work", content: group, }]).summary(),
-    "Read project files · Read project files",
-  )
   // Count operations in order, including repeated captions. Failures beyond
   // the three visible operations must still be tracked, though never displayed.
   for count in 0..<=4 {
@@ -328,11 +324,9 @@ test "completed turn summaries show the first three captions and track failure s
       (if count == 4 { 1 } else { 0 }, 0),
     )
     assert_eq(
-      MinimalContent::Completed([
-        { identity: "work", content: Activity(calls), },
-      ]).summary(),
+      MinimalContent::Activity(calls).summary(),
       match count {
-        0 => "Work completed"
+        0 => "View activity"
         1 => "Operation 1"
         2 => "Operation 1 · Operation 2"
         3 => "Operation 1 · Operation 2 · Operation 3"
@@ -395,12 +389,7 @@ test "job coordination does not take up captions in a work summary" {
       error=false,
     ),
   )
-  assert_eq(
-    MinimalContent::Completed([
-      { identity: "work", content: Activity(entries), },
-    ]).summary(),
-    "read · mbtx",
-  )
+  assert_eq(MinimalContent::Activity(entries).summary(), "read · mbtx")
 }
 
 ///|
@@ -550,4 +539,123 @@ test "minimal prose keeps the durable completion stamp only when finished" {
   }
   assert_eq(completed_at, None)
   assert_true(live)
+}
+
+///|
+/// Minimal mode shows an answered turn as its answer alone: the interim prose
+/// and tool calls leave the transcript once a final answer arrives, whether it
+/// is finished assistant prose or a recorded answer. A turn that ends without
+/// an answer keeps its work visible.
+test "a final answer removes the preceding process from minimal mode" {
+  let work : Array[VisibleRow] = VisibleRow::history([
+    {
+      kind: User(content=Content([Text("Compute fib(45)")])),
+      ts: None,
+      sequence: Some(1),
+    },
+    {
+      kind: Assistant(
+        reasoning=None,
+        prose=Some("Probing timing APIs"),
+        calls=[
+          {
+            call_id: "probe",
+            children: [],
+            name: "mbtx",
+            arguments: Some("{\"description\":\"Probe timing APIs\"}"),
+            outcome: Done(
+              content=Content([Text("output")]),
+              is_error=true,
+              brief=Some("mbtx (exit=1)"),
+            ),
+          },
+        ],
+        replay=false,
+        finished=false,
+        end_sequence=None,
+      ),
+      ts: None,
+      sequence: Some(2),
+    },
+  ])
+  let input = Input(
+    minimal=true,
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="answered-test",
+    current_project=None,
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=None,
+    items=work,
+    streaming_response=None,
+    streaming_identity="live",
+  )
+  let endings : Array[@transcript.TranscriptItem] = [
+    {
+      kind: Assistant(
+        reasoning=None,
+        prose=Some("fib(45) = 1134903170"),
+        calls=[],
+        replay=false,
+        finished=true,
+        end_sequence=None,
+      ),
+      ts: Some(1_700_000_000_000.0),
+      sequence: Some(3),
+    },
+    { kind: Answer("fib(45) = 1134903170"), ts: None, sequence: Some(3), },
+  ]
+  for ending in endings {
+    let answered = {
+      ..input,
+      items: [..work, { identity: "ending", item: ending, }],
+    }
+    guard answered.minimal_blocks().to_array()
+      is [
+        { content: Item(item={ kind: User(..), .. }, ..), .. },
+        {
+          content: Minimal(
+            Messages(
+              [{ content: Prose(text~, finished=true, ..), .. }],
+              active_group=None
+            )
+          ),
+          ..
+        },
+      ] else {
+      fail("expected the user message and its answer alone")
+    }
+    assert_eq(text, "fib(45) = 1134903170")
+  }
+  let stopped = {
+    ..input,
+    items: [
+      ..work,
+      {
+        identity: "terminal",
+        item: { kind: TurnEnd, ts: None, sequence: Some(3), },
+      },
+    ],
+  }
+  assert_true(
+    stopped.minimal_blocks().to_array()
+    is [
+      { content: Item(item={ kind: User(..), .. }, ..), .. },
+      {
+        content: Minimal(
+          Messages(
+            [
+              { content: Prose(finished=false, ..), .. },
+              { content: Activity(_), .. },
+            ],
+            active_group=None
+          )
+        ),
+        ..
+      },
+    ],
+  )
 }

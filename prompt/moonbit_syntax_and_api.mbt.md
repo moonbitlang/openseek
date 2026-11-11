@@ -225,9 +225,6 @@ pkgtype(kind: "executable")
 
 ## Syntax And API Discipline
 
-- Prefer `Int32` over `Int` for 32-bit integers. They are aliases today, but
-  the current toolchain names the type and its APIs `Int32`; use `Int32` in
-  new annotations and when parsing integers.
 - Syntax the compiler rejects, each shown working in the verified example
   below: parameters and `self` are never `mut`, a mutable local is
   `let mut` (there is no `var`), and only a struct field you assign is

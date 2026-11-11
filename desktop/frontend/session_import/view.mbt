@@ -25,18 +25,31 @@ pub fn Model::view(
 ) -> @html.Html {
   let children = if self.content is Some(content) {
     let busy = content.operation.busy()
+    let (description, destination) = match content.target {
+      Host(target) =>
+        (
+          label(
+            locale, "Import as a conversation you can continue in the selected project. Original workspace files are not imported.",
+            "导入后可在所选项目中继续聊天。原工作区文件不会随对话一起导入。",
+          ),
+          @html.p(class="session-import-destination", target.workspace),
+        )
+      Cloud(..) =>
+        (
+          label(
+            locale, "Import a Cloud conversation export as a new Cloud chat. Original workspace files are not imported.",
+            "将 Cloud 对话导出导入为新的 Cloud 聊天。原工作区文件不会随对话一起导入。",
+          ),
+          @html.nothing,
+        )
+    }
     [
       @rui.dialog_header([
         @rui.dialog_title(id="session-import-title", title(locale)),
       ]),
       @html.div([
-        @rui.dialog_description(
-          label(
-            locale, "Import as a conversation you can continue in the selected project. Original workspace files are not imported.",
-            "导入后可在所选项目中继续聊天。原工作区文件不会随对话一起导入。",
-          ),
-        ),
-        @html.p(class="session-import-destination", content.target.workspace),
+        @rui.dialog_description(description),
+        destination,
         @html.div(class="session-import-actions", [
           @html.button(
             class="button secondary",

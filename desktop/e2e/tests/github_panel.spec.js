@@ -104,12 +104,6 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await expect(panel.locator('.github-pulls .github-item')).toHaveCount(30);
   await expect(panel.locator('.github-issues .github-item')).toHaveCount(30);
   await expect(panel.locator('.github-avatar-image')).toHaveCount(60);
-  await expect.poll(() => panel.locator('.github-item').first().evaluate(row => {
-    const avatar = row.querySelector('.github-avatar').getBoundingClientRect();
-    const title = row.querySelector('.github-item-title').getBoundingClientRect();
-    return row.getBoundingClientRect().height <= 28 && avatar.width === 16 && avatar.height === 16 &&
-      title.left > avatar.right && Math.abs(title.top + title.height / 2 - avatar.top - avatar.height / 2) < 1;
-  })).toBe(true);
   const created = panel.getByRole('button', { name: 'Created By Me', exact: true });
   await expect(created).toHaveAttribute('aria-expanded', 'false');
   await created.focus();

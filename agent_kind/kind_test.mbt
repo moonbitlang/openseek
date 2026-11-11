@@ -22,7 +22,7 @@ async fn bind_test_server(skip_message : String) -> @http.Server? {
 
 ///|
 async fn child_test_server(
-  group : @async.TaskGroup[Unit],
+  group : @async.TaskGroup,
   handle : (Json) -> MockReply raise,
 ) -> String? {
   guard bind_test_server("local TCP bind unavailable; skipping child test")
@@ -31,21 +31,21 @@ async fn child_test_server(
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
-      (request, body, conn) => {
+      (request, conn) => {
         assert_eq(request.path, "/chat/completions")
-        match handle(@json.parse(body.read_all().text())) {
+        match handle(@json.parse(conn.text.read_all())) {
           Sse(payload) => {
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "text/event-stream",
             })
-            conn.write("data: \{payload}\n\n")
-            conn.write("data: [DONE]\n\n")
+            conn.write_string("data: \{payload}\n\n")
+            conn.write_string("data: [DONE]\n\n")
           }
           Body(json) => {
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "application/json",
             })
-            conn.write(json.stringify())
+            conn.write_string(json.stringify())
           }
         }
       },

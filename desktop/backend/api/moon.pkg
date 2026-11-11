@@ -18,20 +18,20 @@ import {
   "openseek_desktop/backend/internal/work_dir",
   "openseek_desktop/backend/internal/workspaces",
   "openseek_desktop/backend/internal/worktree",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "tonyfettes/xlog",
 }
 
 import {
   "moonbitlang/openseek_protocol" @wire,
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
 } for "wbtest"
 
 import {
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "openseek_desktop/backend/internal/fsx",
   "moonbitlang/core/env" @sys,
   "moonbitlang/openseek/mcp/streamhttp",
@@ -40,3 +40,12 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)

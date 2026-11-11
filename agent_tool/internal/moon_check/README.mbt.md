@@ -119,7 +119,7 @@ async test "the walk stops at the first marker it meets" {
     @fs.mkdir(source, recursive=true)
 
     // Only a workspace marker at the top: the walk climbs all the way up.
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/moon.work",
       "members = []\n",
       create_mode=CreateOrTruncate,
@@ -130,7 +130,7 @@ async test "the walk stops at the first marker it meets" {
     )
 
     // Add a module marker in between, and it wins — it is nearer.
-    @fs.write_file(
+    @fs.write_text(
       "\{module_dir}/moon.mod",
       "name = \"example/demo\"\n",
       create_mode=CreateOrTruncate,

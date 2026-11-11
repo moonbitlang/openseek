@@ -26,3 +26,18 @@ pub fn compact_count(value : Int32) -> String {
     scaled((value + 50_000) / 100_000, "M")
   }
 }
+
+///|
+/// A span of time coarsened the way a person reads a wait: seconds under a
+/// minute, minutes and seconds under an hour, hours and minutes beyond. A
+/// span that has not begun reads as none.
+pub fn duration(ms : Double) -> String {
+  let seconds = (ms.max(0.0) / 1000.0).to_int()
+  if seconds < 60 {
+    "\{seconds}s"
+  } else if seconds < 3600 {
+    "\{seconds / 60}m \{seconds % 60}s"
+  } else {
+    "\{seconds / 3600}h \{seconds % 3600 / 60}m"
+  }
+}

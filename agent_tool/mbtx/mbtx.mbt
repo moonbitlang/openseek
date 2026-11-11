@@ -154,19 +154,15 @@ pub fn definition(
   AgentToolDefinition(
     name="mbtx",
     description=description(
-        background=bg_runtime is Some(_),
-        escalation=approval is Some(_),
-        delegation=subagents,
-        auto_background_after_ms~,
-        foreground_timeout_ms~,
-        build_timeout_ms~,
-        workspace_writes~,
-      ) +
-      (if scratch_dir is Some(_) {
-        "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
-      } else {
-        ""
-      }),
+      background=bg_runtime is Some(_),
+      escalation=approval is Some(_),
+      delegation=subagents,
+      auto_background_after_ms~,
+      foreground_timeout_ms~,
+      build_timeout_ms~,
+      workspace_writes~,
+      scratch_dir?,
+    ),
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),
@@ -220,9 +216,8 @@ pub fn definition(
             on_trace?=on_program_trace,
             on_image_output?=on_program_output,
           )
-          errdefer @async.protect_from_cancel(() => {
-            program.close(discard_images=!program.is_in_background())
-          })
+          // `close` keeps a backgrounded program's images by itself.
+          errdefer program.close(discard_images=true)
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
@@ -366,10 +361,7 @@ async fn execute(
   mcp_service? : @mcphost.Service,
 ) -> @agent_tool.ToolAction {
   if scratch_dir is Some(dir) {
-    @fs.mkdir(dir, recursive=true, permission=0o700) catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => ()
-      error => raise error
-    }
+    @fs.mkdir(dir, recursive=true, permission=0o700, allow_exist=true)
     guard @fs.kind(dir, follow_symlink=false) is Directory else {
       fail("scratch directory must not be a symlink")
     }
@@ -385,7 +377,7 @@ async fn execute(
           is_error=true,
         )
       }
-      file_state.with_access(() => {
+      let path = file_state.with_access(() => {
         save_script(
           workspace_root,
           filename,
@@ -403,14 +395,7 @@ async fn execute(
           )
       }
       saved.val = Some(filename)
-      // The same resolution `save_script` used; a script that could be saved
-      // resolves, so a failure here only costs the cache its dedicated dir.
-      let path = try resolve_filename(workspace_root, filename) catch {
-        _ => None
-      } noraise {
-        path => Some(path)
-      }
-      (source, filename, path)
+      (source, filename, Some(path))
     }
     File(filename) => {
       let bundled = bundled_source(filename) catch {
@@ -425,13 +410,7 @@ async fn execute(
       if bundled is Some(source) {
         (source, filename, Some(filename))
       } else {
-        let path = resolve_filename(workspace_root, filename) catch {
-          error =>
-            return @agent_tool.respond(
-              "error: mbtx \{@tool_error.failure_message("\{error}")}",
-              is_error=true,
-            )
-        }
+        let path = @workspace_path.resolve(workspace_root, filename)
         let source = read_script_snapshot(file_state, path) catch {
           error =>
             return @agent_tool.respond(
@@ -448,13 +427,15 @@ async fn execute(
   // against the workspace, as every workspace-relative tool path does.
   let run_cwd = @workspace_path.resolve_cwd(workspace_root, input.cwd)
   if run_cwd is Some(c) {
-    guard @fs.exists(c) else {
-      return @agent_tool.respond(
-        "error: mbtx cwd does not exist: \{c}",
-        is_error=true,
-      )
+    let kind = @fs.kind(c) catch {
+      @os_error.OsError(NotFound, ..) =>
+        return @agent_tool.respond(
+          "error: mbtx cwd does not exist: \{c}",
+          is_error=true,
+        )
+      error => raise error
     }
-    guard @fs.kind(c) is Directory else {
+    guard kind is Directory else {
       return @agent_tool.respond(
         "error: mbtx cwd is not a directory: \{c}",
         is_error=true,
@@ -480,7 +461,7 @@ async fn execute(
   // A granted escalation is consumed by THIS call and nothing else. There is
   // no session-scoped grant and no rule to remember, so the next escalating
   // call asks again.
-  let escalated = if input.escalated {
+  if input.escalated {
     let outcome = match approval {
       Some(channel) =>
         // The program goes with the question, headed by the working
@@ -508,15 +489,12 @@ async fn execute(
     guard outcome is AllowedOnce else {
       return @agent_tool.respond(escalation_refused(outcome), is_error=true)
     }
-    true
-  } else {
-    false
   }
   // One source of truth for whether moonrun's policy actually governs this
   // execution. The launch argv, adopted-job metadata, and foreground refusal
   // classifier must not drift: ordinary output from an escalated run is never
   // evidence of a policy that was not active.
-  let policy_active = !escalated
+  let policy_active = !input.escalated
   let handoff_dir_has_owner = job_dir is Some(_) || scratch_dir is Some(_)
   // A directory that an automatic handoff may give to a job must outlive this
   // call, so it gets a name of its own inside a caller-owned job dir or scratch
@@ -563,7 +541,7 @@ async fn execute(
   // has its own lifecycle. A non-standard caller that wires neither root has no
   // owner, so its fallback directory is reclaimed by the job at terminal status.
   let mut job_owns_cleanup = false
-  async fn cleanup() -> Unit {
+  async fn cleanup() -> Unit nocancel {
     if job_owns_cleanup {
       return
     }
@@ -577,7 +555,7 @@ async fn execute(
     })
   }
 
-  defer @async.protect_from_cancel(() => cleanup())
+  defer cleanup()
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
   // `dir` is one uniquely named call directory under `job_dir` or `scratch_dir`,
@@ -599,28 +577,33 @@ async fn execute(
   // rebuilds on modification time. Without a cache owner, the program builds
   // in this call's own directory. A cache directory that cannot be
   // created costs this call the cache, not the run.
-  let key_dir = match build_cache_root(job_dir?, scratch_dir?) {
-    Some(root) => Some("\{root}/\{cache_key(script_path)}")
-    None => None
-  }
+  let key_dir = build_cache_root(job_dir?, scratch_dir?).map(root => {
+    "\{root}/\{cache_key(script_path)}"
+  })
   let stage_dir = match key_dir {
     Some(keyed) =>
-      open_generation(keyed, generations.get(keyed).unwrap_or(0)) catch {
+      open_generation(keyed, generations.get_or_default(keyed, 0)) catch {
         _ => build_dir
       }
     None => build_dir
   }
   let cached = stage_dir != build_dir
   // What a stopped build does to its key: the next call builds elsewhere.
-  let retire = key_dir.map(keyed => {
-    () => generations[keyed] = generations.get(keyed).unwrap_or(0) + 1
-  })
+  let retire = if cached {
+    key_dir.map(keyed => {
+      () => {
+        generations.update_or_default(keyed, 1, generation => generation + 1)
+      }
+    })
+  } else {
+    None
+  }
   // With warnings requested the program is recompiled even when unchanged:
   // moon's no-op rebuild reports the artifact and nothing else, so a cache
   // hit would silently drop the diagnostics the caller asked to see. Warning
   // runs are probes, and the recompile is the ~270ms case, not the cold one.
   if input.warning {
-    @fs.write_file(
+    @fs.write_text(
       "\{stage_dir}/snippet.mbtx",
       source,
       create_mode=CreateOrTruncate,
@@ -628,21 +611,17 @@ async fn execute(
   } else {
     stage_source("\{stage_dir}/snippet.mbtx", source) |> ignore
   }
-  let log = "\{build_dir}/output.log"
-  // Pre-create the merged output file so both redirects open it; both append
-  // so stdout and stderr interleave in write order.
-  @fs.write_file(log, "", create_mode=CreateOrTruncate)
   // Give the snippet an EMPTY stdin (immediate EOF) rather than inheriting fd 0:
   // under `openseek serve`/TUI that fd is the JSONL control channel, and a
   // snippet reading `@stdio.stdin` would otherwise consume the engine's
   // prompt/steer/cancel commands (or block until the timeout). An empty temp
   // file is portable (no `/dev/null`/`NUL` special-casing).
   let empty_stdin = "\{build_dir}/stdin.empty"
-  @fs.write_file(empty_stdin, "", create_mode=CreateOrTruncate)
+  @fs.write_text(empty_stdin, "", create_mode=CreateOrTruncate)
   // moon's diagnostics point at the copied source under the build dir; the
   // canonical path anchors the diagnostic path rewrite below.
   let real = @fs.realpath(build_dir) catch { _ => build_dir }
-  let stage_real = @fs.realpath(stage_dir) catch { _ => stage_dir }
+  let run_bases = [real, build_dir]
   // Every snippet runs on wasm, the backend moonrun's policy governs. Write
   // the policy for every run; only an approved escalation omits it at launch.
   let policy_path = "\{build_dir}/policy.json"
@@ -675,14 +654,10 @@ async fn execute(
   }
   let injected : Map[String, String] = Map([])
   if mcp_service is Some(service) {
-    for key, value in service.env() {
-      injected[key] = value
-    }
+    injected.merge_in_place(service.env())
   }
   if program is Some(program) {
-    for key, value in program.env() {
-      injected[key] = value
-    }
+    injected.merge_in_place(program.env())
   }
   // Canonical like the workspace root, so a scratch inside the workspace is
   // recognized as such and stays writable for source (see
@@ -697,7 +672,7 @@ async fn execute(
     workspace?=workspace_grant,
     inject=injected,
   )
-  @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
+  @fs.write_text(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   // Wrap each phase's command in sandbox-exec for the roles that need a rule
   // the wasm policy cannot state: "may not write source". The policy's `fs`
   // rules bind the snippet and stop at the process boundary, so a spawned
@@ -791,12 +766,22 @@ async fn execute(
     build_snippet(
       build_dir~,
       stage_dir~,
-      retire=if cached { retire } else { None },
+      retire~,
       run_cwd~,
       warning=input.warning,
       build_timeout_ms~,
       empty_stdin~,
-      rewrite_bases=[real, build_dir, stage_real, stage_dir],
+      rewrite_bases=if cached {
+        [
+          ..run_bases,
+          @fs.realpath(stage_dir) catch {
+            _ => stage_dir
+          },
+          stage_dir,
+        ]
+      } else {
+        run_bases
+      },
       source_name~,
       confine~,
     ) {
@@ -810,7 +795,7 @@ async fn execute(
   // at startup, so the copy also decouples job lifetime from the cache.
   let artifact = if cached {
     let copy = "\{build_dir}/snippet.wasm"
-    @fs.write_file(copy, @fs.read_file(built), create_mode=CreateOrTruncate) catch {
+    @fs.write_binary(copy, @fs.read_binary(built), create_mode=CreateOrTruncate) catch {
       error =>
         return @agent_tool.respond(
           "mbtx: the build succeeded but its artifact could not be copied out of the session cache (\{error}) — a filesystem fault, not a problem in `source`.",
@@ -855,7 +840,7 @@ async fn execute(
       OutputCapBytes,
       // Same EOF-on-stdin contract as every other path here: never hand the
       // snippet the engine's fd 0.
-      stdin=@process.redirect_from_file(empty_stdin),
+      stdin=FromFile(empty_stdin),
     )
     if program is Some(program) {
       exec.on_ending(() => program.stop())
@@ -912,7 +897,7 @@ async fn execute(
         description?=input.description,
         command="mbtx run (build ok): \{@agent_tool.brief_line(source, limit=64)}",
         sandboxed_command?,
-        output_rewrites=temp_path_rewrites([real, build_dir], source_name~),
+        output_rewrites=temp_path_rewrites(run_bases, source_name~),
         moonrun_policy_active=policy_active,
         on_terminal=terminal_cleanup,
         data?=program.map(program => () => program.trace()),
@@ -932,15 +917,14 @@ async fn execute(
       }
       let handoff = "mbtx: the build succeeded and the RUNNING PROGRAM was still going after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost; any later nonzero exit is the program's own). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\")."
       let handoff = match exec.spill_path() {
-        Some(path) => "\{handoff}\nOutput file: \{path}"
+        Some(path) =>
+          if runtime.snapshot(id) is Some(snapshot) &&
+            !snapshot.output_persistent {
+            "\{handoff}\nOutput file: \{path}\nThis output file is temporary and lasts until engine shutdown."
+          } else {
+            "\{handoff}\nOutput file: \{path}"
+          }
         None => "\{handoff}\nOutput retention: memory only."
-      }
-      let handoff = if exec.spill_path() is Some(_) &&
-        runtime.snapshot(id) is Some(snapshot) &&
-        !snapshot.output_persistent {
-        "\{handoff}\nThis output file is temporary and lasts until engine shutdown."
-      } else {
-        handoff
       }
       // Explicitly requested compiler warnings must not vanish because the
       // program outlived the grace: they exist only in the build phase's
@@ -972,47 +956,51 @@ async fn execute(
       policy_active~,
     )
     exec.discard()
-    let text = rewrite_temp_paths(raw, [real, build_dir], source_name~)
-    let body = with_build_notes(build_notes, finished_body(text, exit_code))
-    let body = if output_limit_reached {
-      "\{body}\n[mbtx: output passed the fixed \{OutputCapBytes}-byte inline limit, so the program was STOPPED and this is only what it printed first. Retrying the same call will hit the same limit. Redirect bulky child output with `stdout=ToFile(path)` where `path` is under `@fs.tmpdir()`, then have that same snippet read the file and print only the needed excerpt before it exits.]"
-    } else {
-      body
+    let notices : Array[String] = []
+    if output_limit_reached {
+      notices.push(
+        "[mbtx: output passed the fixed \{OutputCapBytes}-byte inline limit, so the program was STOPPED and this is only what it printed first. Retrying the same call will hit the same limit. Redirect bulky child output with `stdout=ToFile(path)` where `path` is under `@fs.tmpdir()`, then have that same snippet read the file and print only the needed excerpt before it exits.]",
+      )
     }
-    let body = if saw_binary {
-      "\{body}\n[mbtx: the program emitted non-UTF-8 bytes; the text above is a lossy rendering.]"
-    } else {
-      body
+    if saw_binary {
+      notices.push(
+        "[mbtx: the program emitted non-UTF-8 bytes; the text above is a lossy rendering.]",
+      )
     }
-    let body = with_denial_guidance(body, sandbox_denied)
-    let is_error = exit_code != Some(0) ||
-      sandbox_denied is Some(_) ||
-      output_limit_reached
-    return @agent_tool.respond(
-      body,
-      is_error~,
-      brief?=if is_error { Some("mbtx run") } else { None },
+    return run_report(
+      rewrite_temp_paths(raw, run_bases, source_name~),
+      exit_code,
+      build_notes~,
+      notices~,
+      denial=sandbox_denied,
+      stopped=output_limit_reached,
     )
   }
+  let log = "\{build_dir}/output.log"
+  // Pre-create the merged output file so both redirects open it; both append
+  // so stdout and stderr interleave in write order.
+  @fs.write_text(log, "", create_mode=CreateOrTruncate)
   let result = @async.with_timeout_opt(foreground_timeout_ms, () => {
     defer (if program is Some(program) { program.stop() })
     let exit_code = @process.run(
-      prog,
-      argv,
-      cwd=run_cwd.unwrap_or("."),
-      inherit_env=true,
-      stdin=@process.redirect_from_file(empty_stdin),
-      stdout=@process.redirect_to_file(log, append=true),
-      stderr=@process.redirect_to_file(log, append=true),
-      no_console_window=true,
-      cancel_handler?=program.map(program => {
-        let CancellationHandler(cancel) = @process.graceful_cancel(timeout=5000)
-        CancellationHandler(pid => {
-          program.stop()
-          cancel(pid)
-        })
-      }),
-    )
+        prog,
+        argv,
+        cwd=run_cwd.unwrap_or("."),
+        inherit_env=true,
+        stdin=FromFile(empty_stdin),
+        stdout=AppendFile(log),
+        stderr=AppendFile(log),
+        no_console_window=true,
+        cancel_handler?=program.map(program => {
+          let CancellationHandler(cancel) = @process.graceful_cancel(
+            timeout=5000,
+          )
+          CancellationHandler(pid => {
+            program.stop()
+            cancel(pid)
+          })
+        }),
+      ).exit_code
     // Revoke the moment the child is gone, before the log read suspends: an
     // accepted call must be marked interrupted, not allowed to finish under
     // a capability whose process has exited. The defer above covers the
@@ -1036,24 +1024,15 @@ async fn execute(
     policy_active~,
   )
   match result {
-    Some((exit_code, raw)) => {
-      // Rewrite the throwaway temp path to the inline label or saved filename.
-      let text = rewrite_temp_paths(raw, [real, build_dir], source_name~)
-      // PREPEND the exit status so it survives the agent loop's outer 60k
-      // result clamp (which cuts the tail); the output cap is below 60k so
-      // both the status line and the body are retained.
-      let body = with_build_notes(
-        build_notes,
-        finished_body(text, Some(exit_code)),
+    Some((exit_code, raw)) =>
+      run_report(
+        rewrite_temp_paths(raw, run_bases, source_name~),
+        Some(exit_code),
+        build_notes~,
+        notices=[],
+        denial=sandbox_denied,
+        stopped=false,
       )
-      let body = with_denial_guidance(body, sandbox_denied)
-      let is_error = exit_code != 0 || sandbox_denied is Some(_)
-      @agent_tool.respond(
-        body,
-        is_error~,
-        brief?=if is_error { Some("mbtx run") } else { None },
-      )
-    }
     None => {
       // The snippet may have printed useful output before it hung; the log is
       // still on disk (cleanup runs below), so surface the captured prefix
@@ -1061,7 +1040,7 @@ async fn execute(
       // line stays first so it survives the outer result clamp.
       let partial = rewrite_temp_paths(
         read_capped(log),
-        [real, build_dir],
+        run_bases,
         source_name~,
       )
       let head = timeout_head(foreground_timeout_ms)
@@ -1160,19 +1139,19 @@ async fn build_snippet(
   // stream: warnings stay attributable to the build, and the run phase's
   // policy-refusal scan never reads build chatter.
   let build_log = "\{build_dir}/build.log"
-  @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
+  @fs.write_text(build_log, "", create_mode=CreateOrTruncate)
   errdefer mark_aborted()
   let result = @async.with_timeout_opt(build_timeout_ms, () => {
     let exit_code = @process.run(
-      prog,
-      argv,
-      cwd=run_cwd.unwrap_or("."),
-      inherit_env=true,
-      stdin=@process.redirect_from_file(empty_stdin),
-      stdout=@process.redirect_to_file(build_log, append=true),
-      stderr=@process.redirect_to_file(build_log, append=true),
-      no_console_window=true,
-    )
+        prog,
+        argv,
+        cwd=run_cwd.unwrap_or("."),
+        inherit_env=true,
+        stdin=FromFile(empty_stdin),
+        stdout=AppendFile(build_log),
+        stderr=AppendFile(build_log),
+        no_console_window=true,
+      ).exit_code
     (exit_code, read_capped(build_log))
   })
   guard result is Some((exit_code, raw)) else {
@@ -1262,7 +1241,7 @@ fn parse_artifacts_path(output : String) -> String? {
   let mut found : String? = None
   for line in output.split("\n") {
     let line = line.trim()
-    guard line.has_prefix("{\"artifacts_path\"") else { continue }
+    guard is_artifact_report(line) else { continue }
     let parsed = @json.parse(line) catch { _ => continue }
     if parsed is { "artifacts_path": [String(path), ..], .. } {
       found = Some(path)
@@ -1272,12 +1251,18 @@ fn parse_artifacts_path(output : String) -> String? {
 }
 
 ///|
+/// Whether a trimmed output line is moon's `{"artifacts_path":[…]}` report.
+fn is_artifact_report(line : StringView) -> Bool {
+  line.has_prefix("{\"artifacts_path\"")
+}
+
+///|
 /// A successful build's output with moon's machine-facing artifact report
 /// removed: what remains — compiler warnings under `warning: "on"`, usually
 /// nothing — is for the model to read.
 fn strip_artifact_report(text : String) -> String {
   [..text.split("\n")]
-  .filter(line => !line.trim().has_prefix("{\"artifacts_path\""))
+  .filter(line => !is_artifact_report(line.trim()))
   .join("\n")
   .trim()
   .to_owned()
@@ -1329,6 +1314,32 @@ fn exit_status(exit_code : Int32) -> String {
 fn timeout_head(foreground_timeout_ms : Int32) -> String {
   let bound = duration_label(foreground_timeout_ms)
   "mbtx: timed out after \{bound} and was cancelled — the build had already succeeded, so it is the PROGRAM that did not finish (an infinite loop, or waiting on something that never arrived)."
+}
+
+///|
+/// The report of a run that ended inline: the build's notes, the run's status
+/// and output (`text`, already path-rewritten), then each of `notices`, then
+/// any refusal guidance. The exit status is PREPENDED so it survives the agent
+/// loop's outer 60k result clamp, which cuts the tail. `stopped` marks a run
+/// mbtx itself ended, which is an error whatever its exit.
+fn run_report(
+  text : String,
+  exit_code : Int32?,
+  build_notes~ : String,
+  notices~ : Array[String],
+  denial~ : String?,
+  stopped~ : Bool,
+) -> @agent_tool.ToolAction {
+  let body = [
+    with_build_notes(build_notes, finished_body(text, exit_code)),
+    ..notices,
+  ].join("\n")
+  let is_error = exit_code != Some(0) || denial is Some(_) || stopped
+  @agent_tool.respond(
+    with_denial_guidance(body, denial),
+    is_error~,
+    brief?=if is_error { Some("mbtx run") } else { None },
+  )
 }
 
 ///|
@@ -1390,18 +1401,26 @@ async fn refusal_guidance(
   if exit_code is Some(0) {
     return None
   }
-  async fn shows(reports : (String) -> Bool) -> Bool {
-    match log_path {
-      Some(path) =>
-        log_shows_denial(path, reports, budget_bytes=DenialScanBudgetBytes)
-      None => reports(head)
+  // One pass reads both layers, so a flooded log is scanned once: the policy
+  // refusal stops the scan, and a profile denial is noted along the way.
+  let mut command_denied = false
+  fn reports(output : String) -> Bool {
+    if !command_denied &&
+      sandboxed_command is Some(command) &&
+      command.output_reports_denial(output) {
+      command_denied = true
     }
+    // An escalated run was given no moonrun policy, so nothing it prints can
+    // be that policy refusing something. The marker is ordinary guest text in
+    // that case; classifying it would turn a successful run into an error.
+    policy_active && @sandbox.output_reports_policy_refusal(output)
   }
-
-  // An escalated run was given no moonrun policy, so nothing it
-  // prints can be that policy refusing something. The marker is ordinary guest
-  // text in that case; classifying it would turn a successful run into an error.
-  if policy_active && shows(@sandbox.output_reports_policy_refusal) {
+  let policy_refused = match log_path {
+    Some(path) =>
+      log_shows_denial(path, reports, budget_bytes=DenialScanBudgetBytes)
+    None => reports(head)
+  }
+  if policy_refused {
     // The escalating variant only where a channel exists AND this is a
     // foreground report: its wording assumes nothing ran, which is true here
     // and false of `job_output`, whose job worked before it was refused.
@@ -1413,11 +1432,10 @@ async fn refusal_guidance(
       },
     )
   }
-  guard sandboxed_command is Some(command) else { return None }
-  if shows(output => command.output_reports_denial(output)) {
-    return Some(command.denial_feedback())
+  guard command_denied && sandboxed_command is Some(command) else {
+    return None
   }
-  None
+  Some(command.denial_feedback())
 }
 
 ///|
@@ -1563,14 +1581,8 @@ async fn read_capped(path : String) -> String {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
   let buf = FixedArray::make(OutputCapBytes, b'\x00')
-  let mut filled = 0
-  while filled < OutputCapBytes {
-    let n = file.read(buf, offset=filled, max_len=OutputCapBytes - filled)
-    if n <= 0 {
-      break
-    }
-    filled += n
-  }
+  // `read_at` comes back short only at EOF.
+  let filled = file.read_at(buf, position=0)
   let text = @utf8.decode_lossy(Bytes::from_array(buf[:filled]))
   // If we filled the cap there may be more; note the truncation.
   if filled == OutputCapBytes {
@@ -1627,7 +1639,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.4.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.4.1\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
                 }),
               ),
             ]
@@ -1710,7 +1722,15 @@ fn description(
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
   workspace_writes~ : WorkspaceWrites,
+  scratch_dir? : String,
 ) -> String {
+  // File artifacts live under the session scratch directory, so the
+  // instructions for producing them exist only where that directory does.
+  let artifacts = if scratch_dir is Some(_) {
+    "File artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
+  } else {
+    ""
+  }
   // The one sentence here that depends on what this build can actually do.
   //
   // Without an approval channel a refusal really is the end of the road, and
@@ -1891,6 +1911,7 @@ fn description(
       $|
       $|This context has no background-job runtime. A run may stay in the foreground
       $|for up to \{foreground_bound}; at that deadline it is cancelled and reported as a timeout.
+      $|\{artifacts}
     )
   }
   // Delegation is described only where it can be granted: a session whose
@@ -1951,6 +1972,7 @@ fn description(
     $|completion or user input, without a timeout. Explicitly finish when your
     $|work is complete.
     $|\{delegation}
+    $|\{artifacts}
   )
 }
 
@@ -1961,5 +1983,5 @@ async fn read_script_snapshot(
   state : @agent_tool.FileStateMap,
   path : String,
 ) -> String {
-  state.with_access(() => @fs.read_file(path).text())
+  state.with_access(() => @fs.read_text(path))
 }

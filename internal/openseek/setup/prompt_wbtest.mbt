@@ -3,17 +3,17 @@ async test "AGENTS.md discovery only reads the workspace" {
   @vfs.with_tmpdir(prefix="openseek-agents-prompt-", root => {
     let workspace = "\{root}/project/service"
     @fs.mkdir(workspace, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/AGENTS.md",
       "outer instructions",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/project/AGENTS.md",
       "project instructions",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/AGENTS.md",
       "service instructions",
       create_mode=CreateOrTruncate,
@@ -41,7 +41,7 @@ async test "AGENTS.md leading BOM is ignored without changing body content" {
   @vfs.with_tmpdir(prefix="openseek-agents-prompt-bom-", root => {
     let workspace = "\{root}/project"
     @fs.mkdir(workspace, recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{workspace}/AGENTS.md",
       "\u{FEFF}workspace instructions\u{FEFF}tail",
       create_mode=CreateOrTruncate,

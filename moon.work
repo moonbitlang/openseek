@@ -1,6 +1,7 @@
 members = [
   ".",
   "./protocol",
+  "./indexeddb",
   "./tools_sdk",
   "./cmd/viz_app",
   "./inspect",

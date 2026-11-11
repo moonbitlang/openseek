@@ -1,13 +1,12 @@
 
-/* ---------- sidebar ---------- */
-/* The aside carries no horizontal padding of its own: each row (header,
-   sections, footer) owns its inset, so the scrolling sessions list can
-   run its scrollbar at the sidebar's true edge instead of trapping it
-   inside a shared padding box. */
-aside {
+/* Keep insets on children so the session scrollbar reaches the sidebar edge.
+   The child selector keeps other `aside`s, such as the conversation
+   overview, from taking the sidebar's look and its `--sidebar-edge` anchor. */
+.app > aside {
   /* How far in from the aside's edges the sessions list and the footer sit.
      The header keeps its own, wider inset for the icon buttons. */
   --sidebar-inset: 12px;
+  anchor-name: --sidebar-edge;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0;
@@ -18,29 +17,23 @@ aside {
   border-right: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
-  /* The width-resize grab strip on the right edge positions against the
-     aside itself. */
   position: relative;
   visibility: visible;
   transition: visibility 0s linear;
 }
 
-/* Drag-to-resize handle on the sidebar's right edge. A thin strip floated
-   above the seam with a col-resize cursor; it tints on hover and while
-   dragging. Wired imperatively by frontend/sidebar_resize.mbt; the narrow
-   layout hides it with the other resize handles. */
+/* Fixed anchoring lets the hit area straddle the edge without being clipped
+   by the sidebar's overflow. */
 .sidebar-resize-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 4px;
+  position: fixed;
+  position-anchor: --sidebar-edge;
+  top: anchor(top);
+  bottom: anchor(bottom);
+  left: anchor(right);
+  transform: translateX(-50%);
+  width: var(--resize-handle-width);
   z-index: 3;
   cursor: col-resize;
-}
-.sidebar-resize-handle:hover,
-html.is-resizing .sidebar-resize-handle {
-  background: linear-gradient(to left, #257de0 50%, transparent 50%);
 }
 
 /* The fixed history controls and sidebar toggle share the shell header.
@@ -57,8 +50,6 @@ html.is-resizing .sidebar-resize-handle {
   padding-inline: var(--sidebar-toggle-reserved-width) var(--sidebar-inset);
 }
 
-/* A two-segment switch between the Chats list and the Projects list,
-   centered on the same row as the sidebar toggle and history arrows. */
 .sidebar-mode {
   /* Keep the switch's padding and gap out of the native window drag region. */
   -webkit-app-region: no-drag;
@@ -105,20 +96,13 @@ html.is-resizing .sidebar-resize-handle {
   overflow-y: auto;
   overflow-x: hidden;
   border-top: 1px solid var(--color-border);
-  /* The scroll box spans to the sidebar's edge, and the rows inside it stop
-     `--sidebar-inset` short of it however the platform draws its scrollbar. A
-     classic bar (Windows, Linux) fills the stable gutter and holds the rows
-     off the edge on its own; an overlay bar (macOS) floats above the content
-     and reserves nothing, so there the whole inset has to be real padding.
-     `--scrollbar-lane` is the measured width of the gutter the bar claims. */
-  padding-top: 0;
+  padding-top: var(--space-3);
   padding-bottom: 0.8em;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
 .sidebar-section {
   display: grid;
-  /* Preserve the 1px gap at the default 14px type size, scaling with it. */
   --sidebar-row-gap: calc(1em / 14);
   gap: var(--sidebar-row-gap);
   min-width: 0;
@@ -139,7 +123,6 @@ html.is-resizing .sidebar-resize-handle {
   line-height: calc(20 / 12);
 }
 
-/* the console's device selector, above the account row */
 .sidebar-button.device-selector {
   grid-template-columns: 20px minmax(0, 1fr) 16px;
 
@@ -150,7 +133,6 @@ html.is-resizing .sidebar-resize-handle {
   }
 }
 
-/* the console's account row in the sidebar footer */
 .console-account {
   display: flex;
   align-items: center;
@@ -199,9 +181,8 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  /* Keep breathing room around the 1.6em line box as the font grows. */
   min-height: 2em;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
@@ -224,7 +205,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   align-self: stretch;
   flex: 1 1 auto;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 .conversation-content > .sidebar-label,
@@ -361,11 +342,8 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
-/* A conversation row's trailing slot: two right-aligned groups — what the
-   row is (status glyphs) and what can be done to it (buttons) — stacked in
-   one grid cell. The cell takes the width of the wider group, so hovering
-   swaps one for the other without nudging the title, and a row with no
-   glyphs and no actions renders no slot at all (no reserved gutter). */
+/* Stack status and actions in one cell sized to the wider group, so swapping
+   them on hover does not shift the conversation title. */
 .row-trailing {
   flex: 0 0 auto;
   display: grid;
@@ -375,14 +353,29 @@ html.is-resizing .sidebar-resize-handle {
 .row-trailing > * {
   grid-area: 1 / 1;
 }
+
+.sidebar-run-status {
+  --icon-size: var(--icon-md);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.sidebar-run-status.running { color: var(--color-text-secondary); }
+.sidebar-run-status.running .icon {
+  animation: spinRunDot 0.9s linear infinite;
+}
+.sidebar-run-status.needs-input { color: var(--color-warning); }
+.sidebar-run-status.completed { color: var(--color-text-secondary); }
+.sidebar-run-status.failed { color: var(--color-danger); }
+
 .row-status,
 .row-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
-/* Both groups stay in layout (visibility, not display) so the cell keeps
-   one width across the swap. */
 .conversation-row:hover .row-trailing:has(.row-actions) .row-status,
 .conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
   visibility: hidden;
@@ -391,7 +384,6 @@ html.is-resizing .sidebar-resize-handle {
    status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
   visibility: visible;
-  background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
 .conversation-row:not(.loading)
@@ -486,9 +478,6 @@ html.is-resizing .sidebar-resize-handle {
   }
 }
 
-/* An attached workspace: a folder row whose main disclosure button folds its
-   conversations. The hover controls remain separate siblings, so opening the
-   action menu or starting a chat cannot also toggle the project. */
 .conversation-row + .sidebar-project,
 .sidebar-conversation + .sidebar-project,
 .sidebar-project:not(.collapsed):has(.conversation-row) + .sidebar-project {
@@ -558,53 +547,14 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-/* Worktree affordances: the composer's launch-mode chip. A sidebar row names
-   its worktree in the row's own tooltip. The archive-discard confirmation
-   reuses the shared modal styles. */
-/* The composer's launch-mode chip: Local ⇄ Worktree while the conversation
-   can still choose; fixed to the worktree's name once bound. */
-.composer-worktree {
-  --icon-size: var(--icon-sm);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  box-sizing: border-box;
-  /* Same box as `.composer-model`, so the toolbar chips sit at one height. */
-  height: 2.25rem;
-  margin: 0;
-  padding: 0 var(--space-4);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-control-surface);
-  color: var(--color-text-secondary);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  white-space: nowrap;
-}
-button.composer-worktree {
-  cursor: pointer;
-}
-button.composer-worktree:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
-}
-.composer-worktree.on {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
-/* A conversation nested under its workspace row: the twisty cell and the row
-   gap make up the rest of the indent, landing the title under its
-   workspace's. */
 .conversation-row.nested {
-  padding-left: var(--space-6);
+  padding-left: var(--space-5);
 }
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  /* Align beneath titles: 2.5rem includes the leading twisty cell. */
-  padding: 0 var(--space-4) 0 2.5rem;
+  /* Match nested titles: row inset, twisty cell, then content gap. */
+  padding: 0 var(--space-4) 0 calc(var(--space-5) + 1rem + var(--space-2));
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -626,63 +576,7 @@ button.composer-worktree:hover {
   background: transparent;
 }
 
-/* A sub-run in flight, docked above the composer: what is running, how far it
-   has gotten, and what it is doing right now. It is status, not content — no
-   durable event describes a child's progress — so it sits with the composer's
-   other live run state rather than in the scroller. Quiet by default, with a
-   pulsing dot so a stalled child still reads as attached rather than as a
-   frozen line. The dock collapses to nothing when no child is running. */
-.subrun-dock {
-  display: flex;
-  flex-direction: column;
-}
-.subrun-dock:empty {
-  display: none;
-}
-.subrun-lane {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-2) var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-.subrun-mark {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-secondary);
-  animation: lane-pulse 1.6s ease-in-out infinite;
-}
-/* `lane-pulse` is defined in base.css — shared with the composer's running
-   row. */
-.subrun-name {
-  flex: 0 0 auto;
-  color: var(--color-text-secondary);
-  font-weight: 600;
-}
-.subrun-detail {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  min-width: 0;
-}
-.subrun-step {
-  flex: 0 0 auto;
-}
-.subrun-activity {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Every conversation row leads with the twisty cell — a button when the
-   conversation folded sub-run transcripts under it, an empty box otherwise,
-   so titles line up either way. The chevron points down when open and right
-   when closed. */
+/* Rows without children retain an empty twisty slot to keep titles aligned. */
 .row-twisty {
   --icon-size: var(--icon-sm);
   flex: 0 0 1rem;
@@ -717,15 +611,12 @@ button.row-twisty:hover {
   cursor: inherit;
 }
 
-/* A sub-run transcript under the conversation that launched it: a step
-   further in than its parent, and quieter — it is that turn's evidence, not
-   a conversation of its own. */
 .conversation-row.subrun {
-  padding-left: 2rem;
+  padding-left: calc(2rem - var(--space-2));
   color: var(--color-text-muted);
 }
 .conversation-row.subrun.nested {
-  padding-left: 2.5rem;
+  padding-left: calc(2.5rem - var(--space-2));
 }
 
 #project-picker-dialog {
@@ -1191,7 +1082,8 @@ button.row-twisty:hover {
 }
 
 .sidebar-footer {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: calc(1em / 14);
   min-width: 0;
   border-top: 1px solid var(--color-border);
@@ -1239,42 +1131,59 @@ button.row-twisty:hover {
   }
 }
 
+.sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1em / 14);
+  min-width: 0;
+  padding: var(--space-3) var(--sidebar-inset);
+}
+
 .sidebar-search {
   --icon-size: var(--icon-md);
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
-  box-sizing: border-box;
-  height: 2rem;
-  margin: var(--space-4) var(--space-5) var(--space-5);
-  width: calc(100% - 2 * var(--space-5));
+  min-width: 0;
+  min-height: 2em;
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-seam);
-  border-radius: 7px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-md);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
 }
-.sidebar-search:focus-within {
+.sidebar-search > .icon {
+  justify-self: center;
+  color: var(--color-text-muted);
+}
+.sidebar-search:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.sidebar-tool-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.sidebar-tool-button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 .sidebar-search input {
-  flex: 1;
   min-width: 0;
   width: 100%;
   padding: 0;
   border: 0;
   outline: none;
-  color: var(--color-text-primary);
+  background: transparent;
+  color: inherit;
   font: inherit;
 }
-.sidebar-search input::placeholder { color: var(--color-text-muted); }
+.sidebar-search input::placeholder { color: inherit; opacity: 1; }
 .sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
 .conversation-row.search-selected { background: var(--color-bg-subtle); }
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
-/* Host identity and actions share the right edge without moving the title. */
 .workspace-trailing {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

@@ -93,7 +93,7 @@ pub async fn FileSystem::mismatch_on_disk(
   }
   for entry in entries {
     let path = "\{root}/\{entry.path}"
-    let content = @fs.read_file(path).text() catch {
+    let content = @fs.read_text(path) catch {
       error => return "missing expected file \{entry.path}: \{error}"
     }
     if content != entry.content {
@@ -109,7 +109,7 @@ pub async fn FileSystem::mismatch_on_disk(
 pub async fn write_text(root : String, path : String, content : String) -> Unit {
   validate_relative_path(path)
   ensure_parent_dir(root, path)
-  @fs.write_file("\{root}/\{path}", content, create_mode=CreateOrTruncate)
+  @fs.write_text("\{root}/\{path}", content, create_mode=CreateOrTruncate)
 }
 
 ///|

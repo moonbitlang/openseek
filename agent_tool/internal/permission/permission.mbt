@@ -24,11 +24,7 @@ async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
   } else {
     match @fs.kind(path) {
       Regular =>
-        File(
-          @crypto.bytes_to_hex_string(
-            @crypto.sha256(@fs.read_file(path).binary()),
-          ),
-        )
+        File(@crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_binary(path))))
       Directory => Directory(@fs.readdir(path, include_hidden=true, sort=true))
       _ => fail("unsupported filesystem target: \{path}")
     }

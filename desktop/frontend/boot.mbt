@@ -7,7 +7,7 @@
 
 ///|
 priv suberror AppShortcutSubscription {
-  AppShortcutSubscription(@cmd.Emit[Msg])
+  AppShortcutSubscription(@cmd.Emit[Msg], files~ : Bool, symbols~ : Bool)
 }
 
 ///|
@@ -16,13 +16,19 @@ fn app_shortcut_sub_loader(
   scheduler : &Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    AppShortcutSubscription(emit) => {
+    AppShortcutSubscription(emit, files~, symbols~) => {
       let mut emit = emit
+      let mut files = files
+      let mut symbols = symbols
       let target = @dom.document().as_event_target()
       let is_apple = app_shortcut_platform_is_apple()
       let listener : @dom.Listener = event => {
         guard event.to_keyboard_event() is Some(keyboard) &&
           app_shortcut_message(keyboard, is_apple) is Some(message) else {
+          return
+        }
+        if (message is QuickOpenOpen(@quick_open.Files) && !files) ||
+          (message is QuickOpenOpen(@quick_open.Symbols) && !symbols) {
           return
         }
         // In a real browser these chords overlap print/new-tab, new-window,
@@ -50,8 +56,17 @@ fn app_shortcut_sub_loader(
           )
         },
         update_tagger: payload => {
-          guard payload is AppShortcutSubscription(next) else { return }
+          guard payload
+            is AppShortcutSubscription(
+              next,
+              files=new_files,
+              symbols=new_symbols
+            ) else {
+            return
+          }
           emit = next
+          files = new_files
+          symbols = new_symbols
         },
       })
     }
@@ -66,11 +81,17 @@ fn app_shortcut_sub_loader(
 /// sidebar, Shift+B toggles the right panel, and Shift+F opens Search.
 /// Period opens Settings.
 /// Plus/equal and minus adjust the app font size, including held-key repeats.
-fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
+/// Quick Open chords the palette cannot answer keep their browser meaning.
+fn app_shortcut_subscription(emit : @cmd.Emit[Msg], model : Model) -> @sub.Sub {
+  let target = model.quick_open_target()
   @sub.custom_sub(
     "app-shortcut-capture",
     Global,
-    AppShortcutSubscription(emit),
+    AppShortcutSubscription(
+      emit,
+      files=target is Some(_),
+      symbols=target is Some(input) && input.supports(@quick_open.Symbols),
+    ),
     app_shortcut_sub_loader,
   )
 }
@@ -134,6 +155,7 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
     platform,
     open_web_links_in_app,
     reveal_files,
+    preview_files: ctx.can_preview_html(desktop=self.is_desktop),
     share_files: ctx.root() is Some(_),
     download_files: ctx.owner is @interop.Cloud(..) && ctx.root() is Some(_),
     downloading: self.file_panel.download is Some(_),
@@ -454,12 +476,27 @@ fn SidebarDispatcher::section_primary(
 }
 
 ///|
+fn SidebarDispatcher::section_secondary(
+  self : SidebarDispatcher,
+  id : @section.Id,
+  action : @section.SecondaryAction,
+) -> @cmd.Cmd {
+  match (id.source(), action) {
+    ("cloud.chats", ImportConversation(..)) => self.emit(OpenCloudImport)
+    (source, _) =>
+      self.unroutable("section secondary action", "source \{source}")
+  }
+}
+
+///|
 fn SidebarDispatcher::placeholder_open(
   self : SidebarDispatcher,
   id : String,
 ) -> @cmd.Cmd {
   if id == "cloud-sign-in" {
     self.emit(RemoteConnectClicked)
+  } else if id == "cloud-sign-in-cancel" {
+    self.emit(RemoteCancelClicked)
   } else if id == "cloud-list-status" {
     self.emit(CloudAction(@cloud.Refresh))
   } else {
@@ -492,6 +529,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   let section : @section.Actions = {
     primary: id => self.section_primary(id),
+    secondary: (id, action) => self.section_secondary(id, action),
     placeholder: id => self.placeholder_open(id),
     project,
     conversation,
@@ -599,12 +637,13 @@ fn main {
           @sub.on_resize(
             emit.map(viewport => ViewportResized(width=viewport.width.to_int())),
           ),
-          app_shortcut_subscription(emit),
+          app_shortcut_subscription(emit, model),
           language_subscription(emit),
           // Host event sources follow the device roster. Removing a device
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
           model.bridge_subscriptions(emit),
+          cloud_mcp_subscriptions(model, emit),
           @cloud.subscriptions(
             model.cloud,
             if model.screen is Chat {
@@ -762,6 +801,7 @@ fn main {
         browser_open_external: emit(BrowserOpenExternal),
         reveal_file: path => emit(RevealFile(path)),
         share_file: path => emit(ShareFile(path)),
+        preview_file: path => emit(PreviewFile(path)),
         toggle_menu: emit(ToggleRightPanelMenu),
         toggle_expanded: emit(ToggleRightPanelExpanded),
         close_tabs: emit.map(selection => CloseDockTabs(selection)),
@@ -1150,6 +1190,7 @@ fn main {
         reveal_file: path => emit(RevealFile(path)),
         share_file: path => emit(ShareFile(path)),
         download_file: path => emit(DownloadFile(path)),
+        preview_file: path => emit(PreviewFile(path)),
       },
       shell,
     )

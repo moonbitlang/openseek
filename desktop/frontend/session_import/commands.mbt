@@ -4,19 +4,27 @@ fn import_source(
   source : @protocol.SessionImportSource,
   generation : Int32,
   emit : @cmd.Emit[Msg],
+  account~ : @protocol.AccountSession?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        target.channel,
-        @commands.session_import,
-        {
-          source,
-          workspace: target.workspace,
-          worktree_of: target.worktree_of,
-        },
-      ) catch {
-        error => @protocol.Failed(@interop.bridge_error_text(error))
+      let reply = match target {
+        Host(target) =>
+          @interop.bridge_request(target.channel, @commands.session_import, {
+            source,
+            workspace: target.workspace,
+            worktree_of: target.worktree_of,
+          }) catch {
+            error => @protocol.Failed(@interop.bridge_error_text(error))
+          }
+        // The dialog outlives the sign-in it opened under; a changed account
+        // must not receive another account's import.
+        Cloud(account=owner) =>
+          match account {
+            Some(session) if session.user.user_id == owner =>
+              @cloud.import_session(session.token, source)
+            _ => Failed(@cloud_client.Failure::Unauthorized.label())
+          }
       }
       scheduler.add(emit(Imported(generation, reply)))
     })

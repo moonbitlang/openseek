@@ -1,6 +1,6 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/argparse",
   "moonbitlang/x/path",
   "moonbitlang/openseek-scripts/internal/markdown_comments",
@@ -11,3 +11,10 @@ warnings = "+unnecessary_annotation"
 supported_targets = "+native"
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

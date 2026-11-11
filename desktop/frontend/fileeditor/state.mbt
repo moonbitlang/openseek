@@ -1588,3 +1588,23 @@ enum RemovedDirectoryRead {
 
 ///|
 pub extend RemovedDirectoryRead with Eq::{equal, not_equal}
+
+///|
+/// The background review requests after the reply for `path` at `generation`
+/// settles: a background reply for the newest request retires that request,
+/// every other reply leaves the map untouched.
+fn State::settled_background_review(
+  self : State,
+  path : @common.Uri,
+  generation : Int32,
+  background : Bool,
+) -> Map[@common.Uri, Int32] {
+  guard background &&
+    self.background_review_requests.get(path) is Some(requested) &&
+    requested == generation else {
+    return self.background_review_requests
+  }
+  let requests = self.background_review_requests.copy()
+  requests.remove(path)
+  requests
+}

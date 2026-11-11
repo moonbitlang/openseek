@@ -19,11 +19,3 @@ options(
 import {
   "moonbitlang/core/async/socket",
 } for "wbtest"
-
-import {
-  "moonbitlang/core/async",
-  "moonbitlang/core/async/http",
-  "moonbitlang/core/async/socket",
-  "moonbitlang/core/env",
-  "moonbitlang/core/json",
-} for "test"

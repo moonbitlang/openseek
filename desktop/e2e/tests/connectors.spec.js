@@ -82,9 +82,9 @@ test('the overview shows what the conversation\'s engine is connected to', async
   await app.openSession();
   // Folded, the card is one line; unfolded, it lists every server.
   const panel = await showOverview(page);
-  await expect(panel.getByText('2 connected · 2 failed', { exact: true })).toBeVisible();
+  await expect(panel.getByText('2 failed · 2 connected', { exact: true })).toBeVisible();
   await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
-  await expect(panel.getByText('2 connected · 2 failed', { exact: true })).toBeHidden();
+  await expect(panel.getByText('2 failed · 2 connected', { exact: true })).toBeHidden();
   const seekmoon = panel.locator('.connectors-row', { hasText: 'seekmoon' });
   await expect(seekmoon.getByText('3 tools', { exact: true })).toBeVisible();
   // How a server is reached and its tools are on hover.

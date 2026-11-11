@@ -25,22 +25,8 @@ fn normalize_submission_id(submission_id : String?) -> String? {
   guard submission_id is Some(submission_id) && !submission_id.is_blank() else {
     return None
   }
-  let mut byte_length = 0
-  for char in submission_id {
-    let codepoint = char.to_int()
-    let width = if codepoint <= 127 {
-      1
-    } else if codepoint <= 2047 {
-      2
-    } else if codepoint <= 65535 {
-      3
-    } else {
-      4
-    }
-    byte_length += width
-    if byte_length > SubmissionIdMaxBytes {
-      return None
-    }
+  guard @utf8.encode(submission_id).length() <= SubmissionIdMaxBytes else {
+    return None
   }
   Some(submission_id)
 }
@@ -98,11 +84,6 @@ fn RunStatus::wire(self : RunStatus) -> String {
 }
 
 ///|
-fn emit(sink : EventSink, event : EngineEvent) -> Unit {
-  sink(event)
-}
-
-///|
 fn emit_error(
   sink : EventSink,
   message : String,
@@ -110,7 +91,7 @@ fn emit_error(
   exit_code? : Int32,
   diagnostics? : String,
 ) -> Unit {
-  emit(sink, Error({ run_id, message: Some(message), exit_code, diagnostics, }))
+  sink(Error({ run_id, message: Some(message), exit_code, diagnostics, }))
 }
 
 ///|
@@ -121,7 +102,7 @@ fn emit_finished(
   answer? : String,
   exit_code? : Int32,
 ) -> Unit {
-  emit(sink, Finished({ run_id, status: status.wire(), answer, exit_code, }))
+  sink(Finished({ run_id, status: status.wire(), answer, exit_code, }))
 }
 
 ///|

@@ -8,7 +8,7 @@ priv struct ProcessOutput {
 }
 
 ///|
-/// Run a compiler directly with literal arguments and immediately-closed stdin.
+/// Run a compiler directly with literal arguments and empty stdin.
 /// The owning task group cancels the child on timeout, read failure, or output
 /// overflow; callers supply the wall-clock bound around this collection.
 async fn collect_process_output(
@@ -18,33 +18,36 @@ async fn collect_process_output(
   max_output_chars~ : Int32,
 ) -> ProcessOutput {
   let (reader, writer) = @process.read_from_process()
+  let mut exit_code : Int32? = None
+  let mut prefix : OutputPrefix = { text: "", output_limit_reached: false, }
   @async.with_task_group() <| group => {
     defer reader.close()
-    let (stdin_reader, stdin_writer) = @process.write_to_process()
-    stdin_writer.close()
-    let process = @process.spawn(
-      group,
-      program,
-      args,
-      stdin=stdin_reader,
-      stdout=writer,
-      stderr=writer,
-      cwd=cwd.clamped_view(),
-      cancel_handler=@process.hard_cancel(),
-      no_wait=true,
-      no_console_window=true,
-    )
-    let prefix = read_output_prefix(reader, max_output_chars)
-    let exit_code = if prefix.output_limit_reached {
-      None
-    } else {
-      Some(process.wait())
+    // The child holds its own copy of `writer`; closing ours lets the reader
+    // see end-of-file once the child exits.
+    let process = {
+      defer writer.close()
+      @process.spawn(
+        group,
+        program,
+        args,
+        stdin=Empty,
+        stdout=Shared(writer),
+        stderr=Shared(writer),
+        cwd=cwd.clamped_view(),
+        cancel_handler=@process.hard_cancel(),
+        no_wait=true,
+        no_console_window=true,
+      )
     }
-    {
-      exit_code,
-      text: prefix.text,
-      output_limit_reached: prefix.output_limit_reached,
+    prefix = read_output_prefix(reader, max_output_chars)
+    if !prefix.output_limit_reached {
+      exit_code = Some(process.wait())
     }
+  }
+  {
+    exit_code,
+    text: prefix.text,
+    output_limit_reached: prefix.output_limit_reached,
   }
 }
 
@@ -66,13 +69,16 @@ async fn read_output_prefix(
   let mut chars = 0
   let mut bytes_read = 0
   let mut pending : Bytes = b""
+  let buffer = FixedArray::make(1024, b'\x00')
   let byte_budget = max_output_chars * 4 + 4
   for ;; {
     let chunk_limit = (byte_budget - bytes_read).clamp(min=1, max=1024)
     // A character left incomplete when the stream ends is dropped.
-    guard reader.read_some(max_len=chunk_limit) is Some(chunk) else {
+    let count = reader.read_into(buffer, max_len=chunk_limit)
+    guard count > 0 else {
       return { text: text.to_string(), output_limit_reached: false, }
     }
+    let chunk = Bytes::makei(count, index => buffer[index])
     bytes_read += chunk.length()
     let (decoded, rest) = decode_complete_chars(pending + chunk)
     pending = rest

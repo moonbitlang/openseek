@@ -3,7 +3,7 @@ async test "current PR status skips GitHub for a local checkout without remotes"
   let dir = @fs.tmpdir(prefix="openseek-local-pr-status-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     let branch = @git.current_branch(repo).unwrap()
     let status = github_checkout_status(repo, _ => {
@@ -21,9 +21,9 @@ async test "current PR status verifies remote lifecycle even for saved branch as
   let dir = @fs.tmpdir(prefix="openseek-pr-status-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "initial")
     let branch = @git.current_branch(repo).unwrap()
@@ -131,27 +131,27 @@ async test "checkout choices preserve edits until chosen and stash retains index
   let dir = @fs.tmpdir(prefix="openseek-checkout-choices-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/tracked.txt",
       "original\n",
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["add", "tracked.txt"])
     git_test_commit(dir, "initial")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/tracked.txt",
       "staged\n",
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["add", "tracked.txt"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/tracked.txt",
       "working\n",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/untracked.txt",
       "keep\n",
       create_mode=CreateOrTruncate,
@@ -159,9 +159,9 @@ async test "checkout choices preserve edits until chosen and stash retains index
     assert_false(github_prepare_checkout(repo, 42, Ask))
     assert_true(github_prepare_checkout(repo, 42, Carry))
     assert_eq(@gitx.output(repo, ["show", ":tracked.txt"]), "staged\n")
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "working\n")
+    assert_eq(@fs.read_text("\{dir}/tracked.txt"), "working\n")
     assert_true(github_prepare_checkout(repo, 42, Stash))
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "original\n")
+    assert_eq(@fs.read_text("\{dir}/tracked.txt"), "original\n")
     assert_eq(
       @gitx.output(repo, ["show", "stash@{0}:tracked.txt"]),
       "working\n",
@@ -170,13 +170,13 @@ async test "checkout choices preserve edits until chosen and stash retains index
       @gitx.output(repo, ["show", "stash@{0}^2:tracked.txt"]),
       "staged\n",
     )
-    assert_eq(@fs.read_file("\{dir}/untracked.txt").text(), "keep\n")
+    assert_eq(@fs.read_text("\{dir}/untracked.txt"), "keep\n")
     assert_true(github_prepare_checkout(repo, 42, Ask))
     git_test_run(dir, ["stash", "apply", "--index"])
     assert_true(github_prepare_checkout(repo, 42, Discard))
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "original\n")
+    assert_eq(@fs.read_text("\{dir}/tracked.txt"), "original\n")
     assert_eq(@gitx.output(repo, ["show", ":tracked.txt"]), "original\n")
-    assert_eq(@fs.read_file("\{dir}/untracked.txt").text(), "keep\n")
+    assert_eq(@fs.read_text("\{dir}/untracked.txt"), "keep\n")
   }
 }
 
@@ -218,12 +218,14 @@ test "checkout errors explain recovery and retain Git diagnostics" {
 }
 
 ///|
-/// Best-effort removal of a test repository. Cancellation stays observable;
-/// any other rmdir failure is the test's own tmpdir and is ignored.
-async fn git_test_cleanup(dir : String) -> Unit {
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
+/// Best-effort removal of a test repository; it runs to completion under
+/// cancellation, and an rmdir failure is the test's own tmpdir and is ignored.
+async fn git_test_cleanup(dir : String) -> Unit nocancel {
+  @async.protect_from_cancel(() => {
+    @fs.rmdir(dir, recursive=true) catch {
+      _ => ()
+    }
+  })
 }
 
 ///|

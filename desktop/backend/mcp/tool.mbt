@@ -5,8 +5,8 @@
 ///|
 /// One `tools/call`, as its handler sees it.
 pub(all) struct ToolCall {
-  // The conversation the call is made for, recovered from the bearer token
-  // it was granted — never from anything the model wrote.
+  // The conversation authenticated by the host: the HTTP bearer grant or
+  // the trusted identity attached to a stdio stream, never tool arguments.
   session : String
   // The call's `arguments`, as sent. Handlers decode what they declared in
   // their schema and raise `ToolError` for anything else.

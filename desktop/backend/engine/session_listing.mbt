@@ -53,7 +53,7 @@ async fn session_group(
     for id in store.list() {
       let path = store.session_file(id) catch { _ => continue }
       paths.add(path)
-      let stamp = Some(@fs.mtime(path)) catch { _ => None }
+      let stamp = Some(file_stamp(@fs.mtime(path))) catch { _ => None }
       let title = if store.title(id) is Some(title) {
         title
       } else {
@@ -82,13 +82,7 @@ async fn session_group(
     cache.retain((path, _) => paths.contains(path))
     // Match store listings: newest first with full timestamp precision;
     // directories without readable timestamps remain visible at the end.
-    entries.sort_by((a, b) => {
-      if a.1 != b.1 {
-        b.1.compare(a.1)
-      } else {
-        b.2.compare(a.2)
-      }
-    })
+    entries.sort_by((a, b) => (b.1, b.2).compare((a.1, a.2)))
     [ for entry in entries => entry.0 ]..append(unstamped)
   } catch {
     error => return failed("session list failed: \{error}")
@@ -126,7 +120,7 @@ async fn cached_listing_prompt(
   path : String,
   mtime : (Int64, Int32)?,
 ) -> String? {
-  let ctime = Some(@fs.ctime(path)) catch { _ => None }
+  let ctime = Some(file_stamp(@fs.ctime(path))) catch { _ => None }
   if mtime is Some(mtime) &&
     ctime is Some(ctime) &&
     cache.get(path) is Some(cached) &&
@@ -139,7 +133,8 @@ async fn cached_listing_prompt(
   // Absence and errors are never cached. Empty text is a successful result.
   if text is Some(text) && mtime is Some(mtime) && ctime is Some(ctime) {
     let unchanged = try
-      @fs.mtime(path) == mtime && @fs.ctime(path) == ctime
+      file_stamp(@fs.mtime(path)) == mtime &&
+      file_stamp(@fs.ctime(path)) == ctime
     catch {
       _ => false
     }
@@ -148,4 +143,10 @@ async fn cached_listing_prompt(
     }
   }
   text
+}
+
+///|
+/// A file time as `(seconds, nanoseconds)`, which compares and orders.
+fn file_stamp(time : @fs.Timestamp) -> (Int64, Int32) {
+  (time.sec(), time.nsec())
 }

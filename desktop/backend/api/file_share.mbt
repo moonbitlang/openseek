@@ -22,7 +22,6 @@ async fn ApiState::share_file(
     ).publish(server_url~, token~)
     credential.settle(self, reply)
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => Failed(message="Could not share the file: \{error}")
   }
 }

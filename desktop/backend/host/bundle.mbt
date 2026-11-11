@@ -45,11 +45,11 @@ pub async fn HostState::viz_assets(self : HostState) -> VizAssets {
 ///|
 /// Read the visualizer shell and bundle selected by `viz_assets`.
 pub async fn VizAssets::read(self : VizAssets) -> (String, String) {
-  let shell = @fs.read_file(self.shell).text() catch {
+  let shell = @fs.read_text(self.shell) catch {
     error =>
       raise HostError("could not read session visualizer shell: \{error}")
   }
-  let bundle = @fs.read_file(self.bundle).text() catch {
+  let bundle = @fs.read_text(self.bundle) catch {
     error =>
       raise HostError("could not read session visualizer bundle: \{error}")
   }
@@ -61,12 +61,12 @@ async test "development frontend comes from the declared resource root" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-frontend-")
   defer @fs.rmdir(root.to_string(), recursive=true)
   let development = root.join("desktop-dev.html").to_string()
-  @fs.write_file(development, "development", create_mode=CreateOrTruncate)
+  @fs.write_text(development, "development", create_mode=CreateOrTruncate)
   let resources = root.join("desktop")
   @fs.mkdir(resources.to_string(), recursive=true)
   let packaged = resources.join(PackagedFrontendEntryPath)
   @fs.mkdir(packaged.dirname().to_string(), recursive=true)
-  @fs.write_file(packaged.to_string(), "packaged", create_mode=CreateOrTruncate)
+  @fs.write_text(packaged.to_string(), "packaged", create_mode=CreateOrTruncate)
   // Development must never consume generated package inputs left in the
   // checkout; the launcher's declared resource root identifies the source
   // checkout without threading the host executable through this API.

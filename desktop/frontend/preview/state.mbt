@@ -33,6 +33,7 @@ pub(all) struct PageState {
   loading : Bool
   // The last load failure's description, cleared by the next navigation.
   failure : String?
+  cloud_preview : Bool
 }
 
 ///|
@@ -54,7 +55,11 @@ pub fn State::empty() -> State {
 ///|
 /// Allocate a page. A blank tab starts without a URL; a routed link opens
 /// with one (the caller also asks the host to create the native view then).
-pub fn open_page(state : State, url? : String) -> (State, Int32) {
+pub fn open_page(
+  state : State,
+  url? : String,
+  cloud_preview~ : Bool = false,
+) -> (State, Int32) {
   let id = state.next_id
   let pages = state.pages.copy()
   pages[id] = {
@@ -63,6 +68,7 @@ pub fn open_page(state : State, url? : String) -> (State, Int32) {
     title: "",
     loading: url is Some(_),
     failure: None,
+    cloud_preview,
   }
   ({ ..state, pages, next_id: id + 1, }, id)
 }

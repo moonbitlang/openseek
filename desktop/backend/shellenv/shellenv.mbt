@@ -70,15 +70,16 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
       return
     }
   }
-  guard result is Some((code, stdout, _)) else {
+  guard result is Some(output) else {
     @xlog.warn() <? { "message": "shell env probe timed out" }
     return
   }
+  let code = output.exit_code
   guard code == 0 else {
     @xlog.warn() <? { "message": "shell env probe exit", "code": code }
     return
   }
-  let text = stdout.text() catch {
+  let text = output.stdout_text() catch {
     error => {
       @xlog.warn() <?
         { "message": "shell env probe output", "error": "\{error}" }

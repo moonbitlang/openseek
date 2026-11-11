@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 5
+pub const HostProtocolRevision : Int32 = 7
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -370,6 +370,7 @@ pub impl @json.ToJson for BrowserElement
 #derive(Eq, @debug.Debug)
 pub(all) enum BrowserEventPayload {
   OpenRequested(request~ : String, session~ : String, url~ : String)
+  CloudOpenRequested(account~ : String, request~ : String, session~ : String, url~ : String)
   Navigated(id~ : Int32, url~ : String)
   LoadingChanged(id~ : Int32, loading~ : Bool)
   TitleUpdated(id~ : Int32, title~ : String)
@@ -437,6 +438,22 @@ pub fn BrowserPickReply::to_json(Self) -> @json.Json
 pub fn BrowserPickReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for BrowserPickReply
 pub impl @json.ToJson for BrowserPickReply
+
+#derive(Eq, @debug.Debug)
+pub(all) struct BrowserPreviewPayload {
+  id : Int32
+  path : String
+  root : String?
+  dark : Bool
+  session : String?
+}
+pub fn BrowserPreviewPayload::equal(Self, Self) -> Bool
+pub fn BrowserPreviewPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserPreviewPayload::not_equal(Self, Self) -> Bool
+pub fn BrowserPreviewPayload::to_json(Self) -> @json.Json
+pub fn BrowserPreviewPayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for BrowserPreviewPayload
+pub impl @json.ToJson for BrowserPreviewPayload
 
 #derive(Eq, @debug.Debug)
 pub(all) struct BrowserThemePayload {
@@ -655,10 +672,12 @@ pub impl @json.ToJson for CloudHistoryCacheEntry
 pub(all) struct CloudHistoryCachePage {
   session : SessionDocument
   messages : Array[@json.Json]
+  prediction : @openseek_protocol.PredictionRecord?
   offset : Int32?
   etag : String?
 }
 pub fn CloudHistoryCachePage::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCachePage::label(Self, String) -> String
 pub fn CloudHistoryCachePage::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCachePage
 pub impl @json.ToJson for CloudHistoryCachePage
@@ -681,6 +700,35 @@ pub fn CloudHistoryCacheRequest::from_json(@json.Json, @json.JsonPath) -> Self r
 pub fn CloudHistoryCacheRequest::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCacheRequest
 pub impl @json.ToJson for CloudHistoryCacheRequest
+
+#derive(Eq, @debug.Debug)
+pub(all) enum CloudMcpEvent {
+  Questions(account~ : String, snapshot~ : UserQuestionSnapshot)
+  Input(account~ : String, session~ : String, text~ : String, id~ : String)
+}
+pub fn CloudMcpEvent::equal(Self, Self) -> Bool
+pub fn CloudMcpEvent::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudMcpEvent::not_equal(Self, Self) -> Bool
+pub fn CloudMcpEvent::to_json(Self) -> @json.Json
+pub fn CloudMcpEvent::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for CloudMcpEvent
+pub impl @json.ToJson for CloudMcpEvent
+
+#derive(Eq, @debug.Debug)
+pub(all) enum CloudMcpRequest {
+  Dispatch(account~ : String, session~ : String, message~ : @json.Json)
+  Detach(account~ : String, session~ : String)
+  Questions(account~ : String)
+  Answer(account~ : String, answer~ : UserQuestionAnswer)
+}
+pub fn CloudMcpRequest::account(Self) -> String
+pub fn CloudMcpRequest::equal(Self, Self) -> Bool
+pub fn CloudMcpRequest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudMcpRequest::not_equal(Self, Self) -> Bool
+pub fn CloudMcpRequest::to_json(Self) -> @json.Json
+pub fn CloudMcpRequest::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for CloudMcpRequest
+pub impl @json.ToJson for CloudMcpRequest
 
 #derive(Eq, @debug.Debug)
 pub(all) struct CodexAccountLoginCancelPayload {
@@ -2592,6 +2640,8 @@ pub impl @json.ToJson for MoonPackageGraphReply
 
 #derive(Eq, @debug.Debug)
 pub(all) enum Notification {
+  PreviewOpen(PreviewOpenRequest)
+  CloudMcp(CloudMcpEvent)
   UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
   AgentConnected(ConnectedPayload)
@@ -2634,6 +2684,8 @@ pub fn Notification::wire_name(Self) -> String
 
 #derive(Eq, Hash, @debug.Debug)
 pub(all) enum NotificationKind {
+  PreviewOpen
+  CloudMcp
   UserQuestions
   AgentApprovals
   AgentConnected
@@ -2903,6 +2955,25 @@ pub fn PrepareAttachmentReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for PrepareAttachmentReply
 pub impl @json.ToJson for PrepareAttachmentReply
 
+pub(all) struct PreviewOpenArgs {
+  path : String
+}
+pub fn PreviewOpenArgs::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub impl @json.FromJson for PreviewOpenArgs
+
+#derive(Eq, @debug.Debug)
+pub(all) enum PreviewOpenRequest {
+  Local(session~ : String, workspace~ : String, path~ : String)
+  Cloud(account~ : String, session~ : String, path~ : String)
+}
+pub fn PreviewOpenRequest::equal(Self, Self) -> Bool
+pub fn PreviewOpenRequest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PreviewOpenRequest::not_equal(Self, Self) -> Bool
+pub fn PreviewOpenRequest::to_json(Self) -> @json.Json
+pub fn PreviewOpenRequest::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for PreviewOpenRequest
+pub impl @json.ToJson for PreviewOpenRequest
+
 #derive(Eq, @debug.Debug)
 pub(all) enum QueueAction {
   QueueAdd(id~ : String, text~ : String, images~ : Array[String])
@@ -3073,9 +3144,25 @@ pub impl @json.FromJson for RunsReply
 pub impl @json.ToJson for RunsReply
 
 #derive(Eq, @debug.Debug)
+pub(all) enum ScheduleAction {
+  Pause
+  Resume
+  Run
+  Stop
+  Delete
+}
+pub fn ScheduleAction::equal(Self, Self) -> Bool
+pub fn ScheduleAction::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleAction::not_equal(Self, Self) -> Bool
+pub fn ScheduleAction::to_json(Self) -> @json.Json
+pub fn ScheduleAction::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleAction
+pub impl @json.ToJson for ScheduleAction
+
+#derive(Eq, @debug.Debug)
 pub(all) struct ScheduleActionPayload {
   id : String
-  action : String
+  action : ScheduleAction
 }
 pub fn ScheduleActionPayload::equal(Self, Self) -> Bool
 pub fn ScheduleActionPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3086,12 +3173,25 @@ pub impl @json.FromJson for ScheduleActionPayload
 pub impl @json.ToJson for ScheduleActionPayload
 
 #derive(Eq, @debug.Debug)
+pub(all) enum ScheduleChangeReply {
+  Changed(SchedulesReply)
+  Refused(ScheduleRefusal)
+}
+pub fn ScheduleChangeReply::equal(Self, Self) -> Bool
+pub fn ScheduleChangeReply::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleChangeReply::not_equal(Self, Self) -> Bool
+pub fn ScheduleChangeReply::to_json(Self) -> @json.Json
+pub fn ScheduleChangeReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleChangeReply
+pub impl @json.ToJson for ScheduleChangeReply
+
+#derive(Eq, @debug.Debug)
 pub(all) struct ScheduleEntry {
   id : String
   spec : ScheduleSpec
   enabled : Bool
   run_requested : Bool
-  notice : String?
+  skipped : ScheduleSkip?
   next_at : Int64?
 }
 pub fn ScheduleEntry::equal(Self, Self) -> Bool
@@ -3101,6 +3201,24 @@ pub fn ScheduleEntry::to_json(Self) -> @json.Json
 pub fn ScheduleEntry::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ScheduleEntry
 pub impl @json.ToJson for ScheduleEntry
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ScheduleRefusal {
+  ForeignOwner
+  Missing
+  UnattachedProject
+  PastTime
+  AlreadyRunning
+  AlreadyQueued
+  StopBeforeDelete
+}
+pub fn ScheduleRefusal::equal(Self, Self) -> Bool
+pub fn ScheduleRefusal::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleRefusal::not_equal(Self, Self) -> Bool
+pub fn ScheduleRefusal::to_json(Self) -> @json.Json
+pub fn ScheduleRefusal::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleRefusal
+pub impl @json.ToJson for ScheduleRefusal
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ScheduleRun {
@@ -3152,6 +3270,21 @@ pub fn ScheduleSavePayload::to_json(Self) -> @json.Json
 pub fn ScheduleSavePayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ScheduleSavePayload
 pub impl @json.ToJson for ScheduleSavePayload
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ScheduleSkip {
+  PreviousRunActive
+  CapacityFull
+  MissedTime
+  AutomaticFolderUnavailable
+}
+pub fn ScheduleSkip::equal(Self, Self) -> Bool
+pub fn ScheduleSkip::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleSkip::not_equal(Self, Self) -> Bool
+pub fn ScheduleSkip::to_json(Self) -> @json.Json
+pub fn ScheduleSkip::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ScheduleSkip
+pub impl @json.ToJson for ScheduleSkip
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ScheduleSpec {

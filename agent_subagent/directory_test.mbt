@@ -6,14 +6,14 @@
 ///|
 /// A fresh store root holding `work/a` and `work/b`, each a repository with
 /// `lib/a.txt` committed; `work` itself is a plain directory.
-async fn[X] repositories(group : @async.TaskGroup[X]) -> (String, String) {
+async fn repositories(group : @async.TaskGroup) -> (String, String) {
   let root = @fs.tmpdir(prefix="openseek-directory-")
   group.add_defer(() => @fs.rmdir(root, recursive=true))
   let work = "\{root}/work"
   for name in ["a", "b"] {
     let repo = "\{work}/\{name}"
     @fs.mkdir("\{repo}/lib", recursive=true)
-    @fs.write_file("\{repo}/lib/a.txt", "alpha\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{repo}/lib/a.txt", "alpha\n", create_mode=CreateOrTruncate)
     for
       args in [
         ["init", "-q"],
@@ -70,7 +70,7 @@ async test "a directory worker changes its directory in place and leaves the cha
     // It ran there, with what its sandbox needs: its directory, and the
     // checkout as what is denied.
     let request : Json = @json.parse(
-      @fs.read_file("\{root}/results/\{info.session}.result.json.request").text(),
+      @fs.read_text("\{root}/results/\{info.session}.result.json.request"),
     )
     guard request
       is {
@@ -90,12 +90,12 @@ async test "a directory worker changes its directory in place and leaves the cha
     // The one piece of git state it may write: its repository's index.
     assert_eq(git_index, "\{mine}/.git/index")
     // Its change is left uncommitted in its repository; the other is untouched.
-    assert_eq(@fs.read_file("\{mine}/lib/a.txt").text(), "ALPHA\n")
+    assert_eq(@fs.read_text("\{mine}/lib/a.txt"), "ALPHA\n")
     let status = @subtask.git_require(["status", "--porcelain"], cwd=mine)
     assert_true(status is Ok(status) && status.contains("lib/a.txt"))
     let log = @subtask.git_require(["log", "--oneline"], cwd=mine)
     assert_true(log is Ok(log) && log.trim().split("\n").count() == 1)
-    assert_eq(@fs.read_file("\{work}/b/lib/a.txt").text(), "alpha\n")
+    assert_eq(@fs.read_text("\{work}/b/lib/a.txt"), "alpha\n")
     // What to do with it names the directory.
     guard @agent_subagent.describe_workspace(info.workspace) is Some(text) else {
       fail("a directory worker's change was not described")
@@ -130,7 +130,7 @@ async test "a running directory worker holds its directory, and only a directory
     // is one inside a MoonBit module (it builds at the module's root), and
     // git metadata or a worktree.
     @fs.mkdir("\{work}/m/pkg", recursive=true)
-    @fs.write_file("\{work}/m/moon.mod", "name = \"m\"\n")
+    @fs.write_text("\{work}/m/moon.mod", "name = \"m\"\n")
     @fs.mkdir("\{work}/b/.worktrees/w1", recursive=true)
     let module_root = "\{@fs.realpath(work)}/m"
     for

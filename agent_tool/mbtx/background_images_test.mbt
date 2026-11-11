@@ -1,11 +1,12 @@
 ///|
 async test "background PTC images survive source removal job completion repeat reads and runtime shutdown" {
-  let bytes = @fs.read_file("deepseek/client/testdata/two-colors.png").binary()
+  let bytes = @fs.read_binary("deepseek/client/testdata/two-colors.png")
   let image = @openseek_protocol.Image::from_bytes(bytes)
   @vfs.with_tmpdir(ws => {
-    let retained = @async.with_timeout(30000, () => {
+    let mut retained = ""
+    @async.with_timeout(30000, () => {
       @async.with_task_group(group => {
-        @fs.write_file("\{ws}/picture", bytes)
+        @fs.write_binary("\{ws}/picture", bytes)
         let tools = @agent_tool.Tools([
           @read_image.definition(workspace_root=ws),
         ])
@@ -28,7 +29,7 @@ async test "background PTC images survive source removal job completion repeat r
         let output = dispatch(definition, {
           "source": (
             #|---
-            #|import { "moonbitlang/openseek_tools@0.4.0" @tools, "moonbitlang/core/async" }
+            #|import { "moonbitlang/openseek_tools@0.4.1" @tools, "moonbitlang/core/async" }
             #|---
             #|async fn main {
             #|  @async.sleep(150)
@@ -50,16 +51,16 @@ async test "background PTC images survive source removal job completion repeat r
         }
         let saved : @openseek_protocol.JobRecord = @json.from_json(
           @json.parse(
-            @fs.read_file(
+            @fs.read_text(
               "\{ws}/\{@openseek_protocol.job_storage_name(job.id)}.json",
-            ).text(),
+            ),
           ),
         )
         guard saved.data
           is Some({ "ptc_images": [{ "path": String(path), .. }], .. }) else {
           fail("missing durable image path")
         }
-        path
+        retained = path
       })
     })
     let tool = @read_image.definition(workspace_root=ws)
@@ -70,13 +71,13 @@ async test "background PTC images survive source removal job completion repeat r
 
 ///|
 async test "foreground PTC retires image files and trace paths on success failure and cancellation" {
-  let bytes = @fs.read_file("deepseek/client/testdata/two-colors.png").binary()
+  let bytes = @fs.read_binary("deepseek/client/testdata/two-colors.png")
   let image = @openseek_protocol.Image::from_bytes(bytes)
   for outcome in ["success", "failure", "cancel"] {
     @vfs.with_tmpdir(ws => {
       @async.with_timeout(30000, () => {
         @async.with_task_group(group => {
-          @fs.write_file("\{ws}/picture", bytes)
+          @fs.write_binary("\{ws}/picture", bytes)
           let ready : @async.Queue[Unit] = Queue(kind=Unbounded)
           let tools = @agent_tool.Tools([
             @read_image.definition(workspace_root=ws),
@@ -118,7 +119,7 @@ async test "foreground PTC retires image files and trace paths on success failur
           }
           let source =
             $|---
-            $|import { "moonbitlang/openseek_tools@0.4.0" @tools, "moonbitlang/core/async" }
+            $|import { "moonbitlang/openseek_tools@0.4.1" @tools, "moonbitlang/core/async" }
             $|---
             $|async fn main {
             $|  let result = @tools.call("read_image", { "path": "picture" })
@@ -162,7 +163,7 @@ async test "foreground PTC retires image files and trace paths on success failur
           }
           assert_true(traces.last() is Some({ "ptc_images"? : None, .. }))
           assert_eq(retained.val, [image])
-          assert_eq(@fs.read_file("\{ws}/picture").binary(), bytes)
+          assert_eq(@fs.read_binary("\{ws}/picture"), bytes)
           assert_true(jobs.list().is_empty())
         })
       })

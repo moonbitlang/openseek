@@ -8,14 +8,15 @@ async test "worktree creation reads settings using a resource path" {
   defer @async.protect_from_cancel(() => {
     if windows {
       // Git objects are read-only on Windows; fs.rmdir cannot remove them.
-      let (code, _, stderr) = @processx.collect_output_no_stdin(
+      let result = @processx.collect_output_no_stdin(
         "powershell.exe",
         [
           "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; $fixture = [IO.Path]::GetFullPath($env:OPENSEEK_WORKTREE_TEST_ROOT); $temp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()); if (!$fixture.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -or !([IO.Path]::GetFileName($fixture)).StartsWith('openseek-worktree-windows-')) { throw 'Unexpected fixture path' }; Remove-Item -LiteralPath $fixture -Recurse -Force",
         ],
         extra_env={ "OPENSEEK_WORKTREE_TEST_ROOT": root.to_string() },
       )
-      assert_eq(code, 0, msg=stderr.text())
+      let code = result.exit_code
+      assert_eq(code, 0, msg=result.stderr_text())
     } else {
       @fs.rmdir(root.to_string(), recursive=true)
     }
@@ -44,20 +45,14 @@ async test "worktree creation reads settings using a resource path" {
     session_is_moving: _ => false,
     drain_sessions: _ => (),
   }
-  let reply = create(
-    host,
-    repo.resource_path(),
-    WorktreeOwner::openseek("windows-session"),
-    _ => (),
-  )
+  let reply = create(host, repo, WorktreeOwner::openseek("windows-session"), _ => {
+    ()
+  })
   assert_eq(reply.name, "wt-1")
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
-  let replay = create(
-    host,
-    repo.resource_path(),
-    WorktreeOwner::openseek("windows-session"),
-    _ => (),
-  )
+  let replay = create(host, repo, WorktreeOwner::openseek("windows-session"), _ => {
+    ()
+  })
   assert_eq(replay.name, reply.name)
   assert_eq(replay.worktrees.length(), 1)
 }

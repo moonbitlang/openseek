@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, sessionA, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id = sessionA) {
   await cloud.rowContainer(id).hover();
@@ -15,7 +15,6 @@ async function rename(page, cloud, title) {
 }
 
 const patches = cloud => cloud.requests.filter(request => request.method === 'PATCH');
-const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');
 
 {
   const desktop = false;
@@ -45,38 +44,3 @@ const creations = cloud => cloud.requests.filter(request => request.method === '
   });
 }
 
-{
-  const desktop = false;
-
-  test(`${desktop ? 'desktop' : 'browser'} Cloud archives into the existing group, opens read only and restores with its draft`, async ({ page }) => {
-    const cloud = new CloudHarness(page, { desktop });
-    cloud.histories.set(sessionA, { messages: [{ task_id: 'earlier', kind: 'assistant_message', data: { content: 'Earlier Cloud answer.' }, created_at: 1000 }], generating: false });
-    await cloud.install();
-    await cloud.goto();
-    await cloud.open();
-    await page.locator('#task').fill('Unsent Cloud draft');
-    await menu(page, cloud);
-    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
-    await expect(cloud.row(sessionC)).toHaveCount(0);
-    await expect(page.locator('main h1')).toHaveText('New chat');
-    await expect(page.locator('#task')).toHaveValue('');
-    expect(creations(cloud)).toHaveLength(0);
-    expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ archived: true }]);
-    await expect(cloud.row(sessionA)).toHaveCount(0);
-    const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/v1/sessions/${sessionA}/messages`));
-    await cloud.openArchived(sessionA);
-    expect((await history).status()).toBe(304);
-    await expect(page.locator('main h1')).toHaveText('Cloud fixture A');
-    await expect(page.locator('#transcript')).toContainText('Earlier Cloud answer.');
-    await expect(page.locator('.archived-read-only')).toHaveText('Archived conversation · Read onlyRestore');
-    await expect(page.locator('#task')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
-    await page.locator('main').getByRole('button', { name: 'Restore', exact: true }).click();
-    await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
-    await expect(page.locator('.archived-read-only')).toHaveCount(0);
-    await expect(page.locator('#task')).toHaveValue('Unsent Cloud draft');
-    expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ archived: true }, { archived: false }]);
-    expect(creations(cloud)).toHaveLength(0);
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}

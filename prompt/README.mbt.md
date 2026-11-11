@@ -4,15 +4,18 @@ This package owns SeekMoon's built-in system prompt text and prompt-selection
 policy. Prompt Markdown files are converted to generated MoonBit string
 functions through the module-level `md_to_mbt_string` dev-build rule.
 
-The `{{BUNDLED_RESOURCES_LAYOUT}}` placeholder expands to a sorted,
-directory-only tree of the repository's `share/` during generation. The
-generated prompt contains the tree as static text; only the installation's
-absolute `Bundled resources` path is appended at runtime. No `tree` executable
-is required. `just prompt` refreshes this filesystem-derived content;
-the documentation updater invokes it automatically. `just check-prompt` checks
-freshness without writing and runs in CI before other build commands.
-Direct `moon` commands also run the dev-build rule when its Markdown input changes,
-but do not track directory-only changes under `share/`.
+The generator strips Markdown comments outside code blocks. The working
+prompt has no resource-layout placeholders: at runtime, the CLI appends the
+installation's absolute `Bundled resources` path and a sorted, directory-only
+tree of that directory to both built-in and custom base prompts. No `tree`
+executable is required, and changes to the installed resources do not require
+regenerating the prompt. Files passed through `--system-prompt-file` are read
+literally, without template expansion or comment stripping.
+
+`just prompt` refreshes the generated sources; the documentation updater also
+invokes the generator. `just check-prompt` checks freshness without writing and
+runs in CI before other build commands. Direct `moon` commands run the dev-build
+rule when its Markdown input changes.
 
 ## Prompt Sources
 

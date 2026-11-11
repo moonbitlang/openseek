@@ -2,13 +2,13 @@
 package "openseek_desktop/backend/remote"
 
 import {
-  "moonbitlang/async/http",
-  "moonbitlang/async/io",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/io",
   "openseek_desktop/backend/api",
 }
 
 // Values
-pub async fn serve_app_server(@api.ApiState, &@io.Reader, &@io.Writer) -> Unit
+pub async fn serve_app_server(@api.ApiState, &@io.BinaryReader, &@io.BinaryWriter) -> Unit
 
 // Errors
 

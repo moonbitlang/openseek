@@ -58,8 +58,12 @@ missing but its parent exists, OpenSeek creates that final component and logs a
 creates only `c` when `a/b` already exists.
 `--system-prompt-file` and `--system-prompt-addendum-file` can also be supplied
 with `OPENSEEK_SYSTEM_PROMPT_FILE` and
-`OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`. `--session` explicitly creates or
-resumes that session under `--session-root` (default `.openseek`). Relative
+`OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`. The base file is read literally, without
+template expansion. Both built-in and custom bases receive the same runtime
+context, including the bundled resource path and directory layout when present,
+workspace environment, project instructions, and skills.
+`--session` explicitly creates or resumes that session under `--session-root`
+(default `.openseek`). Relative
 session roots are resolved under `--dir`.
 `--review-deadline` bounds one automatic `--review-gate` audit to that many
 milliseconds; the default is 900000 (15 minutes). Model-initiated reviews run

@@ -1,6 +1,6 @@
 // The MCP methods this server answers, as JSON-RPC messages in and out. The
-// HTTP layer in `server.mbt` hands every authenticated POST body here and
-// writes back whatever this returns.
+// transports provide a trusted conversation identity and write each reply
+// using their own framing.
 //
 // Scope: the tool surface only — `initialize`, `ping`, `tools/list`, and
 // `tools/call`. Resources, prompts, and server-initiated requests are not
@@ -51,24 +51,34 @@ fn failure(id : Json, code : Int32, message : String) -> Json {
 }
 
 ///|
-/// Answer one inbound message sent for `session`. `None` when the
-/// message expects no reply: a notification, or a response to a request —
-/// which this server never sends, so there is nothing to match it to.
-async fn Server::dispatch(
-  self : Server,
-  session : String,
-  message : Json,
-  groups : Array[String],
-) -> Json? {
+priv struct Request {
+  id : Json
+  method_ : String
+  params : Json
+  modern : Bool
+}
+
+///|
+priv enum InboundMessage {
+  Request(Request)
+  Answer(Json)
+  Ignore
+}
+
+///|
+/// Validate and classify without executing a handler or starting a task.
+fn classify_message(message : Json) -> InboundMessage {
+  if validate_modern(message) is Some(error) {
+    return Answer(error)
+  }
   guard message is Object(fields) else {
-    // JSON-RPC answers an unidentifiable request under a null id.
-    return Some(failure(null, InvalidRequest, "Invalid Request"))
+    return Answer(failure(null, InvalidRequest, "Invalid Request"))
   }
   guard fields.get("method") is Some(String(method_)) else {
     if fields.contains("result") || fields.contains("error") {
-      return None
+      return Ignore
     }
-    return Some(
+    return Answer(
       failure(
         fields.get("id").unwrap_or(null),
         InvalidRequest,
@@ -76,9 +86,40 @@ async fn Server::dispatch(
       ),
     )
   }
-  guard fields.get("id") is Some(id) else { return None }
-  let params = fields.get("params").unwrap_or(Json::empty_object())
-  let modern = @wire.request_version(message) is Some(_)
+  guard fields.get("id") is Some(id) else { return Ignore }
+  Request({
+    id,
+    method_,
+    params: fields.get("params").unwrap_or(Json::empty_object()),
+    modern: @wire.request_version(message) is Some(_),
+  })
+}
+
+///|
+/// Answer one inbound message for the conversation authenticated by the host.
+/// `session` and `groups` come from trusted host context, never the message.
+/// Notifications and responses return `None`.
+pub async fn Dispatcher::dispatch(
+  self : Dispatcher,
+  message : Json,
+  session~ : String,
+  groups~ : Array[String] = [],
+) -> Json? {
+  match classify_message(message) {
+    Ignore => None
+    Answer(answer) => Some(answer)
+    Request(request) => Some(self.execute_request(request, session~, groups~))
+  }
+}
+
+///|
+async fn Dispatcher::execute_request(
+  self : Dispatcher,
+  request : Request,
+  session~ : String,
+  groups~ : Array[String],
+) -> Json {
+  let { id, method_, params, modern, } = request
   let answer = match method_ {
     "server/discover" if modern =>
       reply(id, {
@@ -102,11 +143,11 @@ async fn Server::dispatch(
       },
     }
   }
-  Some(answer)
+  answer
 }
 
 ///|
-fn Server::initialize_result(self : Server, params : Json) -> Json {
+fn Dispatcher::initialize_result(self : Dispatcher, params : Json) -> Json {
   let version = match params {
     { "protocolVersion": String(requested), .. } if supported_legacy_version(
         requested,
@@ -121,7 +162,7 @@ fn Server::initialize_result(self : Server, params : Json) -> Json {
 }
 
 ///|
-fn Server::tool_list(self : Server, groups : Array[String]) -> Json {
+fn Dispatcher::tool_list(self : Dispatcher, groups : Array[String]) -> Json {
   let tools : Array[Json] = [
     for _, tool in self.tools if offered(tool.name, groups) => {
       {
@@ -138,8 +179,8 @@ fn Server::tool_list(self : Server, groups : Array[String]) -> Json {
 /// Run one tool for `session`. An unknown tool is a protocol error; a
 /// handler that raises or outruns its deadline is a tool result with
 /// `isError`, which the model reads like any other output.
-async fn Server::call_tool(
-  self : Server,
+async fn Dispatcher::call_tool(
+  self : Dispatcher,
   session : String,
   id : Json,
   params : Json,
@@ -157,7 +198,6 @@ async fn Server::call_tool(
   }
   async fn invoke() -> Result[Array[Content], String] {
     try (tool.call)({ session, arguments, }) catch {
-      error if @async.is_being_cancelled() => raise error
       error => Err("\{error}")
     } noraise {
       content => Ok(content)

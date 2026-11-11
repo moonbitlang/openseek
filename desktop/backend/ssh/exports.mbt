@@ -30,14 +30,14 @@ pub async fn askpass_main() -> Unit {
       "prompt": prompt,
       "hint": @env.get_env_var("SSH_ASKPASS_PROMPT").unwrap_or(""),
     }
-    socket.write(request.stringify() + "\n")
+    socket.write(@utf8.encode(request.stringify() + "\n"))
     match auth_frame(socket) {
       { "action": "value", "value": String(value), .. } => {
-        @stdio.stdout.write(value + "\n")
+        @stdio.stdout.text.write(value + "\n")
         true
       }
       { "action": "accept", .. } => {
-        @stdio.stdout.write("yes\n")
+        @stdio.stdout.text.write("yes\n")
         true
       }
       _ => false
@@ -56,11 +56,11 @@ pub async fn askpass_main() -> Unit {
 /// (`desktop/app/internal/extension/extension.mbt`); this package's blackbox
 /// test (`command_test.mbt`) drives the same store.
 pub async fn profiles() -> @protocol.SshProfiles {
-  let text = @fs.read_file(profile_path()) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return { hosts: [], }
+  let text = @fs.read_text(profile_path()) catch {
+    @os_error.OsError(NotFound, ..) => return { hosts: [], }
     error => raise error
   }
-  @json.from_json(@json.parse(text.text()))
+  @json.from_json(@json.parse(text))
 }
 
 ///|
@@ -299,18 +299,22 @@ pub async fn Connection::run(
       group.spawn_bg(() => self.serve_auth(auth_server, token, emit))
       let args = arguments(self.profile.command)
       args.push(remote_command(model_environment=settings is Some(_)))
-      let (input, lifetime) = @process.write_to_process()
-      defer lifetime.close()
-      let (reader, output) = @process.read_from_process()
-      defer reader.close()
-      let (errors, error_output) = @process.read_from_process(shared=true)
+      // Both SSH children write their diagnostics to this one pipe; the parent
+      // keeps its end open while either may still be spawned.
+      let (errors, error_output) = @process.read_from_process()
       defer errors.close()
+      defer error_output.close()
       group.spawn_bg(allow_failure=true, () => {
-        while errors.read_some(max_len=4096) is Some(bytes) {
-          if stderr.length() + bytes.length() > 8192 {
+        let chunk = FixedArray::make(4096, b'\x00')
+        for ;; {
+          let count = errors.read_into(chunk)
+          guard count > 0 else { break }
+          if stderr.length() + count > 8192 {
             stderr = Buffer()
           }
-          stderr.write_bytes(bytes)
+          for index in 0..<count {
+            stderr.write_byte(chunk[index])
+          }
           if @utf8.decode_lossy(stderr.to_bytes()).contains(
               "Permission denied, please try again.",
             ) {
@@ -326,13 +330,21 @@ pub async fn Connection::run(
         "ssh",
         args,
         extra_env=environment,
-        stdin=input,
-        stdout=output,
-        stderr=error_output,
+        stdin=FeedFromParent,
+        stdout=Collect,
+        stderr=Shared(error_output),
         no_console_window=true,
         cancel_handler=@process.graceful_cancel(timeout=1000),
       )
-      group.spawn_bg(() => if settings is Some(line) { lifetime.write(line) })
+      let lifetime = bootstrap.stdin
+      defer lifetime.close()
+      let reader = bootstrap.stdout
+      defer reader.close()
+      group.spawn_bg(() => {
+        if settings is Some(line) {
+          lifetime.text.write(line)
+        }
+      })
       let mut released = false
       group.spawn_bg(() => {
         let code = bootstrap.wait()
@@ -374,15 +386,13 @@ pub async fn Connection::run(
       forward.insert(0, "-L")
       forward.insert(0, "-N")
       forward.insert(0, "-oExitOnForwardFailure=yes")
-      let (tunnel_input, tunnel_writer) = @process.write_to_process()
-      tunnel_writer.close()
       let tunnel = @process.spawn(
         group,
         "ssh",
         forward,
         extra_env=environment,
-        stdin=tunnel_input,
-        stderr=error_output,
+        stdin=Empty,
+        stderr=Shared(error_output),
         no_console_window=true,
         cancel_handler=@process.graceful_cancel(timeout=1000),
       )
@@ -401,7 +411,9 @@ pub async fn Connection::run(
             if tunnel.try_wait() is Some(code) {
               raise SshError("SSH forwarding exited \{code}")
             }
-            let client = @http.Client("http://127.0.0.1:\{address.port()}") catch {
+            let client = @http.ClientConnection(
+              "http://127.0.0.1:\{address.port()}",
+            ) catch {
               _ => {
                 if self.waiter is None {
                   remaining -= 25
@@ -475,7 +487,7 @@ pub async fn Connection::run(
       self.rpc = Some(rpc)
       emit({ "method": "agent.connected", "params": connected })
       stopped.get()
-      group.return_immediately(())
+      group.return_immediately()
     })
     Ok(())
   } catch {

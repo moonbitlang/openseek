@@ -24,6 +24,8 @@ pub async fn export_snapshot(String, String) -> @protocol.SessionSnapshot
 
 pub async fn file_unchanged(String, String, String, String) -> Bool
 
+pub async fn import_session(String, @protocol.SessionImportSource) -> @protocol.SessionImportReply
+
 pub async fn read_directory(String, String, String) -> @protocol.ReadDirReply
 
 pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol.ReadFileReply
@@ -34,7 +36,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, desktop_history? : Bool) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -151,7 +153,7 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
-  history_disk_request : Int32?
+  history_cache_request : Int32?
   history_window : HistoryWindow
   history_older_request : (Int32, Int32, Int32)?
   history_turn_request : (Int32, Int32)?
@@ -176,6 +178,7 @@ pub(all) struct Conversation {
   uploads : Array[UploadedAttachment]
   shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
+  client_tools_ready : Bool
   outgoing : PendingCommand?
   stream : StreamLease?
   control : ControlState?
@@ -271,6 +274,10 @@ pub fn MetadataSave::equal(Self, Self) -> Bool
 pub fn MetadataSave::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
+  ClientToolsReady(Int32, String, Bool)
+  QuestionInput(account~ : String, session~ : String, text~ : String, id~ : String)
+  QuestionInputDelivered(Int32, String)
+  QuestionInputFailed(Int32, String, String)
   AccountChanged(String?)
   Refresh
   Create
@@ -291,7 +298,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
-  DiskHistoryLoaded(Int32, String, Int32, History?)
+  CachedHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, @cloud_client.Failure)
@@ -389,6 +396,7 @@ pub fn SessionListStatus::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct State {
+  client_tools : Bool
   user_id : String?
   epoch : Int32
   needs_sign_in : Bool
@@ -418,6 +426,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
 pub fn State::mark_read(Self, String) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::replace(Self, String, Conversation) -> Self
 pub fn State::sidebar_sessions(Self) -> Array[Session]
 
 #derive(Eq)

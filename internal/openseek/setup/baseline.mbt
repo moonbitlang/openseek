@@ -24,17 +24,18 @@ async fn run_capture(
   cwd : String,
 ) -> String? {
   let outcome = @async.with_timeout_opt(BaselineProbeBudgetMs, () => {
-    @process.collect_stdout(
+    @process.run(
       command.clamped_view(),
       args,
       inherit_env=true,
+      stdout=Collect,
       cwd=cwd.clamped_view(),
     )
   }) catch {
     _ => return None
   }
   match outcome {
-    Some((0, data)) => Some(data.text())
+    Some(result) if result.exit_code == 0 => Some(result.stdout_text())
     _ => None
   }
 }

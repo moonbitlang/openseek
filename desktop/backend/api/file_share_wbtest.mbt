@@ -2,7 +2,7 @@
 async test "file share RPC checks account authority before capturing workspace files" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="seekmoon-file-share-auth-"))
   defer @fs.rmdir(root.to_string(), recursive=true)
-  @fs.write_file(root.join("auth.json").to_string(), share_account_fixture())
+  @fs.write_text(root.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=root)
   let state = ApiState(engine="unused", auth=store)
   for (local_share, user_id) in [(false, "123"), (true, "other-account")] {

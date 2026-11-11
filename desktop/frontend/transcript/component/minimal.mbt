@@ -260,7 +260,6 @@ priv enum MinimalContent {
   Activity(Array[MinimalActivity])
   Note(text~ : String, error~ : Bool)
   ContextSummary(String)
-  Completed(Array[MinimalPart])
   Messages(Array[MinimalPart], active_group~ : String?)
 }
 
@@ -322,9 +321,9 @@ fn MinimalStream::push_block(self : MinimalStream, part : MinimalPart) -> Unit {
   }
   self.blocks.push({
     stream: self.stream,
-    // Anchor the group to its preceding user, not its first child: that child
-    // becomes a Completed disclosure at final, while sibling checkpoints and
-    // their browser-owned expansion state must survive.
+    // Anchor the group to its preceding user, not its first child: the
+    // process before a final answer leaves the group at final, while sibling
+    // checkpoints and their browser-owned expansion state must survive.
     key: if self.blocks is [.., previous] {
       { value: "minimal-messages\u{0}\{previous.key.wire()}", }
     } else {
@@ -335,13 +334,14 @@ fn MinimalStream::push_block(self : MinimalStream, part : MinimalPart) -> Unit {
 }
 
 ///|
-/// Only an explicit final answer collapses the preceding process. User inputs
-/// split disclosures without ending a turn. A stop, failure, or empty success
-/// flushes the same process unfolded, fencing it off from the next turn.
+/// Only an explicit final answer retires the preceding process: minimal mode
+/// shows an answered turn as its answer alone. User inputs split processes
+/// without ending a turn. A stop, failure, or empty success keeps the same
+/// process visible, fencing it off from the next turn.
 fn MinimalStream::finish(
   locale~ : @i18n.Locale = English,
   self : MinimalStream,
-  collapse~ : Bool,
+  answered~ : Bool,
 ) -> Unit {
   self.flush_parts()
   for section in self.sections {
@@ -363,12 +363,7 @@ fn MinimalStream::finish(
           ),
         })
       Process(parts) =>
-        if collapse && parts is [first, ..] {
-          self.push_block({
-            identity: "completed\u{0}\{first.identity}",
-            content: Completed(parts),
-          })
-        } else {
+        if !answered {
           for part in parts {
             self.push_block(part)
           }
@@ -404,7 +399,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
       }
       Assistant(prose~, calls~, finished~, ..) => {
         if finished && prose is Some(text) && !text.is_blank() {
-          builder.finish(locale~, collapse=true)
+          builder.finish(locale~, answered=true)
           builder.push_block({
             identity: "final\u{0}\{identity}",
             content: Prose(
@@ -461,7 +456,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         }
       }
       Answer(text) => {
-        builder.finish(locale~, collapse=!text.is_blank())
+        builder.finish(locale~, answered=!text.is_blank())
         if !text.is_blank() {
           builder.push_block({
             identity: "final\u{0}\{identity}",
@@ -476,9 +471,9 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
           })
         }
       }
-      TurnEnd => builder.finish(locale~, collapse=false)
+      TurnEnd => builder.finish(locale~, answered=false)
       Failure(text) => {
-        builder.finish(locale~, collapse=false)
+        builder.finish(locale~, answered=false)
         builder.push_block({
           identity: "failure\u{0}\{identity}",
           content: Note(text~, error=true),
@@ -526,7 +521,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
       }
     }
   }
-  builder.finish(locale~, collapse=false)
+  builder.finish(locale~, answered=false)
   if self.streaming_response is Some(text) && !text.is_blank() {
     builder.push_block({
       identity: "live\u{0}\{self.streaming_identity}",
@@ -580,7 +575,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
 fn MinimalContent::activities(self : MinimalContent) -> Array[MinimalActivity] {
   match self {
     Activity(entries) => entries
-    Completed(parts) | Messages(parts, ..) => {
+    Messages(parts, ..) => {
       let entries : Array[MinimalActivity] = []
       for part in parts {
         entries.append(part.content.activities())
@@ -618,13 +613,7 @@ fn MinimalContent::summary(
     }
   }
   if captions.is_empty() {
-    captions.push(
-      if self is Completed(_) {
-        ui(locale, WorkCompleted)
-      } else {
-        ui(locale, ViewActivity)
-      },
-    )
+    captions.push(ui(locale, ViewActivity))
   }
   if more {
     captions.push("…")
@@ -633,9 +622,9 @@ fn MinimalContent::summary(
 }
 
 ///|
-/// Render an operation identically inside a live tool group or directly inside
-/// a completed process with only one group. This preserves statuses and edits
-/// when the redundant inner disclosure is omitted.
+/// Render an operation identically inside a tool group or as the only call of
+/// its group. This preserves statuses and edits when the redundant group
+/// disclosure is omitted.
 fn MinimalActivity::render(
   locale~ : @i18n.Locale = English,
   self : MinimalActivity,
@@ -818,7 +807,6 @@ fn MinimalContent::render(
     Activity(entries) => {
       // A single call has nothing to summarize separately. Render its caption
       // once, including running/failed status and any requested edit preview.
-      // This also applies inside a completed process that contains prose.
       if entries is [Call(call)] {
         return MinimalActivity::Call(call).render(locale~, actions, single=true)
       }
@@ -842,32 +830,6 @@ fn MinimalContent::render(
           minimal_activity_views(locale~, entries, actions),
         ),
       ])
-    }
-    Completed(parts) => {
-      // Neither the process nor its only tool group needs a disclosure when
-      // they contain just one call. Keep the same row before and after final.
-      if parts is [{ content: Activity([Call(call)]), .. }] {
-        return MinimalActivity::Call(call).render(locale~, actions, single=true)
-      }
-      // One group needs only the outer disclosure. Mixed prose and
-      // tool groups retain their individual folds, with completed summaries.
-      let body = if parts is [{ content: Activity(entries), .. }] {
-        @html.div(
-          class="minimal-process-body minimal-rows",
-          minimal_activity_views(locale~, entries, actions),
-        )
-      } else {
-        let children : Map[String, @html.Html] = Map([])
-        for part in parts {
-          children[part.identity] = part.content.render(
-            locale~,
-            actions,
-            artifact_view?,
-          )
-        }
-        @html.div(class="minimal-process-body minimal-rows", children)
-      }
-      @html.details(class="minimal-process", [self.summary_view(locale~), body])
     }
   }
 }

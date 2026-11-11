@@ -305,9 +305,9 @@ async test "real_contains rejects a symlink escaping the boundary" {
   // A real file inside the boundary, and a symlink inside the boundary that
   // points at a file outside it (the escape the lexical check misses).
   let inside = "\{root}/inside.txt"
-  @fs.write_file(inside, b"x", create_mode=CreateOrTruncate)
+  @fs.write_text(inside, "x", create_mode=CreateOrTruncate)
   let secret = "\{outside}/secret.txt"
-  @fs.write_file(secret, b"s", create_mode=CreateOrTruncate)
+  @fs.write_text(secret, "s", create_mode=CreateOrTruncate)
   let link = "\{root}/link.txt"
   @fs.symlink(target=secret, link)
   guard @pathx.Path(root).to_absolute() is Some(root_path) &&

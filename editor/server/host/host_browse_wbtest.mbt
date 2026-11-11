@@ -6,7 +6,7 @@ async test "host directory listing keeps directories and flags repositories" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     }
     @fs.mkdir("\{root}/alpha", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       "\{root}/alpha/moon.mod",
       "name = \"alpha\"\n",
       create_mode=CreateOrTruncate,
@@ -14,7 +14,7 @@ async test "host directory listing keeps directories and flags repositories" {
     @fs.mkdir("\{root}/beta", recursive=true)
     @fs.mkdir("\{root}/gamma/.git", recursive=true)
     @fs.mkdir("\{root}/.hidden", recursive=true)
-    @fs.write_file("\{root}/notes.txt", "text\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{root}/notes.txt", "text\n", create_mode=CreateOrTruncate)
     let real_root = realpath_or_normalized(root)
     match resolve_host_directory_listing(BrowseHost, root) {
       HostDirectoryListOk(listing) => {
@@ -52,7 +52,7 @@ async test "switch target validation realpaths directories and rejects others" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     }
     @fs.mkdir("\{root}/repo", recursive=true)
-    @fs.write_file("\{root}/file.txt", "x\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{root}/file.txt", "x\n", create_mode=CreateOrTruncate)
     match resolve_switch_target(BrowseHost, "\{root}/repo") {
       HostSwitchTarget(real) =>
         assert_eq(real, realpath_or_normalized("\{root}/repo"))

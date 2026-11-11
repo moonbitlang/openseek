@@ -2,13 +2,13 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. SDK `moonbitlang/openseek_tools@0.4.0` uses
+implementation. SDK `moonbitlang/openseek_tools@0.4.1` uses
 `moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
 
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/openseek_tools@0.4.1" @tools,
   "moonbitlang/core/async",
 }
 ---
@@ -72,7 +72,7 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
   "moonbitlang/core/async",
 }
 ---
@@ -89,7 +89,11 @@ async fn main {
 ```
 
 `search` runs in the script. The first search downloads the host's catalog of
-servers and tools, and later searches in the same script reuse it. `server`
+servers and tools, and later searches in the same script reuse it. The host
+waits a bounded time for servers still connecting before it lists the catalog:
+for `server` when a search names one, for every server otherwise. A search
+for another server, or for every server, downloads the catalog again unless
+the download already waited for every server. `server`
 alone lists that server's tools in order; `query` ranks tools with BM25 over
 their server, name, description, and the property names and descriptions in
 their schemas, within `server` when both are given; neither lists every tool.
@@ -132,11 +136,16 @@ image to the model.
 Both use the v1 result envelope. `call` sends
 `{"version":1,"call":{"server","tool","arguments"}}`, answered with an added
 `"images"` when it saved any. The catalog download sends
-`{"version":1,"list":{"cursor"?}}` until a reply has no `next_cursor`; each
-reply's `data` is `{"items":[...],"next_cursor"?}`, with each server
+`{"version":1,"list":{"cursor"?,"snapshot"?,"server"?}}` until a reply has no
+`next_cursor`; each reply's `data` is
+`{"items":[...],"snapshot","next_cursor"?}`, with each server
 (`{"server","instructions"?,"error"?}`) followed by its tools
 (`{"server","tool":{"name","description","input_schema","output_schema"?}}`) in
-configuration order.
+configuration order. The first request names no snapshot, and the host lists
+the catalog once the `server` it names (every server when it names none) has
+settled or a bounded wait has ended; every later one names the first reply's `snapshot`,
+so the pages all come from that catalog even when a server connects or loses
+its connection meanwhile.
 
 ## Standalone tests
 
@@ -150,7 +159,7 @@ invalid capabilities/responses, errors, no retries, and cancellation.
 
 The `mcp` tests do the same with `OPENSEEK_MCP` for MCP calls and the catalog
 download: exact request bodies, saved images, a catalog over several replies,
-one download serving later searches, empty catalogs and unavailable servers,
+one download serving the later searches it waited for, empty catalogs and unavailable servers,
 refused and malformed listings, transport failures, and a run with no MCP
 host. The catalog tests cover ranking, paging, and rendering on their own, and
 the `mcp` transport tests cover its handoff, envelopes, no retries, and
@@ -169,10 +178,14 @@ independent of the host PR.
 
 ## Development and releases
 
-SDK 0.4.0 is prepared here for the migration to `moonbitlang/core/async`;
-0.3.0 and earlier releases use the separate `moonbitlang/async` runtime.
-Use 0.4.0 with core/async scripts. The wire protocol remains v1.
-Publish 0.4.0 before distributing scripts pinned to it. Keep SDK and wire
+SDK 0.4.0 and later use `moonbitlang/core/async`; 0.3.0 and earlier releases
+use the separate `moonbitlang/async` runtime. The wire protocol remains v1.
+SDK 0.4.1 pages an MCP catalog download through one host snapshot, so a server
+that connects or loses its connection mid-download cannot shift the pages; its
+API is unchanged from 0.4.0. The next release names the server of a scoped
+search in its first `list` request, so the host waits for that server alone;
+a listing from an earlier SDK waits for every server. Publish a release before pinning scripts and
+prompts to it. Keep SDK and wire
 versions separate. Documentation and host tool additions do not require
 changing the SDK API. For a future SDK release, check and test the independent module first:
 

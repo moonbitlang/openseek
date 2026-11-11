@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/async" @core_async,
+  "openseek_desktop/backend/static_preview",
   "openseek_desktop/backend/ssh",
   "openseek_desktop/app/internal/cdp",
   "moonbit-community/proton",
@@ -34,6 +36,11 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 supported_targets = "+native"
 
 import {
+  "moonbitlang/async/io",
   "moonbitlang/async/websocket",
   "moonbitlang/core/json",
 } for "wbtest"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

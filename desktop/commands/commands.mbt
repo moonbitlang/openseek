@@ -784,6 +784,12 @@ pub let browser_open : Command[
 ] = Command("browser.open")
 
 ///|
+pub let browser_preview : Command[
+  @protocol.BrowserPreviewPayload,
+  @protocol.EmptyReply,
+] = Command("browser.preview")
+
+///|
 pub let browser_navigate : Command[
   @protocol.BrowserOpenPayload,
   @protocol.EmptyReply,
@@ -923,13 +929,13 @@ pub let schedules_list : Command[
 ///|
 pub let schedules_save : Command[
   @protocol.ScheduleSavePayload,
-  @protocol.SchedulesReply,
+  @protocol.ScheduleChangeReply,
 ] = Command("schedules.save")
 
 ///|
 pub let schedules_action : Command[
   @protocol.ScheduleActionPayload,
-  @protocol.SchedulesReply,
+  @protocol.ScheduleChangeReply,
 ] = Command("schedules.action")
 
 ///|
@@ -1043,3 +1049,8 @@ pub let fs_share_file : Command[
   @protocol.FileSharePayload,
   @protocol.SessionShareReply,
 ] = Command("fs.share_file")
+
+///|
+pub let cloud_mcp : Command[@protocol.CloudMcpRequest, Json] = Command(
+  "cloud.mcp",
+)

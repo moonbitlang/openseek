@@ -14,8 +14,9 @@ Two question-card layout flows also run in WebKit to cover Safari's grid
 sizing, clipping, and narrow-viewport interaction. Shared question state and
 protocol cases run in Chromium and model tests.
 
-`mobile_browser.spec.js` runs in Chromium and WebKit and covers the phone
-layout that browsers and the Android client share; it needs no Android build.
+`mobile_browser.spec.js` covers the phone layout that browsers and the Android
+client share; it needs no Android build. Its `@webkit-layout` cases also run in
+WebKit.
 Its reduced viewport heights simulate layout only, not a real phone's soft
 keyboard or browser toolbar.
 
@@ -61,6 +62,17 @@ Import `test` and `expect` from `tests/support/test.js`. Its pages run with CSS
 transitions and animations disabled, so clicks do not wait for moving targets.
 Tag a test `{ tag: '@motion' }` when it checks motion itself, such as a running
 spinner, reduced-motion handling, or geometry during or after a transition.
+
+## IndexedDB module contracts
+
+`indexeddb.spec.js` runs the public-interface MoonBit tests from `indexeddb/`
+in Chromium and WebKit. The tests require real IndexedDB and are marked skipped
+in the Node test gate. `just test-browser` and CI compile them automatically.
+When running Playwright directly, first run this from the repository root:
+
+```sh
+moon test indexeddb --target js --build-only --include-skipped
+```
 
 ## Suite scope
 

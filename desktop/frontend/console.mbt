@@ -12,8 +12,8 @@
 /// Who the relay says we are (`/v2/auth/me`), or the local Dev host.
 #derive(Eq)
 priv enum ConsoleAuth {
-  // The check is in flight (or failed — `notice` carries the failure and
-  // the gate card offers a retry).
+  // The check is in flight (or failed — the gate card shows the failure and
+  // offers a retry).
   AuthChecking
   AuthSignedOut
   AuthSignedIn(login~ : String, avatar~ : String)
@@ -78,8 +78,10 @@ priv struct ConsoleState {
   booted : Bool
   // A sign-out on the wire; gates the account buttons.
   busy : Bool
-  // The last account-level failure, shown until the next action clears it.
-  notice : String?
+  // The last page-access failure: the local console's own `/v1/auth/me`
+  // check or host sign-out. The relay's page sign-in is the Cloud account,
+  // whose failures live in `Model.account_error`.
+  access_error : String?
 }
 
 ///|
@@ -98,7 +100,7 @@ fn empty_console_state(
     preselect_project,
     booted: false,
     busy: false,
-    notice: None,
+    access_error: None,
   }
 }
 
@@ -129,7 +131,7 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
     preselect_project: None,
     booted: true,
     busy: false,
-    notice: None,
+    access_error: None,
   }
 }
 
@@ -227,7 +229,7 @@ fn update_console_msg(
             auth: AuthSignedIn(login~, avatar~),
             roster_sync: RosterLoading,
             roster_request_generation: generation,
-            notice: None,
+            access_error: None,
           },
         },
       )
@@ -236,7 +238,7 @@ fn update_console_msg(
     MeFailed(message) =>
       (
         @cmd.none,
-        { ..model, console: { ..model.console, notice: Some(message), }, },
+        { ..model, console: { ..model.console, access_error: Some(message), }, },
       )
     RosterLoaded(metas, generation~) => {
       // A reply that outlived the session, or was overtaken by a later roster
@@ -292,8 +294,9 @@ fn update_console_msg(
           console: {
             ..model.console,
             roster_sync: RosterLoading,
-            notice: None,
+            access_error: None,
           },
+          account_error: None,
         },
       )
     }
@@ -301,18 +304,25 @@ fn update_console_msg(
       guard !model.console.busy else { return (@cmd.none, model) }
       (
         sign_out(dispatch),
-        { ..model, console: { ..model.console, busy: true, notice: None, }, },
+        {
+          ..model,
+          console: { ..model.console, busy: true, access_error: None, },
+        },
       )
     }
     SignOutFailed(message, token~) => {
       guard token == model.account.map(account => account.token) else {
         return (@cmd.none, model)
       }
+      let console = { ..model.console, busy: false, }
+      // A token names the Cloud account's sign-out; without one, the local
+      // console signed out of its own host.
       (
         @cmd.none,
-        {
-          ..model,
-          console: { ..model.console, busy: false, notice: Some(message), },
+        if token is Some(_) {
+          { ..model, console, account_error: Some(message), }
+        } else {
+          { ..model, console: { ..console, access_error: Some(message), }, }
         },
       )
     }
@@ -660,31 +670,31 @@ test "a revoked page device is retired without connecting a survivor" {
   )
   assert_true(listed.focused == Remote("d_a"))
   let seeded = {
-    ..listed.replace_conversation(
+    ..listed
+    .replace_conversation(
       empty_conversation(
         @interop.ChannelId::Remote("d_a"),
         "s1",
         @interop.ChannelId::Remote("d_a").test_project(),
       ),
-    ),
-    api_provider: Custom,
-    custom_api_url: "https://old.example/chat",
-    deepseek_key_saved: true,
-    custom_key_saved: true,
-    setup_api_key: "old-device-key",
-    settings_saves: 2,
-    host_settings_revision: 7,
-    deferred_host_settings: Some({
-      revision: 8,
-      provider: "deepseek",
-      custom_api_url: "",
-      has_deepseek_key: true,
-      has_glm_key: false,
-      has_custom_key: false,
-      followup_behavior: "steer",
-      prompt_source: "builtin_moonbit_guide",
-      custom_prompt: "",
+    )
+    .with_host_settings(_ => {
+      current: Some(
+        host_settings(
+          provider="custom",
+          revision=7,
+          custom_api_url="https://old.example/chat",
+          has_deepseek_key=true,
+          has_custom_key=true,
+        ),
+      ),
+      saves: 2,
+      deferred: Some(
+        host_settings(provider="deepseek", revision=8, has_deepseek_key=true),
+      ),
+      error: None,
     }),
+    setup_api_key: "old-device-key",
     installed_skills: [
       {
         id: "old-host",
@@ -709,14 +719,10 @@ test "a revoked page device is retired without connecting a survivor" {
   assert_true(refreshed.device_state(Remote("d_a")) is None)
   assert_true(refreshed.device_state(Remote("d_b")) is None)
   assert_eq(refreshed.installed_skills.length(), 0)
-  assert_true(refreshed.api_provider is Deepseek)
-  inspect(refreshed.custom_api_url, content="")
-  assert_false(refreshed.deepseek_key_saved)
-  assert_false(refreshed.custom_key_saved)
+  // The retired device's settings left with its device state.
+  assert_false(refreshed.host_settings_loaded())
+  assert_true(refreshed.host_settings_mirror() == HostSettingsMirror::loading())
   inspect(refreshed.setup_api_key, content="")
-  inspect(refreshed.settings_saves, content="0")
-  inspect(refreshed.host_settings_revision, content="-1")
-  assert_true(refreshed.deferred_host_settings is None)
   inspect(
     refreshed.conversations
     .iter()
@@ -797,18 +803,25 @@ test "an action for another roster device cannot move page focus" {
   )
   assert_true(listed.focused == Remote("d_a"))
   assert_true(listed.device_state(Remote("d_b")) is None)
-  let seeded = {
-    ..listed,
-    api_provider: Custom,
-    custom_api_url: "https://old.example/chat",
-    host_settings_revision: 7,
-  }
+  let seeded = listed.with_host_settings(mirror => {
+    ..mirror,
+    current: Some(
+      host_settings(
+        provider="custom",
+        revision=7,
+        custom_api_url="https://old.example/chat",
+      ),
+    ),
+  })
   let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), seeded)
   assert_true(opened.focused == Remote("d_a"))
   assert_true(opened.active_session != "s-b")
-  assert_true(opened.api_provider is Custom)
-  inspect(opened.custom_api_url, content="https://old.example/chat")
-  inspect(opened.host_settings_revision, content="7")
+  assert_true(opened.api_provider() is Custom)
+  inspect(
+    opened.test_endpoint().custom_api_url,
+    content="https://old.example/chat",
+  )
+  assert_true(opened.host_settings() is Some({ revision: 7, .. }))
 }
 
 ///|
@@ -919,7 +932,7 @@ test "a failed sign-out re-enables the account actions" {
     signing_out,
   )
   assert_false(failed_once.console.busy)
-  assert_true(failed_once.console.notice == Some("boom"))
+  assert_true(failed_once.console.access_error == Some("boom"))
   assert_true(failed_once.console == failed_twice.console)
 }
 
@@ -977,7 +990,7 @@ fn console_signed_out(
         roster: [],
         roster_sync: RosterLoading,
         busy: false,
-        notice: None,
+        access_error: None,
       },
     },
   )
@@ -1043,14 +1056,21 @@ test "account changes retire focused host mirrors before the new roster answers"
     _ => @cmd.none,
   )
   let old = {
-    ..listed,
+    ..listed.with_host_settings(mirror => {
+      ..mirror,
+      current: Some(
+        host_settings(
+          provider="deepseek",
+          revision=7,
+          custom_api_url="https://old.example/chat",
+          has_deepseek_key=true,
+        ),
+      ),
+    }),
     account: Some({
       token: "ts_A",
       user: { user_id: "A", login: "alice", avatar_url: "", },
     }),
-    custom_api_url: "https://old.example/chat",
-    deepseek_key_saved: true,
-    host_settings_revision: 7,
     installed_skills: [
       {
         id: "old",
@@ -1088,9 +1108,7 @@ test "account changes retire focused host mirrors before the new roster answers"
   assert_true(pending.account == Some(account))
   assert_true(pending.focused == Local)
   assert_true(pending.devices.is_empty() && pending.conversations.is_empty())
-  assert_eq(pending.host_settings_revision, -1)
-  assert_eq(pending.custom_api_url, "")
-  assert_false(pending.deepseek_key_saved)
+  assert_false(pending.host_settings_loaded())
   assert_true(pending.installed_skills.is_empty())
   assert_eq(pending.codex.draft_text(), "")
   assert_true(pending.file_panel.watching is None)
@@ -1106,7 +1124,7 @@ test "account changes retire focused host mirrors before the new roster answers"
     pending,
   )
   assert_true(failed.account == Some(account))
-  assert_eq(failed.host_settings_revision, -1)
+  assert_false(failed.host_settings_loaded())
   assert_true(failed.installed_skills.is_empty())
   assert_true(failed.file_panel.watching is None)
   // Refreshing the same credential does not discard host configuration.
@@ -1116,7 +1134,7 @@ test "account changes retire focused host mirrors before the new roster answers"
     old.account_epoch,
     Ok(old.account),
   )
-  assert_eq(refreshed.host_settings_revision, 7)
+  assert_true(refreshed.host_settings() is Some({ revision: 7, .. }))
   assert_eq(refreshed.codex.draft_text(), "old account draft")
 }
 
@@ -1138,5 +1156,6 @@ test "a late browser logout result cannot clear a newer account" {
     Console(SignOutFailed("old failure", token=Some("ts_A"))),
     model,
   )
-  assert_true(unchanged.console.notice is None)
+  assert_true(unchanged.console.access_error is None)
+  assert_eq(unchanged.account_error, None)
 }

@@ -29,13 +29,13 @@ pub async fn configured_system_prompt(
   let base = if base_path == "" {
     @prompt.system_prompt_for_model(model)
   } else {
-    @fs.read_file(@workspace_path.resolve(workspace_root, base_path)).text()
+    @fs.read_text(@workspace_path.resolve(workspace_root, base_path))
   }
   prompt <+ "\{base}"
   if addendum_path != "" {
-    let addendum = @fs.read_file(
+    let addendum = @fs.read_text(
       @workspace_path.resolve(workspace_root, addendum_path),
-    ).text()
+    )
     prompt <+ "\n\n\{addendum}"
   }
   // The runtime environment block appended to every system prompt — including
@@ -48,9 +48,8 @@ pub async fn configured_system_prompt(
   // the recorded directory is where the session was started — resume it from
   // the same project root.
   //
-  // The resource directory is resolved from the running executable.
-  // Documentation layout and usage instructions live in the static default
-  // prompt, keeping the installation-dependent path in this tail.
+  // The resource directory and its layout describe the running installation,
+  // independently of the selected base prompt.
   let target = if workspace_root == "" { "." } else { workspace_root }
   let cwd = @fs.realpath(target) catch { _ => target }
   let outline = dir_outline(cwd).unwrap_or(
@@ -70,7 +69,17 @@ pub async fn configured_system_prompt(
       "\n\nSession scratch directory: \{Json(dir).stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
   }
   if @resources.directory() is Some(dir) {
-    prompt <+ "\n\nBundled resources: \{dir}"
+    let layout = resource_layout(dir)
+    prompt <+
+      $|
+      $|
+      $|Bundled resources: \{dir}
+      $|
+      $|Directory layout relative to `Bundled resources`:
+      $|
+      $|```text
+      $|\{layout}
+      $|```
   }
   let agents_section = agents_prompt_section(cwd)
   if agents_section is Some(section) {
@@ -134,7 +143,7 @@ async fn mcp_prompt_section(config_paths : Array[String]) -> String? {
 async fn mcp_server_names(config_paths : Array[String]) -> Array[String] {
   let names : Array[String] = []
   for path in config_paths {
-    let json = @json.parse(@fs.read_file(path).text()) catch { _ => continue }
+    let json = @json.parse(@fs.read_text(path)) catch { _ => continue }
     guard json is { "mcpServers": Object(servers), .. } else { continue }
     for name, _ in servers {
       if !names.contains(name) {
@@ -153,7 +162,7 @@ async fn agents_prompt_section(workspace_root : String) -> String? {
   let path = @workspace_path.join_child(workspace_root, "AGENTS.md")
   guard @fs.exists(path) && @fs.kind(path) is Regular else { return None }
   // AGENTS files may start with a UTF-8 BOM; keep only the document text.
-  let content = @utf8.decode(@fs.read_file(path).binary(), ignore_bom=true)
+  let content = @utf8.decode(@fs.read_binary(path), ignore_bom=true)
   Some(
     "Project-specific instructions and guidelines:\n\n<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>",
   )

@@ -73,14 +73,59 @@ pub(all) struct Action {
 
 ///|
 #derive(Debug, Eq)
+pub(all) enum SecondaryAction {
+  ImportConversation(disabled~ : Bool)
+}
+
+///|
+fn tool_button(
+  action : Action,
+  icon : @html.Html,
+  command : @cmd.Cmd,
+) -> @html.Html {
+  @html.button(
+    class="sidebar-button sidebar-tool-button",
+    type_="button",
+    title=action.title,
+    disabled=action.disabled,
+    attrs=@html.Attrs::build().aria_label(action.title),
+    on_click=command,
+    [
+      @html.span(class="sidebar-icon", icon),
+      @html.span(class="sidebar-label", action.title),
+    ],
+  )
+}
+
+///|
+fn SecondaryAction::button(
+  self : SecondaryAction,
+  id : Id,
+  actions : Actions,
+  locale : @i18n.Locale,
+) -> @html.Html {
+  match self {
+    ImportConversation(disabled~) =>
+      tool_button(
+        { title: @messages.text(locale, Import), disabled, },
+        @icons.icon(@icons.icon_chat_import),
+        (actions.secondary)(id, self),
+      )
+  }
+}
+
+///|
+#derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
-  label : String
+  // Unlabeled sections expose their action below the sidebar search instead.
+  label : String?
   // The active conversation's session id while this section holds the
   // focused chat; `None` otherwise. Same contract as
   // `@project.Input.activation`.
   activation : String?
   action : Action?
+  secondary_actions : Array[SecondaryAction]
   entries : Array[Entry]
 }
 
@@ -92,6 +137,7 @@ pub fn Input::id(self : Input) -> Id {
 ///|
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
+  secondary : (Id, SecondaryAction) -> @cmd.Cmd
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
@@ -201,13 +247,20 @@ fn Actions::entry_component(
 }
 
 ///|
+#derive(Eq)
+pub(all) struct RenderedSection {
+  tools : @html.Html
+  rows : Array[(String, @html.Html)]
+}
+
+///|
 /// Keyed entries retain their component state across insertion and reorder.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[RenderedSection] {
   let entry_inputs = input.map3(locale, search, (input, locale, search) => {
     @vector.from_array(input.entries.map(entry => (locale, entry, search)))
   })
@@ -222,26 +275,44 @@ pub fn component(
     },
     by=entry => entry.1.key(),
   )
-  input.map2(entry_rows, (input, entry_rows) => {
+  input.map3(entry_rows, locale, (input, entry_rows, locale) => {
     let mut class = "sidebar-heading section-heading"
     if input.activation is Some(_) {
       class += " active"
     }
-    let heading : Array[@html.Html] = [
-      @html.span(class="sidebar-label section-label", input.label),
-    ]
-    if input.action is Some(action) {
-      heading.push(
-        @html.button(
-          class="section-primary-action",
-          type_="button",
-          title=action.title,
-          disabled=action.disabled,
-          attrs=@html.Attrs::build().aria_label(action.title),
-          on_click=(actions.primary)(input.id),
+    let heading = if input.label is Some(label) {
+      let children : Array[@html.Html] = [
+        @html.span(class="sidebar-label section-label", label),
+      ]
+      if input.action is Some(action) {
+        children.push(
+          @html.button(
+            class="section-primary-action",
+            type_="button",
+            title=action.title,
+            disabled=action.disabled,
+            attrs=@html.Attrs::build().aria_label(action.title),
+            on_click=(actions.primary)(input.id),
+            @icons.icon(@icons.icon_add),
+          ),
+        )
+      }
+      @html.div(class~, children)
+    } else {
+      @html.nothing
+    }
+    let tools : Array[@html.Html] = []
+    if input.label is None && input.action is Some(action) {
+      tools.push(
+        tool_button(
+          action,
           @icons.icon(@icons.icon_add),
+          (actions.primary)(input.id),
         ),
       )
+    }
+    for action in input.secondary_actions {
+      tools.push(action.button(input.id, actions, locale))
     }
     let rows : Map[String, @html.Html] = Map([])
     for group in entry_rows {
@@ -249,21 +320,27 @@ pub fn component(
         rows[row.0] = row.1
       }
     }
-    [
-      (
-        input.id.key(),
-        @html.div(class="sidebar-group", [
-          @html.div(class~, heading),
-          @html.div(
-            id=input.id.key() + ":content",
-            class="sidebar-group-content",
-            rows,
-          ),
-        ]),
-      ),
-    ]
+    {
+      tools: @html.fragment(tools),
+      rows: [
+        (
+          input.id.key(),
+          @html.div(class="sidebar-group", [
+            heading,
+            @html.div(
+              id=input.id.key() + ":content",
+              class="sidebar-group-content",
+              rows,
+            ),
+          ]),
+        ),
+      ],
+    }
   })
 }
+
+///|
+pub extend RenderedSection with Eq::{equal, not_equal}
 
 ///|
 pub extend Action with Debug::{to_repr}
@@ -291,6 +368,12 @@ pub extend Input with Debug::{to_repr}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend SecondaryAction with Debug::{to_repr}
+
+///|
+pub extend SecondaryAction with Eq::{equal, not_equal}
 
 ///|
 pub extend Placeholder with Debug::{to_repr}

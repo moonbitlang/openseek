@@ -5,8 +5,9 @@ import {
   "moonbitlang/openseek/mcp/stdio",
   "moonbitlang/openseek/mcp/streamhttp",
   "moonbitlang/openseek/mcp/config",
+  "moonbitlang/openseek/mcp/config/headers_helper",
   "moonbitlang/openseek_protocol/emit",
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 }
 
 import {
@@ -14,10 +15,20 @@ import {
   "moonbitlang/openseek/jsonrpc",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/mcp/config",
-  "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
 } for "test"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)

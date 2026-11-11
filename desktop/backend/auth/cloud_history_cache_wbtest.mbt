@@ -22,6 +22,7 @@ async test "Cloud history survives a host restart and follows account retirement
       ]),
     },
     messages: [{ "kind": "user", "engine_sequence": 7, "data": {} }],
+    prediction: None,
     offset: Some(3),
     etag: Some("etag-1"),
   }

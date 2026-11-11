@@ -156,8 +156,8 @@ async test "execute_tool_call reports a cancelled child task as a tool error" {
       let child = group.spawn(() => @async.sleep(10_000))
       child.cancel()
       child.wait()
-      respond("unreachable")
     })
+    respond("unreachable")
   }
 
   let tools = Tools([

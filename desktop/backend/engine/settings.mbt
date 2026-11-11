@@ -29,7 +29,7 @@ const EngineSettingsFileName = "engine-settings.json"
 /// update manifest live here. The hosted chat proxy that used to live on
 /// this origin is retired — runs are bring-your-own-key only — so this
 /// origin no longer serves any chat-completions traffic.
-const RelayServerOrigin : String = "https://openseek-api.moonbitlang.cn"
+const RelayServerOrigin : String = "https://seekmoon.moonbitlang.com"
 
 ///|
 /// The chat endpoint selection: where runs send their requests. SeekMoon
@@ -184,10 +184,10 @@ fn settings_status_payload(
 /// read-modify-write or the Windows replace fallback's remove/rename window.
 async fn EngineManager::settings_snapshot(
   self : EngineManager,
-) -> (EngineSettings, Int32) {
+) -> EngineSettings {
   self.settings_lock.acquire()
   defer self.settings_lock.release()
-  (load_engine_settings(self.runtime_dir), self.settings_revision)
+  load_engine_settings(self.runtime_dir)
 }
 
 ///|
@@ -401,9 +401,7 @@ pub async fn pattern_repair_environment(
   manager : EngineManager,
   model~ : String,
 ) -> PatternRepairEnvironment {
-  let (settings, _) = manager.settings_snapshot() catch {
-    _ => return Unavailable
-  }
+  let settings = manager.settings_snapshot() catch { _ => return Unavailable }
   let endpoint = resolved_endpoint(settings) catch {
     EngineError(message) => return Configuration(message)
   }
@@ -428,18 +426,8 @@ pub async fn pattern_repair_environment(
 /// retired, so remote access stays available for every provider.
 /// `OPENSEEK_SERVER_URL` overrides the origin for development against a
 /// local or ad-hoc server.
-///
-/// The settings snapshot is awaited but discarded: the origin no longer
-/// derives from the stored provider. The await holds this function's
-/// published `async` signature stable across the BYOK cutover (the
-/// committed `pkg.generated.mbti` pins it); drop it at the next interface
-/// reshape and regenerate with `moon info`.
-pub async fn remote_server_base(manager : EngineManager) -> String? {
-  if @env.get("OPENSEEK_SERVER_URL") is Some(base) && !base.is_blank() {
-    return Some(base.trim().to_owned())
-  }
-  let (_, _) = manager.settings_snapshot()
-  Some(RelayServerOrigin)
+pub fn remote_server_base() -> String {
+  @env.get("OPENSEEK_SERVER_URL").unwrap_or(RelayServerOrigin)
 }
 
 // The settings store's contract: tolerant reads, merge-preserving atomic
@@ -545,7 +533,7 @@ async test "host prompt settings preserve literal text and publish only committe
     assert_eq(committed, [saved.revision])
     assert_eq(manager.settings_revision, revision)
     // Existing-session run settings do not depend on reading global prompt text.
-    let (settings, _) = manager.settings_snapshot()
+    let settings = manager.settings_snapshot()
     assert_true(settings.provider is Deepseek)
   })
 }
@@ -650,10 +638,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
     assert_true(text.contains("\"provider\": \"deepseek\""))
     // Remote access is a SeekMoon relay service and no longer depends on
     // the chat provider, so it stays on the production origin.
-    debug_inspect(
-      remote_server_base(manager),
-      content="Some(\"https://openseek-api.moonbitlang.cn\")",
-    )
+    assert_eq(remote_server_base(), "https://seekmoon.moonbitlang.com")
   })
 }
 

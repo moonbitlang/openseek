@@ -108,8 +108,9 @@ fn session_snapshot_command(
 
 ///|
 /// Move the UI's focus to `channel`: refetch the focused-scoped mirrors
-/// that BridgeReady only loads for the then-focused device (host settings,
-/// installed skills) and reset their local bookkeeping, so
+/// that BridgeReady only loads for the then-focused device (installed
+/// skills), re-read the newly focused host's settings so its reply settles
+/// the setup modal for that host, and reset the focused form state, so
 /// nothing of the previous device's host bleeds through. The active
 /// conversation is the caller's to place afterwards (an activation or a
 /// rotation); until it does, nothing is selected. A no-op when focus is
@@ -146,25 +147,30 @@ fn focus_channel(
     dispatch.map(msg => FileEditor(msg)),
     file_ctx(model),
   )
+  let next = {
+    ..model.reset_api_setup(),
+    focused: channel,
+    active_session: "",
+    selected_conversation: None,
+    conversation_load_failure: None,
+    loading_conversation: None,
+    installed_skills: [],
+    // Codex is host-owned just like the other focused mirrors. Clear the
+    // previous device's account and conversation list before its replies
+    // can be mistaken for this device's sidebar section.
+    codex: model.codex.reset_for_channel(),
+    // The old HostConnection is already parked. Preserve the remaining
+    // owner/root state until the post-dispatch sync retires its file-index
+    // cache and re-roots against the newly focused host.
+    file_panel,
+  }
+  // A cached snapshot makes the new host ready at once, so its provider must
+  // own the default model before the caller places a fresh chat; the
+  // refetch reply arrives too late for a chat that was already sent. Its
+  // committed prompt default refills the Settings editor the same way.
   (
     @cmd.batch([focus_cmd, unwatch_cmd]),
-    {
-      ..model.clear_host_settings(),
-      focused: channel,
-      active_session: "",
-      selected_conversation: None,
-      conversation_load_failure: None,
-      loading_conversation: None,
-      installed_skills: [],
-      // Codex is host-owned just like the other focused mirrors. Clear the
-      // previous device's account and conversation list before its replies
-      // can be mistaken for this device's sidebar section.
-      codex: model.codex.reset_for_channel(),
-      // The old HostConnection is already parked. Preserve the remaining
-      // owner/root state until the post-dispatch sync retires its file-index
-      // cache and re-roots against the newly focused host.
-      file_panel,
-    },
+    next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }
 
@@ -1541,7 +1547,6 @@ fn covering_overlay(model : Model) -> Bool {
 /// custom select, the composer's Git popover, and every `covering_overlay` —
 /// must hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int32? {
-  guard !model.cloud_selected() else { return None }
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -1561,6 +1566,12 @@ fn desired_browser_view(model : Model) -> Int32? {
   guard @dock.active_browser(model.dock_state()) is Some(id) &&
     @preview.page(model.preview, id) is Some(page) &&
     page.url is Some(_) else {
+    return None
+  }
+  // Explicit Cloud previews and client-tool opens share native placement.
+  // Ordinary links keep their existing behavior.
+  guard !model.cloud_selected() ||
+    (page.cloud_preview && model.file_panel_visible()) else {
     return None
   }
   Some(id)
@@ -1899,12 +1910,9 @@ fn update(
   // many messages — device/session switches, background pushes, connection
   // metadata, restored session data, a worktree registry broadcast — so the
   // package fences the palette once here rather than in every branch.
-  let (quick_open_cmd, quick_open) = match model.active_checkout() {
-    Some(active) =>
-      model.quick_open.reconcile(
-        dispatch.map(msg => QuickOpen(msg)),
-        model.quick_open_input(active),
-      )
+  let (quick_open_cmd, quick_open) = match model.quick_open_input() {
+    Some(input) =>
+      model.quick_open.reconcile(dispatch.map(msg => QuickOpen(msg)), input)
     // No checkout on screen is no owner to fence against — the palette has
     // nothing left to search, so it closes here for the same reason it does
     // when its conversation is replaced.
@@ -1932,6 +1940,11 @@ fn update(
   } else {
     model
   }
+  let preview_generation = model.file_panel.file_link_generation
+  let (preview_open_cmd, model) = model.open_pending_preview(dispatch)
+  let preview_file_opened = model.file_panel.file_link_generation !=
+    preview_generation
+  let cmd = @cmd.batch([cmd, preview_open_cmd])
   // Panel visibility is root-owned because it controls both HTML layout and
   // host-backed editor/browser lifecycles. Reconcile every transition once
   // here, no matter which semantic action opened or closed the panel.
@@ -1945,7 +1958,7 @@ fn update(
   // still take the generic path so an older active document is restored.
   let file_opened_with_panel = !previous.right_panel_open &&
     model.right_panel_open &&
-    msg.opens_file_before_panel_reconciliation() &&
+    (preview_file_opened || msg.opens_file_before_panel_reconciliation(model)) &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
@@ -2070,13 +2083,14 @@ fn update(
       dev.reconnect_failures == 0
     })
   // The Jobs panel reads the listing and the selected job's output; the
-  // overview's background tasks card reads only the listing.
+  // overview's background tasks card reads only the listing. Both describe
+  // the conversation on screen, which is the jobs owner's.
   let watch : @jobs.Watch = if !connected {
     Unwatched
   } else if model.file_panel_visible() &&
     model.dock_state().active is Some(Jobs) {
     Panel
-  } else if model.overview_jobs_owner() is Some(_) {
+  } else if model.overview_conversation() is Some(_) {
     Summary
   } else {
     Unwatched
@@ -2135,7 +2149,8 @@ fn update(
         model.dock_state().tabs != previous.dock_state().tabs ||
         model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
-        msg.opens_file_before_panel_reconciliation() ||
+        preview_file_opened ||
+        msg.opens_file_before_panel_reconciliation(model) ||
         msg is Dock(TabActivated(_)),
       ),
     ]),
@@ -2144,10 +2159,15 @@ fn update(
 }
 
 ///|
-/// Only the resolved editor reply opens a document during this transition.
-/// Every file selection first asks the host to classify the path.
-fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
-  self is OpenPathResolved(_, Editor(_))
+/// Host file selections first ask the host to classify the path, so only the
+/// resolved editor reply opens a document during this transition. A Cloud
+/// Quick Open pick names an indexed file and opens it synchronously.
+fn Msg::opens_file_before_panel_reconciliation(
+  self : Msg,
+  model : Model,
+) -> Bool {
+  self is OpenPathResolved(_, Editor(_)) ||
+  (model.cloud_selected() && self is QuickOpen(@quick_open.Pick(_)))
 }
 
 ///|
@@ -2358,6 +2378,15 @@ fn update_msg(
         { ..model, locale, },
       )
     }
+    CloudFollowupLoaded(value) => {
+      guard !model.has_host() && value is Some(value) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        { ..model, cloud_followup_behavior: FollowupBehavior::parse(value), },
+      )
+    }
     SettingsLoaded(
       notification_corner~,
       tree_layout~,
@@ -2377,9 +2406,10 @@ fn update_msg(
       let theme = theme
         .map(value => Theme::parse(value, model.theme))
         .unwrap_or(model.theme)
-      let app_font_size = font_size
-        .map(value => AppFontSize::parse(value, model.app_font_size))
-        .unwrap_or(model.app_font_size)
+      let app_font_size = match font_size.bind(AppFontSize::parse) {
+        Some(size) => Some(size)
+        None => model.app_font_size
+      }
       // Startup runs before any conversation exists, so adopting the stored
       // tiers here is enough — every conversation minted afterwards reads
       // them.
@@ -2452,15 +2482,11 @@ fn update_msg(
       // The localStorage read and the host settings request start together.
       // If the host won that race, reconcile the just-loaded model preference
       // now; otherwise `HostSettingsLoaded` performs the same fold later.
-      let next = if next.host_settings_loaded() {
-        next.align_fresh_conversation_with_provider()
-      } else {
-        next
-      }
+      let next = next.align_new_chats_with_provider(next.focused)
       (
         @cmd.batch([
           theme.apply(model.system_dark, model.is_desktop, dispatch),
-          app_font_size.apply(),
+          apply_app_font_size(app_font_size),
           codex_cmd,
           codex_effort_cmd,
         ]),
@@ -3741,14 +3767,7 @@ fn update_msg(
         guard file_ctx(model).root() is Some(root) else {
           return (@cmd.none, model)
         }
-        let model = model.begin_editor_navigation()
-        show_editor_resource(
-          dispatch,
-          model,
-          @resource.join_relative(root, path),
-          None,
-          file_link_generation=model.file_panel.file_link_generation,
-        )
+        open_cloud_relative(dispatch, model, root, path, None)
       } else {
         request_open_path(dispatch, model, path.0, None)
       }
@@ -4156,10 +4175,13 @@ fn update_msg(
           model.focused,
           model.focused_connection_generation(),
         ),
-        { ..model, host_settings_error: None, },
+        model.map_host_settings(model.focused, mirror => {
+          ..mirror,
+          error: None,
+        }),
       )
     Prompt(msg) => {
-      guard model.host_settings_loaded() && model.settings_saves == 0 else {
+      guard model.host_settings_loaded() && !model.host_settings_saving() else {
         return (@cmd.none, model)
       }
       if msg is @prompt.Edited(_) {
@@ -4195,8 +4217,7 @@ fn update_msg(
           model.focused_connection_generation(),
         ),
         {
-          ..model,
-          settings_saves: model.settings_saves + 1,
+          ..model.map_host_settings(model.focused, mirror => mirror.write_sent()),
           select_menu: None,
         },
       )
@@ -4207,7 +4228,9 @@ fn update_msg(
       (@cmd.none, { ..model, setup_api_key: value, })
     }
     ProviderChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let provider = ApiProvider::parse(value)
       // The update channel no longer derives from the chat provider (only
       // the hosted chat proxy was retired; self-update and the relay stay
@@ -4216,22 +4239,23 @@ fn update_msg(
       let push = push_host_settings(
         dispatch,
         model.focused,
-        provider_settings_patch(provider, model.custom_api_url),
+        provider_settings_patch(provider, endpoint.custom_api_url),
         model.focused_connection_generation(),
       )
       let next = {
-        ..model,
-        api_provider: provider,
-        custom_api_url: if provider is Custom &&
-          model.custom_api_url == OpenRouterChatCompletionsUrl {
-          ""
-        } else {
-          model.custom_api_url
-        },
+        ..model.edit_host_endpoint({
+          ..endpoint,
+          provider,
+          custom_api_url: if provider is Custom &&
+            endpoint.custom_api_url == OpenRouterChatCompletionsUrl {
+            ""
+          } else {
+            endpoint.custom_api_url
+          },
+        }),
         setup_api_key: "",
-        settings_saves: model.settings_saves + 1,
         select_menu: None,
-      }.align_fresh_conversation_with_provider()
+      }.align_new_chats_with_provider(model.focused)
       // The switch can move the endpoint between usable and not. Inside the
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
@@ -4250,8 +4274,16 @@ fn update_msg(
       )
     }
     FollowupBehaviorChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let behavior = FollowupBehavior::parse(value)
+      if !model.has_host() {
+        return (
+          save_cloud_followup_behavior(behavior),
+          { ..model, cloud_followup_behavior: behavior, select_menu: None, },
+        )
+      }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       (
         push_host_settings(
           dispatch,
@@ -4260,15 +4292,18 @@ fn update_msg(
           model.focused_connection_generation(),
         ),
         {
-          ..model,
-          followup_behavior: behavior,
-          settings_saves: model.settings_saves + 1,
+          ..model.edit_host_endpoint({
+            ..endpoint,
+            followup_behavior: behavior,
+          }),
           select_menu: None,
         },
       )
     }
     CustomApiUrlChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       (
         push_host_settings(
           dispatch,
@@ -4276,11 +4311,7 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        {
-          ..model,
-          custom_api_url: value,
-          settings_saves: model.settings_saves + 1,
-        },
+        model.edit_host_endpoint({ ..endpoint, custom_api_url: value, }),
       )
     }
     NotificationCornerChanged(value) => {
@@ -4332,12 +4363,94 @@ fn update_msg(
         { ..model, remote_access: Some(status), },
       )
     RemoteAccessSet(enabled) =>
-      (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
-    RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
-    RemoteCancelClicked => (cancel_remote(dispatch), model)
+      (
+        set_remote_access(dispatch, enabled),
+        { ..model, remote_access_error: None, },
+      )
+    RemoteConnectClicked => begin_account_login(dispatch, model)
+    AccountRetryClicked => {
+      guard !model.remote_connecting else { return (@cmd.none, model) }
+      let epoch = model.account_epoch + 1
+      (
+        fetch_account(
+          dispatch,
+          model.is_desktop,
+          epoch,
+          local_console=model.is_local_console(),
+        ),
+        { ..model, account_epoch: epoch, account_error: None, },
+      )
+    }
+    RemoteCancelClicked => {
+      guard model.is_desktop && model.account_login is Some(Waiting) else {
+        return (@cmd.none, model)
+      }
+      (
+        cancel_remote(dispatch, model.account_epoch),
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=true, cancel_pending=true),
+          ),
+          account_error: None,
+        },
+      )
+    }
+    AccountLoginCancelled(epoch) => {
+      guard model.account_login is Some(_) else { return (@cmd.none, model) }
+      account_loaded(dispatch, model, epoch, Ok(None))
+    }
+    AccountLoginTimedOut(epoch) => {
+      guard model.account_login is Some(_) else { return (@cmd.none, model) }
+      account_loaded(
+        dispatch,
+        model,
+        epoch,
+        Err(@settings.text(model.locale, SignInTimedOut)),
+      )
+    }
+    AccountCancelFailed(epoch, message) => {
+      guard epoch == model.account_epoch &&
+        model.account_login is Some(Cancelling(connect_pending~, ..)) else {
+        return (@cmd.none, model)
+      }
+      if !connect_pending {
+        return account_loaded(
+          dispatch,
+          { ..model, account_login: None, },
+          epoch,
+          Err(message),
+        )
+      }
+      (
+        @cmd.none,
+        { ..model, account_login: Some(Waiting), account_error: Some(message), },
+      )
+    }
+    AccountCancelFinished(epoch) => {
+      guard epoch == model.account_epoch &&
+        model.account_login is Some(Cancelling(connect_pending~, ..)) else {
+        return (@cmd.none, model)
+      }
+      if !connect_pending {
+        return (
+          fetch_account(dispatch, true, epoch),
+          { ..model, account_login: None, },
+        )
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=true, cancel_pending=false),
+          ),
+        },
+      )
+    }
     RemoteDisconnectClicked => sign_out_account(dispatch, model)
-    RemoteDisconnectFailed(message) =>
-      (@cmd.none, { ..model, remote_error: Some(message), })
+    RemoteAccessSetFailed(message) =>
+      (@cmd.none, { ..model, remote_access_error: Some(message), })
     AppInfoLoaded(version~, console_url~) =>
       (@cmd.none, { ..model, app_version: version, console_url, })
     CheckForUpdates =>
@@ -4797,12 +4910,14 @@ fn update_msg(
       }
     }
     SaveApiKey => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
         (@cmd.none, model)
       } else {
-        match model.api_provider {
+        match endpoint.provider {
           // The key goes straight to the host's store; the mirror keeps
           // only its presence. The save never navigates — it lands on
           // whatever page the form (Settings or the modal over any screen)
@@ -4812,14 +4927,15 @@ fn update_msg(
           // comes back as a toast.
           Deepseek | Glm | OpenRouter | Custom as provider => {
             let next = {
-              ..model,
-              deepseek_key_saved: model.deepseek_key_saved ||
-              provider is Deepseek,
-              glm_key_saved: model.glm_key_saved || provider is Glm,
-              custom_key_saved: model.custom_key_saved ||
-              provider is (OpenRouter | Custom),
+              ..model.edit_host_endpoint({
+                ..endpoint,
+                deepseek_key_saved: endpoint.deepseek_key_saved ||
+                provider is Deepseek,
+                glm_key_saved: endpoint.glm_key_saved || provider is Glm,
+                custom_key_saved: endpoint.custom_key_saved ||
+                provider is (OpenRouter | Custom),
+              }),
               setup_api_key: "",
-              settings_saves: model.settings_saves + 1,
             }
             (
               push_host_settings(
@@ -4883,7 +4999,7 @@ fn update_msg(
       let followup_behavior = match msg {
         SendFollowup(@composer.SteerNow) => FollowupSteer
         SendFollowup(@composer.QueueNext) => FollowupQueue
-        _ => model.followup_behavior
+        _ => model.followup_behavior()
       }
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
@@ -5125,6 +5241,59 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
+    }
+    CloudMcpNotification(event) => {
+      guard model.is_desktop else { return (@cmd.none, model) }
+      match event {
+        Questions(account~, snapshot~) =>
+          update(
+            dispatch,
+            CloudQuestions(account~, @user_questions.Snapshot(snapshot)),
+            model,
+          )
+        Input(account~, session~, text~, id~) =>
+          update_cloud(
+            dispatch,
+            @cloud.QuestionInput(account~, session~, text~, id~),
+            model,
+          )
+      }
+    }
+    CloudQuestions(account~, msg) => {
+      guard model.is_desktop &&
+        model.account.map(a => a.user.user_id) == Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (command, questions) = model.cloud_questions.update(
+        msg,
+        Local,
+        dispatch.map(msg => CloudQuestions(account~, msg)),
+        submit=(answer, emit) => {
+          @cmd.attempt(
+            result => {
+              match result {
+                Ok(snapshot) => emit(@user_questions.Snapshot(snapshot))
+                Err(error) =>
+                  emit(
+                    @user_questions.Failed(
+                      request=answer.id,
+                      error=@interop.bridge_error_text(error),
+                    ),
+                  )
+              }
+            },
+            () => {
+              let reply = @interop.bridge_request(
+                Local,
+                @commands.cloud_mcp,
+                @protocol.CloudMcpRequest::Answer(account~, answer~),
+              )
+              @json.from_json(reply)
+            },
+          )
+        },
+      )
+      (command, { ..model, cloud_questions: questions, })
     }
     UserQuestions(channel~, connection_generation~, msg) => {
       guard model.device_state(channel) is Some(device) &&
@@ -6102,22 +6271,31 @@ fn update_msg(
         )
       }
     }
-    FontSizeAdjusted(delta) => {
-      let size = (model.app_font_size.base_pixels() + delta).clamp(
-        min=AppFontSizeMinPixels,
-        max=AppFontSizeMaxPixels,
+    FontSizeAdjusted(delta) =>
+      (
+        @cmd.custom_cmd(scheduler => {
+          let size = (AppFontSize::current().base_pixels() + delta).clamp(
+            min=AppFontSizeMinPixels,
+            max=AppFontSizeMaxPixels,
+          )
+          scheduler.add(dispatch(FontSizeChanged(size.to_string())))
+        }),
+        model,
       )
-      update(dispatch, FontSizeChanged(size.to_string()), model)
-    }
     FontSizeChanged(value) => {
-      let app_font_size = AppFontSize::parse(value, model.app_font_size)
       let model = { ..model, select_menu: None, }
-      if app_font_size == model.app_font_size {
+      guard AppFontSize::parse(value) is Some(app_font_size) else {
+        return (@cmd.none, model)
+      }
+      if Some(app_font_size) == model.app_font_size {
         (@cmd.none, model)
       } else {
         (
-          @cmd.batch([app_font_size.apply(), app_font_size.save()]),
-          { ..model, app_font_size, },
+          @cmd.batch([
+            apply_app_font_size(Some(app_font_size)),
+            app_font_size.save(),
+          ]),
+          { ..model, app_font_size: Some(app_font_size), },
         )
       }
     }
@@ -6727,6 +6905,25 @@ fn update_msg(
       )
     }
     BrowserAnnotation(msg) => update_browser_annotation(dispatch, msg, model)
+    CloudBrowserOpenRequested(account~, request~, session~, url~) => {
+      guard model.is_desktop &&
+        model.account.map(a => a.user.user_id) == Some(account) else {
+        return (@cmd.none, model)
+      }
+      let owner = @interop.Cloud(account~, session~)
+      let (id, next) = model.add_browser_tab(owner, url~, cloud_preview=true)
+      (
+        browser_open(
+          dispatch,
+          id,
+          url,
+          model.theme.is_dark(model.system_dark),
+          Some({ channel: Local, session, }),
+          request~,
+        ),
+        next,
+      )
+    }
     BrowserOpenRequested(request~, session~, url~) => {
       // Native views exist only in the desktop window, whose conversations
       // are all on the local channel.
@@ -7108,6 +7305,21 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    PreviewOpenRequested(request) => (@cmd.none, model.queue_preview(request))
+    OpenNextPreview => (@cmd.none, model)
+    PreviewFile(path) => model.preview_file(dispatch, path)
+    CloudFilePreviewCreated(owner~, auth_epoch~, result~) => {
+      let ctx = file_ctx(model)
+      guard ctx.owner == owner &&
+        ctx.cloud_files is Some({ epoch: current, .. }) &&
+        current == auth_epoch else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Ok(url) => open_user_link(dispatch, model, url, cloud_preview=true)
+        Err(message) => model.notify_error(dispatch, message)
+      }
+    }
     DownloadFile(path) => {
       guard model.workspace_file(path) is Some(file) else {
         return (@cmd.none, model)
@@ -7149,7 +7361,16 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (cmd, session_import_dialog) = model.session_import_dialog.open(
-        target,
+        Host(target),
+      )
+      (cmd, { ..model, session_import_dialog, })
+    }
+    OpenCloudImport => {
+      guard model.cloud_account() is Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (cmd, session_import_dialog) = model.session_import_dialog.open(
+        Cloud(account~),
       )
       (cmd, { ..model, session_import_dialog, })
     }
@@ -7157,42 +7378,39 @@ fn update_msg(
       let (cmd, session_import_dialog, imported) = model.session_import_dialog.update(
         dispatch.map(msg => SessionImport(msg)),
         msg,
+        account?=model.account,
       )
       let model = { ..model, session_import_dialog, }
-      guard imported is Some((target, session_id)) &&
-        model.device_state(target.channel) is Some(dev) &&
-        dev.connection_generation == target.connection_generation &&
-        model.console.page_device is Some(device) else {
-        return (cmd, model)
+      match imported {
+        Some((Host(target), session_id)) =>
+          open_host_import(dispatch, cmd, model, target, session_id)
+        Some((Cloud(account~), session)) => {
+          // An import that finishes after a sign-out or account switch
+          // belongs to an account this page no longer shows.
+          guard model.cloud_account() == Some(account) else {
+            return (cmd, model)
+          }
+          let (refresh, model) = update_cloud(dispatch, @cloud.Refresh, model)
+          let (open, model) = update_msg(
+            dispatch,
+            OpenCloudConversation(account~, session~),
+            {
+              ..model,
+              management_dialog: None,
+              chat_navigation_generation: model.chat_navigation_generation + 1,
+            },
+          )
+          (@cmd.batch([cmd, refresh, open]), model)
+        }
+        None => (cmd, model)
       }
-      let (focus, model) = focus_channel(dispatch, model, target.channel)
-      let (sessions, model) = request_sessions_refresh(
-        dispatch,
-        target.channel,
-        model,
-      )
-      let (visit, model) = navigation_visit(
-        model,
-        { device: Some(device), target: Session(session_id), },
-        replace=false,
-      )
-      // The ordinary navigation resolver opens the session once its catalog
-      // row arrives. Workspace and worktree notifications use their existing
-      // handlers; the import reply carries no inventory snapshot.
-      (
-        @cmd.batch([cmd, focus, sessions, visit]),
-        {
-          ..model,
-          navigation: { ..model.navigation, phase: Waiting, sessions: None, },
-        },
-      )
     }
     ExportDialog(message) | FileShareDialog(message) => {
       let file = msg is FileShareDialog(_)
       let (login, model) = if message is @export_dialog.SignIn {
         // Leave the dialog retryable while the rejected account is clearing.
         guard !model.remote_connecting else { return (@cmd.none, model) }
-        begin_account_login(dispatch, model, create=false)
+        begin_account_login(dispatch, model)
       } else {
         (@cmd.none, model)
       }
@@ -7226,76 +7444,96 @@ fn update_msg(
       }
       (cmd, next)
     }
-    ExternalLinkClicked(url) =>
-      // Web links open in the dock's Browser tabs by default — the
-      // toolbar's open-external button hands the page to the system
-      // browser when its chrome or logins are needed. Non-web schemes
-      // (mailto:, vscode:, …) and remote consoles (no native views) keep
-      // the external path. A same-URL tab already in this strip
-      // re-activates instead of duplicating.
-      //
-      // Only from conversation screens: the capture listener behind this
-      // message is document-wide, so it also reports anchors on screens where
-      // the dock is not rendered and a tab would be invisible. Chat and Codex
-      // deliberately share this route — their PR links must open in the same
-      // built-in Browser instead of changing behavior with the conversation
-      // provider. Settings' device-page link is the clearest external case:
-      // it wants the browser where the user is already signed in.
-      if !model.is_desktop {
-        (open_browser_link(url), model)
-      } else if model.management_dialog is None && @preview.is_web_url(url) {
-        // Opening or reusing a Browser tab is a newer dock navigation than a
-        // transcript text-file link still waiting on `host.open_path`. Spend the
-        // shared token before either branch so its delayed reply cannot put a
-        // file back over the URL the user chose later.
-        let model = model.begin_editor_navigation()
-        // The scan is over this strip's tabs, not the global page map: a
-        // parked conversation may hold the same URL, and matching its page
-        // first would shadow this strip's own tab forever.
-        let reuse = for tab in model.dock_state().tabs {
-          if tab is Browser(id~) &&
-            @preview.page(model.preview, id) is Some(page) &&
-            page.url is Some(page_url) &&
-            page_url == url {
-            break Some(id)
-          }
-        } nobreak {
-          None
-        }
-        match reuse {
-          Some(id) => {
-            let dock = @dock.open_browser(model.dock_state(), id)
-            // The reuse matched this page's optimistic URL mirror, which can
-            // drift from what the native view actually shows — a host op that
-            // failed, or a reload's `close_all` that swept the view. Focusing
-            // alone would present the stale page under the clicked URL, so a
-            // reuse re-navigates: `browser.navigate` rebuilds the view when
-            // it is gone, and dropping the pane placement makes the next sync
-            // measure and show whatever the host has now.
-            (
-              browser_navigate(
-                dispatch,
-                id,
-                url,
-                model.theme.is_dark(model.system_dark),
-                model.dock_owner().host(),
-              ),
-              {
-                ..model,
-                preview: @preview.navigate(model.preview, id, url),
-                browser_pane: { shown: None, rect: None, geo: None, },
-                right_panel_open: true,
-                right_panel_menu_open: false,
-              }.with_dock_state(dock),
-            )
-          }
-          None =>
-            open_browser_tab(dispatch, model, model.dock_owner().host(), url~)
-        }
-      } else {
-        (open_external_link(dispatch, url), model)
-      }
+    ExternalLinkClicked(url) => open_user_link(dispatch, model, url)
     FromDevice(channel, msg) => update_device_msg(dispatch, channel, msg, model)
+  }
+}
+
+///|
+fn open_user_link(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  url : String,
+  cloud_preview~ : Bool = false,
+) -> (@cmd.Cmd, Model) {
+  // Web links open in the dock's Browser tabs by default — the
+  // toolbar's open-external button hands the page to the system
+  // browser when its chrome or logins are needed. Non-web schemes
+  // (mailto:, vscode:, …) and remote consoles (no native views) keep
+  // the external path. A same-URL tab already in this strip
+  // re-activates instead of duplicating.
+  //
+  // Only from conversation screens: the capture listener behind this
+  // message is document-wide, so it also reports anchors on screens where
+  // the dock is not rendered and a tab would be invisible. Chat and Codex
+  // deliberately share this route — their PR links must open in the same
+  // built-in Browser instead of changing behavior with the conversation
+  // provider. Settings' device-page link is the clearest external case:
+  // it wants the browser where the user is already signed in.
+  if !model.is_desktop {
+    (open_browser_link(url), model)
+  } else if model.management_dialog is None && @preview.is_web_url(url) {
+    // Opening or reusing a Browser tab is a newer dock navigation than a
+    // transcript text-file link still waiting on `host.open_path`. Spend the
+    // shared token before either branch so its delayed reply cannot put a
+    // file back over the URL the user chose later.
+    let model = model.begin_editor_navigation()
+    // The scan is over this strip's tabs, not the global page map: a
+    // parked conversation may hold the same URL, and matching its page
+    // first would shadow this strip's own tab forever.
+    let reuse = for tab in model.dock_state().tabs {
+      if tab is Browser(id~) &&
+        @preview.page(model.preview, id) is Some(page) &&
+        page.url is Some(page_url) &&
+        page_url == url &&
+        page.cloud_preview == cloud_preview {
+        break Some(id)
+      }
+    } nobreak {
+      None
+    }
+    match reuse {
+      Some(id) => {
+        let dock = @dock.open_browser(model.dock_state(), id)
+        // The reuse matched this page's optimistic URL mirror, which can
+        // drift from what the native view actually shows — a host op that
+        // failed, or a reload's `close_all` that swept the view. Focusing
+        // alone would present the stale page under the clicked URL, so a
+        // reuse re-navigates: `browser.navigate` rebuilds the view when
+        // it is gone, and dropping the pane placement makes the next sync
+        // measure and show whatever the host has now.
+        (
+          browser_navigate(
+            dispatch,
+            id,
+            url,
+            model.theme.is_dark(model.system_dark),
+            model.dock_owner().host(),
+          ),
+          {
+            ..model,
+            preview: @preview.navigate(model.preview, id, url),
+            browser_pane: {
+              shown: model.browser_pane.shown.filter(shown => shown != id),
+              rect: None,
+              geo: None,
+            },
+            right_panel_open: true,
+            right_panel_menu_open: false,
+          }.with_dock_state(dock),
+        )
+      }
+      None =>
+        open_browser_tab(
+          dispatch,
+          model,
+          model.dock_owner().host(),
+          url~,
+          cloud_preview~,
+        )
+    }
+  } else {
+    (open_external_link(dispatch, url), model)
   }
 }
 
@@ -7568,19 +7806,15 @@ fn update_device_msg(
         fetch_projects(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
+        fetch_host_settings(dispatch, channel, connection_generation),
       ]
       if channel == Local && model.is_desktop {
         commands.push(ssh_load(dispatch))
       }
-      // The focused-scoped half: the host-settings mirror and installed
-      // skills (they feed the composer's `$` completion, so
-      // they load on connect rather than when the Skills page opens) follow
-      // the device the UI acts on — always this one while the app runs a
-      // single channel.
+      // The focused-scoped half: installed skills (they feed the composer's
+      // `$` completion, so they load on connect rather than when the Skills
+      // page opens) follow the device the UI acts on.
       if channel == model.focused {
-        commands.push(
-          fetch_host_settings(dispatch, channel, connection_generation),
-        )
         commands.push(fetch_installed_skills(dispatch, channel))
         // Codex conversations are always visible in the global sidebar, so
         // populate that focused-host catalog on bridge readiness rather than
@@ -7643,14 +7877,14 @@ fn update_device_msg(
         // before this connection's re-read lands. Absent rows read as the
         // safe Local default.
         workspace_settings: [],
+        // Replies from writes issued on the dead bridge carry their captured
+        // generation and are ignored below. The new host may have restarted
+        // its in-memory settings revision, so its first authoritative status
+        // starts a fresh monotonic round.
+        host_settings: HostSettingsMirror::loading(),
       })
-      // Replies from writes issued on the dead bridge carry their captured
-      // generation and are ignored below. The new host may have restarted
-      // its in-memory settings revision, so its first authoritative status
-      // starts a fresh monotonic round. Focused-scoped, like the fetches
-      // that repopulate the mirror.
       let model = if channel == model.focused {
-        { ..model.clear_host_settings(), conversations, }
+        { ..model.reset_api_setup(), conversations, }
       } else {
         { ..model, conversations, }
       }
@@ -7803,99 +8037,74 @@ fn update_device_msg(
       update_msg(dispatch, FileEditor(msg), model)
     }
     HostSettingsLoadFailed(message, connection_generation~) => {
-      guard channel == model.focused &&
-        connection_generation == dev.connection_generation else {
+      guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      (@cmd.none, { ..model, host_settings_error: Some(message), })
+      (
+        @cmd.none,
+        model.map_host_settings(channel, mirror => {
+          ..mirror,
+          error: Some(message),
+        }),
+      )
     }
     HostSettingsLoaded(settings, connection_generation~) => {
       guard connection_generation is None ||
         (connection_generation is Some(gen) && gen == dev.connection_generation) else {
         return (@cmd.none, model)
       }
-      // The settings mirror is the focused host's. A generation-carrying
-      // reply is only ever requested for the focused channel, but the
-      // `settings.changed` broadcast (generation None) arrives from every
-      // connected device — a background device's edit must not clobber the
-      // form. A focus switch refetches, so nothing is lost.
-      guard channel == model.focused else { return (@cmd.none, model) }
-      if settings.revision < model.host_settings_revision {
+      // A `settings.changed` broadcast (generation None) arrives from every
+      // connected device; each lands on its own device's mirror.
+      let mirror = dev.host_settings
+      if !mirror.accepts(settings) {
         (@cmd.none, model)
-      } else if model.settings_saves > 0 {
-        (@cmd.none, model.defer_host_settings(settings))
+      } else if mirror.saves > 0 {
+        (
+          @cmd.none,
+          model.map_host_settings(channel, mirror => mirror.hold(settings)),
+        )
       } else {
         // The settled mirror decides the modal (`settle_api_setup`); the
         // dismissal flag — not the mirror, which a reconnect clears — is
         // what keeps a "Not now" quiet across snapshots.
-        let next = model.apply_host_settings(settings).settle_api_setup()
-        (
-          if next.api_setup_open && !next.cloud_selected() {
-            @dialog.show("api-setup-dialog")
-          } else {
-            @cmd.none
-          },
-          next,
-        )
+        let next = model.apply_host_settings(channel, settings)
+        let next = if channel == next.focused {
+          next.settle_api_setup()
+        } else {
+          next
+        }
+        (next.api_setup_dialog(channel), next)
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      // A save issued on the old focus may settle after the user switches
-      // devices. Its revision and localStorage cleanup belong to that old
-      // host and must not alter the newly focused host's mirror.
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let next = {
-        ..model,
-        settings_saves: if model.settings_saves > 0 {
-          model.settings_saves - 1
-        } else {
-          0
-        },
-      }.defer_host_settings(settings)
-      let next = if next.settings_saves > 0 {
+      // A save may settle after the user switched devices; it settles on
+      // the device it was issued against.
+      let mirror = dev.host_settings.write_settled().hold(settings)
+      let next = model.map_host_settings(channel, _ => mirror)
+      let next = if mirror.saves > 0 {
         next
       } else {
-        next.flush_host_settings()
+        next.flush_host_settings(channel)
       }
-      (
-        if next.api_setup_open && !next.cloud_selected() {
-          @dialog.show("api-setup-dialog")
-        } else {
-          @cmd.none
-        },
-        next,
-      )
+      (next.api_setup_dialog(channel), next)
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let next = {
-        ..model,
-        settings_saves: if model.settings_saves > 0 {
-          model.settings_saves - 1
-        } else {
-          0
-        },
-      }
-      let next = if next.settings_saves == 0 {
-        next.flush_host_settings()
-      } else {
-        next
-      }
+      let mirror = dev.host_settings.write_settled()
+      let settled = mirror.saves == 0
+      let next = model.map_host_settings(channel, _ => mirror)
+      let next = if settled { next.flush_host_settings(channel) } else { next }
       let (notice, notified) = next.notify_error(
         dispatch,
         notice_text(model.locale, SaveSettings(message.to_string())),
       )
-      let commands = [notice]
-      if next.api_setup_open && !next.cloud_selected() {
-        commands.push(@dialog.show("api-setup-dialog"))
-      }
-      if next.settings_saves == 0 {
+      let commands = [notice, next.api_setup_dialog(channel)]
+      if settled {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
         // host truth after a definite or ambiguous write failure.
@@ -8546,22 +8755,12 @@ fn update_device_msg(
       // must reject branch and pull-request answers still in flight for the
       // checkout that no longer owns it.
       let (fence, next) = next.mint_git_request()
-      let conversations = next.conversations.map(conv => {
-        if conv.device == channel && conv.project() == workspace {
-          let placement = next_dev.conversation_workspace(
-            workspace,
-            conv.session_id,
-            conv.workspace,
-          )
-          if conv.workspace is Worktree(..) && placement is Project(..) {
-            { ..conv.forget_git(fence~), workspace: placement, }
-          } else {
-            { ..conv, workspace: placement, }
-          }
-        } else {
-          conv
-        }
-      })
+      let conversations = next.rebind_project_conversations(
+        channel,
+        workspace,
+        next_dev,
+        fence~,
+      )
       // The list reply is the reconnect catch-up path: live
       // `worktree.changed` notifications are not replayed after a gap, so the
       // accepted snapshot must also repair the selected Codex task's placement.
@@ -8611,26 +8810,12 @@ fn update_device_msg(
       // keeps the row with `present: false`, so it passes through unchanged and
       // later Unarchive still surfaces Repair. Stand down any staged confirm
       // only when the placement itself disappeared.
-      let conversations = next.conversations.map(conv => {
-        if conv.device == channel && conv.project() == workspace {
-          let placement = next_dev.conversation_workspace(
-            workspace,
-            conv.session_id,
-            conv.workspace,
-          )
-          if conv.workspace is Worktree(..) && placement is Project(..) {
-            // The checkout is gone, so every placement derived from it goes
-            // too. `forget_git` retires probes already in flight for the removed
-            // checkout; the enum transition simultaneously makes every file,
-            // LSP, terminal and launcher root re-project to the project.
-            { ..conv.forget_git(fence~), workspace: placement, }
-          } else {
-            { ..conv, workspace: placement, }
-          }
-        } else {
-          conv
-        }
-      })
+      let conversations = next.rebind_project_conversations(
+        channel,
+        workspace,
+        next_dev,
+        fence~,
+      )
       // An open discard dialog whose mapping just disappeared (a protocol
       // client explicitly removed the worktree) must close too:
       // confirming it later would fire a stale forced archive.
@@ -9777,6 +9962,18 @@ fn update_device_msg(
       })
       (@cmd.batch(commands), seeded)
     }
+    PreviewRequested(request) =>
+      if channel == Local {
+        update_msg(dispatch, PreviewOpenRequested(request), model)
+      } else {
+        (@cmd.none, model)
+      }
+    CloudMcpEvent(event) =>
+      if channel == Local {
+        update_msg(dispatch, CloudMcpNotification(event), model)
+      } else {
+        (@cmd.none, model)
+      }
     QuestionsChanged(snapshot) =>
       update_msg(
         dispatch,
@@ -10544,22 +10741,81 @@ fn test_model() -> Model {
         projects: [@interop.ChannelId::Local.test_project()],
         project_catalog: Some(Ok(())),
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
+        // The shared fixture represents a connected desktop after its
+        // initial settings snapshot. Loading-state tests opt back into
+        // `HostSettingsMirror::loading()`. BYOK means a ready app has a key
+        // saved: without one, the composer's send gate stays shut and every
+        // submission test would first need to configure an endpoint.
+        // Setup-flow tests load their own keyless settings payloads instead.
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="deepseek", has_deepseek_key=true),
+        ),
       },
     ],
     focused: @interop.ChannelId::Local,
     console: local_console_state(login_return_to="/console/"),
     sidebar_mode: WorkMode,
-    // The shared fixture represents a connected desktop after its initial
-    // settings snapshot. Loading-state tests opt back into revision -1.
-    host_settings_revision: 0,
-    // BYOK means a ready app has a key saved: without one, the composer's
-    // send gate stays shut and every submission test would first need to
-    // configure an endpoint. Setup-flow tests load their own keyless
-    // settings payloads instead.
-    deepseek_key_saved: true,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
+}
+
+///|
+/// The focused host's settings state (snapshot, writes in flight, deferred
+/// status); a loading one when the page holds no device.
+fn Model::host_settings_mirror(self : Model) -> HostSettingsMirror {
+  self
+  .focused_device()
+  .map(dev => dev.host_settings)
+  .unwrap_or(HostSettingsMirror::loading())
+}
+
+///|
+/// Rewrite the focused host's settings state.
+fn Model::with_host_settings(
+  self : Model,
+  f : (HostSettingsMirror) -> HostSettingsMirror,
+) -> Model {
+  self.map_host_settings(self.focused, f)
+}
+
+///|
+/// Rewrite the focused host's loaded endpoint, keeping its revision; a
+/// fixture that is still loading starts from the zero-config endpoint at
+/// revision 0.
+fn Model::with_host_endpoint(
+  self : Model,
+  provider? : ApiProvider,
+  custom_api_url? : String,
+  followup_behavior? : FollowupBehavior,
+  deepseek_key_saved? : Bool,
+  glm_key_saved? : Bool,
+  custom_key_saved? : Bool,
+) -> Model {
+  self.with_host_settings(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
+    let endpoint = current.endpoint
+    let endpoint = {
+      provider: provider.unwrap_or(endpoint.provider),
+      custom_api_url: custom_api_url.unwrap_or(endpoint.custom_api_url),
+      followup_behavior: followup_behavior.unwrap_or(endpoint.followup_behavior),
+      deepseek_key_saved: deepseek_key_saved.unwrap_or(
+        endpoint.deepseek_key_saved,
+      ),
+      glm_key_saved: glm_key_saved.unwrap_or(endpoint.glm_key_saved),
+      custom_key_saved: custom_key_saved.unwrap_or(endpoint.custom_key_saved),
+    }
+    { ..mirror, current: Some({ ..current, endpoint, }), }
+  })
+}
+
+///|
+/// The focused host's loaded endpoint.
+fn Model::test_endpoint(self : Model) -> HostEndpoint raise {
+  guard self.host_settings() is Some(settings) else {
+    fail("the focused host has no settings snapshot")
+  }
+  settings.endpoint
 }
 
 ///|
@@ -10716,6 +10972,44 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
   let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
   assert_false(wide.narrow)
   assert_true(wide.sidebar_open)
+}
+
+///|
+test "Cloud preferences are local while device settings retain their owner" {
+  let emit = test_dispatch()
+  let host = test_model()
+  let cloud = {
+    ..host,
+    devices: [],
+    console: { ..host.console, page_device: None, },
+    cloud_followup_behavior: FollowupSteer,
+    select_menu: Some(FollowupBehaviorMenu),
+  }
+  for
+    msg in [
+      CloudFollowupLoaded(Some("queue")),
+      FollowupBehaviorChanged("queue"),
+    ] {
+    let (_, next) = update_msg(emit, msg, cloud)
+    let (_, repeated) = update_msg(emit, msg, cloud)
+    assert_true(next.followup_behavior() is FollowupQueue)
+    assert_true(next.followup_behavior() == repeated.followup_behavior())
+    assert_true(next.select_menu == repeated.select_menu)
+    if msg is FollowupBehaviorChanged(_) {
+      assert_true(next.select_menu is None)
+    }
+  }
+  let (_, missing) = update_msg(emit, CloudFollowupLoaded(None), cloud)
+  assert_true(missing.followup_behavior() == cloud.followup_behavior())
+  for
+    model in [host, host.with_host_settings(_ => HostSettingsMirror::loading())] {
+    let (_, loaded) = update_msg(
+      emit,
+      CloudFollowupLoaded(Some("queue")),
+      model,
+    )
+    assert_true(loaded == model)
+  }
 }
 
 ///|
@@ -12724,18 +13018,19 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
 test "BridgeReady clears focused host settings until the refetch lands" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://old.example/chat",
-    custom_key_saved: true,
+    ..test_model()
+    .with_host_endpoint(
+      custom_api_url="https://old.example/chat",
+      custom_key_saved=true,
+      provider=Custom,
+    )
+    .with_host_settings(mirror => { ..mirror, saves: 1, }),
     setup_api_key: "old-key",
-    host_settings_revision: 7,
   }
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   assert_false(next.host_settings_loaded())
-  assert_true(next.api_provider is Deepseek)
-  inspect(next.custom_api_url, content="")
-  assert_false(next.custom_key_saved)
+  assert_true(next.host_settings_mirror() == HostSettingsMirror::loading())
+  assert_true(next.api_provider() is Deepseek)
   inspect(next.setup_api_key, content="")
 }
 
@@ -15787,48 +16082,46 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = {
-    ..test_model(),
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
-  }
+  let official = test_model().with_host_endpoint(
+    deepseek_key_saved=false,
+    provider=Deepseek,
+  )
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
-  assert_true({ ..official, deepseek_key_saved: true, }.api_ready())
+  assert_true(official.with_host_endpoint(deepseek_key_saved=true).api_ready())
   // The GLM provider is gated on its own key, never DeepSeek's.
-  let glm = {
-    ..test_model(),
-    api_provider: Glm,
-    deepseek_key_saved: true,
-    glm_key_saved: false,
-  }
+  let glm = test_model().with_host_endpoint(
+    deepseek_key_saved=true,
+    glm_key_saved=false,
+    provider=Glm,
+  )
   assert_false(glm.api_ready())
   assert_true(glm.display_status() is ApiKeyRequired)
-  assert_true({ ..glm, glm_key_saved: true, }.api_ready())
-  let custom = { ..test_model(), api_provider: Custom, custom_api_url: "", }
+  assert_true(glm.with_host_endpoint(glm_key_saved=true).api_ready())
+  let custom = test_model().with_host_endpoint(
+    custom_api_url="",
+    provider=Custom,
+  )
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
-  let configured = {
-    ..custom,
-    custom_api_url: "https://proxy.example/chat/completions",
-  }
+  let configured = custom.with_host_endpoint(
+    custom_api_url="https://proxy.example/chat/completions",
+  )
   assert_true(configured.api_ready())
 }
 
 ///|
 test "OpenRouter setup requires only its stored custom key" {
-  let openrouter = {
-    ..test_model(),
-    api_provider: OpenRouter,
-    deepseek_key_saved: true,
-    custom_key_saved: false,
-  }
-  assert_false(openrouter.api_ready())
-  assert_true({ ..openrouter, custom_key_saved: true, }.api_ready())
-  // Model choice belongs to the chat, just as with the official endpoint.
-  assert_true(
-    { ..openrouter, custom_key_saved: true, default_model: Deepseek(V4Pro), }.api_ready(),
+  let openrouter = test_model().with_host_endpoint(
+    deepseek_key_saved=true,
+    custom_key_saved=false,
+    provider=OpenRouter,
   )
+  assert_false(openrouter.api_ready())
+  let keyed = openrouter.with_host_endpoint(custom_key_saved=true)
+  assert_true(keyed.api_ready())
+  // Model choice belongs to the chat, just as with the official endpoint.
+  assert_true({ ..keyed, default_model: Deepseek(V4Pro), }.api_ready())
 }
 
 ///|
@@ -15858,7 +16151,7 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
-  assert_eq(restored.app_font_size, AppFontSize(15))
+  assert_eq(restored.app_font_size, Some(AppFontSize(15)))
   assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
@@ -15896,7 +16189,6 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
-  assert_eq(unknown.app_font_size, AppFontSize(14))
   assert_true(unknown.default_model is Deepseek(V4Flash))
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)
@@ -16433,7 +16725,7 @@ test "Codex threads share the Projects section's project rows" {
   // Work shows Projects, shared across both agents; archived conversations
   // live on Settings' archived page.
   assert_eq(sections.length(), 1)
-  inspect(sections[0].label, content="Projects")
+  assert_true(sections[0].label is None)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
   }
@@ -16592,29 +16884,30 @@ fn host_settings(
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
 ) -> HostSettings {
-  {
+  HostSettings::from_status({
     revision,
     provider,
-    custom_api_url,
+    custom_api_url: Some(custom_api_url),
     has_deepseek_key,
     has_glm_key,
     has_custom_key,
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
-  }
+  })
 }
 
 ///|
 test "the OpenRouter custom preset restores as OpenRouter" {
   let restored = test_model().apply_host_settings(
+    Local,
     host_settings(
       provider="custom",
       custom_api_url=OpenRouterChatCompletionsUrl,
       has_custom_key=true,
     ),
   )
-  assert_true(restored.api_provider is OpenRouter)
+  assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
 }
 
@@ -16622,15 +16915,11 @@ test "the OpenRouter custom preset restores as OpenRouter" {
 test "host settings edits wait for the focused host snapshot" {
   let dispatch = test_dispatch()
   // Model a queued DOM message from the old Settings page after focus already
-  // moved. The negative revision is authoritative: none of these stale values
-  // or events may be applied to the replacement host.
+  // moved. The loading mirror is authoritative: none of these stale events
+  // may be applied to the replacement host.
   let loading = {
-    ..test_model(),
-    api_provider: Deepseek,
-    custom_api_url: "https://old.example/chat",
-    deepseek_key_saved: true,
+    ..test_model().with_host_settings(_ => HostSettingsMirror::loading()),
     setup_api_key: "old-device-key",
-    host_settings_revision: -1,
   }
   let messages : Array[Msg] = [
     SetupApiKeyChanged("queued-key"),
@@ -16641,14 +16930,10 @@ test "host settings edits wait for the focused host snapshot" {
   for message in messages {
     let (_, once) = update(dispatch, message, loading)
     let (_, twice) = update(dispatch, message, loading)
-    assert_true(once.api_provider == loading.api_provider)
-    assert_eq(once.custom_api_url, loading.custom_api_url)
+    assert_true(once.host_settings_mirror() == HostSettingsMirror::loading())
     assert_eq(once.setup_api_key, loading.setup_api_key)
-    assert_eq(once.settings_saves, 0)
-    assert_true(twice.api_provider == loading.api_provider)
-    assert_eq(twice.custom_api_url, loading.custom_api_url)
+    assert_true(twice.host_settings_mirror() == HostSettingsMirror::loading())
     assert_eq(twice.setup_api_key, loading.setup_api_key)
-    assert_eq(twice.settings_saves, 0)
   }
 }
 
@@ -16667,7 +16952,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(zero_config.screen is Chat)
   assert_true(zero_config.api_setup_open)
-  assert_true(zero_config.api_provider is Deepseek)
+  assert_true(zero_config.api_provider() is Deepseek)
   assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
     dispatch,
@@ -16690,7 +16975,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(restored.screen is Chat)
   assert_true(!restored.api_setup_open)
-  assert_true(restored.deepseek_key_saved)
+  assert_true(restored.test_endpoint().deepseek_key_saved)
 }
 
 ///|
@@ -16725,12 +17010,10 @@ test "the setup modal tracks endpoint usability without toasts" {
       host_settings(provider="custom", custom_api_url=""),
       connection_generation=None,
     ),
-    {
-      ..test_model(),
-      host_settings_revision: 0,
-      api_provider: Custom,
-      custom_api_url: "https://ok.example/chat",
-    },
+    test_model().with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    ),
   )
   assert_true(broken.api_setup_open)
   // "Not now" dismisses; an unrelated payload that leaves the endpoint
@@ -16765,11 +17048,11 @@ test "the setup modal tracks endpoint usability without toasts" {
       connection_generation=None,
     ),
     {
-      ..test_model(),
+      ..test_model().with_host_endpoint(
+        provider=Custom,
+        custom_api_url="https://ok.example/chat",
+      ),
       management_dialog: Some(Settings(Engine)),
-      host_settings_revision: 0,
-      api_provider: Custom,
-      custom_api_url: "https://ok.example/chat",
     },
   )
   assert_true(!mid_edit.api_setup_open)
@@ -16782,31 +17065,35 @@ test "switching to a provider missing its key or URL opens the setup modal" {
   // no URL takes the endpoint from usable to not. Off the Settings page
   // the setup modal is the announcement — no toast underneath it.
   let (_, switched) = update(dispatch, ProviderChanged("custom"), test_model())
-  assert_true(switched.api_provider is Custom)
+  assert_true(switched.api_provider() is Custom)
   assert_true(switched.api_setup_open)
   assert_eq(switched.notifications.length(), 0)
   // A switch that stays usable stays quiet.
-  let (_, kept) = update(dispatch, ProviderChanged("deepseek"), {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://ok.example/chat",
-  })
+  let (_, kept) = update(
+    dispatch,
+    ProviderChanged("deepseek"),
+    test_model().with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    ),
+  )
   assert_true(!kept.api_setup_open)
   // Switching back to a provider the stored key makes usable retires the
   // modal that the break opened.
   let (_, back) = update(dispatch, ProviderChanged("deepseek"), switched)
-  assert_true(back.api_provider is Deepseek)
+  assert_true(back.api_provider() is Deepseek)
   assert_true(!back.api_setup_open)
 }
 
 ///|
 test "the GLM provider aligns only a fresh chat to its model family" {
   let dispatch = test_dispatch()
-  let (_, glm) = update(dispatch, ProviderChanged("glm"), {
-    ..test_model(),
-    glm_key_saved: true,
-  })
-  assert_true(glm.api_provider is Glm)
+  let (_, glm) = update(
+    dispatch,
+    ProviderChanged("glm"),
+    test_model().with_host_endpoint(glm_key_saved=true),
+  )
+  assert_true(glm.api_provider() is Glm)
   assert_true(glm.default_model is Glm(G53))
   assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
@@ -16853,7 +17140,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   // Once a conversation has begun, its pinned model remains explicit and
   // visible for the user to change rather than being rewritten by Settings.
   let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
-  assert_true(running.api_provider is Glm)
+  assert_true(running.api_provider() is Glm)
   assert_true(running.default_model is Glm(G53))
   assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
@@ -16871,10 +17158,10 @@ test "a dismissal survives the mirror reset a reconnect performs" {
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
-  // A reconnect (or focus switch) resets the mirror to the loading
-  // sentinel; the refetched snapshot must not re-pop the modal on every
-  // WS flap — dismissal is the user's answer for the session.
-  let cleared = dismissed.clear_host_settings()
+  // A reconnect resets the mirror to loading; the refetched snapshot must
+  // not re-pop the modal on every WS flap — dismissal is the user's answer
+  // for the session.
+  let (_, cleared) = update_dev(dispatch, BridgeReady, dismissed)
   assert_true(!cleared.api_setup_open)
   let (_, reconnected) = update_dev(
     dispatch,
@@ -16922,8 +17209,9 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   // Quiet must not mean lost: the notice stays while the endpoint is
   // unusable, dismissal or not.
   assert_true(dismissed.api_setup_banner_visible())
-  // The loading sentinel is not a verdict; a reconnect must not flash it.
-  assert_true(!dismissed.clear_host_settings().api_setup_banner_visible())
+  // A loading mirror is not a verdict; a reconnect must not flash it.
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, dismissed)
+  assert_true(!reconnected.api_setup_banner_visible())
   // A usable endpoint retires the notice with the modal.
   assert_true(!test_model().api_setup_banner_visible())
   // Its "Set up" reopens the modal, and reopening cancels the dismissal so
@@ -16943,35 +17231,43 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
 
 ///|
 test "a custom endpoint reads as usable only from a plausible URL" {
-  let custom = {
-    ..test_model(),
-    api_provider: Custom,
-    deepseek_key_saved: false,
-  }
+  let custom = test_model().with_host_endpoint(
+    provider=Custom,
+    deepseek_key_saved=false,
+  )
   // A prefix mid-typing must not arm Send or retire the setup modal.
-  assert_true(!{ ..custom, custom_api_url: "", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "h", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "https://", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "ftp://host", }.api_ready())
-  assert_true({ ..custom, custom_api_url: "https://host", }.api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="").api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="h").api_ready())
+  assert_true(!custom.with_host_endpoint(custom_api_url="https://").api_ready())
   assert_true(
-    { ..custom, custom_api_url: " https://host/chat/completions ", }.api_ready(),
+    !custom.with_host_endpoint(custom_api_url="ftp://host").api_ready(),
   )
   assert_true(
-    { ..custom, custom_api_url: "http://127.0.0.1:8080", }.api_ready(),
+    custom.with_host_endpoint(custom_api_url="https://host").api_ready(),
+  )
+  assert_true(
+    custom
+    .with_host_endpoint(custom_api_url=" https://host/chat/completions ")
+    .api_ready(),
+  )
+  assert_true(
+    custom
+    .with_host_endpoint(custom_api_url="http://127.0.0.1:8080")
+    .api_ready(),
   )
 }
 
 ///|
 test "clearing the mirror never leaves an orphaned setup modal" {
-  // A modal left up over the loading sentinel would render default data
-  // with every control disabled; close it with the mirror it was showing.
+  // A modal left up over a loading mirror would render default data with
+  // every control disabled; close it with the mirror it was showing.
+  let dispatch = test_dispatch()
   let open = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
-  assert_true(!open.clear_host_settings().api_setup_open)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, open)
+  assert_true(!reconnected.api_setup_open)
 }
 
 ///|
@@ -16980,10 +17276,9 @@ test "saving from the setup modal stays on the page it opened over" {
   // The modal renders over any screen; completing setup from it must not
   // yank the user to Chat.
   let over_skills = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     management_dialog: Some(Skills),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), over_skills)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
@@ -16992,9 +17287,7 @@ test "saving from the setup modal stays on the page it opened over" {
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
   let custom_half = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "",
+    ..test_model().with_host_endpoint(provider=Custom, custom_api_url=""),
     api_setup_open: true,
   }
   let (_, keyed) = update(
@@ -17011,13 +17304,12 @@ test "saving from the setup modal stays on the page it opened over" {
 test "saving the key from the setup modal retires it" {
   let dispatch = test_dispatch()
   let open = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.deepseek_key_saved)
+  assert_true(saved.test_endpoint().deepseek_key_saved)
   assert_true(saved.screen is Chat)
   assert_true(!saved.api_setup_open)
   assert_eq(saved.setup_api_key, "")
@@ -17028,14 +17320,16 @@ test "a settled host save that completes the setup closes the modal" {
   // A custom URL typed into the modal is saved optimistically; the host's
   // applied confirmation is what retires the modal, not mid-typing.
   let typing = {
-    ..test_model(),
+    ..test_model()
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://ok.example/chat",
+    )
+    .with_host_settings(mirror => { ..mirror, saves: 1, }),
     api_setup_open: true,
-    api_provider: Custom,
-    custom_api_url: "https://ok.example/chat",
-    settings_saves: 1,
     select_menu: Some(ApiProviderMenu),
   }
-  let closed = typing.flush_host_settings()
+  let closed = typing.flush_host_settings(Local)
   assert_true(!closed.api_setup_open)
   assert_true(closed.select_menu is None)
   // The same host reconciliation must not close the API selector when it is
@@ -17045,52 +17339,58 @@ test "a settled host save that completes the setup closes the modal" {
     management_dialog: Some(Settings(Engine)),
     api_setup_open: false,
     select_menu: Some(ApiProviderMenu),
-  }.flush_host_settings()
+  }.flush_host_settings(Local)
   assert_true(page.select_menu == Some(ApiProviderMenu))
   // A flush that leaves the endpoint unusable keeps the modal up.
   let still = {
-    ..test_model(),
+    ..test_model().with_host_settings(_ => {
+      ..HostSettingsMirror::loading(),
+      deferred: Some(host_settings(provider="deepseek")),
+    }),
     api_setup_open: true,
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
-    deferred_host_settings: Some(host_settings(provider="deepseek")),
-    host_settings_revision: -1,
   }
-  assert_true(still.flush_host_settings().api_setup_open)
+  assert_true(still.flush_host_settings(Local).api_setup_open)
 }
 
 ///|
-test "a background device's pushes leave the focused mirrors alone" {
+test "a background device's settings broadcast lands on its own mirror" {
   let dispatch = test_dispatch()
   let background : @interop.ChannelId = Remote("d_bg")
+  let home = test_model()
   let model = {
-    ..test_model(),
+    ..home,
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      home.devices[0],
       { ..empty_device_state(background), bridge: Connected, },
     ],
   }
-  // A settings.changed broadcast from the background device: the form (and
-  // the incomplete-settings redirect) keeps the focused host's state.
   let (_, settled) = update(
     dispatch,
     FromDevice(
       background,
       HostSettingsLoaded(
-        host_settings(provider="deepseek"),
+        host_settings(provider="glm", revision=3),
         connection_generation=None,
       ),
     ),
     model,
   )
-  assert_true(settled.api_provider is Deepseek)
-  assert_true(settled.screen is Chat)
+  // The form (and the setup modal) keep the focused host's state.
+  assert_true(settled.host_settings_mirror() == model.host_settings_mirror())
+  assert_true(settled.api_ready())
+  assert_true(!settled.api_setup_open)
+  guard settled.device_state(background) is Some(dev) &&
+    dev.host_settings.current is Some(current) else {
+    fail("the background device keeps its own snapshot")
+  }
+  assert_true(current.endpoint.provider is Glm)
+  assert_eq(current.revision, 3)
 }
 
 ///|
 test "host settings are deferred while this client's writes are in flight" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), settings_saves: 1, }
+  let model = test_model().with_host_settings(mirror => { ..mirror, saves: 1, })
   // A broadcast (or a stale get reply) arriving mid-write must not clobber
   // the optimistic mirror.
   let (_, ignored) = update_dev(
@@ -17101,8 +17401,8 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  assert_true(ignored.api_provider is Deepseek)
-  inspect(ignored.settings_saves, content="1")
+  assert_true(ignored.api_provider() is Deepseek)
+  inspect(ignored.host_settings_mirror().saves, content="1")
   // The write's own reply reconciles once it is the last one out.
   let (_, settled) = update_dev(
     dispatch,
@@ -17112,12 +17412,12 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  inspect(settled.settings_saves, content="0")
-  assert_true(settled.api_provider is Deepseek)
-  assert_true(settled.deepseek_key_saved)
-  inspect(settled.host_settings_revision, content="2")
+  inspect(settled.host_settings_mirror().saves, content="0")
+  assert_true(settled.api_provider() is Deepseek)
+  assert_true(settled.test_endpoint().deepseek_key_saved)
+  assert_true(settled.host_settings() is Some({ revision: 2, .. }))
   // With more writes still out, even a reply only decrements.
-  let stacked = { ..model, settings_saves: 2, }
+  let stacked = model.with_host_settings(mirror => { ..mirror, saves: 2, })
   let (_, still_pending) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -17126,19 +17426,20 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     stacked,
   )
-  inspect(still_pending.settings_saves, content="1")
-  assert_true(still_pending.api_provider is Deepseek)
+  inspect(still_pending.host_settings_mirror().saves, content="1")
+  assert_true(still_pending.api_provider() is Deepseek)
 }
 
 ///|
 test "a newer peer broadcast beats a delayed local settings reply" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: Custom,
-    settings_saves: 1,
-    host_settings_revision: 5,
-  }
+  let model = test_model()
+    .with_host_settings(mirror => {
+      ..mirror,
+      current: mirror.current.map(current => { ..current, revision: 5, }),
+    })
+    .with_host_endpoint(provider=Custom)
+    .with_host_settings(mirror => { ..mirror, saves: 1, })
   let (_, broadcast) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -17148,7 +17449,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     model,
   )
   // Preserve the optimistic form until the local RPC settles.
-  assert_true(broadcast.api_provider is Custom)
+  assert_true(broadcast.api_provider() is Custom)
   let (_, settled) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -17157,38 +17458,125 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     ),
     broadcast,
   )
-  assert_true(settled.api_provider is Deepseek)
-  inspect(settled.host_settings_revision, content="7")
-  inspect(settled.settings_saves, content="0")
+  assert_true(settled.api_provider() is Deepseek)
+  assert_true(settled.host_settings() is Some({ revision: 7, .. }))
+  inspect(settled.host_settings_mirror().saves, content="0")
 }
 
 ///|
-test "background settings replies cannot alter the focused host mirror" {
+test "focusing a host with cached settings aligns the default model first" {
   let dispatch = test_dispatch()
   let home = test_model()
-  let focused = {
+  let remote : @interop.ChannelId = Remote("d_glm")
+  let model = {
     ..home,
     devices: [
       home.devices[0],
-      { ..empty_device_state(Remote("d_b")), bridge: Connected, },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="glm", has_glm_key=true),
+        ),
+      },
     ],
-    focused: Remote("d_b"),
-    api_provider: Custom,
-    settings_saves: 1,
+    default_model: Deepseek(V4Pro),
+  }
+  let (_, focused) = focus_channel(dispatch, model, remote)
+  assert_true(focused.api_ready())
+  assert_true(focused.default_model is Glm(G53))
+  // A host still loading leaves the preference for its reply to align.
+  let loading = model.map_host_settings(remote, _ => {
+    HostSettingsMirror::loading()
+  })
+  let (_, pending) = focus_channel(dispatch, loading, remote)
+  assert_true(pending.default_model is Deepseek(V4Pro))
+}
+
+///|
+test "a background host's provider change aligns its retained draft" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let remote : @interop.ChannelId = Remote("d_b")
+  // The fresh Local chat stays retained while the user works on `d_b`.
+  assert_true(home.composing_new_chat())
+  let model = {
+    ..home,
+    devices: [
+      home.devices[0],
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="deepseek", has_deepseek_key=true),
+        ),
+      },
+    ],
+    focused: remote,
+  }
+  let (_, changed) = update(
+    dispatch,
+    FromDevice(
+      Local,
+      HostSettingsLoaded(
+        host_settings(provider="glm", revision=1, has_glm_key=true),
+        connection_generation=None,
+      ),
+    ),
+    model,
+  )
+  guard changed.find_conversation(Local, "desktop-test") is Some(draft) else {
+    fail("the retained draft stays")
+  }
+  assert_true(draft.engine_model is Glm(G53))
+  // The default model follows the focused host, not the background one.
+  assert_true(changed.default_model == model.default_model)
+}
+
+///|
+test "a settings write settles on the device it was sent to" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let remote : @interop.ChannelId = Remote("d_b")
+  // The user saved on Local twice, then moved to `d_b` while the writes
+  // were out; `d_b` has a write of its own in flight.
+  let model = {
+    ..home,
+    devices: [
+      {
+        ..home.devices[0],
+        host_settings: { ..home.devices[0].host_settings, saves: 2, },
+      },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: {
+          ..HostSettingsMirror::loading().apply(
+            host_settings(provider="custom", custom_api_url="https://b.example"),
+          ),
+          saves: 1,
+        },
+      },
+    ],
+    focused: remote,
   }
   let (_, applied) = update(
     dispatch,
     FromDevice(
       Local,
       HostSettingsApplied(
-        host_settings(provider="deepseek", revision=7),
+        host_settings(provider="glm", revision=7),
         connection_generation=0,
       ),
     ),
-    focused,
+    model,
   )
-  assert_true(applied.api_provider is Custom)
-  assert_eq(applied.settings_saves, 1)
+  assert_true(applied.host_settings_mirror() == model.host_settings_mirror())
+  guard applied.device_state(Local) is Some(home_dev) else {
+    fail("Local stays connected")
+  }
+  assert_eq(home_dev.host_settings.saves, 1)
+  assert_true(home_dev.host_settings.deferred is Some({ revision: 7, .. }))
   let (_, failed) = update(
     dispatch,
     FromDevice(
@@ -17197,8 +17585,16 @@ test "background settings replies cannot alter the focused host mirror" {
     ),
     applied,
   )
-  assert_eq(failed.settings_saves, 1)
-  assert_eq(failed.notifications.length(), 0)
+  assert_true(failed.host_settings_mirror() == model.host_settings_mirror())
+  guard failed.device_state(Local) is Some(home_dev) &&
+    home_dev.host_settings.current is Some(current) else {
+    fail("Local keeps its snapshot")
+  }
+  // The last write out flushes the newest status held for that device, and
+  // the failure is still the user's to see.
+  assert_eq(home_dev.host_settings.saves, 0)
+  assert_true(current.endpoint.provider is Glm)
+  assert_eq(failed.notifications.length(), 1)
 }
 
 ///|
@@ -17236,18 +17632,17 @@ test "the tree-layout setting parses its wire names" {
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model(),
+    ..test_model().with_host_endpoint(deepseek_key_saved=false),
     setup_api_key: "typed",
-    deepseek_key_saved: false,
   }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
-  assert_true(once.api_provider is Deepseek)
-  assert_true(twice.api_provider is Deepseek)
+  assert_true(once.api_provider() is Deepseek)
+  assert_true(twice.api_provider() is Deepseek)
   inspect(once.setup_api_key, content="")
   inspect(twice.setup_api_key, content="")
-  inspect(once.settings_saves, content="1")
-  inspect(twice.settings_saves, content="1")
+  inspect(once.host_settings_mirror().saves, content="1")
+  inspect(twice.host_settings_mirror().saves, content="1")
   assert_true(once.display_status() is ApiKeyRequired)
   assert_true(twice.display_status() is ApiKeyRequired)
 }
@@ -17256,70 +17651,70 @@ test "update is pure: a provider change is idempotent" {
 test "saving a key marks the active provider credential only" {
   let dispatch = test_dispatch()
   let deepseek = {
-    ..test_model(),
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
+    ..test_model().with_host_endpoint(
+      provider=Deepseek,
+      deepseek_key_saved=false,
+    ),
     setup_api_key: "  sk-new  ",
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
-  assert_true(saved_deepseek.deepseek_key_saved)
-  assert_false(saved_deepseek.custom_key_saved)
+  assert_true(saved_deepseek.test_endpoint().deepseek_key_saved)
+  assert_false(saved_deepseek.test_endpoint().custom_key_saved)
   inspect(saved_deepseek.setup_api_key, content="")
-  inspect(saved_deepseek.settings_saves, content="1")
+  inspect(saved_deepseek.host_settings_mirror().saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
   assert_true(saved_deepseek.management_dialog is Some(Settings(Engine)))
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
-    ..test_model(),
-    api_provider: Custom,
-    deepseek_key_saved: false,
-    custom_api_url: "https://proxy.example/chat/completions",
+    ..test_model().with_host_endpoint(
+      provider=Custom,
+      deepseek_key_saved=false,
+      custom_api_url="https://proxy.example/chat/completions",
+    ),
     setup_api_key: "  sk-custom-new  ",
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
-  assert_false(saved_custom.deepseek_key_saved)
-  assert_true(saved_custom.custom_key_saved)
+  assert_false(saved_custom.test_endpoint().deepseek_key_saved)
+  assert_true(saved_custom.test_endpoint().custom_key_saved)
   assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
-    ..test_model(),
-    api_provider: Glm,
-    deepseek_key_saved: false,
-    glm_key_saved: false,
+    ..test_model().with_host_endpoint(
+      provider=Glm,
+      deepseek_key_saved=false,
+      glm_key_saved=false,
+    ),
     setup_api_key: "  glm-new  ",
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
-  assert_true(saved_glm.glm_key_saved)
-  assert_false(saved_glm.deepseek_key_saved)
-  assert_false(saved_glm.custom_key_saved)
+  assert_true(saved_glm.test_endpoint().glm_key_saved)
+  assert_false(saved_glm.test_endpoint().deepseek_key_saved)
+  assert_false(saved_glm.test_endpoint().custom_key_saved)
   assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
-    ..test_model(),
-    api_provider: OpenRouter,
-    deepseek_key_saved: false,
-    custom_key_saved: false,
+    ..test_model().with_host_endpoint(
+      provider=OpenRouter,
+      deepseek_key_saved=false,
+      custom_key_saved=false,
+    ),
     setup_api_key: "  sk-openrouter-new  ",
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
-  assert_true(saved_openrouter.custom_key_saved)
-  assert_false(saved_openrouter.deepseek_key_saved)
+  assert_true(saved_openrouter.test_endpoint().custom_key_saved)
+  assert_false(saved_openrouter.test_endpoint().deepseek_key_saved)
 }
 
 ///|
 /// Conversation navigation must still work beneath Settings.
 test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: Deepseek,
-    management_dialog: Some(Settings(Engine)),
-  }
+  let model = { ..test_model(), management_dialog: Some(Settings(Engine)), }
   let (_, next) = update(
     dispatch,
     SessionRotated({ channel: Local, session: "s-fresh", }),
@@ -19830,6 +20225,7 @@ test "file editor context reports the file body actual visibility" {
 
 ///|
 test "only synchronous file-open messages suppress panel reactivation" {
+  let host = test_model()
   let owner : @interop.ConversationKey = {
     channel: Local,
     session: "desktop-test",
@@ -19838,14 +20234,14 @@ test "only synchronous file-open messages suppress panel reactivation" {
     owner: @interop.Host(owner),
     archive_generation: 0,
   }
-  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation())
+  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation(host))
   assert_false(
     ComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
     CodexComposerAction(
@@ -19853,24 +20249,26 @@ test "only synchronous file-open messages suppress panel reactivation" {
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
-    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
+    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(
+      host,
+    ),
   )
   assert_false(
-    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(host),
   )
   assert_true(
     OpenPathResolved(
       FileOpenContext::new(owner, 1),
       Editor({ path: "a.mbt", line: Some(1), column: None, }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   // This only starts the asynchronous host lookup. The later OpenPathResolved is
   // the message that actually opens the document.
-  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation())
-  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation())
+  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation(host))
+  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation(host))
 }
 
 ///|
@@ -21696,10 +22094,10 @@ test "switching the chat provider leaves the update answer alone" {
     ProviderChanged("openseek-staging"),
     available,
   )
-  assert_true(switched.api_provider is Deepseek)
+  assert_true(switched.api_provider() is Deepseek)
   assert_true(switched.update_ux is UpdateAvailable(..))
   let (_, kept) = update(dispatch, ProviderChanged("custom"), available)
-  assert_true(kept.api_provider is Custom)
+  assert_true(kept.api_provider() is Custom)
   assert_true(kept.update_ux is UpdateAvailable(..))
 }
 
@@ -22646,7 +23044,7 @@ test "remote access walks connect states and dedups clicks" {
     connecting,
   )
   assert_false(failed.remote_connecting)
-  assert_true(failed.remote_error is Some("nope"))
+  assert_true(failed.account_error is Some("nope"))
   let signed_in : RemoteAccess = { ..signed_out, connected: true, }
   let (_, done) = update(dispatch, RemoteStatusLoaded(signed_in), connecting)
   assert_true(done.remote_connecting)
@@ -24371,4 +24769,40 @@ test "a subagent of an archived conversation opens from the archive" {
     is Some({ session: "desktop-parent-sr-1", record: ArchivedRecord, .. }) else {
     fail("expected the child to open from the archive")
   }
+}
+
+///|
+fn open_host_import(
+  dispatch : @cmd.Emit[Msg],
+  cmd : @cmd.Cmd,
+  model : Model,
+  target : @session_import.HostTarget,
+  session_id : String,
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(target.channel) is Some(dev) &&
+    dev.connection_generation == target.connection_generation &&
+    model.console.page_device is Some(device) else {
+    return (cmd, model)
+  }
+  let (focus, model) = focus_channel(dispatch, model, target.channel)
+  let (sessions, model) = request_sessions_refresh(
+    dispatch,
+    target.channel,
+    model,
+  )
+  let (visit, model) = navigation_visit(
+    model,
+    { device: Some(device), target: Session(session_id), },
+    replace=false,
+  )
+  // The ordinary navigation resolver opens the session once its catalog
+  // row arrives. Workspace and worktree notifications use their existing
+  // handlers; the import reply carries no inventory snapshot.
+  (
+    @cmd.batch([cmd, focus, sessions, visit]),
+    {
+      ..model,
+      navigation: { ..model.navigation, phase: Waiting, sessions: None, },
+    },
+  )
 }

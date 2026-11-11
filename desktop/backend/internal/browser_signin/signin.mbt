@@ -114,15 +114,14 @@ fn return_path(requested : String?) -> String {
 /// Trade the one-time code for the account, returned as the relay's JSON.
 async fn exchange(relay : String, code~ : String, verifier~ : String) -> String {
   let request : Json = { "code": code, "code_verifier": verifier }
-  let (response, body) = @http.post(
+  let (response, text) = @http.post_text(
     "\{relay}/v2/auth/account/exchange",
-    request,
+    request.stringify(),
     headers={ "Content-Type": "application/json" },
   )
   guard response.code == 200 else {
     fail("the relay answered HTTP \{response.code}")
   }
-  let text = body.text()
   guard @json.parse(text)
     is { "token": String(token), "user": { "user_id": String(_), .. }, .. } &&
     !token.is_empty() else {

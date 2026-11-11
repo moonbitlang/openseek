@@ -1,14 +1,21 @@
 import {
   "moonbitlang/openseek/agent_session",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/json",
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/openseek/agent_session/store",
 } for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation"
 
 supported_targets = "+native+wasm"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

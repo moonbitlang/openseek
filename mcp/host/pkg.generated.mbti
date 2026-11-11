@@ -2,9 +2,8 @@
 package "moonbitlang/openseek/mcp/host"
 
 import {
-  "moonbitlang/async",
-  "moonbitlang/core/json",
-  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/core/async",
+  "moonbitlang/openseek/mcp/tools",
 }
 
 // Values
@@ -14,7 +13,7 @@ import {
 // Types and methods
 type Service
 pub fn Service::env(Self) -> Map[String, String]
-pub async fn[X] Service::start(@async.TaskGroup[X], call~ : async (String, String, @json.Json) -> @agent_tool.ToolAction, items~ : () -> Array[@json.Json], image_directory? : String) -> Self
+pub async fn Service::start(@async.TaskGroup, Array[@tools.Server], image_directory? : String) -> Self
 
 // Type aliases
 

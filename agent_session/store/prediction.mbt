@@ -11,8 +11,8 @@ async fn read_prediction(
   store : SessionStore,
   id : @agent_session.SessionId,
 ) -> @protocol.PredictionRecord? {
-  let text = @fs.read_file(store.prediction_path(id)).text() catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+  let text = @fs.read_text(store.prediction_path(id)) catch {
+    @os_error.OsError(NotFound, ..) => return None
     error => raise error
   }
   let json = @json.parse(text)

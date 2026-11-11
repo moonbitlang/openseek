@@ -74,6 +74,157 @@ pub impl FromJson for ScheduleRunStatus with fn from_json(json, path) {
 }
 
 ///|
+/// Why a due occurrence of a schedule did not launch.
+#derive(Eq, Debug)
+pub(all) enum ScheduleSkip {
+  /// The schedule's previous run had not finished.
+  PreviousRunActive
+  /// Every execution slot was taken by other runs.
+  CapacityFull
+  /// The host was late by more than a minute, e.g. after sleep.
+  MissedTime
+  /// The host could not name the automatic working folder.
+  AutomaticFolderUnavailable
+}
+
+///|
+pub impl ToJson for ScheduleSkip with fn to_json(self) {
+  match self {
+    PreviousRunActive => "previous_run_active"
+    CapacityFull => "capacity_full"
+    MissedTime => "missed_time"
+    AutomaticFolderUnavailable => "automatic_folder_unavailable"
+  }
+}
+
+///|
+pub impl FromJson for ScheduleSkip with fn from_json(json, path) {
+  match json {
+    "previous_run_active" => PreviousRunActive
+    "capacity_full" => CapacityFull
+    "missed_time" => MissedTime
+    "automatic_folder_unavailable" => AutomaticFolderUnavailable
+    _ => raise JsonDecodeError((path, "unknown schedule skip reason"))
+  }
+}
+
+///|
+#derive(Eq, Debug)
+pub(all) enum ScheduleAction {
+  Pause
+  Resume
+  Run
+  Stop
+  Delete
+}
+
+///|
+pub impl ToJson for ScheduleAction with fn to_json(self) {
+  match self {
+    Pause => "pause"
+    Resume => "resume"
+    Run => "run"
+    Stop => "stop"
+    Delete => "delete"
+  }
+}
+
+///|
+pub impl FromJson for ScheduleAction with fn from_json(json, path) {
+  match json {
+    "pause" => Pause
+    "resume" => Resume
+    "run" => Run
+    "stop" => Stop
+    "delete" => Delete
+    _ => raise JsonDecodeError((path, "unknown schedule action"))
+  }
+}
+
+///|
+/// Why the host declined a schedule change. Each is a state the user can
+/// correct; failures to read or save the store stay on the error channel.
+#derive(Eq, Debug)
+pub(all) enum ScheduleRefusal {
+  /// Another host on this computer owns the schedules.
+  ForeignOwner
+  /// The schedule was deleted, e.g. from another window.
+  Missing
+  /// The chosen project is not attached to this host.
+  UnattachedProject
+  /// A one-time schedule's time has already passed.
+  PastTime
+  /// A run of this schedule is in progress.
+  AlreadyRunning
+  /// A Run now request for this schedule is waiting for a slot.
+  AlreadyQueued
+  /// A schedule cannot be deleted while it runs.
+  StopBeforeDelete
+}
+
+///|
+pub impl ToJson for ScheduleRefusal with fn to_json(self) {
+  match self {
+    ForeignOwner => "foreign_owner"
+    Missing => "missing"
+    UnattachedProject => "unattached_project"
+    PastTime => "past_time"
+    AlreadyRunning => "already_running"
+    AlreadyQueued => "already_queued"
+    StopBeforeDelete => "stop_before_delete"
+  }
+}
+
+///|
+pub impl FromJson for ScheduleRefusal with fn from_json(json, path) {
+  match json {
+    "foreign_owner" => ForeignOwner
+    "missing" => Missing
+    "unattached_project" => UnattachedProject
+    "past_time" => PastTime
+    "already_running" => AlreadyRunning
+    "already_queued" => AlreadyQueued
+    "stop_before_delete" => StopBeforeDelete
+    _ => raise JsonDecodeError((path, "unknown schedule refusal"))
+  }
+}
+
+///|
+/// The reply to `schedules.save` and `schedules.action`.
+#derive(Eq, Debug)
+pub(all) enum ScheduleChangeReply {
+  Changed(SchedulesReply)
+  Refused(ScheduleRefusal)
+}
+
+///|
+pub impl ToJson for ScheduleChangeReply with fn to_json(self) {
+  match self {
+    Changed(state) => { "status": "changed", "state": state.to_json() }
+    Refused(reason) => { "status": "refused", "reason": reason.to_json() }
+  }
+}
+
+///|
+pub impl FromJson for ScheduleChangeReply with fn from_json(json, path) {
+  let obj = JsonObject::decode(json, path, "ScheduleChangeReply")
+  match obj.required_string("status") {
+    "changed" =>
+      Changed(
+        @json.from_json(obj.required_json("state"), path=path.add_key("state")),
+      )
+    "refused" =>
+      Refused(
+        @json.from_json(
+          obj.required_json("reason"),
+          path=path.add_key("reason"),
+        ),
+      )
+    _ => raise JsonDecodeError((path, "unknown schedule change status"))
+  }
+}
+
+///|
 #derive(Eq, Debug)
 pub(all) struct ScheduleSpec {
   name : String
@@ -151,7 +302,8 @@ pub(all) struct ScheduleEntry {
   spec : ScheduleSpec
   enabled : Bool
   run_requested : Bool
-  notice : String?
+  // Why the most recent occurrence did not launch, until the next one does.
+  skipped : ScheduleSkip?
   next_at : Int64?
 }
 
@@ -178,11 +330,13 @@ pub impl FromJson for ScheduleEntry with fn from_json(json, path) {
     obj.required_json("run_requested"),
     path=path.add_key("run_requested"),
   )
-  let notice : String? = match obj.optional_json("notice") {
+  // A store saved before `skipped` existed carries a free-text `notice`,
+  // which decoding ignores like any unknown field.
+  let skipped : ScheduleSkip? = match obj.optional_json("skipped") {
     None => None
-    Some(value) => Some(@json.from_json(value, path=path.add_key("notice")))
+    Some(value) => Some(@json.from_json(value, path=path.add_key("skipped")))
   }
-  { id, spec, enabled, run_requested, notice, next_at, }
+  { id, spec, enabled, run_requested, skipped, next_at, }
 }
 
 ///|
@@ -192,8 +346,8 @@ pub impl ToJson for ScheduleEntry with fn to_json(self) {
   fields["spec"] = self.spec.to_json()
   fields["enabled"] = Json(self.enabled)
   fields["run_requested"] = Json(self.run_requested)
-  if self.notice is Some(value) {
-    fields["notice"] = Json(value)
+  if self.skipped is Some(value) {
+    fields["skipped"] = value.to_json()
   }
   if self.next_at is Some(value) {
     fields["next_at"] = Json(value.to_double())
@@ -354,7 +508,7 @@ pub impl ToJson for ScheduleSavePayload with fn to_json(self) {
 #derive(Eq, Debug)
 pub(all) struct ScheduleActionPayload {
   id : String
-  action : String
+  action : ScheduleAction
 }
 
 ///|
@@ -364,13 +518,10 @@ pub impl FromJson for ScheduleActionPayload with fn from_json(json, path) {
     obj.required_json("id"),
     path=path.add_key("id"),
   )
-  let action : String = @json.from_json(
+  let action : ScheduleAction = @json.from_json(
     obj.required_json("action"),
     path=path.add_key("action"),
   )
-  guard action is ("pause" | "resume" | "run" | "stop" | "delete") else {
-    raise JsonDecodeError((path, "unknown schedule action"))
-  }
   { id, action, }
 }
 
@@ -378,7 +529,7 @@ pub impl FromJson for ScheduleActionPayload with fn from_json(json, path) {
 pub impl ToJson for ScheduleActionPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["id"] = Json(self.id)
-  fields["action"] = Json(self.action)
+  fields["action"] = self.action.to_json()
   Json(fields)
 }
 
@@ -477,3 +628,51 @@ pub extend ScheduleActionPayload with ToJson::{to_json}
 
 ///|
 pub extend ScheduleActionPayload with FromJson::{from_json}
+
+///|
+pub extend ScheduleSkip with Eq::{equal, not_equal}
+
+///|
+pub extend ScheduleSkip with Debug::{to_repr}
+
+///|
+pub extend ScheduleSkip with ToJson::{to_json}
+
+///|
+pub extend ScheduleSkip with FromJson::{from_json}
+
+///|
+pub extend ScheduleAction with Eq::{equal, not_equal}
+
+///|
+pub extend ScheduleAction with Debug::{to_repr}
+
+///|
+pub extend ScheduleAction with ToJson::{to_json}
+
+///|
+pub extend ScheduleAction with FromJson::{from_json}
+
+///|
+pub extend ScheduleRefusal with Eq::{equal, not_equal}
+
+///|
+pub extend ScheduleRefusal with Debug::{to_repr}
+
+///|
+pub extend ScheduleRefusal with ToJson::{to_json}
+
+///|
+pub extend ScheduleRefusal with FromJson::{from_json}
+
+///|
+pub extend ScheduleChangeReply with Eq::{equal, not_equal}
+
+///|
+pub extend ScheduleChangeReply with Debug::{to_repr}
+
+///|
+pub extend ScheduleChangeReply with ToJson::{to_json}
+
+///|
+pub extend ScheduleChangeReply with FromJson::{from_json}

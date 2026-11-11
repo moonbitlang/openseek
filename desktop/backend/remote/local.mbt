@@ -144,7 +144,7 @@ async fn LocalConsole::handle(
         respond_status(conn, 401, "Unauthorized")
         return
       }
-      let (response, body) = @http.post(
+      let (response, body) = @http.post_text(
         self.account_origin + "/v2/auth/logout",
         "",
         headers={ "Authorization": authorization },
@@ -154,7 +154,7 @@ async fn LocalConsole::handle(
           return
         }
       }
-      respond_account_page(conn, body.text(), code=response.code, html=false)
+      respond_account_page(conn, body, code=response.code, html=false)
     }
     Devices =>
       respond_json(conn, {
@@ -213,7 +213,7 @@ async fn LocalConsole::handle(
 /// debugging clients and document navigations may omit Origin.
 fn LocalConsole::request_allowed(
   self : LocalConsole,
-  request : @http.Request,
+  request : @http.RequestHeader,
 ) -> Bool {
   guard request.headers.get("host") is Some(host) &&
     "http://" + host == self.origin() else {
@@ -231,7 +231,7 @@ fn LocalConsole::request_allowed(
 /// accepted instead of dialled.
 async fn serve_ws(
   state : @api.ApiState,
-  request : @http.Request,
+  request : @http.RequestHeader,
   conn : @http.ServerConnection,
 ) -> Unit {
   let ws = @websocket.from_http_server(request, conn)
@@ -252,8 +252,8 @@ async fn serve_static(
 ) -> Unit {
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
-  let body = @fs.read_file("\{root}/\{relative}").binary() catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => {
+  let body = @fs.read_binary("\{root}/\{relative}") catch {
+    @os_error.OsError(NotFound, ..) => {
       respond_status(conn, 404, "Not Found")
       return
     }
@@ -302,7 +302,7 @@ async fn respond_json(conn : @http.ServerConnection, body : Json) -> Unit {
     "Cache-Control": "no-store",
     "Connection": "close",
   })
-  conn.write(text)
+  conn.write_string(text)
   conn.end_response()
 }
 
@@ -502,6 +502,6 @@ async fn respond_account_page(
     "Cache-Control": "no-store",
     "Connection": "close",
   })
-  conn.write(body)
+  conn.write_string(body)
   conn.end_response()
 }

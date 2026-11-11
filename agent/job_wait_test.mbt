@@ -41,12 +41,13 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
         runtime.queue_steer(Notice("JOB-COMPLETE \{job.id}"))
       })
       let (input, release) = @process.write_to_process()
+      defer input.close()
       defer release.close()
       let id = jobs.start(
         program="/bin/cat",
         args=[],
         command="gated result",
-        stdin=input,
+        stdin=Shared(input),
       )
       let bodies : Array[String] = []
       let responses = [
@@ -96,7 +97,7 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
       assert_eq(bodies.length(), 1)
       match wake {
         Complete => {
-          release.write("RESULT\n")
+          release.text.write("RESULT\n")
           release.close()
         }
         UserInput =>
@@ -217,13 +218,14 @@ async fn exercise_plain_finish(existing : Bool) -> Unit {
     let scope = @agent_runtime.AgentTaskScope(group)
     let jobs = @bgjobs.BgJobRuntime(scope)
     let (input, release) = @process.write_to_process()
+    defer input.close()
     defer release.close()
     async fn start_job() -> Unit {
       let _ = jobs.start(
         program="/bin/cat",
         args=[],
         command="long lived server",
-        stdin=input,
+        stdin=Shared(input),
       )
     }
     if existing {

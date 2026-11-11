@@ -56,7 +56,7 @@ async fn ProjectCatalog::resolve(
   if self.roots.get(cwd) is Some(cached) {
     return Some(cached)
   }
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
+  let result = @processx.collect_output_no_stdin(
     "git",
     ["worktree", "list", "--porcelain"],
     cwd~,
@@ -67,8 +67,9 @@ async fn ProjectCatalog::resolve(
       return Some(cwd)
     }
   }
+  let code = result.exit_code
   if code == 0 {
-    let output = stdout.text() catch { _ => "" }
+    let output = result.stdout_text() catch { _ => "" }
     if self.record_worktrees(cwd, output) is Some(project) {
       return Some(project)
     }

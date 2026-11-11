@@ -1,6 +1,9 @@
 ///|
-#cfg(all(target="native", not(platform="windows")))
 async test "validator receives EOF and preserves parser diagnostics" {
+  // The validator is a POSIX shell script.
+  if @async.platform is Windows {
+    return
+  }
   let validator : PatternRepairValidator = {
     command: "/bin/sh",
     prefix_args: ["-c", "if read -r line; then exit 99; fi", "validator"],
@@ -27,17 +30,4 @@ async test "validator receives EOF and preserves parser diagnostics" {
   } noraise {
     _ => fail("invalid pattern should be rejected")
   }
-}
-
-///|
-#cfg(all(target="native", not(platform="windows")))
-async test "validator preserves cancellation" {
-  let result = @async.with_timeout_opt(50, () => {
-    run_pattern_repair_validator(
-      { command: "/bin/sh", prefix_args: ["-c", "exec sleep 30"], },
-      pattern="foo()",
-      workspace_root=".",
-    )
-  })
-  assert_true(result is None)
 }

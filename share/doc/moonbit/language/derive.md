@@ -2,20 +2,35 @@
 
 MoonBit supports deriving a number of builtin traits automatically from the type definition.
 
-To derive a trait `T`, it is required that all fields used in the type implements `T`.
-For example, deriving `Show` for a struct `struct A { x: T1; y: T2 }` requires both `T1: Show` and `T2: Show`
+Place `#derive(...)` before the type definition. Run `moon fmt` to migrate
+the older trailing `derive(...)` syntax.
+
+To derive a trait `T`, all fields used in the type must implement `T`.
+For example, deriving `Debug` for a struct `struct A { x: T1; y: T2 }`
+requires both `T1 : Debug` and `T2 : Debug`.
+
+`derive` generates a trait implementation. The examples below also use
+[`extend`](https://docs.moonbitlang.com/en/latest/language/methods.html#attaching-trait-methods-with-extend) to state explicitly
+which generated trait functions are part of the type's method-style API. This
+avoids relying on the deprecated implicit attachment of methods from an
+implementation.
 
 ## Eq and Compare
 
-`derive(Eq)` and `derive(Compare)` will generate the corresponding method for testing equality and comparison.
+`#derive(Eq)` and `#derive(Compare)` generate the corresponding implementations for testing equality and comparison.
 Fields are compared in the same order as their definitions.
 For enums, the order between cases ascends in the order of definition.
 
 ```moonbit
+#derive(Eq, Compare)
 struct DeriveEqCompare {
-  x : Int
-  y : Int
-} derive(Eq, Compare)
+  x : Int32
+  y : Int32
+}
+
+pub extend DeriveEqCompare with Eq::{not_equal, equal}
+
+pub extend DeriveEqCompare with Compare::{op_lt, op_le, op_ge, compare, op_gt}
 
 test "derive eq_compare struct" {
   let p1 = DeriveEqCompare::{ x: 1, y: 2 }
@@ -44,11 +59,16 @@ test "derive eq_compare struct" {
 ```
 
 ```moonbit
+#derive(Eq, Compare)
 enum DeriveEqCompareEnum {
-  Case1(Int)
+  Case1(Int32)
   Case2(label~ : String)
   Case3
-} derive(Eq, Compare)
+}
+
+pub extend DeriveEqCompareEnum with Eq::{not_equal, equal}
+
+pub extend DeriveEqCompareEnum with Compare::{op_lt, op_le, op_ge, compare, op_gt}
 
 test "derive eq_compare enum" {
   let p1 = DeriveEqCompareEnum::Case1(42)
@@ -79,14 +99,17 @@ test "derive eq_compare enum" {
 
 ## Debug
 
-`derive(Debug)` will generate a structural debugging implementation for the type.
+`#derive(Debug)` generates a structural debugging implementation for the type.
 It is useful with `debug_inspect` in tests and `@debug.to_string` when formatting diagnostic messages.
 
 ```moonbit
+#derive(Debug)
 struct DebugPoint {
-  x : Int
-  y : Int
-} derive(Debug)
+  x : Int32
+  y : Int32
+}
+
+pub extend DebugPoint with Debug::{to_repr}
 
 test "derive debug struct" {
   let point = DebugPoint::{ x: 1, y: 2 }
@@ -97,10 +120,13 @@ test "derive debug struct" {
 Enums can derive `Debug` as well:
 
 ```moonbit
+#derive(Debug)
 enum DebugShape {
-  Circle(radius~ : Int)
-  Rect(width~ : Int, height~ : Int)
-} derive(Debug)
+  Circle(radius~ : Int32)
+  Rect(width~ : Int32, height~ : Int32)
+}
+
+pub extend DebugShape with Debug::{to_repr}
 
 test "derive debug enum" {
   let shape = DebugShape::Rect(width=3, height=4)
@@ -110,19 +136,23 @@ test "derive debug enum" {
 
 ## Default
 
-`derive(Default)` generates a `Default` implementation for the type. Call
+`#derive(Default)` generates a `Default` implementation for the type. Call
 `Default::default()` with the expected type specified so MoonBit can select the
-implementation. Deriving the trait does not by itself attach `default` as a
-type method; use an explicit [`extend`](https://docs.moonbitlang.com/en/latest/language/methods.html#attaching-trait-methods-with-extend)
-declaration if a method-style API is desired.
+implementation. Use an explicit `extend` declaration if `default` should also
+be part of the type's method-style API.
 
 For structs, the default value is the struct with all fields set as their default value.
 
 ```moonbit
+#derive(Default, Eq)
 struct DeriveDefault {
-  x : Int
+  x : Int32
   y : String?
-} derive(Default, Eq)
+}
+
+pub extend DeriveDefault with Default::{default}
+
+pub extend DeriveDefault with Eq::{not_equal, equal}
 
 test "derive default struct" {
   let p : DeriveDefault = Default::default()
@@ -133,11 +163,16 @@ test "derive default struct" {
 For enums, the default value is the only case that has no parameters.
 
 ```moonbit
+#derive(Default, Eq)
 enum DeriveDefaultEnum {
-  Case1(Int)
+  Case1(Int32)
   Case2(label~ : String)
   Case3
-} derive(Default, Eq)
+}
+
+pub extend DeriveDefaultEnum with Default::{default}
+
+pub extend DeriveDefaultEnum with Eq::{not_equal, equal}
 
 test "derive default enum" {
   let value : DeriveDefaultEnum = Default::default()
@@ -149,28 +184,35 @@ Enums that has no cases or more than one cases without parameters cannot derive 
 
 <!-- MANUAL CHECK  should not compile -->
 ```moonbit
+#derive(Default) // cannot find a constant constructor as default
 enum CannotDerive1 {
     Case1(String)
-    Case2(Int)
-} derive(Default) // cannot find a constant constructor as default
+    Case2(Int32)
+}
 
+#derive(Default) // Case1 and Case2 are both candidates as default constructor
 enum CannotDerive2 {
     Case1
     Case2
-} derive(Default) // Case1 and Case2 are both candidates as default constructor
+}
 ```
 
 ## Hash
 
-`derive(Hash)` will generate a hash implementation for the type.
+`#derive(Hash)` generates a hash implementation for the type.
 This will allow the type to be used in places that expects a `Hash` implementation,
 for example `HashMap`s and `HashSet`s.
 
 ```moonbit
+#derive(Hash, Eq)
 struct DeriveHash {
-  x : Int
+  x : Int32
   y : String?
-} derive(Hash, Eq)
+}
+
+pub extend DeriveHash with Hash::{hash, hash_combine}
+
+pub extend DeriveHash with Eq::{not_equal, equal}
 
 test "derive hash struct" {
   let hs = @hashset.HashSet([])
@@ -184,11 +226,11 @@ test "derive hash struct" {
 
 ## Arbitrary
 
-`derive(Arbitrary)` will generate random values of the given type.
+`#derive(Arbitrary)` will generate random values of the given type.
 
 ## Shrink
 
-`derive(Shrink)` implements `@quickcheck.Shrink` for property-based testing.
+`#derive(Shrink)` implements `@quickcheck.Shrink` for property-based testing.
 Struct fields are shrunk one at a time in source order. Enum values keep their
 current constructor while its payload is shrunk; constructors without payloads
 produce no candidates. Every field or payload used by the derived
@@ -196,10 +238,14 @@ implementation must itself implement `Shrink`.
 
 ```moonbit
 ///|
+#derive(Shrink)
 struct ShrinkPoint {
-  x : Int
-  y : Int
-} derive(Shrink)
+  x : Int32
+  y : Int32
+}
+
+///|
+pub extend ShrinkPoint with @shrink.Shrink::{shrink}
 
 ///|
 fn shrink_candidates(point : ShrinkPoint) -> Iter[ShrinkPoint] {
@@ -215,21 +261,35 @@ test "derive shrink struct" {
 
 ## FromJson and ToJson
 
-`derive(FromJson)` and `derive(ToJson)` automatically generate round-trippable
+`#derive(FromJson)` and `#derive(ToJson)` automatically generate round-trippable
 trait implementations used for serializing the type to and from JSON. Trait
 functions can be called with qualified syntax such as `ToJson::to_json(value)`.
 The implementation is mainly for debugging and storing the types in a human-readable format.
 
 ```moonbit
+#derive(FromJson, ToJson, Eq)
 struct JsonTest1 {
-  x : Int
-  y : Int
-} derive(FromJson, ToJson, Eq)
+  x : Int32
+  y : Int32
+}
 
+pub extend JsonTest1 with @moonbitlang/core/json.FromJson::{from_json}
+
+pub extend JsonTest1 with ToJson::{to_json}
+
+pub extend JsonTest1 with Eq::{not_equal, equal}
+
+#derive(FromJson(style="legacy"), ToJson(style="legacy"), Eq)
 enum JsonTest2 {
-  A(x~ : Int)
-  B(x~ : Int, y~ : Int)
-} derive(FromJson(style="legacy"), ToJson(style="legacy"), Eq)
+  A(x~ : Int32)
+  B(x~ : Int32, y~ : Int32)
+}
+
+pub extend JsonTest2 with @moonbitlang/core/json.FromJson::{from_json}
+
+pub extend JsonTest2 with ToJson::{to_json}
+
+pub extend JsonTest2 with Eq::{not_equal, equal}
 
 test "json basic" {
   let input = JsonTest1::{ x: 123, y: 456 }
@@ -258,19 +318,29 @@ For such usage and future usage of them, please manually implement the traits.
 The arguments include: `repr`, `case_repr`, `default`, `rename_all`, etc.
 
 ```moonbit
+#derive(FromJson(fields(x(rename="renamedX"))), ToJson(fields(x(rename="renamedX"))), Eq)
 struct JsonTest3 {
-  x : Int
-  y : Int
-} derive (
-  FromJson(fields(x(rename="renamedX"))),
-  ToJson(fields(x(rename="renamedX"))),
-  Eq,
-)
+  x : Int32
+  y : Int32
+}
 
+pub extend JsonTest3 with @moonbitlang/core/json.FromJson::{from_json}
+
+pub extend JsonTest3 with ToJson::{to_json}
+
+pub extend JsonTest3 with Eq::{not_equal, equal}
+
+#derive(FromJson, ToJson, Eq)
 enum JsonTest4 {
-  A(x~ : Int)
-  B(x~ : Int, y~ : Int)
-} derive(FromJson, ToJson, Eq)
+  A(x~ : Int32)
+  B(x~ : Int32, y~ : Int32)
+}
+
+pub extend JsonTest4 with @moonbitlang/core/json.FromJson::{from_json}
+
+pub extend JsonTest4 with ToJson::{to_json}
+
+pub extend JsonTest4 with Eq::{not_equal, equal}
 
 test "json args" {
   let input = JsonTest3::{ x: 123, y: 456 }
@@ -293,12 +363,12 @@ Considering the following enum definition:
 ```moonbit
 enum E {
   One
-  Uniform(Int)
-  Axes(x~: Int, y~: Int)
+  Uniform(Int32)
+  Axes(x~: Int32, y~: Int32)
 }
 ```
 
-With `derive(ToJson(style="legacy"))`, the enum is formatted into:
+With `#derive(ToJson(style="legacy"))`, the enum is formatted into:
 
 ```none
 E::One              => { "$tag": "One" }
@@ -306,7 +376,7 @@ E::Uniform(2)       => { "$tag": "Uniform", "0": 2 }
 E::Axes(x=-1, y=1)  => { "$tag": "Axes", "x": -1, "y": 1 }
 ```
 
-With `derive(ToJson(style="flat"))`, the enum is formatted into:
+With `#derive(ToJson(style="flat"))`, the enum is formatted into:
 
 ```none
 E::One              => "One"
@@ -324,11 +394,14 @@ As a result, it interpreted as `T | undefined` iff it is a direct field
 of a struct, and `[T] | null` otherwise:
 
 ```moonbit
+#derive(ToJson)
 struct A {
-  x : Int?
-  y : Int??
-  z : (Int?, Int??)
-} derive(ToJson)
+  x : Int32?
+  y : Int32??
+  z : (Int32?, Int32??)
+}
+
+pub extend A with ToJson::{to_json}
 
 test {
   json_inspect({ x: None, y: None, z: (None, None) }, content={
@@ -391,8 +464,8 @@ test {
   For example, for a struct
   ```moonbit
   struct S {
-    x: Int
-    y: Int
+    x: Int32
+    y: Int32
   }
   ```
 

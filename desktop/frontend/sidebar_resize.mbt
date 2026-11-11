@@ -12,11 +12,10 @@
 const ResizingClass = "is-resizing"
 
 ///|
-/// The sidebar never shrinks below this. Mirrors the CSS `clamp` floor.
+/// Width bounds at the default 15px font size; keep aligned with base.css.
 const MinSidebarWidth = 220
 
 ///|
-/// The sidebar never grows past this. Mirrors the CSS `clamp` ceiling.
 const MaxSidebarWidth = 480
 
 ///|
@@ -95,22 +94,22 @@ fn on_sidebar_resize_move(event : @dom.Event) -> Unit {
     return
   }
   let rect = app.get_bounding_client_rect()
+  let pixels_per_rem = AppFontSize::current().base_pixels().to_double()
   set_sidebar_width(
     drag_width(
-      mouse.get_client_x() - rect.get_left(),
-      ceiling=rect.get_width() - MinContentWidth.to_double(),
+      (mouse.get_client_x() - rect.get_left()) / pixels_per_rem,
+      ceiling=(rect.get_width() - MinContentWidth.to_double()) / pixels_per_rem,
     ),
   )
 }
 
 ///|
-/// Clamp the dragged width into the sidebar's allowed range.
-fn drag_width(raw : Double, ceiling~ : Double) -> Int32 {
-  let ceiling = ceiling.clamp(
-    min=MinSidebarWidth.to_double(),
-    max=MaxSidebarWidth.to_double(),
-  )
-  raw.clamp(min=MinSidebarWidth.to_double(), max=ceiling).to_int()
+/// All widths here are in rem so a later font-size change preserves the ratio.
+fn drag_width(raw : Double, ceiling~ : Double) -> Double {
+  let min = MinSidebarWidth.to_double() / 15.0
+  let max = MaxSidebarWidth.to_double() / 15.0
+  let ceiling = ceiling.clamp(min~, max~)
+  raw.clamp(min~, max=ceiling)
 }
 
 ///|
@@ -122,21 +121,14 @@ fn end_sidebar_resize() -> Unit {
 }
 
 ///|
-/// Write the dragged width as a custom property on the document element,
-/// where the CSS `clamp(...)` reads it.
-fn set_sidebar_width(width : Int32) -> Unit {
-  set_root_custom_property("--sidebar-width", "\{width}px")
+fn set_sidebar_width(width : Double) -> Unit {
+  set_root_custom_property("--sidebar-width", "\{width}rem")
 }
 
 ///|
 /// Toggle a class on the document element (empty string clears it).
 fn set_root_class(class_name : String) -> Unit {
-  if document_element() is Some(root) {
+  if @dom.document().get_document_element() is Some(root) {
     root.set_attribute("class", class_name)
   }
-}
-
-///|
-fn document_element() -> @dom.Element? {
-  @dom.document().query_selector("html").to_option()
 }

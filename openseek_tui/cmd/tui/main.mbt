@@ -377,19 +377,23 @@ async fn probe_engine(
   try {
     let args = args_prefix.copy()
     args.push("--help")
-    let (code, output) = @process.collect_output_merged(
+    let result = @process.run(
       engine,
       args,
+      stdout=Collect,
+      stderr=DuplicateStdout,
       inherit_env=true,
     )
-    if code == 0 {
+    if result.exit_code == 0 {
       Usable
     } else {
-      Failed(code, output_tail(output.text() catch { _ => "" }))
+      Failed(
+        result.exit_code,
+        output_tail(result.stdout_text() catch { _ => "" }),
+      )
     }
   } catch {
-    @os_error.OSError(_) as err if err.is_ENOENT() || err.is_EACCES() =>
-      NotLaunchable
+    @os_error.OsError(NotFound | AccessDenied, ..) => NotLaunchable
     err => raise err
   }
 }
@@ -416,17 +420,19 @@ const SlowProbeNoticeMs : Int32 = 1500
 /// `probe_engine`, telling the user on stderr when it takes long enough to be a
 /// first-launch download rather than a cached start.
 async fn probe_engine_with_notice(config : AppConfig) -> EngineProbe {
+  let mut probe : EngineProbe = Usable
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true) <| () => {
       @async.sleep(SlowProbeNoticeMs)
-      @stdio.stderr.write(
+      @stdio.stderr.text.write(
         "Preparing engine '\{config.engine_display()}' (the first launch downloads it)…\n",
       ) catch {
         _ => ()
       }
     }
-    probe_engine(config.engine, config.engine_args_prefix)
+    probe = probe_engine(config.engine, config.engine_args_prefix)
   })
+  probe
 }
 
 ///|

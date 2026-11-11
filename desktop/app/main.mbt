@@ -107,7 +107,8 @@ async fn main {
   }
   // The dock's browser tabs: native web contents views, owned by the
   // window and commanded over bridge-local `browser.*` ops.
-  let views = @extension.BrowserViews()
+  let previews = @static_preview.Server(engine~, runtime_dir?)
+  let views = @extension.BrowserViews(previews~)
   // The server through which the agents this host runs reach its tools — the
   // browser tabs above, to begin with. It binds now so every engine can be
   // granted its address from the first spawn; the backend serves it with its
@@ -126,6 +127,9 @@ async fn main {
     console_url?=console.map(console => console.entry_url()),
     resources=@host.desktop_resources(resources),
     host_mcp~,
+    cloud_browser=account => {
+      @extension.browser_open_tool(views, cloud_account=account)
+    },
   )
   let bridge = @extension.DesktopBridgeActor(state, askpass=Some(executable))
   views.page_attached(payload => bridge.notify_browser_event(payload))
@@ -250,7 +254,7 @@ async fn main {
     is_primary = true
     // Before the bridge: it prepares the workspace registry first, and
     // no page may attach to a host that has not.
-    state.start_services(group)
+    start_backend(group, state, views)
     group.spawn_bg(allow_failure=true, () => bridge.run())
     // The relay actor registers this host only when remote access (or the
     // environment override) is enabled, and idles otherwise.
@@ -436,4 +440,31 @@ fn relay_settings(matches : @argparse.Matches) -> @auth.ConnectorConfig? {
     return None
   }
   Some({ relay_url, device_token, device_name, })
+}
+
+///|
+/// Start the backend services and the HTML previews, and return once the
+/// services have started. They run on their own task group inside one task of
+/// Proton's application group: cancelling that group at shutdown cancels the
+/// task and the group in it.
+async fn start_backend(
+  group : @core_async.TaskGroup,
+  state : @api.ApiState,
+  views : @extension.BrowserViews,
+) -> Unit {
+  let started : @core_async.Queue[Result[Unit, Error]] = Queue(kind=Unbounded)
+  group.spawn_bg(() => {
+    @core_async.with_task_group(services => {
+      let result : Result[Unit, Error] = try {
+        state.start_services(services)
+        views.start_previews(services)
+        Ok(())
+      } catch {
+        error => Err(error)
+      }
+      started.put(result)
+      result.unwrap_or_error()
+    })
+  })
+  started.get().unwrap_or_error()
 }

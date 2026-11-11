@@ -1,7 +1,7 @@
 ///|
 /// The one line the overview shows for `conversation`'s connectors while
-/// their card is folded: how many servers its engine reached, and how many
-/// it could not, or where the question stands.
+/// their card is folded: how many servers its engine is still connecting,
+/// could not reach, and reached, or where the question stands.
 pub fn summary(
   locale~ : @i18n.Locale = English,
   conversation : @interop.ConversationKey,
@@ -13,18 +13,30 @@ pub fn summary(
     Loaded(Stopped) | Reloading(Stopped) => text(locale, NotRunning)
     Loaded(Connecting) | Reloading(Connecting) => text(locale, EngineConnecting)
     Loaded(Running(status)) | Reloading(Running(status)) => {
-      let connected = status.servers
-        .filter(server => server.state is Connected(_))
+      let mut connecting = 0
+      let mut failed = status.configs
+        .filter(config => config.state is Failed(_))
         .length()
-      let failed = status.servers
-        .filter(server => server.state is (Failed(_) | Lost(_)))
-        .length() +
-        status.configs.filter(config => config.state is Failed(_)).length()
-      if failed > 0 {
-        "\{text(locale, ConnectedCount(connected))} · \{text(locale, FailedCount(failed))}"
-      } else {
-        text(locale, ConnectedCount(connected))
+      let mut connected = 0
+      for server in status.servers {
+        match server.state {
+          Connecting => connecting += 1
+          Failed(_) | Lost(_) => failed += 1
+          Connected(_) => connected += 1
+          NoTools | Skipped => ()
+        }
       }
+      let parts : Array[String] = []
+      if connecting > 0 {
+        parts.push(text(locale, ConnectingCount(connecting)))
+      }
+      if failed > 0 {
+        parts.push(text(locale, FailedCount(failed)))
+      }
+      if connected > 0 || parts.is_empty() {
+        parts.push(text(locale, ConnectedCount(connected)))
+      }
+      parts.join(" · ")
     }
   }
 }
@@ -145,6 +157,14 @@ fn server_row(
   }
   let reached = "\{transport} · \{server.target}"
   match server.state {
+    Connecting =>
+      item(
+        tone="",
+        name=server.name,
+        note=Some(text(locale, EngineConnecting)),
+        detail=None,
+        title=reached,
+      )
     Connected(tools) =>
       item(
         tone="ok",

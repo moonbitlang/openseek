@@ -32,25 +32,36 @@ If a test name starts with `"panic"`, it indicates that the expected behavior of
 
 ```moonbit
 test "panic_test" {
-  let _ : Int = Option::None.unwrap()
+  let _ : Int32 = Option::None.unwrap()
 }
 ```
+
+## Documentation Tests
+
+Code blocks marked `mbt check` in `///` documentation comments can contain
+tests run by `moon test`. A documentation test does not inherit the documented
+function's `#cfg` attribute. If the test only supports certain backends,
+put the appropriate `#cfg` attribute on the test block itself.
 
 ## Snapshot Tests
 
 Writing tests can be tedious when specifying the expected values. Thus, MoonBit provides three kinds of snapshot tests.
 All of which can be inserted or updated automatically using `moon test --update`.
 
-### Snapshotting `Show`
+### Snapshotting `Debug`
 
-We can use `inspect(x, content="x")` to inspect anything that implements `Show` trait.
-As we mentioned before, `Show` is a builtin trait that can be derived, providing `to_string` that will print the content of the data structures.
+Use `debug_inspect(x, content="...")` for values implementing `Debug`.
+Add `#derive(Debug)` before a type definition to generate a structural
+representation. Use `inspect` for values with a custom `Show` implementation.
 The labelled argument `content` can be omitted as `moon test --update` will insert it for you:
 
 ```moonbit
+#derive(Debug)
 struct X {
-  x : Int
-} derive(Debug)
+  x : Int32
+}
+
+pub extend X with Debug::{to_repr}
 
 test "show snapshot test" {
   debug_inspect({ x: 10 }, content="{ x: 10 }")
@@ -59,15 +70,21 @@ test "show snapshot test" {
 
 ### Snapshotting `JSON`
 
-The problem with the derived `Show` trait is that it does not perform pretty printing, resulting in extremely long output.
+Structural debugging output can become long for deeply nested values.
 
-The solution is to use `@json.inspect(x, content=x)`. The benefit is that the resulting content is a JSON structure, which can be more readable after being formatted.
+Use `json_inspect(x, content=x)` to record a JSON structure, which can be more
+readable after formatting.
 
 ```moonbit
+#derive(Debug, ToJson)
 enum Rec {
   End
   Really_long_name_that_is_difficult_to_read(Rec)
-} derive(Debug, ToJson)
+}
+
+pub extend Rec with Debug::{to_repr}
+
+pub extend Rec with ToJson::{to_json}
 
 test "json snapshot test" {
   let r = Really_long_name_that_is_difficult_to_read(
@@ -114,6 +131,110 @@ Hello, world! And hello, MoonBit!
 This can also be used for applications to test the generated output, whether it were creating an image, a video or some custom data.
 
 Please note that `@test.T::snapshot` should be used at the end of a test block, as it always raises exception.
+
+## Property-Based Tests
+
+Example-based tests check particular inputs. Property-based tests describe a
+relationship that should hold for many generated inputs. Use the standard
+library's `quickcheck` package inside an ordinary `test` block; no additional
+module dependency is needed. For examples in a `_test.mbt` file, add this import
+to `moon.pkg`:
+
+```moonbit
+import {
+  "moonbitlang/core/quickcheck",
+} for "test"
+```
+
+### Checking a Property
+
+Adding zero should leave an integer unchanged:
+
+```moonbit
+test "adding zero preserves an integer" {
+  @quickcheck.check((x : Int32) => x + 0 == x, count=100, seed=2026)
+}
+```
+
+Run this test with `moon test`. `check` generates inputs and calls the property
+for each one. Returning `true` accepts a case; returning `false` or raising an
+error causes `check` to report a failure. Here, `count` requests 100 cases and
+`seed` makes the run repeatable. Generated `Int32` values are not limited to
+small numbers: they can include values near the limits of the type.
+
+The input type must implement `Arbitrary` to generate values, `Shrink` to
+simplify failing inputs, and `Debug` to display them. These implementations are
+provided for common types, including `Int32`. Keep properties deterministic
+and avoid mutating their inputs.
+
+### Understanding a Counterexample
+
+What about adding one? `x + 1 > x` holds for mathematical integers, but does it
+hold for `Int32`? Small examples such as 0, 1, and 100 would all pass. The
+following example uses `report` to look for a counterexample. It returns a
+result instead of raising a test failure, so we can record the failure report
+in a snapshot while keeping the demonstration itself a passing test:
+
+```moonbit
+test "adding one does not always increase an integer" {
+  let report = @quickcheck.report(
+    (x : Int32) => x + 1 > x,
+    count=100,
+    seed=2026,
+  )
+  debug_inspect(
+    report,
+    content=(
+      #|Falsified(
+      #|  counterexample=2147483647,
+      #|  tests=99,
+      #|  size=98,
+      #|  shrinks=0,
+      #|  shrink_attempts=31,
+      #|)
+    ),
+  )
+}
+```
+
+`Falsified` means the property returned `false`. The counterexample is
+`2147483647`, the largest `Int32`. Adding one overflows and wraps to
+`-2147483648`, so the result is smaller, not larger. This is a mistaken
+assumption about fixed-width arithmetic, not a bug in addition.
+
+QuickCheck also tries simpler inputs that still fail, a process called
+shrinking. Here, `shrinks=0`: no smaller input preserves the failure, since
+only the largest `Int32` fails this property. The optional `max_shrinks`
+argument limits the number of candidates examined; shrinking does not in
+general guarantee the smallest counterexample. Use `check`, rather than
+`report`, when a false property should fail your test suite.
+
+### Keeping a Regression Test
+
+To reproduce a run, keep the seed, settings, property, and toolchain/library
+version the same. Generated cases and shrink results can change between
+versions. Once a counterexample reveals a bug or a mistaken expectation, keep
+that concrete input in an example-based test with the correct expected behavior:
+
+```moonbit
+test "adding one at the Int32 boundary" {
+  let x : Int32 = 2147483647
+  assert_eq(x + 1, -2147483648)
+  assert_eq(x.to_int64() + 1, 2147483648L)
+}
+```
+
+The second assertion converts to `Int64` **before** adding one, which is wide
+enough for this calculation. Converting the result after `Int32` addition
+would be too late: the overflow would already have happened.
+
+Keep both kinds of tests: the regression test always checks the discovered
+case, while the property test can explore more inputs with other seeds and
+settings. Passing generated cases is not a proof that a property holds for all
+inputs.
+
+For custom generators and more ways to choose useful properties, see
+[Property-Based Testing in MoonBit](https://www.moonbitlang.com/blog/property-based-testing-moonbit).
 
 ## BlackBox Tests and WhiteBox Tests
 

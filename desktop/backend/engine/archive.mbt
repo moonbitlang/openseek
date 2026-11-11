@@ -415,10 +415,7 @@ pub async fn archive_session(
   force~ : Bool = false,
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.ArchiveReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   let refusal = archive_session_commit(
     manager,
     session,
@@ -449,11 +446,7 @@ async fn archive_session_commit(
   defer manager.archive_commit_lock.release()
   // The other half, for a second host attached to this project: its archive
   // of a conversation sharing the checkout has to wait here as well.
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   family.refuse_new_members(session)
   // The checkout goes with the conversation. A dirty refusal
@@ -493,10 +486,7 @@ pub async fn unarchive_session(
   session : String,
   on_committed : (String, String) -> Unit,
 ) -> @protocol.SessionsReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   unarchive_session_commit(manager, session, on_committed)
   archived_sessions()
 }
@@ -511,11 +501,7 @@ async fn unarchive_session_commit(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   move_session_family(family, to_archive=false, on_committed)
 }
@@ -531,10 +517,7 @@ pub async fn delete_archived_session(
   on_committed : (String, String) -> Unit,
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionsReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   delete_archived_session_commit(
     manager,
     session,
@@ -567,11 +550,7 @@ async fn delete_archived_session_commit(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   family.delete_records(archived=true, on_committed, on_worktree_changed?)
   // Physical erasure happens after the commit: the records are already
@@ -601,10 +580,7 @@ pub async fn delete_session(
   edit_replacement? : EditReplacement,
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionDeleteReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   let family = manager.claim_session_family_move(
     session,
@@ -614,11 +590,7 @@ pub async fn delete_session(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(family.root).to_path(),
-  ) catch {
-    error => raise EngineError("could not lock the archived store: \{error}")
-  }
+  let shared = lock_archived_store(family.root)
   defer shared.release()
   family.refuse_new_members(session)
 
@@ -684,10 +656,7 @@ pub async fn delete_session_check(
   session : String,
   workspace : String,
 ) -> @protocol.SessionDeleteCheckReply {
-  let session = session.trim().to_owned()
-  guard !session.is_empty() && @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
+  let session = checked_session_id(session)
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   {
     checkout: @worktree.WorktreeOwner::openseek(session).checkout_removal(
@@ -740,9 +709,7 @@ async fn SessionFamilyMove::delete_records(
       for session_id in order {
         // A condemned leftover with the same id only blocks this rename and
         // is itself already scheduled for erasure.
-        if @fsx.exists(deleting.join(session_id).to_path()) {
-          @fs.rmdir(deleting.join(session_id).to_string(), recursive=true)
-        }
+        @fsx.remove_if_exists(deleting.join(session_id).to_path())
         move_session_record(source.join(session_id), deleting, session_id)
         moved.push(session_id)
       }
@@ -937,7 +904,7 @@ async test "archive and restore move a subagent session family together" {
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-3", "chat-sr-2"]
   for session_id in family {
     @fsx.ensure_dir(Path(live + session_id + "/scratch"))
-    @fs.write_file(live + session_id + "/scratch/marker.txt", "retained")
+    @fs.write_text(live + session_id + "/scratch/marker.txt", "retained")
   }
   // Text that resembles the marker and an unrelated conversation must not be
   // swept into the family.
@@ -958,7 +925,7 @@ async test "archive and restore move a subagent session family together" {
   for session_id in family {
     assert_false(@fsx.is_dir(Path(live + session_id)))
     assert_eq(
-      @fs.read_file(archived + session_id + "/scratch/marker.txt").text(),
+      @fs.read_text(archived + session_id + "/scratch/marker.txt"),
       "retained",
     )
   }
@@ -973,7 +940,7 @@ async test "archive and restore move a subagent session family together" {
   }
   for session_id in family {
     assert_eq(
-      @fs.read_file(live + session_id + "/scratch/marker.txt").text(),
+      @fs.read_text(live + session_id + "/scratch/marker.txt"),
       "retained",
     )
     assert_false(@fsx.is_dir(Path(archived + session_id)))
@@ -995,7 +962,7 @@ async test "permanent deletion removes one archived session family only" {
   let workspace = dir + "/workspace"
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1005,7 +972,7 @@ async test "permanent deletion removes one archived session family only" {
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-2", "chat-sr-4"]
   for session_id in family {
     @fsx.ensure_dir(Path(archived + session_id + "/scratch"))
-    @fs.write_file(archived + session_id + "/scratch/marker.txt", "retained")
+    @fs.write_text(archived + session_id + "/scratch/marker.txt", "retained")
   }
   @fsx.ensure_dir(Path(archived + "other"))
   let manager = new_engine_manager("unused")
@@ -1048,7 +1015,7 @@ async test "permanent deletion uses the selected archived store" {
   @fsx.ensure_dir(Path(global_root + "/sessions/chat"))
   @fsx.ensure_dir(Path(global_root + "/archived/sessions/chat"))
   @fsx.ensure_dir(Path(workspace + "/.openseek/archived/sessions/chat"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1086,7 +1053,7 @@ async test "permanent deletion refuses a live twin in the selected store" {
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/chat"))
   @fsx.ensure_dir(Path(workspace + "/.openseek/archived/sessions/chat"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1151,7 +1118,7 @@ async test "selected archived store is revalidated after detachment" {
   @sys.set_env_var("HOME", home)
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(workspace.join(".openseek/archived/sessions/chat").to_path())
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace.to_string()] } : Json).stringify(),
     create_mode=CreateOrTruncate,
@@ -1214,4 +1181,26 @@ async test "a claimed child prevents a partial family archive" {
   assert_true(@fsx.is_dir(Path(store + "/sessions/chat-sr-1")))
   assert_false(@fsx.exists(Path(store + "/archived/sessions")))
   assert_true(manager.record_guards.is_empty())
+}
+
+///|
+/// A request's session id, trimmed and refused unless it names one record
+/// directory.
+fn checked_session_id(raw : String) -> String raise EngineError {
+  let session = raw.trim().to_owned()
+  guard @session_store.safe_session_id(session) else {
+    raise EngineError("invalid session id")
+  }
+  session
+}
+
+///|
+/// Take the cross-host lock on `root`'s archived store: every host's
+/// archive, unarchive, delete and side-chat fork serialize on it.
+async fn lock_archived_store(
+  root : @pathx.Absolute,
+) -> @fsx.FileLock raise EngineError {
+  @fsx.FileLock::acquire(@session_store.archived_root(root).to_path()) catch {
+    error => raise EngineError("could not lock the archived store: \{error}")
+  }
 }

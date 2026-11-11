@@ -6,7 +6,8 @@ fn run(emit : @cmd.Emit[Msg], task : async () -> Msg) -> @cmd.Cmd {
 }
 
 ///|
-fn State::replace(
+/// Replace conversation `id` in a copy of the conversation map.
+pub fn State::replace(
   self : State,
   id : String,
   conversation : Conversation,
@@ -161,7 +162,7 @@ fn State::fence_archived_history(
   // A prompt being prepared or submitted still owns its admission request.
   guard self.conversations.get(id) is Some(conversation) &&
     !conversation.sending &&
-    conversation.history_disk_request != Some(conversation.request) else {
+    conversation.history_cache_request != Some(conversation.request) else {
     return (self, @cmd.none)
   }
   // Fence pre-archive reads even after a later restore. Replace an unfinished
@@ -350,8 +351,9 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   token? : String,
   navigation~ : Int32,
-  desktop_history~ : Bool = false,
+  client_tools~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
+  let state = { ..state, client_tools, }
   // A boundary observed while this read was in flight may be missing from it.
   // Settle the read first so its records are not discarded, then read again.
   let follow_up = match msg {
@@ -378,12 +380,77 @@ pub fn update(
     return (next, command, None)
   }
   let (next, command, select) = match msg {
+    ClientToolsReady(epoch, id, ready) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      let next = state.replace(id, {
+        ..conversation,
+        client_tools_ready: ready,
+      })
+      let (next, command) = if ready && conversation.last_seq is Some(_) {
+        next.send_pending(id, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
+    }
+    QuestionInput(account~, session~, text~, id~) => {
+      guard state.user_id == Some(account) &&
+        token is Some(token) &&
+        !state.retired.contains(session) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state,
+        run(emit, () => {
+          try deliver_question_input(token, session, text, id) catch {
+            error =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                "Could not deliver question answer: \{error}",
+              )
+          } noraise {
+            _ => QuestionInputDelivered(state.epoch, session)
+          }
+        }),
+        None,
+      )
+    }
+    QuestionInputDelivered(epoch, id) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, {
+          ..conversation,
+          generating: true,
+          watch_status: Watching,
+          history_required: true,
+        }),
+        @cmd.none,
+        None,
+      )
+    }
+    QuestionInputFailed(epoch, id, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, { ..conversation, notice: Some(error), }),
+        @cmd.none,
+        None,
+      )
+    }
     AccountChanged(user_id) => {
-      let cache_catalog = desktop_history &&
-        user_id is Some(_) &&
-        token is Some(_)
+      let cache_catalog = user_id is Some(_) && token is Some(_)
       let next = {
         ..State::empty(),
+        client_tools,
         user_id,
         epoch: state.epoch + 1,
         sequence: state.sequence,
@@ -392,7 +459,7 @@ pub fn update(
       let (next, command) = next.list(token, emit)
       let catalog = if cache_catalog && token is Some(token) {
         run(emit, () => {
-          let entries = match history_cache(token, List) {
+          let entries = match next.history_cache(token, List) {
             Entries(entries) => entries
             _ => []
           }
@@ -401,7 +468,11 @@ pub fn update(
       } else {
         @cmd.none
       }
-      (next, @cmd.batch([command, catalog]), None)
+      (
+        next,
+        @cmd.batch([next.cache_account_changed(state.user_id), command, catalog]),
+        None,
+      )
     }
     Refresh => {
       guard !(state.list_status is Retrying) else {
@@ -718,11 +789,7 @@ pub fn update(
       guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
         return (state, @cmd.none, None)
       }
-      (
-        state.forget(id),
-        cache_mutation(desktop_history, token, Remove(session=id)),
-        None,
-      )
+      (state.forget(id), state.cache_mutation(token, Remove(session=id)), None)
     }
     DeleteFailed(epoch, id, request, error) => {
       guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
@@ -731,7 +798,7 @@ pub fn update(
       if error is Http(404) {
         return (
           state.forget(id),
-          cache_mutation(desktop_history, token, Remove(session=id)),
+          state.cache_mutation(token, Remove(session=id)),
           None,
         )
       }
@@ -992,36 +1059,37 @@ pub fn update(
           notice: None,
         })
       }
-      let (next, command) = if desktop_history &&
-        token is Some(token) &&
+      let (next, command) = if token is Some(token) &&
         !conversation.history_cached &&
         !conversation.history_reading &&
-        conversation.history_disk_request is None {
-        next.read_disk_history(id, token, emit)
+        conversation.history_cache_request is None {
+        next.read_persistent_history(id, token, emit)
       } else {
         next.load(id, token, emit, reuse=true)
       }
       (next, command, None)
     }
-    DiskHistoryLoaded(epoch, id, request, history) => {
+    CachedHistoryLoaded(epoch, id, request, history) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.history_disk_request == Some(request) else {
+        conversation.history_cache_request == Some(request) else {
         return (state, @cmd.none, None)
       }
-      let awaiting_disk = conversation.request == request &&
+      let awaiting_cache = conversation.request == request &&
         conversation.history_reading
-      // A boundary observed during the disk read is covered by the network
+      // A boundary observed during the cache read is covered by the network
       // read that follows it, which starts after that boundary.
       let conversation = {
         ..conversation,
-        history_disk_request: None,
-        history_reading: conversation.history_reading && !awaiting_disk,
+        history_cache_request: None,
+        history_reading: conversation.history_reading && !awaiting_cache,
       }
       let next = state.replace(
         id,
         if history is Some(history) && !conversation.history_cached {
-          let cached = conversation.with_latest_page(history)
+          let cached = conversation
+            .with_latest_page(history)
+            .with_prediction(history.prediction)
           {
             ..cached.restore_goal(cached.document),
             history_cached: true,
@@ -1033,7 +1101,7 @@ pub fn update(
           conversation
         },
       )
-      if !awaiting_disk {
+      if !awaiting_cache {
         return (next, @cmd.none, None)
       }
       let (next, command) = next.load(id, token, emit)
@@ -1178,7 +1246,7 @@ pub fn update(
         history_cached: true,
         history_etag: history.etag,
         history_reading: false,
-        history_disk_request: None,
+        history_cache_request: None,
         events: conversation.events.filter(event => {
           !conversation.records.any(record => {
             record.task_id == event.task_id &&
@@ -1271,15 +1339,10 @@ pub fn update(
         @cmd.batch([
           refresh,
           turn,
-          if desktop_history {
-            cache_mutation(
-              true,
-              token,
-              Write(session=id, page=history.cache_page()),
-            )
-          } else {
-            @cmd.none
-          },
+          state.cache_mutation(
+            token,
+            Write(session=id, page=history.cache_page()),
+          ),
         ]),
         None,
       )
@@ -1305,7 +1368,7 @@ pub fn update(
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
-        history_disk_request: None,
+        history_cache_request: None,
         loading: false,
         history_required: false,
         watch_status: if observing && conversation.last_seq is Some(_) {

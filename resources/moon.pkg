@@ -1,8 +1,15 @@
 import {
   "moonbitlang/openseek/env" @exe,
-  "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/x/path",
 }
 
 supported_targets = "+native+wasm"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
+  ],
+)

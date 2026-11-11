@@ -52,7 +52,7 @@ async fn remove_path_if_exists(path : String) -> Unit {
 
 ///|
 async fn archive_digest(path : String) -> String {
-  let bytes = @asyncfs.read_file(path).binary()
+  let bytes = @asyncfs.read_binary(path)
   @crypto.bytes_to_hex_string(@crypto.sha256(bytes)).to_lower()
 }
 
@@ -71,7 +71,7 @@ async fn ensure_cached_archive(cache_dir : String) -> String {
     remove_path_if_exists(path)
   }
   println("downloading \{MermaidArchiveUrl}")
-  let (response, body) = @http.get(MermaidArchiveUrl) catch {
+  let (response, body) = @http.get_binary(MermaidArchiveUrl) catch {
     error =>
       raise MermaidAssetError(
         "failed to download \{MermaidArchiveUrl}: \{error}",
@@ -82,7 +82,7 @@ async fn ensure_cached_archive(cache_dir : String) -> String {
       "failed to download \{MermaidArchiveUrl}: HTTP \{response.code} \{response.reason}",
     )
   }
-  @asyncfs.write_file(path, body, create_mode=CreateOrTruncate)
+  @asyncfs.write_binary(path, body, create_mode=CreateOrTruncate)
   let actual = archive_digest(path)
   if actual != MermaidArchiveSha256 {
     remove_path_if_exists(path)
@@ -105,7 +105,7 @@ async fn run_tar(
     command_args.push(arg)
   }
   println("$ [\{working_dir}] tar \{command_args.join(" ")}")
-  let code = @process.run(
+  let result = @process.run(
     "tar",
     command_args,
     inherit_env=true,
@@ -116,9 +116,9 @@ async fn run_tar(
         "failed to launch tar while extracting \{MermaidArchiveName}: \{error}",
       )
   }
-  if code != 0 {
+  if result.exit_code != 0 {
     raise MermaidAssetError(
-      "tar failed with exit code \{code} while extracting \{MermaidArchiveName}",
+      "tar failed with exit code \{result.exit_code} while extracting \{MermaidArchiveName}",
     )
   }
 }

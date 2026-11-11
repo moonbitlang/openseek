@@ -13,12 +13,12 @@ async test "standalone script checks do not require or inherit a module" {
   assert_eq(script.cwd(), scripts)
   assert_eq(script.check_args(), ["check", "--output-json", file.to_string()])
   assert_true(moon_cli_scope(root, scripts.join("lib.mbt")) is None)
-  @fs.write_file(
+  @fs.write_text(
     root.join("moon.mod").to_string(),
     "name = \"test/module\"",
     create_mode=CreateOrTruncate,
   )
-  @fs.write_file(
+  @fs.write_text(
     scripts.join("moon.pkg").to_string(),
     "",
     create_mode=CreateOrTruncate,

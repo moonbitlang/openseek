@@ -97,7 +97,7 @@ fn SemanticSearchCancellationFrontiers::record(
 ///|
 priv enum SemanticSearchRequest {
   Search(
-    command~ : MoonxProvider,
+    command~ : @moonbit.MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchSemanticPayload,
     reply~ : @async.Queue[@protocol.SearchSemanticReply]
@@ -148,7 +148,7 @@ fn empty_semantic_search_reply(
 ///|
 async fn SemanticSearchService::search(
   self : SemanticSearchService,
-  command : MoonxProvider,
+  command : @moonbit.MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
 ) -> @protocol.SearchSemanticReply {
@@ -607,7 +607,7 @@ async fn publish_semantic_progress(
 
 ///|
 async fn run_semantic_search(
-  command : MoonxProvider,
+  command : @moonbit.MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
   emit : async (@protocol.Notification) -> Unit,
@@ -642,28 +642,43 @@ async fn run_semantic_search(
   // process has no console — the same workaround text search uses.
   let (stdin_reader, stdin_writer) = @process.write_to_process()
   stdin_writer.close()
+  let hits : Array[@protocol.SemanticSearchHit] = []
+  let files : Map[String, Bool] = Map([])
+  let mut match_count = 0
+  let mut limit_hit = false
+  let mut partial = false
+  let mut error : @protocol.SemanticSearchError? = None
+  let mut failure : @protocol.SemanticSearchError? = None
   @async.with_task_group(group => {
-    let process = @process.spawn(
-      group,
-      command,
-      semantic_search_args(payload),
-      inherit_env=false,
-      extra_env=provider.environment,
-      stdin=stdin_reader,
-      stdout=child_stdout,
-      stderr=child_stderr,
-      cwd=native_root,
-      no_console_window=true,
-      cancel_handler=@process.hard_cancel(),
-      no_wait=true,
-    ) catch {
+    let process = try {
+      // The child holds its own copies of these ends; the parent's must close
+      // so the readers see end-of-file once the child exits.
+      defer stdin_reader.close()
+      defer child_stdout.close()
+      defer child_stderr.close()
+      errdefer stdout_reader.close()
+      errdefer stderr_reader.close()
+      @process.spawn(
+        group,
+        command,
+        semantic_search_args(payload),
+        inherit_env=false,
+        extra_env=provider.environment,
+        stdin=Shared(stdin_reader),
+        stdout=Shared(child_stdout),
+        stderr=Shared(child_stderr),
+        cwd=native_root,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+        no_wait=true,
+      )
+    } catch {
       error => {
-        stdout_reader.close()
-        stderr_reader.close()
-        return empty_semantic_search_reply(reply_root, payload.generation, error={
+        failure = Some({
           code: "moongrep_unavailable",
           message: "Cannot start semantic search: \{error}",
         })
+        return
       }
     }
     let stderr_task = group.spawn(() => {
@@ -671,9 +686,7 @@ async fn run_semantic_search(
       let retained = @buffer.Buffer(size_hint=4096)
       let mut retained_bytes = 0
       for ;; {
-        guard stderr_reader.read_some(max_len=4096) is Some(chunk) else {
-          break
-        }
+        guard stderr_reader.read() is Some(chunk) else { break }
         if retained_bytes < MaxSemanticSearchStderrBytes {
           let length = chunk
             .length()
@@ -684,14 +697,10 @@ async fn run_semantic_search(
       }
       @utf8.decode_lossy(retained.contents())
     })
-    let hits : Array[@protocol.SemanticSearchHit] = []
-    let files : Map[String, Bool] = Map([])
-    let mut match_count = 0
-    let mut limit_hit = false
     let mut published_hits = 0
     defer stdout_reader.close()
     for ;; {
-      let line = stdout_reader.read_until("\n")
+      let line = stdout_reader.text.read_until("\n")
       guard line is Some(line) else { break }
       if parse_moongrep_match(line) is Some(parsed) {
         guard semantic_path_is_included(parsed.path, payload) else { continue }
@@ -744,7 +753,7 @@ async fn run_semantic_search(
       }
     }
     let lower = stderr.to_lower()
-    let partial = lower.contains("warning:") ||
+    partial = lower.contains("warning:") ||
       lower.contains("skipping") ||
       lower.contains("parse failed")
     // moongrep streams hits before it aborts, and its current wasm build can
@@ -756,28 +765,25 @@ async fn run_semantic_search(
       None => semantic_search_error(stderr)
     }
     if semantic_search_exit_is_fatal(exit_code, !hits.is_empty()) {
-      return empty_semantic_search_reply(reply_root, payload.generation, error={
-        code,
-        message,
-      })
-    }
-    let error : @protocol.SemanticSearchError? = if exit_code != 0 {
-      Some({ code, message, })
-    } else {
-      None
-    }
-    {
-      root: reply_root,
-      generation: payload.generation,
-      matches: hits,
-      match_count,
-      file_count: files.length(),
-      limit_hit,
-      cancelled: false,
-      partial,
-      error,
+      failure = Some({ code, message, })
+    } else if exit_code != 0 {
+      error = Some({ code, message, })
     }
   })
+  if failure is Some(error) {
+    return empty_semantic_search_reply(reply_root, payload.generation, error~)
+  }
+  {
+    root: reply_root,
+    generation: payload.generation,
+    matches: hits,
+    match_count,
+    file_count: files.length(),
+    limit_hit,
+    cancelled: false,
+    partial,
+    error,
+  }
 }
 
 ///|
@@ -785,7 +791,7 @@ pub async fn search_semantic(
   service : SemanticSearchService,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
-  command : MoonxProvider,
+  command : @moonbit.MoonxProvider,
 ) -> @protocol.SearchSemanticReply {
   service.search(command, root, payload)
 }
@@ -909,11 +915,11 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
     assert_true(reply.cancelled)
     assert_eq(reply.generation, 7)
     assert_eq(reply.root, resource_root)
-    group.return_immediately(())
+    group.return_immediately()
   })
 }
 
 ///|
-fn test_provider() -> MoonxProvider {
+fn test_provider() -> @moonbit.MoonxProvider {
   MoonxProvider(engine="unused", runtime_dir=None, source=External)
 }

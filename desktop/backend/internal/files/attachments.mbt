@@ -159,7 +159,7 @@ pub async fn import_attachment(
   ignore(ensure_attachment_directory(root, directory))
   let relative = "\{directory}/\{file.name}"
   let target = root.join((relative : @pathx.Relative))
-  @fs.write_file(target.to_string(), file.bytes, create_mode=CreateNew)
+  @fs.write_binary(target.to_string(), file.bytes, create_mode=CreateNew)
   { path: relative, }
 }
 
@@ -200,8 +200,8 @@ pub async fn stage_attachments(
         target.to_path().dirname().relative(base=root.to_path()).to_string(),
       ),
     )
-    @fs.write_file(target.to_string(), file.bytes, create_mode=CreateNew) catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => {
+    @fs.write_binary(target.to_string(), file.bytes, create_mode=CreateNew) catch {
+      @os_error.OsError(AlreadyExists, ..) => {
         let existing = load_attachment(AttachmentPath(target.resource_path()))
         guard existing.bytes == file.bytes else {
           raise InvalidRequest(

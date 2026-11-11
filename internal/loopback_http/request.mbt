@@ -39,9 +39,10 @@ pub fn RequestReader::RequestReader(socket : @socket.Tcp) -> RequestReader {
 ///|
 async fn RequestReader::byte(self : RequestReader) -> Byte {
   if self.offset == self.buffer.length() {
-    guard self.socket.read_some(max_len=4096) is Some(bytes) else {
-      fail("Incomplete request")
-    }
+    let chunk = FixedArray::make(4096, b'\x00')
+    let read = self.socket.read_into(chunk)
+    guard read > 0 else { fail("Incomplete request") }
+    let bytes = Bytes::from_array(chunk[:read])
     self.wire_bytes += bytes.length()
     guard self.wire_bytes <= MaxWireBytes else {
       raise RequestTooLarge("Request framing too large")

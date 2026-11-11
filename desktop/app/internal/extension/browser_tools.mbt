@@ -93,24 +93,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
       },
       call: call => [Text(views.tabs(call.session).stringify())],
     },
-    {
-      name: "browser_open",
-      description: "Open a new browser tab beside this conversation in SeekMoon and load an address in it. The user sees the tab. Answers with the tab once its page has loaded.",
-      input_schema: {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "The address to load: http://, https://, or file://.",
-          },
-        },
-        "required": ["url"],
-        "additionalProperties": false,
-      },
-      call: call => {
-        [Text(views.open_tab(call.session, call.arguments).stringify())]
-      },
-    },
+    browser_open_tool(views),
     {
       name: "browser_navigate",
       description: "Take one of this conversation's browser tabs somewhere else: load an address in it, go back or forward in its history, or reload it. Give exactly one of `url` and `action`. Answers with the tab once its page has loaded.",
@@ -400,7 +383,6 @@ async fn[T] BrowserViews::with_page(
       entered = true
       f(connection)
     }) catch {
-      error if @async.is_being_cancelled() => raise error
       // Only the search is retried: a failure of `f` itself is the caller's.
       error if entered || attempt >= 4 => raise error
       _ => continue
@@ -431,6 +413,7 @@ async fn BrowserViews::open_tab(
   self : BrowserViews,
   session : String,
   arguments : Json,
+  cloud_account? : String,
 ) -> Json {
   guard arguments is { "url": String(url), .. } else {
     raise @mcp.ToolError("browser_open needs `url`, the address to load.")
@@ -446,7 +429,11 @@ async fn BrowserViews::open_tab(
   let opened : @async.Queue[Int32] = Queue(kind=Unbounded)
   self.opening[request] = opened
   defer self.opening.remove(request)
-  notify(OpenRequested(request~, session~, url~))
+  match cloud_account {
+    Some(account) =>
+      notify(CloudOpenRequested(account~, request~, session~, url~))
+    None => notify(OpenRequested(request~, session~, url~))
+  }
   guard @async.with_timeout_opt(OpenTimeoutMs, () => opened.get()) is Some(id) else {
     raise @mcp.ToolError(
       "SeekMoon did not open the tab within \{OpenTimeoutMs / 1000} seconds.",
@@ -797,4 +784,36 @@ async test "the page's open delivers its tab's id to the tool that asked for it"
   views.answer_open({ ..payload, id: 6, request: Some("r-gone"), })
   views.answer_open({ ..payload, id: 7, request: Some("r-1"), })
   assert_eq(opened.get(), 7)
+}
+
+///|
+/// The same browser tool for Local and account-bound Cloud conversations.
+pub fn browser_open_tool(
+  views : BrowserViews,
+  cloud_account? : String,
+) -> @mcp.Tool {
+  {
+    name: "browser_open",
+    description: "Open a new browser tab beside this conversation in SeekMoon and load an address in it. The user sees the tab. Answers with the tab once its page has loaded.",
+    input_schema: {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The address to load: http://, https://, or file://.",
+        },
+      },
+      "required": ["url"],
+      "additionalProperties": false,
+    },
+    call: call => {
+      [
+        Text(
+          views
+          .open_tab(call.session, call.arguments, cloud_account?)
+          .stringify(),
+        ),
+      ]
+    },
+  }
 }

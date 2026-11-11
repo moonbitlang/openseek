@@ -24,10 +24,10 @@ pub async fn with_text_output(body : async () -> Unit) -> Unit {
       @emit.drain(event => {
         let text = renderer.render(event)
         if text.progress != "" {
-          @stdio.stderr.write(text.progress)
+          @stdio.stderr.text.write(text.progress)
         }
         if text.answer != "" {
-          @stdio.stdout.write(text.answer)
+          @stdio.stdout.text.write(text.answer)
         }
       })
     },

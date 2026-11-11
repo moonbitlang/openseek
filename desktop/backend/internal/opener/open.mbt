@@ -182,7 +182,7 @@ async test "open_path only requires a working directory for relative paths" {
     Refused("This conversation has no working directory"),
   )
   let text_path = "\{root}/source.mbt"
-  @fs.write_file(text_path, "fn main {}", create_mode=CreateOrTruncate)
+  @fs.write_text(text_path, "fn main {}", create_mode=CreateOrTruncate)
   let editor_without_cwd = open_path({
     session: "",
     cwd: None,
@@ -204,7 +204,7 @@ async test "open_path returns workspace editor positions without a system open" 
   // create the shared `_build` parent.
   let dir = @fs.tmpdir(prefix="openseek-host-open-editor-")
   let file = "\{dir}/source.mbt"
-  @fs.write_file(file, "fn main {}", create_mode=CreateOrTruncate)
+  @fs.write_text(file, "fn main {}", create_mode=CreateOrTruncate)
   let cwd = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
@@ -238,7 +238,7 @@ async test "open_path returns workspace editor positions without a system open" 
     Editor({ path: "\{cwd}/source.mbt", line: None, column: None, }),
   )
   let literal = "\{file}:12"
-  @fs.write_file(literal, "literal", create_mode=CreateOrTruncate)
+  @fs.write_text(literal, "literal", create_mode=CreateOrTruncate)
   let literal_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
@@ -257,7 +257,7 @@ async test "open_path returns workspace editor positions without a system open" 
   assert_eq(directory_reply, Directory({ path: "src", }))
   // All UI entry points share the same content-based routing response.
   let pdf = "\{dir}/report"
-  @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
+  @fs.write_text(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
   assert_eq(
     open_path(
       { session: "unused", cwd: Some(cwd), path: "report", },
@@ -265,7 +265,7 @@ async test "open_path returns workspace editor positions without a system open" 
     ),
     Editor({ path: "\{cwd}/report", line: None, column: None, }),
   )
-  @fs.write_file(
+  @fs.write_text(
     "\{dir}/notes.pdf",
     "ordinary text",
     create_mode=CreateOrTruncate,
@@ -277,7 +277,7 @@ async test "open_path returns workspace editor positions without a system open" 
     ),
     Editor({ path: "\{cwd}/notes.pdf", line: None, column: None, }),
   )
-  @fs.write_file(
+  @fs.write_binary(
     "\{dir}/picture",
     b"\x89PNG\x0d\x0a\x1a\x0a",
     create_mode=CreateOrTruncate,
@@ -296,7 +296,7 @@ async test "macOS application bundles bypass the workspace Files tree" {
   let dir = @fs.tmpdir(prefix="openseek-host-open-app-bundle-")
   let bundle = "\{dir}/SeekMoon.app"
   @fs.mkdir("\{bundle}/Contents", recursive=true)
-  @fs.write_file(
+  @fs.write_text(
     "\{bundle}/Contents/Info.plist",
     "<?xml version=\"1.0\"?>",
     create_mode=CreateOrTruncate,
@@ -327,7 +327,7 @@ async test "open_path rejects missing files and opens outside text files" {
     missing is Refused(message) && message.has_prefix("File does not exist:"),
   )
   let outside = "\{root}/outside.txt"
-  @fs.write_file(outside, "outside", create_mode=CreateOrTruncate)
+  @fs.write_text(outside, "outside", create_mode=CreateOrTruncate)
   let outside = @fs.realpath(outside)
   let escaped = open_path({
     session: "unused-for-explicit-cwd",

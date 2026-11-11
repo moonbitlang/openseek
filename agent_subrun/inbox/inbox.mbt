@@ -84,7 +84,7 @@ pub async fn open(path : String) -> Unit {
   @fs.mkdir(@path.Path(path).dirname().to_string(), recursive=true) catch {
     _ => ()
   }
-  @fs.write_file(path, "", create_mode=OpenOrCreate, append=true)
+  @fs.write_text(path, "", create_mode=OpenOrCreate, append=true)
 }
 
 ///|
@@ -116,7 +116,7 @@ pub async fn post(path : String, message : Message) -> Bool {
     "text": message.text,
   }
   let line = (if torn { "\n" } else { "" }) + record.stringify() + "\n"
-  file.write(line)
+  file.text.write(line)
   true
 }
 
@@ -132,7 +132,7 @@ pub async fn read(path : String) -> Inbox? {
     defer file.close()
     file.lock(Shared)
     defer file.unlock()
-    file.read_all().binary()
+    file.read_all()
   }
   let messages = []
   let mut unreadable = 0

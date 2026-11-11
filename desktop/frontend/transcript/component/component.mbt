@@ -477,10 +477,9 @@ fn show_empty_project_menu_after_render() -> @cmd.Cmd {
       }
       if @dom.document().get_element_by_id(EmptyProjectSearchId).to_option()
         is Some(search) {
-        let _ : @js.Value = @js.Value::cast_from(search).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if search.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -493,10 +492,9 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
     _ => {
       if @dom.document().get_element_by_id(EmptyProjectTriggerId).to_option()
         is Some(trigger) {
-        let _ : @js.Value = @js.Value::cast_from(trigger).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
+        if trigger.to_html_element() is Some(element) {
+          element.focus()
+        }
       }
     },
     kind=@cmd.after_render,
@@ -896,23 +894,11 @@ fn transcript_sub_loader(
       )
       let remove_artifact_listener = artifact_frame_listener(
         () => scheduler.add(emit(ContentRendered)),
-        (owner, reference, payload) => {
-          guard owner == artifact_owner &&
-            @mention_context.artifact_snapshot(reference, payload)
-            is Some(snapshot) else {
-            return
+        (owner, interaction) => {
+          if owner == artifact_owner {
+            scheduler.add(artifact_context(interaction))
           }
-          scheduler.add(artifact_context(AttachState(snapshot)))
         },
-        (owner, reference, payload, message) => {
-          guard owner == artifact_owner &&
-            decode_artifact_followup(reference, payload, message)
-            is Some(action) else {
-            return
-          }
-          scheduler.add(artifact_context(action))
-        },
-        artifact_state_payload_valid,
       )
       Some({
         unload: scheduler => {

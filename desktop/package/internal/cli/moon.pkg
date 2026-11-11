@@ -1,9 +1,16 @@
 import {
-  "moonbitlang/async/fs" @asyncfs,
-  "moonbitlang/async/process",
+  "moonbitlang/core/async/fs" @asyncfs,
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
 }
 
 warnings = "+missing_doc+unnecessary_annotation+unnecessary_view_op+unqualified_local_using"
 
 supported_targets = "native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/process",
+  ],
+)

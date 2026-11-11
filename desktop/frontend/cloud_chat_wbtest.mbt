@@ -23,8 +23,7 @@ fn integrated_cloud_model() -> Model {
       user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
     }),
     is_desktop: true,
-    deepseek_key_saved: false,
-  }
+  }.with_host_endpoint(deepseek_key_saved=false)
   let (_, model) = update(
     test_dispatch(),
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
@@ -75,7 +74,11 @@ fn integrated_cloud_model() -> Model {
 ///|
 fn Model::with_cloud_baseline(self : Model, session : String) -> Model {
   let conversations = self.cloud.conversations.copy()
-  conversations[session] = { ..conversations[session], last_seq: Some(0), }
+  conversations[session] = {
+    ..conversations[session],
+    last_seq: Some(0),
+    client_tools_ready: self.is_desktop,
+  }
   { ..self, cloud: { ..self.cloud, conversations, }, }
 }
 
@@ -297,7 +300,7 @@ test "Chats use the shared section with existing ordering and create action" {
       }
     })
   }
-  assert_eq(sections.map(section => section.label), ["Chats"])
+  assert_eq(sections.map(section => section.label), [None])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
   assert_true(sections[0].action is Some(_))
 }
@@ -566,7 +569,7 @@ test "remote toggle preserves Cloud while account sign-out clears it" {
       connected: true,
       managed_by_env: false,
       device_url: Some(
-        "https://openseek-api.moonbitlang.cn/console/?device=fixture",
+        "https://seekmoon.moonbitlang.com/console/?device=fixture",
       ),
     }),
   }
@@ -807,4 +810,16 @@ test "new-chat shortcuts create conversations in the selected Codex project" {
     }
   }
   assert_eq(actual, [project, project, project, project])
+}
+
+///|
+test "a Cloud Quick Open pick opens its file before panel reconciliation" {
+  let cloud = integrated_cloud_model()
+  assert_true(cloud.cloud_selected())
+  assert_true(
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(cloud),
+  )
+  assert_false(
+    QuickOpen(@quick_open.Move(1)).opens_file_before_panel_reconciliation(cloud),
+  )
 }

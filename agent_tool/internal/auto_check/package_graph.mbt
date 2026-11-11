@@ -170,9 +170,9 @@ fn normalize_dir(path : String) -> String {
 /// (`source = "src"`) or legacy `moon.mod.json` (`"source": "src"`); `""`
 /// when unset or unreadable, meaning packages live under the module root.
 async fn module_source_dir(root : String) -> String {
-  let modern = @fs.read_file("\{root}/moon.mod").text() catch {
+  let modern = @fs.read_text("\{root}/moon.mod") catch {
     _ => {
-      let legacy = @fs.read_file("\{root}/moon.mod.json").text() catch {
+      let legacy = @fs.read_text("\{root}/moon.mod.json") catch {
         _ => return ""
       }
       return parse_module_source(legacy, json=true)

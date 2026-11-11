@@ -4,15 +4,15 @@
 
 ///|
 struct StdioTransport {
-  reader : &@io.Reader
-  writer : &@io.Writer
+  reader : &@io.TextReader
+  writer : &@io.TextWriter
   teardown : () -> Unit
 }
 
 ///|
 fn StdioTransport::StdioTransport(
-  reader : &@io.Reader,
-  writer : &@io.Writer,
+  reader : &@io.TextReader,
+  writer : &@io.TextWriter,
   teardown~ : () -> Unit,
 ) -> StdioTransport {
   { reader, writer, teardown, }

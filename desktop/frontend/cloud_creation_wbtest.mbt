@@ -145,24 +145,24 @@ test "failed Cloud creation retains the composer owner and retries only on submi
 }
 
 ///|
-test "signing in for new Cloud returns to an empty page without creating a session" {
+test "signed-out Cloud New stays disabled and sign-in does not resume creation" {
   let initial = integrated_cloud_model()
   let model = { ..initial, account: None, cloud: @cloud.State::empty(), }
-  let (_, login) = update(test_dispatch(), CloudAction(@cloud.Create), model)
-  assert_true(login.remote_connecting)
-  let (_, blank) = update(
+  assert_true(
+    model.chat_sidebar_sections("local")[0].action
+    is Some({ disabled: true, .. }),
+  )
+  let (_, ignored) = update(test_dispatch(), CloudAction(@cloud.Create), model)
+  assert_false(ignored.remote_connecting)
+  assert_true(ignored.cloud == model.cloud)
+  let (_, login) = update(test_dispatch(), RemoteConnectClicked, ignored)
+  let (_, signed_in) = update(
     test_dispatch(),
     AccountLoaded(login.account_epoch, Ok(initial.account)),
     login,
   )
-  assert_true(blank.screen is Chat && blank.cloud_selected())
-  assert_true(
-    blank.cloud.creation is Some(_) && !blank.cloud.creating_session(),
-  )
-  assert_true(blank.cloud.sessions.is_empty())
-  assert_true(blank.navigation.location == blank.navigation_location())
-  assert_true(blank.cloud_identity() is None)
-  assert_false(blank.composer_input().presentation.disabled)
+  assert_true(signed_in.cloud.creation is None)
+  assert_true(signed_in.cloud.sessions.is_empty())
 }
 
 ///|

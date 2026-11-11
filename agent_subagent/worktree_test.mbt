@@ -6,15 +6,15 @@
 ///|
 /// A fresh store root holding a repository `repo` with `lib/a.txt` and
 /// `other/b.txt` committed; the store's own files are its siblings.
-async fn[X] seeded(group : @async.TaskGroup[X]) -> (String, String) {
+async fn seeded(group : @async.TaskGroup) -> (String, String) {
   let root = @fs.tmpdir(prefix="openseek-worker-")
   group.add_defer(() => @fs.rmdir(root, recursive=true))
   let repo = "\{root}/repo"
   @fs.mkdir(repo)
   @fs.mkdir("\{repo}/lib")
   @fs.mkdir("\{repo}/other")
-  @fs.write_file("\{repo}/lib/a.txt", "alpha\n", create_mode=CreateOrTruncate)
-  @fs.write_file("\{repo}/other/b.txt", "beta\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{repo}/lib/a.txt", "alpha\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{repo}/other/b.txt", "beta\n", create_mode=CreateOrTruncate)
   for
     args in [
       ["init", "-q"],
@@ -94,9 +94,9 @@ async test "a worker's change is handed over as a commit on its branch" {
     assert_eq(must_git(repo, ["rev-parse", branch]).trim(), commit)
     assert_eq(must_git(repo, ["rev-parse", "\{commit}^"]).trim(), base)
     // The launching checkout is untouched until it takes the commit.
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "alpha\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "alpha\n")
     ignore(must_git(repo, ["cherry-pick", commit]))
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "ALPHA\n")
     // Its paths and name are free again at once.
     guard h.start_worker("fix-lib", ["lib"]) is Started(job_id~, ..) else {
       fail("the handed-over paths are still reserved")
@@ -124,8 +124,8 @@ async test "a worker that strays from its paths keeps its files, and a reuse of 
       is Worktree({ state: Unmergeable(defects=[_, ..]), path, .. }) else {
       fail("expected an unmergeable worktree")
     }
-    assert_eq(@fs.read_file("\{path}/other/b.txt").text(), "BETA\n")
-    assert_eq(@fs.read_file("\{repo}/other/b.txt").text(), "beta\n")
+    assert_eq(@fs.read_text("\{path}/other/b.txt"), "BETA\n")
+    assert_eq(@fs.read_text("\{repo}/other/b.txt"), "beta\n")
     // A new slice of the same name gets a directory of its own.
     guard h.start_worker("fix-lib", ["lib"]) is Started(job_id~, ..) else {
       fail("the name is still reserved")
@@ -134,7 +134,7 @@ async test "a worker that strays from its paths keeps its files, and a reuse of 
       fail("expected a worktree")
     }
     assert_true(second != path)
-    assert_eq(@fs.read_file("\{path}/other/b.txt").text(), "BETA\n")
+    assert_eq(@fs.read_text("\{path}/other/b.txt"), "BETA\n")
   })
 }
 
@@ -196,7 +196,7 @@ async test "a worktree git cannot capture is retried, then handed over with its 
       is Worktree({ state: CaptureFailed(reasons=[_, ..]), path, .. }) else {
       fail("expected a failed capture")
     }
-    assert_eq(@fs.read_file("\{path}/lib/a.txt").text(), "ALPHA\n")
+    assert_eq(@fs.read_text("\{path}/lib/a.txt"), "ALPHA\n")
     // Handed over all the same: its paths are free.
     guard h.start_worker("other-lib", ["lib"]) is Started(job_id~, ..) else {
       fail("a failed capture still holds its paths")
@@ -222,7 +222,7 @@ async test "a worktree an earlier engine left is handed over, once, with its ses
       is Ok(provisioned) else {
       fail("provision failed")
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{provisioned.entry.worker_root}/lib/a.txt",
       "ALPHA\n",
       create_mode=CreateOrTruncate,
@@ -244,7 +244,7 @@ async test "a worktree an earlier engine left is handed over, once, with its ses
       fail("expected the orphan to be handed over")
     }
     ignore(must_git(repo, ["cherry-pick", commit]))
-    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
+    assert_eq(@fs.read_text("\{repo}/lib/a.txt"), "ALPHA\n")
     // Reported until the caller says it delivered the report.
     assert_true(h.launcher.recover() is [("p-sr-7", _)])
     h.launcher.reported(["p-sr-7"])
@@ -345,7 +345,7 @@ async test "a change handed over at shutdown is reported until it is taken" {
       is Ok(provisioned) else {
       fail("provision failed")
     }
-    @fs.write_file(
+    @fs.write_text(
       "\{provisioned.entry.worker_root}/lib/a.txt",
       "ALPHA\n",
       create_mode=CreateOrTruncate,
@@ -384,7 +384,7 @@ async test "a cancelled worker start leaves nothing that blocks a retry" {
     for i in 0..<400 {
       let dir = "\{repo}/.mooncakes/pkg\{i}"
       @fs.mkdir(dir, recursive=true)
-      @fs.write_file("\{dir}/f.txt", "x", create_mode=CreateOrTruncate)
+      @fs.write_text("\{dir}/f.txt", "x", create_mode=CreateOrTruncate)
     }
     let h = harness(
       group,
@@ -397,7 +397,7 @@ async test "a cancelled worker start leaves nothing that blocks a retry" {
     let mut saw_running = false
     for _ in 0..<2000 {
       for name in (@fs.readdir(registry) catch { _ => [] }) {
-        let text = @fs.read_file("\{registry}/\{name}").text() catch { _ => "" }
+        let text = @fs.read_text("\{registry}/\{name}") catch { _ => "" }
         if name.has_suffix(".json") && text.contains("\"Running\"") {
           saw_running = true
         }

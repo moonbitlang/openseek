@@ -18,14 +18,13 @@ async test "fork preserves checkout probe errors without creating a member" {
         },
       ],
     } : Json).stringify()
-  @fs.write_file(registry, before)
+  @fs.write_text(registry, before)
   // A self-referencing symlink reliably fails stat even when run as root.
   let checkout = workspace.join(".worktrees/example").to_string()
   @fs.symlink(checkout, target=checkout)
   defer @fs.remove(checkout)
-  let expected = try @fs.kind(checkout) catch {
-    @os_error.OSError(_) as error => error.to_string()
-    error => raise error
+  let expected = try @fsx.is_dir(checkout |> @pathx.Path) catch {
+    error => "\{error}"
   } noraise {
     _ => fail("expected the checkout probe to fail")
   }
@@ -41,12 +40,12 @@ async test "fork preserves checkout probe errors without creating a member" {
       _ => published = true,
     )
   catch {
-    @os_error.OSError(_) as error => assert_eq(error.to_string(), expected)
-    error => raise error
+    @worktree.WorktreeError(_) as error => raise error
+    error => assert_eq("\{error}", expected)
   } noraise {
     _ => fail("a failed checkout probe must refuse the fork")
   }
   assert_false(created)
   assert_false(published)
-  assert_eq(@fs.read_file(registry).text(), before)
+  assert_eq(@fs.read_text(registry), before)
 }

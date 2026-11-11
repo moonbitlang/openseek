@@ -2,8 +2,16 @@
 // `{ "mcpServers": { "<name>": { … } } }` shape, so an existing
 // Claude/Cursor-style `mcp.json` can be pointed at directly. A server entry is
 // either a stdio server (`"command"` + optional `"args"`/`"env"`) or a
-// Streamable HTTP server (`"url"` + optional `"headers"`). File reading and
+// Streamable HTTP server (`"url"` + optional `"headers"` / `"headersHelper"`). File reading and
 // JSON parsing are the caller's; this layer is pure and decodes a parsed `Json`.
+
+///|
+/// A headers helper executable and its literal arguments, decoded from configuration.
+#derive(Eq, Debug)
+pub(all) struct HeadersHelperCommand {
+  command : String
+  arguments : Array[String]
+}
 
 ///|
 /// A configured MCP server: launched as a subprocess (stdio) or reached at a
@@ -16,7 +24,12 @@ pub(all) enum McpServer {
     args~ : Array[String],
     env~ : Map[String, String]
   )
-  Http(name~ : String, url~ : String, headers~ : Map[String, String])
+  Http(
+    name~ : String,
+    url~ : String,
+    headers~ : Map[String, String],
+    headers_helper~ : HeadersHelperCommand?
+  )
 }
 
 ///|
@@ -149,7 +162,30 @@ fn decode_http_server(
   let headers = decode_string_map(name, entry, "headers")
   let url = expand_env(name, url, env)
   let headers = headers.map((_, value) => expand_env(name, value, env))
-  Http(name~, url~, headers~)
+  let headers_helper = if entry is { "headersHelper": value, .. } {
+    guard value is Array([String(command), .. items]) else {
+      raise Invalid(
+        "server `\{name}`: `headersHelper` must be a nonempty array of strings",
+      )
+    }
+    guard !command.is_empty() else {
+      raise Invalid("server `\{name}`: `headersHelper` needs an executable")
+    }
+    let arguments = [
+      for item in items => {
+        guard item is String(argument) else {
+          raise Invalid(
+            "server `\{name}`: every `headersHelper` entry must be a string",
+          )
+        }
+        argument
+      }
+    ]
+    Some({ command, arguments, })
+  } else {
+    None
+  }
+  Http(name~, url~, headers~, headers_helper~)
 }
 
 ///|

@@ -219,10 +219,9 @@ fn parse_open(event : @dom.Event) -> Open? {
 fn focus_element(id : String, after_render : Bool) -> @cmd.Cmd {
   let focus = _ => {
     if @dom.document().get_element_by_id(id).to_option() is Some(element) {
-      let _ : @js.Value = @js.Value::cast_from(element).apply_with_string(
-        "focus",
-        ([] : FixedArray[@js.Value]),
-      )
+      if element.to_html_element() is Some(element) {
+        element.focus()
+      }
       if element.get_attribute(TemporaryFocusAttribute) is Some(focus_id) &&
         focus_id == id {
         element.remove_attribute(TemporaryFocusAttribute)

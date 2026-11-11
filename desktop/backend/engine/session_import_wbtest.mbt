@@ -27,7 +27,7 @@ async test "import loads through the normal session API and joins the selected w
     )
     assert_eq(created, [session_id])
     assert_true(
-      @worktree.list(workspace).worktrees is [row] &&
+      @worktree.list(repo).worktrees is [row] &&
       row.sessions.contains(session_id),
     )
     assert_eq(@worktree.run_dir(repo, session_id), checkout)

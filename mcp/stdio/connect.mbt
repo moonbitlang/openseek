@@ -38,8 +38,8 @@ pub fn StdioConnection::shutdown(self : StdioConnection) -> Unit {
 /// closing the pipes in every failure case so nothing leaks. The server inherits
 /// openseek's environment (so it always has `PATH`, `HOME`, etc.); `env` adds to
 /// and overrides it.
-pub async fn[X] connect(
-  group : @async.TaskGroup[X],
+pub async fn connect(
+  group : @async.TaskGroup,
   command~ : String,
   args~ : Array[String],
   env? : Map[String, String],
@@ -48,33 +48,23 @@ pub async fn[X] connect(
   client_version~ : String,
   handshake_timeout_ms~ : Int32 = DefaultHandshakeTimeoutMs,
 ) -> StdioConnection {
-  let (stdin_writer, stdout_reader, process) = {
-    // The child's stdin/stdout pipes via the process helpers, which create the
-    // synchronous, non-overlapped child endpoints a subprocess needs on every
-    // platform (including Windows). They hand the child ends back as un-closable
-    // trait objects and clean them up in `spawn`'s own teardown, so the only
-    // unreachable-in-practice leak is one fd if `read_from_process` raises (fd
-    // exhaustion) after `write_to_process` succeeded — accepted, since that end
-    // cannot be closed here.
-    let (child_stdin, stdin_writer) = @process.write_to_process()
-    errdefer stdin_writer.close()
-    let (stdout_reader, child_stdout) = @process.read_from_process()
-    errdefer stdout_reader.close()
-    // `no_wait`: the group terminates the server at teardown rather than waiting
-    // for an exit that only comes once its stdin is closed.
-    let process = @process.spawn(
-      group,
-      command,
-      args,
-      extra_env?=env,
-      inherit_env=true,
-      stdin=child_stdin,
-      stdout=child_stdout,
-      cwd?=cwd.map(dir => dir.clamped_view()),
-      no_wait=true,
-    )
-    (stdin_writer, stdout_reader, process)
-  }
+  // `FeedFromParent` and `Collect` give the parent its pipe ends on the
+  // process handle; `spawn` owns and closes the child ends. `no_wait`: the group
+  // terminates the server at teardown rather than waiting for an exit that only
+  // comes once its stdin is closed.
+  let process = @process.spawn(
+    group,
+    command,
+    args,
+    extra_env?=env,
+    inherit_env=true,
+    stdin=FeedFromParent,
+    stdout=Collect,
+    cwd?=cwd.map(dir => dir.clamped_view()),
+    no_wait=true,
+  )
+  let stdin_writer = process.stdin
+  let stdout_reader = process.stdout
   // The pump and writer tasks own their respective parent pipe ends and close
   // them in defer blocks. Teardown cancels the owner tasks instead of closing a
   // handle from another task while an async read/write is still pending (which
@@ -100,8 +90,8 @@ pub async fn[X] connect(
     }
   }
   let transport = NdjsonTransport::NdjsonTransport(
-    stdout_reader,
-    stdin_writer,
+    stdout_reader.text,
+    stdin_writer.text,
     on_close=teardown,
   )
   let client = @jsonrpc.Client(transport)

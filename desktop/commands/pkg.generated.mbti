@@ -3,6 +3,7 @@ package "openseek_desktop/commands"
 
 import {
   "moonbit-community/proton_contract",
+  "moonbitlang/core/json",
   "openseek_desktop/protocol",
 }
 
@@ -69,6 +70,8 @@ pub let browser_open : Command[@protocol.BrowserOpenPayload, @protocol.EmptyRepl
 
 pub let browser_pick_element : Command[@protocol.BrowserPickPayload, @protocol.BrowserPickReply]
 
+pub let browser_preview : Command[@protocol.BrowserPreviewPayload, @protocol.EmptyReply]
+
 pub let browser_reload : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 
 pub let browser_set_bounds : Command[@protocol.BrowserBoundsPayload, @protocol.EmptyReply]
@@ -80,6 +83,8 @@ pub let browser_set_visible : Command[@protocol.BrowserVisiblePayload, @protocol
 pub let cloud_file_download : Command[@protocol.CloudFileDownloadPayload, @protocol.CloudFileDownloadReply]
 
 pub let cloud_history_cache : Command[@protocol.CloudHistoryCacheRequest, @protocol.CloudHistoryCacheReply]
+
+pub let cloud_mcp : Command[@protocol.CloudMcpRequest, @json.Json]
 
 pub let codex_account_login_cancel : Command[@protocol.CodexAccountLoginCancelPayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 
@@ -241,11 +246,11 @@ pub let pattern_repair : Command[@protocol.PatternRepairPayload, @protocol.Patte
 
 pub let remote_access_set : Command[@protocol.RemoteAccessPayload, @protocol.AuthStatusPayload]
 
-pub let schedules_action : Command[@protocol.ScheduleActionPayload, @protocol.SchedulesReply]
+pub let schedules_action : Command[@protocol.ScheduleActionPayload, @protocol.ScheduleChangeReply]
 
 pub let schedules_list : Command[@protocol.EmptyPayload, @protocol.SchedulesReply]
 
-pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.SchedulesReply]
+pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.ScheduleChangeReply]
 
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 

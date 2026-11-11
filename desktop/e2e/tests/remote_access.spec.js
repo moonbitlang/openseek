@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // The `auth.status` shape (docs/remote-protocol.md): absent fields, never
 // null, stand for a signed-out user and device.
-const relay = 'https://openseek-api.moonbitlang.cn';
+const relay = 'https://seekmoon.moonbitlang.com';
 const signedOut = { connected: false, server_url: relay };
 const signedIn = {
   connected: true,
@@ -69,7 +69,7 @@ async function installDesktop(page, { managed = false } = {}) {
       openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 5 });
+            window.desktopEvent('openseek.agent.connected', { protocol: 6 });
           }
           return window.desktopRequest({ method, params });
         },
@@ -93,6 +93,7 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await expect(connect).toBeEnabled();
   await connect.click();
 
+  await expect(section.getByRole('status')).toHaveText('Finish signing in in your browser…');
   await expect(section.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 

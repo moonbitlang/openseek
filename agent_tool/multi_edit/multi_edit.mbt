@@ -203,7 +203,7 @@ async fn load_edits_file(
   }
 
   let path = @workspace_path.resolve(workspace_root, spec)
-  let text = @fs.read_file(path).text() catch {
+  let text = @fs.read_text(path) catch {
     error =>
       return Err(
         failed("error: multi_edit could not read edits file \{path}: \{error}"),
@@ -302,7 +302,7 @@ async fn multi_edit_files(
   let failures : Array[EditFailure] = []
   let prepared : Array[PreparedFile] = []
   for group in groups {
-    let content = @fs.read_file(group.path).text() catch {
+    let content = @fs.read_text(group.path) catch {
       error => {
         failures.push({
           file: group.file,
@@ -400,7 +400,7 @@ async fn multi_edit_files(
     match measure_baseline(check_paths) {
       Measured(baseline) => {
         for write in writes {
-          let current = @fs.read_file(write.path).text() catch {
+          let current = @fs.read_text(write.path) catch {
             error =>
               return not_verified("could not re-read \{write.path}: \{error}")
           }
@@ -421,7 +421,7 @@ async fn multi_edit_files(
   // A checked batch interrupted while being written or checked must
   // not stay on disk unverified: put every original back before the
   // cancellation unwinds. Registered before the first write.
-  async fn restore_on_unwind() -> Unit {
+  async fn restore_on_unwind() -> Unit nocancel {
     if baseline is Some(_) {
       @async.protect_from_cancel(() => {
         restore_files(writes, write_scope?) |> ignore
@@ -429,7 +429,7 @@ async fn multi_edit_files(
     }
   }
 
-  errdefer @async.protect_from_cancel(() => restore_on_unwind())
+  errdefer restore_on_unwind()
   // A checked batch that fails mid-write restores the files touched so far.
   let written : Array[PreparedWrite] = []
   async fn write_failed(problem : String) -> @agent_tool.ToolAction {
@@ -469,7 +469,7 @@ async fn multi_edit_files(
     // writes, so a failure can leave the file empty, and the rollback must
     // cover it.
     written.push(write)
-    @fs.write_file(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
+    @fs.write_text(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
       error =>
         return write_failed("\{write.path}: error writing file: \{error}")
     }
@@ -505,7 +505,7 @@ async fn multi_edit_files(
   for write in writes {
     let seen_digest = @agent_tool.content_digest(write.original_content)
     let new_digest = @agent_tool.content_digest(write.new_content)
-    let final_content = @fs.read_file(write.path).text() catch {
+    let final_content = @fs.read_text(write.path) catch {
       _ => write.new_content
     }
     let final_digest = @agent_tool.content_digest(final_content)
@@ -1117,7 +1117,7 @@ async fn restore_files(
       failures.push(write.path)
       continue
     }
-    @fs.write_file(
+    @fs.write_text(
       write.path,
       write.original_content,
       create_mode=CreateOrTruncate,

@@ -7,8 +7,8 @@
 ///|
 /// The current status. The fallback `server_url` is the relay origin —
 /// a SeekMoon-hosted service that no longer depends on the chat provider.
-async fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
-  state.auth.status(server_url?=@engine.remote_server_base(state.manager))
+fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
+  state.auth.status(server_url=@engine.remote_server_base())
 }
 
 ///|
@@ -35,7 +35,18 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   let store = state.auth
   // Publish the resulting state on success, failure, and cancellation alike;
   // sign_out serializes the local clear with persistence.
-  defer state.hub.publish(AuthChanged(store.status()))
+  let clients = state.cloud_clients.iter().collect()
+  defer {
+    for (account, client) in clients {
+      if state.cloud_clients
+        .get(account)
+        .map_or(false, current => physical_equal(current, client)) &&
+        store.account().map(account => account.token) != Some(client.token) {
+        state.cloud_clients.remove(account)
+      }
+    }
+    state.hub.publish(AuthChanged(store.status()))
+  }
   store.sign_out() catch {
     @auth.AuthError(message) => raise @host.HostError(message)
     error => raise @host.HostError("sign-out failed: \{error}")
@@ -46,7 +57,7 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
 ///|
 /// Abort an in-flight sign-in; the pending `auth.connect` settles with
 /// its own error. A no-op (current status) when nothing is in flight.
-async fn auth_cancel(state : ApiState) -> @protocol.AuthStatusPayload {
+fn auth_cancel(state : ApiState) -> @protocol.AuthStatusPayload {
   ignore(state.auth.cancel_sign_in())
   auth_status(state)
 }

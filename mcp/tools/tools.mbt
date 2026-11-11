@@ -24,6 +24,15 @@ const DefaultDiscoveryTimeoutMs : Int32 = 30000
 const CallTimeoutMs : Int32 = 120000
 
 ///|
+/// How long a script's call or search waits for a server that is still
+/// connecting. A server may never settle (a headers helper waiting on the
+/// user has no deadline), so the wait is bounded. A call's wait counts
+/// against its `CallTimeoutMs`, which keeps every reply within the SDK's
+/// 125-second request deadline; a listing request waits for nothing else,
+/// so a search's wait alone stays within it.
+const ConnectWaitMs : Int32 = 60000
+
+///|
 /// Cap on one tool's description in the catalog, so a misbehaving server
 /// cannot crowd the pages a script renders.
 const MaxDescriptionChars : Int32 = 1024
@@ -64,46 +73,127 @@ pub struct ServerEntry {
 }
 
 ///|
-/// Connect every configured server, in config order, and keep the outcome of
-/// each beside the tools it offers. Every failure it returns is also reported
-/// as the event it always was. The connections' reader/writer tasks run on
-/// `scope`'s group and live until it ends.
-pub async fn[X] connect(
-  scope : @agent_runtime.AgentTaskScope[X],
+/// One configured server being connected in the background, with the task
+/// that connects it (see `start`). The task's result is what connecting came
+/// to.
+pub struct Server {
+  config : @config.McpServer
+  connecting : @async.Task[ServerEntry]
+}
+
+///|
+/// Start connecting every configured server at once, each in a task of its
+/// own on `scope`'s group, and return them in config order right away. A
+/// server that never settles (a stuck headers helper, say) holds back only its
+/// own task, which ends with the group. Every failure a task returns is also
+/// reported as the event it always was. The connections' reader/writer tasks
+/// run on `scope`'s group and live until it ends.
+pub fn start(
+  scope : @agent_runtime.AgentTaskScope,
   servers : Array[@config.McpServer],
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
-) -> Array[ServerEntry] {
-  let entries : Array[ServerEntry] = []
-  for server in servers {
-    let (connection, instructions, tools) = connect_server(
-      scope,
-      server,
-      client_name~,
-      client_version~,
-      workspace_root?,
-      discovery_timeout_ms~,
-    )
-    entries.push({ server, connection, instructions, tools, })
+) -> Array[Server] {
+  servers.map(server => {
+    config: server,
+    connecting: scope
+    .group()
+    .spawn(no_wait=true, () => {
+      connect_server(
+        scope,
+        server,
+        client_name~,
+        client_version~,
+        workspace_root?,
+        discovery_timeout_ms~,
+      )
+    }),
+  })
+}
+
+///|
+/// What connecting this server came to, or `None` while it is still
+/// connecting, as `Task::try_wait` reads its task — except that a task
+/// cancelled with its group, which only happens as the engine shuts down,
+/// reads as `None` rather than raising.
+pub fn Server::try_wait(self : Server) -> ServerEntry? {
+  self.connecting.try_wait() catch {
+    _ => None
   }
-  entries
+}
+
+///|
+/// What connecting this server came to, waiting up to `timeout_ms` for it to
+/// settle: `None` when it is still connecting by then.
+async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
+  @async.with_timeout_opt(timeout_ms, () => self.connecting.wait())
+}
+
+///|
+/// Wait until the servers a search needs have settled: the one named
+/// `server`, or every server when none is named (one not configured needs
+/// nothing). The wait ends after `timeout_ms` whatever is left; a server
+/// still connecting then is listed as such.
+pub async fn settle(
+  servers : Array[Server],
+  server? : String,
+  timeout_ms~ : Int32 = ConnectWaitMs,
+) -> Unit {
+  let waiting = servers.filter(configured => {
+    match server {
+      Some(name) => name == configured.config.name()
+      None => true
+    }
+  })
+  ignore(
+    @async.with_timeout_opt(timeout_ms, () => {
+      for configured in waiting {
+        ignore(configured.connecting.wait())
+      }
+    }),
+  )
+}
+
+///|
+/// Call `tool` of this server, as `ServerEntry::call` does, once it has
+/// settled. A server still connecting is waited for up to `wait_ms`, and is an
+/// error result saying so when it has not settled by then. The wait counts
+/// against the call's deadline.
+pub async fn Server::call(
+  self : Server,
+  tool : String,
+  arguments : Json,
+  wait_ms~ : Int32 = ConnectWaitMs,
+) -> @agent_tool.ToolAction {
+  let started = @async.now()
+  guard self.wait(timeout_ms=wait_ms) is Some(entry) else {
+    let (message, _) = cap_serialized(
+      "MCP server `\{self.config.name()}` is still connecting after \{wait_ms / 1000}s; try again later",
+      MaxToolOutputChars,
+    )
+    @agent_tool.respond(message, is_error=true)
+  }
+  let waited = (@async.now() - started).to_int()
+  entry.call(tool, arguments, timeout_ms=CallTimeoutMs - waited)
 }
 
 ///|
 /// Call `tool` of this server. A server that is not connected, or that does
 /// not offer `tool`, is an error result naming what went wrong; so is a call
-/// the server fails, times out, or loses the connection on.
+/// the server fails, loses the connection on, or does not answer within
+/// `timeout_ms`.
 pub async fn ServerEntry::call(
   self : ServerEntry,
   tool : String,
   arguments : Json,
+  timeout_ms~ : Int32 = CallTimeoutMs,
 ) -> @agent_tool.ToolAction {
   let server = self.server.name()
   match self.connection {
     Live(client) if self.tools.iter().any(offered => offered.name == tool) =>
-      call_tool(client, tool, arguments)
+      call_tool(client, tool, arguments, timeout_ms~)
     Live(_) => {
       let (message, _) = cap_serialized(
         "MCP server `\{server}` has no tool `\{tool}`; find its tools with `@mcp.search(server=\{Json(server).stringify()})`",
@@ -135,29 +225,35 @@ pub async fn ServerEntry::call(
 /// an MCP host reply: descriptions, instructions, and errors are cut and marked, an
 /// arguments schema that is not an object or is oversized becomes the open
 /// object schema (the server still validates its arguments), and an oversized
-/// result schema is dropped, since it only helps whoever reads `data`.
-pub fn catalog_items(entries : Array[ServerEntry]) -> Array[Json] {
+/// result schema is dropped, since it only helps whoever reads `data`. A
+/// server still connecting is listed as unavailable, saying so, until it
+/// settles.
+pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
   let items : Array[Json] = []
-  for entry in entries {
-    let server = entry.server.name()
+  for configured in servers {
+    let server = configured.config.name()
     let fields : Map[String, Json] = { "server": Json(server) }
-    let error = match entry.connection {
-      Failed(error) => Some(error)
-      Live(client) if client.is_closed() => Some("the connection was lost")
-      Live(_) | NoTools => None
+    let settled = configured.try_wait()
+    let error = match settled {
+      None => Some("still connecting; search again from a later script")
+      Some({ connection: Failed(error), .. }) => Some(error)
+      Some({ connection: Live(client), .. }) if client.is_closed() =>
+        Some("the connection was lost")
+      Some(_) => None
     }
     match error {
       Some(error) =>
         fields["error"] = Json(cut(error, MaxServerTextChars, marked=true))
       None =>
-        if entry.instructions is Some(instructions) && !instructions.is_blank() {
+        if settled is Some({ instructions: Some(instructions), .. }) &&
+          !instructions.is_blank() {
           fields["instructions"] = Json(
             cut(instructions.trim().to_owned(), MaxServerTextChars, marked=true),
           )
         }
     }
     items.push(Json::object(fields))
-    guard error is None else { continue }
+    guard error is None && settled is Some(entry) else { continue }
     for tool in entry.tools {
       let record : Map[String, Json] = {
         "name": Json(tool.name),
@@ -199,15 +295,19 @@ fn cut(text : String, limit : Int32, marked~ : Bool) -> String {
 /// including discovery outrunning `discovery_timeout_ms`, so a server that
 /// handshakes but never answers `tools/list` cannot hang the engine's startup.
 /// Cancellation propagates.
-async fn[X] connect_server(
-  scope : @agent_runtime.AgentTaskScope[X],
+async fn connect_server(
+  scope : @agent_runtime.AgentTaskScope,
   server : @config.McpServer,
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32,
-) -> (Connection, String?, Array[@mcp.McpTool]) {
+) -> ServerEntry {
   let name = server.name()
+  fn unavailable(connection : Connection) -> ServerEntry {
+    { server, connection, instructions: None, tools: [], }
+  }
+
   // A connected server, normalized across transports: the initialized client
   // and its initialization result; closing the client tears the transport
   // (and, for stdio, the process) down.
@@ -228,11 +328,22 @@ async fn[X] connect_server(
         )
         (connection.client(), connection.init())
       }
-      Http(url~, headers~, ..) => {
+      Http(url~, headers~, headers_helper~, ..) => {
+        // Resolve configuration before connecting. The transport receives only
+        // ordinary headers; helper output overrides static keys regardless of case.
+        let resolved : Map[String, String] = Map([])
+        for name, value in headers {
+          resolved[name.to_lower()] = value
+        }
+        if headers_helper is Some(helper) {
+          for name, value in @headers_helper.run(helper, cwd?=workspace_root) {
+            resolved[name.to_lower()] = value
+          }
+        }
         let connection = @streamhttp.connect(
           scope.group(),
           url~,
-          headers~,
+          headers=resolved,
           client_name~,
           client_version~,
         )
@@ -243,7 +354,7 @@ async fn[X] connect_server(
     error => {
       let error = "\{error}"
       @emit.emit(McpConnectFailed(server=name, error~))
-      return (Failed(error), None, [])
+      return unavailable(Failed(error))
     }
   }
   let discovered = try {
@@ -252,12 +363,12 @@ async fn[X] connect_server(
   } catch {
     @async.TimeoutError => {
       @emit.emit(McpListToolsTimeout(server=name))
-      return (Failed("timed out listing its tools"), None, [])
+      return unavailable(Failed("timed out listing its tools"))
     }
     error => {
       let error = "\{error}"
       @emit.emit(McpListToolsFailed(server=name, error~))
-      return (Failed("listing its tools failed: \{error}"), None, [])
+      return unavailable(Failed("listing its tools failed: \{error}"))
     }
   }
   // A server with nothing to offer is useless for the rest of the session:
@@ -265,9 +376,14 @@ async fn[X] connect_server(
   if discovered.is_empty() {
     @emit.emit(McpNoTools(server=name))
     client.close()
-    return (NoTools, None, [])
+    return unavailable(NoTools)
   }
-  (Live(client), init.instructions, discovered)
+  {
+    server,
+    connection: Live(client),
+    instructions: init.instructions,
+    tools: discovered,
+  }
 }
 
 ///|
@@ -295,14 +411,16 @@ pub async fn discover(
 /// Proxy a tool call to the MCP server and map the result into a tool action:
 /// the rendered text as content, image content as image input (the same way
 /// `read_image` returns it), and any `structuredContent` as data.
-/// A JSON-RPC / transport failure becomes an error response; a tool-level
-/// failure is surfaced via `is_error`.
+/// A JSON-RPC / transport failure, and a call the server does not answer
+/// within `timeout_ms`, becomes an error response; a tool-level failure is
+/// surfaced via `is_error`.
 pub async fn call_tool(
   client : @mcp.McpClient,
   tool : String,
   args : Json,
+  timeout_ms~ : Int32 = CallTimeoutMs,
 ) -> @agent_tool.ToolAction {
-  let outcome = @async.with_timeout_opt(CallTimeoutMs, () => {
+  let outcome = @async.with_timeout_opt(timeout_ms, () => {
     client.call_tool(name=tool, arguments=args)
   }) catch {
     error => {
@@ -318,7 +436,7 @@ pub async fn call_tool(
   }
   guard outcome is Some(result) else {
     let (message, _) = cap_serialized(
-      "MCP tool `\{tool}` timed out after \{CallTimeoutMs / 1000}s",
+      "MCP tool `\{tool}` timed out after \{timeout_ms / 1000}s",
       MaxToolOutputChars,
     )
     return @agent_tool.respond(message, is_error=true)

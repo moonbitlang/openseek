@@ -19,6 +19,11 @@ const SendTimeoutMs : Int32 = 5000
 const MaxReplyChars : Int32 = 65536
 
 ///|
+/// Catalog snapshots kept for listings in progress. A listing takes a few
+/// requests, so only the latest few catalogs are needed.
+const MaxSnapshots : Int32 = 4
+
+///|
 /// The script closed its connection before its reply.
 priv suberror ScriptGone
 
@@ -28,26 +33,26 @@ priv suberror ScriptGone
 struct Service {
   server : @socket.TcpServer
   token : String
-  /// Call `tool` of `server`.
-  call : async (String, String, Json) -> @agent_tool.ToolAction
-  /// The catalog's items as they stand now.
-  items : () -> Array[Json]
+  /// The configured servers, in configuration order, being connected.
+  servers : Array[@mcptools.Server]
+  snapshots : Snapshots
   /// Where a result's images are saved, when there is anywhere.
   image_directory : String?
   mut stop : (async () -> Unit)?
 }
 
 ///|
-/// Serve MCP servers' tools on the session's task group until it ends:
-/// `call` calls `tool` of `server`, and `items` is the catalog as it stands
-/// now, each item small enough for a reply on its own. This package knows no
-/// MCP client; the engine supplies both. Images in call results are saved
-/// under `image_directory`, created on first use; without one they are
-/// dropped with a note.
-pub async fn[X] Service::start(
-  group : @async.TaskGroup[X],
-  call~ : async (String, String, Json) -> @agent_tool.ToolAction,
-  items~ : () -> Array[Json],
+/// Serve the tools of `servers` on the session's task group until it ends.
+/// A call goes to the server it names once that server has settled
+/// (`Server::call`). A new listing waits for the server a scoped search
+/// names, or for every server (`@mcptools.settle`), then lists the catalog
+/// (`@mcptools.catalog_items`). Both waits are bounded, so a server that
+/// never settles cannot outlast the SDK's request deadline. Images in call
+/// results are saved under `image_directory`, created on first use; without
+/// one they are dropped with a note.
+pub async fn Service::start(
+  group : @async.TaskGroup,
+  servers : Array[@mcptools.Server],
   image_directory? : String,
 ) -> Service {
   guard @env.rand(32) is Some(entropy) else {
@@ -57,8 +62,8 @@ pub async fn[X] Service::start(
   let service : Service = {
     server,
     token: @crypto.bytes_to_hex_string(entropy),
-    call,
-    items,
+    servers,
+    snapshots: { kept: [], next: 0, },
     image_directory,
     stop: None,
   }
@@ -103,15 +108,15 @@ pub async fn[X] Service::start(
       // which it does when it is stopped. Cancel what it asked for then, as
       // stopping a script cancels its PTC calls; the MCP client tells the
       // server the request is cancelled.
-      let reply = @async.with_task_group(request => {
-        request.spawn_bg(no_wait=true, () => {
-          ignore(socket.read_some(max_len=1)) catch {
+      let reply = @async.any([
+        () => service.answer(input),
+        () => {
+          ignore(socket.read_into(FixedArray::make(1, b'\x00'))) catch {
             _ => ()
           }
           raise ScriptGone
-        })
-        service.answer(input)
-      }) catch {
+        },
+      ]) catch {
         ScriptGone => return
         error => raise error
       }
@@ -122,14 +127,14 @@ pub async fn[X] Service::start(
     worker.cancel()
     @async.protect_from_cancel(() => worker.wait() catch { _ => () })
   })
-  group.add_defer(() => @async.protect_from_cancel(() => service.close()))
+  group.add_defer(() => service.close())
   service
 }
 
 ///|
 /// Stop serving and close the listener when the session's group ends. Calls
 /// in flight are cancelled.
-async fn Service::close(self : Service) -> Unit {
+async fn Service::close(self : Service) -> Unit nocancel {
   @async.protect_from_cancel(() => {
     if self.stop is Some(stop) {
       self.stop = None
@@ -157,12 +162,9 @@ pub fn Service::env(self : Service) -> Map[String, String] {
 async fn Service::answer(self : Service, input : Json) -> Json {
   match input {
     { "version": 1, "list": Object(fields), .. } =>
-      match fields.get("cursor") {
-        None | Some(Null) => list_reply((self.items)(), 0)
-        Some(Number(cursor, ..)) if cursor >= 0.0 && cursor == cursor.floor() =>
-          list_reply((self.items)(), cursor.to_int())
-        _ =>
-          error_result("MCP host list requires a non-negative integer cursor")
+      self.list(fields) catch {
+        InvalidList(message) => error_result(message)
+        error => raise error
       }
     {
       "version": 1,
@@ -174,16 +176,19 @@ async fn Service::answer(self : Service, input : Json) -> Json {
       },
       ..
     } => {
-      let reply = match (self.call)(server, tool, arguments) {
-        Respond(output) => self.call_reply(output)
-        Control(_) => error_result("MCP tool returned unsupported loop control")
+      let action = match
+        self.servers.search_by(configured => configured.config.name() == server) {
+        Some(index) => self.servers[index].call(tool, arguments)
+        None =>
+          @agent_tool.respond(
+            "no MCP server `\{@agent_tool.brief_line(server, limit=128)}`; list them with `@mcp.search()`",
+            is_error=true,
+          )
       }
-      if reply.stringify().length() > MaxReplyChars {
-        error_result(
-          "MCP tool executed, but its result exceeded the 64K character limit. Do not retry a mutation merely to retrieve output.",
-        )
-      } else {
-        reply
+      match action {
+        Respond(output) =>
+          deliverable(call_reply(output, image_directory?=self.image_directory))
+        Control(_) => error_result("MCP tool returned unsupported loop control")
       }
     }
     _ =>
@@ -194,11 +199,95 @@ async fn Service::answer(self : Service, input : Json) -> Json {
 }
 
 ///|
-/// The catalog items from `cursor`: as many whole items as fit one reply
-/// (always at least one), and the cursor of the rest while any remain.
-fn list_reply(items : Array[Json], cursor : Int32) -> Json {
+/// A `list` request the host cannot answer, with the reason.
+priv suberror InvalidList {
+  InvalidList(String)
+}
+
+///|
+/// The reply to a `list` request with these fields: a page of the snapshot
+/// it names, or of a new one when it names none, taken once the server it
+/// names (every server when it names none) has settled.
+async fn Service::list(self : Service, fields : Map[String, Json]) -> Json {
+  let cursor = index(fields, "cursor").unwrap_or(0)
+  let snapshot = if index(fields, "snapshot") is Some(id) {
+    guard self.snapshots.find(id) is Some(snapshot) else {
+      raise InvalidList(
+        "MCP host no longer keeps catalog snapshot \{id}; list the catalog again",
+      )
+    }
+    snapshot
+  } else {
+    let server = match fields.get("server") {
+      None | Some(Null) => None
+      Some(String(server)) => Some(server)
+      _ => raise InvalidList("MCP host list requires a string server")
+    }
+    @mcptools.settle(self.servers, server?)
+    self.snapshots.take(@mcptools.catalog_items(self.servers))
+  }
+  list_reply(snapshot, cursor)
+}
+
+///|
+/// The optional non-negative integer field `key` of a `list` request.
+fn index(fields : Map[String, Json], key : String) -> Int32? raise InvalidList {
+  match fields.get(key) {
+    None | Some(Null) => None
+    Some(Number(number, ..)) if number >= 0.0 && number == number.floor() =>
+      Some(number.to_int())
+    _ =>
+      raise InvalidList("MCP host list requires a non-negative integer \{key}")
+  }
+}
+
+///|
+/// The catalogs recent listings started from, oldest first: every page of a
+/// listing comes from the one it started from, so a catalog that changes
+/// meanwhile cannot shift its pages.
+priv struct Snapshots {
+  kept : Array[Snapshot]
+  mut next : Int32
+}
+
+///|
+/// The kept snapshot with this id, if it is still kept.
+fn Snapshots::find(self : Snapshots, id : Int32) -> Snapshot? {
+  self.kept.iter().find_first(snapshot => snapshot.id == id)
+}
+
+///|
+/// `items` as a snapshot a new listing can page through: the latest one when
+/// the catalog has not changed since, otherwise a new one, which pushes out
+/// the oldest once more than `MaxSnapshots` are kept.
+fn Snapshots::take(self : Snapshots, items : Array[Json]) -> Snapshot {
+  if self.kept.last() is Some(latest) && latest.items == items {
+    return latest
+  }
+  let snapshot = { id: self.next, items, }
+  self.next += 1
+  self.kept.push(snapshot)
+  if self.kept.length() > MaxSnapshots {
+    ignore(self.kept.remove(0))
+  }
+  snapshot
+}
+
+///|
+/// The catalog's items at one moment, under the id a listing names it by.
+priv struct Snapshot {
+  id : Int32
+  items : Array[Json]
+}
+
+///|
+/// The snapshot's items from `cursor`: as many whole items as fit one reply
+/// (always at least one), the snapshot's id, and the cursor of the rest while
+/// any remain.
+fn list_reply(snapshot : Snapshot, cursor : Int32) -> Json raise InvalidList {
+  let items = snapshot.items
   guard cursor < items.length() || (cursor == 0 && items.is_empty()) else {
-    return error_result(
+    raise InvalidList(
       "MCP host list cursor \{cursor} is past the catalog's \{items.length()} items",
     )
   }
@@ -215,7 +304,10 @@ fn list_reply(items : Array[Json], cursor : Int32) -> Json {
     used += size
   }
   let next = cursor + listed.length()
-  let data : Map[String, Json] = { "items": Json::array(listed) }
+  let data : Map[String, Json] = {
+    "items": Json::array(listed),
+    "snapshot": Json(snapshot.id),
+  }
   if next < items.length() {
     data["next_cursor"] = Json(next)
   }
@@ -231,15 +323,15 @@ fn list_reply(items : Array[Json], cursor : Int32) -> Json {
 /// A tool's result as a script receives it. A reply is JSON, so images
 /// cannot travel in it: each is saved to a file, its path is named in the
 /// text and listed in `images`, and the script shows it to the model with
-/// `read_image`.
-async fn Service::call_reply(
-  self : Service,
+/// `read_image`. Images are saved under `image_directory`.
+async fn call_reply(
   output : @agent_tool.ToolOutput,
+  image_directory? : String,
 ) -> Json {
   let notes : Array[String] = []
   let paths : Array[Json] = []
   for image in output.images {
-    match self.save_image(image) {
+    match save_image(image, image_directory?) {
       Ok(path) => {
         notes.push(
           "[image \{image.media_type} saved to \{path}; show it to the model with read_image]",
@@ -272,14 +364,14 @@ async fn Service::call_reply(
 }
 
 ///|
-/// Save `image` in a file of its own, readable only by the user, or say why
-/// it was not. The call has already run, so a failure here only loses the
-/// image.
-async fn Service::save_image(
-  self : Service,
+/// Save `image` in a file of its own under `image_directory`, readable only
+/// by the user, or say why it was not. The call has already run, so a
+/// failure here only loses the image.
+async fn save_image(
   image : @protocol.Image,
+  image_directory? : String,
 ) -> Result[String, String] {
-  guard self.image_directory is Some(directory) else {
+  guard image_directory is Some(directory) else {
     return Err("this session has no directory to save images in")
   }
   guard @env.rand(16) is Some(entropy) else {
@@ -295,11 +387,25 @@ async fn Service::save_image(
   let path = "\{directory}/mcp-image-\{@crypto.bytes_to_hex_string(entropy)}\{extension}"
   try {
     @fs.mkdir(directory, permission=0o700, recursive=true, allow_exist=true)
-    @fs.write_file(path, image.bytes, create_mode=CreateNew, permission=0o600)
+    @fs.write_binary(path, image.bytes, create_mode=CreateNew, permission=0o600)
   } catch {
     error => Err("\{error}")
   } noraise {
     _ => Ok(path)
+  }
+}
+
+///|
+/// `reply` as a script receives it: an explicit error in its place when it is
+/// over `MaxReplyChars` once serialized. The call has already run, so the
+/// error says not to run it again for its output.
+fn deliverable(reply : Json) -> Json {
+  if reply.stringify().length() > MaxReplyChars {
+    error_result(
+      "MCP tool executed, but its result exceeded the 64K character limit. Do not retry a mutation merely to retrieve output.",
+    )
+  } else {
+    reply
   }
 }
 
@@ -314,7 +420,7 @@ async fn send(conn : @http.ServerConnection, result : Json) -> Unit {
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": "application/json",
     })
-    conn.write(result)
+    conn.write_string(result.stringify())
     conn.end_response()
   })
 }

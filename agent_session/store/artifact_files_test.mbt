@@ -13,25 +13,16 @@ async test "artifact directories isolate sessions and equal IDs in separate work
     for directory in [first, second, third] {
       @fs.mkdir(directory, recursive=true)
     }
-    @fs.write_file(first + "/chart.html", "first")
-    @fs.write_file(second + "/chart.html", "second")
+    @fs.write_text(first + "/chart.html", "first")
+    @fs.write_text(second + "/chart.html", "second")
     let reopened = @store.SessionStore(one.root())
     assert_eq(reopened.artifact_dir(id), first)
-    assert_eq(
-      @fs.read_file(reopened.artifact_dir(id) + "/chart.html").text(),
-      "first",
-    )
-    assert_eq(
-      @fs.read_file(two.artifact_dir(id) + "/chart.html").text(),
-      "second",
-    )
+    assert_eq(@fs.read_text(reopened.artifact_dir(id) + "/chart.html"), "first")
+    assert_eq(@fs.read_text(two.artifact_dir(id) + "/chart.html"), "second")
     @fs.rmdir(first, recursive=true)
     assert_eq(reopened.artifact_dir(id), first)
     assert_false(@fs.exists(first))
-    assert_eq(
-      @fs.read_file(two.artifact_dir(id) + "/chart.html").text(),
-      "second",
-    )
+    assert_eq(@fs.read_text(two.artifact_dir(id) + "/chart.html"), "second")
   })
 }
 
@@ -48,45 +39,39 @@ async test "fork copies file artifacts into an independently writable directory"
     )
     let original = store.artifact_dir(source)
     @fs.mkdir(original + "/charts", recursive=true)
-    @fs.write_file(
+    @fs.write_text(
       store.scratch_dir(source) + "/helper.mbtx",
       "source working state",
     )
-    @fs.write_file(original + "/charts/view.html", "original")
+    @fs.write_text(original + "/charts/view.html", "original")
     let source_bundle = original + "/charts/view.html.source"
     @fs.mkdir(source_bundle + "/data", recursive=true)
-    @fs.write_file(source_bundle + "/main.mbt", "editable Rabbita source")
-    @fs.write_file(source_bundle + "/moon.mod", "module manifest")
-    @fs.write_file(source_bundle + "/data/values.json", "[1, 2, 3]")
+    @fs.write_text(source_bundle + "/main.mbt", "editable Rabbita source")
+    @fs.write_text(source_bundle + "/moon.mod", "module manifest")
+    @fs.write_text(source_bundle + "/data/values.json", "[1, 2, 3]")
     ignore(store.fork(source, fork, system_prompt="fork"))
     let copy = store.artifact_dir(fork) + "/charts/view.html"
     assert_false(@fs.exists(store.scratch_dir(fork) + "/helper.mbtx"))
     assert_true(copy != original + "/charts/view.html")
-    assert_eq(@fs.read_file(copy).text(), "original")
+    assert_eq(@fs.read_text(copy), "original")
     let fork_sources = store.artifact_dir(fork) + "/charts/view.html.source"
     assert_eq(
-      @fs.read_file(fork_sources + "/main.mbt").text(),
+      @fs.read_text(fork_sources + "/main.mbt"),
       "editable Rabbita source",
     )
-    assert_eq(
-      @fs.read_file(fork_sources + "/moon.mod").text(),
-      "module manifest",
-    )
-    assert_eq(
-      @fs.read_file(fork_sources + "/data/values.json").text(),
-      "[1, 2, 3]",
-    )
-    @fs.write_file(
+    assert_eq(@fs.read_text(fork_sources + "/moon.mod"), "module manifest")
+    assert_eq(@fs.read_text(fork_sources + "/data/values.json"), "[1, 2, 3]")
+    @fs.write_text(
       fork_sources + "/main.mbt",
       "fork revision",
       create_mode=CreateOrTruncate,
     )
     assert_eq(
-      @fs.read_file(source_bundle + "/main.mbt").text(),
+      @fs.read_text(source_bundle + "/main.mbt"),
       "editable Rabbita source",
     )
-    @fs.write_file(copy, "fork changed", create_mode=CreateOrTruncate)
-    assert_eq(@fs.read_file(original + "/charts/view.html").text(), "original")
+    @fs.write_text(copy, "fork changed", create_mode=CreateOrTruncate)
+    assert_eq(@fs.read_text(original + "/charts/view.html"), "original")
     @fs.rmdir(root + "/store/sessions/fork", recursive=true)
     assert_false(@fs.exists(copy))
     assert_true(@fs.exists(original + "/charts/view.html"))

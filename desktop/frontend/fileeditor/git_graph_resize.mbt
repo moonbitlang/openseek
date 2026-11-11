@@ -22,12 +22,11 @@ let git_graph_resizing : Ref[Bool] = Ref(false)
 
 ///|
 fn set_git_graph_split(height : Int32) -> Unit {
-  guard document_element() is Some(root) else { return }
-  let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
-  let _ : @js.Value = style.apply_with_string("setProperty", [
-    @js.Value::cast_from("--review-changes-height"),
-    @js.Value::cast_from("\{height}px"),
-  ])
+  guard @dom.document().get_document_element() is Some(root) &&
+    root.to_html_element() is Some(html) else {
+    return
+  }
+  html.get_style().set_property("--review-changes-height", "\{height}px")
 }
 
 ///|

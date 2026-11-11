@@ -196,37 +196,16 @@ pub async fn Service::run(
 ) -> Unit {
   @async.with_task_group(group => {
     while true {
-      for entry in self.entries.copy() {
-        let ready = match entry.feedback {
-          Detached => !(entry.outcome is Pending)
-          Waiting | Returned | Claimed => false
-        }
-        if ready {
-          entry.feedback = Claimed
-          group.spawn_bg(() => {
-            let answers = match entry.outcome {
-              Answered(answers) => Some(answers)
-              Skipped => None
-              Pending => return
-            }
-            let context = @message_context.UserQuestionResponse(
-              request_id=entry.pending.id,
-              questions=entry.pending.questions,
-              answers~,
-            )
-            deliver(
-              entry.pending.session,
-              context.encode(),
-              entry.pending.id + "-result",
-            ) catch {
-              error =>
-                report_error(
-                  entry.pending.session,
-                  "Could not deliver question answer \{entry.pending.id}: \{error}",
-                )
-            }
-          })
-        }
+      for (session, text, id) in self.take_inputs() {
+        group.spawn_bg(() => {
+          deliver(session, text, id) catch {
+            error =>
+              report_error(
+                session,
+                "Could not deliver question answer \{id}: \{error}",
+              )
+          }
+        })
       }
       self.changed.wait()
     }
@@ -235,3 +214,29 @@ pub async fn Service::run(
 
 ///|
 pub extend QuestionError with Show::{output, to_string}
+
+///|
+/// Claim delayed answers once, using the same envelope as Local session input.
+pub fn Service::take_inputs(self : Service) -> Array[(String, String, String)] {
+  let inputs = []
+  for entry in self.entries {
+    guard entry.feedback is Detached && !(entry.outcome is Pending) else {
+      continue
+    }
+    entry.feedback = Claimed
+    let answers = match entry.outcome {
+      Answered(answers) => Some(answers)
+      Skipped => None
+      Pending => continue
+    }
+    let context = @message_context.UserQuestionResponse(
+      request_id=entry.pending.id,
+      questions=entry.pending.questions,
+      answers~,
+    )
+    inputs.push(
+      (entry.pending.session, context.encode(), entry.pending.id + "-result"),
+    )
+  }
+  inputs
+}

@@ -215,3 +215,73 @@ pub async fn share(
   }
   url
 }
+
+///|
+/// Create a Cloud chat from an export. The service downloads share links
+/// itself, from its account origin, and answers 201 with the new session id.
+/// Rejections the user can act on (wrong origin, missing or expired share,
+/// unreachable share host) carry the service's explanation.
+pub async fn import_session(
+  token : String,
+  source : @protocol.SessionImportSource,
+) -> @protocol.SessionImportReply {
+  let (response, data) = @http.request(
+    CloudOrigin + "/v1/sessions/import",
+    Post,
+    { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    ({ "source": source.to_json() } : Json).stringify(),
+  ) catch {
+    _ => return Failed(@cloud_client.Failure::Unreachable.label())
+  }
+  if response.code is (400 | 404 | 410 | 502) {
+    let message = data.text() catch { _ => "" }
+    if !message.trim().is_empty() {
+      return Failed(message.trim().to_owned())
+    }
+  }
+  check_status(response.code) catch {
+    @cloud_client.RequestError(failure) => return Failed(failure.label())
+  }
+  let json = data.json() catch {
+    _ => return Failed(@cloud_client.Failure::Malformed.label())
+  }
+  guard response.code == 201 &&
+    json is { "id": String(id), .. } &&
+    !id.is_empty() else {
+    return Failed(@cloud_client.Failure::Malformed.label())
+  }
+  Success(id)
+}
+
+///|
+/// Delayed question feedback uses the same Cloud command transport as normal
+/// input. It targets its original conversation, independently of selection.
+async fn deliver_question_input(
+  token : String,
+  session : String,
+  text : String,
+  id : String,
+) -> Unit {
+  let snapshot = read_control(token, session)
+  let content = @wire.Content([Text(text)])
+  let result = match snapshot.data.active_task_id {
+    Some(task) =>
+      send_command(
+        token,
+        session,
+        @wire.Steer(content~, submission_id=Some(id)),
+        task_id=task,
+      )
+    None =>
+      send_command(
+        token,
+        session,
+        @wire.Prompt(content~, submission_id=Some(id)),
+      )
+  }
+  // TODO: retain failed delayed answers for manual retry. Never automatically
+  // replay an ambiguous submission after reconnect.
+  if result is Rejected(reason) {
+    fail(reason)
+  }
+}

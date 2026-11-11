@@ -54,7 +54,7 @@ async test "multi_edit applies multiple line-anchored replacements" {
     )
     assert_false(output.is_error)
     assert_eq(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
       (
         #|let a = new_a
         #|let b = keep
@@ -105,8 +105,8 @@ async test "multi_edit applies a batch spanning several files" {
       output.content,
       "ok: applied 3 edit(s) across 2 file(s)\n\{first}: 1 edit(s)\n\{second}: 2 edit(s)",
     )
-    assert_eq(@fs.read_file(first).text(), "let a = new_a\n")
-    assert_eq(@fs.read_file(second).text(), "let b = new_b\nlet c = new_c\n")
+    assert_eq(@fs.read_text(first), "let a = new_a\n")
+    assert_eq(@fs.read_text(second), "let b = new_b\nlet c = new_c\n")
   })
 }
 
@@ -145,7 +145,7 @@ async test "multi_edit collapses aliased spellings of one file into a single gro
       output.content.contains("ok: applied 2 edit(s) across 1 file(s)"),
     )
     assert_true(output.content.contains("note.txt: 2 edit(s)"))
-    assert_eq(@fs.read_file(path).text(), "ALPHA\nBETA\n")
+    assert_eq(@fs.read_text(path), "ALPHA\nBETA\n")
   })
 }
 
@@ -156,8 +156,8 @@ async test "multi_edit rejects a file whose edits are not contiguous" {
     let second = "\{dir}/b.mbt"
     let original_first = "let a = old_a\nlet a2 = old_a2\n"
     let original_second = "let b = old_b\n"
-    @fs.write_file(first, original_first, create_mode=CreateOrTruncate)
-    @fs.write_file(second, original_second, create_mode=CreateOrTruncate)
+    @fs.write_text(first, original_first, create_mode=CreateOrTruncate)
+    @fs.write_text(second, original_second, create_mode=CreateOrTruncate)
     // first reappears at edit[2] after second's block — rejected before any write.
     let output = run_multi_edit({
       "edits": [
@@ -184,8 +184,8 @@ async test "multi_edit rejects a file whose edits are not contiguous" {
     assert_true(output.is_error)
     assert_true(output.content.contains("must be contiguous"))
     assert_true(output.content.contains("edit[2]"))
-    assert_eq(@fs.read_file(first).text(), original_first)
-    assert_eq(@fs.read_file(second).text(), original_second)
+    assert_eq(@fs.read_text(first), original_first)
+    assert_eq(@fs.read_text(second), original_second)
   })
 }
 
@@ -219,7 +219,7 @@ async test "multi_edit inserts when old_string is empty, alongside a replacement
     })
     assert_false(output.is_error)
     assert_eq(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
       (
         #|let a = new_a
         #|let x = new
@@ -276,7 +276,7 @@ async test "multi_edit applies edits against original offsets despite length cha
     })
     assert_false(output.is_error)
     assert_eq(
-      @fs.read_file(path).text(),
+      @fs.read_text(path),
       (
         #|let a = 1000
         #|let bb = 2
@@ -320,7 +320,7 @@ async test "multi_edit matches the original file, not text introduced by earlier
       ],
     })
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "beta\ngamma\n")
+    assert_eq(@fs.read_text(path), "beta\ngamma\n")
   })
 }
 
@@ -357,7 +357,7 @@ async test "multi_edit uses line anchors to disambiguate duplicate spans" {
       ],
     })
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "x = one\ny = dup\nz = three\n")
+    assert_eq(@fs.read_text(path), "x = one\ny = dup\nz = three\n")
   })
 }
 
@@ -387,7 +387,7 @@ async test "multi_edit resolves relative paths under the workspace root" {
       output.content.contains("ok: applied 1 edit(s) across 1 file(s)"),
     )
     assert_true(output.content.contains("note.txt: 1 edit(s)"))
-    assert_eq(@fs.read_file(path).text(), "alpha\ndelta\n")
+    assert_eq(@fs.read_text(path), "alpha\ndelta\n")
   })
 }
 
@@ -396,7 +396,7 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/failures.txt"
     let original = "alpha\nbeta\nsame\nsame\n"
-    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
     let output = run_multi_edit({
       "edits": [
         {
@@ -427,7 +427,7 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
       output.content,
       "error multi_editing: 2 problem(s); no changes applied\n\{path} edit[1] line range 1-1: old_string not found\n\{path} edit[2] line range 3-4: old_string and new_string are identical",
     )
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
   })
 }
 
@@ -436,7 +436,7 @@ async test "multi_edit rejects overlapping replacements and leaves file unchange
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/overlap.txt"
     let original = "abcdef\n"
-    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
     let output = run_multi_edit({
       "edits": [
         {
@@ -460,7 +460,7 @@ async test "multi_edit rejects overlapping replacements and leaves file unchange
       output.content,
       "error multi_editing: 1 problem(s); no changes applied\n\{path} edit[1] line range 1-1: replacement overlaps edit[0]",
     )
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
   })
 }
 
@@ -469,7 +469,7 @@ async test "multi_edit rejects generated mbti files before writing" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-generated-", dir => {
     let path = "\{dir}/pkg.generated.mbti"
     let original = "package old\n"
-    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
     let output = run_multi_edit({
       "edits": [
         {
@@ -483,7 +483,7 @@ async test "multi_edit rejects generated mbti files before writing" {
     })
     assert_true(output.is_error)
     assert_true(output.content.contains("run moon info"))
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_eq(@fs.read_text(path), original)
   })
 }
 
@@ -541,14 +541,14 @@ async test "multi_edit applies a batch from a response file (edits_file)" {
         "start_line": 2,
       },
     ]
-    @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
+    @fs.write_text(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
     let output = run_multi_edit({ "edits_file": spec_path })
     assert_false(output.is_error)
     assert_eq(
       output.content,
       "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
     )
-    assert_eq(@fs.read_file(path).text(), "let a = new_a\nlet b = new_b\n")
+    assert_eq(@fs.read_text(path), "let a = new_a\nlet b = new_b\n")
   })
 }
 
@@ -568,7 +568,7 @@ async test "multi_edit concatenates inline edits with an edits_file" {
         "start_line": 2,
       },
     ]
-    @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
+    @fs.write_text(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
     // Inline edits and the file's edits are both applied (concatenated).
     let output = run_multi_edit({
       "edits": [
@@ -586,7 +586,7 @@ async test "multi_edit concatenates inline edits with an edits_file" {
       output.content,
       "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
     )
-    assert_eq(@fs.read_file(path).text(), "let a = new_a\nlet b = new_b\n")
+    assert_eq(@fs.read_text(path), "let a = new_a\nlet b = new_b\n")
   })
 }
 
@@ -629,7 +629,7 @@ async test "multi_edit reports a malformed response file entry" {
     let spec : Json = [
       { "old_string": "a", "new_string": "b", "start_line": 1 },
     ]
-    @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
+    @fs.write_text(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
     let output = run_multi_edit({ "edits_file": spec_path })
     assert_true(output.is_error)
     assert_true(output.content.contains("arguments.edits[0] to include file"))
@@ -692,7 +692,7 @@ async test "a write scope rejects the whole batch on one out-of-scope path" {
     // in-scope file stays untouched too.
     assert_true(output.is_error)
     assert_true(output.content.contains("write blocked"))
-    assert_true(@fs.read_file("\{dir}/lib/a.txt").text() == "aa\n")
-    assert_true(@fs.read_file("\{dir}/other/b.txt").text() == "bb\n")
+    assert_true(@fs.read_text("\{dir}/lib/a.txt") == "aa\n")
+    assert_true(@fs.read_text("\{dir}/other/b.txt") == "bb\n")
   })
 }

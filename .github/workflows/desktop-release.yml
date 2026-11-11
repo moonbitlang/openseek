@@ -28,7 +28,7 @@ jobs:
     name: Check for updates
     runs-on: ubuntu-24.04
     env:
-      OPENSEEK_API_ORIGIN: https://openseek-api.moonbitlang.cn
+      OPENSEEK_API_ORIGIN: https://seekmoon.moonbitlang.com
     outputs:
       release: ${{ steps.check.outputs.release }}
       version: ${{ steps.release.outputs.version }}
@@ -159,6 +159,9 @@ jobs:
           node desktop/package/build.mjs browser --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/assets/frontend.js
+          # openseek-api serves these .br/.gz copies by Accept-Encoding.
+          node desktop/package/precompress.mjs desktop/dist/browser
+          test -f desktop/dist/browser/assets/frontend.js.br
           tar -C desktop/dist -czf desktop/dist/SeekMoon.browser.tar.gz browser
 
       # Only a hand-off to the Android builder and the publish job, which
@@ -506,7 +509,7 @@ jobs:
       actions: read
       contents: write
     env:
-      OPENSEEK_API_ORIGIN: https://openseek-api.moonbitlang.cn
+      OPENSEEK_API_ORIGIN: https://seekmoon.moonbitlang.com
       RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
 
     steps:

@@ -43,12 +43,12 @@ pub fn BackgroundTasks::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Changes {
   summary : String
-  rows : Array[@html.Html]
+  rows : () -> Array[@html.Html]
 }
 
 pub(all) struct Connectors {
   summary : String
-  rows : Array[@html.Html]
+  rows : () -> Array[@html.Html]
   refresh : @cmd.Cmd?
 }
 

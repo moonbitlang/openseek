@@ -29,7 +29,7 @@ async test "write resolves relative paths under the workspace root" {
     let path = "\{dir}/note.txt"
     assert_false(output.is_error)
     assert_eq(output.content, "ok: wrote 1 line (9 chars) to \{path}")
-    assert_eq(@fs.read_file(path).text(), "workspace")
+    assert_eq(@fs.read_text(path), "workspace")
   })
 }
 
@@ -71,7 +71,7 @@ async test "write surfaces filesystem errors through the dispatch boundary" {
   @vfs.with_tmpdir(dir => {
     // A parent component that is a regular file cannot be created or written
     // through, so the write fails (missing parent *directories* are created).
-    @fs.write_file("\{dir}/afile", "x", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/afile", "x", create_mode=CreateOrTruncate)
     let result = execute_via_boundary({
       "path": "\{dir}/afile/child.txt",
       "content": "x",
@@ -126,7 +126,7 @@ async test "a write scope confines write to its allowed paths" {
       fail("expected Respond")
     }
     assert_false(admitted.is_error)
-    assert_eq(@fs.read_file("\{dir}/lib/new.txt").text(), "n\n")
+    assert_eq(@fs.read_text("\{dir}/lib/new.txt"), "n\n")
     // Out of scope: blocked before parent directories are even created.
     guard run_write(tool, { "path": "other/new.txt", "content": "n\n" })
       is Respond(blocked) else {
@@ -146,7 +146,7 @@ async test "write creates missing parent directories" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(output.content, "ok: wrote 2 lines (10 chars) to \{path}")
-    assert_eq(@fs.read_file(path).text(), "import {}\n")
+    assert_eq(@fs.read_text(path), "import {}\n")
   })
 }
 
@@ -158,7 +158,7 @@ async test "write creates a file with the given content" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(output.content, "ok: wrote 1 line (11 chars) to \{path}")
     assert_false(output.is_error)
-    let read_back = @fs.read_file(path).text()
+    let read_back = @fs.read_text(path)
     assert_eq(read_back, "hello write")
   })
 }
@@ -176,7 +176,7 @@ async test "write truncates existing files" {
       "ok: wrote 1 line (5 chars) to \{path} (overwrote existing file)",
     )
     assert_false(output.is_error)
-    let read_back = @fs.read_file(path).text()
+    let read_back = @fs.read_text(path)
     assert_eq(read_back, "short")
   })
 }
@@ -211,7 +211,7 @@ async test "write accepts empty content" {
       "ok: wrote 0 lines (0 chars) to \{path} (overwrote existing file)",
     )
     assert_false(output.is_error)
-    let read_back = @fs.read_file(path).text()
+    let read_back = @fs.read_text(path)
     assert_eq(read_back, "")
   })
 }
@@ -247,7 +247,7 @@ async test "write rejects generated mbti files" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("run moon info"))
-    assert_eq(@fs.read_file(path).text(), "old interface")
+    assert_eq(@fs.read_text(path), "old interface")
   })
 }
 
@@ -264,7 +264,7 @@ async test "write requires approval to overwrite an existing .mbt source file" {
     assert_true(output.is_error)
     assert_true(output.content.contains("no approval channel"))
     // unchanged on disk
-    assert_eq(@fs.read_file(path).text(), "pub fn f() -> Int { 1 }\n")
+    assert_eq(@fs.read_text(path), "pub fn f() -> Int { 1 }\n")
   })
 }
 
@@ -278,7 +278,7 @@ async test "write still creates a NEW .mbt source file" {
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "pub fn g() -> Int { 0 }\n")
+    assert_eq(@fs.read_text(path), "pub fn g() -> Int { 0 }\n")
   })
 }
 
@@ -310,7 +310,7 @@ async test "write requires approval to overwrite source through a symlink" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("no approval channel"))
-    assert_eq(@fs.read_file(src).text(), "pub fn f() -> Int { 1 }\n")
+    assert_eq(@fs.read_text(src), "pub fn f() -> Int { 1 }\n")
   })
 }
 
@@ -323,14 +323,14 @@ async test "write parse-gates manifest content written through a symlink" {
   @vfs.with_tmpdir(prefix="openseek-write-manifest-link-", dir => {
     let manifest = "\{dir}/moon.pkg"
     let original = "import {}\n"
-    @fs.write_file(manifest, original, create_mode=CreateOrTruncate)
+    @fs.write_text(manifest, original, create_mode=CreateOrTruncate)
     let link = "\{dir}/alias.txt"
     @fs.symlink(target="moon.pkg", link)
     let result = execute({ "path": link, "content": "x" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     // The malformed content never reached the manifest.
-    assert_eq(@fs.read_file(manifest).text(), original)
+    assert_eq(@fs.read_text(manifest), original)
   })
 }
 
@@ -463,7 +463,7 @@ async test "write accepts filename through dispatch and rejects conflicting path
     let result = execute_via_boundary({ "filename": path, "content": "hello" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "hello")
+    assert_eq(@fs.read_text(path), "hello")
     let other = "\{dir}/other.txt"
     let result = execute_via_boundary({
       "path": path,
@@ -472,7 +472,7 @@ async test "write accepts filename through dispatch and rejects conflicting path
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "hello")
+    assert_eq(@fs.read_text(path), "hello")
     assert_false(@fs.exists(other))
   })
 }

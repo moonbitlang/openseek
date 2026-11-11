@@ -1,10 +1,12 @@
 ///|
-/// Best-effort removal of a test repository. Cancellation stays observable;
-/// any other rmdir failure is the test's own tmpdir and is ignored.
-async fn git_test_cleanup(dir : String) -> Unit {
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
+/// Best-effort removal of a test repository; it runs to completion under
+/// cancellation, and an rmdir failure is the test's own tmpdir and is ignored.
+async fn git_test_cleanup(dir : String) -> Unit nocancel {
+  @async.protect_from_cancel(() => {
+    @fs.rmdir(dir, recursive=true) catch {
+      _ => ()
+    }
+  })
 }
 
 ///|
@@ -33,16 +35,16 @@ async test "PR review uses its merge base and association follows the checked ou
   let dir = @fs.tmpdir(prefix="openseek-checkout-review-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/upstream.txt",
       "before\n",
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "old default branch")
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/upstream.txt",
       "upstream work\n",
       create_mode=CreateOrTruncate,
@@ -51,7 +53,7 @@ async test "PR review uses its merge base and association follows the checked ou
     git_test_commit(dir, "PR base")
     let base = revision_commit(repo, "HEAD").unwrap()
     git_test_run(dir, ["switch", "-c", "pr/feature"])
-    @fs.write_file("\{dir}/pr.txt", "PR work\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/pr.txt", "PR work\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "PR head")
     let url = "https://github.example/owner/repo/pull/42"
@@ -86,9 +88,9 @@ async test "Git history pages stay pinned and commit changes use first parent" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file("\{dir}/old.mbt", "first\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/old.mbt", "first\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "old.mbt"])
     git_test_commit(dir, "first")
     git_test_run(dir, ["branch", "-M", "feature/graph"])
@@ -119,7 +121,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     let (first_page, has_more) = git_history_page(repo, snapshot, 0, 1)
     assert_true(has_more)
     assert_true(first_page is [{ id, subject: "rename", .. }] && id == second)
-    @fs.write_file("\{dir}/third.mbt", "third\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/third.mbt", "third\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "third.mbt"])
     git_test_commit(dir, "third")
     let third = revision_commit(repo, "HEAD").unwrap()
@@ -148,7 +150,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     // only the first parent's delta appears below the merge row.
     git_test_run(dir, ["branch", "side", first])
     git_test_run(dir, ["checkout", "--quiet", "side"])
-    @fs.write_file("\{dir}/side.mbt", "side\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/side.mbt", "side\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "side.mbt"])
     git_test_commit(dir, "side")
     git_test_run(dir, ["checkout", "--quiet", "feature/graph"])
@@ -167,7 +169,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
 
     // Exhaustive copy discovery and tree modes are properties of historical
     // inspection, not the cheaper working-tree poll.
-    @fs.write_file("\{dir}/copy.mbt", "first\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/copy.mbt", "first\n", create_mode=CreateOrTruncate)
     @fs.symlink(target="new.mbt", "\{dir}/link")
     git_test_run(dir, ["add", "copy.mbt", "link"])
     git_test_run(dir, [
@@ -201,7 +203,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     // A type change stays inert when either revision is a special Git object,
     // including the less obvious symlink-to-regular-file direction.
     @fs.remove("\{dir}/link")
-    @fs.write_file("\{dir}/link", "regular\n", create_mode=CreateOrTruncate)
+    @fs.write_text("\{dir}/link", "regular\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "link"])
     git_test_commit(dir, "replace symlink")
     let type_commit = revision_commit(repo, "HEAD").unwrap()
@@ -213,12 +215,12 @@ async test "Git history pages stay pinned and commit changes use first parent" {
       }),
     )
 
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/binary.dat",
       "binary\u{0}payload",
       create_mode=CreateOrTruncate,
     )
-    @fs.write_file(
+    @fs.write_text(
       "\{dir}/oversized.txt",
       "x".repeat(@files.MaxEditorFileBytes + 1),
       create_mode=CreateOrTruncate,
@@ -243,14 +245,14 @@ async test "Git history paginates fifty commits and describes detached HEAD" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-page-")
   let repo = git_test_repo(dir)
   let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     let unborn = capture_git_history_snapshot(repo, None)
     assert_eq(unborn.head, None)
     assert_true(unborn.refs.is_empty())
     assert_true(unborn.tips.is_empty())
     for index in 0..<52 {
-      @fs.write_file(
+      @fs.write_text(
         "\{dir}/history.txt",
         "\{index}\n",
         create_mode=CreateOrTruncate,
@@ -276,9 +278,9 @@ async test "Git history paginates fifty commits and describes detached HEAD" {
 async test "Git recognizes only origin HEAD's branch as the default" {
   let dir = @fs.tmpdir(prefix="openseek-git-default-branch-")
   let repo = git_test_repo(dir)
-  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
-  @fs.write_file("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "tracked.txt"])
   git_test_run(dir, [
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
@@ -300,12 +302,12 @@ async test "Git recognizes only origin HEAD's branch as the default" {
 async test "Git snapshots pair status with HEAD and supplied revisions stay pinned" {
   let dir = @fs.tmpdir(prefix="openseek-git-review-")
   let repo = git_test_repo(dir)
-  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   assert_eq(revision_commit(repo, "HEAD"), None)
   @fs.mkdir("\{dir}/desktop", recursive=true)
-  @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
-  @fs.write_file(
+  @fs.write_text("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
+  @fs.write_text(
     "\{dir}/desktop/keep.txt",
     "keep\n",
     create_mode=CreateOrTruncate,
@@ -344,7 +346,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   )
   git_test_run(dir, ["restore", "--staged", "desktop/keep.txt"])
   git_test_run(dir, ["restore", "desktop/keep.txt"])
-  @fs.write_file("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
   let (snapshot_head, snapshot_base, _, _, _, _, changes) = git_change_snapshot(
     repo,
     "",
@@ -451,9 +453,9 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
 async test "checkout reviews retain committed changes and follow rebases" {
   let dir = @fs.tmpdir(prefix="openseek-git-root-review-")
   let repo = git_test_repo(dir)
-  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
-  @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "review.txt"])
   git_test_run(dir, [
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
@@ -464,7 +466,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   git_test_run(dir, [
     "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
   ])
-  @fs.write_file("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
   let (before_head, before_base, _, _, _, _, before_changes) = git_change_snapshot(
     repo,
     "",
@@ -494,7 +496,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   assert_eq(after_changes, before_changes)
   // Rebase onto new upstream work while retaining the task's creation base.
   git_test_run(dir, ["switch", "--detach", first])
-  @fs.write_file(
+  @fs.write_text(
     "\{dir}/upstream.txt",
     "upstream\n",
     create_mode=CreateOrTruncate,
@@ -512,7 +514,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   )
   assert_eq(tip_base, Some(upstream))
   assert_true(tip_changes.is_empty())
-  @fs.write_file("\{dir}/review.txt", "pending\n", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/review.txt", "pending\n", create_mode=CreateOrTruncate)
   let (_, pending_base, _, _, _, _, pending_changes) = git_change_snapshot(
     repo,
     "",
@@ -527,7 +529,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
     "-c", "commit.gpgSign=false", "rebase", "origin/main",
   ])
-  @fs.write_file(
+  @fs.write_text(
     "\{dir}/review.txt",
     "uncommitted\n",
     create_mode=CreateOrTruncate,

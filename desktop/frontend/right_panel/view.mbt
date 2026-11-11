@@ -19,11 +19,7 @@ fn panel_view(
         { tab, label, title: path.path, missing, }
       }
       GitDiff(diff~) => {
-        let short = if diff.commit.length() <= 8 {
-          diff.commit
-        } else {
-          diff.commit.exact_view(end=8).to_owned()
-        }
+        let short = @fileeditor.short_commit(diff.commit)
         {
           tab,
           label: "\{@fileeditor.basename(diff.path)} (\{short})",
@@ -149,6 +145,13 @@ fn panel_view(
         actions.file_editor,
         input.file_panel,
         input.file_ctx,
+        preview=if input.file_ctx.can_preview_html(desktop=input.is_desktop) {
+          input.file_ctx.active_file.map(path => {
+            (actions.preview_file)(path.to_string())
+          })
+        } else {
+          None
+        },
         share=input.file_ctx.active_file.map(path => {
           (actions.share_file)(path.to_string())
         }),
@@ -217,4 +220,5 @@ let blank_browser_page : @preview.PageState = {
   title: "",
   loading: false,
   failure: None,
+  cloud_preview: false,
 }

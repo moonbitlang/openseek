@@ -49,9 +49,17 @@ fn connect_remote(dispatch : @cmd.Emit[Msg], epoch : Int32) -> @cmd.Cmd {
         @protocol.NoPayload,
       ) catch {
         error => {
+          // These are the existing auth.connect failure messages. Translate
+          // expected outcomes at the host boundary and keep other diagnostics.
+          let message = @interop.bridge_error_text(error)
           scheduler.add(
             dispatch(
-              AccountLoaded(epoch, Err(@interop.bridge_error_text(error))),
+              match message {
+                "the sign-in was cancelled" => AccountLoginCancelled(epoch)
+                "sign-in timed out waiting for the browser" =>
+                  AccountLoginTimedOut(epoch)
+                _ => AccountLoaded(epoch, Err(message))
+              },
             ),
           )
           return
@@ -64,9 +72,9 @@ fn connect_remote(dispatch : @cmd.Emit[Msg], epoch : Int32) -> @cmd.Cmd {
 }
 
 ///|
-/// Abort a waiting sign-in. The connect's own failure reply settles the
-/// section, so this only surfaces its *own* failure (a dead bridge).
-fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+/// Abort a waiting sign-in. Retry waits for both this acknowledgement and
+/// the original connect reply so cancellation cannot affect the next attempt.
+fn cancel_remote(dispatch : @cmd.Emit[Msg], epoch : Int32) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let _ = @interop.bridge_request(
@@ -76,11 +84,14 @@ fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       ) catch {
         error => {
           scheduler.add(
-            dispatch(RemoteDisconnectFailed(@interop.bridge_error_text(error))),
+            dispatch(
+              AccountCancelFailed(epoch, @interop.bridge_error_text(error)),
+            ),
           )
           return
         }
       }
+      scheduler.add(dispatch(AccountCancelFinished(epoch)))
     })
     |> ignore
   })
@@ -120,7 +131,7 @@ fn set_remote_access(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @cmd.Cmd {
       }) catch {
         error => {
           scheduler.add(
-            dispatch(RemoteDisconnectFailed(@interop.bridge_error_text(error))),
+            dispatch(RemoteAccessSetFailed(@interop.bridge_error_text(error))),
           )
           return
         }

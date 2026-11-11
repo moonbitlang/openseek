@@ -28,15 +28,27 @@ fn ScheduleForm::empty() -> ScheduleForm {
 }
 
 ///|
+/// The schedules request a page is waiting on. A change (save or action)
+/// supersedes a refresh in flight, whose stale reply the sequence then drops;
+/// a refresh never preempts a change, whose reply carries the newer snapshot.
+#derive(Eq)
+priv enum SchedulePending {
+  Refresh
+  Change
+}
+
+///|
 #derive(Eq)
 priv struct SchedulePage {
   owner : @interop.ChannelId?
   snapshot : @protocol.SchedulesReply
   form : ScheduleForm?
-  busy : Bool
+  pending : SchedulePending?
   sequence : Int32
   error : String?
   log : (String, String)?
+  // The schedule whose card is asking whether to delete it.
+  confirm_delete : String?
 }
 
 ///|
@@ -45,10 +57,45 @@ fn SchedulePage::empty() -> SchedulePage {
     owner: None,
     snapshot: { entries: [], runs: [], },
     form: None,
-    busy: false,
+    pending: None,
     sequence: 0,
     error: None,
     log: None,
+    confirm_delete: None,
+  }
+}
+
+///|
+/// An edit to one field of the schedule form.
+priv enum ScheduleField {
+  Name(String)
+  /// `None` selects the automatic working folder.
+  Workspace(String?)
+  Task(String)
+  Model(String)
+  OneTime(Bool)
+  Minutes(String)
+  Timeout(String)
+}
+
+///|
+/// How a schedules request ended.
+priv enum ScheduleOutcome {
+  /// The host's schedules after a refresh or an applied change.
+  Snapshot(@protocol.SchedulesReply)
+  /// The host declined the change, for a reason the user can correct.
+  Declined(@protocol.ScheduleRefusal)
+  /// The request did not complete; the bridge's description of why.
+  BridgeFailed(String)
+}
+
+///|
+fn ScheduleOutcome::of_change(
+  reply : @protocol.ScheduleChangeReply,
+) -> ScheduleOutcome {
+  match reply {
+    Changed(snapshot) => Snapshot(snapshot)
+    Refused(reason) => Declined(reason)
   }
 }
 
@@ -57,21 +104,25 @@ priv enum SchedulePageMsg {
   Poll
   New
   Edit(String)
-  Field(String, String)
+  Field(ScheduleField)
   CloseForm
   Save(Bool)
-  Action(String, String)
-  Loaded(
-    @interop.ChannelId,
-    Int32,
-    Bool,
-    Result[@protocol.SchedulesReply, String]
-  )
+  Action(String, @protocol.ScheduleAction)
+  AskDelete(String)
+  CancelDelete
+  Loaded(@interop.ChannelId, Int32, Bool, ScheduleOutcome)
   Log(String)
   LogLoaded(@interop.ChannelId, String, Result[String, String])
   CloseLog
   Open(@protocol.ScheduleRun)
   Opened(@interop.ChannelId, String, Result[@protocol.SessionsReply, String])
+}
+
+///|
+/// Whether a save or action is awaiting its reply. Only then are the page's
+/// controls unavailable; a background refresh leaves them usable.
+fn SchedulePage::changing(self : SchedulePage) -> Bool {
+  self.pending is Some(Change)
 }
 
 ///|
@@ -88,29 +139,45 @@ fn request_schedules(
   request : ScheduleRequest,
 ) -> (@cmd.Cmd, Model) {
   let page = model.schedules
-  guard !page.busy else { return (@cmd.none, model) }
+  let pending : SchedulePending = match request {
+    List => {
+      guard page.pending is None else { return (@cmd.none, model) }
+      Refresh
+    }
+    Save(_) | Action(_) => {
+      guard !page.changing() else { return (@cmd.none, model) }
+      Change
+    }
+  }
   let channel = model.focused
   let sequence = page.sequence + 1
   let cmd = @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.SchedulesReply, String] = try {
-        let reply = match request {
+      let result : ScheduleOutcome = try {
+        match request {
           List =>
-            @interop.bridge_request(
-              channel,
-              @commands.schedules_list,
-              @protocol.EmptyPayload::NoPayload,
+            Snapshot(
+              @interop.bridge_request(
+                channel,
+                @commands.schedules_list,
+                @protocol.EmptyPayload::NoPayload,
+              ),
             )
           Save(payload) =>
-            @interop.bridge_request(channel, @commands.schedules_save, payload)
+            ScheduleOutcome::of_change(
+              @interop.bridge_request(
+                channel, @commands.schedules_save, payload,
+              ),
+            )
           Action(payload) =>
-            @interop.bridge_request(
-              channel, @commands.schedules_action, payload,
+            ScheduleOutcome::of_change(
+              @interop.bridge_request(
+                channel, @commands.schedules_action, payload,
+              ),
             )
         }
-        Ok(reply)
       } catch {
-        error => Err(@interop.bridge_error_text(error))
+        error => BridgeFailed(@interop.bridge_error_text(error))
       }
       scheduler.add(
         dispatch(
@@ -127,7 +194,7 @@ fn request_schedules(
       schedules: {
         ..page,
         owner: Some(channel),
-        busy: true,
+        pending: Some(pending),
         sequence,
         error: if request is List {
           page.error
@@ -163,9 +230,7 @@ fn open_schedules(
 
 ///|
 fn schedule_client_now() -> Int64 {
-  let date : @js.Value = @js.globalThis.get_with_string("Date")
-  let now : Double = date.apply_with_string("now", ([] : FixedArray[@js.Value]))
-  now.to_int64()
+  @interop.now_ms().to_int64()
 }
 
 ///|
@@ -227,18 +292,25 @@ fn update_schedules(
         return (@cmd.none, model)
       }
       let page = match result {
-        Ok(snapshot) =>
+        Snapshot(snapshot) =>
           {
             ..page,
             snapshot,
-            busy: false,
+            pending: None,
             form: if saved {
               None
             } else {
               page.form
             },
           }
-        Err(error) => { ..page, busy: false, error: Some(error), }
+        // A declined save keeps its draft so the user can correct it.
+        Declined(reason) =>
+          {
+            ..page,
+            pending: None,
+            error: Some(schedule_refusal_text(model.locale, reason)),
+          }
+        BridgeFailed(error) => { ..page, pending: None, error: Some(error), }
       }
       (@cmd.none, { ..model, schedules: page, })
     }
@@ -343,30 +415,21 @@ fn update_schedules(
     }
     CloseForm =>
       (@cmd.none, { ..model, schedules: { ..page, form: None, error: None, }, })
-    Field(field, value) => {
+    Field(field) => {
       guard page.form is Some(form) else { return (@cmd.none, model) }
       let form = match field {
-        "name" => { ..form, name: value, }
-        "workspace" =>
-          {
-            ..form,
-            workspace: if value == "auto" {
-              None
-            } else {
-              Some(value)
-            },
-          }
-        "task" => { ..form, task: value, }
-        "model" => { ..form, model: value, }
-        "timing" => { ..form, once: value == "once", once_at: None, }
-        "minutes" => { ..form, minutes: value, once_at: None, }
-        "timeout" => { ..form, timeout: value, }
-        _ => form
+        Name(name) => { ..form, name, }
+        Workspace(workspace) => { ..form, workspace, }
+        Task(task) => { ..form, task, }
+        Model(model) => { ..form, model, }
+        OneTime(once) => { ..form, once, once_at: None, }
+        Minutes(minutes) => { ..form, minutes, once_at: None, }
+        Timeout(timeout) => { ..form, timeout, }
       }
       (@cmd.none, { ..model, schedules: { ..page, form: Some(form), }, })
     }
     Save(run_now) => {
-      guard !page.busy && page.form is Some(form) else {
+      guard !page.changing() && page.form is Some(form) else {
         return (@cmd.none, model)
       }
       match schedule_form_spec(locale=model.locale, form) {
@@ -381,7 +444,18 @@ fn update_schedules(
       }
     }
     Action(id, action) =>
-      request_schedules(dispatch, model, Action({ id, action, }))
+      request_schedules(
+        dispatch,
+        { ..model, schedules: { ..page, confirm_delete: None, }, },
+        Action({ id, action, }),
+      )
+    AskDelete(id) =>
+      (
+        @cmd.none,
+        { ..model, schedules: { ..page, confirm_delete: Some(id), }, },
+      )
+    CancelDelete =>
+      (@cmd.none, { ..model, schedules: { ..page, confirm_delete: None, }, })
     CloseLog => (@cmd.none, { ..model, schedules: { ..page, log: None, }, })
     Log(path) => {
       let channel = model.focused
@@ -436,23 +510,13 @@ fn update_schedules(
                   log: Some(
                     (
                       path,
-                      (match model.locale {
-                        SimplifiedChinese => "已记录的失败：\n"
-                        TraditionalChinese => "已記錄的失敗：\n"
-                        Japanese => "記録されたエラー：\n"
-                        English => "Recorded failure:\n"
-                        Spanish => "Fallo registrado:\n"
-                      }) +
-                      message +
-                      (match model.locale {
-                        SimplifiedChinese => "\n\n无法读取日志：\n"
-                        TraditionalChinese => "\n\n無法讀取日誌：\n"
-                        Japanese =>
-                          "\n\nログを読み取れませんでした：\n"
-                        English => "\n\nLog could not be read:\n"
-                        Spanish => "\n\nNo se pudo leer el registro:\n"
-                      }) +
-                      error,
+                      (
+                        $|\{ui(model.locale, RecordedFailure)}
+                        $|\{message}
+                        $|
+                        $|\{ui(model.locale, LogUnreadable)}
+                        $|\{error}
+                      ),
                     ),
                   ),
                 },

@@ -50,8 +50,7 @@ fn RunConfig::configured_thinking(
     return thinking
   }
   if @env.get("OPENSEEK_THINKING") is Some(value) {
-    guard @protocol.OpenSeekThinking::parse(value.trim().to_owned())
-      is Some(thinking) else {
+    guard @protocol.OpenSeekThinking::parse(value) is Some(thinking) else {
       raise EngineError("OPENSEEK_THINKING must be one of no, high, or max")
     }
     return thinking
@@ -234,7 +233,7 @@ async fn serve_config(
   mcp_config? : McpConfig,
 ) -> RunConfig {
   let engine = manager.engine
-  let (settings, _) = manager.settings_snapshot()
+  let settings = manager.settings_snapshot()
   let endpoint = resolved_endpoint(settings)
   // A workspace run happens in the project directory itself, with the
   // session's durable record in the in-project store. Only registered
@@ -549,7 +548,7 @@ async test "host chooses durable placement from workspace state" {
   })
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-workspace"))
-  @fs.write_file(
+  @fs.write_text(
     global_root + "/workspaces.json",
     ({ "workspaces": [workspace] } : Json).stringify(),
     create_mode=CreateOrTruncate,

@@ -10,6 +10,16 @@
 /// `internal/commands`; this package only binds them to native handlers.
 
 ///|
+let preview_open_event : @proton_contract.Event[@protocol.PreviewOpenRequest] = @commands.extension_contract.event(
+  @protocol.NotificationKind::PreviewOpen.wire_name(),
+)
+
+///|
+let cloud_mcp_event : @proton_contract.Event[@protocol.CloudMcpEvent] = @commands.extension_contract.event(
+  @protocol.NotificationKind::CloudMcp.wire_name(),
+)
+
+///|
 let user_questions_event : @proton_contract.Event[
   @protocol.UserQuestionSnapshot,
 ] = @commands.extension_contract.event(
@@ -265,6 +275,8 @@ async fn PageEventTarget::emit(
   // payload type that belongs to that event.
   match notification {
     Ssh(payload) => self.events.emit(ssh_event, payload)
+    Hub(PreviewOpen(payload)) => self.events.emit(preview_open_event, payload)
+    Hub(CloudMcp(payload)) => self.events.emit(cloud_mcp_event, payload)
     Hub(UserQuestions(payload)) =>
       self.events.emit(user_questions_event, payload)
     Hub(AgentApprovals(payload)) => self.events.emit(approvals_event, payload)
@@ -351,7 +363,7 @@ struct DesktopBridgeActor {
   host_connection : @host.HostConnection
   // All producers write directly to this window-owned mailbox. Local
   // control, browser, filesystem and terminal events never enter the hub.
-  inbox : @async.Queue[BridgeInput]
+  inbox : @core_async.Queue[BridgeInput]
 }
 
 ///|
@@ -510,6 +522,7 @@ async fn DesktopBridgeActor::connect(
 ) -> @protocol.EmptyReply {
   // A reloaded page has no references to the previous page's emulator
   // instances, so its PTYs must not survive the new attachment.
+  self.state.detach_cloud_questions()
   self.host_connection.close_terminals()
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
   self.inbox.put(Control(PageConnected(context, reply)))

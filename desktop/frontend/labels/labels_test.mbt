@@ -10,3 +10,17 @@ test "a compacted count never gains a digit it did not earn" {
   inspect(@labels.compact_count(999_950), content="1M")
   inspect(@labels.compact_count(1_230_000), content="1.2M")
 }
+
+///|
+test "a duration never shows finer units than its own scale" {
+  assert_eq(@labels.duration(-1500.0), "0s")
+  assert_eq(@labels.duration(0.0), "0s")
+  assert_eq(@labels.duration(950.0), "0s")
+  assert_eq(@labels.duration(59_999.0), "59s")
+  assert_eq(@labels.duration(60_000.0), "1m 0s")
+  assert_eq(@labels.duration(134_000.0), "2m 14s")
+  assert_eq(@labels.duration(3_599_000.0), "59m 59s")
+  // Past an hour the seconds column is noise to anyone reading it.
+  assert_eq(@labels.duration(3_600_000.0), "1h 0m")
+  assert_eq(@labels.duration(87_240_000.0), "24h 14m")
+}

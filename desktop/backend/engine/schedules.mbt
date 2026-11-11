@@ -14,7 +14,7 @@
 const ScheduleConcurrency = 4
 
 ///|
-pub struct Schedules {
+struct Schedules {
   manager : EngineManager
   directory : @pathx.Path?
   lock : @async.Mutex
@@ -27,7 +27,7 @@ pub struct Schedules {
   // nothing: what it would remember is another process's to change.
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
-  stopped : Map[String, Unit]
+  stopped : Set[String]
 }
 
 ///|
@@ -42,7 +42,7 @@ pub fn Schedules::Schedules(
     ownership: None,
     state: None,
     processes: Map([]),
-    stopped: Map([]),
+    stopped: Set([]),
   }
 }
 
@@ -89,11 +89,6 @@ fn Schedules::directory(self : Schedules) -> @pathx.Path raise EngineError {
       raise EngineError("Local schedules need an available host data directory")
   }
 }
-
-///|
-/// What a client is told when it tries to change schedules through a host
-/// that does not own the store.
-const ScheduleForeignOwner = "Schedules are run by another SeekMoon open on this computer; change them there"
 
 ///|
 // Caller holds the lock. Whether this process owns the store, claiming it
@@ -180,45 +175,58 @@ pub async fn Schedules::list(self : Schedules) -> @protocol.SchedulesReply {
 }
 
 ///|
+/// Save a schedule. A change the user can correct (another host owns the
+/// store, the project is detached, the time has passed) is refused with a
+/// reason; failing to read or save the store raises.
 pub async fn Schedules::save(
   self : Schedules,
   payload : @protocol.ScheduleSavePayload,
-) -> @protocol.SchedulesReply {
+) -> @protocol.ScheduleChangeReply {
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
-    guard self.owns() else { raise EngineError(ScheduleForeignOwner) }
+    guard self.owns() else { return Refused(ForeignOwner) }
     let state = self.load()
     // Validate typed callers too, and resolve only registered project paths.
     let spec : @protocol.ScheduleSpec = @json.from_json(payload.spec.to_json())
     if spec.workspace is Some(workspace) {
       let path = @pathx.Absolute::parse_resource_path(workspace)
       guard @workspaces.registered_dir(path) is Some(_) else {
-        raise EngineError("Choose an attached project for this schedule")
+        return Refused(UnattachedProject)
       }
     }
-    let next_at = schedule_next(spec.timing, @async.now())
-    guard next_at is Some(_) else {
-      raise EngineError("Choose a time in the future")
-    }
-    let id = match payload.id {
+    let previous = match payload.id {
       Some(id) => {
-        guard state.entries.any(entry => entry.id == id) else {
-          raise EngineError("Schedule no longer exists")
+        guard state.entries.search_by(entry => entry.id == id) is Some(index) else {
+          return Refused(Missing)
         }
-        id
+        Some(state.entries[index])
       }
+      None => None
+    }
+    let now = @async.now()
+    // An edit that leaves the timing alone keeps the pending deadline:
+    // renaming an hourly task must not push its next run an hour away.
+    let next_at = match previous {
+      Some(entry) if entry.spec.timing == spec.timing &&
+        entry.next_at is Some(at) &&
+        at > now => Some(at)
+      _ => schedule_next(spec.timing, now)
+    }
+    guard next_at is Some(_) else { return Refused(PastTime) }
+    let id = match previous {
+      Some(entry) => entry.id
       None => @uuid.mint()
     }
     guard !payload.run_now || !schedule_running(state, id) else {
-      raise EngineError("This schedule is already running")
+      return Refused(AlreadyRunning)
     }
     let entry : @protocol.ScheduleEntry = {
       id,
       spec,
       enabled: true,
       run_requested: payload.run_now,
-      notice: None,
+      skipped: None,
       next_at,
     }
     let entries = state.entries.copy()
@@ -228,7 +236,7 @@ pub async fn Schedules::save(
     }
     let next = { ..state, entries, }
     self.commit(next)
-    next
+    Changed(next)
   })
 }
 
@@ -238,64 +246,62 @@ fn schedule_running(state : @protocol.SchedulesReply, id : String) -> Bool {
 }
 
 ///|
+/// Apply a user action to a schedule, refusing it with a reason when the
+/// schedule's state does not allow it.
 pub async fn Schedules::action(
   self : Schedules,
   payload : @protocol.ScheduleActionPayload,
-) -> @protocol.SchedulesReply {
+) -> @protocol.ScheduleChangeReply {
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
-    guard self.owns() else { raise EngineError(ScheduleForeignOwner) }
+    guard self.owns() else { return Refused(ForeignOwner) }
     let state = self.load()
     guard state.entries.search_by(entry => entry.id == payload.id)
       is Some(index) else {
-      raise EngineError("Schedule no longer exists")
+      return Refused(Missing)
     }
     let entry = state.entries[index]
     let entries = state.entries.copy()
     match payload.action {
-      "pause" =>
+      Pause =>
         entries[index] = {
           ..entry,
           enabled: false,
           run_requested: false,
           next_at: None,
         }
-      "resume" => {
+      Resume => {
         let next_at = schedule_next(entry.spec.timing, @async.now())
-        guard next_at is Some(_) else {
-          raise EngineError(
-            "This one-time schedule has passed; edit its time or run it now",
-          )
-        }
+        guard next_at is Some(_) else { return Refused(PastTime) }
         entries[index] = { ..entry, enabled: true, next_at, }
       }
-      "run" => {
-        guard !schedule_running(state, entry.id) && !entry.run_requested else {
-          raise EngineError("This schedule is already running or queued")
+      Run => {
+        guard !schedule_running(state, entry.id) else {
+          return Refused(AlreadyRunning)
         }
+        guard !entry.run_requested else { return Refused(AlreadyQueued) }
         entries[index] = { ..entry, run_requested: true, }
       }
-      "stop" =>
+      Stop =>
         for run in state.runs {
           if run.schedule_id == entry.id && run.status is Running {
-            self.stopped[run.id] = ()
+            self.stopped.add(run.id)
             if self.processes.get(run.id) is Some(process) {
               process.cancel()
             }
           }
         }
-      "delete" => {
+      Delete => {
         guard !schedule_running(state, entry.id) else {
-          raise EngineError("Stop this run before deleting its schedule")
+          return Refused(StopBeforeDelete)
         }
         ignore(entries.remove(index))
       }
-      _ => raise EngineError("Unknown schedule action")
     }
     let next = { ..state, entries, }
     self.commit(next)
-    next
+    Changed(next)
   })
 }
 
@@ -336,6 +342,12 @@ pub async fn Schedules::run(
 }
 
 ///|
+/// Whether `entry`'s own timing has come due by `now`.
+fn schedule_due(entry : @protocol.ScheduleEntry, now : Int64) -> Bool {
+  entry.enabled && entry.next_at is Some(at) && at <= now
+}
+
+///|
 async fn Schedules::take_due(
   self : Schedules,
   at? : Int64,
@@ -348,13 +360,19 @@ async fn Schedules::take_due(
     guard self.owns() else { return [] }
     let state = self.load()
     let now = at.unwrap_or_else(@async.now)
+    // Most ticks find nothing to start; skip the copies below for them.
+    guard state.entries
+      .iter()
+      .any(entry => entry.run_requested || schedule_due(entry, now)) else {
+      return []
+    }
     let entries = state.entries.copy()
     let runs = state.runs.copy()
     let launches : Array[(@protocol.ScheduleEntry, @protocol.ScheduleRun)] = []
     let mut active = runs.count_if(run => run.status is Running)
     let mut changed = false
     for index, entry in entries {
-      let due = entry.enabled && entry.next_at is Some(at) && at <= now
+      let due = schedule_due(entry, now)
       guard entry.run_requested || due else { continue }
       let running = schedule_running(state, entry.id)
       // Explicit Run now waits for capacity. Periodic ticks never build a backlog.
@@ -373,37 +391,42 @@ async fn Schedules::take_due(
         enabled: entry.enabled && next_at is Some(_),
       }
       changed = true
-      let notice = if running {
-        Some("Skipped: the previous run is still active")
+      let skipped : @protocol.ScheduleSkip? = if running {
+        Some(PreviousRunActive)
       } else if active >= ScheduleConcurrency {
-        Some("Skipped: all four execution slots were busy")
+        Some(CapacityFull)
       } else if !entry.run_requested &&
         entry.next_at is Some(at) &&
         now - at > 60000 {
-        Some("Skipped: the host missed the scheduled time")
+        Some(MissedTime)
       } else {
         None
       }
-      entries[index] = { ..entries[index], notice, }
-      guard notice is None else { continue }
+      entries[index] = { ..entries[index], skipped, }
+      guard skipped is None else { continue }
+      // A schedule that cannot start is skipped on its own; the others
+      // still launch on this tick.
+      let workspace = schedule_run_workspace(entry) catch {
+        error => {
+          @xlog.warn() <?
+            {
+              "event": "schedule_automatic_folder_unavailable",
+              "schedule": entry.id,
+              "message": "\{error}",
+            }
+          entries[index] = {
+            ..entries[index],
+            skipped: Some(AutomaticFolderUnavailable),
+          }
+          continue
+        }
+      }
       let id = @uuid.mint()
       let run : @protocol.ScheduleRun = {
         id,
         schedule_id: entry.id,
         name: entry.spec.name,
-        workspace: entry.spec.workspace.unwrap_or_else(() => {
-          guard @home.dir() is Some(home) else {
-            raise EngineError(
-              "Automatic tasks need an available home directory",
-            )
-          }
-          home
-          .join("OpenSeek")
-          .join("Scheduled")
-          .join(entry.id)
-          .resolve()
-          .resource_path()
-        }),
+        workspace,
         session: "scheduled-\{id}",
         started_at: now,
         finished_at: None,
@@ -419,4 +442,22 @@ async fn Schedules::take_due(
     }
     launches
   })
+}
+
+///|
+/// The directory a run of `entry` works in: its attached project, or the
+/// automatic folder the host keeps for it under the user's home.
+fn schedule_run_workspace(entry : @protocol.ScheduleEntry) -> String raise {
+  if entry.spec.workspace is Some(workspace) {
+    return workspace
+  }
+  guard @home.dir() is Some(home) else {
+    raise EngineError("Automatic tasks need an available home directory")
+  }
+  home
+  .join("OpenSeek")
+  .join("Scheduled")
+  .join(entry.id)
+  .resolve()
+  .resource_path()
 }

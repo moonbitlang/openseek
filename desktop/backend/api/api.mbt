@@ -39,6 +39,8 @@ struct ApiState {
   // grants every engine it starts access to it, and `start_services` serves
   // it.
   host_mcp : @mcp.Server?
+  cloud_clients : Map[String, CloudMcpClient]
+  cloud_browser : ((String) -> @mcp.Tool)?
   questions : @user_questions.Service
   messages : @session_messages.Service
   // Called for every finished run, alongside the notification fan-out — the
@@ -275,6 +277,7 @@ pub fn ApiState::ApiState(
   console_url? : String,
   resources~ : @host.HostResources = @host.HostResources::from_path(),
   host_mcp? : @mcp.Server,
+  cloud_browser? : (String) -> @mcp.Tool,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(
@@ -305,6 +308,8 @@ pub fn ApiState::ApiState(
     app_version,
     console_url,
     host_mcp,
+    cloud_browser,
+    cloud_clients: Map([]),
     messages: Service(),
     questions: Service(),
     on_finished,
@@ -508,6 +513,7 @@ pub fn endpoints(
     Endpoint(@commands.mcp_status, payload => {
       @engine.mcp_status(state.manager, payload)
     }),
+    Endpoint(@commands.cloud_mcp, payload => state.cloud_mcp(payload)),
     @endpoint.Endpoint::sync(@commands.user_questions_list, _ => {
       state.questions.snapshot()
     }),
@@ -760,7 +766,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.worktree_list, payload => {
-      @worktree.list(payload.workspace)
+      @worktree.list(@pathx.Absolute::parse_resource_path(payload.workspace))
     }),
     Endpoint(@commands.worktree_create, payload => {
       let owner = match (payload.session, payload.codex_thread) {
@@ -789,7 +795,7 @@ pub fn endpoints(
       }
       let reply = @worktree.create(
         state.manager.worktree_host(),
-        payload.workspace,
+        @pathx.Absolute::parse_resource_path(payload.workspace),
         owner,
         worktrees => {
           publish_worktree_changed(state, payload.workspace, worktrees)
@@ -823,7 +829,7 @@ pub fn endpoints(
     Endpoint(@commands.worktree_remove, payload => {
       @worktree.remove(
         state.manager.worktree_host(),
-        payload.workspace,
+        @pathx.Absolute::parse_resource_path(payload.workspace),
         payload.name,
         payload.force is Some(true),
         worktrees => {

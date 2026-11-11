@@ -8,11 +8,15 @@ import {
 }
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "test"
 
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
 } for "wbtest"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

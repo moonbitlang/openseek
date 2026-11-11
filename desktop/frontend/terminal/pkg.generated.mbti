@@ -10,8 +10,6 @@ import {
 }
 
 // Values
-pub fn apply_font_family(String) -> @cmd.Cmd
-
 pub fn apply_font_size(Double) -> @cmd.Cmd
 
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]

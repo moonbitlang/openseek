@@ -27,7 +27,7 @@
 ///   producers: stdin reader ──────────── Wire(command)
 ///              turn/compact completions ─ TurnDone(finished~) │ CompactDone
 ///              background-job exits ───── BackgroundNotice
-///              MCP connection closes ──── McpConnectionClosed
+///              MCP server change ──────── McpChanged
 ///   pump: for ;; match step
 ///     ├─ Wire(Prompt)          ── active? queue pending : start turn
 ///     ├─ Wire(Steer)           ── turn running │ prompt queued? queue steer : reject
@@ -36,7 +36,7 @@
 ///     ├─ Wire(Goal)            ── durable marker; auto=true arms auto-continue
 ///     ├─ Wire(Approval)        ── release a tool blocked INSIDE the active turn
 ///     ├─ BackgroundNotice      ── idle? drain queued context to the log
-///     ├─ McpConnectionClosed   ── emit `mcp_status` if it changed
+///     ├─ McpChanged            ── emit `mcp_status` if it changed
 ///     ├─ TurnDone              ── drain context ── start next pending work
 ///     │                           └─ armed goal(auto) unmet ⇒ auto-continue
 ///     ├─ CompactDone           ── adopt compacted session ── start next pending
@@ -111,7 +111,7 @@ async fn run_serve(
     now_ms=@env.now().reinterpret_as_int64(),
   )
   let approval_policy = @execution.approval_policy(matches, interactive=true)
-  @async.with_task_group(group => {
+  @core_async.with_task_group(group => {
     let scope = @agent_runtime.AgentTaskScope(group)
     // All scheduling flows through one ordered queue with one consumer:
     // wire commands from the reader, plus the internal turn-completion and
@@ -160,10 +160,11 @@ async fn run_serve(
       ),
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
-    let mcp = @execution.connect_mcp(
+    let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
       workspace_root~,
+      on_change=() => ignore(steps.try_put(McpChanged) catch { _ => false }),
     )
     let extra_tools = @execution.build_extra_tools(
       model~,
@@ -171,15 +172,10 @@ async fn run_serve(
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )
-    // What this engine holds of its MCP servers goes out unasked: once now
-    // that connecting is over, and again whenever it changes. The close
-    // handler runs inside a connection's own teardown, so it only wakes the
-    // loop and the loop reports — which also means nothing is sent once the
-    // loop has stopped and the group is closing every connection on the way
-    // out. Installed before the first read, so no close falls between them.
-    mcp.on_connection_closed(() => {
-      ignore(steps.try_put(McpConnectionClosed) catch { _ => false })
-    })
+    // What this engine holds of its MCP servers goes out unasked: once now,
+    // with the servers still connecting, and again on every `McpChanged`.
+    // Only the loop reports, so nothing is sent once it has stopped and the
+    // group is closing every connection on the way out.
     let mut reported_mcp = mcp.status()
     @emit.emit(McpStatus(status=reported_mcp))
     fn report_mcp_status() {
@@ -262,7 +258,7 @@ async fn run_serve(
     }
     let pending : Array[PendingWork] = []
     let mut active_work : ActiveWork? = None
-    let mut prediction : (Int32, @async.Task[Unit])? = None
+    let mut prediction : (Int32, @core_async.Task[Unit])? = None
     // Preserve model and thinking mode: disabling thinking changes DeepSeek's
     // cached prefix even when the message array and tool schemas are identical.
     let prediction_client = @client.Client(
@@ -469,7 +465,7 @@ async fn run_serve(
     fn start_turn(
       content : @agent_session.Content,
       submission_id : String?,
-    ) -> @async.Task[Unit] {
+    ) -> @core_async.Task[Unit] {
       group.spawn() <| () => {
         errdefer {
           @emit.emit(AgentAborted(reason="interrupted"))
@@ -516,7 +512,9 @@ async fn run_serve(
       }
     }
 
-    fn start_compaction(current : @agent_session.Session) -> @async.Task[Unit] {
+    fn start_compaction(
+      current : @agent_session.Session,
+    ) -> @core_async.Task[Unit] {
       group.spawn() <| () => {
         errdefer {
           @emit.emit(CompactionFailed(error="cancelled"))
@@ -750,7 +748,7 @@ async fn run_serve(
         // drains and applies the queued notice live; only drain here when idle,
         // so an idle engine still surfaces the completion.
         BackgroundNotice => if active_work is None { drain_idle_steers() }
-        McpConnectionClosed => report_mcp_status()
+        McpChanged => report_mcp_status()
         TurnDone(finished~) => {
           goal_promoted_this_boundary = false
           drain_idle_steers()

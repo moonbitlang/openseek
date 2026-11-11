@@ -11,6 +11,8 @@ pub async fn catalog() -> @protocol.SkillsCatalogReply
 
 pub async fn content(@protocol.InstallSkillPayload) -> @protocol.SkillContentReply
 
+pub fn global_library_dir() -> @pathx.Path?
+
 pub async fn installed_content(@protocol.UninstallSkillPayload) -> @protocol.SkillContentReply
 
 pub async fn set_enabled(@protocol.SetSkillEnabledPayload, () -> Unit) -> @protocol.SetSkillEnabledReply

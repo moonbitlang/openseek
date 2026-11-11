@@ -90,7 +90,7 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
-  history_disk_request : Int32?
+  history_cache_request : Int32?
   history_window : HistoryWindow
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
@@ -126,6 +126,7 @@ pub(all) struct Conversation {
   shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
   // One command waiting for session creation or the first SSE snapshot.
+  client_tools_ready : Bool
   outgoing : PendingCommand?
   stream : StreamLease?
   control : ControlState?
@@ -161,7 +162,7 @@ fn Conversation::empty() -> Conversation {
     history_cached: false,
     history_etag: None,
     history_reading: false,
-    history_disk_request: None,
+    history_cache_request: None,
     history_window: HistoryWindow::empty(),
     history_older_request: None,
     history_turn_request: None,
@@ -191,6 +192,7 @@ fn Conversation::empty() -> Conversation {
     uploads: [],
     shell_commands: [],
     pending: None,
+    client_tools_ready: false,
     outgoing: None,
     stream: None,
     control: None,
@@ -287,6 +289,7 @@ pub extend SessionListStatus with Eq::{equal, not_equal}
 ///|
 #derive(Eq)
 pub(all) struct State {
+  client_tools : Bool
   user_id : String?
   epoch : Int32
   needs_sign_in : Bool
@@ -307,6 +310,7 @@ pub(all) struct State {
 ///|
 pub fn State::empty() -> State {
   {
+    client_tools: false,
     user_id: None,
     epoch: 0,
     needs_sign_in: false,
@@ -330,6 +334,15 @@ pub using @cloud_client {type Failure}
 
 ///|
 pub(all) enum Msg {
+  ClientToolsReady(Int32, String, Bool)
+  QuestionInput(
+    account~ : String,
+    session~ : String,
+    text~ : String,
+    id~ : String
+  )
+  QuestionInputDelivered(Int32, String)
+  QuestionInputFailed(Int32, String, String)
   AccountChanged(String?)
   Refresh
   Create
@@ -354,7 +367,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
-  DiskHistoryLoaded(Int32, String, Int32, History?)
+  CachedHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, Failure)

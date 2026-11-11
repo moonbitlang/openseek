@@ -16,10 +16,10 @@ pub(all) struct Environment {
 ///|
 /// What the conversation's engine is connected to: a one-line summary for
 /// the folded card and the rows for the unfolded one, drawn by the package
-/// that owns the MCP status.
+/// that owns the MCP status. The rows are drawn only while the card is open.
 pub(all) struct Connectors {
   summary : String
-  rows : Array[@html.Html]
+  rows : () -> Array[@html.Html]
   /// Ask again; `None` while a question is already out.
   refresh : @cmd.Cmd?
 }
@@ -27,10 +27,11 @@ pub(all) struct Connectors {
 ///|
 /// The pull requests and branches the conversation works on: a one-line
 /// summary for the folded card and the rows for the unfolded one, drawn by
-/// the package that owns the attached list.
+/// the package that owns the attached list. The rows are drawn only while the
+/// card is open.
 pub(all) struct Changes {
   summary : String
-  rows : Array[@html.Html]
+  rows : () -> Array[@html.Html]
 }
 
 ///|
@@ -97,14 +98,9 @@ pub fn view(
     class="conv-overview",
     attrs=@html.Attrs::build().aria_label(text(locale, Overview)),
     [
-      card(
-        locale,
-        Environment,
-        state,
-        emit,
-        aside=[],
-        environment_rows(locale, environment),
-      ),
+      card(locale, Environment, state, emit, () => {
+        environment_rows(locale, environment)
+      }),
       // With no checkout to describe and nothing attached, there is no card.
       if changes is Some(changes) {
         card(
@@ -112,11 +108,7 @@ pub fn view(
           Changes,
           state,
           emit,
-          aside=if state.is_open(Changes) {
-            []
-          } else {
-            [@html.span(class="conv-overview-summary", changes.summary)]
-          },
+          summary=changes.summary,
           changes.rows,
         )
       } else {
@@ -127,15 +119,14 @@ pub fn view(
         Connectors,
         state,
         emit,
-        // Folded, the card is its summary; unfolded, the rows say it all and
-        // the summary gives way to asking again.
-        aside=[
-          if state.is_open(Connectors) {
-            refresh_button(locale, connectors.refresh)
-          } else {
-            @html.span(class="conv-overview-summary", connectors.summary)
-          },
-        ],
+        // Unfolded, the rows say it all and the summary gives way to asking
+        // again.
+        summary=connectors.summary,
+        aside=if state.is_open(Connectors) {
+          [refresh_button(locale, connectors.refresh)]
+        } else {
+          []
+        },
         connectors.rows,
       ),
       // Last, so the card coming and going never moves the others.
@@ -160,27 +151,19 @@ fn background_card(
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let tasks = background.tasks
-  let (link, label) = if tasks.in_jobs {
-    let link = background.jobs
-    (link, text(locale, if link.shown { HideJobs } else { OpenJobs }))
+  let (link, hide, show) = if tasks.in_jobs {
+    (background.jobs, HideJobs, OpenJobs)
   } else {
-    let link = background.workflows
-    (link, text(locale, if link.shown { HideWorkflows } else { OpenWorkflows }))
+    (background.workflows, HideWorkflows, OpenWorkflows)
   }
+  let label = text(locale, if link.shown { hide } else { show })
   card(
     locale,
     BackgroundTasks,
     state,
     emit,
+    summary=running_text(locale, tasks.running()),
     aside=[
-      if state.is_open(BackgroundTasks) {
-        @html.nothing
-      } else {
-        @html.span(
-          class="conv-overview-summary",
-          running_text(locale, tasks.running()),
-        )
-      },
       @html.button(
         class=if link.shown {
           "conv-overview-mini active"
@@ -196,50 +179,56 @@ fn background_card(
         @icons.icon(@icons.icon_layout_sidebar_right),
       ),
     ],
-    [
-      ..tasks.jobs.map(job => {
-        row(@icons.icon_terminal, title=job.command, [
-          @html.span(
-            class="conv-overview-row-text conv-overview-command",
-            job.command,
-          ),
-          @html.span(
-            class="conv-overview-row-sub",
-            elapsed(background.now_ms - job.started_at_ms.to_double()),
-          ),
-        ])
-      }),
-      ..tasks.subagents.map(title => {
-        row(@icons.icon_robot, title~, [
-          @html.span(class="conv-overview-row-text", title),
-        ])
-      }),
-      if tasks.finished > 0 {
-        row(@icons.icon_check, [
-          @html.span(class="conv-overview-row-text", [
+    () => {
+      [
+        ..tasks.jobs.map(job => {
+          row(@icons.icon_terminal, title=job.command, [
+            @html.span(
+              class="conv-overview-row-text conv-overview-command",
+              job.command,
+            ),
             @html.span(
               class="conv-overview-row-sub",
-              finished_text(locale, tasks.finished, tasks.more_finished),
+              @labels.duration(
+                background.now_ms - job.started_at_ms.to_double(),
+              ),
             ),
-          ]),
-        ])
-      } else {
-        @html.nothing
-      },
-    ],
+          ])
+        }),
+        ..tasks.subagents.map(title => {
+          row(@icons.icon_robot, title~, [
+            @html.span(class="conv-overview-row-text", title),
+          ])
+        }),
+        if tasks.finished > 0 {
+          row(@icons.icon_check, [
+            @html.span(class="conv-overview-row-text", [
+              @html.span(
+                class="conv-overview-row-sub",
+                finished_text(locale, tasks.finished, tasks.more_finished),
+              ),
+            ]),
+          ])
+        } else {
+          @html.nothing
+        },
+      ]
+    },
   )
 }
 
 ///|
-/// One card: its title folds and unfolds it, the aside stays visible either
-/// way, and the rows come last so folding never moves the title's button.
+/// One card: its title folds and unfolds it, the summary stands in for the
+/// rows while it is folded, the aside stays visible either way, and the rows
+/// come last so folding never moves the title's button.
 fn card(
   locale : @i18n.Locale,
   section : Section,
   state : State,
   emit : @cmd.Emit[Msg],
-  aside~ : Array[@html.Html],
-  rows : Array[@html.Html],
+  summary? : String,
+  aside~ : Array[@html.Html] = [],
+  rows : () -> Array[@html.Html],
 ) -> @html.Html {
   let open = state.is_open(section)
   let title = match section {
@@ -261,10 +250,20 @@ fn card(
         on_click=emit(Toggled(section)),
         [@html.span(title), @icons.icon(@icons.icon_chevron_down)],
       ),
-      @html.div(class="conv-overview-card-aside", aside),
+      @html.div(
+        class="conv-overview-card-aside",
+        [
+          if !open && summary is Some(summary) {
+            @html.span(class="conv-overview-summary", summary)
+          } else {
+            @html.nothing
+          },
+          ..aside,
+        ],
+      ),
     ]),
     if open {
-      @html.div(class="conv-overview-card-rows", rows)
+      @html.div(class="conv-overview-card-rows", rows())
     } else {
       @html.nothing
     },

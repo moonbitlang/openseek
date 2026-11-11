@@ -209,12 +209,13 @@ async test "job_output returns before a gated job can complete" {
     @async.with_task_group(group => {
       let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
       let (input, release) = @process.write_to_process()
+      defer input.close()
       defer release.close()
       let id = bg.start(
         program="/bin/cat",
         args=[],
         command="gate",
-        stdin=input,
+        stdin=Shared(input),
       )
       // Completion is impossible until after the read returns. No elapsed-time
       // assertion or sleep-based race is needed to prove it does not wait.

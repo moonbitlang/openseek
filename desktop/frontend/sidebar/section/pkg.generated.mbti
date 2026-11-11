@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale], @rabbita.Val[@conversation.Search]) -> @rabbita.Val[Array[(String, @html.Html)]]
+pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale], @rabbita.Val[@conversation.Search]) -> @rabbita.Val[RenderedSection]
 
 // Errors
 
@@ -28,6 +28,7 @@ pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
+  secondary : (Id, SecondaryAction) -> @cmd.Cmd
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
@@ -61,9 +62,10 @@ pub fn Id::to_repr(Self) -> @debug.Repr
 #derive(Eq, @debug.Debug)
 pub(all) struct Input {
   id : Id
-  label : String
+  label : String?
   activation : String?
   action : Action?
+  secondary_actions : Array[SecondaryAction]
   entries : Array[Entry]
 }
 pub fn Input::equal(Self, Self) -> Bool
@@ -83,6 +85,22 @@ pub(all) struct Placeholder {
 pub fn Placeholder::equal(Self, Self) -> Bool
 pub fn Placeholder::not_equal(Self, Self) -> Bool
 pub fn Placeholder::to_repr(Self) -> @debug.Repr
+
+#derive(Eq)
+pub(all) struct RenderedSection {
+  tools : @html.Html
+  rows : Array[(String, @html.Html)]
+}
+pub fn RenderedSection::equal(Self, Self) -> Bool
+pub fn RenderedSection::not_equal(Self, Self) -> Bool
+
+#derive(Eq, @debug.Debug)
+pub(all) enum SecondaryAction {
+  ImportConversation(disabled~ : Bool)
+}
+pub fn SecondaryAction::equal(Self, Self) -> Bool
+pub fn SecondaryAction::not_equal(Self, Self) -> Bool
+pub fn SecondaryAction::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

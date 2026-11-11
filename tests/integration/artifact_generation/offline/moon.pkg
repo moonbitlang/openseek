@@ -1,12 +1,21 @@
 import {
   "moonbitlang/openseek/agent",
   "moonbitlang/openseek/agent_runtime",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/json",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
 } for "test"
 
 supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)

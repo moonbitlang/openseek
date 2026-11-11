@@ -29,7 +29,8 @@ async fn copy_artifact_tree(source : String, destination : String) -> Unit {
         @fs.mkdir(to)
         copy_artifact_tree(from, to)
       }
-      Regular => @fs.write_file(to, @fs.read_file(from), create_mode=CreateNew)
+      Regular =>
+        @fs.write_binary(to, @fs.read_binary(from), create_mode=CreateNew)
       _ =>
         fail(
           "cannot fork an artifact bundle containing a symlink or special file",

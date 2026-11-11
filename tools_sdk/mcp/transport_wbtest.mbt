@@ -147,9 +147,16 @@ test "request shapes match the MCP host's v1 wire" {
       },
     },
   )
-  assert_eq(encode(List(cursor=None)), { "version": 1, "list": {} })
-  assert_eq(encode(List(cursor=Some(12))), {
+  assert_eq(encode(List(cursor=None, snapshot=None, server=None)), {
     "version": 1,
-    "list": { "cursor": 12 },
+    "list": {},
+  })
+  assert_eq(encode(List(cursor=None, snapshot=None, server=Some("github"))), {
+    "version": 1,
+    "list": { "server": "github" },
+  })
+  assert_eq(encode(List(cursor=Some(12), snapshot=Some(3), server=None)), {
+    "version": 1,
+    "list": { "cursor": 12, "snapshot": 3 },
   })
 }
