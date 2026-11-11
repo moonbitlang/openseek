@@ -108,3 +108,35 @@ test "text helpers ignore image bytes but search across text parts" {
   assert_false(content.is_text_only())
   assert_eq(image.data_url(), "data:image/png;base64,iVBORw0KGgo=")
 }
+
+///|
+test "attachment references round trip without binary data and reject malformed identities" {
+  let reference = @openseek_protocol.ImageRef::ImageRef(
+    attachment_id="sha256:" + "a".repeat(64),
+    media_type="image/png",
+    bytes=100,
+  )
+  let content : @openseek_protocol.Content = Content([
+    Text("see"),
+    ImageRef(reference),
+  ])
+  assert_eq(
+    (@json.from_json(Json(content)) : @openseek_protocol.Content),
+    content,
+  )
+  assert_false(Json(content).stringify().contains("base64"))
+  assert_eq(@openseek_protocol.ImageRef::from_url(reference.url()), reference)
+  for id in ["sha256:../image", "sha256:" + "A".repeat(64), "file-provider"] {
+    try
+      @openseek_protocol.ImageRef::ImageRef(
+        attachment_id=id,
+        media_type="image/png",
+        bytes=100,
+      )
+    catch {
+      _ => ()
+    } noraise {
+      _ => fail("invalid attachment id accepted")
+    }
+  }
+}

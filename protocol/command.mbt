@@ -247,10 +247,11 @@ fn parse_command_content(line : Json) -> Result[Content, String] {
       }
       let parts : Array[ContentPart] = [Text(text)]
       for url in urls {
-        let image = Image::from_data_url(url) catch {
-          error => return Err("\{error}")
-        }
-        parts.push(Image(image))
+        parts.push(
+          ContentPart::from_image_url(url) catch {
+            error => return Err("\{error}")
+          },
+        )
       }
       Ok(Content(parts))
     }

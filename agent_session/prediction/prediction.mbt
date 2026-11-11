@@ -40,18 +40,21 @@ pub enum GenerationResult {
 /// provider can reuse its cached prefix. Only the prediction instruction is new.
 /// Tool definitions are context: this function never executes returned calls.
 /// The caller supplies a client with its own bounded retry/reasoning policy.
+/// Images in the history resolve through `attachments`, the user-level store by
+/// default.
 pub async fn generate(
   client : @client.Client,
   session : @agent_session.Session,
   tools~ : Array[@deepseek.ToolDefinition],
+  attachments? : @attachments.AttachmentStore,
 ) -> GenerationResult {
   let messages = session.chat_messages()
   guard messages.length() > 1 else { return Skipped }
-  messages.push(ChatMessage(User, content=[Text(PredictionPrompt)]))
+  messages.push(ModelMessage(User, content=[Text(PredictionPrompt)]))
   // Adding JSON mode reduced parent cache hits in DeepSeek comparisons.
   // Request JSON in the appended prompt and validate it below instead.
   let response = @async.with_timeout(8000, () => {
-    client.chat(messages, tools~, max_tokens=1024)
+    @request.chat(client, messages, attachments?, tools~, max_tokens=1024)
   })
   guard response.tool_calls.is_empty() else {
     fail("prediction returned a tool call")

@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/openseek/agent_session",
@@ -15,7 +16,6 @@ import {
 
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client",
   "moonbitlang/core/async/http",
   "moonbitlang/core/async/socket",

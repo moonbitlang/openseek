@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/mcp/host" @mcphost,
@@ -6,6 +7,7 @@ import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/core/int",
   "moonbitlang/openseek/agent_session/compact",
+  "moonbitlang/openseek/agent_session/request",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",

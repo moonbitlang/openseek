@@ -11,6 +11,8 @@ pub const RunRequestVersion : Int32 = 1
 
 pub const RunResultVersion : Int32 = 1
 
+pub fn is_attachment_url(String) -> Bool
+
 pub fn job_id_from_storage(String) -> String
 
 pub fn job_storage_name(String) -> String
@@ -94,8 +96,10 @@ pub impl @json.ToJson for Content
 pub(all) enum ContentPart {
   Text(String)
   Image(Image)
+  ImageRef(ImageRef)
 }
 pub fn ContentPart::equal(Self, Self) -> Bool
+pub fn ContentPart::from_image_url(String) -> Self raise
 pub fn ContentPart::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ContentPart::not_equal(Self, Self) -> Bool
 pub fn ContentPart::to_repr(Self) -> @debug.Repr
@@ -181,6 +185,23 @@ pub fn Image::from_data_url(String) -> Self raise ImageError
 pub fn Image::not_equal(Self, Self) -> Bool
 pub fn Image::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Image
+
+#derive(Eq, @debug.Debug)
+pub struct ImageRef {
+  attachment_id : String
+  media_type : String
+  bytes : Int32
+}
+pub fn ImageRef::ImageRef(attachment_id~ : String, media_type~ : String, bytes~ : Int32) -> Self raise
+pub fn ImageRef::equal(Self, Self) -> Bool
+pub fn ImageRef::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ImageRef::from_url(String) -> Self raise
+pub fn ImageRef::not_equal(Self, Self) -> Bool
+pub fn ImageRef::to_json(Self) -> @json.Json
+pub fn ImageRef::to_repr(Self) -> @debug.Repr
+pub fn ImageRef::url(Self) -> String
+pub impl @json.FromJson for ImageRef
+pub impl @json.ToJson for ImageRef
 
 #derive(Eq, @debug.Debug)
 pub(all) enum JobEventKind {

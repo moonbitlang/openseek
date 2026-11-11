@@ -1,6 +1,8 @@
 import {
   "moonbitlang/core/env",
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/request",
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client",

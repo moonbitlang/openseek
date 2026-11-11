@@ -16,29 +16,22 @@ async test "realworld inline user and tool images are recognized" {
     retry_attempts=1,
   )
   let prompt = "Identify the solid color of each half of this image. Reply only with a JSON object with keys left and right, using one lowercase English color name for each."
-  let histories : Array[Array[@deepseek.ChatMessage]] = [
+  let histories : Array[Array[@agent_session.ModelMessage]] = [
+    [ModelMessage(User, content=[Text(prompt), Image(image)])],
     [
-      ChatMessage(
-        User,
-        content=@agent_session.to_deepseek_parts(
-          Content([Text(prompt), Image(image)]),
-        ),
-      ),
-    ],
-    [
-      ChatMessage(User, content=[Text(prompt)]),
-      ChatMessage(Assistant, content=[], tool_calls=[
+      ModelMessage(User, content=[Text(prompt)]),
+      ModelMessage(Assistant, content=[], tool_calls=[
         ToolCall(id="call-image", name="read_image", arguments="{}"),
       ]),
-      ChatMessage(
-        Tool("call-image"),
-        content=@agent_session.to_deepseek_parts(Content([Image(image)])),
-      ),
+      ModelMessage(Tool("call-image"), content=[Image(image)]),
     ],
   ]
   @async.with_timeout(120_000, () => {
     for history in histories {
-      let response = client.chat(history, response_format=JsonObject)
+      let response = client.chat(
+        history.map(message => message.to_chat_message({})),
+        response_format=JsonObject,
+      )
       let answer = @json.parse(response.content)
       assert_true(answer is { "left": "blue", "right": "yellow", .. })
       assert_true(response.usage.total_tokens > 0)

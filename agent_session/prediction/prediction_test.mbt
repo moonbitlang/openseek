@@ -26,7 +26,7 @@ async test "prediction preserves the main request prefix and leaves the session 
     ToolDefinition("shell", "Run a shell command", { "type": "object" }),
   ]
   let original_request = @deepseek.encode_chat_request(
-    session.chat_messages(),
+    session.chat_messages().map(message => message.to_chat_message(Map([]))),
     tools~,
     thinking=High,
   )
@@ -99,7 +99,7 @@ async test "prediction preserves the main request prefix and leaves the session 
     assert_eq(usage.prompt_cache_miss_tokens, 8)
     assert_eq(
       @deepseek.encode_chat_request(
-        session.chat_messages(),
+        session.chat_messages().map(message => message.to_chat_message(Map([]))),
         tools~,
         thinking=High,
       ),

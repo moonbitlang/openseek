@@ -30,26 +30,28 @@ const CompactionUserPrompt : String =
 ///|
 fn compaction_messages(
   session : @agent_session.Session,
-) -> Array[@deepseek.ChatMessage] {
+) -> Array[@agent_session.ModelMessage] {
   let messages = session.chat_messages()
   // `chat_messages` always starts with the session's system message. Replace
   // only that authority-bearing message; preserve the projected conversation,
   // including valid assistant/tool pairs, byte-for-byte after it.
-  messages[0] = ChatMessage(System, content=[Text(CompactionSystemPrompt)])
-  messages..push(ChatMessage(User, content=[Text(CompactionUserPrompt)]))
+  messages[0] = ModelMessage(System, content=[Text(CompactionSystemPrompt)])
+  messages..push(ModelMessage(User, content=[Text(CompactionUserPrompt)]))
 }
 
 ///|
 /// Generate a handoff summary of the session's projected history through one
 /// model call, failing when the endpoint returns an empty summary. Pass a
 /// `thinking=No` client where the model honors the control (Kimi models
-/// ignore it): a checkpoint summary needs no reasoning budget.
+/// ignore it): a checkpoint summary needs no reasoning budget. Images in the
+/// history resolve through `attachments`, the user-level store by default.
 pub async fn generate_compaction_summary(
   client~ : @client.Client,
+  attachments? : @attachments.AttachmentStore,
   session : @agent_session.Session,
 ) -> String {
   let messages = compaction_messages(session)
-  let response = client.chat(messages)
+  let response = @request.chat(client, messages, attachments?)
   let summary = response.content.trim().to_owned()
   if summary.is_empty() {
     fail("compaction summary was empty")

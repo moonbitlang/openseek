@@ -99,8 +99,16 @@ this requires no Files API upload or remote file lifetime management.
 
 The caller must select an image-capable model and an endpoint accepting file
 references; file IDs are scoped to the uploading API key.
-This package does not resize images, cache file IDs, delete uploads, or fall
-back to base64. Callers own local image retention and remote file lifetimes.
+`Client::chat` sends wire messages only. `Client::upload_attachments` resolves
+stored `ImageRef`s to reusable file IDs: the mapping and its lock live at the
+root of the given `AttachmentStore` as `files-v1.json` and `files-v1.lock`,
+alongside `v1/objects`, shared across clients and scoped by endpoint and
+credential digest. Uploads run outside the short index-write lock and cached
+IDs refresh near expiry. A provider response rejecting a file reference raises
+`RejectedImageFile`; `Client::forget_uploads` drops those IDs so the next
+resolution uploads again. `agent_session/request.chat` combines these steps for
+model messages. Local images retain their original bytes; remote uploads have
+bounded expiry.
 Limits follow the [DeepSeek Files API documentation](https://api-docs.deepseek.com/zh-cn/guides/files_api/).
 
 ## Configuration

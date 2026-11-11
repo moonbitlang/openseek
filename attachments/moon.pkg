@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/x/crypto",
+}
+
+supported_targets = "+wasm+native"
