@@ -1,9 +1,9 @@
 ///|
 /// Transport-independent MCP tools and JSON-RPC dispatch. Handlers keep the
 /// browser and session objects supplied by the host that constructs them.
-pub struct Dispatcher {
-  priv version : String
-  priv tools : Map[String, Tool]
+struct Dispatcher {
+  version : String
+  tools : Map[String, Tool]
 }
 
 ///|
