@@ -597,12 +597,17 @@ fn item(
       None => @html.span(class="conv-changes-link", title~, label)
     },
   ]
+  // With no details to sit beside, the tags join the name instead of taking
+  // a line of their own.
+  if meta.is_empty() && !aside.is_empty() {
+    heading.push(@html.span(class="conv-changes-aside", aside))
+  }
   if menu is Some((locale, target)) {
     let label = text(locale, MoreActions)
     heading.push(more_button(label, target))
   }
   let lines = [@html.div(class="conv-changes-title", heading)]
-  if !meta.is_empty() || !aside.is_empty() {
+  if !meta.is_empty() {
     lines.push(
       @html.div(class="conv-changes-details", [
         @html.span(class="conv-changes-meta", meta),
