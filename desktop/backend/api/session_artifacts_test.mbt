@@ -1,6 +1,13 @@
 ///|
+/// Tests in this package that swap the process-wide HOME hold this lock.
+#cfg(not(platform="windows"))
+let home_env_test_lock : @async.Mutex = Mutex()
+
+///|
 #cfg(not(platform="windows"))
 async test "host MCP attaches only to its caller and preserves concurrent artifacts" {
+  home_env_test_lock.acquire()
+  defer home_env_test_lock.release()
   let root = @pathx.Path(
     @fs.realpath(@fs.tmpdir(prefix="seekmoon-pr-artifacts-")),
   ).resolve()
