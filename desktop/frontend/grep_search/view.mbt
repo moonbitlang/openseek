@@ -268,23 +268,22 @@ fn pattern_repair_control(
 /// Select recovery copy from the closed repair state. Unavailable messages are
 /// Host-controlled setup guidance (for example, a missing API key), so retain
 /// them instead of replacing the user's recovery action with generic advice.
-fn pattern_repair_failure_label(page : Page) -> String {
+fn pattern_repair_failure_label(locale~ : @i18n.Locale, page : Page) -> String {
   match page.pattern_repair_phase {
-    PatternRepairInputRequired => "Enter a pattern before repairing it."
+    PatternRepairInputRequired => ui(locale, PatternRepairInputRequiredLabel)
     PatternRepairUnavailable =>
       page.pattern_repair_message.unwrap_or(
-        "Pattern repair is unavailable. Check Settings and retry.",
+        ui(locale, PatternRepairUnavailableLabel),
       )
-    PatternRepairTimedOut =>
-      "Pattern Repair Agent timed out after 120 seconds. Try again."
+    PatternRepairTimedOut => ui(locale, PatternRepairTimedOutLabel)
     PatternRepairValidationFailed =>
-      "Pattern repair failed. The current pattern was not changed."
-    _ => "Pattern repair failed. Update the pattern or retry."
+      ui(locale, PatternRepairValidationFailedLabel)
+    _ => ui(locale, PatternRepairFailedLabel)
   }
 }
 
 ///|
-fn pattern_repair_details(page : Page) -> @html.Html {
+fn pattern_repair_details(locale~ : @i18n.Locale, page : Page) -> @html.Html {
   let has_candidate = page.pattern_repair_candidate is Some(_)
   let has_diagnostic = page.pattern_repair_phase
     is PatternRepairValidationFailed &&
@@ -295,7 +294,7 @@ fn pattern_repair_details(page : Page) -> @html.Html {
   let candidate = match page.pattern_repair_candidate {
     Some(candidate) =>
       @html.div(class="search-pattern-repair-candidate", [
-        @html.p("Candidate pattern (not applied)"),
+        @html.p(ui(locale, PatternRepairCandidateLabel)),
         @html.pre(class="search-pattern-repair-candidate-value", candidate),
       ])
     None => @html.nothing
@@ -314,12 +313,12 @@ fn pattern_repair_details(page : Page) -> @html.Html {
   } else {
     let rows = page.pattern_repair_trace.map(item => @html.li(item))
     @html.div(class="search-pattern-repair-trace", [
-      @html.p("Repair trace"),
+      @html.p(ui(locale, PatternRepairTraceLabel)),
       @html.ol(class="search-pattern-repair-trace-list", rows),
     ])
   }
   @html.details(class="search-pattern-repair-details", [
-    @html.summary("Show repair details"),
+    @html.summary(ui(locale, ShowPatternRepairDetails)),
     candidate,
     diagnostic,
     trace,
@@ -350,9 +349,9 @@ fn pattern_repair_notice(
     @html.div(class="search-pattern-repair-status error", [
       @html.span(
         attrs=@html.Attrs::build().role("alert"),
-        pattern_repair_failure_label(page),
+        pattern_repair_failure_label(locale~, page),
       ),
-      pattern_repair_details(page),
+      pattern_repair_details(locale~, page),
     ])
   } else {
     @html.nothing

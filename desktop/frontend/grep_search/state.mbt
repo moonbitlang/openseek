@@ -222,7 +222,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           page: {
             ..page,
             pattern_repair_phase: PatternRepairInputRequired,
-            pattern_repair_message: Some("Enter a pattern before repairing it."),
+            pattern_repair_message: None,
             pattern_repair_candidate: None,
             pattern_repair_trace: [],
           },
