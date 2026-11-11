@@ -107,8 +107,7 @@ pub fn MarkerDecorationsService::marker_decorations_handle(
     get_live_markers_for_model: model => self.get_live_markers_for_model(model),
     get_live_resolved_marker_decorations_for_model: model => {
       let resolved : Array[ResolvedMarkerDecoration] = []
-      for pair in self.get_live_markers_for_model(model) {
-        let (range, marker) = pair
+      for (range, marker) in self.get_live_markers_for_model(model) {
         resolved.push({
           range,
           marker,

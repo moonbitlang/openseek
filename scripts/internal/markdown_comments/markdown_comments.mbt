@@ -43,8 +43,7 @@ fn collect_block_comment_ranges(
     ExtFootnoteDefinition(node) =>
       collect_block_comment_ranges(markdown, node.v.block, ranges)
     ExtTable(node) =>
-      for row_entry in node.v.rows.iter() {
-        let (row, _) = row_entry
+      for (row, _) in node.v.rows.iter() {
         collect_table_row_comment_ranges(row.v, ranges)
       }
     BlankLine(_)
@@ -62,8 +61,7 @@ fn collect_table_row_comment_ranges(
 ) -> Unit {
   match row {
     Header(cells) | Data(cells) =>
-      for cell in cells.iter() {
-        let (inline, _) = cell
+      for (inline, _) in cells.iter() {
         collect_inline_comment_ranges(inline, ranges)
       }
     Sep(_) => ()

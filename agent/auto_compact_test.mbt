@@ -58,8 +58,7 @@ fn sse_tool_calls(
   total_tokens : Int32,
 ) -> String {
   let entries : Array[Json] = [
-    for index, call in calls => {
-      let (id, name) = call
+    for index, (id, name) in calls => {
       (
         {
           "index": index,

@@ -55,8 +55,7 @@ fn create_cormen_tree() -> IntervalTree {
     (6, 10),
     (19, 20),
   ]
-  for interval in data {
-    let (start, end) = interval
+  for (start, end) in data {
     let node = IntervalNode("", start, end)
     r.insert(node)
   }

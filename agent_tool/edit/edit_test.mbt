@@ -231,8 +231,7 @@ async test "edit rejects malformed arguments and names the offending field" {
       ({ "path": "\{dir}/noop.txt", "old_string": "x" }, "arguments.new_string"),
       (null, "object arguments"),
     ]
-    for case in cases {
-      let (arguments, expected) = case
+    for (arguments, expected) in cases {
       let output = run_edit(arguments)
       assert_eq(
         output.content,

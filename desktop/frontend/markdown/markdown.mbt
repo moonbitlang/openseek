@@ -428,8 +428,7 @@ fn MarkdownRender::table(
 ) -> @html.Html {
   let head : Array[@html.Html] = []
   let body : Array[@html.Html] = []
-  for row in table.rows.iter() {
-    let (row_node, _) = row
+  for (row_node, _) in table.rows.iter() {
     match row_node.v {
       Header(cells) => {
         let cell_nodes : Array[@html.Html] = []

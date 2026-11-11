@@ -116,8 +116,7 @@ async fn EngineManager::reap_idle_engines(
     }
   }
   let reaped : Array[String] = []
-  for candidate in candidates {
-    let (slot, engine) = candidate
+  for (slot, engine) in candidates {
     let seen = engine.last_activity_ms
     guard !engine.jobs_hold_engine(now~, idle_ms~) else { continue }
     // The probe suspended, so everything read before it is stale: a prompt

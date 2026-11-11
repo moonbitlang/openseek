@@ -61,8 +61,7 @@ test "outline body decorations complete the hidden body inline" {
 test "collapsed chevrons auto-hide only under mouseover controls" {
   let provider = FoldingDecorationProvider(folding_test_model(["line"]))
   let cases = [(false, false), (true, false), (false, true)]
-  for case in cases {
-    let (is_manual, is_outline_body) = case
+  for (is_manual, is_outline_body) in cases {
     let mouseover = provider.get_decoration_option(
       true, false, is_manual, is_outline_body,
     )
@@ -75,8 +74,7 @@ test "collapsed chevrons auto-hide only under mouseover controls" {
     show_folding_controls=Always,
     show_folding_highlights=true,
   )
-  for case in cases {
-    let (is_manual, is_outline_body) = case
+  for (is_manual, is_outline_body) in cases {
     let always = provider.get_decoration_option(
       true, false, is_manual, is_outline_body,
     )

@@ -492,8 +492,7 @@ fn EditorContributionRegistry::register_editor_command(
     run,
   }
   self.commands.set(command.id, RegisteredEditor(command))
-  for binding in keybindings {
-    let (key, alt, ctrl_cmd) = binding
+  for (key, alt, ctrl_cmd) in keybindings {
     self.keybindings.push({
       key,
       alt,
@@ -503,8 +502,7 @@ fn EditorContributionRegistry::register_editor_command(
       when: precondition,
     })
   }
-  for binding in shift_keybindings {
-    let (key, alt, ctrl_cmd) = binding
+  for (key, alt, ctrl_cmd) in shift_keybindings {
     self.keybindings.push({
       key,
       alt,
@@ -602,8 +600,7 @@ fn EditorContributionRegistry::register_core_editor_command(
   shift_keybindings~ : Array[(String, Bool, Bool)] = [],
 ) -> Unit {
   self.commands.set(command.id, RegisteredCore(command))
-  for binding in keybindings {
-    let (key, alt, ctrl_cmd) = binding
+  for (key, alt, ctrl_cmd) in keybindings {
     self.keybindings.push({
       key,
       alt,
@@ -613,8 +610,7 @@ fn EditorContributionRegistry::register_core_editor_command(
       when: keybinding_when,
     })
   }
-  for binding in shift_keybindings {
-    let (key, alt, ctrl_cmd) = binding
+  for (key, alt, ctrl_cmd) in shift_keybindings {
     self.keybindings.push({
       key,
       alt,

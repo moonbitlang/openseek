@@ -128,8 +128,7 @@ fn LauncherActions::rows(
     )
   }
   let rows : Array[@html.Html] = []
-  for entry in entries {
-    let (label, hint, image, choose) = entry
+  for (label, hint, image, choose) in entries {
     rows.push(
       @html.button(
         class=if popup {

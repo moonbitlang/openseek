@@ -170,8 +170,7 @@ pub async fn Launcher::recover(
     return []
   }
   let recovered = []
-  for found in self.entries(geometry) {
-    let (session, entry) = found
+  for (session, entry) in self.entries(geometry) {
     guard !self.working.contains(session) && !self.known.contains(session) else {
       continue
     }

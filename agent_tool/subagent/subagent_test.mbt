@@ -147,8 +147,7 @@ async test "subagent says when the session's slots are full" {
 /// is capped.
 #cfg(not(platform="windows"))
 async test "subagent bounds every child's step budget by its kind's ceiling" {
-  for case in [(None, 40), (Some(10), 10), (Some(500), 40)] {
-    let (requested, expected) = case
+  for (requested, expected) in [(None, 40), (Some(10), 10), (Some(500), 40)] {
     @async.with_task_group(group => {
       let seen = @fs.tmpdir(prefix="openseek-subagent-request-")
       group.add_defer(() => @fs.rmdir(seen, recursive=true))

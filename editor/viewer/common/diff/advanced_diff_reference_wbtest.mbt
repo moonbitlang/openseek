@@ -113,8 +113,7 @@ test "reference: substantial edits absorb at most twenty UTF-16 units of matchin
       Range(1, 1, 1, 183),
     ),
   ]
-  for entry in cases {
-    let (original, modified, expected) = entry
+  for (original, modified, expected) in cases {
     let result = advanced_compute(original, modified)
     guard result.changes
       is [{ mapping: { inner_changes: Some([inner]), .. }, .. }] else {

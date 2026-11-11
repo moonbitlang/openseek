@@ -96,8 +96,7 @@ fn code_editor_foreign_zone_geometry(
 ) -> (Array[CodeEditorForeignZoneHeight], Double) {
   let foreign : Array[CodeEditorForeignZoneHeight] = []
   let mut excluded_height = 0.0
-  for info in layout_infos {
-    let (id, after_line_number, raw_height) = info
+  for (id, after_line_number, raw_height) in layout_infos {
     let height_in_px = raw_height.max(0.0)
     if excluded_zone_ids.contains(id) {
       excluded_height += height_in_px

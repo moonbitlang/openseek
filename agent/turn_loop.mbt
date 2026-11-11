@@ -719,8 +719,7 @@ async fn AgentLoop::prefetch_concurrent_results(
     let worst_prior = last_index.to_int64() * max_tool_result_chars.to_int64()
     guard self.next_call_fits(response.usage, worst_prior) else { continue }
     @async.with_task_group() <| scope => {
-      for entry in group {
-        let (index, call) = entry
+      for (index, call) in group {
         scope.spawn_bg(() => {
           results.set(index, @agent_tool.execute_tool_call(call, self.tools))
         })

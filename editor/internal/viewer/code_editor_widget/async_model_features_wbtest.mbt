@@ -382,13 +382,12 @@ test "hover scroll handling covers neither top left both and ignored input" {
   let hc = viewer.content_hover_controller().unwrap()
 
   for
-    case in [
+    (left_changed, top_changed, should_hide) in [
       (false, false, false),
       (false, true, true),
       (true, false, true),
       (true, true, true),
     ] {
-    let (left_changed, top_changed, should_hide) = case
     hc.hover = shown_hover_controller()
     viewer.on_editor_scroll_changed(
       hover_scroll_change(left_changed, top_changed),

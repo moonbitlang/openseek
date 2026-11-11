@@ -204,8 +204,7 @@ test "invalid arguments and unknown servers are errors" {
     ("offset past no servers", () => @catalog.Catalog([]).search(offset=1)),
     ("unknown server", () => catalog().search(server="jira")),
   ]
-  for case in cases {
-    let (label, run) = case
+  for (label, run) in cases {
     let result = try run() |> Ok catch {
       error => Err(error)
     }
@@ -360,14 +359,13 @@ test "fields in tuple items and conditional branches are searchable" {
     ]),
   ])
   for
-    pair in [
+    (query, name) in [
       ("repository", "t/pair"),
       ("branch", "t/legacy"),
       ("timezone", "t/cond"),
       ("workspace", "t/deps"),
       ("checksum", "t/blob"),
     ] {
-    let (query, name) = pair
     // Instance values are not indexed, so `plain` never matches.
     assert_eq(listed(search_one(catalog, query)), [name], msg=query)
   }

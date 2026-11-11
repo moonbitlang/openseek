@@ -177,8 +177,7 @@ test "ViewZones maps zero, first, middle, last, and clamped model anchors" {
     (4, 7),
     (99, 7),
   ]
-  for index, pair in line_cases {
-    let (after_line_number, expected_view_line) = pair
+  for index, (after_line_number, expected_view_line) in line_cases {
     let id = fixture.add_zone(
       ViewZone(
         after_line_number,
@@ -200,8 +199,7 @@ test "ViewZones maps zero, first, middle, last, and clamped model anchors" {
     (Some(9), 2),
     (Some(999), 2),
   ]
-  for index, pair in column_cases {
-    let (after_column, expected_view_line) = pair
+  for index, (after_column, expected_view_line) in column_cases {
     let id = fixture.add_zone(
       ViewZone(
         1,
@@ -232,8 +230,7 @@ test "ViewZones forwards every affinity at wrap and injected-text boundaries" {
     (LeftOfInjectedText, 2),
     (RightOfInjectedText, 2),
   ]
-  for index, pair in wrap_cases {
-    let (affinity, expected_view_line) = pair
+  for index, (affinity, expected_view_line) in wrap_cases {
     let id = wrap_fixture.add_zone(
       ViewZone(
         1,
@@ -280,8 +277,7 @@ test "ViewZones forwards every affinity at wrap and injected-text boundaries" {
     (LeftOfInjectedText, 1),
     (RightOfInjectedText, 1),
   ]
-  for index, pair in injected_cases {
-    let (affinity, expected_view_line) = pair
+  for index, (affinity, expected_view_line) in injected_cases {
     let id = injected_fixture.add_zone(
       ViewZone(
         1,

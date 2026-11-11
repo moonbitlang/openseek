@@ -820,8 +820,7 @@ pub async fn SessionStore::latest(
   }
   // Newest first.
   stamped.sort_by(stamped_newest_first)
-  for entry in stamped {
-    let (id, _, _) = entry
+  for (id, _, _) in stamped {
     let _ = self.load(id) catch { _ => continue }
     return Some(id)
   }

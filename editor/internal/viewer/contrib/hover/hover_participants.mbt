@@ -133,8 +133,10 @@ fn MarkerHoverParticipant::compute_sync(
   }
   let max_column = ctx.model.get_line_max_column(line_number)
   let parts : Array[HoverPart] = []
-  for entry in self.marker_decorations.get_live_markers_for_model(ctx.model) {
-    let (range, marker) = entry
+  for
+    (range, marker) in self.marker_decorations.get_live_markers_for_model(
+      ctx.model,
+    ) {
     // `editor.getLineDecorations(lineNumber)`: only decorations touching the
     // anchor line participate.
     if range.start_line_number > line_number ||

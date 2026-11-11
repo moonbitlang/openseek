@@ -257,8 +257,7 @@ pub fn PackageGraph::depends_on(
   let seen : Set[Int32] = Set([from])
   let queue : Array[Int32] = [from]
   while queue.pop() is Some(current) {
-    for edge in self.edges {
-      let (source, target) = edge
+    for (source, target) in self.edges {
       if source != current || seen.contains(target) {
         continue
       }

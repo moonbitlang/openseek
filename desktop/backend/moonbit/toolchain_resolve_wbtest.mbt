@@ -171,12 +171,11 @@ async test "explicit seed selection checks platform and fails without fallback" 
       create_mode=CreateOrTruncate,
     )
     for
-      pair in [
+      (platform, host_platform) in [
         ("linux-x64", "Linux-x86_64"),
         ("linux-arm64", "Linux-aarch64"),
         ("macos-arm64", "Darwin-arm64"),
       ] {
-      let (platform, host_platform) = pair
       assert_true(
         bundled_source(platform~, host_platform~, seed_dir=seed.to_string())
         is Some(Bundled(_)),

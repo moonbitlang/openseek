@@ -148,8 +148,7 @@ async test "the seed is found in the canonical seekmoon resource tree" {
       ("lib/core/moon.mod", "{}"),
       (MoonbitSeedVersionFile, "test-version"),
     ]
-    for file in files {
-      let (path, content) = file
+    for (path, content) in files {
       @fs.write_text(
         root.join(path).to_string(),
         content,

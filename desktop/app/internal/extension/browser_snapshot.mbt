@@ -74,8 +74,7 @@ fn snapshot_line(node : @cdp.AxNode, role : String) -> String {
     line.write_string(" ")
     line.write_string(Json(name).stringify())
   }
-  for property in shown_properties {
-    let (name, show_off) = property
+  for (name, show_off) in shown_properties {
     if node.properties.get(name) is Some(value) &&
       property_label(name, value, show_off) is Some(label) {
       line.write_string(" [\{label}]")

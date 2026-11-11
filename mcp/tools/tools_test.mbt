@@ -463,8 +463,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
         { "version": 1, "content": "ping failed", "is_error": true },
       ),
     ]
-    for pair in requests {
-      let (request, expected) = pair
+    for (request, expected) in requests {
       assert_eq(post_host(host, request), expected)
     }
     assert_true(

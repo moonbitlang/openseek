@@ -141,8 +141,7 @@ test "the spawn policy does not admit arbitrary Proton commands or global cwd op
 /// The wording around the list is deliberately not asserted; that only breaks
 /// on rewrites.
 test "the rendered spawn list covers every admitted command" {
-  for entry in spawnable_commands {
-    let (program, args_prefix) = entry
+  for (program, args_prefix) in spawnable_commands {
     let bullet = spawn_bullet(program)
     match args_prefix {
       // A program admitted with no prefix takes any arguments; there is no

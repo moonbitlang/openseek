@@ -824,8 +824,7 @@ fn line_injected_text_from_decorations(
       l_order - r_order
     }
   })
-  for entry in entries {
-    let (line_number, column, _, options) = entry
+  for (line_number, column, _, options) in entries {
     let line = (line_number - 1).clamp(min=0, max=snapshot.line_count() - 1)
     let line_text = snapshot.line_text(line)
     let column0 = (column - 1).clamp(min=0, max=line_text.length())
@@ -889,8 +888,7 @@ fn injected_text_for_model_line(
   })
   let line_text = snapshot.line_text(target_line0)
   let out : Array[InjectedText] = []
-  for entry in entries {
-    let (column, _, options) = entry
+  for (column, _, options) in entries {
     let column0 = (column - 1).clamp(min=0, max=line_text.length())
     out.push(
       InjectedText(

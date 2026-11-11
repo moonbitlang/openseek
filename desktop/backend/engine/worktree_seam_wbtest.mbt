@@ -42,8 +42,7 @@ async fn stage_worktree_placements(
   let store = @workspaces.store_root(workspace)
   @fsx.ensure_dir(store.to_path())
   let entries : Array[Json] = []
-  for row in rows {
-    let (name, branch, session, codex_thread) = row
+  for (name, branch, session, codex_thread) in rows {
     let entry : Map[String, Json] = {
       "name": Json(name),
       "branch": Json(branch),
