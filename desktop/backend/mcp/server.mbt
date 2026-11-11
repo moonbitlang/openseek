@@ -61,6 +61,9 @@ struct Server {
   // Reported as `serverInfo.version`.
   version : String
   tools : Map[String, Tool]
+  // What each batch of tools lets an agent do, for the `instructions` a
+  // client is given.
+  offerings : Array[Offering]
   // Bearer token to the conversation it was granted to, and back. A grant
   // lasts for the launch: a conversation's engine is respawned many times
   // (model change, idle retirement), and every one of them is the same caller.
@@ -69,14 +72,33 @@ struct Server {
 }
 
 ///|
+/// A batch of tools registered together, and the phrase that sums up what
+/// they let an agent do.
+priv struct Offering {
+  about : String
+  tools : Array[String]
+}
+
+///|
 /// A server offering `tools`, with its loopback listener already bound on an
 /// ephemeral port. `run` serves it; binding here lets a grant name the port
-/// before anything is accepted.
-pub async fn Server::Server(tools : Array[Tool], version~ : String) -> Server {
+/// before anything is accepted. `about` sums up what the tools let an agent
+/// do, as `add_tools` takes it.
+pub async fn Server::Server(
+  tools : Array[Tool],
+  version~ : String,
+  about? : String,
+) -> Server {
+  let offerings = if about is Some(about) {
+    [{ about, tools: tools.map(tool => tool.name), }]
+  } else {
+    []
+  }
   {
     listener: Server(@socket.Addr::parse("127.0.0.1:0")),
     version,
     tools: Map::from_array(tools.map(tool => (tool.name, tool))),
+    offerings,
     sessions: Map([]),
     tokens: Map([]),
   }
@@ -91,9 +113,13 @@ pub fn Server::url(self : Server) -> String {
 ///|
 /// Register backend-owned tools after constructing the engine manager, before
 /// serving requests. Validate the whole batch before changing the catalog.
+/// `about` is a short phrase summing up what the batch lets an agent do
+/// ("ask the user questions"); the server's `instructions` join the phrases
+/// of the batches a client is offered.
 pub fn Server::add_tools(
   self : Server,
   tools : Array[Tool],
+  about? : String,
 ) -> Unit raise ServerError {
   let names : Map[String, Unit] = Map([])
   for tool in tools {
@@ -104,6 +130,9 @@ pub fn Server::add_tools(
   }
   for tool in tools {
     self.tools[tool.name] = tool
+  }
+  if about is Some(about) {
+    self.offerings.push({ about, tools: tools.map(tool => tool.name), })
   }
 }
 

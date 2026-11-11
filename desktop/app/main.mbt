@@ -116,6 +116,7 @@ async fn main {
   let host_mcp = @mcp.Server(
     @extension.browser_tools(views),
     version=app_version,
+    about="drive browser tabs the user can watch",
   )
   let state = @api.ApiState(
     engine~,

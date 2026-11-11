@@ -409,3 +409,55 @@ async test "a tool's images reach the engine's MCP client as images" {
     assert_eq(rendered.images.length(), 1)
   })
 }
+
+///|
+async test "instructions sum up only the tool batches a client is offered" {
+  let server = @mcp.Server(
+    test_tools().filter(tool => tool.name is "browser_get_text"),
+    version="test",
+    about="read tabs",
+  )
+  server.add_tools(
+    test_tools().filter(tool => tool.name is "echo"),
+    about="echo",
+  )
+  server.add_tools(test_tools().filter(tool => tool.name is "broken"))
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => server.run())
+    let grant = grant(server, "s-instructions")
+    async fn instructions(groups : String?) -> String? {
+      let headers = { "Authorization": grant.authorization }
+      if groups is Some(groups) {
+        headers["X-SeekMoon-Tool-Groups"] = groups
+      }
+      let mut result = None
+      @async.with_task_group(group => {
+        let connection = @streamhttp.connect(
+          group,
+          url=grant.url,
+          headers~,
+          client_name="openseek",
+          client_version="test",
+        )
+        defer connection.shutdown()
+        result = connection.init().instructions
+      })
+      result
+    }
+    guard instructions(None) is Some(all) &&
+      instructions(Some("browser")) is Some(browser) else {
+      fail("a client offered a described batch is given instructions")
+    }
+    assert_true(all.contains("read tabs") && all.contains("echo"))
+    assert_true(browser.contains("read tabs") && !browser.contains("echo"))
+    assert_eq(instructions(Some("broken")), None)
+    guard post(
+        grant,
+        request(1, "initialize", { "protocolVersion": "2025-11-25" }),
+      )
+      is (200, Some({ "result": { "instructions": String(legacy), .. }, .. })) else {
+      fail("a legacy initialize carries the same instructions")
+    }
+    assert_eq(legacy, all)
+  })
+}

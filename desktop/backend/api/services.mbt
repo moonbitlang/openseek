@@ -45,9 +45,15 @@ pub async fn ApiState::start_services(
   // Engines are granted this server from their first spawn, so it serves
   // from the same moment they can exist.
   if self.host_mcp is Some(server) {
-    server.add_tools(self.session_tools())
-    server.add_tools(self.question_tools())
-    server.add_tools(self.artifact_tools())
+    server.add_tools(
+      self.session_tools(),
+      about="read and message the user's other chats",
+    )
+    server.add_tools(self.question_tools(), about="ask the user questions")
+    server.add_tools(
+      self.artifact_tools(),
+      about="attach this session's pull requests and branches",
+    )
     @xlog.info() <?
       { "event": "desktop_host_tools_serving", "url": server.url() }
     group.spawn_bg(allow_failure=true, () => server.run())

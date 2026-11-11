@@ -81,13 +81,19 @@ async fn Server::dispatch(
   let modern = @wire.request_version(message) is Some(_)
   let answer = match method_ {
     "server/discover" if modern =>
-      reply(id, {
-        "supportedVersions": [@wire.ModernVersion],
-        "capabilities": { "tools": {} },
-      })
+      reply(
+        id,
+        self.with_instructions(
+          {
+            "supportedVersions": [@wire.ModernVersion],
+            "capabilities": { "tools": {} },
+          },
+          groups,
+        ),
+      )
     "initialize" if modern =>
       failure(id, MethodNotFound, "Use server/discover for stateless MCP")
-    "initialize" => reply(id, self.initialize_result(params))
+    "initialize" => reply(id, self.initialize_result(params, groups))
     "ping" => reply(id, Json::empty_object())
     "tools/list" => reply(id, self.tool_list(groups))
     "tools/call" => self.call_tool(session, id, params, groups)
@@ -106,18 +112,45 @@ async fn Server::dispatch(
 }
 
 ///|
-fn Server::initialize_result(self : Server, params : Json) -> Json {
+fn Server::initialize_result(
+  self : Server,
+  params : Json,
+  groups : Array[String],
+) -> Json {
   let version = match params {
     { "protocolVersion": String(requested), .. } if supported_legacy_version(
         requested,
       ) => requested
     _ => LatestLegacyProtocolVersion
   }
-  {
-    "protocolVersion": Json(version),
-    "capabilities": { "tools": Json::empty_object() },
-    "serverInfo": { "name": Json(ServerName), "version": Json(self.version) },
+  self.with_instructions(
+    {
+      "protocolVersion": Json(version),
+      "capabilities": { "tools": Json::empty_object() },
+      "serverInfo": { "name": Json(ServerName), "version": Json(self.version) },
+    },
+    groups,
+  )
+}
+
+///|
+/// `result` with the `instructions` a client offered `groups` is given: one
+/// line joining what each offered batch of tools lets an agent do, which a
+/// client can show on its own. Without such a batch there are none.
+fn Server::with_instructions(
+  self : Server,
+  result : Map[String, Json],
+  groups : Array[String],
+) -> Json {
+  let abouts = [
+    for offering in self.offerings if offering.tools
+    .iter()
+    .any(name => offered(name, groups)) => offering.about
+  ]
+  if !abouts.is_empty() {
+    result["instructions"] = Json("SeekMoon desktop app: \{abouts.join("; ")}.")
   }
+  Json::object(result)
 }
 
 ///|

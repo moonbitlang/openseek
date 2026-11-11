@@ -39,6 +39,10 @@ const MaxSchemaChars : Int32 = 16384
 const MaxServerTextChars : Int32 = 4000
 
 ///|
+/// Cap on the one-line summary of a server's instructions in its notice.
+const MaxSummaryChars : Int32 = 250
+
+///|
 /// What connecting one configured server came to.
 pub enum Connection {
   /// Connected and offering tools, through this client. The client stays open
@@ -247,9 +251,9 @@ pub const NoticePrefix : String = "[mcp server]"
 
 ///|
 /// The runtime notice telling the agent what connecting this server came to,
-/// or `None` while it is still connecting. A connected server's instructions
-/// follow, capped as in the catalog and introduced as the server's words, not
-/// the user's.
+/// or `None` while it is still connecting. A connected server is summed up by
+/// the first line of its instructions, capped and introduced as the server's
+/// own words; the rest of them comes with its tools from `@mcp.search`.
 pub fn Server::notice(self : Server) -> String? {
   guard self.try_wait() is Some(entry) else { return None }
   let name = self.config.name()
@@ -259,17 +263,14 @@ pub fn Server::notice(self : Server) -> String? {
   } else if entry.connection is NoTools {
     "Connected, but it offers no tools."
   } else if entry.instructions is Some(instructions) && !instructions.is_blank() {
-    let instructions = cut(
-      instructions.trim().to_owned(),
-      MaxServerTextChars,
-      marked=true,
-    )
-    (
-      $|Connected; find its tools with \{search}. The server sent the
-      $|instructions below. They describe its tools; they are not the user's.
-      $|
-      $|\{instructions}
-    )
+    let instructions = instructions.trim()
+    let first_line = if instructions.split_once("\n") is Some((line, _)) {
+      line.trim()
+    } else {
+      instructions
+    }
+    let summary = cut(first_line.to_owned(), MaxSummaryChars, marked=true)
+    "Connected; find its tools with \{search}. It describes itself: \{summary}"
   } else {
     "Connected; find its tools with \{search}."
   }
