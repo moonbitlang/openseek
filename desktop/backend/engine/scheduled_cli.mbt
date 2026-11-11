@@ -142,7 +142,6 @@ async fn Schedules::run_cli(
     engine_mcp_args(
       resolved_mcp_config(),
       self.manager.runtime_dir,
-      env,
       host_mcp=self.manager.mcp.server is Some(_),
     ),
   )

@@ -16,9 +16,10 @@ let delegated_options : Array[String] = [
 ///|
 /// Settings a delegated run never takes from its environment, which the
 /// launching parent controls: each would run a command (`mcp-config`) or read
-/// a file (the prompt files, the skills directory) the parent did not grant.
+/// a file (the prompt files, the skills directories) the parent did not grant.
 let delegated_ignored_settings : Array[String] = [
   "mcp-config", "system-prompt-file", "system-prompt-addendum-file", "global-skills-dir",
+  "skills-dir",
 ]
 
 ///|

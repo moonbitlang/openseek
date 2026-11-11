@@ -309,10 +309,10 @@ servers are configured. A server that fails to start, handshake, or list its
 tools is logged and reported as unavailable — MCP never breaks a session. Tool
 results are size-capped and calls are bounded by a timeout.
 
-HTTP `url` and `headers` values support `${VAR}` references to the engine's
-environment, for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion
-is single-pass and missing variables are configuration errors. Stdio fields
-remain literal.
+A stdio entry's `command`, `args`, and `env` values, and an HTTP entry's `url`
+and `headers` values, support `${VAR}` references to the engine's environment,
+for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion is single-pass
+and missing variables are configuration errors.
 
 Validate a configuration without starting a session:
 
@@ -321,7 +321,8 @@ moon run . -- mcp --mcp-config mcp.json
 ```
 
 A running engine connects those servers in the background, so a slow server
-does not hold up the session. A script that reaches a server still connecting
+does not hold up the session. A skill can bring MCP servers too (see Skills);
+those connect only when a script first reaches them. A script that reaches a server still connecting
 waits for it: a call waits for its server, a search naming a server waits for
 that one, and any other search waits for every server. Each wait ends after 60
 seconds, since a server may never finish connecting (a headers helper waiting
@@ -334,8 +335,8 @@ that state changes — a server finishing connecting, or a connected server
 exiting, say. Each event carries the whole state: every configuration file in
 the order given, `loaded` or `failed` with the error, and each server of the
 merged configuration with its `transport`, its `target` (the command, or the
-URL without credentials), and a `state` — `connecting` until it has come to
-anything, `connected` with the tools it registered, `lost` when it connected and the connection has closed
+URL without credentials), and a `state` — `idle` while a skill's server waits
+for a script to reach it, `connecting` until it has come to anything, `connected` with the tools it registered, `lost` when it connected and the connection has closed
 since, `no_tools`, `failed` with the error, or `skipped` when earlier servers
 used up the tool budget. A controller keeps the latest one; it is this engine's
 own connections, not what connecting again would yield.
@@ -348,11 +349,19 @@ tool. This keeps the surface small; revisit if a concrete need appears.
 
 Reusable markdown playbooks the agent loads on demand. A skill is a
 `<name>.md` file or a `<name>/SKILL.md` directory layout with optional
-`name:`/`description:` frontmatter. Two libraries are merged: the global one
-(`~/.openseek/skills`, or `--global-skills-dir`) and the workspace one
-(`.openseek/skills`), with workspace skills shadowing same-named global ones.
-The system prompt lists each skill's name, description, and file path; the
-agent reads the file before applying it. See `agent_skill/README.mbt.md`.
+`name:`/`description:` frontmatter. Libraries are merged in order: any
+`--skills-dir` given, the global one (`~/.openseek/skills`, or
+`--global-skills-dir`), and the workspace one (`.openseek/skills`), each
+shadowing same-named skills of the ones before it. The system prompt lists each
+skill's name, description, and file path; the agent reads the file before
+applying it. See `agent_skill/README.mbt.md`.
+
+A `<name>/SKILL.md` skill can bring MCP servers in an `mcp.json` beside it, in
+the shape `--mcp-config` reads. Its entries may reference the skill's own
+directory as `${OPENSEEK_SKILL_DIR}` (for a server program the skill ships),
+which its stdio servers also find in their environment. A skill's server
+connects when a script first searches or calls it: the agent learns of it from
+the skill. A server of the same name in an `--mcp-config` file replaces it. A delegated run starts none of them.
 
 ## Terminal UI
 

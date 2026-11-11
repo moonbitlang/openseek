@@ -49,13 +49,21 @@ async fn run_task_turn(
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
+    // A delegated run starts no MCP servers its parent did not grant, and so
+    // none its skills bring.
     let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
+      skills=if delegate {
+        @setup.skill_library(matches, workspace_root~)
+      } else {
+        []
+      },
       workspace_root~,
     )
-    // A one-shot run has a single turn, so it waits for every server rather
-    // than start without tools that are about to arrive.
+    // A one-shot run has a single turn, so it waits for every configured
+    // server rather than start without tools that are about to arrive; a
+    // skill's servers connect when a script reaches them.
     mcp.wait()
     let extra_tools = @execution.build_extra_tools(
       model~,

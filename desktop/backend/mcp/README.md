@@ -32,6 +32,8 @@ continues to negotiate `2025-11-25` and earlier supported revisions.
   stateless `server/discover`.
 - `server.mbt` — the listener, the grants, and one task per request.
 - `stdio.mbt` — newline-delimited JSON-RPC over streams supplied by the host.
+- `skill.mbt` — the `SKILL.md` of the `seekmoon` skill that tells an engine's
+  agent about the server.
 
 ## Host-owned streams
 
@@ -83,10 +85,12 @@ The adapter writes only JSON-RPC responses to its supplied output stream.
 
 ## Configuration
 
-Engines started by a host configured with tools connect automatically, for both
-conversations and scheduled runs. The engine launcher writes `host-mcp.json`
-in the runtime directory (or the global store directory when no runtime directory
-was supplied) and passes it as the first `--mcp-config` argument. It contains:
+Engines started by a host configured with tools are given its `seekmoon`
+skill, for both conversations and scheduled runs. The engine launcher writes the
+skill under `host-skills/seekmoon/` in the runtime directory (or the global
+store directory when no runtime directory was supplied) and passes
+`host-skills` as a `--skills-dir` argument. The skill's `SKILL.md` is
+`skill_markdown()`; its `mcp.json` contains:
 
 ```json
 {
@@ -102,15 +106,17 @@ was supplied) and passes it as the first `--mcp-config` argument. It contains:
 ```
 
 OpenSeek expands the HTTP URL and header values from the engine's environment
-when it loads the configuration. Missing variables are errors, so a process
-that was not granted access cannot connect through this entry. The tools
-reach the model as `mcp__seekmoon__<tool>` automatically.
+when it connects. Missing variables are errors, so a process that was not
+granted access cannot connect through this entry. The agent learns of the tools
+from the skill, and the engine connects the server when a script first
+searches or calls it.
 
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
-file is absent, follows the host defaults as another `--mcp-config` argument.
-Later entries replace whole same-named servers before any connection starts.
-A user can therefore override `seekmoon` to customize its headers. A broken
-user file is reported without preventing the host defaults from loading.
+file is absent, is passed as `--mcp-config`. A server there replaces the
+skill's same-named one, so a user can override `seekmoon` to customize its
+headers; it then connects as the engine starts, like every configured server.
+A broken user file is reported without preventing the skill's server from
+loading.
 The old `seekmoon mcp` stdio relay and executable have been removed.
 
 To offer a subset, override the entry in `~/.openseek/mcp.json` and add `"X-SeekMoon-Tool-Groups": "browser"` to the headers.
