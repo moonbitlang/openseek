@@ -21,12 +21,12 @@ pub fn Dispatcher::add_tools(
   self : Dispatcher,
   tools : Array[Tool],
 ) -> Unit raise ServerError {
-  let names : Map[String, Unit] = Map([])
+  let names : Set[String] = Set([])
   for tool in tools {
     if self.tools.contains(tool.name) || names.contains(tool.name) {
       raise ServerError("duplicate host tool: \{tool.name}")
     }
-    names[tool.name] = ()
+    names.add(tool.name)
   }
   for tool in tools {
     self.tools[tool.name] = tool
