@@ -273,6 +273,10 @@ fn update_cloud(
       pending_previews.remove(@interop.Cloud(account~, session~))
     }
   }
+  let approval_owner = match model.cloud_draft_identity() {
+    Some(owner) => Some(owner)
+    None => model.cloud_identity()
+  }
   let next = {
     ..model,
     docks,
@@ -285,10 +289,10 @@ fn update_cloud(
     },
     cloud,
     navigation,
-    // A turn that starts in the Cloud conversation on screen, from this
-    // client or another, locks its approval mode, so the menu closes with it.
+    // Creation or a turn starting in the selected Cloud conversation locks
+    // its approval mode, so the menu closes with it.
     select_menu: if model.select_menu is Some(OpenSeekApprovalMenu) &&
-      model.cloud_identity() is Some(owner) &&
+      approval_owner is Some(owner) &&
       !cloud.can_choose_approval(owner.session()) {
       None
     } else {

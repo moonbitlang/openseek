@@ -222,6 +222,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
+  approval : @protocol.OpenSeekApproval
 }
 
 ///|

@@ -251,3 +251,120 @@ test "account changes retire the Cloud blank selection and its composer" {
     )
   }
 }
+
+///|
+test "Cloud draft approval survives creation failure and reaches the created session" {
+  for mode in [@protocol.ApprovalAsk, @protocol.ApprovalReview] {
+    let (_, blank) = update(
+      test_dispatch(),
+      CloudAction(@cloud.Create),
+      integrated_cloud_model(),
+    )
+    assert_true(
+      approval_select(blank) is Some({ mode: ApprovalAsk, enabled: true, .. }),
+    )
+    let chosen = choose_approval(blank, mode)
+    assert_true(
+      approval_select(chosen)
+      is Some({ mode: current, enabled: true, open: false, }) &&
+      current == mode,
+    )
+    assert_true(chosen.cloud.metadata_saves.is_empty())
+    let opened = approval_action(
+      chosen,
+      ApprovalMenuToggled(identity=chosen.composer_input().identity),
+    )
+    assert_true(approval_select(opened) is Some({ open: true, .. }))
+    let pending = submit_blank_cloud(opened)
+    assert_true(pending.select_menu is None)
+    assert_true(
+      approval_select(pending) is Some({ mode: current, enabled: false, .. }) &&
+      current == mode,
+    )
+    let other = if mode is ApprovalAsk {
+      @protocol.ApprovalReview
+    } else {
+      @protocol.ApprovalAsk
+    }
+    assert_true(choose_approval(pending, other).cloud == pending.cloud)
+    let request = pending.cloud.creation.unwrap().request
+    let (_, failed) = update(
+      test_dispatch(),
+      CloudAction(@cloud.CreateFailed(pending.cloud.epoch, request, Http(503))),
+      pending,
+    )
+    assert_true(
+      approval_select(failed) is Some({ mode: current, enabled: true, .. }) &&
+      current == mode,
+    )
+    let retried = submit_blank_cloud(failed)
+    let (_, created) = update(
+      test_dispatch(),
+      CloudAction(
+        @cloud.Created(
+          retried.cloud.epoch,
+          retried.cloud.creation.unwrap().request,
+          "new-cloud",
+        ),
+      ),
+      retried,
+    )
+    assert_true(created.cloud.approval("new-cloud") == mode)
+    assert_true(
+      approval_select(created) is Some({ mode: current, .. }) && current == mode,
+    )
+  }
+}
+
+///|
+test "Cloud draft approval stays with its composer across navigation and resets for the next draft" {
+  let (_, blank) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Create),
+    integrated_cloud_model(),
+  )
+  let chosen = choose_approval(blank, @protocol.ApprovalReview)
+  let old_identity = chosen.composer_input().identity
+  let (_, existing) = update(
+    test_dispatch(),
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    chosen,
+  )
+  assert_true(approval_select(existing) is Some({ mode: ApprovalAsk, .. }))
+  let stale = approval_action(
+    existing,
+    ApprovalSelected(identity=old_identity, mode=ApprovalAsk),
+  )
+  assert_true(stale.cloud == existing.cloud)
+  let (_, host) = update(
+    test_dispatch(),
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    stale,
+  )
+  let host = choose_approval(host, @protocol.ApprovalAsk)
+  let (_, returned) = update(test_dispatch(), CloudAction(@cloud.Create), host)
+  assert_true(returned.composer_input().identity.owner == old_identity.owner)
+  assert_true(approval_select(returned) is Some({ mode: ApprovalReview, .. }))
+  let pending = submit_blank_cloud(returned)
+  let (_, created) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Created(
+        pending.cloud.epoch,
+        pending.cloud.creation.unwrap().request,
+        "new-cloud",
+      ),
+    ),
+    pending,
+  )
+  let (_, next) = update(test_dispatch(), CloudAction(@cloud.Create), created)
+  assert_true(next.composer_input().identity.owner != old_identity.owner)
+  assert_true(
+    approval_select(next) is Some({ mode: ApprovalAsk, enabled: true, .. }),
+  )
+  let stale = approval_action(
+    next,
+    ApprovalSelected(identity=old_identity, mode=ApprovalReview),
+  )
+  assert_true(stale.cloud == next.cloud)
+}

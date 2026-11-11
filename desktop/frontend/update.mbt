@@ -2611,6 +2611,8 @@ fn update_msg(
         guard model.accepts_composer_action(action.identity()) else {
           return (@cmd.none, model)
         }
+        let selected = model.cloud_identity() == Some(action.identity().owner) ||
+          model.cloud_draft_identity() == Some(action.identity().owner)
         match action {
           @composer.ShellCommandSubmitted(identity~, command~) =>
             return submit_cloud_shell(dispatch, model, identity.owner, command)
@@ -2686,11 +2688,11 @@ fn update_msg(
               model,
             )
           }
-          // The session keeps the mode on the server; a running turn keeps
-          // the policy its engine started with, so the menu is locked then.
+          // Drafts keep the mode locally until creation. Existing sessions
+          // save it on the server and lock it while a turn is running.
           @composer.ApprovalMenuToggled(identity~) => {
             guard model.screen is Chat &&
-              model.cloud_identity() == Some(identity.owner) &&
+              selected &&
               model.cloud.can_choose_approval(identity.owner.session()) else {
               return (@cmd.none, model)
             }
@@ -2700,14 +2702,12 @@ fn update_msg(
               model,
             )
           }
-          @composer.SelectMenuDismissed(identity~) => {
-            guard model.cloud_identity() == Some(identity.owner) else {
-              return (@cmd.none, model)
-            }
+          @composer.SelectMenuDismissed(..) => {
+            guard selected else { return (@cmd.none, model) }
             return update_msg(dispatch, CloseSelectMenu, model)
           }
           @composer.ApprovalSelected(identity~, mode~) => {
-            guard model.cloud_identity() == Some(identity.owner) &&
+            guard selected &&
               identity.owner is @interop.Cloud(account~, session~) else {
               return (@cmd.none, model)
             }

@@ -25,7 +25,9 @@ fn State::submit_command(
           self.epoch,
           submission.request,
           required_string(
-            request(CloudOrigin, "/v1/sessions", Post, token~),
+            request(CloudOrigin, "/v1/sessions", Post, token~, body={
+              "approval": creation.approval.to_json(),
+            }),
             "id",
           ),
         ) catch {

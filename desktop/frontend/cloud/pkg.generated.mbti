@@ -218,6 +218,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
+  approval : @protocol.OpenSeekApproval
 }
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool

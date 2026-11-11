@@ -46,6 +46,8 @@ export class CloudHarness {
     this.meStatus = 401;
     this.listStatus = 200;
     this.importStatus = 201;
+    this.createStatus = 201;
+    this.pauseCreate = null;
     this.shareStatus = 200;
     this.exportSnapshots = new Map();
     this.patchStatus = 204;
@@ -70,6 +72,7 @@ export class CloudHarness {
     this.sessionIds = [sessionA, sessionB];
     this.generating = new Set();
     this.archived = new Set();
+    this.approvals = new Map();
     this.histories = new Map();
     this.historyTurns = new Map();
     this.nativeNotices = new Map();
@@ -387,6 +390,9 @@ export class CloudHarness {
     }
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
+        if (this.pauseCreate) await this.pauseCreate;
+        if (this.createStatus !== 201) return json({}, this.createStatus);
+        this.approvals.set(sessionC, request.postDataJSON().approval);
         this.sessionIds = [sessionC, ...this.sessionIds.filter(id => id !== sessionC)];
         return json({ id: sessionC }, 201);
       }
@@ -394,7 +400,7 @@ export class CloudHarness {
       if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id) })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask' })) }, status);
     }
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();
@@ -405,6 +411,7 @@ export class CloudHarness {
       if (body.title !== undefined) this.titles.set(session, body.title);
       if (body.archived === true) this.archived.add(session);
       if (body.archived === false) this.archived.delete(session);
+      if (body.approval !== undefined) this.approvals.set(session, body.approval);
       return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
