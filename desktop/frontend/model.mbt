@@ -1579,7 +1579,7 @@ priv struct Model {
   account_checked : Bool
   // The last Cloud account failure in any environment: a failed read,
   // sign-in, cancellation, sign-out or disconnect, or an expired session.
-  account_error : String?
+  account_error : @account_failure.Failure?
   // The last failure of the Remote access switch, shown in Connections.
   remote_access_error : String?
 }
@@ -1802,7 +1802,10 @@ priv enum Msg {
   CheckForUpdates
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
   // sign-in state moved.
-  AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
+  AccountLoaded(
+    Int32,
+    Result[@protocol.AccountSession?, @account_failure.Failure]
+  )
   AccountPreferencesChanged(Bool)
   AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
   DeviceAccountExpired(@interop.ChannelId, Int32, String)

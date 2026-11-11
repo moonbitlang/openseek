@@ -672,7 +672,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     login: identity.0,
     avatar: identity.1,
     busy: self.console.busy,
-    notice: self.account_error,
+    notice: self.account_error.map(failure => failure.text(self.locale)),
     page: if self.console.page_device is Some(id) {
       DevicePage(
         id~,
@@ -971,9 +971,13 @@ fn settings_account_rows(
       ),
     )
   }
-  if model.settings_section() == Account && model.account_error is Some(message) {
+  if model.settings_section() == Account && model.account_error is Some(failure) {
     rows.push(
-      @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
+      @ui.form_row(
+        @settings.text(model.locale, Problem),
+        [],
+        desc=failure.text(model.locale),
+      ),
     )
   }
   rows
@@ -2333,7 +2337,9 @@ fn view(
             locale=model.locale,
             dispatch,
             model.console,
-            account_error=model.account_error,
+            account_error=model.account_error.map(failure => {
+              failure.text(model.locale)
+            }),
             host_incompatible=model.host_incompatible(),
           ),
         ]
@@ -2440,7 +2446,9 @@ fn view(
         locale=model.locale,
         dispatch,
         model.console,
-        account_error=model.account_error,
+        account_error=model.account_error.map(failure => {
+          failure.text(model.locale)
+        }),
         host_incompatible=true,
       ),
     ]
@@ -3003,8 +3011,8 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @sidebar_messages.text(locale, CloudSignInHint),
     ),
   ]
-  if model.account_error is Some(message) {
-    children.push(@html.p(class="empty-detail", message))
+  if model.account_error is Some(failure) {
+    children.push(@html.p(class="empty-detail", failure.text(locale)))
     children.push(
       @html.button(
         class="button primary",

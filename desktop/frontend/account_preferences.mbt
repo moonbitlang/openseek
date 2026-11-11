@@ -151,7 +151,10 @@ fn account_preferences_loaded(
   }
   if result is Err(Unauthorized as error) {
     let (command, next) = expire_account(dispatch, model)
-    return (command, { ..next, account_error: Some(error.label()), })
+    return (
+      command,
+      { ..next, account_error: Some(Diagnostic(error.label())), },
+    )
   }
   let preferences = match result {
     Ok(value) =>

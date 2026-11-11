@@ -41,7 +41,7 @@ priv enum Operation {
   Sharing(@protocol.ShareProgress)
   SigningIn
   SignInRequired
-  SignInFailed(String)
+  SignInFailed(@account_failure.Failure)
   Saved(path~ : String, opened~ : Bool)
   Failed(String)
 }
@@ -71,7 +71,7 @@ pub(all) enum Msg {
   Progress(@protocol.SessionShareProgress)
   HostProgress(@interop.ChannelId, @protocol.SessionShareProgress)
   Published(generation~ : Int32, @protocol.SessionShareReply)
-  SignedIn(generation~ : Int32, Result[Unit, String])
+  SignedIn(generation~ : Int32, Result[Unit, @account_failure.Failure])
   ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 
@@ -287,7 +287,7 @@ pub fn Model::open_cloud(self : Model, session~ : String) -> (@cmd.Cmd, Model) {
 /// export reply and published link from the old account.
 pub fn Model::account_changed(
   self : Model,
-  result : Result[Unit, String],
+  result : Result[Unit, @account_failure.Failure],
 ) -> (@cmd.Cmd, Model) {
   if self.content is Some({ operation: SigningIn, .. }) {
     self.update(_ => @cmd.none, SignedIn(generation=self.generation, result))

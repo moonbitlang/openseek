@@ -58,7 +58,7 @@ fn connect_remote(dispatch : @cmd.Emit[Msg], epoch : Int32) -> @cmd.Cmd {
                 "the sign-in was cancelled" => AccountLoginCancelled(epoch)
                 "sign-in timed out waiting for the browser" =>
                   AccountLoginTimedOut(epoch)
-                _ => AccountLoaded(epoch, Err(message))
+                _ => AccountLoaded(epoch, Err(Diagnostic(message)))
               },
             ),
           )
@@ -110,7 +110,10 @@ fn disconnect_remote(dispatch : @cmd.Emit[Msg], epoch : Int32) -> @cmd.Cmd {
         error => {
           scheduler.add(
             dispatch(
-              AccountLoaded(epoch, Err(@interop.bridge_error_text(error))),
+              AccountLoaded(
+                epoch,
+                Err(Diagnostic(@interop.bridge_error_text(error))),
+              ),
             ),
           )
           return

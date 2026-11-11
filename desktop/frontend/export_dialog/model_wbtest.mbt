@@ -79,7 +79,7 @@ test "share login failure success and clipboard feedback transitions" {
         let (_, signing_in_again) = first.advance(emit, SignIn)
         assert_true(signing_in == signing_in_again)
         assert_true(signing_in.content is Some({ operation: SigningIn, .. }))
-        for result in [Ok(()), Err("Cancelled")] {
+        for result in [Ok(()), Err(@account_failure.Diagnostic("Cancelled"))] {
           let signed_in = SignedIn(generation=first.generation, result)
           let (_, done) = signing_in.advance(emit, signed_in)
           let (_, again) = signing_in.advance(emit, signed_in)

@@ -4378,7 +4378,7 @@ fn update_msg(
         dispatch,
         model,
         epoch,
-        Err(@settings.text(model.locale, SignInTimedOut)),
+        Err(Diagnostic(@settings.text(model.locale, SignInTimedOut))),
       )
     }
     AccountCancelFailed(epoch, message) => {
@@ -4391,12 +4391,16 @@ fn update_msg(
           dispatch,
           { ..model, account_login: None, },
           epoch,
-          Err(message),
+          Err(Diagnostic(message)),
         )
       }
       (
         @cmd.none,
-        { ..model, account_login: Some(Waiting), account_error: Some(message), },
+        {
+          ..model,
+          account_login: Some(Waiting),
+          account_error: Some(Diagnostic(message)),
+        },
       )
     }
     AccountCancelFinished(epoch) => {
@@ -22926,11 +22930,11 @@ test "remote access walks connect states and dedups clicks" {
   ignore(second_cmd)
   let (_, failed) = update(
     dispatch,
-    AccountLoaded(connecting.account_epoch, Err("nope")),
+    AccountLoaded(connecting.account_epoch, Err(Diagnostic("nope"))),
     connecting,
   )
   assert_false(failed.remote_connecting)
-  assert_true(failed.account_error is Some("nope"))
+  assert_true(failed.account_error is Some(Diagnostic("nope")))
   let signed_in : RemoteAccess = { ..signed_out, connected: true, }
   let (_, done) = update(dispatch, RemoteStatusLoaded(signed_in), connecting)
   assert_true(done.remote_connecting)

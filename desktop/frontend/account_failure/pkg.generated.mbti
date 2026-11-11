@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/account_failure"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) enum Failure {
+  StorageUnavailable
+  StorageReadFailed(String)
+  Diagnostic(String)
+}
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+pub fn Failure::text(Self, @i18n.Locale) -> String
+pub fn Failure::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

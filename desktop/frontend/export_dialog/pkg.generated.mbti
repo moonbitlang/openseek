@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/account_failure",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -27,7 +28,7 @@ pub fn FileSource::to_repr(Self) -> @debug.Repr
 #derive(Eq, @debug.Debug)
 type Model
 pub fn Model::Model(id_prefix? : String) -> Self
-pub fn Model::account_changed(Self, Result[Unit, String]) -> (@cmd.Cmd, Self)
+pub fn Model::account_changed(Self, Result[Unit, @account_failure.Failure]) -> (@cmd.Cmd, Self)
 pub fn Model::account_expired(Self, Msg) -> Bool
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::is_open(Self) -> Bool
@@ -48,7 +49,7 @@ pub(all) enum Msg {
   Progress(@protocol.SessionShareProgress)
   HostProgress(@interop.ChannelId, @protocol.SessionShareProgress)
   Published(generation~ : Int32, @protocol.SessionShareReply)
-  SignedIn(generation~ : Int32, Result[Unit, String])
+  SignedIn(generation~ : Int32, Result[Unit, @account_failure.Failure])
   ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 

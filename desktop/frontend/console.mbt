@@ -320,7 +320,7 @@ fn update_console_msg(
       (
         @cmd.none,
         if token is Some(_) {
-          { ..model, console, account_error: Some(message), }
+          { ..model, console, account_error: Some(Diagnostic(message)), }
         } else {
           { ..model, console: { ..console, access_error: Some(message), }, }
         },

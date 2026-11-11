@@ -9,7 +9,7 @@ fn fetch_account(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.AccountSession?, String] = try {
+      let result : Result[@protocol.AccountSession?, @account_failure.Failure] = try {
         if desktop {
           Ok(
             @interop.bridge_request(
@@ -20,14 +20,16 @@ fn fetch_account(
           )
         } else {
           match load_browser_account() {
-            Err(message) => Err(message)
+            Err(failure) => Err(failure)
             Ok(Some(account)) => Ok(Some(account))
             Ok(None) if local_console => Ok(None)
             Ok(None) => {
               let base = match resolve_browser_url("/v2/auth/me") {
                 Ok((url, _)) => url
                 Err(message) => {
-                  scheduler.add(dispatch(AccountLoaded(epoch, Err(message))))
+                  scheduler.add(
+                    dispatch(AccountLoaded(epoch, Err(Diagnostic(message)))),
+                  )
                   return
                 }
               }
@@ -39,7 +41,7 @@ fn fetch_account(
                     Ok((url, _)) => url
                     Err(message) => {
                       scheduler.add(
-                        dispatch(AccountLoaded(epoch, Err(message))),
+                        dispatch(AccountLoaded(epoch, Err(Diagnostic(message)))),
                       )
                       return
                     }
@@ -48,10 +50,16 @@ fn fetch_account(
                   match response.code {
                     200 => Ok(Some(@json.from_json(body.json())))
                     401 => Ok(None)
-                    _ => Err("the sign-in check answered HTTP \{response.code}")
+                    _ =>
+                      Err(
+                        Diagnostic(
+                          "the sign-in check answered HTTP \{response.code}",
+                        ),
+                      )
                   }
                 }
-                _ => Err("the sign-in check answered HTTP \{me.code}")
+                _ =>
+                  Err(Diagnostic("the sign-in check answered HTTP \{me.code}"))
               }
             }
           }
@@ -59,11 +67,13 @@ fn fetch_account(
       } catch {
         error =>
           Err(
-            if desktop {
-              @interop.bridge_error_text(error)
-            } else {
-              "the relay is unreachable: \{@interop.bridge_error_text(error)}"
-            },
+            Diagnostic(
+              if desktop {
+                @interop.bridge_error_text(error)
+              } else {
+                "the relay is unreachable: \{@interop.bridge_error_text(error)}"
+              },
+            ),
           )
       }
       scheduler.add(dispatch(AccountLoaded(epoch, result)))
@@ -186,7 +196,7 @@ test "account sign-in timeout is localized and restores the retry action" {
     assert_true(expired.account_login is None)
     assert_eq(
       expired.account_error,
-      Some(@settings.text(locale, SignInTimedOut)),
+      Some(Diagnostic(@settings.text(locale, SignInTimedOut))),
     )
     let (_, retried) = begin_account_login(test_dispatch(), expired)
     assert_true(retried.remote_connecting)
@@ -209,7 +219,7 @@ test "a failed account cancellation keeps the waiting sign-in cancellable" {
   )
   assert_true(failed.remote_connecting)
   assert_true(failed.account_login is Some(Waiting))
-  assert_eq(failed.account_error, Some("bridge disconnected"))
+  assert_eq(failed.account_error, Some(Diagnostic("bridge disconnected")))
   let (_, retried) = update(test_dispatch(), RemoteCancelClicked, failed)
   assert_true(retried.account_login is Some(Cancelling(..)))
   assert_eq(retried.account_error, None)
@@ -220,7 +230,7 @@ fn account_loaded(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   epoch : Int32,
-  result : Result[@protocol.AccountSession?, String],
+  result : Result[@protocol.AccountSession?, @account_failure.Failure],
 ) -> (@cmd.Cmd, Model) {
   guard epoch == model.account_epoch else { return (@cmd.none, model) }
   if model.account_login is Some(Cancelling(cancel_pending~, ..)) {
@@ -244,12 +254,12 @@ fn account_loaded(
   }
   let account = match result {
     Ok(account) => account
-    Err(message) => {
+    Err(failure) => {
       let (command, export_dialog) = model.export_dialog.account_changed(
-        Err(message),
+        Err(failure),
       )
       let (file_command, file_share_dialog) = model.file_share_dialog.account_changed(
-        Err(message),
+        Err(failure),
       )
       return (
         @cmd.batch([command, file_command]),
@@ -260,7 +270,7 @@ fn account_loaded(
           remote_connecting: false,
           account_login: None,
           account_checked: true,
-          account_error: Some(message),
+          account_error: Some(failure),
         },
       )
     }
@@ -379,11 +389,13 @@ fn sign_out_account(
 }
 
 ///|
-fn load_browser_account() -> Result[@protocol.AccountSession?, String] {
+fn load_browser_account() -> Result[
+  @protocol.AccountSession?,
+  @account_failure.Failure,
+] {
   match @base_browser.local_storage_get("seekmoon.account.v1") {
-    Err(Unavailable) => Err("Account storage is unavailable.")
-    Err(AccessFailed(detail)) =>
-      Err("Could not read account storage: " + detail)
+    Err(Unavailable) => Err(StorageUnavailable)
+    Err(AccessFailed(detail)) => Err(StorageReadFailed(detail))
     Ok(None) => Ok(None)
     Ok(Some(text)) =>
       Ok(
