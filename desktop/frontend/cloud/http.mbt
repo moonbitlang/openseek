@@ -250,3 +250,34 @@ pub async fn import_session(
   }
   Ok(id)
 }
+
+///|
+/// Delayed question feedback uses the same Cloud command transport as normal
+/// input. It targets its original conversation, independently of selection.
+async fn deliver_question_input(
+  token : String,
+  session : String,
+  text : String,
+  id : String,
+) -> ControlResult {
+  let snapshot = read_control(token, session)
+  let content = @wire.Content([Text(text)])
+  let result = match snapshot.data.active_task_id {
+    Some(task) =>
+      send_command(
+        token,
+        session,
+        @wire.Steer(content~, submission_id=Some(id)),
+        task_id=task,
+      )
+    None =>
+      send_command(
+        token,
+        session,
+        @wire.Prompt(content~, submission_id=Some(id)),
+      )
+  }
+  // TODO: retain failed delayed answers for manual retry. Never automatically
+  // replay an ambiguous submission after reconnect.
+  result
+}

@@ -25,7 +25,9 @@ fn State::submit_command(
           self.epoch,
           submission.request,
           required_string(
-            request(CloudOrigin, "/v1/sessions", Post, token~),
+            request(CloudOrigin, "/v1/sessions", Post, token~, body={
+              "approval": creation.approval.to_json(),
+            }),
             "id",
           ),
         ) catch {
@@ -49,6 +51,11 @@ fn State::send_pending(
 ) -> (State, @cmd.Cmd) {
   let conversation = self.conversations[session]
   guard token is Some(token) && conversation.outgoing is Some(submission) else {
+    return (self, @cmd.none)
+  }
+  guard !self.client_tools ||
+    conversation.client_tools_ready ||
+    submission.input is Terminal(_) else {
     return (self, @cmd.none)
   }
   let request = submission.request

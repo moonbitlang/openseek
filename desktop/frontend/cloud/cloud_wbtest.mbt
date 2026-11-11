@@ -408,3 +408,47 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
   )
   assert_true(disconnected.conversations["session"].live.response is None)
 }
+
+///|
+test "desktop Cloud sending waits for client MCP readiness and fences old sockets" {
+  let base = controls_fixture()
+  let base = { ..base, client_tools: true, }
+  let original = base.conversations["session"]
+  let outgoing : PendingCommand = {
+    request: base.sequence + 1,
+    input: Prompt(
+      draft={ task: "Hello", mentions: [], images: [], },
+      attachments=[],
+      content=@wire.Content([Text("Hello")]),
+    ),
+  }
+  let conversation = {
+    ..original,
+    last_seq: Some(1),
+    outgoing: Some(outgoing),
+  }
+  let state = base.replace("session", conversation)
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let (held, _) = state.send_pending("session", Some("token"), emit)
+  assert_true(held.conversations["session"].outgoing is Some(_))
+  assert_false(held.conversations["session"].sending)
+  let (ready, _, _) = update(
+    state,
+    ClientToolsReady(state.epoch, "session", true),
+    emit,
+    token="token",
+    navigation=0,
+    client_tools=true,
+  )
+  assert_true(ready.conversations["session"].outgoing is None)
+  assert_true(ready.conversations["session"].sending)
+  let (stale, _, _) = update(
+    state,
+    ClientToolsReady(state.epoch - 1, "session", true),
+    emit,
+    token="token",
+    navigation=0,
+    client_tools=true,
+  )
+  assert_true(stale == state)
+}

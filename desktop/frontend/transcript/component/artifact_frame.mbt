@@ -29,6 +29,12 @@ let artifact_frame_bridge : String =
   #|};
 
 ///|
+let artifact_frame_followup : String =
+  #|window.openseekArtifact.sendFollowUpMessage = ({ prompt, title = "" }) => {
+  #|  parent.postMessage({ type: "openseek-artifact-followup", version: 2, token, prompt, title }, "*");
+  #|};
+
+///|
 /// Runs inside the frame after the artifact and reports its height.
 let artifact_frame_resize : String =
   #|const send = () => parent.postMessage({
@@ -41,10 +47,15 @@ let artifact_frame_resize : String =
   #|});
 
 ///|
-fn artifact_srcdoc(content : String, token : String) -> String {
+fn artifact_srcdoc(
+  content : String,
+  token : String,
+  followup_enabled~ : Bool,
+) -> String {
   let token = Json::string(token).stringify()
+  let followup = if followup_enabled { artifact_frame_followup } else { "" }
   "<meta http-equiv=\"Content-Security-Policy\" content=\"\{ARTIFACT_FRAME_POLICY}\"><meta name=\"referrer\" content=\"no-referrer\">" +
-  "<script>(() => {\nconst token = \{token};\n\{artifact_frame_bridge}\n})();</script>" +
+  "<script>(() => {\nconst token = \{token};\n\{artifact_frame_bridge}\n\{followup}\n})();</script>" +
   content +
   "<script>(() => {\n\{artifact_frame_resize}\n})();</script>"
 }
@@ -68,6 +79,7 @@ fn settle_artifact_frames(
   reference : String,
   state : ArtifactFileState,
   owner : String,
+  followup_enabled~ : Bool,
 ) -> Unit {
   for node in @dom.document().query_selector_all("[data-transcript-artifact]") {
     guard node.get_attribute("data-transcript-artifact") == Some(reference) &&
@@ -103,7 +115,10 @@ fn settle_artifact_frames(
         if button is Some(button) {
           set_display(button, "none")
         }
-        frame.set_attribute("srcdoc", artifact_srcdoc(content, token))
+        frame.set_attribute(
+          "srcdoc",
+          artifact_srcdoc(content, token, followup_enabled~),
+        )
         frame.set_attribute("data-artifact-loaded", owner)
         frame.set_attribute("data-artifact-reference", reference)
         set_display(frame, "block")
@@ -127,6 +142,7 @@ priv enum ArtifactFrameMessage {
   ArtifactHeight(Int32)
   /// `payload` is absent when the frame could not serialize its state.
   ArtifactState(token~ : String, payload~ : String?)
+  ArtifactFollowup(token~ : String, prompt~ : String, title~ : String)
 }
 
 ///|
@@ -164,6 +180,23 @@ fn ArtifactFrameMessage::decode(data : @js.Value) -> ArtifactFrameMessage? {
       }
       Some(ArtifactState(token~, payload=string("payload")))
     }
+    Some("openseek-artifact-followup") => {
+      guard number("version") == Some(2.0) &&
+        string("token") is Some(token) &&
+        string("prompt") is Some(prompt) &&
+        string("title") is Some(title) else {
+        return None
+      }
+      let prompt = prompt.trim()
+      guard !prompt.is_empty() else { return None }
+      Some(
+        ArtifactFollowup(
+          token~,
+          prompt=prompt.to_owned(),
+          title=title.trim().to_owned(),
+        ),
+      )
+    }
     _ => None
   }
 }
@@ -182,11 +215,26 @@ fn source_frame(event : @dom.Event) -> @dom.Element? {
 }
 
 ///|
-/// Installs the window listeners for frame heights, offered state and the
-/// "ask with current settings" button. Returns the uninstaller.
+fn current_artifact_frame(
+  frame : @dom.Element,
+  token : String,
+) -> (@dom.Element, String, String)? {
+  guard frame.get_attribute("data-artifact-token") == Some(token) &&
+    frame.closest("[data-transcript-artifact]") is Some(node) &&
+    node.get_attribute("data-transcript-artifact") is Some(reference) &&
+    node.get_attribute("data-artifact-owner") is Some(owner) &&
+    frame.get_attribute("data-artifact-reference") == Some(reference) &&
+    frame.get_attribute("data-artifact-loaded") == Some(owner) else {
+    return None
+  }
+  Some((node, reference, owner))
+}
+
+///|
+/// Installs the frame message and selection listeners. Returns the uninstaller.
 fn artifact_frame_listener(
   changed : () -> Unit,
-  selected : (String, @mention_context.ArtifactSnapshot) -> Unit,
+  interact : (String, ArtifactInteraction) -> Unit,
 ) -> () -> Unit {
   // Keyed by frame generation token; a reloaded frame gets a new token, so
   // a stale entry is never read again.
@@ -207,12 +255,7 @@ fn artifact_frame_listener(
         }
       }
       ArtifactState(token~, payload~) => {
-        guard frame.get_attribute("data-artifact-token") == Some(token) &&
-          frame.closest("[data-transcript-artifact]") is Some(node) &&
-          node.get_attribute("data-transcript-artifact") is Some(reference) &&
-          frame.get_attribute("data-artifact-reference") == Some(reference) &&
-          frame.get_attribute("data-artifact-loaded") ==
-          node.get_attribute("data-artifact-owner") else {
+        guard current_artifact_frame(frame, token) is Some((node, reference, _)) else {
           return
         }
         let button = node.query_selector(".chat-artifact-context")
@@ -232,6 +275,16 @@ fn artifact_frame_listener(
           }
         }
       }
+      ArtifactFollowup(token~, prompt~, title~) => {
+        guard current_artifact_frame(frame, token) is Some((_, _, owner)) &&
+          frame_has_user_activation(frame) else {
+          return
+        }
+        interact(
+          owner,
+          RequestFollowup(prompt~, title~, snapshot=snapshots.get(token)),
+        )
+      }
     }
   }
   let click : @dom.Listener = event => {
@@ -249,7 +302,7 @@ fn artifact_frame_listener(
       snapshots.get(token) is Some(snapshot) else {
       return
     }
-    selected(owner, snapshot)
+    interact(owner, AttachState(snapshot))
   }
   @dom.window().add_event_listener("message", message)
   @dom.document().add_event_listener("click", click)
@@ -271,3 +324,7 @@ extern "js" fn message_from_frame(
 ///|
 extern "js" fn event_is_trusted(event : @dom.Event) -> Bool =
   #|(event) => event.isTrusted
+
+///|
+extern "js" fn frame_has_user_activation(frame : @dom.Element) -> Bool =
+  #|frame => document.activeElement === frame && navigator.userActivation?.isActive === true

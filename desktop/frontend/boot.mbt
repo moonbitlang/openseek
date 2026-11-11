@@ -643,6 +643,7 @@ fn main {
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
           model.bridge_subscriptions(emit),
+          cloud_mcp_subscriptions(model, emit),
           @cloud.subscriptions(
             model.cloud,
             if model.screen is Chat {
@@ -831,8 +832,13 @@ fn main {
           open_review_changes: emit.map(selection => {
             TranscriptReviewChangesOpened(slot~, selection~)
           }),
-          artifact_context: emit.map(snapshot => {
-            TranscriptArtifactContextRequested(slot~, snapshot)
+          artifact_context: emit.map(action => {
+            match action {
+              AttachState(snapshot) =>
+                TranscriptArtifactContextRequested(slot~, snapshot)
+              RequestFollowup(prompt~, title~, snapshot~) =>
+                ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~)
+            }
           }),
           choose_project: emit.map(project => ProjectMenuProjectChosen(project)),
           new_project: emit(AddProjectRequested),

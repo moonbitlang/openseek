@@ -127,6 +127,9 @@ async fn main {
     console_url?=console.map(console => console.entry_url()),
     resources=@host.desktop_resources(resources),
     host_mcp~,
+    cloud_browser=account => {
+      @extension.browser_open_tool(views, cloud_account=account)
+    },
   )
   let bridge = @extension.DesktopBridgeActor(state, askpass=Some(executable))
   views.page_attached(payload => bridge.notify_browser_event(payload))

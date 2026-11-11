@@ -126,6 +126,7 @@ pub(all) struct Conversation {
   shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
   // One command waiting for session creation or the first SSE snapshot.
+  client_tools_ready : Bool
   outgoing : PendingCommand?
   stream : StreamLease?
   control : ControlState?
@@ -191,6 +192,7 @@ fn Conversation::empty() -> Conversation {
     uploads: [],
     shell_commands: [],
     pending: None,
+    client_tools_ready: false,
     outgoing: None,
     stream: None,
     control: None,
@@ -220,6 +222,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
+  approval : @protocol.OpenSeekApproval
 }
 
 ///|
@@ -287,6 +290,7 @@ pub extend SessionListStatus with Eq::{equal, not_equal}
 ///|
 #derive(Eq)
 pub(all) struct State {
+  client_tools : Bool
   user_id : String?
   epoch : Int32
   needs_sign_in : Bool
@@ -307,6 +311,7 @@ pub(all) struct State {
 ///|
 pub fn State::empty() -> State {
   {
+    client_tools: false,
     user_id: None,
     epoch: 0,
     needs_sign_in: false,
@@ -330,6 +335,15 @@ pub using @cloud_client {type Failure}
 
 ///|
 pub(all) enum Msg {
+  ClientToolsReady(Int32, String, Bool)
+  QuestionInput(
+    account~ : String,
+    session~ : String,
+    text~ : String,
+    id~ : String
+  )
+  QuestionInputDelivered(Int32, String)
+  QuestionInputFailed(Int32, String, Notice)
   AccountChanged(String?)
   Refresh
   Create

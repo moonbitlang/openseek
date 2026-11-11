@@ -370,6 +370,7 @@ pub impl @json.ToJson for BrowserElement
 #derive(Eq, @debug.Debug)
 pub(all) enum BrowserEventPayload {
   OpenRequested(request~ : String, session~ : String, url~ : String)
+  CloudOpenRequested(account~ : String, request~ : String, session~ : String, url~ : String)
   Navigated(id~ : Int32, url~ : String)
   LoadingChanged(id~ : Int32, loading~ : Bool)
   TitleUpdated(id~ : Int32, title~ : String)
@@ -699,6 +700,35 @@ pub fn CloudHistoryCacheRequest::from_json(@json.Json, @json.JsonPath) -> Self r
 pub fn CloudHistoryCacheRequest::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCacheRequest
 pub impl @json.ToJson for CloudHistoryCacheRequest
+
+#derive(Eq, @debug.Debug)
+pub(all) enum CloudMcpEvent {
+  Questions(account~ : String, snapshot~ : UserQuestionSnapshot)
+  Input(account~ : String, session~ : String, text~ : String, id~ : String)
+}
+pub fn CloudMcpEvent::equal(Self, Self) -> Bool
+pub fn CloudMcpEvent::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudMcpEvent::not_equal(Self, Self) -> Bool
+pub fn CloudMcpEvent::to_json(Self) -> @json.Json
+pub fn CloudMcpEvent::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for CloudMcpEvent
+pub impl @json.ToJson for CloudMcpEvent
+
+#derive(Eq, @debug.Debug)
+pub(all) enum CloudMcpRequest {
+  Dispatch(account~ : String, session~ : String, message~ : @json.Json)
+  Detach(account~ : String, session~ : String)
+  Questions(account~ : String)
+  Answer(account~ : String, answer~ : UserQuestionAnswer)
+}
+pub fn CloudMcpRequest::account(Self) -> String
+pub fn CloudMcpRequest::equal(Self, Self) -> Bool
+pub fn CloudMcpRequest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudMcpRequest::not_equal(Self, Self) -> Bool
+pub fn CloudMcpRequest::to_json(Self) -> @json.Json
+pub fn CloudMcpRequest::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for CloudMcpRequest
+pub impl @json.ToJson for CloudMcpRequest
 
 #derive(Eq, @debug.Debug)
 pub(all) struct CodexAccountLoginCancelPayload {
@@ -2610,6 +2640,8 @@ pub impl @json.ToJson for MoonPackageGraphReply
 
 #derive(Eq, @debug.Debug)
 pub(all) enum Notification {
+  PreviewOpen(PreviewOpenRequest)
+  CloudMcp(CloudMcpEvent)
   UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
   AgentConnected(ConnectedPayload)
@@ -2652,6 +2684,8 @@ pub fn Notification::wire_name(Self) -> String
 
 #derive(Eq, Hash, @debug.Debug)
 pub(all) enum NotificationKind {
+  PreviewOpen
+  CloudMcp
   UserQuestions
   AgentApprovals
   AgentConnected
@@ -2920,6 +2954,25 @@ pub fn PrepareAttachmentReply::to_json(Self) -> @json.Json
 pub fn PrepareAttachmentReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for PrepareAttachmentReply
 pub impl @json.ToJson for PrepareAttachmentReply
+
+pub(all) struct PreviewOpenArgs {
+  path : String
+}
+pub fn PreviewOpenArgs::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub impl @json.FromJson for PreviewOpenArgs
+
+#derive(Eq, @debug.Debug)
+pub(all) enum PreviewOpenRequest {
+  Local(session~ : String, workspace~ : String, path~ : String)
+  Cloud(account~ : String, session~ : String, path~ : String)
+}
+pub fn PreviewOpenRequest::equal(Self, Self) -> Bool
+pub fn PreviewOpenRequest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PreviewOpenRequest::not_equal(Self, Self) -> Bool
+pub fn PreviewOpenRequest::to_json(Self) -> @json.Json
+pub fn PreviewOpenRequest::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for PreviewOpenRequest
+pub impl @json.ToJson for PreviewOpenRequest
 
 #derive(Eq, @debug.Debug)
 pub(all) enum QueueAction {

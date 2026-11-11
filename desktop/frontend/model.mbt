@@ -1273,6 +1273,11 @@ priv enum ChatSelection {
 ///|
 #derive(Eq)
 priv struct Model {
+  pending_previews : Map[
+    @interop.ConversationIdentity,
+    Array[@protocol.PreviewOpenRequest],
+  ]
+  cloud_questions : @user_questions.Model
   cloud : @cloud.State
   chat_navigation_generation : Int32
   ssh_ui : SshUi
@@ -1480,6 +1485,7 @@ priv struct Model {
   pending_project_adoption : ProjectAdoption?
   screen : Screen
   management_dialog : ManagementDialog?
+  artifact_followup : ArtifactFollowup?
   // Destination identities and history; page data stays in its owning state.
   navigation : AppNavigation
   navigation_initial : String?
@@ -1738,6 +1744,14 @@ priv enum Msg {
     slot~ : String,
     @mention_context.ArtifactSnapshot
   )
+  ArtifactFollowupRequested(
+    slot~ : String,
+    prompt~ : String,
+    title~ : String,
+    snapshot~ : @mention_context.ArtifactSnapshot?
+  )
+  ArtifactFollowupConfirmed
+  ArtifactFollowupDismissed
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.
@@ -1914,6 +1928,7 @@ priv enum Msg {
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
+  SendArtifactFollowup
   // `Send` for a conversation that is not the one on screen (a `!` command
   // finishing in the background): the same submission, without scrolling the
   // transcript the user is reading.
@@ -1984,6 +1999,8 @@ priv enum Msg {
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
   ShareFile(String)
+  PreviewOpenRequested(@protocol.PreviewOpenRequest)
+  OpenNextPreview
   PreviewFile(String)
   CloudFilePreviewCreated(
     owner~ : @interop.ConversationIdentity,
@@ -2146,6 +2163,14 @@ priv enum Msg {
   // of that conversation's agent (`browser.event` kind `open_requested`).
   // The page allocates the tab, as it does every tab, and names `request`
   // in the `browser.open` that creates the view.
+  CloudMcpNotification(@protocol.CloudMcpEvent)
+  CloudQuestions(account~ : String, @user_questions.Msg)
+  CloudBrowserOpenRequested(
+    account~ : String,
+    request~ : String,
+    session~ : String,
+    url~ : String
+  )
   BrowserOpenRequested(request~ : String, session~ : String, url~ : String)
   ExplorerRequested(@fileeditor.ExplorerMode)
   // Open the Workflows tab in the right panel.
@@ -2227,6 +2252,8 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
+  PreviewRequested(@protocol.PreviewOpenRequest)
+  CloudMcpEvent(@protocol.CloudMcpEvent)
   QuestionsChanged(@protocol.UserQuestionSnapshot)
   ApprovalsChanged(ApprovalMirror)
   BridgeReady
@@ -2740,6 +2767,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     // The desktop window owns its host outright, so its one channel is in
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
+    pending_previews: Map([]),
+    cloud_questions: @user_questions.Model(),
     cloud: @cloud.State::empty(),
     chat_navigation_generation: 0,
     devices: if desktop {
@@ -2825,6 +2854,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     conversation_load_failure: None,
     screen: Chat,
     management_dialog: None,
+    artifact_followup: None,
     navigation: AppNavigation::empty(),
     navigation_initial: if desktop {
       None

@@ -27,7 +27,11 @@ pub async fn call(
 /// `offset` (default 0). No match is a page with no tools.
 ///
 /// The search runs in the script. The first search downloads the host's
-/// catalog and later ones reuse it. A search changes nothing, so every
+/// catalog and later ones reuse it. The host waits a bounded time for servers
+/// still connecting before it lists them: for `server` when it is given, for
+/// every server otherwise, so a search for another server, or for every
+/// server, downloads the catalog again unless it waited for every server
+/// already. A search changes nothing, so every
 /// failure raises `SearchError` and the search may simply run again: an
 /// unknown server, a `limit` below 1, a negative or past-the-end `offset`, and
 /// a catalog that could not be downloaded (no MCP host, or a transport
@@ -38,7 +42,7 @@ pub async fn search(
   limit? : Int32,
   offset? : Int32,
 ) -> SearchPage raise SearchError {
-  let catalog = catalog()
+  let catalog = catalog(server.filter(name => !name.is_blank()))
   let page = catalog.search(query?, server?, limit?, offset?) catch {
     @catalog.SearchError(message) => raise SearchError(message)
   }
@@ -61,33 +65,46 @@ pub async fn search(
 const INVALID_CATALOG = "Invalid MCP catalog from the MCP host"
 
 ///|
-/// The catalog this script downloaded. The host's catalog changes only as a
-/// server finishes connecting or loses its connection, and a call to a server
-/// still connecting or lost says so, so one download serves the whole script.
-let downloaded : Ref[@catalog.Catalog?] = Ref(None)
+/// The catalog this script downloaded, with the server the host waited for
+/// before listing it (`None` when it waited for every server). The host's
+/// catalog changes only as a server finishes connecting or loses its
+/// connection, and a call to a server still connecting waits for it, so one
+/// download serves every search it waited for.
+let downloaded : Ref[(@catalog.Catalog, String?)?] = Ref(None)
 
 ///|
-/// The host's catalog: the one this script already downloaded, or a fresh
-/// download. A failed download is not kept, so the next search tries again.
-async fn catalog() -> @catalog.Catalog raise SearchError {
-  if downloaded.val is Some(catalog) {
+/// The host's catalog once `server` (every server when `None`) has settled:
+/// the one this script already downloaded when the host waited for it then,
+/// or a fresh download. A failed download is not kept, so the next search
+/// tries again.
+async fn catalog(server : String?) -> @catalog.Catalog raise SearchError {
+  if downloaded.val is Some((catalog, waited)) &&
+    (waited is None || waited == server) {
     return catalog
   }
-  let catalog = decode_catalog(download())
-  downloaded.val = Some(catalog)
+  let catalog = decode_catalog(download(server))
+  downloaded.val = Some((catalog, server))
   catalog
 }
 
 ///|
 /// Every catalog item, one `list` request per reply's worth, in the host's
-/// order. Every request after the first names the snapshot the first reply
-/// came from, so a catalog that changes meanwhile cannot shift the pages.
-async fn download() -> Array[Json] raise SearchError {
+/// order. The first request names `server`, for the host to wait for before
+/// it lists the catalog. Every request after the first names the snapshot the
+/// first reply came from, so a catalog that changes meanwhile cannot shift
+/// the pages.
+async fn download(server : String?) -> Array[Json] raise SearchError {
   let items : Array[Json] = []
   let mut cursor = None
   let mut snapshot = None
   for ;; {
-    let reply = send(List(cursor~, snapshot~)) catch {
+    let reply = send(
+      List(
+        cursor~,
+        snapshot~,
+        server=if snapshot is None { server } else { None },
+      ),
+    ) catch {
       TransportError(message) => raise SearchError(message)
     }
     // A cursor the host refuses arrives as an error result with the reason.

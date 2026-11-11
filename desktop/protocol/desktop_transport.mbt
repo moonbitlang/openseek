@@ -7,6 +7,8 @@
 /// typed payload once an event is decoded.
 #derive(Debug, Eq, Hash)
 pub(all) enum NotificationKind {
+  PreviewOpen
+  CloudMcp
   UserQuestions
   AgentApprovals
   AgentConnected
@@ -45,6 +47,8 @@ pub(all) enum NotificationKind {
 /// The stable public name written at a transport boundary.
 pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
   match self {
+    PreviewOpen => "preview.open_requested"
+    CloudMcp => "cloud.mcp.event"
     UserQuestions => "user_questions.changed"
     AgentApprovals => "agent.approvals"
     AgentConnected => "agent.connected"
@@ -84,6 +88,8 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
 /// Every event exposed by the desktop transports, in registration order.
 pub fn NotificationKind::all() -> Array[NotificationKind] {
   [
+    PreviewOpen,
+    CloudMcp,
     UserQuestions,
     AgentApprovals,
     AgentConnected,
@@ -125,6 +131,8 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
 /// introduced only by `from_wire`/`params` at the transport boundary.
 #derive(Debug, Eq)
 pub(all) enum Notification {
+  PreviewOpen(PreviewOpenRequest)
+  CloudMcp(CloudMcpEvent)
   UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
   AgentConnected(ConnectedPayload)
@@ -169,6 +177,10 @@ pub(all) enum Notification {
 /// table that would only be consumed by this decoder.
 pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
   match name {
+    "preview.open_requested" =>
+      Some(PreviewOpen(@json.from_json(params) catch { _ => return None }))
+    "cloud.mcp.event" =>
+      Some(CloudMcp(@json.from_json(params) catch { _ => return None }))
     "user_questions.changed" =>
       Some(UserQuestions(@json.from_json(params) catch { _ => return None }))
     "agent.approvals" =>
@@ -265,6 +277,8 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
 /// The payload-free identity used by transport registration.
 fn Notification::kind(self : Notification) -> NotificationKind {
   match self {
+    PreviewOpen(_) => PreviewOpen
+    CloudMcp(_) => CloudMcp
     UserQuestions(_) => UserQuestions
     AgentApprovals(_) => AgentApprovals
     AgentConnected(_) => AgentConnected
@@ -310,6 +324,8 @@ pub fn Notification::wire_name(self : Notification) -> String {
 /// Encode the typed payload only when a transport writes the public event.
 pub fn Notification::params(self : Notification) -> Json {
   match self {
+    PreviewOpen(payload) => ToJson::to_json(payload)
+    CloudMcp(payload) => ToJson::to_json(payload)
     UserQuestions(payload) => ToJson::to_json(payload)
     AgentApprovals(payload) => ToJson::to_json(payload)
     AgentConnected(payload) => ToJson::to_json(payload)

@@ -37,7 +37,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -179,6 +179,7 @@ pub(all) struct Conversation {
   uploads : Array[UploadedAttachment]
   shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
+  client_tools_ready : Bool
   outgoing : PendingCommand?
   stream : StreamLease?
   control : ControlState?
@@ -218,6 +219,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
+  approval : @protocol.OpenSeekApproval
 }
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
@@ -274,6 +276,10 @@ pub fn MetadataSave::equal(Self, Self) -> Bool
 pub fn MetadataSave::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
+  ClientToolsReady(Int32, String, Bool)
+  QuestionInput(account~ : String, session~ : String, text~ : String, id~ : String)
+  QuestionInputDelivered(Int32, String)
+  QuestionInputFailed(Int32, String, Notice)
   AccountChanged(String?)
   Refresh
   Create
@@ -329,6 +335,8 @@ pub(all) enum Notice {
   OperationRejected(String)
   ControlRejected(String)
   AnswerRejected(String)
+  QuestionAnswerFailed(@cloud_client.Failure)
+  QuestionAnswerDetail(String)
   ApprovalSaveRaced
   DeleteWhileGenerating
   AdditionalInputNotApplied
@@ -407,6 +415,7 @@ pub fn SessionListStatus::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct State {
+  client_tools : Bool
   user_id : String?
   epoch : Int32
   needs_sign_in : Bool

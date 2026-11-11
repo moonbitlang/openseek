@@ -259,15 +259,18 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
 
 ///|
 /// A running engine keeps the policy it started with, so the server refuses
-/// a change until the turn ends. A session the server has not created yet
-/// has no mode to change, and a save in flight holds the picker.
+/// a change until the turn ends. A draft keeps its choice until creation;
+/// creation and metadata saves in flight hold the picker.
 pub fn State::can_choose_approval(self : State, id : String) -> Bool {
   !self.retired.contains(id) &&
   !self.deletions.contains(id) &&
   !self.metadata_saves.contains(id) &&
-  self.sessions.any(session => {
-    session.id == id && !session.archived && !session.generating
-  }) &&
+  (
+    self.is_draft(id) ||
+    self.sessions.any(session => {
+      session.id == id && !session.archived && !session.generating
+    })
+  ) &&
   self.conversations
   .get(id)
   .map_or(true, conversation => {
@@ -278,9 +281,11 @@ pub fn State::can_choose_approval(self : State, id : String) -> Bool {
 }
 
 ///|
-/// The mode the session's next engine starts with. Before the server creates
-/// the session, and on servers without approval modes, engines ask.
+/// The mode the session's next engine starts with, including a draft's choice.
 pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+  if self.creation is Some({ id: draft, approval, .. }) && draft == id {
+    return approval
+  }
   match self.sessions.iter().find_first(session => session.id == id) {
     Some(session) => session.approval
     None => ApprovalAsk
@@ -351,7 +356,9 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   token? : String,
   navigation~ : Int32,
+  client_tools~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
+  let state = { ..state, client_tools, }
   // A boundary observed while this read was in flight may be missing from it.
   // Settle the read first so its records are not discarded, then read again.
   let follow_up = match msg {
@@ -378,10 +385,89 @@ pub fn update(
     return (next, command, None)
   }
   let (next, command, select) = match msg {
+    ClientToolsReady(epoch, id, ready) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      let next = state.replace(id, {
+        ..conversation,
+        client_tools_ready: ready,
+      })
+      let (next, command) = if ready && conversation.last_seq is Some(_) {
+        next.send_pending(id, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
+    }
+    QuestionInput(account~, session~, text~, id~) => {
+      guard state.user_id == Some(account) &&
+        token is Some(token) &&
+        !state.retired.contains(session) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state,
+        run(emit, () => {
+          try deliver_question_input(token, session, text, id) catch {
+            @cloud_client.RequestError(failure) =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                QuestionAnswerFailed(failure),
+              )
+            error =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                QuestionAnswerDetail("\{error}"),
+              )
+          } noraise {
+            Accepted => QuestionInputDelivered(state.epoch, session)
+            Rejected(reason) =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                QuestionAnswerDetail(reason),
+              )
+          }
+        }),
+        None,
+      )
+    }
+    QuestionInputDelivered(epoch, id) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, {
+          ..conversation,
+          generating: true,
+          watch_status: Watching,
+          history_required: true,
+        }),
+        @cmd.none,
+        None,
+      )
+    }
+    QuestionInputFailed(epoch, id, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, { ..conversation, notice: Some(error), }),
+        @cmd.none,
+        None,
+      )
+    }
     AccountChanged(user_id) => {
       let cache_catalog = user_id is Some(_) && token is Some(_)
       let next = {
         ..State::empty(),
+        client_tools,
         user_id,
         epoch: state.epoch + 1,
         sequence: state.sequence,
@@ -498,7 +584,7 @@ pub fn update(
       let next = {
         ..state,
         sequence: request,
-        creation: Some({ id, request, navigation, }),
+        creation: Some({ id, request, navigation, approval: ApprovalAsk, }),
         notice: None,
       }.replace(id, {
         ..Conversation::empty(),
@@ -543,7 +629,7 @@ pub fn update(
           updated_at: None,
           generating: false,
           archived: false,
-          approval: ApprovalAsk,
+          approval: creation.approval,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -604,6 +690,19 @@ pub fn update(
       (next, @cmd.none, None)
     }
     Edit(account~, session=id, edit~) => {
+      if state.creation is Some(creation) && creation.id == id {
+        guard state.user_id == Some(account) &&
+          token is Some(_) &&
+          edit is SetApproval(approval) &&
+          state.can_choose_approval(id) else {
+          return (state, @cmd.none, None)
+        }
+        return (
+          { ..state, creation: Some({ ..creation, approval, }), },
+          @cmd.none,
+          None,
+        )
+      }
       let edit = match edit {
         Rename(title) => Rename(title.trim().to_owned())
         other => other

@@ -6,6 +6,8 @@ pub(all) enum Notice {
   OperationRejected(String)
   ControlRejected(String)
   AnswerRejected(String)
+  QuestionAnswerFailed(@cloud_client.Failure)
+  QuestionAnswerDetail(String)
   ApprovalSaveRaced
   DeleteWhileGenerating
   AdditionalInputNotApplied
@@ -49,6 +51,26 @@ pub fn Notice::text(self : Notice, locale : @i18n.Locale) -> String {
       "クラウドが回答を受け付けませんでした：\{reason}。"
     (Spanish, AnswerRejected(reason)) =>
       "Cloud no aceptó la respuesta: \{reason}."
+    (English, QuestionAnswerFailed(failure)) =>
+      "Could not deliver question answer: \{failure.text(locale)}"
+    (SimplifiedChinese, QuestionAnswerFailed(failure)) =>
+      "无法发送问题答复：\{failure.text(locale)}"
+    (TraditionalChinese, QuestionAnswerFailed(failure)) =>
+      "無法傳送問題答覆：\{failure.text(locale)}"
+    (Japanese, QuestionAnswerFailed(failure)) =>
+      "質問への回答を送信できませんでした：\{failure.text(locale)}"
+    (Spanish, QuestionAnswerFailed(failure)) =>
+      "No se pudo enviar la respuesta a la pregunta: \{failure.text(locale)}"
+    (English, QuestionAnswerDetail(detail)) =>
+      "Could not deliver question answer: \{detail}"
+    (SimplifiedChinese, QuestionAnswerDetail(detail)) =>
+      "无法发送问题答复：\{detail}"
+    (TraditionalChinese, QuestionAnswerDetail(detail)) =>
+      "無法傳送問題答覆：\{detail}"
+    (Japanese, QuestionAnswerDetail(detail)) =>
+      "質問への回答を送信できませんでした：\{detail}"
+    (Spanish, QuestionAnswerDetail(detail)) =>
+      "No se pudo enviar la respuesta a la pregunta: \{detail}"
     (English, ApprovalSaveRaced) =>
       "A turn started before the approval mode was saved. Choose it again after the turn finishes."
     (SimplifiedChinese, ApprovalSaveRaced) =>

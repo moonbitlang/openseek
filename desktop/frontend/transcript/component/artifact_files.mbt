@@ -6,6 +6,18 @@ priv struct ArtifactOwner {
   workspace : @common.Uri?
   checkout : @common.Uri?
   archived : Bool
+  followup_enabled : Bool
+}
+
+///|
+/// An action requested from the preview of a particular artifact.
+pub(all) enum ArtifactInteraction {
+  AttachState(@mention_context.ArtifactSnapshot)
+  RequestFollowup(
+    prompt~ : String,
+    title~ : String,
+    snapshot~ : @mention_context.ArtifactSnapshot?
+  )
 }
 
 ///|
@@ -16,6 +28,7 @@ fn Input::artifact_owner(self : Input) -> ArtifactOwner {
     workspace: self.current_project,
     checkout: self.root,
     archived: self.archived,
+    followup_enabled: self.source is OpenSeek && !self.archived,
   }
 }
 
@@ -27,6 +40,7 @@ fn ArtifactOwner::key(self : ArtifactOwner) -> String {
     self.checkout.map(root => root.to_string()).unwrap_or(""),
     self.session,
     self.archived.to_string(),
+    self.followup_enabled.to_string(),
   ]).stringify()
 }
 
@@ -181,9 +195,14 @@ fn ArtifactFileCache::apply_after_render(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      let owner = owner.key()
+      let key = owner.key()
       for reference, state in self.0 {
-        settle_artifact_frames(reference, state, owner)
+        settle_artifact_frames(
+          reference,
+          state,
+          key,
+          followup_enabled=owner.followup_enabled,
+        )
       }
     },
     kind=@cmd.after_render,

@@ -46,6 +46,8 @@ export class CloudHarness {
     this.meStatus = 401;
     this.listStatus = 200;
     this.importStatus = 201;
+    this.createStatus = 201;
+    this.pauseCreate = null;
     this.shareStatus = 200;
     this.exportSnapshots = new Map();
     this.patchStatus = 204;
@@ -70,6 +72,7 @@ export class CloudHarness {
     this.sessionIds = [sessionA, sessionB];
     this.generating = new Set();
     this.archived = new Set();
+    this.approvals = new Map();
     this.histories = new Map();
     this.historyTurns = new Map();
     this.nativeNotices = new Map();
@@ -79,6 +82,8 @@ export class CloudHarness {
     this.authorization = null;
     this.pauseAuthorizationCancel = null;
     this.taskCount = 0;
+    this.mcpSockets = new Map();
+    this.mcpFrames = [];
   }
 
   async install() {
@@ -226,7 +231,26 @@ export class CloudHarness {
       throw new Error(`Unexpected account request: ${path}`);
     });
     await this.page.route(`${cloudOrigin}/**`, route => this.cloudRequest(route));
-    if (this.desktop) await this.installDesktopBridge();
+    if (this.desktop) {
+      await this.page.routeWebSocket('wss://cloud.moonbitlang.com/v1/sessions/*/mcp', socket => {
+        const session = new URL(socket.url()).pathname.split('/')[3];
+        this.mcpSockets.set(session, socket);
+        socket.onMessage(async raw => {
+          const frame = JSON.parse(raw);
+          this.mcpFrames.push({ session, frame });
+          if (frame.type === 'auth') {
+            if (this.pauseMcpReady) await this.pauseMcpReady;
+            socket.send(JSON.stringify({ type: 'ready' }));
+          } else {
+            this.onMcpReply?.(session, frame);
+          }
+        });
+        socket.onClose(() => {
+          if (this.mcpSockets.get(session) === socket) this.mcpSockets.delete(session);
+        });
+      });
+      await this.installDesktopBridge();
+    }
   }
 
   account() { return { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: 'octocat', avatar_url: '' } }; }
@@ -256,6 +280,7 @@ export class CloudHarness {
       if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
       if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
       if (request.method === 'cloud.history_cache') return this.historyCache?.(request.params) ?? { kind: 'done' };
+      if (request.method === 'cloud.mcp') return this.clientMcp?.(request.params) ?? { generation: 0, requests: [] };
       if (request.method === 'cloud.key') throw new Error('Cloud must not read local credentials');
       return this.device.replyFor(request);
     });
@@ -365,6 +390,9 @@ export class CloudHarness {
     }
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
+        if (this.pauseCreate) await this.pauseCreate;
+        if (this.createStatus !== 201) return json({}, this.createStatus);
+        this.approvals.set(sessionC, request.postDataJSON().approval);
         this.sessionIds = [sessionC, ...this.sessionIds.filter(id => id !== sessionC)];
         return json({ id: sessionC }, 201);
       }
@@ -372,7 +400,7 @@ export class CloudHarness {
       if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id) })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask' })) }, status);
     }
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();
@@ -383,6 +411,7 @@ export class CloudHarness {
       if (body.title !== undefined) this.titles.set(session, body.title);
       if (body.archived === true) this.archived.add(session);
       if (body.archived === false) this.archived.delete(session);
+      if (body.approval !== undefined) this.approvals.set(session, body.approval);
       return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {

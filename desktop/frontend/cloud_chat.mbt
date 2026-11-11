@@ -132,6 +132,7 @@ fn update_cloud(
     dispatch.map(message => CloudAction(message)),
     token?=model.account.map(account => account.token),
     navigation=model.chat_navigation_generation,
+    client_tools=model.is_desktop,
   )
   let completion = if model.account.map(account => account.user.user_id) ==
     before.user_id {
@@ -242,11 +243,17 @@ fn update_cloud(
   }
   let mut file_panel = model.file_panel
   let docks = model.docks.copy()
+  let pending_previews = model.pending_previews.copy()
   let file_commands : Array[@cmd.Cmd] = []
   if before.epoch != cloud.epoch && before.user_id is Some(account) {
     let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
     file_panel = panel
     file_commands.push(clear)
+    for owner in pending_previews.keys().to_array() {
+      if owner is @interop.Cloud(account=current, ..) && current == account {
+        pending_previews.remove(owner)
+      }
+    }
     for owner in docks.keys().to_array() {
       if owner is @interop.Cloud(account=current, ..) && current == account {
         docks.remove(owner)
@@ -263,11 +270,17 @@ fn update_cloud(
       file_panel = panel
       file_commands.push(clear)
       docks.remove(@interop.Cloud(account~, session~))
+      pending_previews.remove(@interop.Cloud(account~, session~))
     }
+  }
+  let approval_owner = match model.cloud_draft_identity() {
+    Some(owner) => Some(owner)
+    None => model.cloud_identity()
   }
   let next = {
     ..model,
     docks,
+    pending_previews,
     file_panel,
     screen: if message is @cloud.Create {
       Chat
@@ -276,10 +289,10 @@ fn update_cloud(
     },
     cloud,
     navigation,
-    // A turn that starts in the Cloud conversation on screen, from this
-    // client or another, locks its approval mode, so the menu closes with it.
+    // Creation or a turn starting in the selected Cloud conversation locks
+    // its approval mode, so the menu closes with it.
     select_menu: if model.select_menu is Some(OpenSeekApprovalMenu) &&
-      model.cloud_identity() is Some(owner) &&
+      approval_owner is Some(owner) &&
       !cloud.can_choose_approval(owner.session()) {
       None
     } else {

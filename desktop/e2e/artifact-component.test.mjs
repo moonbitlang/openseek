@@ -78,6 +78,28 @@ test('compiled Rabbita inputs update the answer locally and reset together', asy
   } finally { await page.close(); }
 });
 
+test('chart hover and selection update the same answer as the sliders', async () => {
+  const { page, frame, errors } = await openComponent();
+  try {
+    const svg = frame.locator('#speedup-chart svg');
+    await expect(svg).toBeVisible();
+    const point = await svg.evaluate(node => {
+      const line = node.querySelector('polyline[stroke="#2563eb"]');
+      const [x, y] = line.getAttribute('points').trim().split(/\s+/)[15].split(',').map(Number);
+      const point = node.createSVGPoint(); point.x = x; point.y = y;
+      const client = point.matrixTransform(node.getScreenCTM());
+      return { x: client.x, y: client.y };
+    });
+    const box = await page.locator('iframe').boundingBox();
+    await page.mouse.move(box.x + point.x, box.y + point.y);
+    await expect(frame.getByRole('tooltip')).toBeVisible();
+    await page.mouse.click(box.x + point.x, box.y + point.y);
+    await expect(frame.locator('#workers')).toHaveValue('16');
+    await expect(frame.getByRole('status')).toHaveText('4.00× faster');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 test('repeated instances are independent and reopening restores the authored state', async () => {
   const { page, frame, errors } = await openComponent({}, 2);
   try {

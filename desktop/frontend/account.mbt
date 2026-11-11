@@ -282,6 +282,11 @@ fn account_loaded(
   let next = {
     ..model,
     account,
+    cloud_questions: if changed {
+      @user_questions.Model()
+    } else {
+      model.cloud_questions
+    },
     export_dialog,
     file_share_dialog,
     remote_connecting: false,

@@ -657,3 +657,69 @@ test('Host Quick Open retains both file and workspace-symbol shortcuts', async (
   expect(app.requests.some(request => request.method === 'lsp.workspace_symbols')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('preview_open reuses Cloud viewers and parks another session without stealing focus', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page, { desktop: true });
+  const names = ['report.docx', 'report.pdf', 'image.png', 'src/main.mbt', 'notes.txt'];
+  for (const name of names.slice(0, 2)) cloud.contents.set(`${sessionA}:${name}`, { kind: 'binary_content', ...cloud.device.officeFiles[`docs/${name}`] });
+  cloud.contents.set(`${sessionA}:image.png`, { kind: 'binary_content', data_base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jBfkAAAAASUVORK5CYII=', media_type: 'image/png', sig: 'image' });
+  for (const name of names.slice(3)) cloud.contents.set(`${sessionA}:${name}`, { kind: 'content', content: `// Tool preview ${name}`, sig: name, absolute: `/${name}` });
+  cloud.contents.set(`${sessionB}:notes.txt`, { kind: 'content', content: 'Session B tool preview', sig: 'b', absolute: '/notes.txt' });
+  const native = [];
+  const reply = cloud.device.replyFor.bind(cloud.device);
+  cloud.device.replyFor = request => {
+    if (request.method.startsWith('browser.')) { native.push(request); return {}; }
+    return reply(request);
+  };
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  const preview = (session, path) => page.evaluate(payload => window.desktopEvent('openseek.preview.open_requested', payload), { kind: 'cloud', account: cloud.userId, session, path });
+  await preview(sessionA, 'src/main.mbt');
+  await expect(source(page)).toContainText('Tool preview src/main.mbt');
+  expect(cloud.fileRequests.filter(r => r.content && r.path === 'src/main.mbt')).toHaveLength(1);
+  await preview(sessionB, 'notes.txt');
+  await expect(page.locator('main .topbar-title')).toHaveText(cloud.titles.get(sessionA));
+  await expect(source(page)).toContainText('Tool preview src/main.mbt');
+  expect(cloud.fileRequests.some(r => r.content && r.session === sessionB)).toBe(false);
+  await cloud.open(sessionB);
+  await expect(source(page)).toContainText('Session B tool preview');
+  expect(cloud.fileRequests.filter(r => r.content && r.session === sessionB)).toHaveLength(1);
+  await cloud.open(sessionA);
+  await preview(sessionA, 'report.docx');
+  await expect(page.locator('.word-page')).toBeVisible();
+  await preview(sessionA, 'report.pdf');
+  await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
+  await preview(sessionA, 'image.png');
+  await expect(page.locator('.file-image-preview img')).toBeVisible();
+  await preview(sessionA, 'notes.txt');
+  await expect(source(page)).toContainText('Tool preview notes.txt');
+  await page.screenshot({ path: testInfo.outputPath('mcp-cloud-file-preview.png') });
+  await page.route(`${cloudOrigin}/v1/sessions/*/previews`, route => route.fulfill({ status: 201, headers: { 'Access-Control-Allow-Origin': authOrigin }, json: { url: 'https://preview.example.test/index.html' } }));
+  await preview(sessionA, 'index.html');
+  await expect(page.locator('.browser-address')).toHaveValue('https://preview.example.test/index.html');
+  await expect.poll(() => native.some(r => r.method === 'browser.set_visible' && r.params.visible)).toBe(true);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('preview_open reuses Local file reads and the existing HTML preview command', async ({ page }) => {
+  const cloud = new CloudHarness(page, { desktop: true });
+  const native = [];
+  const reply = cloud.device.replyFor.bind(cloud.device);
+  cloud.device.replyFor = request => {
+    if (request.method.startsWith('browser.')) { native.push(request); return {}; }
+    return reply(request);
+  };
+  await cloud.install(); await cloud.goto();
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await cloud.device.openSession();
+  const preview = path => page.evaluate(path => window.desktopEvent('openseek.preview.open_requested', { kind: 'local', session: 'session-1', workspace: '/workspace', path }), path);
+  await preview('src/main.mbt');
+  await expect(source(page)).toContainText(/fn\s+main/);
+  expect(cloud.hostRequests.filter(r => r.method === 'fs.read_file' && r.params.path === '/workspace/src/main.mbt')).toHaveLength(1);
+  await preview('docs/report.pdf');
+  await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
+  await preview('docs/report.docx');
+  await expect(page.locator('.word-page')).toBeVisible();
+  await preview('index.htm');
+  await expect.poll(() => native.some(r => r.method === 'browser.preview' && r.params.path === '/workspace/index.htm' && r.params.root === '/workspace' && r.params.session === 'session-1')).toBe(true);
+  expect(cloud.device.pageErrors).toEqual([]);
+});

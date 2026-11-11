@@ -36,3 +36,30 @@ test "frame messages decode heights within bounds and only current-version state
   assert_true(decode("null") is None)
   assert_true(decode("\"openseek-artifact-state\"") is None)
 }
+
+///|
+test "frame follow-ups decode the question and optional dialog title" {
+  let decode = (text : String) => {
+    ArtifactFrameMessage::decode(@js.Value::from_json_string(text))
+  }
+  assert_true(
+    decode(
+      "{\"type\":\"openseek-artifact-followup\",\"version\":2,\"token\":\"t\",\"prompt\":\" Explain this result. \",\"title\":\"\"}",
+    )
+    is Some(
+      ArtifactFollowup(token="t", prompt="Explain this result.", title="")
+    ),
+  )
+  assert_true(
+    decode(
+      "{\"type\":\"openseek-artifact-followup\",\"version\":2,\"token\":\"t\",\"prompt\":\"  \",\"title\":\"Explain\"}",
+    )
+    is None,
+  )
+  assert_true(
+    decode(
+      "{\"type\":\"openseek-artifact-followup\",\"version\":2,\"token\":\"t\",\"prompt\":\"Explain this result.\",\"title\":42}",
+    )
+    is None,
+  )
+}

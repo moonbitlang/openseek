@@ -1568,8 +1568,8 @@ fn desired_browser_view(model : Model) -> Int32? {
     page.url is Some(_) else {
     return None
   }
-  // In Cloud, only a file preview in the current conversation's pane can
-  // place a native view. Ordinary links keep their existing behavior.
+  // Explicit Cloud previews and client-tool opens share native placement.
+  // Ordinary links keep their existing behavior.
   guard !model.cloud_selected() ||
     (page.cloud_preview && model.file_panel_visible()) else {
     return None
@@ -1751,6 +1751,12 @@ fn update(
     _ => model
   }
   let model = model.restore_message_approvals()
+  let model = if model.artifact_followup is Some(followup) &&
+    model.transcript_slot().map(slot => slot.key()) != Some(followup.slot) {
+    { ..model, artifact_followup: None, }
+  } else {
+    model
+  }
   let model = if navigates {
     { ..model, management_dialog: None, }
   } else {
@@ -1934,6 +1940,11 @@ fn update(
   } else {
     model
   }
+  let preview_generation = model.file_panel.file_link_generation
+  let (preview_open_cmd, model) = model.open_pending_preview(dispatch)
+  let preview_file_opened = model.file_panel.file_link_generation !=
+    preview_generation
+  let cmd = @cmd.batch([cmd, preview_open_cmd])
   // Panel visibility is root-owned because it controls both HTML layout and
   // host-backed editor/browser lifecycles. Reconcile every transition once
   // here, no matter which semantic action opened or closed the panel.
@@ -1947,7 +1958,7 @@ fn update(
   // still take the generic path so an older active document is restored.
   let file_opened_with_panel = !previous.right_panel_open &&
     model.right_panel_open &&
-    msg.opens_file_before_panel_reconciliation(model) &&
+    (preview_file_opened || msg.opens_file_before_panel_reconciliation(model)) &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
@@ -2138,6 +2149,7 @@ fn update(
         model.dock_state().tabs != previous.dock_state().tabs ||
         model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
+        preview_file_opened ||
         msg.opens_file_before_panel_reconciliation(model) ||
         msg is Dock(TabActivated(_)),
       ),
@@ -2602,6 +2614,8 @@ fn update_msg(
         guard model.accepts_composer_action(action.identity()) else {
           return (@cmd.none, model)
         }
+        let selected = model.cloud_identity() == Some(action.identity().owner) ||
+          model.cloud_draft_identity() == Some(action.identity().owner)
         match action {
           @composer.ShellCommandSubmitted(identity~, command~) =>
             return submit_cloud_shell(dispatch, model, identity.owner, command)
@@ -2677,11 +2691,11 @@ fn update_msg(
               model,
             )
           }
-          // The session keeps the mode on the server; a running turn keeps
-          // the policy its engine started with, so the menu is locked then.
+          // Drafts keep the mode locally until creation. Existing sessions
+          // save it on the server and lock it while a turn is running.
           @composer.ApprovalMenuToggled(identity~) => {
             guard model.screen is Chat &&
-              model.cloud_identity() == Some(identity.owner) &&
+              selected &&
               model.cloud.can_choose_approval(identity.owner.session()) else {
               return (@cmd.none, model)
             }
@@ -2691,14 +2705,12 @@ fn update_msg(
               model,
             )
           }
-          @composer.SelectMenuDismissed(identity~) => {
-            guard model.cloud_identity() == Some(identity.owner) else {
-              return (@cmd.none, model)
-            }
+          @composer.SelectMenuDismissed(..) => {
+            guard selected else { return (@cmd.none, model) }
             return update_msg(dispatch, CloseSelectMenu, model)
           }
           @composer.ApprovalSelected(identity~, mode~) => {
-            guard model.cloud_identity() == Some(identity.owner) &&
+            guard selected &&
               identity.owner is @interop.Cloud(account~, session~) else {
               return (@cmd.none, model)
             }
@@ -3302,6 +3314,22 @@ fn update_msg(
       | ApplyAllFeedback
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
+    ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~) => {
+      guard model.artifact_followup is None &&
+        model.artifact_followup_target(slot) is Some(identity) else {
+        return (@cmd.none, model)
+      }
+      (
+        @dialog.show("artifact-followup-dialog"),
+        {
+          ..model,
+          artifact_followup: Some({ slot, identity, prompt, title, snapshot, }),
+        },
+      )
+    }
+    ArtifactFollowupConfirmed => confirm_artifact_followup(dispatch, model)
+    ArtifactFollowupDismissed =>
+      (@cmd.none, { ..model, artifact_followup: None, })
     // Delivered to the component by boot, alongside the other component inputs.
     ComposerReply(_)
     | ComposerCommandResult(_)
@@ -4932,7 +4960,7 @@ fn update_msg(
       }
       (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
-    Send | SendFollowup(_) | SendInBackground => {
+    Send | SendFollowup(_) | SendInBackground | SendArtifactFollowup => {
       // Re-pinning is for the reader of this conversation's transcript.
       let scroll = if msg is SendInBackground {
         @cmd.none
@@ -4971,6 +4999,13 @@ fn update_msg(
         .prompt()
         .trim()
         .to_owned()
+      // A failed artifact follow-up can be retried from its button. Only
+      // composer submissions have a draft to restore after a refusal.
+      let (draft, draft_mentions) = if msg is SendArtifactFollowup {
+        ("", [])
+      } else {
+        (conv.task, conv.mentions)
+      }
       let sendable = conv.prompt_ready() &&
         conv.draft_sendable() &&
         model.bridge_state() is Connected &&
@@ -5049,8 +5084,8 @@ fn update_msg(
             submission_id,
             Some(run_id),
             task,
-            conv.task,
-            conv.mentions,
+            draft,
+            draft_mentions,
             followup_behavior,
             images=conv.images,
           )
@@ -5113,8 +5148,8 @@ fn update_msg(
           ..conv,
           pending_prompt: Some({
             submission_id,
-            draft: conv.task,
-            mentions: conv.mentions.copy(),
+            draft,
+            mentions: draft_mentions.copy(),
             images: conv.images,
           }),
         }
@@ -5188,6 +5223,59 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
+    }
+    CloudMcpNotification(event) => {
+      guard model.is_desktop else { return (@cmd.none, model) }
+      match event {
+        Questions(account~, snapshot~) =>
+          update(
+            dispatch,
+            CloudQuestions(account~, @user_questions.Snapshot(snapshot)),
+            model,
+          )
+        Input(account~, session~, text~, id~) =>
+          update_cloud(
+            dispatch,
+            @cloud.QuestionInput(account~, session~, text~, id~),
+            model,
+          )
+      }
+    }
+    CloudQuestions(account~, msg) => {
+      guard model.is_desktop &&
+        model.account.map(a => a.user.user_id) == Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (command, questions) = model.cloud_questions.update(
+        msg,
+        Local,
+        dispatch.map(msg => CloudQuestions(account~, msg)),
+        submit=(answer, emit) => {
+          @cmd.attempt(
+            result => {
+              match result {
+                Ok(snapshot) => emit(@user_questions.Snapshot(snapshot))
+                Err(error) =>
+                  emit(
+                    @user_questions.Failed(
+                      request=answer.id,
+                      error=@interop.bridge_error_text(error),
+                    ),
+                  )
+              }
+            },
+            () => {
+              let reply = @interop.bridge_request(
+                Local,
+                @commands.cloud_mcp,
+                @protocol.CloudMcpRequest::Answer(account~, answer~),
+              )
+              @json.from_json(reply)
+            },
+          )
+        },
+      )
+      (command, { ..model, cloud_questions: questions, })
     }
     UserQuestions(channel~, connection_generation~, msg) => {
       guard model.device_state(channel) is Some(device) &&
@@ -6780,6 +6868,25 @@ fn update_msg(
       )
     }
     BrowserAnnotation(msg) => update_browser_annotation(dispatch, msg, model)
+    CloudBrowserOpenRequested(account~, request~, session~, url~) => {
+      guard model.is_desktop &&
+        model.account.map(a => a.user.user_id) == Some(account) else {
+        return (@cmd.none, model)
+      }
+      let owner = @interop.Cloud(account~, session~)
+      let (id, next) = model.add_browser_tab(owner, url~, cloud_preview=true)
+      (
+        browser_open(
+          dispatch,
+          id,
+          url,
+          model.theme.is_dark(model.system_dark),
+          Some({ channel: Local, session, }),
+          request~,
+        ),
+        next,
+      )
+    }
     BrowserOpenRequested(request~, session~, url~) => {
       // Native views exist only in the desktop window, whose conversations
       // are all on the local channel.
@@ -7161,6 +7268,8 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    PreviewOpenRequested(request) => (@cmd.none, model.queue_preview(request))
+    OpenNextPreview => (@cmd.none, model)
     PreviewFile(path) => model.preview_file(dispatch, path)
     CloudFilePreviewCreated(owner~, auth_epoch~, result~) => {
       let ctx = file_ctx(model)
@@ -9805,6 +9914,18 @@ fn update_device_msg(
       })
       (@cmd.batch(commands), seeded)
     }
+    PreviewRequested(request) =>
+      if channel == Local {
+        update_msg(dispatch, PreviewOpenRequested(request), model)
+      } else {
+        (@cmd.none, model)
+      }
+    CloudMcpEvent(event) =>
+      if channel == Local {
+        update_msg(dispatch, CloudMcpNotification(event), model)
+      } else {
+        (@cmd.none, model)
+      }
     QuestionsChanged(snapshot) =>
       update_msg(
         dispatch,

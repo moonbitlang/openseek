@@ -22,8 +22,9 @@ pub fn endpoints(ApiState, @host.HostConnection, local_share? : Bool, on_share_p
 
 // Types and methods
 type ApiState
-pub fn ApiState::ApiState(engine~ : String, codex? : @codex.CodexSettings, runtime_dir? : @pathx.Path, executable? : String, auth? : @auth.AuthStore, app_version? : String, console_url? : String, resources? : @host.HostResources, host_mcp? : @mcp.Server, on_finished? : (@protocol.FinishedPayload) -> Unit) -> Self
+pub fn ApiState::ApiState(engine~ : String, codex? : @codex.CodexSettings, runtime_dir? : @pathx.Path, executable? : String, auth? : @auth.AuthStore, app_version? : String, console_url? : String, resources? : @host.HostResources, host_mcp? : @mcp.Server, cloud_browser? : (String) -> @mcp.Tool, on_finished? : (@protocol.FinishedPayload) -> Unit) -> Self
 pub fn ApiState::auth_store(Self) -> @auth.AuthStore
+pub fn ApiState::detach_cloud_questions(Self) -> Unit
 pub fn ApiState::host_state(Self) -> @host.HostState
 pub fn ApiState::manager(Self) -> @engine.EngineManager
 pub fn ApiState::publish(Self, @protocol.Notification) -> Unit

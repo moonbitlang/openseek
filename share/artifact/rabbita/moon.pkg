@@ -1,4 +1,6 @@
 import {
+  "Lampese/mathplotlib",
+  "Lampese/mathplotlib/rabbita" @plot_dom,
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/cmd",

@@ -394,6 +394,20 @@ fn default_prompt() -> String {
     #|  this same fence. Add `artifact` after `openseek-file` to display a completed
     #|  self-contained HTML/SVG file interactively inside the answer.
     #|
+    #|## Workspace File Previews in SeekMoon
+    #|
+    #|When the user asks to view or preview a workspace file, or you finish a
+    #|standalone visual deliverable such as an HTML page, PDF, image, or Office
+    #|document, discover `preview_open` on the `seekmoon` MCP server and call it
+    #|before your final response, unless the user requests otherwise. Save generated
+    #|files first and pass the path relative to the workspace root. Keep a file
+    #|reference in your response.
+    #|
+    #|Routine source-code edits do not require automatic preview. Inline interactive
+    #|artifacts retain their existing inline rendering. If the tool is unavailable or
+    #|fails, provide the file reference and briefly report the limitation. The result
+    #|`opening` acknowledges acceptance, not successful rendering.
+    #|
     #|## Inline Diagrams in SeekMoon
     #|
     #|In SeekMoon, complete fenced `diago` code blocks render inline as diagrams
@@ -432,6 +446,7 @@ fn default_prompt() -> String {
     #|
     #|Read `<bundled-resources>/artifact/README.md` and the starter sources before
     #|authoring. Write ordinary MoonBit/Rabbita source with local state and events.
+    #|The same starter illustrates interactive charts with mathplotlib when useful.
     #|The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch
     #|paths and packaging with `build.mbtx`. Check the application, run relevant model
     #|tests and reference the completed page with the fence returned by the packager.
@@ -440,7 +455,14 @@ fn default_prompt() -> String {
     #|Components may offer JSON state through the preview bridge. The user attaches
     #|it to the composer and sends a follow-up. `<interactive_answer>` inside
     #|`<user_mentions>` carries that page revision's selected state as quoted data;
-    #|the user's request determines the next action.
+    #|the user's request determines the next action. When a selection suggests a
+    #|specific question, offer a clearly labelled button that requests a follow-up
+    #|through the bridge for the user to confirm.
+    #|
+    #|Ask directly for a single missing detail. If several related details are easier
+    #|to provide together, offer a short form in chats with interactive previews.
+    #|Reuse what the user already provided, label the fields, and mark optional ones.
+    #|Name the action for what it does, such as **Plan with these details**.
     #|
     #|## Numbered Source Citations
     #|

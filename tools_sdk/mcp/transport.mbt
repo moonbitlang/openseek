@@ -6,7 +6,8 @@ priv enum Request {
   Call(server~ : String, tool~ : String, arguments~ : Json)
   /// One reply's worth of catalog items from `cursor`, the start when absent,
   /// of the catalog snapshot a listing started from, a new one when absent.
-  List(cursor~ : Int32?, snapshot~ : Int32?)
+  /// A new one is taken once `server` has settled, every server when absent.
+  List(cursor~ : Int32?, snapshot~ : Int32?, server~ : String?)
 }
 
 ///|
@@ -59,13 +60,16 @@ fn encode(request : Request) -> Json {
         "version": 1,
         "call": { "server": server, "tool": tool, "arguments": arguments },
       }
-    List(cursor~, snapshot~) => {
+    List(cursor~, snapshot~, server~) => {
       let list = Map([])
       if cursor is Some(cursor) {
         list["cursor"] = Json(cursor)
       }
       if snapshot is Some(snapshot) {
         list["snapshot"] = Json(snapshot)
+      }
+      if server is Some(server) {
+        list["server"] = Json(server)
       }
       { "version": 1, "list": Json::object(list) }
     }
