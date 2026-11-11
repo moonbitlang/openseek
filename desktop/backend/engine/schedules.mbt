@@ -14,7 +14,7 @@
 const ScheduleConcurrency = 4
 
 ///|
-pub struct Schedules {
+struct Schedules {
   manager : EngineManager
   directory : @pathx.Path?
   lock : @async.Mutex
@@ -27,7 +27,7 @@ pub struct Schedules {
   // nothing: what it would remember is another process's to change.
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
-  stopped : Map[String, Unit]
+  stopped : Set[String]
 }
 
 ///|
@@ -42,7 +42,7 @@ pub fn Schedules::Schedules(
     ownership: None,
     state: None,
     processes: Map([]),
-    stopped: Map([]),
+    stopped: Set([]),
   }
 }
 
@@ -286,7 +286,7 @@ pub async fn Schedules::action(
       Stop =>
         for run in state.runs {
           if run.schedule_id == entry.id && run.status is Running {
-            self.stopped[run.id] = ()
+            self.stopped.add(run.id)
             if self.processes.get(run.id) is Some(process) {
               process.cancel()
             }
@@ -342,6 +342,12 @@ pub async fn Schedules::run(
 }
 
 ///|
+/// Whether `entry`'s own timing has come due by `now`.
+fn schedule_due(entry : @protocol.ScheduleEntry, now : Int64) -> Bool {
+  entry.enabled && entry.next_at is Some(at) && at <= now
+}
+
+///|
 async fn Schedules::take_due(
   self : Schedules,
   at? : Int64,
@@ -354,13 +360,19 @@ async fn Schedules::take_due(
     guard self.owns() else { return [] }
     let state = self.load()
     let now = at.unwrap_or_else(@async.now)
+    // Most ticks find nothing to start; skip the copies below for them.
+    guard state.entries
+      .iter()
+      .any(entry => entry.run_requested || schedule_due(entry, now)) else {
+      return []
+    }
     let entries = state.entries.copy()
     let runs = state.runs.copy()
     let launches : Array[(@protocol.ScheduleEntry, @protocol.ScheduleRun)] = []
     let mut active = runs.count_if(run => run.status is Running)
     let mut changed = false
     for index, entry in entries {
-      let due = entry.enabled && entry.next_at is Some(at) && at <= now
+      let due = schedule_due(entry, now)
       guard entry.run_requested || due else { continue }
       let running = schedule_running(state, entry.id)
       // Explicit Run now waits for capacity. Periodic ticks never build a backlog.

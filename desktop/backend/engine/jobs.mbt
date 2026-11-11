@@ -37,13 +37,26 @@ async fn jobs_directory(scope : @protocol.JobsScope) -> String {
 fn EngineManager::jobs_engine(
   self : EngineManager,
   scope : @protocol.JobsScope,
+  directory : String,
 ) -> ServeEngine? {
+  // Verify workspace placement as well as the session id: duplicate session
+  // ids in different stores must stay isolated.
   guard !scope.archived &&
     self.pump is Serving(sessions~) &&
-    sessions.get(scope.session) is Some(slot) else {
+    sessions.get(scope.session) is Some(slot) &&
+    slot.live() is Some(engine) &&
+    engine.session_root is Some(root) &&
+    directory == jobs_store_path(root, scope.session) else {
     return None
   }
-  slot.live()
+  Some(engine)
+}
+
+///|
+/// The engine's authoritative live job list.
+async fn ServeEngine::jobs_snapshot(self : ServeEngine) -> @wire.Event {
+  let request_id = @uuid.mint()
+  self.job_request(request_id, JobsSnapshot(request_id~))
 }
 
 ///|
@@ -160,27 +173,21 @@ pub async fn list_jobs(
   let errors : Array[String] = []
   let records : Map[String, @wire.JobRecord] = Map([])
   let mut refresh_failed = false
-  if manager.jobs_engine(scope) is Some(engine) {
-    // Verify workspace placement as well as the session id before requesting
-    // live data; duplicate session ids in different stores must stay isolated.
-    if engine.session_root is Some(root) &&
-      directory == jobs_store_path(root, scope.session) {
-      let request_id = @uuid.mint()
-      try engine.job_request(request_id, JobsSnapshot(request_id~)) catch {
-        error => {
-          refresh_failed = true
-          errors.push("Live job refresh failed: \{error}")
+  if manager.jobs_engine(scope, directory) is Some(engine) {
+    try engine.jobs_snapshot() catch {
+      error => {
+        refresh_failed = true
+        errors.push("Live job refresh failed: \{error}")
+      }
+    } noraise {
+      JobsSnapshot(jobs~, ..) =>
+        for job in jobs {
+          let key = "\{job.generation}/\{job.id}"
+          records[key] = job
         }
-      } noraise {
-        JobsSnapshot(jobs~, ..) =>
-          for job in jobs {
-            let key = "\{job.generation}/\{job.id}"
-            records[key] = job
-          }
-        _ => {
-          refresh_failed = true
-          errors.push("Unexpected job snapshot reply")
-        }
+      _ => {
+        refresh_failed = true
+        errors.push("Unexpected job snapshot reply")
       }
     }
   }
@@ -279,19 +286,7 @@ async fn job_history_page(
   }
   generations.sort_by((a, b) => {
     match (a.1, b.1) {
-      (Some(x), Some(y)) => {
-        let seconds = y.0.compare(x.0)
-        if seconds != 0 {
-          seconds
-        } else {
-          let nanos = y.1.compare(x.1)
-          if nanos != 0 {
-            nanos
-          } else {
-            b.0.compare(a.0)
-          }
-        }
-      }
+      (Some(x), Some(y)) => (y.0, y.1, b.0).compare((x.0, x.1, a.0))
       (Some(_), None) => -1
       (None, Some(_)) => 1
       (None, None) => b.0.compare(a.0)
@@ -369,19 +364,12 @@ async fn job_history_page(
 }
 
 ///|
-/// Order one generation's jobs newest first by job id.
+/// Order one generation's jobs newest first by job id. Length is compared
+/// before content so historical counters order numerically (`bg-10` after
+/// `bg-9`) regardless of how `String::compare` orders same-prefix strings.
 fn[T] newest_first(items : Array[T], id : (T) -> String) -> Array[T] {
   let ordered = items.map(item => (job_id_order_key(id(item)), item))
-  ordered.sort_by((a, b) => {
-    let a = a.0
-    let b = b.0
-    let length = b.length().compare(a.length())
-    if length != 0 {
-      length
-    } else {
-      b.compare(a)
-    }
-  })
+  ordered.sort_by((a, b) => (b.0.length(), b.0).compare((a.0.length(), a.0)))
   ordered.map(entry => entry.1)
 }
 
@@ -459,13 +447,10 @@ pub async fn read_job(
     metadata_error => {
       // A failed first metadata write must not make a retained live log
       // unreadable. Only the exact owning engine may supply this fallback.
-      guard manager.jobs_engine(scope) is Some(engine) &&
-        engine.session_root is Some(root) &&
-        directory == jobs_store_path(root, scope.session) else {
+      guard manager.jobs_engine(scope, directory) is Some(engine) else {
         raise metadata_error
       }
-      let request_id = @uuid.mint()
-      match engine.job_request(request_id, JobsSnapshot(request_id~)) {
+      match engine.jobs_snapshot() {
         JobsSnapshot(jobs~, ..) => {
           guard jobs
             .iter()
@@ -536,9 +521,7 @@ pub async fn stop_job(
   let record_guard = manager.begin_record_read(target.scope.session)
   defer manager.end_record_read(target.scope.session, record_guard)
   let directory = jobs_directory(target.scope)
-  guard manager.jobs_engine(target.scope) is Some(engine) &&
-    engine.session_root is Some(root) &&
-    directory == jobs_store_path(root, target.scope.session) else {
+  guard manager.jobs_engine(target.scope, directory) is Some(engine) else {
     raise EngineError("job controls require its current live engine")
   }
   let request_id = @uuid.mint()

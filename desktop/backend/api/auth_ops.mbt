@@ -7,8 +7,8 @@
 ///|
 /// The current status. The fallback `server_url` is the relay origin —
 /// a SeekMoon-hosted service that no longer depends on the chat provider.
-async fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
-  state.auth.status(server_url?=@engine.remote_server_base(state.manager))
+fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
+  state.auth.status(server_url=@engine.remote_server_base())
 }
 
 ///|
@@ -46,7 +46,7 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
 ///|
 /// Abort an in-flight sign-in; the pending `auth.connect` settles with
 /// its own error. A no-op (current status) when nothing is in flight.
-async fn auth_cancel(state : ApiState) -> @protocol.AuthStatusPayload {
+fn auth_cancel(state : ApiState) -> @protocol.AuthStatusPayload {
   ignore(state.auth.cancel_sign_in())
   auth_status(state)
 }

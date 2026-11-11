@@ -38,7 +38,7 @@ pub async fn engine_command(resources : @resources.Resources) -> String {
 pub async fn ssh_model_credentials(
   manager : EngineManager,
 ) -> Map[String, String] {
-  let (settings, _) = manager.settings_snapshot()
+  let settings = manager.settings_snapshot()
   let (name, key) = match settings.provider {
     Deepseek => {
       let key = match settings.deepseek_api_key {
