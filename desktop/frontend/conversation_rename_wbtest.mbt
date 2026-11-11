@@ -69,12 +69,18 @@ test "a failed save closes the field and reports through a toast" {
   let model = rename_edit(renaming_model(), Typed("Renamed"))
   let (_, failed) = update_msg(
     test_dispatch(),
-    ConversationRenameFailed(id~, message="offline"),
+    ConversationRenameFailed(id~, message=Bridge(@interop.External("offline"))),
     rename_edit(model, Submitted),
   )
   assert_true(failed.conversation_rename is None)
   assert_true(
-    failed.notifications is [{ message: Raw("Rename failed: offline"), .. }],
+    failed.notifications
+    is [
+      {
+        message: Notice(RenameFailure(Bridge(@interop.External("offline")))),
+        ..
+      },
+    ],
   )
 }
 

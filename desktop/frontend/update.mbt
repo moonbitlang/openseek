@@ -2355,10 +2355,7 @@ fn update_msg(
     }
     LanguageStorageFailed(message) =>
       // Report the failure without discarding the working in-memory choice.
-      model.notify_error(
-        dispatch,
-        @settings.text(model.locale, LanguageStorageFailed(message)),
-      )
+      model.notify_notice(dispatch, LanguageStorageFailure(message))
     SystemLanguagesChanged(languages) => {
       let locale = model.language.resolve(languages)
       (
@@ -3264,8 +3261,9 @@ fn update_msg(
         model.file_panel,
         file_ctx(model),
       )
-      let (notice, next) = { ..model, file_panel: panel, }.notify_error(
-        dispatch, "These saved changes no longer match the current review or are hidden by its filters. The saved context is unchanged.",
+      let (notice, next) = { ..model, file_panel: panel, }.notify_notice(
+        dispatch,
+        ReviewSelectionMismatch,
       )
       (@cmd.batch([command, notice]), next)
     }
@@ -3562,10 +3560,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       let (command, panel) = model.file_panel.start_office_region(
         ctx,
@@ -3586,10 +3581,7 @@ fn update_msg(
       }
       guard result is Some(result) else { return (@cmd.none, model) }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       match result {
         Err(message) => model.notify_error(dispatch, message)
@@ -3616,10 +3608,7 @@ fn update_msg(
         Some(preview) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
-        dispatch,
-        @fileeditor.capture_submission_declined_message(model.locale),
-      )
+      model.notify_file_error(dispatch, @fileeditor.CaptureSubmissionDeclined)
     }
     FileEditor(@fileeditor.PdfCaptureRequested) => {
       // Text drafts and captured images own their source until submitted or
@@ -3630,10 +3619,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       (
         @fileeditor.capture_pdf_region(
@@ -3663,10 +3649,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       let capture = match result {
         Ok(capture) => capture
@@ -3700,10 +3683,7 @@ fn update_msg(
         Some(preview) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
-        dispatch,
-        @fileeditor.capture_submission_declined_message(model.locale),
-      )
+      model.notify_file_error(dispatch, @fileeditor.CaptureSubmissionDeclined)
     }
     FileEditor(@fileeditor.OfficeSelectionConfirmed(preview)) =>
       confirm_office_selection(
@@ -3826,10 +3806,10 @@ fn update_msg(
         file_ctx(model).owner == @interop.Host(owner) else {
         return (@cmd.none, model)
       }
-      if model.notifications.any(toast => toast.message == Raw(message)) {
+      if model.notifications.any(toast => toast.message == FileFailure(message)) {
         (@cmd.none, model)
       } else {
-        model.notify_error(dispatch, message)
+        model.notify_file_error(dispatch, message)
       }
     }
     // Keep watcher lifecycle state in the file-editor package, but present an
@@ -3855,8 +3835,8 @@ fn update_msg(
       if panel.watch_error is Some(err) &&
         err == message &&
         model.file_panel.watch_error != Some(message) &&
-        !model.notifications.any(toast => toast.message == Raw(message)) {
-        let (toast, next) = next.notify_error(dispatch, message)
+        !model.notifications.any(toast => toast.message == FileFailure(message)) {
+        let (toast, next) = next.notify_file_error(dispatch, message)
         (@cmd.batch([cmd, toast]), next)
       } else {
         (cmd, next)
@@ -4376,7 +4356,7 @@ fn update_msg(
       guard model.account_login is Some(_) else { return (@cmd.none, model) }
       account_loaded(dispatch, model, epoch, Err(SignInTimedOut))
     }
-    AccountCancelFailed(epoch, message) => {
+    AccountCancelFailed(epoch, failure) => {
       guard epoch == model.account_epoch &&
         model.account_login is Some(Cancelling(connect_pending~, ..)) else {
         return (@cmd.none, model)
@@ -4386,16 +4366,12 @@ fn update_msg(
           dispatch,
           { ..model, account_login: None, },
           epoch,
-          Err(Diagnostic(message)),
+          Err(failure),
         )
       }
       (
         @cmd.none,
-        {
-          ..model,
-          account_login: Some(Waiting),
-          account_error: Some(Diagnostic(message)),
-        },
+        { ..model, account_login: Some(Waiting), account_error: Some(failure), },
       )
     }
     AccountCancelFinished(epoch) => {
@@ -5995,26 +5971,7 @@ fn update_msg(
         _ => (@cmd.none, model)
       }
     ConversationRenameFailed(id~, message~) =>
-      match model.conversation_rename {
-        Some(rename) if rename.id == id => {
-          // The title is unchanged, and the row may be folded away by now:
-          // the reason goes to the toast rail, which is always on screen.
-          let (focus, model) = model.finish_conversation_rename(rename)
-          let (toast, model) = model.notify_error(
-            dispatch,
-            (match model.locale {
-              SimplifiedChinese => "重命名失败："
-              TraditionalChinese => "重新命名失敗："
-              Japanese => "名前を変更できませんでした："
-              English => "Rename failed: "
-              Spanish => "No se pudo cambiar el nombre: "
-            }) +
-            message,
-          )
-          (@cmd.batch([focus, toast]), model)
-        }
-        _ => (@cmd.none, model)
-      }
+      model.fail_conversation_rename(dispatch, id, RenameFailure(message))
     NotificationClicked(run_id~) => {
       // Cloud payloads reuse the existing account-scoped conversation key.
       // A notification from a signed-out account cannot open another account.
@@ -7996,9 +7953,9 @@ fn update_device_msg(
       let settled = mirror.saves == 0
       let next = model.map_host_settings(channel, _ => mirror)
       let next = if settled { next.flush_host_settings(channel) } else { next }
-      let (notice, notified) = next.notify_error(
+      let (notice, notified) = next.notify_notice(
         dispatch,
-        notice_text(model.locale, SaveSettings(message.to_string())),
+        SaveSettings(message.to_string()),
       )
       let commands = [notice, next.api_setup_dialog(channel)]
       if settled {
@@ -8428,10 +8385,7 @@ fn update_device_msg(
       // still waiting for its commit. Only mutation failures settle an add.
       model
       .replace_device({ ..dev, project_catalog: Some(Err(message)), })
-      .notify_error(
-        dispatch,
-        notice_text(model.locale, WorkspaceFailure(message)),
-      )
+      .notify_notice(dispatch, WorkspaceFailure(message))
     }
     ProjectsChanged(paths, chat_root~) => {
       // The post-commit broadcast is newer than every list request issued so
@@ -8506,10 +8460,7 @@ fn update_device_msg(
       } else {
         model
       }
-      model.notify_error(
-        dispatch,
-        notice_text(model.locale, WorkspaceFailure(message.to_string())),
-      )
+      model.notify_notice(dispatch, WorkspaceFailure(message.to_string()))
     }
     WorkspaceSettingsLoaded(
       workspace~,
@@ -8597,17 +8548,18 @@ fn update_device_msg(
           // Preserve the failure notification and authoritative re-read;
           // only the matching pending write may change dialog feedback.
           let reread_generation = dev.workspace_settings_request_generation + 1
-          let message = notice_text(
-            model.locale,
-            SaveWorkspace(workspace.path.to_string(), message.to_string()),
+          let notice = SaveWorkspace(
+            workspace.path.to_string(),
+            message.to_string(),
           )
+          let message = notice_text(model.locale, notice)
           let model = model.finish_workspace_settings_save(
             channel,
             workspace,
             request_generation,
             Some(message),
           )
-          let (toast, next) = model.notify_error(dispatch, message)
+          let (toast, next) = model.notify_notice(dispatch, notice)
           (
             @cmd.batch([
               toast,
@@ -8678,12 +8630,9 @@ fn update_device_msg(
         request_generation > dev.worktree_generation(workspace) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
+      model.notify_notice(
         dispatch,
-        notice_text(
-          model.locale,
-          ListWorktrees(workspace.path.to_string(), message.to_string()),
-        ),
+        ListWorktrees(workspace.path.to_string(), message.to_string()),
       )
     }
     WorktreesChanged(rows, workspace~) => {
@@ -8958,9 +8907,9 @@ fn update_device_msg(
       )
       let model = model.replace_device({ ..dev, projects_request_generation, })
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
-      let (toast, model) = model.notify_error(
+      let (toast, model) = model.notify_notice(
         dispatch,
-        notice_text(model.locale, ArchiveFailure(message.to_string())),
+        ArchiveFailure(message.to_string()),
       )
       (@cmd.batch([refresh, archived, toast]), model)
     }
@@ -8973,9 +8922,9 @@ fn update_device_msg(
       // live row as well as an archived one.
       let (sessions, model) = request_sessions_refresh(dispatch, channel, model)
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
-      let (toast, model) = model.notify_error(
+      let (toast, model) = model.notify_notice(
         dispatch,
-        notice_text(model.locale, DeleteFailure(message.to_string())),
+        DeleteFailure(message.to_string()),
       )
       (@cmd.batch([sessions, archived, toast]), model)
     }
@@ -8985,10 +8934,7 @@ fn update_device_msg(
         request_generation == dev.sessions_request_generation else {
         return (@cmd.none, model)
       }
-      model.notify_error(
-        dispatch,
-        notice_text(model.locale, ListSessions(message.to_string())),
-      )
+      model.notify_notice(dispatch, ListSessions(message.to_string()))
     }
     // Another client archived, restored, or deleted a conversation. Both
     // sidebar lists are stale, but this identity-bearing fact takes effect
@@ -23290,7 +23236,9 @@ test "language request failures toast once and remain conversation fenced" {
   let msg = FileEditor(
     @fileeditor.LanguageRequestFailed(
       owner=owner.host().unwrap(),
-      message="Go to definition failed: workspace index is unavailable",
+      message=@fileeditor.DefinitionFailed(
+        @interop.External("workspace index is unavailable"),
+      ),
     ),
   )
   let (_, first) = update(dispatch, msg, model)
@@ -23309,7 +23257,7 @@ test "language request failures toast once and remain conversation fenced" {
     FileEditor(
       @fileeditor.LanguageRequestFailed(
         owner={ channel: Local, session: "another-conversation", },
-        message="late failure",
+        message=@fileeditor.Diagnostic("late failure"),
       ),
     ),
     repeated,
@@ -23359,7 +23307,9 @@ test "file watcher failures toast once and retain lifecycle state" {
     file_ctx(model),
   )
   let model = { ..model, file_panel: ready, }
-  let message = "File watching stopped: too many open files"
+  let message : @fileeditor.Failure = Diagnostic(
+    "File watching stopped: too many open files",
+  )
   let failure = FileEditor(
     @fileeditor.FileWatchFailed(
       channel=owner.host().unwrap().channel,
@@ -23371,7 +23321,10 @@ test "file watcher failures toast once and retain lifecycle state" {
   let (_, failed) = update(dispatch, failure, model)
   assert_eq(failed.file_panel.watch_error, Some(message))
   assert_eq(failed.notifications.length(), 1)
-  assert_eq(failed.notifications[0].message.text(English), message)
+  assert_eq(
+    failed.notifications[0].message.text(English),
+    message.text(English),
+  )
   // The same current-generation notification neither mutates watcher state
   // again nor stacks another toast while the first one is still visible.
   let (_, repeated) = update(dispatch, failure, failed)
@@ -23386,7 +23339,7 @@ test "file watcher failures toast once and retain lifecycle state" {
         channel=owner.host().unwrap().channel,
         root~,
         generation="\{file_ctx(model).watch_namespace}:\{generation - 1}",
-        message="stale watcher failure",
+        message=@fileeditor.Diagnostic("stale watcher failure"),
       ),
     ),
     repeated,
@@ -24478,9 +24431,7 @@ fn open_review_context(
     .bind(placement => placement.checkout_root())
     .map(root => root.path) ==
     Some(selection.source.workspace) else {
-    return model.notify_error(
-      dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
-    )
+    return model.notify_notice(dispatch, ReviewSelectionUnavailable)
   }
   if model.file_panel.changes
     is @fileeditor.ChangeListReady(refreshing=false, ..) {
@@ -24532,10 +24483,7 @@ fn finish_review_context_load(
   }
   let model = { ..model, pending_review_context: None, }
   if error is Some(message) {
-    return model.notify_error(
-      dispatch,
-      "Unable to load the current review: \{message}",
-    )
+    return model.notify_notice(dispatch, ReviewLoadFailed(message))
   }
   open_loaded_review_context(dispatch, model, pending.selection)
 }
@@ -24553,9 +24501,7 @@ fn open_loaded_review_context(
       change.original_path.map(path => path.0) == selection.source.original_file
     })
     is Some(index) else {
-    return model.notify_error(
-      dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
-    )
+    return model.notify_notice(dispatch, ReviewSelectionUnavailable)
   }
   let (command, opened) = update_msg(
     dispatch,

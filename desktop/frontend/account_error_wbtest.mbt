@@ -39,13 +39,10 @@ test "the local console keeps host sign-in failures apart from the Cloud account
   let model = local_console_test_model()
   let (_, failed) = update(
     dispatch,
-    Console(MeFailed("the sign-in check answered HTTP 500")),
+    Console(MeFailed(SignInCheckHttp(500))),
     model,
   )
-  assert_eq(
-    failed.console.access_error,
-    Some("the sign-in check answered HTTP 500"),
-  )
+  assert_eq(failed.console.access_error, Some(SignInCheckHttp(500)))
   assert_eq(failed.account_error, None)
   // A Cloud account read says nothing about the host's sign-in.
   let (_, loaded) = update(
@@ -53,10 +50,7 @@ test "the local console keeps host sign-in failures apart from the Cloud account
     AccountLoaded(failed.account_epoch, Ok(None)),
     failed,
   )
-  assert_eq(
-    loaded.console.access_error,
-    Some("the sign-in check answered HTTP 500"),
-  )
+  assert_eq(loaded.console.access_error, Some(SignInCheckHttp(500)))
   let (_, signed_in) = update(
     dispatch,
     Console(MeLoaded(login="local", avatar="")),
@@ -80,7 +74,7 @@ test "a failed sign-out lands on the login it was for" {
   }
   let (_, failed) = update(
     dispatch,
-    Console(SignOutFailed("logout failed", token=Some("ts_A"))),
+    Console(SignOutFailed(Diagnostic("logout failed"), token=Some("ts_A"))),
     cloud,
   )
   assert_eq(failed.account_error, Some(Diagnostic("logout failed")))
@@ -89,10 +83,10 @@ test "a failed sign-out lands on the login it was for" {
   let host = { ..cloud, account: None, }
   let (_, failed) = update(
     dispatch,
-    Console(SignOutFailed("logout failed", token=None)),
+    Console(SignOutFailed(Diagnostic("logout failed"), token=None)),
     host,
   )
-  assert_eq(failed.console.access_error, Some("logout failed"))
+  assert_eq(failed.console.access_error, Some(Diagnostic("logout failed")))
   assert_eq(failed.account_error, None)
   assert_false(failed.console.busy)
 }
@@ -106,7 +100,7 @@ test "starting a sign-out clears both kinds of failure" {
     console: {
       ..local_console_test_model().console,
       auth: AuthSignedIn(login="local", avatar=""),
-      access_error: Some("old host failure"),
+      access_error: Some(Diagnostic("old host failure")),
     },
   }
   let (_, signing_out) = update(test_dispatch(), Console(SignOutClicked), model)
@@ -122,7 +116,7 @@ test "the console retry clears both kinds of failure" {
     account_error: Some(Diagnostic("account storage is unavailable")),
     console: {
       ..local_console_test_model().console,
-      access_error: Some("the relay is unreachable"),
+      access_error: Some(Diagnostic("the relay is unreachable")),
     },
   }
   let (_, retried) = update(test_dispatch(), Console(RefreshClicked), model)

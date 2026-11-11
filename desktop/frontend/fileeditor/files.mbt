@@ -26,7 +26,7 @@ fn read_directory(
         error => {
           let message = match error {
             SourceError(message) => message
-            _ => Diagnostic(@interop.bridge_error_text(error))
+            _ => Bridge(@interop.bridge_problem(error))
           }
           scheduler.add(dispatch(DirFailed(owner~, epoch~, path~, message~)))
           return
@@ -141,7 +141,7 @@ fn read_file(
         error => {
           let message = match error {
             SourceError(message) => message
-            _ => Diagnostic(@interop.bridge_error_text(error))
+            _ => Bridge(@interop.bridge_problem(error))
           }
           scheduler.add(
             dispatch(
@@ -464,7 +464,7 @@ fn watch_workspace(
                     channel=watched.owner.channel,
                     root=watched.root,
                     generation~,
-                    message="File watching failed: \{@interop.bridge_error_text(error)}",
+                    message=FileWatchingFailed(@interop.bridge_problem(error)),
                   ),
                 ),
               )

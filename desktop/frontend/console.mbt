@@ -26,7 +26,7 @@ priv enum ConsoleAuth {
 priv enum RosterSync {
   RosterLoading
   RosterReady
-  RosterFailed(String)
+  RosterFailed(@account_failure.Failure)
 }
 
 ///|
@@ -81,7 +81,7 @@ priv struct ConsoleState {
   // The last page-access failure: the local console's own `/v1/auth/me`
   // check or host sign-out. The relay's page sign-in is the Cloud account,
   // whose failures live in `Model.account_error`.
-  access_error : String?
+  access_error : @account_failure.Failure?
 }
 
 ///|
@@ -191,15 +191,15 @@ priv enum ConsoleMsg {
   // `/v1/auth/me` settled.
   MeLoaded(login~ : String, avatar~ : String)
   MeUnauthorized
-  MeFailed(String)
+  MeFailed(@account_failure.Failure)
   // The device roster settled.
   RosterLoaded(Array[DeviceMeta], generation~ : Int32)
   RosterUnauthorized(generation~ : Int32, token~ : String?)
-  RosterFailed(message~ : String, generation~ : Int32)
+  RosterFailed(message~ : @account_failure.Failure, generation~ : Int32)
   // The gate card's retry / the account row's refresh — re-runs the load.
   RefreshClicked
   SignOutClicked
-  SignOutFailed(String, token~ : String?)
+  SignOutFailed(@account_failure.Failure, token~ : String?)
   SignOutDone(token~ : String?)
 }
 
@@ -320,7 +320,7 @@ fn update_console_msg(
       (
         @cmd.none,
         if token is Some(_) {
-          { ..model, console, account_error: Some(Diagnostic(message)), }
+          { ..model, console, account_error: Some(message), }
         } else {
           { ..model, console: { ..console, access_error: Some(message), }, }
         },
@@ -923,16 +923,16 @@ test "a failed sign-out re-enables the account actions" {
   let (_, signing_out) = update(dispatch, Console(SignOutClicked), signed)
   let (_, failed_once) = update(
     dispatch,
-    Console(SignOutFailed("boom", token=None)),
+    Console(SignOutFailed(Diagnostic("boom"), token=None)),
     signing_out,
   )
   let (_, failed_twice) = update(
     dispatch,
-    Console(SignOutFailed("boom", token=None)),
+    Console(SignOutFailed(Diagnostic("boom"), token=None)),
     signing_out,
   )
   assert_false(failed_once.console.busy)
-  assert_true(failed_once.console.access_error == Some("boom"))
+  assert_true(failed_once.console.access_error == Some(Diagnostic("boom")))
   assert_true(failed_once.console == failed_twice.console)
 }
 
@@ -946,11 +946,11 @@ test "a roster failure reports without leaving the signed-in frame" {
   )
   let (_, failed) = update(
     dispatch,
-    Console(RosterFailed(message="boom", generation=1)),
+    Console(RosterFailed(message=Diagnostic("boom"), generation=1)),
     signed,
   )
   assert_true(failed.console.auth is AuthSignedIn(..))
-  assert_true(failed.console.roster_sync is RosterFailed("boom"))
+  assert_true(failed.console.roster_sync is RosterFailed(Diagnostic("boom")))
 }
 
 ///|
@@ -1117,7 +1117,7 @@ test "account changes retire focused host mirrors before the new roster answers"
     dispatch,
     Console(
       RosterFailed(
-        message="HTTP 503",
+        message=Diagnostic("HTTP 503"),
         generation=pending.console.roster_request_generation,
       ),
     ),
@@ -1153,7 +1153,7 @@ test "a late browser logout result cannot clear a newer account" {
   assert_true(unchanged.account == Some(account))
   let (_, unchanged) = update(
     test_dispatch(),
-    Console(SignOutFailed("old failure", token=Some("ts_A"))),
+    Console(SignOutFailed(Diagnostic("old failure"), token=Some("ts_A"))),
     model,
   )
   assert_true(unchanged.console.access_error is None)

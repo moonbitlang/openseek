@@ -642,7 +642,7 @@ pub(all) struct State {
   // Keep either failure separate from directory/file requests so a later
   // successful listing does not hide the loss of live updates. The root app
   // owns its toast presentation; this state only prevents a retry loop.
-  watch_error : String?
+  watch_error : Failure?
   // The file tree's keyboard entry, independent of the editor's DOM focus.
   tree_focus : @pathx.Relative?
   // Follow editor changes or directory links once, then leave manual scrolling alone.
@@ -1367,7 +1367,7 @@ pub(all) enum Msg {
     channel~ : @interop.ChannelId,
     root~ : @common.Uri,
     generation~ : String,
-    message~ : String
+    message~ : Failure
   )
   // A new watcher sends `changes=None` once it is attached, requesting a full
   // baseline reconciliation. Later pushes contain the exact debounced events.
@@ -1426,7 +1426,7 @@ pub(all) enum Msg {
   // A user-invoked Definition/References request reached the host but failed.
   // The root app intercepts this message and shows its transient toast; the
   // owner prevents a late reply from surfacing over another conversation.
-  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
+  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : Failure)
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input). NOT handled by this package's `update`:
   // the comment becomes a chip on the main package's composer draft, so the

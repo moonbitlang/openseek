@@ -97,7 +97,7 @@ fn start_download(
       } catch {
         @cloud.RequestError::RequestError(failure) => Err(Cloud(failure))
         SourceError(message) => Err(message)
-        error => Err(Diagnostic(@interop.bridge_error_text(error)))
+        error => Err(Bridge(@interop.bridge_problem(error)))
       }
       scheduler.add(
         dispatch(

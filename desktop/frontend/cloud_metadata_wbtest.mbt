@@ -58,9 +58,7 @@ test "Cloud rename reuses the root draft and closes it only for the owning save"
   assert_eq(failed.cloud_title(), "Cloud conversation")
   assert_true(
     failed.notifications
-    is [
-      { message: Raw("Rename failed: Cloud answered HTTP 503. Try again."), .. },
-    ],
+    is [{ message: Notice(RenameFailure(Cloud(Http(503)))), .. }],
   )
   assert_true(failed.account is Some(_))
   let (_, signed_out) = update_msg(

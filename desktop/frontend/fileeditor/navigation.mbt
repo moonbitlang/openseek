@@ -99,7 +99,7 @@ priv struct MoonIdeNavigationProvider {
   // Viewer providers run outside Rabbita's update function. This callback
   // re-enters the owning app through a scheduled `Msg`; it never mutates the
   // panel model directly.
-  on_error : (@interop.ConversationKey, String) -> Unit
+  on_error : (@interop.ConversationKey, Failure) -> Unit
 }
 
 ///|
@@ -127,7 +127,7 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
     error => {
       (self.on_error)(
         projection.context.owner,
-        "Go to definition failed: \{@interop.bridge_error_text(error)}",
+        DefinitionFailed(@interop.bridge_problem(error)),
       )
       return []
     }
@@ -164,7 +164,7 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
     error => {
       (self.on_error)(
         projection.context.owner,
-        "Find references failed: \{@interop.bridge_error_text(error)}",
+        ReferencesFailed(@interop.bridge_problem(error)),
       )
       return []
     }
@@ -181,7 +181,7 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
 /// The returned handles are retained by `DesktopViewerServices` for the full
 /// lifetime of the one mounted Viewer.
 fn register_moon_ide_navigation_providers(
-  on_error : (@interop.ConversationKey, String) -> Unit,
+  on_error : (@interop.ConversationKey, Failure) -> Unit,
 ) -> Array[@common.Disposable] {
   let provider = MoonIdeNavigationProvider::{ on_error, }
   [

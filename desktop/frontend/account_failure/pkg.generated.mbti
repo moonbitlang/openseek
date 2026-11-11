@@ -3,7 +3,9 @@ package "openseek_desktop/frontend/account_failure"
 
 import {
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
 }
 
 // Values
@@ -16,6 +18,14 @@ pub(all) enum Failure {
   StorageUnavailable
   StorageReadFailed(String)
   SignInTimedOut
+  SignInCheckHttp(Int32)
+  SignInCheckMalformed
+  RelayUnreachable(String)
+  RelayHttp(Int32)
+  DeviceListHttp(Int32)
+  DeviceListMalformed
+  Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
   Diagnostic(String)
 }
 pub fn Failure::equal(Self, Self) -> Bool

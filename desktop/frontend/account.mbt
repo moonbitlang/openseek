@@ -50,16 +50,10 @@ fn fetch_account(
                   match response.code {
                     200 => Ok(Some(@json.from_json(body.json())))
                     401 => Ok(None)
-                    _ =>
-                      Err(
-                        Diagnostic(
-                          "the sign-in check answered HTTP \{response.code}",
-                        ),
-                      )
+                    _ => Err(SignInCheckHttp(response.code))
                   }
                 }
-                _ =>
-                  Err(Diagnostic("the sign-in check answered HTTP \{me.code}"))
+                _ => Err(SignInCheckHttp(me.code))
               }
             }
           }
@@ -67,13 +61,11 @@ fn fetch_account(
       } catch {
         error =>
           Err(
-            Diagnostic(
-              if desktop {
-                @interop.bridge_error_text(error)
-              } else {
-                "the relay is unreachable: \{@interop.bridge_error_text(error)}"
-              },
-            ),
+            if desktop {
+              Bridge(@interop.bridge_problem(error))
+            } else {
+              RelayUnreachable(@interop.bridge_error_text(error))
+            },
           )
       }
       scheduler.add(dispatch(AccountLoaded(epoch, result)))
@@ -150,7 +142,7 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
       connect_reply,
       cancel_reply,
       AccountLoginTimedOut(epoch),
-      AccountCancelFailed(epoch, "old cancellation failed"),
+      AccountCancelFailed(epoch, Diagnostic("old cancellation failed")),
       AccountLoaded(
         epoch,
         Ok(
@@ -211,7 +203,10 @@ test "a failed account cancellation keeps the waiting sign-in cancellable" {
   let (_, cancelling) = update(test_dispatch(), RemoteCancelClicked, pending)
   let (_, failed) = update(
     test_dispatch(),
-    AccountCancelFailed(pending.account_epoch, "bridge disconnected"),
+    AccountCancelFailed(
+      pending.account_epoch,
+      Diagnostic("bridge disconnected"),
+    ),
     cancelling,
   )
   assert_true(failed.remote_connecting)

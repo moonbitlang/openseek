@@ -1822,7 +1822,7 @@ priv enum Msg {
   RemoteCancelClicked
   AccountLoginCancelled(Int32)
   AccountLoginTimedOut(Int32)
-  AccountCancelFailed(Int32, String)
+  AccountCancelFailed(Int32, @account_failure.Failure)
   AccountCancelFinished(Int32)
   // The account's Sign out button.
   RemoteDisconnectClicked
@@ -2068,7 +2068,10 @@ priv enum Msg {
     edit~ : @conversation.RenameEdit
   )
   ConversationRenameSucceeded(@conversation.Id)
-  ConversationRenameFailed(id~ : @conversation.Id, message~ : String)
+  ConversationRenameFailed(
+    id~ : @conversation.Id,
+    message~ : ConversationRenameFailure
+  )
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)

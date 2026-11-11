@@ -43,7 +43,10 @@ async fn wait_bridge_promise(promise : @js.Promise[@js.Value]) -> @js.Value {
   )
   match settled.wait() {
     Ok(value) => value
-    Err(error) => raise js_raised(error)
+    Err(value) => {
+      let error = js_raised(value)
+      raise local_bridge_error(error).unwrap_or(error)
+    }
   }
 }
 

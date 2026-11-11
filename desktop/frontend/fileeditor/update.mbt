@@ -5285,7 +5285,7 @@ test "language request failures remain a pure no-op below the root toast owner" 
   let state = owned_state()
   let msg = LanguageRequestFailed(
     owner=test_ctx().owner.host().unwrap(),
-    message="definition failed",
+    message=Diagnostic("definition failed"),
   )
   let (_, first) = update(emit, msg, state, test_ctx())
   let (_, second) = update(emit, msg, state, test_ctx())
@@ -6177,7 +6177,7 @@ test "FileLoaded settles content into its document, active or not" {
       channel=test_ctx().owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(1),
-      message="stale watcher",
+      message=Diagnostic("stale watcher"),
     ),
     epoch_state,
     ctx,
@@ -9844,7 +9844,7 @@ test "sync reconciles the watcher with the panel and its open files" {
   // Open panel: watch the active session.
   let (watched, _) = sync(
     emit,
-    { ..owned_state(), watch_error: Some("old watcher failure"), },
+    { ..owned_state(), watch_error: Some(Diagnostic("old watcher failure")), },
     test_ctx(),
   )
   assert_true(
@@ -9884,7 +9884,7 @@ test "sync reconciles the watcher with the panel and its open files" {
       channel=test_ctx().owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(attached_generation),
-      message="replaced watcher stopped",
+      message=Diagnostic("replaced watcher stopped"),
     ),
     replaced,
     selected_ctx,
@@ -9932,12 +9932,12 @@ test "watcher failures are visible only in their owning conversation" {
       channel=owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(0),
-      message="File watching stopped",
+      message=Diagnostic("File watching stopped"),
     ),
     owned_state(),
     test_ctx(),
   )
-  assert_true(failed.watch_error is Some("File watching stopped"))
+  assert_true(failed.watch_error is Some(Diagnostic("File watching stopped")))
   let other : @interop.ConversationKey = {
     channel: @interop.ChannelId::Remote("other"),
     session: owner.session(),
@@ -9949,12 +9949,14 @@ test "watcher failures are visible only in their owning conversation" {
       channel=other.channel,
       root=other_ctx.test_resource("/work"),
       generation=other_ctx.watch_identity(0),
-      message="stale failure",
+      message=Diagnostic("stale failure"),
     ),
     failed,
     test_ctx(),
   )
-  assert_true(unchanged.watch_error is Some("File watching stopped"))
+  assert_true(
+    unchanged.watch_error is Some(Diagnostic("File watching stopped")),
+  )
 }
 
 ///|
@@ -9985,7 +9987,7 @@ test "a recursive watcher failure stops retries and refreshes its index" {
       channel=ctx.owner.host().unwrap().channel,
       root=ctx.test_root(),
       generation=ctx.watch_identity(generation),
-      message="File watching stopped",
+      message=Diagnostic("File watching stopped"),
     ),
     watched,
     ctx,
@@ -9994,12 +9996,12 @@ test "a recursive watcher failure stops retries and refreshes its index" {
   assert_true(
     failed.index is IndexReady(refreshing=true, refresh_again=false, ..),
   )
-  assert_true(failed.watch_error is Some("File watching stopped"))
+  assert_true(failed.watch_error is Some(Diagnostic("File watching stopped")))
   let (stopped, _) = sync(emit, failed, ctx)
   // An unchanged desired configuration cannot create a request/failure loop.
   assert_true(stopped.watching is Some({ recursive: true, .. }))
   assert_eq(stopped.watch_generation, generation)
-  assert_true(stopped.watch_error is Some("File watching stopped"))
+  assert_true(stopped.watch_error is Some(Diagnostic("File watching stopped")))
   // A real policy change starts one fresh concrete watcher generation.
   let retry_ctx = {
     ..ctx,
@@ -10035,11 +10037,13 @@ test "a settled run retries one failed watcher activation" {
       recursive: true,
     }),
     watch_generation: generation,
-    watch_error: Some("watch root did not exist"),
+    watch_error: Some(Diagnostic("watch root did not exist")),
   }
   let (_, settled) = update(emit, RunSettled(owner=ctx.owner), watched, ctx)
   assert_true(settled.watching is None)
-  assert_true(settled.watch_error is Some("watch root did not exist"))
+  assert_true(
+    settled.watch_error is Some(Diagnostic("watch root did not exist")),
+  )
   let (retried, _) = sync(emit, settled, ctx)
   assert_true(retried.watching is Some({ recursive: true, .. }))
   assert_eq(retried.watch_generation, generation + 1)
@@ -10092,7 +10096,7 @@ test "same-root conversation switch fences every old watcher push" {
     channel=next_owner.channel,
     root=next_ctx.test_root(),
     generation=test_ctx().watch_identity(old_generation),
-    message="File watching stopped",
+    message=Diagnostic("File watching stopped"),
   )
   let (_, after_old_failure) = update(
     emit, stale_failure, after_old_change, next_ctx,
@@ -10111,7 +10115,7 @@ test "same-root conversation switch fences every old watcher push" {
       channel=next_owner.channel,
       root=next_ctx.test_root(),
       generation=previous_page_ctx.watch_identity(switched.watch_generation),
-      message="previous page watcher stopped",
+      message=Diagnostic("previous page watcher stopped"),
     ),
     after_old_failure,
     next_ctx,
@@ -10121,13 +10125,13 @@ test "same-root conversation switch fences every old watcher push" {
     channel=next_owner.channel,
     root=next_ctx.test_root(),
     generation=next_ctx.watch_identity(switched.watch_generation),
-    message="current watcher stopped",
+    message=Diagnostic("current watcher stopped"),
   )
   let (_, first) = update(
     emit, current_failure, after_previous_page_failure, next_ctx,
   )
   let (_, second) = update(emit, current_failure, ready, next_ctx)
-  assert_eq(first.watch_error, Some("current watcher stopped"))
+  assert_eq(first.watch_error, Some(Diagnostic("current watcher stopped")))
   assert_true(first.watch_error == second.watch_error)
 }
 

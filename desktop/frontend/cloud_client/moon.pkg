@@ -1,6 +1,7 @@
 import {
   "moonbitlang/async/http",
   "moonbitlang/core/json",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
   "openseek_desktop/uri",
 }

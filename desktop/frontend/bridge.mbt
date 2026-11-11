@@ -73,7 +73,7 @@ fn notification_msg(
               channel~,
               root~,
               generation=payload.generation,
-              message=payload.message,
+              message=@fileeditor.Diagnostic(payload.message),
             ),
           ),
         ),
@@ -542,7 +542,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
             channel=Remote("d1"),
             root=_,
             generation="page-a:7",
-            message="File watching stopped"
+            message=@fileeditor.Diagnostic("File watching stopped")
           )
         )
       )

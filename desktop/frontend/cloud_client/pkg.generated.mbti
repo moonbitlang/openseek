@@ -5,6 +5,7 @@ import {
   "moonbitlang/async/http",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
 }
 
@@ -64,6 +65,7 @@ pub(all) enum Failure {
 pub fn Failure::equal(Self, Self) -> Bool
 pub fn Failure::label(Self) -> String
 pub fn Failure::not_equal(Self, Self) -> Bool
+pub fn Failure::text(Self, @i18n.Locale) -> String
 pub fn Failure::to_repr(Self) -> @debug.Repr
 
 pub struct SseParser {

@@ -21,6 +21,8 @@ priv struct Notification {
 priv enum NotificationMessage {
   Raw(String)
   FileFailure(@fileeditor.Failure)
+  Notice(NoticeMessage)
+  CloudFailure(@cloud_client.Failure)
 }
 
 ///|
@@ -31,6 +33,8 @@ fn NotificationMessage::text(
   match self {
     Raw(message) => message
     FileFailure(failure) => failure.text(locale)
+    Notice(message) => notice_text(locale, message)
+    CloudFailure(failure) => failure.text(locale)
   }
 }
 
@@ -84,6 +88,24 @@ fn Model::notify_file_error(
   failure : @fileeditor.Failure,
 ) -> (@cmd.Cmd, Model) {
   self.notify(dispatch, FileFailure(failure))
+}
+
+///|
+fn Model::notify_notice(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  message : NoticeMessage,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, Notice(message))
+}
+
+///|
+fn Model::notify_cloud_error(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  failure : @cloud_client.Failure,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, CloudFailure(failure))
 }
 
 ///|

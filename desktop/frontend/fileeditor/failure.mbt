@@ -9,6 +9,12 @@ pub(all) enum Failure {
   SavedButNotRevealed(String)
   BrowserDownloadFailed
   Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
+  FileWatchingFailed(@interop.BridgeProblem)
+  DefinitionFailed(@interop.BridgeProblem)
+  ReferencesFailed(@interop.BridgeProblem)
+  CaptureUnavailable
+  CaptureSubmissionDeclined
   Diagnostic(String)
   OfficeCitationUnavailable
   ExcelCopyTooLarge
@@ -90,113 +96,45 @@ pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
           "ブラウザーでのダウンロードを開始できませんでした。"
         Spanish => "No se pudo iniciar la descarga en el navegador."
       }
-    Cloud(failure) => cloud_failure_text(locale, failure)
+    Cloud(failure) => failure.text(locale)
+    Bridge(problem) => problem.text(locale)
+    FileWatchingFailed(problem) => {
+      let detail = problem.text(locale)
+      match locale {
+        English => "File watching failed: \{detail}"
+        SimplifiedChinese => "文件监听失败：\{detail}"
+        TraditionalChinese => "檔案監看失敗：\{detail}"
+        Japanese => "ファイルの監視に失敗しました：\{detail}"
+        Spanish => "Falló la supervisión de archivos: \{detail}"
+      }
+    }
+    DefinitionFailed(problem) => {
+      let detail = problem.text(locale)
+      match locale {
+        English => "Go to definition failed: \{detail}"
+        SimplifiedChinese => "转到定义失败：\{detail}"
+        TraditionalChinese => "移至定義失敗：\{detail}"
+        Japanese => "定義への移動に失敗しました：\{detail}"
+        Spanish => "No se pudo ir a la definición: \{detail}"
+      }
+    }
+    ReferencesFailed(problem) => {
+      let detail = problem.text(locale)
+      match locale {
+        English => "Find references failed: \{detail}"
+        SimplifiedChinese => "查找引用失败：\{detail}"
+        TraditionalChinese => "尋找參考失敗：\{detail}"
+        Japanese => "参照の検索に失敗しました：\{detail}"
+        Spanish => "No se pudieron buscar referencias: \{detail}"
+      }
+    }
+    CaptureUnavailable => capture_unavailable_message(locale)
+    CaptureSubmissionDeclined => capture_submission_declined_message(locale)
     Diagnostic(detail) => detail
     OfficeCitationUnavailable => ui(locale, OfficeCitationUnavailable)
     ExcelCopyTooLarge => ui(locale, ExcelCopyTooLarge)
     OfficeSelectionFailed => ui(locale, OfficeSelectionFailed)
     OfficePreviewFailed => ui(locale, OfficePreviewFailed)
     PdfPreviewFailed => ui(locale, PdfPreviewFailed)
-  }
-}
-
-///|
-fn cloud_failure_text(
-  locale : @i18n.Locale,
-  failure : @cloud_client.Failure,
-) -> String {
-  match failure {
-    Unauthorized =>
-      match locale {
-        English => "Your account sign-in expired. Sign in again to continue."
-        SimplifiedChinese =>
-          "账户登录已过期。请重新登录以继续。"
-        TraditionalChinese =>
-          "帳戶登入已過期。請重新登入以繼續。"
-        Japanese =>
-          "アカウントのログインが期限切れです。続行するには再度ログインしてください。"
-        Spanish =>
-          "Tu sesión ha caducado. Vuelve a iniciar sesión para continuar."
-      }
-    Busy =>
-      match locale {
-        English =>
-          "This conversation is already generating. Loading its history…"
-        SimplifiedChinese =>
-          "此对话正在生成回复。正在加载对话历史…"
-        TraditionalChinese =>
-          "此對話正在產生回覆。正在載入對話歷史…"
-        Japanese =>
-          "この会話はすでに生成中です。履歴を読み込み中…"
-        Spanish =>
-          "Esta conversación ya está generando una respuesta. Cargando su historial…"
-      }
-    Http(status) =>
-      match locale {
-        English => "Cloud answered HTTP \{status}. Try again."
-        SimplifiedChinese => "云端返回 HTTP \{status}。请重试。"
-        TraditionalChinese => "雲端回傳 HTTP \{status}。請重試。"
-        Japanese =>
-          "クラウドが HTTP \{status} を返しました。再試行してください。"
-        Spanish => "Cloud respondió con HTTP \{status}. Inténtalo de nuevo."
-      }
-    Unreachable =>
-      match locale {
-        English => "Cloud is unreachable. Check your connection and try again."
-        SimplifiedChinese =>
-          "无法连接云端。请检查网络连接后重试。"
-        TraditionalChinese =>
-          "無法連線至雲端。請檢查網路連線後重試。"
-        Japanese =>
-          "クラウドに接続できません。接続を確認して再試行してください。"
-        Spanish =>
-          "No se puede conectar con Cloud. Comprueba tu conexión e inténtalo de nuevo."
-      }
-    Malformed =>
-      match locale {
-        English => "Cloud returned an invalid response. Try again."
-        SimplifiedChinese => "云端返回了无效响应。请重试。"
-        TraditionalChinese => "雲端回傳了無效回應。請重試。"
-        Japanese =>
-          "クラウドが無効な応答を返しました。再試行してください。"
-        Spanish =>
-          "Cloud devolvió una respuesta no válida. Inténtalo de nuevo."
-      }
-    ExportUnavailable =>
-      match locale {
-        English => "This conversation has no complete original log to export."
-        SimplifiedChinese => "此对话没有可导出的完整原始日志。"
-        TraditionalChinese => "此對話沒有可匯出的完整原始記錄。"
-        Japanese =>
-          "この会話にはエクスポートできる完全な元のログがありません。"
-        Spanish =>
-          "Esta conversación no tiene un registro original completo para exportar."
-      }
-    ServiceNotConfigured =>
-      match locale {
-        English =>
-          "Cloud model credentials are not configured. Contact the service administrator."
-        SimplifiedChinese =>
-          "尚未配置云端模型凭据。请联系服务管理员。"
-        TraditionalChinese =>
-          "尚未設定雲端模型憑證。請聯絡服務管理員。"
-        Japanese =>
-          "クラウドモデルの認証情報が設定されていません。サービス管理者にお問い合わせください。"
-        Spanish =>
-          "Las credenciales del modelo de Cloud no están configuradas. Contacta con el administrador del servicio."
-      }
-    SignInFailed(detail) => detail
-    InvalidImage =>
-      match locale {
-        English => "Choose a valid PNG, JPEG, GIF or WebP image up to 5 MiB."
-        SimplifiedChinese =>
-          "请选择不超过 5 MiB 的有效 PNG、JPEG、GIF 或 WebP 图片。"
-        TraditionalChinese =>
-          "請選擇不超過 5 MiB 的有效 PNG、JPEG、GIF 或 WebP 圖片。"
-        Japanese =>
-          "5 MiB 以下の有効な PNG、JPEG、GIF、WebP 画像を選択してください。"
-        Spanish =>
-          "Elige una imagen PNG, JPEG, GIF o WebP válida de hasta 5 MiB."
-      }
   }
 }

@@ -628,7 +628,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
           match self.console.roster_sync {
             RosterLoading =>
               notices.push(shell_text(self.locale, LoadingDevice))
-            RosterFailed(message) => notices.push(message)
+            RosterFailed(message) => notices.push(message.text(self.locale))
             RosterReady =>
               if self.console.roster.is_empty() {
                 notices.push(shell_text(self.locale, NoDevices))
@@ -955,9 +955,9 @@ fn settings_account_rows(
           @settings.text(
             model.locale,
             if preferences.value is Some(_) {
-              PreferencesSaveFailed(error)
+              PreferencesSaveFailed(error.text(model.locale))
             } else {
-              PreferencesReadFailed(error)
+              PreferencesReadFailed(error.text(model.locale))
             },
           ),
         ),
@@ -2025,7 +2025,7 @@ fn console_gate_view(
 ) -> @html.Html {
   let card : Array[@html.Html] = []
   let error = if console.access_error is Some(_) {
-    console.access_error
+    console.access_error.map(failure => failure.text(locale))
   } else {
     account_error
   }
@@ -2067,7 +2067,7 @@ fn console_gate_view(
             card.push(@html.p(shell_text(locale, CheckingDevice)))
           RosterFailed(message) => {
             card.push(@html.h2(shell_text(locale, CannotLoadDevice)))
-            card.push(@html.p(message))
+            card.push(@html.p(message.text(locale)))
             card.push(
               @html.button(
                 class="button primary",

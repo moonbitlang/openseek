@@ -111,8 +111,7 @@ async fn read_source(
         path: path.path,
         root: None,
       }) catch {
-        error =>
-          raise SourceError(Diagnostic(@interop.bridge_error_text(error)))
+        error => raise SourceError(Bridge(@interop.bridge_problem(error)))
       }
     }
     Cloud(account~, session~) => {
@@ -161,8 +160,7 @@ async fn read_directory_source(
       @interop.bridge_request(owner.channel, @commands.fs_read_directory, {
         path: @resource.join_relative(root, path).path,
       }) catch {
-        error =>
-          raise SourceError(Diagnostic(@interop.bridge_error_text(error)))
+        error => raise SourceError(Bridge(@interop.bridge_problem(error)))
       }
     }
     Cloud(account~, session~) => {
