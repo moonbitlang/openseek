@@ -601,7 +601,7 @@ pub fn[T : Eq] selection_component(
                 title=ui(locale, BatchHint),
                 [
                   @html.input(
-                    input_type=@html.InputType::Checkbox,
+                    input_type=Checkbox,
                     checked=state.batched,
                     on_change=emit.map(_ => BatchToggled),
                   ),
