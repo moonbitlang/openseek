@@ -167,9 +167,15 @@ test('reconnect does not replay calls and answers to detached questions use Clou
   await expect(card).toBeVisible();
   app.mcpSockets.get(sessionA).close({ code: 1012, reason: 'fixture restart' });
   await expect.poll(() => app.mcpFrames.filter(f => f.session === sessionA && f.frame.type === 'auth').length).toBe(2);
+  const snapshot = app.controlState(sessionA);
+  app.controlSnapshots.set(sessionA, { ...snapshot, task_id: 'active-question', data: { ...snapshot.data, active_task_id: 'active-question', status: 'running' } });
   await card.locator('textarea').fill('Keep the same question');
   await card.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => app.requests.filter(r => r.method === 'POST' && r.path.endsWith('/commands')).length).toBe(1);
+  const delivery = JSON.parse(app.requests.find(r => r.method === 'POST' && r.path.endsWith('/commands')).body);
+  expect(delivery.command.command).toBe('steer');
+  expect(delivery.task_id).toBe('active-question');
+  expect(delivery.command.submission_id).toBe('question-40-result');
   expect(app.mcpFrames.filter(f => f.frame.id === 40)).toHaveLength(0);
   expect(app.hostRequests.filter(r => r.method === 'cloud.mcp' && r.params.action === 'dispatch' && r.params.message.id === 40)).toHaveLength(1);
 });
