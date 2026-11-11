@@ -51,6 +51,11 @@ fn State::send_pending(
   guard token is Some(token) && conversation.outgoing is Some(submission) else {
     return (self, @cmd.none)
   }
+  guard !self.client_tools ||
+    conversation.client_tools_ready ||
+    submission.input is Terminal(_) else {
+    return (self, @cmd.none)
+  }
   let request = submission.request
   if submission.input is Terminal(shell) {
     return (

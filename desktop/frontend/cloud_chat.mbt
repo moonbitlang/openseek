@@ -132,6 +132,7 @@ fn update_cloud(
     dispatch.map(message => CloudAction(message)),
     token?=model.account.map(account => account.token),
     navigation=model.chat_navigation_generation,
+    client_tools=model.is_desktop,
   )
   let completion = if model.account.map(account => account.user.user_id) ==
     before.user_id {

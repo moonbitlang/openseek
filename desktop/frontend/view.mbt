@@ -2342,6 +2342,18 @@ fn view(
           CloudTranscript(..) =>
             [
               transcript_html,
+              if model.is_desktop &&
+                model.cloud_identity()
+                is Some(@interop.Cloud(account~, session~)) {
+                model.cloud_questions.view(
+                  session,
+                  model.locale,
+                  true,
+                  dispatch.map(msg => CloudQuestions(account~, msg)),
+                )
+              } else {
+                @html.nothing
+              },
               if model.cloud_archived() &&
                 model.cloud_identity()
                 is Some(@interop.Cloud(account~, session~)) {

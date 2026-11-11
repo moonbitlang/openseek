@@ -1049,3 +1049,8 @@ pub let fs_share_file : Command[
   @protocol.FileSharePayload,
   @protocol.SessionShareReply,
 ] = Command("fs.share_file")
+
+///|
+pub let cloud_mcp : Command[@protocol.CloudMcpRequest, Json] = Command(
+  "cloud.mcp",
+)

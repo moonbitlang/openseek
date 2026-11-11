@@ -1273,6 +1273,7 @@ priv enum ChatSelection {
 ///|
 #derive(Eq)
 priv struct Model {
+  cloud_questions : @user_questions.Model
   cloud : @cloud.State
   chat_navigation_generation : Int32
   ssh_ui : SshUi
@@ -2140,6 +2141,14 @@ priv enum Msg {
   // of that conversation's agent (`browser.event` kind `open_requested`).
   // The page allocates the tab, as it does every tab, and names `request`
   // in the `browser.open` that creates the view.
+  CloudMcpNotification(@protocol.CloudMcpEvent)
+  CloudQuestions(account~ : String, @user_questions.Msg)
+  CloudBrowserOpenRequested(
+    account~ : String,
+    request~ : String,
+    session~ : String,
+    url~ : String
+  )
   BrowserOpenRequested(request~ : String, session~ : String, url~ : String)
   ExplorerRequested(@fileeditor.ExplorerMode)
   // Open the Workflows tab in the right panel.
@@ -2221,6 +2230,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
+  CloudMcpEvent(@protocol.CloudMcpEvent)
   QuestionsChanged(@protocol.UserQuestionSnapshot)
   ApprovalsChanged(ApprovalMirror)
   BridgeReady
@@ -2734,6 +2744,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     // The desktop window owns its host outright, so its one channel is in
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
+    cloud_questions: @user_questions.Model(),
     cloud: @cloud.State::empty(),
     chat_navigation_generation: 0,
     devices: if desktop {

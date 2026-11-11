@@ -3,6 +3,7 @@ package "openseek_desktop/commands"
 
 import {
   "moonbit-community/proton_contract",
+  "moonbitlang/core/json",
   "openseek_desktop/protocol",
 }
 
@@ -82,6 +83,8 @@ pub let browser_set_visible : Command[@protocol.BrowserVisiblePayload, @protocol
 pub let cloud_file_download : Command[@protocol.CloudFileDownloadPayload, @protocol.CloudFileDownloadReply]
 
 pub let cloud_history_cache : Command[@protocol.CloudHistoryCacheRequest, @protocol.CloudHistoryCacheReply]
+
+pub let cloud_mcp : Command[@protocol.CloudMcpRequest, @json.Json]
 
 pub let codex_account_login_cancel : Command[@protocol.CodexAccountLoginCancelPayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 

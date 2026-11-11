@@ -12,6 +12,8 @@ import {
 }
 
 // Values
+pub fn browser_open_tool(BrowserViews, cloud_account? : String) -> @mcp.Tool
+
 pub fn browser_tools(BrowserViews) -> Array[@mcp.Tool]
 
 pub fn browser_view_id(String) -> Int32?

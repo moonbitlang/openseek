@@ -6,6 +6,12 @@
 #derive(Debug, Eq)
 pub(all) enum BrowserEventPayload {
   OpenRequested(request~ : String, session~ : String, url~ : String)
+  CloudOpenRequested(
+    account~ : String,
+    request~ : String,
+    session~ : String,
+    url~ : String
+  )
   Navigated(id~ : Int32, url~ : String)
   LoadingChanged(id~ : Int32, loading~ : Bool)
   TitleUpdated(id~ : Int32, title~ : String)
@@ -24,6 +30,13 @@ pub impl @json.FromJson for BrowserEventPayload with fn from_json(json, path) {
   match object.required_string("kind") {
     "open_requested" =>
       OpenRequested(
+        request=object.required_string("request"),
+        session=object.required_string("session"),
+        url=object.required_string("url"),
+      )
+    "cloud_open_requested" =>
+      CloudOpenRequested(
+        account=object.required_string("account"),
         request=object.required_string("request"),
         session=object.required_string("session"),
         url=object.required_string("url"),
@@ -67,6 +80,14 @@ pub impl ToJson for BrowserEventPayload with fn to_json(self) {
     OpenRequested(request~, session~, url~) =>
       {
         "kind": "open_requested",
+        "request": Json(request),
+        "session": Json(session),
+        "url": Json(url),
+      }
+    CloudOpenRequested(account~, request~, session~, url~) =>
+      {
+        "kind": "cloud_open_requested",
+        "account": Json(account),
         "request": Json(request),
         "session": Json(session),
         "url": Json(url),

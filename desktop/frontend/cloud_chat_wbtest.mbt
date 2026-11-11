@@ -74,7 +74,11 @@ fn integrated_cloud_model() -> Model {
 ///|
 fn Model::with_cloud_baseline(self : Model, session : String) -> Model {
   let conversations = self.cloud.conversations.copy()
-  conversations[session] = { ..conversations[session], last_seq: Some(0), }
+  conversations[session] = {
+    ..conversations[session],
+    last_seq: Some(0),
+    client_tools_ready: self.is_desktop,
+  }
   { ..self, cloud: { ..self.cloud, conversations, }, }
 }
 

@@ -72,6 +72,7 @@ pub fn Model::update(
   msg : Msg,
   channel : @interop.ChannelId,
   emit : @cmd.Emit[Msg],
+  submit? : (@protocol.UserQuestionAnswer, @cmd.Emit[Msg]) -> @cmd.Cmd,
 ) -> (@cmd.Cmd, Model) {
   match msg {
     Snapshot(snapshot) => (@cmd.none, self.snapshot(snapshot))
@@ -88,7 +89,10 @@ pub fn Model::update(
         answers,
       }
       (
-        answer(channel, payload, emit),
+        match submit {
+          Some(submit) => submit(payload, emit)
+          None => answer(channel, payload, emit)
+        },
         {
           ..self,
           cards: self.cards.map(card => {
