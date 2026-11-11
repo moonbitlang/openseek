@@ -3,6 +3,7 @@ import {
   "openseek_desktop/backend/entropy",
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
+  "moonbitlang/core/async/io",
   "moonbitlang/core/async/socket",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
@@ -17,12 +18,15 @@ supported_targets = "+native"
 import {
   "moonbitlang/openseek/mcp/streamhttp",
   "moonbitlang/openseek/mcp/config" @mcpconfig,
+  "moonbitlang/core/async/pipe",
 } for "test"
 
 options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/http",
+    "moonbitlang/core/async/io",
+    "moonbitlang/core/async/pipe",
     "moonbitlang/core/async/socket",
     "moonbitlang/core/async/stdio",
   ],
