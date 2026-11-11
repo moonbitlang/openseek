@@ -376,3 +376,62 @@ async test "blocked stderr cannot hold a tool error reply" {
     )
   })
 }
+
+///|
+async test "cancelling a stdio adapter settles its active handlers" {
+  let started : @async.Queue[Unit] = Queue(kind=Unbounded)
+  let waiting : @async.Queue[Unit] = Queue(kind=Unbounded)
+  let active = Ref(false)
+  let dispatcher = @mcp.Dispatcher(
+    [
+      {
+        name: "waiting",
+        description: "Wait until the owning adapter is cancelled.",
+        input_schema: { "type": "object" },
+        call: _ => {
+          active.val = true
+          defer {
+            active.val = false
+          }
+          started.put(())
+          waiting.get() |> ignore
+          [Text("finished")]
+        },
+      },
+    ],
+    version="test",
+  )
+  // Returning from this body cancels the adapter task owned by the test host.
+  with_stdio(dispatcher, "host-session", (_responses, requests) => {
+    send_stdio_request(
+      requests,
+      request(1, "tools/call", { "name": "waiting" }),
+    )
+    started.get() |> ignore
+    assert_true(active.val)
+  })
+  assert_false(active.val)
+}
+
+///|
+async test "a broken stdio response pipe ends the adapter" {
+  let dispatcher = @mcp.Dispatcher([], version="test")
+  let input = @io.MemoryReader(writer => {
+    writer.write(@utf8.encode(request(1, "ping", {}).stringify() + "\n"))
+  })
+  defer input.close()
+  let (responses, output) = @pipe.pipe()
+  responses.close()
+  defer output.close()
+  let failed = try
+    @async.with_timeout(1000, () => {
+      dispatcher.serve_stdio(input, output, session="host-session")
+    })
+  catch {
+    @async.TimeoutError => fail("a broken response pipe must not hang")
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(failed)
+}
