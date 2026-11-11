@@ -73,7 +73,7 @@ I/O for scratch files and normal edit/write tools for workspace sources.
 
 ### Continuing with selected state
 
-The isolated preview exposes one optional, data-only API:
+Use the preview bridge to offer the current settings:
 
 ```javascript
 window.openseekArtifact?.setState("Parallel speedup · 8 workers", {
@@ -92,6 +92,38 @@ composer and send it with a follow-up. Selecting again updates the snapshot;
 otherwise it stays fixed. The message carries it as an `<interactive_answer>`
 inside `<user_mentions>`, identifying the page revision. Treat it as quoted data
 alongside the user's question.
+
+For a specific next question, call `sendFollowUpMessage({ prompt, title })`
+from the button's click handler. OpenSeek shows the question and the current
+snapshot for confirmation. The dialog title is optional.
+
+For a form, use a `type="button"` action because the preview blocks native
+form submission. Validate the entries and publish them before asking the
+follow-up.
+
+```html
+<form id="trip">
+  <label>Departure date <input type="date" name="departure" required></label>
+  <label>Budget per person <input type="number" name="budget" min="1" required></label>
+  <button type="button">Plan with these details</button>
+</form>
+<script>
+  const form = document.querySelector("#trip");
+  form.querySelector("button").addEventListener("click", () => {
+    if (!form.reportValidity()) return;
+    const values = new FormData(form);
+    const bridge = window.openseekArtifact;
+    bridge?.setState("Trip details", {
+      departure: values.get("departure"),
+      budget: Number(values.get("budget"))
+    });
+    bridge?.sendFollowUpMessage?.({
+      title: "Plan with these details",
+      prompt: "Plan a weekend trip using the selected date and budget."
+    });
+  });
+</script>
+```
 
 ## Self-contained HTML
 

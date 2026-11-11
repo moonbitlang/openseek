@@ -832,8 +832,13 @@ fn main {
           open_review_changes: emit.map(selection => {
             TranscriptReviewChangesOpened(slot~, selection~)
           }),
-          artifact_context: emit.map(snapshot => {
-            TranscriptArtifactContextRequested(slot~, snapshot)
+          artifact_context: emit.map(action => {
+            match action {
+              AttachState(snapshot) =>
+                TranscriptArtifactContextRequested(slot~, snapshot)
+              RequestFollowup(prompt~, title~, snapshot~) =>
+                ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~)
+            }
           }),
           choose_project: emit.map(project => ProjectMenuProjectChosen(project)),
           new_project: emit(AddProjectRequested),

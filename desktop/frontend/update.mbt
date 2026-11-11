@@ -1751,6 +1751,12 @@ fn update(
     _ => model
   }
   let model = model.restore_message_approvals()
+  let model = if model.artifact_followup is Some(followup) &&
+    model.transcript_slot().map(slot => slot.key()) != Some(followup.slot) {
+    { ..model, artifact_followup: None, }
+  } else {
+    model
+  }
   let model = if navigates {
     { ..model, management_dialog: None, }
   } else {
@@ -3310,6 +3316,22 @@ fn update_msg(
       | ApplyAllFeedback
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
+    ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~) => {
+      guard model.artifact_followup is None &&
+        model.artifact_followup_target(slot) is Some(identity) else {
+        return (@cmd.none, model)
+      }
+      (
+        @dialog.show("artifact-followup-dialog"),
+        {
+          ..model,
+          artifact_followup: Some({ slot, identity, prompt, title, snapshot, }),
+        },
+      )
+    }
+    ArtifactFollowupConfirmed => confirm_artifact_followup(dispatch, model)
+    ArtifactFollowupDismissed =>
+      (@cmd.none, { ..model, artifact_followup: None, })
     // Delivered to the component by boot, alongside the other component inputs.
     ComposerReply(_)
     | ComposerCommandResult(_)
@@ -4963,7 +4985,7 @@ fn update_msg(
       }
       (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
-    Send | SendFollowup(_) | SendInBackground => {
+    Send | SendFollowup(_) | SendInBackground | SendArtifactFollowup => {
       // Re-pinning is for the reader of this conversation's transcript.
       let scroll = if msg is SendInBackground {
         @cmd.none
@@ -5002,6 +5024,13 @@ fn update_msg(
         .prompt()
         .trim()
         .to_owned()
+      // A failed artifact follow-up can be retried from its button. Only
+      // composer submissions have a draft to restore after a refusal.
+      let (draft, draft_mentions) = if msg is SendArtifactFollowup {
+        ("", [])
+      } else {
+        (conv.task, conv.mentions)
+      }
       let sendable = conv.prompt_ready() &&
         conv.draft_sendable() &&
         model.bridge_state() is Connected &&
@@ -5080,8 +5109,8 @@ fn update_msg(
             submission_id,
             Some(run_id),
             task,
-            conv.task,
-            conv.mentions,
+            draft,
+            draft_mentions,
             followup_behavior,
             images=conv.images,
           )
@@ -5144,8 +5173,8 @@ fn update_msg(
           ..conv,
           pending_prompt: Some({
             submission_id,
-            draft: conv.task,
-            mentions: conv.mentions.copy(),
+            draft,
+            mentions: draft_mentions.copy(),
             images: conv.images,
           }),
         }

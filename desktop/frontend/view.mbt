@@ -2562,6 +2562,7 @@ fn view(
       model.cloud,
     ),
     skills_detail_dialog_view(dispatch, model, skills_detail_html),
+    artifact_followup_dialog(dispatch, model),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,

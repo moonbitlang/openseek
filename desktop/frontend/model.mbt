@@ -1485,6 +1485,7 @@ priv struct Model {
   pending_project_adoption : ProjectAdoption?
   screen : Screen
   management_dialog : ManagementDialog?
+  artifact_followup : ArtifactFollowup?
   // Destination identities and history; page data stays in its owning state.
   navigation : AppNavigation
   navigation_initial : String?
@@ -1743,6 +1744,14 @@ priv enum Msg {
     slot~ : String,
     @mention_context.ArtifactSnapshot
   )
+  ArtifactFollowupRequested(
+    slot~ : String,
+    prompt~ : String,
+    title~ : String,
+    snapshot~ : @mention_context.ArtifactSnapshot?
+  )
+  ArtifactFollowupConfirmed
+  ArtifactFollowupDismissed
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.
@@ -1916,6 +1925,7 @@ priv enum Msg {
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
+  SendArtifactFollowup
   // `Send` for a conversation that is not the one on screen (a `!` command
   // finishing in the background): the same submission, without scrolling the
   // transcript the user is reading.
@@ -2838,6 +2848,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     conversation_load_failure: None,
     screen: Chat,
     management_dialog: None,
+    artifact_followup: None,
     navigation: AppNavigation::empty(),
     navigation_initial: if desktop {
       None

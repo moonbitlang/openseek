@@ -109,6 +109,15 @@ fn main {
           "\{serial}% sequential · \{parallel}% parallelizable",
         ),
         @html.button(type_="button", on_click=emit(Reset), "Reset"),
+        if has_followup() {
+          @html.button(
+            type_="button",
+            on_click=explain_speedup(model),
+            "Explain this speedup",
+          )
+        } else {
+          @html.nothing
+        },
       ])
     })
   }).mount("app")
