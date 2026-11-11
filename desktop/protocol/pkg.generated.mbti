@@ -2640,6 +2640,7 @@ pub impl @json.ToJson for MoonPackageGraphReply
 
 #derive(Eq, @debug.Debug)
 pub(all) enum Notification {
+  PreviewOpen(PreviewOpenRequest)
   CloudMcp(CloudMcpEvent)
   UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
@@ -2683,6 +2684,7 @@ pub fn Notification::wire_name(Self) -> String
 
 #derive(Eq, Hash, @debug.Debug)
 pub(all) enum NotificationKind {
+  PreviewOpen
   CloudMcp
   UserQuestions
   AgentApprovals
@@ -2952,6 +2954,25 @@ pub fn PrepareAttachmentReply::to_json(Self) -> @json.Json
 pub fn PrepareAttachmentReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for PrepareAttachmentReply
 pub impl @json.ToJson for PrepareAttachmentReply
+
+pub(all) struct PreviewOpenArgs {
+  path : String
+}
+pub fn PreviewOpenArgs::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub impl @json.FromJson for PreviewOpenArgs
+
+#derive(Eq, @debug.Debug)
+pub(all) enum PreviewOpenRequest {
+  Local(session~ : String, workspace~ : String, path~ : String)
+  Cloud(account~ : String, session~ : String, path~ : String)
+}
+pub fn PreviewOpenRequest::equal(Self, Self) -> Bool
+pub fn PreviewOpenRequest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PreviewOpenRequest::not_equal(Self, Self) -> Bool
+pub fn PreviewOpenRequest::to_json(Self) -> @json.Json
+pub fn PreviewOpenRequest::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for PreviewOpenRequest
+pub impl @json.ToJson for PreviewOpenRequest
 
 #derive(Eq, @debug.Debug)
 pub(all) enum QueueAction {

@@ -1934,6 +1934,11 @@ fn update(
   } else {
     model
   }
+  let preview_generation = model.file_panel.file_link_generation
+  let (preview_open_cmd, model) = model.open_pending_preview(dispatch)
+  let preview_file_opened = model.file_panel.file_link_generation !=
+    preview_generation
+  let cmd = @cmd.batch([cmd, preview_open_cmd])
   // Panel visibility is root-owned because it controls both HTML layout and
   // host-backed editor/browser lifecycles. Reconcile every transition once
   // here, no matter which semantic action opened or closed the panel.
@@ -1947,7 +1952,7 @@ fn update(
   // still take the generic path so an older active document is restored.
   let file_opened_with_panel = !previous.right_panel_open &&
     model.right_panel_open &&
-    msg.opens_file_before_panel_reconciliation(model) &&
+    (preview_file_opened || msg.opens_file_before_panel_reconciliation(model)) &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
@@ -2138,6 +2143,7 @@ fn update(
         model.dock_state().tabs != previous.dock_state().tabs ||
         model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
+        preview_file_opened ||
         msg.opens_file_before_panel_reconciliation(model) ||
         msg is Dock(TabActivated(_)),
       ),
@@ -7277,6 +7283,8 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    PreviewOpenRequested(request) => (@cmd.none, model.queue_preview(request))
+    OpenNextPreview => (@cmd.none, model)
     PreviewFile(path) => model.preview_file(dispatch, path)
     CloudFilePreviewCreated(owner~, auth_epoch~, result~) => {
       let ctx = file_ctx(model)
@@ -9932,6 +9940,12 @@ fn update_device_msg(
       })
       (@cmd.batch(commands), seeded)
     }
+    PreviewRequested(request) =>
+      if channel == Local {
+        update_msg(dispatch, PreviewOpenRequested(request), model)
+      } else {
+        (@cmd.none, model)
+      }
     CloudMcpEvent(event) =>
       if channel == Local {
         update_msg(dispatch, CloudMcpNotification(event), model)

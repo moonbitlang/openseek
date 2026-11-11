@@ -37,7 +37,11 @@ async test "Cloud MCP discovers only client tools without loading Local history"
     dispatch("cloud-a", "tools/list", {})
     is {
       "result": {
-        "tools": [{ "name": "browser_open", .. }, { "name": "ask_user", .. }],
+        "tools": [
+          { "name": "browser_open", .. },
+          { "name": "preview_open", .. },
+          { "name": "ask_user", .. },
+        ],
         ..
       },
       ..
@@ -48,6 +52,50 @@ async test "Cloud MCP discovers only client tools without loading Local history"
     "arguments": { "url": "https://example.test/" },
   })
   assert_eq(opened, ["cloud-b"])
+  let previews : @async.Queue[@protocol.PreviewOpenRequest] = Queue(
+    kind=Blocking(8),
+  )
+  let preview_subscription = state.subscribe(
+    previews,
+    map=event => {
+      match event {
+        PreviewOpen(request) => Some(request)
+        _ => None
+      }
+    },
+    on_lag=sub => sub.close(),
+  )
+  defer preview_subscription.close()
+  for
+    path in [
+      "index.html", "report.pdf", "image.png", "report.docx", "src/main.mbt", "notes.txt",
+    ] {
+    let result = dispatch("cloud-b", "tools/call", {
+      "name": "preview_open",
+      "arguments": {
+        "path": Json(path),
+        "session": "wrong-session",
+        "workspace": "/wrong-workspace",
+      },
+    })
+    guard result
+      is {
+        "result": {
+          "isError": false,
+          "content": [{ "text": String(text), .. }],
+          ..
+        },
+        ..
+      } else {
+      fail("preview request was not accepted")
+    }
+    assert_true(@json.parse(text) is { "status": "opening", .. })
+    assert_eq(
+      previews.try_get(),
+      Some(Cloud(account="123", session="cloud-b", path~)),
+    )
+  }
+
   assert_true(
     dispatch("cloud-a", "tools/call", { "name": "browser_navigate" })
     is { "error": { "code": -32602, .. }, .. },
