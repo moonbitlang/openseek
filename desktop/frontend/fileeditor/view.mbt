@@ -574,7 +574,10 @@ fn viewer_notice(
                   dynamic_text(locale, DLoadingBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewContent(_), .. }) => ""
                 Some({ baseline: ReviewMissing, .. }) =>
-                  "\{doc.name} was deleted and has no review baseline to preview."
+                  dynamic_text(
+                    locale,
+                    DDeletedWithoutBaseline(doc.name.to_string()),
+                  )
                 Some({ baseline: ReviewBinary, .. }) =>
                   dynamic_text(locale, DBinaryBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewOversized, .. }) =>
@@ -584,10 +587,12 @@ fn viewer_notice(
                     locale,
                     DBaselineFailed(doc.name.to_string(), message.to_string()),
                   )
-                None => "\{doc.name} was deleted on disk."
+                None =>
+                  dynamic_text(locale, DDeletedOnDisk(doc.name.to_string()))
               }
-            TabBinary => "\{doc.name} is a binary file and cannot be previewed."
-            TabOversized => "\{doc.name} is too large to preview."
+            TabBinary => dynamic_text(locale, DBinaryFile(doc.name.to_string()))
+            TabOversized =>
+              dynamic_text(locale, DLargeFile(doc.name.to_string()))
             TabReadFailed(message) =>
               if doc.review is Some({ baseline: ReviewContent(_), .. }) {
                 ""
@@ -665,9 +670,9 @@ fn history_diff_notice(
         DHistoryDiffFailed(basename(diff.path).to_string(), message.to_string()),
       )
     (HistoryBlobBinary, _) | (_, HistoryBlobBinary) =>
-      "\{basename(diff.path)} is binary at this revision and cannot be previewed."
+      dynamic_text(locale, DBinaryHistoryFile(basename(diff.path).to_string()))
     (HistoryBlobOversized, _) | (_, HistoryBlobOversized) =>
-      "\{basename(diff.path)} is too large at this revision to preview."
+      dynamic_text(locale, DLargeHistoryFile(basename(diff.path).to_string()))
     (HistoryBlobMissing, HistoryBlobMissing) => ui(locale, NoCommitContent)
     _ => ""
   }
