@@ -356,6 +356,7 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
+  let localization = @localization.Localization()
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(emit, input) => {
@@ -390,6 +391,7 @@ pub fn component(
         } else {
           None
         },
+        localization,
       )
     },
   )
@@ -451,6 +453,8 @@ pub fn component(
     by=pair => pair.1.branch_key(),
   )
   state.view3(input, rendered, (state, input, rendered) => {
+    // Incremental input changes do not refresh local subscriptions.
+    localization.set_language(transcript_editor_language(input.locale))
     transcript_view(
       locale=input.locale,
       input,
@@ -753,6 +757,7 @@ priv suberror TranscriptSubscription {
     artifact_owner~ : String,
     artifact_context~ : @cmd.Emit[@mention_context.ArtifactSnapshot],
     load_older~ : @cmd.Cmd?,
+    localization~ : @localization.Localization,
     // The Model's current reading, refreshed after every message. The scroll
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
@@ -771,6 +776,7 @@ fn transcript_subscription(
   departed : @cmd.Emit[ScrollPosition],
   artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot],
   load_older : @cmd.Cmd?,
+  localization : @localization.Localization,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
@@ -781,6 +787,7 @@ fn transcript_subscription(
       artifact_owner=model.artifact_owner.key(),
       artifact_context~,
       load_older~,
+      localization~,
       pinned=model.pinned,
       active=model.overview.active,
     ),
@@ -800,6 +807,7 @@ fn transcript_sub_loader(
       artifact_owner~,
       artifact_context~,
       load_older~,
+      localization~,
       pinned~,
       active~
     ) => {
@@ -891,6 +899,7 @@ fn transcript_sub_loader(
         // Establish the baseline before the mounted scroller's first event,
         // including when a conversation restores a nonzero reading position.
         element => last_top = element.get_scroll_top(),
+        localization,
       )
       let remove_artifact_listener = artifact_frame_listener(
         () => scheduler.add(emit(ContentRendered)),
@@ -924,6 +933,7 @@ fn transcript_sub_loader(
             capture=true,
           )
           observers.disconnect()
+          localization.dispose()
           // The branch is disposed while the incremental graph is read, one
           // step before Rabbita replaces the DOM, so the scroller still shows
           // this conversation. Report where the reader was so a return can
@@ -941,6 +951,7 @@ fn transcript_sub_loader(
               artifact_owner=next_artifact_owner,
               artifact_context=next_artifact_context,
               load_older=next_load_older,
+              localization=_,
               pinned=next_pinned,
               active=next_active
             ) else {
@@ -957,6 +968,17 @@ fn transcript_sub_loader(
       })
     }
     _ => None
+  }
+}
+
+///|
+fn transcript_editor_language(locale : @i18n.Locale) -> @localization.Language {
+  match locale {
+    English => English
+    SimplifiedChinese => SimplifiedChinese
+    TraditionalChinese => TraditionalChinese
+    Japanese => Japanese
+    Spanish => Spanish
   }
 }
 
@@ -987,12 +1009,14 @@ priv struct TranscriptDomMount {
   renderers : @markdown.DiagramRenderers
   images : @dom.IntersectionObserver
   on_size_changed : () -> Unit
+  localization : @localization.Localization
 }
 
 ///|
 fn TranscriptDomMount::TranscriptDomMount(
   on_size_changed : () -> Unit,
   on_image : (String) -> Unit,
+  localization : @localization.Localization,
 ) -> Self {
   {
     element: None,
@@ -1001,6 +1025,7 @@ fn TranscriptDomMount::TranscriptDomMount(
     renderers: @markdown.DiagramRenderers(on_size_changed),
     images: transcript_image_observer(on_image),
     on_size_changed,
+    localization,
   }
 }
 
@@ -1037,7 +1062,11 @@ fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
       dark_mode=element.get_attribute("data-transcript-theme") is Some("dark"),
     )
     self.diagrams = Some(
-      @diagram_viewport.DiagramViewports(element, self.on_size_changed),
+      @diagram_viewport.DiagramViewports(
+        element,
+        self.on_size_changed,
+        localization=self.localization,
+      ),
     )
     observe_transcript_images(self.images, element)
   }
@@ -1116,8 +1145,9 @@ fn TranscriptObservers::install(
   on_change : () -> Unit,
   on_image : (String) -> Unit,
   on_mount : (@dom.Element) -> Unit,
+  localization : @localization.Localization,
 ) -> Self {
-  let mount = TranscriptDomMount(on_change, on_image)
+  let mount = TranscriptDomMount(on_change, on_image, localization)
   let resize = @dom.ResizeObserver::new((_, _) => on_change())
   let content = @dom.MutationObserver::new((_, observer) => {
     // Reconciliation itself moves the SVG and installs toolbar nodes. Pause

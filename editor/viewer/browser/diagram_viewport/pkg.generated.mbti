@@ -3,6 +3,7 @@ package "moonbitlang/editor/viewer/browser/diagram_viewport"
 
 import {
   "moonbit-community/rabbita/dom",
+  "moonbitlang/editor/viewer/common/localization",
 }
 
 // Values
@@ -11,7 +12,7 @@ import {
 
 // Types and methods
 type DiagramViewports
-pub fn DiagramViewports::DiagramViewports(@dom.Element, () -> Unit, fill_container? : Bool) -> Self
+pub fn DiagramViewports::DiagramViewports(@dom.Element, () -> Unit, fill_container? : Bool, localization? : @localization.Localization) -> Self
 pub fn DiagramViewports::dispose(Self) -> Unit
 pub fn DiagramViewports::refresh(Self) -> Unit
 

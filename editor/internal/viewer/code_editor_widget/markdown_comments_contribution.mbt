@@ -400,6 +400,7 @@ fn render_markdown_comment_presentations(
   fold_expanded : Ref[Bool],
   size_observer : @markdown_comments_browser.MarkdownCommentSizeObserver,
   mermaid_theme : @browser_markdown.MermaidTheme,
+  localization : @localization.Localization,
 ) -> (
   @browser_markdown.RenderedMarkdown,
   @browser_markdown.RenderedMarkdown?,
@@ -449,6 +450,7 @@ fn render_markdown_comment_presentations(
   let diagram_viewports = @diagram_viewport.DiagramViewports(
     rendered_markdown.element,
     on_interaction_size_changed,
+    localization~,
   )
   diagram_viewports_slot = Some(diagram_viewports)
   (
@@ -586,6 +588,7 @@ fn CodeEditorWidget::refresh_markdown_comments(
               existing.fold_expanded,
               existing.size_observer,
               mermaid_theme,
+              self.services.localization,
             )
             existing.rendered_markdown = rendered_markdown
             existing.preview_rendered_markdown = preview_rendered_markdown
@@ -657,6 +660,7 @@ fn CodeEditorWidget::refresh_markdown_comments(
             fold_expanded,
             size_observer,
             mermaid_theme,
+            self.services.localization,
           )
           let entry : RenderedMarkdownComment = {
             block,

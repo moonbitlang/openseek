@@ -123,6 +123,7 @@ priv struct MarkdownDiagramViewportLifetime {
   on_size_changed : () -> Unit
   schedule_frame : (() -> Unit) -> () -> Unit
   fill_container : Bool
+  localization : @localization.Localization
   controllers : Array[MarkdownDiagramViewport]
   mut active : Bool
 }
@@ -154,6 +155,8 @@ struct DiagramViewports {
 /// container and initially fits the SVG into that complete surface. It is
 /// intended for standalone image panels; inline Markdown diagrams retain their
 /// intrinsic, user-resizable height by default.
+/// `localization` is borrowed for this lifetime, including viewports mounted by
+/// a later `refresh`; language changes update only the existing control labels.
 ///
 /// ```d2
 /// direction: right
@@ -178,6 +181,7 @@ pub fn DiagramViewports::DiagramViewports(
   target : @rdom.Element,
   on_size_changed : () -> Unit,
   fill_container~ : Bool = false,
+  localization~ : @localization.Localization = Localization(),
 ) -> DiagramViewports {
   let schedule_frame = (callback : () -> Unit) => {
     let registration = @base_browser.schedule_at_next_animation_frame(callback)
@@ -188,6 +192,7 @@ pub fn DiagramViewports::DiagramViewports(
     on_size_changed,
     schedule_frame,
     fill_container,
+    localization,
     controllers: [],
     active: true,
   }
@@ -231,6 +236,7 @@ fn MarkdownDiagramViewportLifetime::refresh(
         self.on_size_changed,
         self.schedule_frame,
         self.fill_container,
+        self.localization,
       ) {
       Mounted(controller) => self.controllers.push(controller)
       Skipped => ()
@@ -323,6 +329,7 @@ fn mount_diagram_viewport(
   on_size_changed : () -> Unit,
   schedule_frame : (() -> Unit) -> () -> Unit,
   fill_container : Bool,
+  localization : @localization.Localization,
 ) -> DiagramViewportMountResult {
   guard direct_svg_child(wrapper) is Some(svg) else { return Skipped }
   let mut result : DiagramViewportMountResult = Skipped
@@ -332,7 +339,7 @@ fn mount_diagram_viewport(
   ) => {
     result = mount_diagram_viewport_in_environment(
       wrapper, svg, owner_document, owner_window, on_size_changed, schedule_frame,
-      fill_container,
+      fill_container, localization,
     )
   })
   if found {
@@ -351,6 +358,7 @@ fn mount_diagram_viewport_in_environment(
   on_size_changed : () -> Unit,
   schedule_frame : (() -> Unit) -> () -> Unit,
   fill_container : Bool,
+  localization : @localization.Localization,
 ) -> DiagramViewportMountResult {
   let content = owner_document.create_element("div")
   content.set_attribute("class", diagram_content_class)
@@ -358,27 +366,25 @@ fn mount_diagram_viewport_in_environment(
   controls.set_attribute("class", diagram_controls_class)
   controls.set_attribute("role", "toolbar")
   let language = element_attribute_or_empty(wrapper, "data-diagram-language")
-  let diagram_name = match language {
-    "mermaid" => "Mermaid"
-    "uml" => "UML"
-    _ => "D2"
+  let (toolbar_message, interactive_message) = match language {
+    "mermaid" => (MermaidControls, InteractiveMermaid)
+    "uml" => (UmlControls, InteractiveUml)
+    _ => (D2Controls, InteractiveDiago)
   }
-  controls.set_attribute("aria-label", "\{diagram_name} diagram controls")
   let pan_button = create_diagram_button(
     owner_document,
     "moonbit-viewer-markdown-diagram-pan",
-    "Toggle pan mode",
     "codicon-move",
     pressed=false,
   )
   let zoom_out_button = create_diagram_button(
-    owner_document, "moonbit-viewer-markdown-diagram-zoom-out", "Zoom out", "codicon-zoom-out",
+    owner_document, "moonbit-viewer-markdown-diagram-zoom-out", "codicon-zoom-out",
   )
   let zoom_in_button = create_diagram_button(
-    owner_document, "moonbit-viewer-markdown-diagram-zoom-in", "Zoom in", "codicon-zoom-in",
+    owner_document, "moonbit-viewer-markdown-diagram-zoom-in", "codicon-zoom-in",
   )
   let fit_button = create_diagram_button(
-    owner_document, "moonbit-viewer-markdown-diagram-fit", "Fit diagram", "codicon-screen-normal",
+    owner_document, "moonbit-viewer-markdown-diagram-fit", "codicon-screen-normal",
   )
   controls.append_child(pan_button.as_node())
   controls.append_child(zoom_out_button.as_node())
@@ -386,10 +392,8 @@ fn mount_diagram_viewport_in_environment(
   controls.append_child(fit_button.as_node())
   let resize_handle = owner_document.create_element("div")
   resize_handle.set_attribute("class", diagram_resize_handle_class)
-  resize_handle.set_attribute("title", "Drag to resize")
   resize_handle.set_attribute("tabindex", "0")
   resize_handle.set_attribute("role", "separator")
-  resize_handle.set_attribute("aria-label", "Resize diagram")
   resize_handle.set_attribute("aria-orientation", "horizontal")
   let controller : MarkdownDiagramViewport = {
     wrapper,
@@ -439,13 +443,12 @@ fn mount_diagram_viewport_in_environment(
   }
   add_element_class(wrapper, diagram_viewport_class)
   wrapper.set_attribute("tabindex", "0")
-  wrapper.set_attribute(
-    "aria-label",
-    match language {
-      "mermaid" => "Interactive Mermaid diagram"
-      "uml" => "Interactive UML diagram"
-      _ => "Interactive Diago diagram"
-    },
+  controller.listeners.push(
+    localization.bind(language => {
+      controller.refresh_localized_labels(
+        language, toolbar_message, interactive_message,
+      )
+    }),
   )
   @base_browser.set_style_property(wrapper, "overflow", "hidden")
   @base_browser.set_style_property(content, "transform-origin", "0 0")
@@ -489,15 +492,12 @@ fn mount_diagram_viewport_in_environment(
 fn create_diagram_button(
   document : @rdom.Document,
   class_name : String,
-  label : String,
   icon_class : String,
   pressed? : Bool,
 ) -> @rdom.Element {
   let button = document.create_element("button")
   button.set_attribute("class", class_name)
   button.set_attribute("type", "button")
-  button.set_attribute("title", label)
-  button.set_attribute("aria-label", label)
   match pressed {
     Some(value) =>
       button.set_attribute("aria-pressed", if value { "true" } else { "false" })
@@ -508,6 +508,43 @@ fn create_diagram_button(
   icon.set_attribute("aria-hidden", "true")
   button.append_child(icon.as_node())
   button
+}
+
+///|
+fn MarkdownDiagramViewport::refresh_localized_labels(
+  self : MarkdownDiagramViewport,
+  language : @localization.Language,
+  toolbar_message : DiagramMessage,
+  interactive_message : DiagramMessage,
+) -> Unit {
+  guard self.active else { return }
+  self.controls.set_attribute(
+    "aria-label",
+    diagram_text(language, toolbar_message),
+  )
+  self.wrapper.set_attribute(
+    "aria-label",
+    diagram_text(language, interactive_message),
+  )
+  for
+    (button, message) in [
+      (self.pan_button, TogglePan),
+      (self.zoom_out_button, ZoomOut),
+      (self.zoom_in_button, ZoomIn),
+      (self.fit_button, FitDiagram),
+    ] {
+    let label = diagram_text(language, message)
+    button.set_attribute("title", label)
+    button.set_attribute("aria-label", label)
+  }
+  self.resize_handle.set_attribute(
+    "title",
+    diagram_text(language, DragToResize),
+  )
+  self.resize_handle.set_attribute(
+    "aria-label",
+    diagram_text(language, ResizeDiagram),
+  )
 }
 
 ///|
