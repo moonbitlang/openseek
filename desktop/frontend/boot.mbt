@@ -643,6 +643,7 @@ fn main {
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
           model.bridge_subscriptions(emit),
+          cloud_mcp_subscriptions(model, emit),
           @cloud.subscriptions(
             model.cloud,
             if model.screen is Chat {

@@ -79,6 +79,8 @@ export class CloudHarness {
     this.authorization = null;
     this.pauseAuthorizationCancel = null;
     this.taskCount = 0;
+    this.mcpSockets = new Map();
+    this.mcpFrames = [];
   }
 
   async install() {
@@ -226,7 +228,26 @@ export class CloudHarness {
       throw new Error(`Unexpected account request: ${path}`);
     });
     await this.page.route(`${cloudOrigin}/**`, route => this.cloudRequest(route));
-    if (this.desktop) await this.installDesktopBridge();
+    if (this.desktop) {
+      await this.page.routeWebSocket('wss://cloud.moonbitlang.com/v1/sessions/*/mcp', socket => {
+        const session = new URL(socket.url()).pathname.split('/')[3];
+        this.mcpSockets.set(session, socket);
+        socket.onMessage(async raw => {
+          const frame = JSON.parse(raw);
+          this.mcpFrames.push({ session, frame });
+          if (frame.type === 'auth') {
+            if (this.pauseMcpReady) await this.pauseMcpReady;
+            socket.send(JSON.stringify({ type: 'ready' }));
+          } else {
+            this.onMcpReply?.(session, frame);
+          }
+        });
+        socket.onClose(() => {
+          if (this.mcpSockets.get(session) === socket) this.mcpSockets.delete(session);
+        });
+      });
+      await this.installDesktopBridge();
+    }
   }
 
   account() { return { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: 'octocat', avatar_url: '' } }; }
@@ -256,6 +277,7 @@ export class CloudHarness {
       if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
       if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
       if (request.method === 'cloud.history_cache') return this.historyCache?.(request.params) ?? { kind: 'done' };
+      if (request.method === 'cloud.mcp') return this.clientMcp?.(request.params) ?? { generation: 0, requests: [] };
       if (request.method === 'cloud.key') throw new Error('Cloud must not read local credentials');
       return this.device.replyFor(request);
     });

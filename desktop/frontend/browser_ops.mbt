@@ -337,6 +337,8 @@ fn focus_browser_address() -> @cmd.Cmd {
 /// bridge boundary before reaching the model.
 fn browser_event_msg(payload : @protocol.BrowserEventPayload) -> Msg? {
   match payload {
+    CloudOpenRequested(account~, request~, session~, url~) =>
+      Some(CloudBrowserOpenRequested(account~, request~, session~, url~))
     OpenRequested(request~, session~, url~) =>
       Some(BrowserOpenRequested(request~, session~, url~))
     Navigated(id~, url~) => Some(Preview(@preview.Msg::Navigated(id~, url~)))

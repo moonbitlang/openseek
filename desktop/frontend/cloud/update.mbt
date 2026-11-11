@@ -351,7 +351,9 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   token? : String,
   navigation~ : Int32,
+  client_tools~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
+  let state = { ..state, client_tools, }
   // A boundary observed while this read was in flight may be missing from it.
   // Settle the read first so its records are not discarded, then read again.
   let follow_up = match msg {
@@ -378,6 +380,72 @@ pub fn update(
     return (next, command, None)
   }
   let (next, command, select) = match msg {
+    ClientToolsReady(epoch, id, ready) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      let next = state.replace(id, {
+        ..conversation,
+        client_tools_ready: ready,
+      })
+      let (next, command) = if ready && conversation.last_seq is Some(_) {
+        next.send_pending(id, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
+    }
+    QuestionInput(account~, session~, text~, id~) => {
+      guard state.user_id == Some(account) &&
+        token is Some(token) &&
+        !state.retired.contains(session) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state,
+        run(emit, () => {
+          try deliver_question_input(token, session, text, id) catch {
+            error =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                "Could not deliver question answer: \{error}",
+              )
+          } noraise {
+            _ => QuestionInputDelivered(state.epoch, session)
+          }
+        }),
+        None,
+      )
+    }
+    QuestionInputDelivered(epoch, id) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, {
+          ..conversation,
+          generating: true,
+          watch_status: Watching,
+          history_required: true,
+        }),
+        @cmd.none,
+        None,
+      )
+    }
+    QuestionInputFailed(epoch, id, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, { ..conversation, notice: Some(error), }),
+        @cmd.none,
+        None,
+      )
+    }
     AccountChanged(user_id) => {
       let cache_catalog = user_id is Some(_) && token is Some(_)
       let next = {

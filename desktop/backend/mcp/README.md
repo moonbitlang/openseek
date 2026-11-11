@@ -273,3 +273,31 @@ against the latest list, preserving unrelated concurrent additions.
 These tools belong to the `artifacts` group. If the configuration filters
 groups with `X-SeekMoon-Tool-Groups`, include `artifacts` (for example
 `browser,artifacts`).
+
+## Cloud client tools (Desktop)
+
+An opened Cloud conversation keeps an account-bound WebSocket to the current
+Cloud service's `/v1/sessions/{id}/mcp` until sign-out (or session deletion).
+The frontend sends the account token only in the initial auth frame and waits
+for `ready` before dispatching JSON-RPC or handing off a new prompt. Switching
+conversations keeps the socket alive; reconnect starts a fresh connection and
+never replays old calls or replies.
+
+The desktop-only `cloud.mcp` command passes the authenticated account and the
+socket's session to a separate `Dispatcher` catalog containing just
+`browser_open` and `ask_user`. It reuses the existing native browser tool and
+question service. Explicit browser opens join the owning Cloud conversation's
+dock and use its existing native-view positioning and visibility rules.
+Ordinary Cloud links keep their behavior.
+
+Cloud questions use the existing question cards, drafts, 30-second waiter and
+XML answer envelope. They do not load Local history or create Local sessions.
+Timely answers return over MCP. After timeout or socket detachment, later
+answers use the existing Cloud command transport: steer into the active task,
+or submit a prompt when idle. Every device owns its own questions and answers;
+there is no cross-device question settlement. Question state lasts only for
+the current host process and account login.
+
+Known follow-ups are marked beside their owners: bounded broadcast dispatch,
+acknowledgement across frontend disconnects, and manual retry after a delayed
+answer's delivery fails. Failed or ambiguous inputs are not replayed on reconnect.

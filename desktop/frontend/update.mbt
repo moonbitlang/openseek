@@ -1568,8 +1568,8 @@ fn desired_browser_view(model : Model) -> Int32? {
     page.url is Some(_) else {
     return None
   }
-  // In Cloud, only a file preview in the current conversation's pane can
-  // place a native view. Ordinary links keep their existing behavior.
+  // Explicit Cloud previews and client-tool opens share native placement.
+  // Ordinary links keep their existing behavior.
   guard !model.cloud_selected() ||
     (page.cloud_preview && model.file_panel_visible()) else {
     return None
@@ -5214,6 +5214,59 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
+    CloudMcpNotification(event) => {
+      guard model.is_desktop else { return (@cmd.none, model) }
+      match event {
+        Questions(account~, snapshot~) =>
+          update(
+            dispatch,
+            CloudQuestions(account~, @user_questions.Snapshot(snapshot)),
+            model,
+          )
+        Input(account~, session~, text~, id~) =>
+          update_cloud(
+            dispatch,
+            @cloud.QuestionInput(account~, session~, text~, id~),
+            model,
+          )
+      }
+    }
+    CloudQuestions(account~, msg) => {
+      guard model.is_desktop &&
+        model.account.map(a => a.user.user_id) == Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (command, questions) = model.cloud_questions.update(
+        msg,
+        Local,
+        dispatch.map(msg => CloudQuestions(account~, msg)),
+        submit=(answer, emit) => {
+          @cmd.attempt(
+            result => {
+              match result {
+                Ok(snapshot) => emit(@user_questions.Snapshot(snapshot))
+                Err(error) =>
+                  emit(
+                    @user_questions.Failed(
+                      request=answer.id,
+                      error=@interop.bridge_error_text(error),
+                    ),
+                  )
+              }
+            },
+            () => {
+              let reply = @interop.bridge_request(
+                Local,
+                @commands.cloud_mcp,
+                @protocol.CloudMcpRequest::Answer(account~, answer~),
+              )
+              @json.from_json(reply)
+            },
+          )
+        },
+      )
+      (command, { ..model, cloud_questions: questions, })
+    }
     UserQuestions(channel~, connection_generation~, msg) => {
       guard model.device_state(channel) is Some(device) &&
         device.connection_generation == connection_generation else {
@@ -6824,6 +6877,25 @@ fn update_msg(
       )
     }
     BrowserAnnotation(msg) => update_browser_annotation(dispatch, msg, model)
+    CloudBrowserOpenRequested(account~, request~, session~, url~) => {
+      guard model.is_desktop &&
+        model.account.map(a => a.user.user_id) == Some(account) else {
+        return (@cmd.none, model)
+      }
+      let owner = @interop.Cloud(account~, session~)
+      let (id, next) = model.add_browser_tab(owner, url~, cloud_preview=true)
+      (
+        browser_open(
+          dispatch,
+          id,
+          url,
+          model.theme.is_dark(model.system_dark),
+          Some({ channel: Local, session, }),
+          request~,
+        ),
+        next,
+      )
+    }
     BrowserOpenRequested(request~, session~, url~) => {
       // Native views exist only in the desktop window, whose conversations
       // are all on the local channel.
@@ -9860,6 +9932,12 @@ fn update_device_msg(
       })
       (@cmd.batch(commands), seeded)
     }
+    CloudMcpEvent(event) =>
+      if channel == Local {
+        update_msg(dispatch, CloudMcpNotification(event), model)
+      } else {
+        (@cmd.none, model)
+      }
     QuestionsChanged(snapshot) =>
       update_msg(
         dispatch,
