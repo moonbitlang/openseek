@@ -277,21 +277,33 @@ async test "the first search downloads every page of the catalog" {
 }
 
 ///|
-async test "later searches reuse the downloaded catalog" {
+async test "later searches reuse a download that waited for their servers" {
   let pages = []
   let received = with_host(catalog_host(paged), () => {
     pages.push(search(server="github", limit=1))
-    pages.push(search(query="events"))
     pages.push(search(server="github", offset=1))
+    pages.push(search(query="events"))
+    pages.push(search(server="calendar"))
   })
-  // One download, three requests for its three replies, for all three searches.
-  assert_eq(received.length(), 3)
+  // The first download waited for `github` alone and serves only `github`;
+  // the second waited for every server and serves every later search.
+  assert_eq(
+    received.filter(request => {
+      !(request is { "list": { "snapshot": _, .. }, .. })
+    }),
+    [
+      { "version": 1, "list": { "server": "github" } },
+      { "version": 1, "list": {} },
+    ],
+  )
+  assert_eq(received.length(), 6)
   assert_eq(pages[0].instructions, Some("Prefer search_issues."))
   assert_true(pages[0].text.has_prefix("Instructions from `github`:"))
   assert_eq(pages[0].next_offset, Some(1))
-  assert_eq(pages[1].tools.map(tool => tool.name), ["list_events"])
-  assert_eq(pages[2].tools.map(tool => tool.name), ["create_issue"])
-  assert_true(pages[2].instructions is None)
+  assert_eq(pages[1].tools.map(tool => tool.name), ["create_issue"])
+  assert_true(pages[1].instructions is None)
+  assert_eq(pages[2].tools.map(tool => tool.name), ["list_events"])
+  assert_eq(pages[3].tools.map(tool => tool.name), ["list_events"])
 }
 
 ///|

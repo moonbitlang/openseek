@@ -35,8 +35,9 @@ struct Service {
   token : String
   /// Call `tool` of `server`.
   call : async (String, String, Json) -> @agent_tool.ToolAction
-  /// The catalog's items as they stand now.
-  items : () -> Array[Json]
+  /// The catalog's items once the servers a new listing waits for have
+  /// settled: the one it names, or every server when it names none.
+  items : async (String?) -> Array[Json]
   /// The catalogs recent listings started from, oldest first: every page of
   /// a listing comes from the one it started from, so a catalog that changes
   /// meanwhile cannot shift its pages.
@@ -49,15 +50,18 @@ struct Service {
 
 ///|
 /// Serve MCP servers' tools on the session's task group until it ends:
-/// `call` calls `tool` of `server`, and `items` is the catalog as it stands
-/// now, each item small enough for a reply on its own. This package knows no
-/// MCP client; the engine supplies both. Images in call results are saved
+/// `call` calls `tool` of `server`, and `items(server)` is the catalog once
+/// the servers a new listing waits for have settled (`server` when a
+/// scoped search names it, otherwise every server), each item small enough
+/// for a reply on its own. Both wait for servers still connecting, so both
+/// must bound that wait within the SDK's 125-second request deadline. This
+/// package knows no MCP client; the engine supplies both. Images in call results are saved
 /// under `image_directory`, created on first use; without one they are
 /// dropped with a note.
 pub async fn Service::start(
   group : @async.TaskGroup,
   call~ : async (String, String, Json) -> @agent_tool.ToolAction,
-  items~ : () -> Array[Json],
+  items~ : async (String?) -> Array[Json],
   image_directory? : String,
 ) -> Service {
   guard @env.rand(32) is Some(entropy) else {
@@ -171,6 +175,7 @@ async fn Service::answer(self : Service, input : Json) -> Json {
     { "version": 1, "list": Object(fields), .. } =>
       self.list(fields) catch {
         InvalidList(message) => error_result(message)
+        error => raise error
       }
     {
       "version": 1,
@@ -209,11 +214,9 @@ priv suberror InvalidList {
 
 ///|
 /// The reply to a `list` request with these fields: a page of the snapshot
-/// it names, or of a new one when it names none.
-fn Service::list(
-  self : Service,
-  fields : Map[String, Json],
-) -> Json raise InvalidList {
+/// it names, or of a new one when it names none, taken once the server it
+/// names (every server when it names none) has settled.
+async fn Service::list(self : Service, fields : Map[String, Json]) -> Json {
   let cursor = index(fields, "cursor").unwrap_or(0)
   let snapshot = if index(fields, "snapshot") is Some(id) {
     guard self.snapshots.iter().find_first(snapshot => snapshot.id == id)
@@ -224,7 +227,12 @@ fn Service::list(
     }
     snapshot
   } else {
-    self.snapshot()
+    let server = match fields.get("server") {
+      None | Some(Null) => None
+      Some(String(server)) => Some(server)
+      _ => raise InvalidList("MCP host list requires a string server")
+    }
+    self.snapshot(server)
   }
   list_reply(snapshot, cursor)
 }
@@ -242,10 +250,11 @@ fn index(fields : Map[String, Json], key : String) -> Int32? raise InvalidList {
 }
 
 ///|
-/// The catalog as it stands now, as a snapshot a listing can page through:
-/// the latest one when the catalog has not changed since.
-fn Service::snapshot(self : Service) -> Snapshot {
-  let items = (self.items)()
+/// The catalog once `server` (every server when `None`) has settled, as a
+/// snapshot a listing can page through: the latest one when the catalog has
+/// not changed since.
+async fn Service::snapshot(self : Service, server : String?) -> Snapshot {
+  let items = (self.items)(server)
   if self.snapshots.last() is Some(latest) && latest.items == items {
     return latest
   }

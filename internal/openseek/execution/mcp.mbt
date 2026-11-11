@@ -115,9 +115,11 @@ pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
 
 ///|
 /// Serve these servers to scripts through an MCP host on `scope`'s group,
-/// which lives as long as the connections do. Calls go to the named server,
-/// and the catalog lists the servers as they stand now (a lost or
-/// still-connecting one as unavailable). Images in results are saved under
+/// which lives as long as the connections do. A call waits for its server to
+/// settle, then goes to it. A listing waits for the server a scoped search
+/// names, or for every server, then lists the servers as they stand (a lost
+/// one, or one still connecting when the bounded wait ends, as unavailable).
+/// Images in results are saved under
 /// `image_directory`. Without a configured server there is nothing to serve,
 /// and no host starts.
 pub async fn McpRegistry::serve(
@@ -141,7 +143,10 @@ pub async fn McpRegistry::serve(
             )
         }
       },
-      items=() => @mcptools.catalog_items(servers),
+      items=server => {
+        @mcptools.settle(servers, server?)
+        @mcptools.catalog_items(servers)
+      },
       image_directory?,
     ),
   )

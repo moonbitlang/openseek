@@ -1807,7 +1807,7 @@ async test "a sandboxed snippet gets the MCP host's handoff" {
     let host = @mcphost.Service::start(
       group,
       call=(_, _, _) => @agent_tool.respond("unused"),
-      items=() => [],
+      items=_ => [],
     )
     @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
       let definition = @mbtx.definition(workspace_root=ws, mcp_service=host)

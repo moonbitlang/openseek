@@ -46,7 +46,7 @@ async test "the MCP host routes calls and refuses other requests" {
     let service = Service::start(
       group,
       call=(server, tool, arguments) => echo(server, tool, arguments),
-      items=() => [],
+      items=_ => [],
     )
     let call = reply(service, {
       "version": 1,
@@ -95,7 +95,7 @@ async test "the MCP host lists the catalog in replies it packs" {
     let service = Service::start(
       group,
       call=(server, tool, arguments) => echo(server, tool, arguments),
-      items=() => items,
+      items=_ => items,
     )
     let listed : Array[Json] = []
     let summaries : Array[Json] = []
@@ -147,7 +147,7 @@ async test "the MCP host lists an empty catalog as one empty reply" {
     let service = Service::start(
       group,
       call=(server, tool, arguments) => echo(server, tool, arguments),
-      items=() => [],
+      items=_ => [],
     )
     assert_eq(reply(service, { "version": 1, "list": {} }), {
       "version": 1,
@@ -155,6 +155,34 @@ async test "the MCP host lists an empty catalog as one empty reply" {
       "is_error": false,
       "data": { "items": [], "snapshot": 0 },
     })
+  })
+}
+
+///|
+async test "a new listing waits for the server it names" {
+  @async.with_task_group(group => {
+    let waited : Array[String?] = []
+    let service = Service::start(
+      group,
+      call=(server, tool, arguments) => echo(server, tool, arguments),
+      items=server => {
+        waited.push(server)
+        [{ "server": "github" }]
+      },
+    )
+    guard reply(service, { "version": 1, "list": { "server": "github" } })
+      is { "data": { "snapshot": snapshot, .. }, .. } else {
+      fail("expected a listing")
+    }
+    ignore(reply(service, { "version": 1, "list": {} }))
+    // A page of a listing in progress comes from its snapshot: no new wait.
+    ignore(
+      reply(service, {
+        "version": 1,
+        "list": { "snapshot": snapshot, "server": "github" },
+      }),
+    )
+    assert_eq(waited, [Some("github"), None])
   })
 }
 
@@ -171,7 +199,7 @@ async test "a listing pages through the catalog it started from" {
     let service = Service::start(
       group,
       call=(server, tool, arguments) => echo(server, tool, arguments),
-      items=() => items.val,
+      items=_ => items.val,
     )
     let list = (fields : Json) => {
       reply(service, { "version": 1, "list": fields })
@@ -236,7 +264,7 @@ async test "the MCP host saves a result's images and names their files" {
     let service = Service::start(
       group,
       call=(_, _, _) => @agent_tool.respond("took it", images=[image, image]),
-      items=() => [],
+      items=_ => [],
       image_directory=directory,
     )
     guard reply(service, call)
@@ -269,7 +297,7 @@ async test "the MCP host saves a result's images and names their files" {
     let service = Service::start(
       group,
       call=(_, _, _) => @agent_tool.respond("", images=[image]),
-      items=() => [],
+      items=_ => [],
     )
     assert_eq(reply(service, call), {
       "version": 1,
@@ -285,7 +313,7 @@ async test "the MCP host replaces an oversized result with an error" {
     let service = Service::start(
       group,
       call=(_, _, _) => @agent_tool.respond("x".repeat(MaxReplyChars)),
-      items=() => [],
+      items=_ => [],
     )
     assert_true(
       reply(service, {
@@ -313,7 +341,7 @@ async test "a call is cancelled when its script closes the connection" {
         finished.val = true
         @agent_tool.respond("too late")
       },
-      items=() => [],
+      items=_ => [],
     )
     // The script stops while its call runs, which closes the connection.
     let stopped = try {

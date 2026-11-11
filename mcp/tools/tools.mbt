@@ -24,6 +24,15 @@ const DefaultDiscoveryTimeoutMs : Int32 = 30000
 const CallTimeoutMs : Int32 = 120000
 
 ///|
+/// How long a script's call or search waits for a server that is still
+/// connecting. A server may never settle (a headers helper waiting on the
+/// user has no deadline), so the wait is bounded. A call's wait counts
+/// against its `CallTimeoutMs`, which keeps every reply within the SDK's
+/// 125-second request deadline; a listing request waits for nothing else,
+/// so a search's wait alone stays within it.
+const ConnectWaitMs : Int32 = 60000
+
+///|
 /// Cap on one tool's description in the catalog, so a misbehaving server
 /// cannot crowd the pages a script renders.
 const MaxDescriptionChars : Int32 = 1024
@@ -116,36 +125,80 @@ pub fn Server::try_wait(self : Server) -> ServerEntry? {
 }
 
 ///|
-/// Call `tool` of this server, as `ServerEntry::call` does once it has
-/// settled; until then the call is an error result saying so.
+/// What connecting this server came to, waiting up to `timeout_ms` for it to
+/// settle: `None` when it is still connecting by then, or when its task was
+/// cancelled with its group, which only happens as the engine shuts down.
+async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
+  @async.with_timeout_opt(timeout_ms, () => self.connecting.wait()) catch {
+    _ => None
+  }
+}
+
+///|
+/// Wait until the servers a search needs have settled: the one named
+/// `server`, or every server when none is named (one not configured needs
+/// nothing). The wait ends after `timeout_ms` whatever is left; a server
+/// still connecting then is listed as such.
+pub async fn settle(
+  servers : Array[Server],
+  server? : String,
+  timeout_ms~ : Int32 = ConnectWaitMs,
+) -> Unit {
+  let waiting = servers.filter(configured => {
+    match server {
+      Some(name) => name == configured.config.name()
+      None => true
+    }
+  })
+  ignore(
+    @async.with_timeout_opt(timeout_ms, () => {
+      for configured in waiting {
+        ignore(configured.connecting.wait()) catch {
+          _ => ()
+        }
+      }
+    }),
+  )
+}
+
+///|
+/// Call `tool` of this server, as `ServerEntry::call` does, once it has
+/// settled. A server still connecting is waited for up to `wait_ms`, and is an
+/// error result saying so when it has not settled by then. The wait counts
+/// against the call's deadline.
 pub async fn Server::call(
   self : Server,
   tool : String,
   arguments : Json,
+  wait_ms~ : Int32 = ConnectWaitMs,
 ) -> @agent_tool.ToolAction {
-  guard self.try_wait() is Some(entry) else {
+  let started = @async.now()
+  guard self.wait(timeout_ms=wait_ms) is Some(entry) else {
     let (message, _) = cap_serialized(
-      "MCP server `\{self.config.name()}` is still connecting; try again later",
+      "MCP server `\{self.config.name()}` is still connecting after \{wait_ms / 1000}s; try again later",
       MaxToolOutputChars,
     )
     @agent_tool.respond(message, is_error=true)
   }
-  entry.call(tool, arguments)
+  let waited = (@async.now() - started).to_int()
+  entry.call(tool, arguments, timeout_ms=CallTimeoutMs - waited)
 }
 
 ///|
 /// Call `tool` of this server. A server that is not connected, or that does
 /// not offer `tool`, is an error result naming what went wrong; so is a call
-/// the server fails, times out, or loses the connection on.
+/// the server fails, loses the connection on, or does not answer within
+/// `timeout_ms`.
 pub async fn ServerEntry::call(
   self : ServerEntry,
   tool : String,
   arguments : Json,
+  timeout_ms~ : Int32 = CallTimeoutMs,
 ) -> @agent_tool.ToolAction {
   let server = self.server.name()
   match self.connection {
     Live(client) if self.tools.iter().any(offered => offered.name == tool) =>
-      call_tool(client, tool, arguments)
+      call_tool(client, tool, arguments, timeout_ms~)
     Live(_) => {
       let (message, _) = cap_serialized(
         "MCP server `\{server}` has no tool `\{tool}`; find its tools with `@mcp.search(server=\{Json(server).stringify()})`",
@@ -363,14 +416,16 @@ pub async fn discover(
 /// Proxy a tool call to the MCP server and map the result into a tool action:
 /// the rendered text as content, image content as image input (the same way
 /// `read_image` returns it), and any `structuredContent` as data.
-/// A JSON-RPC / transport failure becomes an error response; a tool-level
-/// failure is surfaced via `is_error`.
+/// A JSON-RPC / transport failure, and a call the server does not answer
+/// within `timeout_ms`, becomes an error response; a tool-level failure is
+/// surfaced via `is_error`.
 pub async fn call_tool(
   client : @mcp.McpClient,
   tool : String,
   args : Json,
+  timeout_ms~ : Int32 = CallTimeoutMs,
 ) -> @agent_tool.ToolAction {
-  let outcome = @async.with_timeout_opt(CallTimeoutMs, () => {
+  let outcome = @async.with_timeout_opt(timeout_ms, () => {
     client.call_tool(name=tool, arguments=args)
   }) catch {
     error => {
@@ -386,7 +441,7 @@ pub async fn call_tool(
   }
   guard outcome is Some(result) else {
     let (message, _) = cap_serialized(
-      "MCP tool `\{tool}` timed out after \{CallTimeoutMs / 1000}s",
+      "MCP tool `\{tool}` timed out after \{timeout_ms / 1000}s",
       MaxToolOutputChars,
     )
     return @agent_tool.respond(message, is_error=true)
