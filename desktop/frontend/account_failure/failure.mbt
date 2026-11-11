@@ -4,6 +4,7 @@
 pub(all) enum Failure {
   StorageUnavailable
   StorageReadFailed(String)
+  SignInTimedOut
   Diagnostic(String)
 }
 
@@ -18,6 +19,7 @@ pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
   match self {
     StorageUnavailable => text(locale, StorageUnavailable)
     StorageReadFailed(detail) => text(locale, StorageReadFailed(detail))
+    SignInTimedOut => text(locale, SignInTimedOut)
     Diagnostic(detail) => detail
   }
 }

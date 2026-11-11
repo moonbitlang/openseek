@@ -4374,12 +4374,7 @@ fn update_msg(
     }
     AccountLoginTimedOut(epoch) => {
       guard model.account_login is Some(_) else { return (@cmd.none, model) }
-      account_loaded(
-        dispatch,
-        model,
-        epoch,
-        Err(Diagnostic(@settings.text(model.locale, SignInTimedOut))),
-      )
+      account_loaded(dispatch, model, epoch, Err(SignInTimedOut))
     }
     AccountCancelFailed(epoch, message) => {
       guard epoch == model.account_epoch &&

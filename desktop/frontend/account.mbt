@@ -194,10 +194,7 @@ test "account sign-in timeout is localized and restores the retry action" {
     )
     assert_false(expired.remote_connecting)
     assert_true(expired.account_login is None)
-    assert_eq(
-      expired.account_error,
-      Some(Diagnostic(@settings.text(locale, SignInTimedOut))),
-    )
+    assert_true(expired.account_error is Some(SignInTimedOut))
     let (_, retried) = begin_account_login(test_dispatch(), expired)
     assert_true(retried.remote_connecting)
     assert_eq(retried.account_error, None)

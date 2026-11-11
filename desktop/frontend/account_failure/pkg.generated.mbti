@@ -15,6 +15,7 @@ import {
 pub(all) enum Failure {
   StorageUnavailable
   StorageReadFailed(String)
+  SignInTimedOut
   Diagnostic(String)
 }
 pub fn Failure::equal(Self, Self) -> Bool
