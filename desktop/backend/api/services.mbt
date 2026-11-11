@@ -47,6 +47,7 @@ pub async fn ApiState::start_services(
   if self.host_mcp is Some(server) {
     server.add_tools(self.session_tools())
     server.add_tools(self.question_tools())
+    server.add_tools([self.preview_tool()])
     server.add_tools(self.artifact_tools())
     @xlog.info() <?
       { "event": "desktop_host_tools_serving", "url": server.url() }

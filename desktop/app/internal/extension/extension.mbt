@@ -10,6 +10,11 @@
 /// `internal/commands`; this package only binds them to native handlers.
 
 ///|
+let preview_open_event : @proton_contract.Event[@protocol.PreviewOpenRequest] = @commands.extension_contract.event(
+  @protocol.NotificationKind::PreviewOpen.wire_name(),
+)
+
+///|
 let cloud_mcp_event : @proton_contract.Event[@protocol.CloudMcpEvent] = @commands.extension_contract.event(
   @protocol.NotificationKind::CloudMcp.wire_name(),
 )
@@ -270,6 +275,7 @@ async fn PageEventTarget::emit(
   // payload type that belongs to that event.
   match notification {
     Ssh(payload) => self.events.emit(ssh_event, payload)
+    Hub(PreviewOpen(payload)) => self.events.emit(preview_open_event, payload)
     Hub(CloudMcp(payload)) => self.events.emit(cloud_mcp_event, payload)
     Hub(UserQuestions(payload)) =>
       self.events.emit(user_questions_event, payload)
