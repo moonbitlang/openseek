@@ -26,6 +26,12 @@ pub(all) enum Message {
   Configuration
   OpenConfig
   ConfigDescription
+  RemoteCodex
+  RefreshAccount
+  RemoteCodexDescription
+  LocalApiFallback
+  OpenLocalApiSettings
+  LocalApiFallbackDescription
   RemoteControl
   HelpImproveSeekMoon
   ContentImprovementDescription
@@ -378,6 +384,49 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "開啟此桌面應用 Codex 目錄中的 config.toml；檔案不存在時會建立空檔案。應用服務在啟動時讀取配置，修改將在重啟桌面應用後生效。"
     (Japanese, ConfigDescription) =>
       "このデスクトップの Codex ディレクトリにある config.toml を開きます。存在しない場合は空のファイルを作成します。アプリサーバーは起動時に設定を読み込むため、変更は再起動後に適用されます。"
+    (English, RemoteCodex) => "Remote Codex"
+    (Spanish, RemoteCodex) => "Codex remoto"
+    (SimplifiedChinese, RemoteCodex) => "远程 Codex"
+    (TraditionalChinese, RemoteCodex) => "遠端 Codex"
+    (Japanese, RemoteCodex) => "リモート Codex"
+    (English, RefreshAccount) => "Refresh account"
+    (Spanish, RefreshAccount) => "Actualizar cuenta"
+    (SimplifiedChinese, RefreshAccount) => "刷新账户"
+    (TraditionalChinese, RefreshAccount) => "重新整理帳戶"
+    (Japanese, RefreshAccount) => "アカウントを更新"
+    (English, RemoteCodexDescription) =>
+      "Run codex login --device-auth in this host's terminal. Configure ~/.codex/config.toml on the remote host; credentials remain there."
+    (Spanish, RemoteCodexDescription) =>
+      "Ejecuta codex login --device-auth en el terminal de este host. Configura ~/.codex/config.toml en el host remoto; las credenciales permanecen allí."
+    (SimplifiedChinese, RemoteCodexDescription) =>
+      "在此主机的终端中运行 codex login --device-auth。在远程主机上配置 ~/.codex/config.toml；凭据保留在远程主机上。"
+    (TraditionalChinese, RemoteCodexDescription) =>
+      "在此主機的終端機中執行 codex login --device-auth。在遠端主機上設定 ~/.codex/config.toml；憑證保留在遠端主機上。"
+    (Japanese, RemoteCodexDescription) =>
+      "このホストのターミナルで codex login --device-auth を実行してください。~/.codex/config.toml はリモートホストで設定し、認証情報もそこに保持されます。"
+    (English, LocalApiFallback) => "API key fallback from this computer"
+    (Spanish, LocalApiFallback) => "Clave API de respaldo de este equipo"
+    (SimplifiedChinese, LocalApiFallback) =>
+      "使用此计算机的备用 API 密钥"
+    (TraditionalChinese, LocalApiFallback) =>
+      "使用此電腦的備用 API 金鑰"
+    (Japanese, LocalApiFallback) =>
+      "このコンピュータの予備 API キー"
+    (English, OpenLocalApiSettings) => "Open local API settings"
+    (Spanish, OpenLocalApiSettings) => "Abrir configuración de API local"
+    (SimplifiedChinese, OpenLocalApiSettings) => "打开本机 API 设置"
+    (TraditionalChinese, OpenLocalApiSettings) => "開啟本機 API 設定"
+    (Japanese, OpenLocalApiSettings) => "ローカル API 設定を開く"
+    (English, LocalApiFallbackDescription) =>
+      "Remote API settings take priority. This computer supplies a fallback API key; the remote provider, endpoint and model stay unchanged. Reconnect after changing the local key."
+    (Spanish, LocalApiFallbackDescription) =>
+      "La configuración de API remota tiene prioridad. Este equipo proporciona una clave API de respaldo; el proveedor, el endpoint y el modelo remotos no cambian. Vuelve a conectar después de cambiar la clave local."
+    (SimplifiedChinese, LocalApiFallbackDescription) =>
+      "优先使用远程 API 设置。此计算机提供备用 API 密钥；远程提供商、端点和模型保持不变。修改本机密钥后请重新连接。"
+    (TraditionalChinese, LocalApiFallbackDescription) =>
+      "優先使用遠端 API 設定。此電腦提供備用 API 金鑰；遠端供應商、端點和模型保持不變。修改本機金鑰後請重新連線。"
+    (Japanese, LocalApiFallbackDescription) =>
+      "リモートの API 設定が優先されます。このコンピュータは予備の API キーを提供し、リモートのプロバイダー、エンドポイント、モデルは変更されません。ローカルのキーを変更した後は再接続してください。"
     (English, RemoteControl) => "Remote control"
     (Spanish, RemoteControl) => "Control remoto"
     (SimplifiedChinese, RemoteControl) => "远程控制"

@@ -842,15 +842,15 @@ fn codex_account_rows(
   if @interop.is_native_ssh(channel) {
     rows.push(
       @ui.form_row(
-        "Remote Codex",
+        @settings.text(model.locale, RemoteCodex),
         [
           @html.button(
             class="button secondary",
             on_click=dispatch(Codex(channel~, @codex.Msg::refresh())),
-            "Refresh account",
+            @settings.text(model.locale, RefreshAccount),
           ),
         ],
-        desc="Run codex login --device-auth in this host's terminal. Configure ~/.codex/config.toml on the remote host; credentials remain there.",
+        desc=@settings.text(model.locale, RemoteCodexDescription),
       ),
     )
     return rows
@@ -1294,15 +1294,15 @@ fn api_settings_rows(
   if @interop.is_native_ssh(model.focused) {
     return [
       @ui.form_row(
-        "API key fallback from this computer",
+        @settings.text(model.locale, LocalApiFallback),
         [
           @html.button(
             class="button secondary",
             on_click=dispatch(OpenLocalApiSettings),
-            "Open local API settings",
+            @settings.text(model.locale, OpenLocalApiSettings),
           ),
         ],
-        desc="Remote API settings take priority. This computer supplies a fallback API key; the remote provider, endpoint and model stay unchanged. Reconnect after changing the local key.",
+        desc=@settings.text(model.locale, LocalApiFallbackDescription),
       ),
     ]
   }

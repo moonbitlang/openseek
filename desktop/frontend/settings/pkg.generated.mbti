@@ -35,6 +35,12 @@ pub(all) enum Message {
   Configuration
   OpenConfig
   ConfigDescription
+  RemoteCodex
+  RefreshAccount
+  RemoteCodexDescription
+  LocalApiFallback
+  OpenLocalApiSettings
+  LocalApiFallbackDescription
   RemoteControl
   HelpImproveSeekMoon
   ContentImprovementDescription
