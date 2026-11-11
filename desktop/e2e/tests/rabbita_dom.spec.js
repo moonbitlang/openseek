@@ -964,4 +964,3 @@ test('workspace settings dialog opens and persists per-workspace choices', async
 
   expect(app.pageErrors).toEqual([]);
 });
-

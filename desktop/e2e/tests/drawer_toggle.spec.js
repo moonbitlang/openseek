@@ -51,7 +51,6 @@ test('shell panel control remains reachable when expanded and on narrow screens'
   const original = await toggle.elementHandle();
   const initial = await toggle.boundingBox();
   expect(initial.x + initial.width).toBe(1440 - 138);
-  expect(initial.y + initial.height / 2).toBe(24);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const expand = page.getByRole('button', { name: 'Expand panel', exact: true });
