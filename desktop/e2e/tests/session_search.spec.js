@@ -151,22 +151,23 @@ test('Chat and Work searches isolate Cloud and project history and leave archive
   })) });
   await cloud.install();
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
+  const projects = page.locator('.workspace-disclosure').and(page.getByRole('button'));
   const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
   await input.fill('matching');
   await expect(rows(page)).toHaveCount(1);
-  await expect(page.locator('.workspace-disclosure')).toHaveCount(1);
-  await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
+  await expect(projects).toHaveCount(1);
+  await expect(projects).toHaveText('workspace');
   await expect(rows(page).filter({ hasText: 'Matching work archive' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await expect(input).toHaveValue('');
   await input.fill('matching');
   await expect(rows(page)).toHaveText(['Matching Cloud live']);
-  await expect(page.locator('.workspace-disclosure')).toHaveCount(0);
+  await expect(projects).toHaveCount(0);
   await page.getByRole('button', { name: 'Work', exact: true }).click();
   await expect(input).toHaveValue('');
   await input.fill('matching');
   await expect(rows(page)).toHaveText(['Matching work']);
-  await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
+  await expect(projects).toHaveText('workspace');
   expect(app.pageErrors).toEqual([]);
 });
 
