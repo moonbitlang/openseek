@@ -917,6 +917,7 @@ test "a request in flight is reason enough to re-read the record" {
         workspace: @interop.ChannelId::Local.test_project(),
         workspace_name: "work",
         updated_at_ms: None,
+        model_settings: None,
       },
     ]),
     empty,

@@ -216,7 +216,7 @@ fn Model::openseek_reasoning_chip(
   conv : Conversation,
 ) -> @composer.ReasoningSelect? {
   guard conv.engine_model.supports_reasoning() else { return None }
-  let reasoning = self.reasoning_for(conv.engine_model)
+  let reasoning = self.conversation_reasoning(conv)
   let options : Array[@composer.ModelOption] = [
     {
       value: @protocol.ThinkingOff.wire(),

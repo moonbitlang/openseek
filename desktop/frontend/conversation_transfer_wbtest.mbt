@@ -96,6 +96,7 @@ test "import waits for the normal catalog without patching inventory and ignores
           workspace: @interop.ChannelId::Local.test_project(),
           workspace_name: "work",
           updated_at_ms: None,
+          model_settings: None,
         },
       ],
       request_generation=waiting.dev().sessions_request_generation,

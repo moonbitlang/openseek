@@ -19,6 +19,7 @@ test "Chats exclude retired local history and user named workspaces remain proje
         workspace: managed,
         workspace_name: "Unnamed workspace",
         updated_at_ms: Some(1),
+        model_settings: None,
       },
     ],
   })
@@ -224,6 +225,7 @@ test "Host catalogs retain project history and exclude retired standalone histor
     workspace: project,
     workspace_name: "project",
     updated_at_ms: None,
+    model_settings: None,
   }
   let old = { ..ordinary, id: "retired-live", workspace: retired, }
   let (_, model) = update_dev(

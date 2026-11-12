@@ -87,6 +87,11 @@ list` / `openseek sessions show <id>` (or the viz server) and resumable with
 `--session <id>`. Pass `--no-session` to run ephemerally; combining it with
 `--session` is rejected.
 
+A durable session records the model and thinking mode it runs on in
+`model.json` beside its transcript. Resuming it runs on that model again,
+unless `--model` / `--thinking` (or `OPENSEEK_MODEL` / `OPENSEEK_THINKING`)
+configure another, which then becomes the session's model.
+
 Without an explicit prompt file, the CLI uses the built-in prompt
 (`prompt/default_prompt.mbt.md`) for every supported DeepSeek, Kimi, and GLM
 model name.
@@ -105,10 +110,11 @@ moon run . -- sessions fork parser-fix --as parser-fix-retry
 
 `sessions list --format=json` is the machine-readable form of the listing,
 consumed by clients such as the desktop app's sidebar: one JSON array of
-`{id, title, updated_at_ms}` objects, most recently active first. `title` is the
-first line of the session's first user prompt; `updated_at_ms` is `null` for a
-directory whose session files cannot be stat-ed (such husks sort last, like the
-human-readable listing).
+`{id, title, updated_at_ms, model_settings}` objects, most recently active
+first. `title` is the first line of the session's first user prompt;
+`updated_at_ms` is `null` for a directory whose session files cannot be stat-ed
+(such husks sort last, like the human-readable listing). `model_settings` is
+the session's recorded `{model, thinking}`, or `null` when it has none.
 
 `sessions compact <id> --file <f> --from <n> --to <n>` appends a typed summary
 event. It does not delete raw events from the session file;

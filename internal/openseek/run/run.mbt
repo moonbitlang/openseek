@@ -213,13 +213,13 @@ async fn run_general(
       "--claim is for a --kind run: the general agent starts its own session",
     )
   }
-  let (model, thinking, api_url) = @options.agent_settings(matches)
-  guard model.api_key(matches.values) is Some(api_key) else {
-    fail("an API key is required for \{model}: pass --api-key")
-  }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   match @setup.resolved_session_id(matches) {
     None => {
+      let (model, thinking, api_url) = @options.agent_settings(matches)
+      guard model.api_key(matches.values) is Some(api_key) else {
+        fail("an API key is required for \{model}: pass --api-key")
+      }
       let session_scratch_dir = @fs.tmpdir(prefix="openseek-session-")
       defer @async.protect_from_cancel(() => {
         @fs.rmdir(session_scratch_dir, recursive=true)
@@ -266,6 +266,21 @@ async fn run_general(
           "a delegated run starts a new session, and \{id.value()} already exists",
         )
       }
+      // A resumed session keeps the model it recorded unless this run was
+      // configured with another one.
+      let recorded = store.model(id)
+      let (model, thinking, api_url) = @setup.session_agent_settings(
+        matches, recorded,
+      )
+      guard model.api_key(matches.values) is Some(api_key) else {
+        fail("an API key is required for \{model}: pass --api-key")
+      }
+      let writer = @setup.SessionWriter(
+        store,
+        id,
+        { model, thinking, },
+        recorded,
+      )
       // Name the recording up front so a user scanning the event stream knows
       // where to find this run later (`sessions show`, the viz server, or
       // resuming by id).
@@ -296,7 +311,7 @@ async fn run_general(
       run_task_turn(
         matches,
         session,
-        append_item=(session, item) => turn.record(store.append(session, item)),
+        append_item=(session, item) => turn.record(writer.append(session, item)),
         job_log_dir=store.job_logs_dir(id),
         session_scratch_dir=store.scratch_dir(id),
         api_key~,
@@ -363,6 +378,9 @@ async fn run_preset(
       // The inbox sits beside the transcript and is opened just BEFORE the
       // first record: a session with a transcript and no inbox is then one
       // that takes no instructions, never one that has not got to it yet.
+      // A preset's session is new, so it records the model it runs on with
+      // its first append; `echo` appends nothing and records nothing.
+      let writer = @setup.SessionWriter(store, id, { model, thinking, }, None)
       let inbox = if kind.takes_instructions() {
         Some(store.inbox_path(id))
       } else {
@@ -376,7 +394,7 @@ async fn run_preset(
           if turn.session is None && inbox is Some(path) {
             @inbox.open(path)
           }
-          let next = store.append(session, item)
+          let next = writer.append(session, item)
           if turn.session is None {
             // Recorded: a claimed session is an ordinary one from here on.
             if claim_token(matches) is Some(_) {

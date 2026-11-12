@@ -27,6 +27,7 @@ pub fn sessions_from_reply(
         workspace,
         workspace_name: group.name,
         updated_at_ms: entry.updated_at_ms,
+        model_settings: entry.model_settings,
       })
     }
   }

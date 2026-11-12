@@ -239,6 +239,35 @@ pub(all) struct SessionListEntry {
   id : String
   title : String?
   updated_at_ms : Double?
+  /// The model the session last ran on, from its `model.json`; `None` when
+  /// the session has not recorded one.
+  model_settings : SessionModelSettings?
+}
+
+///|
+/// The model and thinking mode a session runs on, as the engine records them
+/// beside its transcript.
+#derive(Debug, Eq)
+pub(all) struct SessionModelSettings {
+  model : String
+  thinking : Thinking
+}
+
+///|
+pub impl ToJson for SessionModelSettings with fn to_json(self) {
+  { "model": self.model, "thinking": self.thinking }
+}
+
+///|
+pub impl FromJson for SessionModelSettings with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionModelSettings")
+  {
+    model: object.required_string("model"),
+    thinking: @json.from_json(
+      object.required_json("thinking"),
+      path=path.add_key("thinking"),
+    ),
+  }
 }
 
 ///|
@@ -254,10 +283,17 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
     Some(Number(value, ..)) => Some(value)
     _ => None
   }
+  // Lenient like the fields above: a record this build cannot read leaves
+  // the row on the default model rather than dropping the row.
+  let model_settings : SessionModelSettings? = match
+    fields.get("model_settings") {
+    Some(value) => Some(@json.from_json(value)) catch { _ => None }
+    _ => None
+  }
   guard fields.get("id") is Some(String(id)) else {
     raise JsonDecodeError((path, "session list entry needs a string id"))
   }
-  { id, title, updated_at_ms, }
+  { id, title, updated_at_ms, model_settings, }
 }
 
 ///|
@@ -3101,6 +3137,18 @@ pub extend SessionListEntry with Eq::{equal, not_equal}
 pub extend SessionListEntry with ToJson::{to_json}
 
 ///|
+pub extend SessionModelSettings with Debug::{to_repr}
+
+///|
+pub extend SessionModelSettings with FromJson::{from_json}
+
+///|
+pub extend SessionModelSettings with Eq::{equal, not_equal}
+
+///|
+pub extend SessionModelSettings with ToJson::{to_json}
+
+///|
 pub extend SessionRuntimeNotice with Debug::{to_repr}
 
 ///|
@@ -3567,6 +3615,9 @@ pub impl ToJson for SessionListEntry with fn to_json(self) {
   }
   if self.updated_at_ms is Some(value) {
     fields["updated_at_ms"] = Json(value)
+  }
+  if self.model_settings is Some(value) {
+    fields["model_settings"] = ToJson::to_json(value)
   }
   Json(fields)
 }

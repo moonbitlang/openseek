@@ -249,6 +249,7 @@ fn Model::push_group_component_inputs(
       workspace,
       workspace_name: workspace.path,
       updated_at_ms: None,
+      model_settings: None,
     })
   }
   // A child opened from Workflows may not be in the host inventory yet.
@@ -2855,6 +2856,7 @@ test "project component receives the complete conversation list" {
       workspace: project,
       workspace_name: "alpha",
       updated_at_ms: None,
+      model_settings: None,
     })
   }
   let model = test_model().with_dev(dev => {
@@ -2896,6 +2898,7 @@ test "same-id records in two project stores keep distinct row keys" {
         workspace: alpha,
         workspace_name: "alpha",
         updated_at_ms: None,
+        model_settings: None,
       },
       {
         id: "desktop-shared",
@@ -2903,6 +2906,7 @@ test "same-id records in two project stores keep distinct row keys" {
         workspace: beta,
         workspace_name: "beta",
         updated_at_ms: None,
+        model_settings: None,
       },
     ],
   })

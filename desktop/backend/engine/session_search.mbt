@@ -12,7 +12,7 @@ pub async fn search_sessions(
   let errors : Array[String] = []
   for
     archived in (if payload.include_archived { [false, true] } else { [false] }) {
-    let reply = if archived { archived_sessions() } else { list_sessions() }
+    let reply = session_listing_groups(archived~, models=false)
     for group in reply.groups {
       if !group.error.is_empty() {
         errors.push("\{group.workspace}: \{group.error}")

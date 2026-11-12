@@ -131,6 +131,9 @@ pub(all) struct SessionListItem {
   // for a damaged directory the engine could not stat; such rows keep their
   // listing but sort after stamped ones, same as the engine's own ordering.
   updated_at_ms : Double?
+  // The model the session last ran on (its `model.json`); `None` when it has
+  // not recorded one.
+  model_settings : @desktop_protocol.SessionModelSettings?
 }
 
 ///|
