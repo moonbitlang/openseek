@@ -174,7 +174,7 @@ fn append_item_text(
       | ContextYield(message)
       | Aborted(message)
       | Interrupted(message)
-      | Failed(message)
+      | Failed(message),
     ) => write_line(out, message)
     Terminal(MaxStepsExhausted) =>
       write_line(out, @agent_session.MaxStepsExhaustedMessage)

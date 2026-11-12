@@ -285,7 +285,7 @@ fn parse_moon_check_diagnostics_impl(
           "loc": String(loc),
           "message": String(message),
           ..
-        }
+        },
       ) => {
         let normalized = normalize_host_path(path)
         let relative = match normalized.strip_prefix(prefix) {

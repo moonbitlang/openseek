@@ -69,7 +69,7 @@ pub(all) enum SubagentUsage {
     completion_tokens~ : Int32,
     cost_usd~ : Double?,
     source~ : SubagentUsageSource,
-    unaccounted~ : String?
+    unaccounted~ : String?,
   )
   /// Nothing could be read; why.
   Unavailable(String)
@@ -231,7 +231,7 @@ pub impl ToJson for SubagentUsage with fn to_json(self) {
       completion_tokens~,
       cost_usd~,
       source~,
-      unaccounted~
+      unaccounted~,
     ) => {
       let fields : Map[String, Json] = {
         "kind": "known",

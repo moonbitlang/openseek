@@ -295,7 +295,7 @@ pub enum FileIndex {
     files~ : Array[@pathx.Relative],
     truncated~ : Bool,
     refreshing~ : Bool,
-    refresh_again~ : Bool
+    refresh_again~ : Bool,
   )
 }
 
@@ -355,7 +355,7 @@ pub(all) enum ChangeList {
     repository~ : Bool,
     files~ : Array[ChangedFile],
     refreshing~ : Bool,
-    refresh_again~ : Bool
+    refresh_again~ : Bool,
   )
 }
 
@@ -374,7 +374,7 @@ pub(all) enum GitGraphState {
     commits~ : Array[@protocol.GitHistoryCommit],
     has_more~ : Bool,
     loading_more~ : Bool,
-    load_error~ : String?
+    load_error~ : String?,
   )
 }
 
@@ -388,7 +388,7 @@ pub enum GitCommitFiles {
   GitCommitFilesReady(
     commit~ : String,
     parent~ : String?,
-    files~ : Array[@protocol.GitHistoricalChange]
+    files~ : Array[@protocol.GitHistoricalChange],
   )
 }
 
@@ -983,25 +983,25 @@ pub(all) enum Msg {
     auth_epoch~ : Int32,
     generation~ : Int32,
     path~ : @common.Uri,
-    bytes~ : Bytes
+    bytes~ : Bytes,
   )
   FileDownloaded(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,
     generation~ : Int32,
     path~ : @common.Uri,
-    result~ : Result[Unit, Failure]
+    result~ : Result[Unit, Failure],
   )
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
   OfficeCitationLaidOut(OfficeCitationNavigation)
   ReviewContextRevealFinished(
     source~ : @mention_context.ReviewSource,
-    found~ : Bool
+    found~ : Bool,
   )
   ReviewContextChanged(
     owner~ : @interop.ConversationIdentity,
     selection~ : @mention_context.ReviewChanges,
-    adding~ : Bool
+    adding~ : Bool,
   )
   GithubReview(@github_review.Msg)
   UpdatePullRequest
@@ -1025,7 +1025,7 @@ pub(all) enum Msg {
   SearchMatchSelected(path~ : String, range~ : @common.Range)
   SemanticSelectionChanged(
     owner~ : @interop.ConversationKey,
-    reference~ : @mention_context.SemanticSearchReference?
+    reference~ : @mention_context.SemanticSearchReference?,
   )
   // The Office viewer emits a versioned `office.selection.v1` envelope after
   // a native Word text or Excel range selection. The root prepares a preview;
@@ -1035,7 +1035,7 @@ pub(all) enum Msg {
     epoch~ : Int32,
     path~ : @common.Uri,
     sig~ : String,
-    selection~ : String
+    selection~ : String,
   )
   OfficeSelectionConfirmed(OfficeSelectionPreview)
   OfficeFeedbackChanged(OfficeSelectionPreview, String)
@@ -1059,7 +1059,7 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     sig~ : String,
     generation~ : Int32,
-    event~ : String
+    event~ : String,
   )
   PdfSelectionChanged(
     owner~ : @interop.ConversationIdentity,
@@ -1067,12 +1067,12 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     sig~ : String,
     generation~ : Int32,
-    selection~ : String
+    selection~ : String,
   )
   OfficeRegionRequested
   OfficeRegionFinished(
     OfficeRegionRequest,
-    Result[@office_capture.Capture, String]?
+    Result[@office_capture.Capture, String]?,
   )
   OfficeRegionFeedbackChanged(OfficeRegionPreview, String)
   OfficeRegionBatchChanged(OfficeRegionPreview, Bool)
@@ -1085,7 +1085,7 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     sig~ : String,
     generation~ : Int32,
-    result~ : Result[@pdf_capture.Capture, String]
+    result~ : Result[@pdf_capture.Capture, String],
   )
   PdfCaptureFeedbackChanged(PdfCapturePreview, String)
   PdfCaptureBatchChanged(PdfCapturePreview, Bool)
@@ -1117,13 +1117,13 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @pathx.Relative,
-    entries~ : Array[FileEntry]
+    entries~ : Array[FileEntry],
   )
   DirFailed(
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @pathx.Relative,
-    message~ : Failure
+    message~ : Failure,
   )
   // A workspace snapshot reply. The owner/epoch pair rejects a result that
   // outlived a conversation or concrete-root transition.
@@ -1131,7 +1131,7 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     files~ : Array[@pathx.Relative],
-    truncated~ : Bool
+    truncated~ : Bool,
   )
   // A request failed or was cancelled. A failed background refresh keeps the
   // previously ready snapshot; only an initial fetch becomes IndexFailed.
@@ -1145,12 +1145,12 @@ pub(all) enum Msg {
     generation~ : Int32,
     repository~ : Bool,
     head~ : String?,
-    files~ : Array[ChangedFile]
+    files~ : Array[ChangedFile],
   )
   ChangesFailed(
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
-    message~ : String
+    message~ : String,
   )
   // A low-frequency fallback while Changes is visible. The selective file
   // watcher intentionally follows only open/listed paths, so polling also
@@ -1164,7 +1164,7 @@ pub(all) enum Msg {
   GitHeadObserved(
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
-    head~ : String?
+    head~ : String?,
   )
   GitHistoryRefreshRequested
   GitHistoryLoadMoreRequested
@@ -1172,25 +1172,25 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     append~ : Bool,
-    reply~ : @protocol.GitHistoryReply
+    reply~ : @protocol.GitHistoryReply,
   )
   GitHistoryFailed(
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     append~ : Bool,
-    message~ : String
+    message~ : String,
   )
   GitCommitSelected(String)
   GitCommitChangesLoaded(
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
-    reply~ : @protocol.GitCommitChangesReply
+    reply~ : @protocol.GitCommitChangesReply,
   )
   GitCommitChangesFailed(
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     commit~ : String,
-    message~ : String
+    message~ : String,
   )
   GitCommitChangesRetry(String)
   HistoricalFileSelected(@dock.GitHistoryDiff)
@@ -1206,7 +1206,7 @@ pub(all) enum Msg {
   PreviewLargeFile(
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
-    path~ : @common.Uri
+    path~ : @common.Uri,
   )
   // A Changes row was clicked. The full decoded row carries the original path
   // needed by renames/copies and whether a working-tree read is possible.
@@ -1218,7 +1218,7 @@ pub(all) enum Msg {
   DiffLoadingDue(
     owner~ : @interop.ConversationIdentity,
     path~ : @common.Uri,
-    generation~ : Int32
+    generation~ : Int32,
   )
   // Switch the active changed-file review between its selected source
   // presentation and the full comparison. Unavailable/loading reviews ignore
@@ -1259,14 +1259,14 @@ pub(all) enum Msg {
     epoch~ : Int32,
     path~ : @common.Uri,
     generation~ : Int32,
-    source~ : String
+    source~ : String,
   )
   PackageGraphRequestFailed(
     owner~ : @interop.ConversationKey,
     epoch~ : Int32,
     path~ : @common.Uri,
     generation~ : Int32,
-    message~ : String
+    message~ : String,
   )
   // The visible DiffEditor publishes only its current projected hunk. The
   // reducer validates exact row, diff generation, and surface generation.
@@ -1277,7 +1277,7 @@ pub(all) enum Msg {
     surface_generation~ : Int32,
     hunk~ : ReviewHunk?,
     file_changes~ : ReviewHunk?,
-    position~ : ReviewHunkPosition?
+    position~ : ReviewHunkPosition?,
   )
   ToggleActiveReviewHunk
   ToggleReviewHunk(
@@ -1286,7 +1286,7 @@ pub(all) enum Msg {
     surface_generation~ : Int32,
     hunk~ : ReviewHunk,
     file_changes~ : ReviewHunk?,
-    position~ : ReviewHunkPosition?
+    position~ : ReviewHunkPosition?,
   )
   // One `git.original_file` request settled. `path` is always the current
   // changed path (the dock/document key), even when the host read its rename
@@ -1296,28 +1296,28 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     generation~ : Int32,
     background~ : Bool,
-    original~ : @protocol.GitOriginalFileReply
+    original~ : @protocol.GitOriginalFileReply,
   )
   GitOriginalFailed(
     owner~ : @interop.ConversationIdentity,
     path~ : @common.Uri,
     generation~ : Int32,
     background~ : Bool,
-    message~ : String
+    message~ : String,
   )
   HistoryBlobLoaded(
     owner~ : @interop.ConversationIdentity,
     key~ : String,
     generation~ : Int32,
     side~ : HistoryDiffSide,
-    blob~ : @protocol.GitOriginalFileReply
+    blob~ : @protocol.GitOriginalFileReply,
   )
   HistoryBlobFailed(
     owner~ : @interop.ConversationIdentity,
     key~ : String,
     generation~ : Int32,
     side~ : HistoryDiffSide,
-    message~ : String
+    message~ : String,
   )
   // A Definition/References result accepted by the Viewer's location opener.
   // Carry the captured owner so a conversation switch that races the async
@@ -1325,7 +1325,7 @@ pub(all) enum Msg {
   OpenNavigationLocation(
     owner~ : @interop.ConversationKey,
     path~ : @pathx.Relative,
-    range~ : @common.Range
+    range~ : @common.Range,
   )
   // `file` is the decoded reply (content + address, or a withheld-file
   // case). `range`, when present, is a jumped-to symbol's one-based range,
@@ -1351,7 +1351,7 @@ pub(all) enum Msg {
     file_link_generation~ : Int32?,
     review_generation~ : Int32?,
     range~ : @common.Range?,
-    annotation~ : String?
+    annotation~ : String?,
   )
   // A read failure carries the same path/generation identities as success so
   // a stale navigation read can settle its loading tab without surfacing an
@@ -1363,7 +1363,7 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     file_link_generation~ : Int32?,
     review_generation~ : Int32?,
-    message~ : Failure
+    message~ : Failure,
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
   // generation identifies the exact watcher configuration that produced it.
@@ -1371,14 +1371,14 @@ pub(all) enum Msg {
     channel~ : @interop.ChannelId,
     root~ : @common.Uri,
     generation~ : String,
-    message~ : Failure
+    message~ : Failure,
   )
   // A new watcher sends `changes=None` once it is attached, requesting a full
   // baseline reconciliation. Later pushes contain the exact debounced events.
   FsChanged(
     root~ : @common.Uri,
     generation~ : String,
-    changes~ : Array[FileChange]?
+    changes~ : Array[FileChange]?,
   )
   // The conversation's agent run finished: the workspace has settled, so
   // re-check the active MoonBit file's module. The pruned watcher cannot see
@@ -1389,14 +1389,14 @@ pub(all) enum Msg {
   RunSettled(owner~ : @interop.ConversationIdentity)
   WorkspaceInvalidated(
     owner~ : @interop.ConversationIdentity,
-    auth_epoch~ : Int32
+    auth_epoch~ : Int32,
   )
   FileVersionChecked(
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @common.Uri,
     sig~ : String,
-    unchanged~ : Bool
+    unchanged~ : Bool,
   )
   // Files outside the checkout, or whose watcher failed, share one stat tick.
   RefreshExternalFiles
@@ -1409,7 +1409,7 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationKey,
     epoch~ : Int32,
     stats~ : Array[FileStat],
-    recheck_diagnostics~ : Bool
+    recheck_diagnostics~ : Bool,
   )
   // The language server's diagnostics returned by `lsp_open`. The full owner
   // fences a reply that lost a device/session switch while the request ran.
@@ -1417,7 +1417,7 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationKey,
     epoch~ : Int32,
     absolute~ : @common.Uri,
-    diagnostics~ : Array[@protocol.LspDiagnostic]
+    diagnostics~ : Array[@protocol.LspDiagnostic],
   )
   // A later diagnostics push from the host. The wire event is channel-scoped
   // but carries no session, so the main package first rejects background
@@ -1425,7 +1425,7 @@ pub(all) enum Msg {
   DiagnosticsPublished(
     channel~ : @interop.ChannelId,
     absolute~ : @common.Uri,
-    diagnostics~ : Array[@protocol.LspDiagnostic]
+    diagnostics~ : Array[@protocol.LspDiagnostic],
   )
   // A user-invoked Definition/References request reached the host but failed.
   // The root app intercepts this message and shows its transient toast; the
@@ -1447,7 +1447,7 @@ pub(all) enum Msg {
     range~ : @common.Range,
     quote~ : String,
     comment~ : String,
-    feedback_id~ : String
+    feedback_id~ : String,
   )
   // Submit feedback already attached by the root through its ordinary send path.
   ApplyAllFeedback
@@ -1468,7 +1468,7 @@ pub(all) enum Msg {
     comment~ : String,
     // Present when the comment came from the original-side code kernel.
     resource~ : ModelUri?,
-    feedback_id~ : String?
+    feedback_id~ : String?,
   )
 }
 

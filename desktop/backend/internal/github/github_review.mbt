@@ -485,7 +485,7 @@ pub async fn mutate_review(
         guard response is { "data": Object(data), .. } &&
           data.get(field)
           is Some(
-            { "thread": { "id": String(id), "isResolved": confirmed, .. }, .. }
+            { "thread": { "id": String(id), "isResolved": confirmed, .. }, .. },
           ) &&
           id == thread &&
           confirmed == Json(resolved) else {

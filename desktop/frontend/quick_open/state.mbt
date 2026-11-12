@@ -128,7 +128,7 @@ pub fn State::handle(
       generation~,
       files~,
       from_cache=_,
-      limit_hit=_
+      limit_hit=_,
     ) =>
       (
         @cmd.none,

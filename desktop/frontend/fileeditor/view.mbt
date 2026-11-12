@@ -3501,7 +3501,7 @@ fn review_badge(
             state: TabDeleted,
             review: Some({ baseline: ReviewContent(_), .. }),
             ..
-          }
+          },
         ) =>
           (
             ui(locale, DeletedBaseline),
@@ -3514,7 +3514,7 @@ fn review_badge(
             state: TabReadFailed(_),
             review: Some({ baseline: ReviewContent(_), .. }),
             ..
-          }
+          },
         ) =>
           (
             ui(locale, WorkingUnavailable),
@@ -3539,7 +3539,7 @@ fn review_badge(
             state: TabDeleted,
             review: Some({ baseline: ReviewMissing, .. }),
             ..
-          }
+          },
         ) =>
           (ui(locale, DeletedNoBaseline), ui(locale, NoBaseline), false, false)
         Some({ name, review: Some({ baseline: ReviewContent(_), .. }), .. }) if name.has_suffix(

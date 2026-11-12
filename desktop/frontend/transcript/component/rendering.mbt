@@ -423,7 +423,7 @@ priv enum BlockContent {
     subrun_parent~ : String?,
     wait_labels~ : Map[Int32, String],
     fork~ : ForkAction?,
-    edit~ : UserEditAction?
+    edit~ : UserEditAction?,
   )
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
@@ -435,7 +435,7 @@ priv enum BlockContent {
     reasoning~ : String?,
     reasoning_complete~ : Bool,
     step_label~ : String?,
-    assistant_name~ : String
+    assistant_name~ : String,
   )
 }
 
@@ -564,7 +564,7 @@ fn Block::render(
       subrun_parent~,
       wait_labels~,
       fork~,
-      edit~
+      edit~,
     ) =>
       transcript_item_view(
         artifact_view?,

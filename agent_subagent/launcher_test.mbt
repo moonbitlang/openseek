@@ -150,7 +150,7 @@ async test "a child that reports is Captured, with its usage and stored report" 
           completion_tokens=15,
           source=Result,
           ..
-        )
+        ),
       ),
     )
     assert_true(info.report is Some(Stored))

@@ -43,12 +43,12 @@ pub(all) enum Event {
     tool_name~ : String,
     is_error~ : Bool,
     content~ : String,
-    brief~ : String?
+    brief~ : String?,
   )
   ToolCallDecodeError(
     tool_call_id~ : String,
     tool_name~ : String,
-    error~ : String
+    error~ : String,
   )
 
   // ── approval ───────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ pub(all) enum Event {
     id~ : String,
     tool_name~ : String,
     detail~ : String,
-    body~ : String?
+    body~ : String?,
   )
   /// How a previously requested approval settled — including when it settled
   /// without the controller's answer — the turn was interrupted, or a second
@@ -94,7 +94,7 @@ pub(all) enum Event {
     request_id~ : String,
     generation~ : String,
     job_id~ : String,
-    outcome~ : JobStopOutcome
+    outcome~ : JobStopOutcome,
   )
 
   // ── goal ───────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ pub(all) enum Event {
   CompactionFinished(
     from_sequence~ : Int32,
     to_sequence~ : Int32,
-    summary~ : String
+    summary~ : String,
   )
   /// Also reported when the cause was cancellation; how loudly to show it is
   /// the client's call, made from the variant.
@@ -123,7 +123,7 @@ pub(all) enum Event {
   AutoCompactionFinished(
     from_sequence~ : Int32,
     to_sequence~ : Int32,
-    summary~ : String
+    summary~ : String,
   )
   AutoCompactionFailed(error~ : String)
   ContextYield(to_sequence~ : Int32, answer~ : String)
@@ -153,7 +153,7 @@ pub(all) enum Event {
     steps~ : Int32,
     prompt_tokens~ : Int32,
     completion_tokens~ : Int32,
-    unaccounted~ : String?
+    unaccounted~ : String?,
   )
 
   // ── workflow ───────────────────────────────────────────────────────────
@@ -182,7 +182,7 @@ pub(all) enum Event {
     journal~ : String,
     events~ : String,
     first_child~ : Int32,
-    child_count~ : Int32
+    child_count~ : Int32,
   )
   /// The paired completion, emitted on every exit of the snippet that owns
   /// the run — success, failure, and cancellation — so a reader never shows
@@ -196,7 +196,7 @@ pub(all) enum Event {
   SessionStarted(
     session~ : String,
     session_root~ : String,
-    workspace_root~ : String?
+    workspace_root~ : String?,
   )
   SessionError(error~ : String)
   WorkspaceCreated(dir~ : String)

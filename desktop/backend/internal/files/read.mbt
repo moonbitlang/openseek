@@ -422,7 +422,7 @@ async test "binary file reads expose only recognized raster signatures" {
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
-      sig=_
+      sig=_,
     ),
   )
   let root = @pathx.Path(@fs.realpath(dir))
@@ -435,7 +435,7 @@ async test "binary file reads expose only recognized raster signatures" {
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
-      sig=_
+      sig=_,
     ),
   )
   let disguised = "\{dir}/not-an-image.png"

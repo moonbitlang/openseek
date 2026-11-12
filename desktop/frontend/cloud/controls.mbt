@@ -831,7 +831,7 @@ fn State::update_control(
     }
     ControlAction(
       _,
-      @composer.FollowupSubmitted(draft~, choice~, attachments~, ..)
+      @composer.FollowupSubmitted(draft~, choice~, attachments~, ..),
     ) => {
       guard running && !locked && (!draft.is_blank() || !attachments.is_empty()) else {
         return Some((self, @cmd.none))

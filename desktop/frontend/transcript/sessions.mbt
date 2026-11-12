@@ -399,7 +399,7 @@ pub fn apply_session_item(
             calls~,
             replay~,
             finished~,
-            end_sequence~
+            end_sequence~,
           ) else {
           continue
         }
@@ -570,7 +570,7 @@ fn SessionTerminalProjection::append_to(
           calls=[],
           replay=false,
           finished=false,
-          end_sequence=_
+          end_sequence=_,
         ) &&
         prose == message {
         items[items.length() - 1] = {

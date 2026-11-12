@@ -234,7 +234,7 @@ async test "a run emits a matched started/finished bracket pair" {
         steps=2,
         prompt_tokens=90,
         completion_tokens=10,
-        unaccounted=None
+        unaccounted=None,
       ),
     ] else {
     fail("expected exactly one started/finished pair, got \{Repr(events)}")

@@ -22,13 +22,13 @@ pub(all) enum McpServer {
     name~ : String,
     command~ : String,
     args~ : Array[String],
-    env~ : Map[String, String]
+    env~ : Map[String, String],
   )
   Http(
     name~ : String,
     url~ : String,
     headers~ : Map[String, String],
-    headers_helper~ : HeadersHelperCommand?
+    headers_helper~ : HeadersHelperCommand?,
   )
 }
 

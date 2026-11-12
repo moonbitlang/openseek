@@ -11,12 +11,12 @@ pub(all) enum Context {
     request_id~ : String,
     target~ : String,
     status~ : String,
-    error~ : String?
+    error~ : String?,
   )
   UserQuestionResponse(
     request_id~ : String,
     questions~ : Array[@protocol.UserQuestion],
-    answers~ : Map[String, String]?
+    answers~ : Map[String, String]?,
   )
 }
 

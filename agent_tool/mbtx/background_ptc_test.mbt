@@ -54,7 +54,7 @@ async test "default PTC survives background handoff and persists job-owned edit 
         assert_true(
           record.data
           is Some(
-            { "ptc_calls": [{ "name": "edit", "status": "done", .. }], .. }
+            { "ptc_calls": [{ "name": "edit", "status": "done", .. }], .. },
           ),
         )
         let saved = @json.parse(
@@ -265,10 +265,10 @@ async test "background edits after foreground edits validate stale input and kee
                     { "name": "edit", "result": { "is_error": true, .. }, .. },
                   ],
                   ..
-                }
+                },
               ),
               ..
-            }
+            },
           ),
         )
       })
@@ -423,7 +423,7 @@ async test "handoff failure retains completed mutations and interrupts pending c
                 { "name": "block", "status": "interrupted", .. },
               ],
               ..
-            }
+            },
           ),
         )
       })

@@ -333,7 +333,7 @@ test "workspace settings input projects the mirror row and falls back inert" {
     is Loaded(
       worktree_mode~,
       checkout_submodules~,
-      submodule_checkout_timeout_seconds~
+      submodule_checkout_timeout_seconds~,
     ) else {
     fail("expected a loaded snapshot")
   }
@@ -754,9 +754,9 @@ test "settings commit decoder carries the workspace identity" {
           workspace~,
           worktree_mode~,
           checkout_submodules~,
-          submodule_checkout_timeout_seconds~
-        )
-      )
+          submodule_checkout_timeout_seconds~,
+        ),
+      ),
     ) else {
     fail("expected a workspace settings change")
   }

@@ -264,7 +264,7 @@ async test "HTTP and stdio call the same host-owned objects" {
           {
             "result": { "content": [{ "text": "same-session:2", .. }], .. },
             ..
-          }
+          },
         ),
       )
       assert_eq(calls.val, 2)
@@ -375,7 +375,7 @@ async test "tool errors use the host logger separately from stdio replies" {
             ..
           },
           ..
-        }
+        },
       ),
     )
     assert_eq(entries.length(), 1)

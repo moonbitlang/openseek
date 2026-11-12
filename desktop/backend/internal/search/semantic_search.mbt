@@ -100,17 +100,17 @@ priv enum SemanticSearchRequest {
     command~ : @moonbit.MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchSemanticPayload,
-    reply~ : @async.Queue[@protocol.SearchSemanticReply]
+    reply~ : @async.Queue[@protocol.SearchSemanticReply],
   )
   Cancel(
     session_key~ : String,
     generation~ : Int32,
-    reply~ : @async.Queue[Unit]
+    reply~ : @async.Queue[Unit],
   )
   Finished(
     session_key~ : String,
     generation~ : Int32,
-    outcome~ : SemanticSearchOutcome
+    outcome~ : SemanticSearchOutcome,
   )
 }
 

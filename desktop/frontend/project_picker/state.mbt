@@ -79,7 +79,7 @@ pub(all) enum Msg {
     channel~ : @interop.ChannelId,
     location~ : Location,
     entries~ : Array[String],
-    generation~ : Int32
+    generation~ : Int32,
   )
   // A browse or create failed; the shell pops the message as a toast and the
   // previous listing stays usable.

@@ -2409,7 +2409,7 @@ fn update_msg(
       codex_model~,
       codex_effort~,
       openseek_effort~,
-      glm_effort~
+      glm_effort~,
     ) => {
       let theme = theme
         .map(value => Theme::parse(value, model.theme))
@@ -3385,7 +3385,7 @@ fn update_msg(
     FileEditor(
       EditorCommentAdded(..)
       | ApplyAllFeedback
-      | ApplyEditorFeedback(_) as feedback
+      | ApplyEditorFeedback(_) as feedback,
     ) => update_editor_feedback(dispatch, feedback, model)
     ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~) => {
       guard model.artifact_followup is None &&
@@ -3420,8 +3420,8 @@ fn update_msg(
         quote~,
         comment~,
         resource~,
-        feedback_id~
-      )
+        feedback_id~,
+      ),
     ) => {
       let clear_feedback = match (resource, feedback_id) {
         (Some(resource), Some(feedback_id)) =>
@@ -3639,8 +3639,8 @@ fn update_msg(
         epoch~,
         path~,
         sig~,
-        selection~
-      )
+        selection~,
+      ),
     ) => {
       guard model.file_panel.accepts_office_callback(
         file_ctx(model),
@@ -3761,8 +3761,8 @@ fn update_msg(
         path~,
         sig~,
         generation~,
-        result~
-      )
+        result~,
+      ),
     ) => {
       let ctx = file_ctx(model)
       guard ctx.panel_open &&
@@ -3822,8 +3822,8 @@ fn update_msg(
         path~,
         sig~,
         generation~,
-        selection~
-      )
+        selection~,
+      ),
     ) => {
       guard model.file_panel.accepts_pdf_callback(
         file_ctx(model),
@@ -3950,7 +3950,7 @@ fn update_msg(
     // before/after check uses that package's owner/root/generation fencing and
     // also prevents a repeated host notification from stacking duplicates.
     FileEditor(
-      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~)
+      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~),
     ) => {
       let file_message = @fileeditor.FileWatchFailed(
         channel~,
@@ -6658,7 +6658,7 @@ fn update_msg(
           auth_epoch~,
           generation~,
           path~,
-          bytes~
+          bytes~,
         ) {
         return (
           @fileeditor.browser_download(
@@ -7330,7 +7330,7 @@ fn update_msg(
     Terminal(@terminal.LinkActivated(url~)) =>
       update_msg(dispatch, ExternalLinkClicked(url), model)
     Terminal(
-      @terminal.CommandFinished(shell~, exit_code~, output~, truncated~) as msg
+      @terminal.CommandFinished(shell~, exit_code~, output~, truncated~) as msg,
     ) => {
       // The panel sees it too: the result is read, so the tab can retire.
       let (retire, terminal) = model.terminal.handle(
@@ -8269,7 +8269,7 @@ fn update_device_msg(
           guard conv.queue_edit
             is Some(
               Saving(id=saving_id, run_id=saving_run, ..)
-              | SavingDetached(id=saving_id, run_id=saving_run)
+              | SavingDetached(id=saving_id, run_id=saving_run),
             ) &&
             saving_id == id &&
             saving_run == run_id else {
@@ -8343,7 +8343,7 @@ fn update_device_msg(
         conv.queue_edit
         is Some(
           Saving(id=saving_id, run_id=saving_run, ..)
-          | SavingDetached(id=saving_id, run_id=saving_run)
+          | SavingDetached(id=saving_id, run_id=saving_run),
         ) &&
         saving_id == id &&
         saving_run == run_id else {
@@ -8601,7 +8601,7 @@ fn update_device_msg(
       paths,
       connection_generation~,
       request_generation~,
-      chat_root~
+      chat_root~,
     ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.projects_request_generation else {
@@ -8710,7 +8710,7 @@ fn update_device_msg(
       checkout_submodules~,
       submodule_checkout_timeout_seconds~,
       connection_generation~,
-      request_generation~
+      request_generation~,
     ) => {
       // The same per-workspace staleness fence as `WorktreesLoaded` — plus a
       // registry-membership check, because pruning a detached workspace's
@@ -8740,7 +8740,7 @@ fn update_device_msg(
       workspace~,
       worktree_mode~,
       checkout_submodules~,
-      submodule_checkout_timeout_seconds~
+      submodule_checkout_timeout_seconds~,
     ) => {
       // A broadcast can race the detach commit the same way a reply can
       // (the hub orders them per client, so an attach is always processed
@@ -8769,7 +8769,7 @@ fn update_device_msg(
       workspace~,
       connection_generation~,
       request_generation~,
-      result~
+      result~,
     ) => {
       guard dev.projects.contains(workspace) &&
         connection_generation == dev.connection_generation else {
@@ -8825,7 +8825,7 @@ fn update_device_msg(
       rows,
       workspace~,
       connection_generation~,
-      request_generation~
+      request_generation~,
     ) => {
       // The staleness fence is per workspace: this reply is stale only when
       // THIS workspace's rows were already applied under a newer token — a
@@ -8863,7 +8863,7 @@ fn update_device_msg(
       workspace~,
       connection_generation~,
       request_generation~,
-      message~
+      message~,
     ) => {
       // A later snapshot or broadcast for this workspace makes an older
       // failure irrelevant, just as a dead connection's rejection must not
@@ -8984,7 +8984,7 @@ fn update_device_msg(
       items,
       connection_generation~,
       request_generation~,
-      fresh_session~
+      fresh_session~,
     ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.archived_request_generation else {
@@ -9068,7 +9068,7 @@ fn update_device_msg(
       items~,
       connection_generation~,
       request_generation~,
-      fresh_session~
+      fresh_session~,
     ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.archived_request_generation else {
@@ -9395,7 +9395,7 @@ fn update_device_msg(
       goal~,
       goal_markers~,
       prediction~,
-      generation~
+      generation~,
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
@@ -9408,7 +9408,7 @@ fn update_device_msg(
       goal~,
       goal_markers~,
       prediction~,
-      generation~
+      generation~,
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
@@ -9621,7 +9621,7 @@ fn update_device_msg(
       generation~,
       queried~,
       pull_request~,
-      compare_url~
+      compare_url~,
     ) => {
       guard model.find_conversation(channel, session) is Some(conv) else {
         return (@cmd.none, model)
@@ -9678,7 +9678,7 @@ fn update_device_msg(
       model=selected_model,
       max_steps~,
       session_root~,
-      submission_id~
+      submission_id~,
     ) => {
       // This run's durable store, classified exactly the way a commit's root
       // is: Started precedes the first commit, so on a fresh connection this
@@ -9906,7 +9906,7 @@ fn update_device_msg(
       approvals~,
       live~,
       frontier~,
-      connection_generation~
+      connection_generation~,
     ) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
@@ -12023,10 +12023,10 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
         stage: Retrying(
           attempt=2,
           max_attempts=5,
-          reason="Stream ended before [DONE]"
+          reason="Stream ended before [DONE]",
         ),
         ..
-      }
+      },
     ),
   )
   // The replacement attempt's first delta ends the notice.
@@ -18695,7 +18695,7 @@ test "session.changed decoder preserves archive invalidation identity" {
       workspace: store.path,
     })
     is Some(
-      SessionsChanged(change="archived", key=archived, fresh_session=Some(_))
+      SessionsChanged(change="archived", key=archived, fresh_session=Some(_)),
     ) else {
     fail("archive invalidation was not decoded")
   }
@@ -18706,7 +18706,7 @@ test "session.changed decoder preserves archive invalidation identity" {
       workspace: store.path,
     })
     is Some(
-      SessionsChanged(change="deleted", key=deleted, fresh_session=Some(_))
+      SessionsChanged(change="deleted", key=deleted, fresh_session=Some(_)),
     ) else {
     fail("delete invalidation was not decoded")
   }
@@ -20732,10 +20732,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     is Some(
       {
         state: @fileeditor.TabReadFailed(
-          @fileeditor.Diagnostic("newer ordinary read failed")
+          @fileeditor.Diagnostic("newer ordinary read failed"),
         ),
         ..
-      }
+      },
     ),
   )
   let (_, old_after_failure) = update(
@@ -20802,10 +20802,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     is Some(
       {
         state: @fileeditor.TabReadFailed(
-          @fileeditor.Diagnostic("old read failed")
+          @fileeditor.Diagnostic("old read failed"),
         ),
         ..
-      }
+      },
     ),
   )
   // The current failure is authoritative even if the stale success filled the
@@ -20830,10 +20830,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     is Some(
       {
         state: @fileeditor.TabReadFailed(
-          @fileeditor.Diagnostic("current read failed")
+          @fileeditor.Diagnostic("current read failed"),
         ),
         ..
-      }
+      },
     ),
   )
   let (_, current_file_reply) = update(
@@ -21063,7 +21063,7 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
       end_line=7,
       quote="let answer = 42",
       comment="name this constant",
-      side=@mention_context.WorkingRevision
+      side=@mention_context.WorkingRevision,
     ),
   )
   assert_eq(added_mentions[0].range, Some(@common.Range(7, 1, 7, 16)))
@@ -21089,7 +21089,7 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
       end_line=3,
       quote="obsolete()",
       comment="good removal",
-      side=@mention_context.OriginalRevision
+      side=@mention_context.OriginalRevision,
     ),
   )
   assert_eq(deleted_mentions[1].range, None)
@@ -21135,7 +21135,7 @@ test "Codex original-side diff feedback queues in the Codex draft" {
       end_line=3,
       quote="obsolete()",
       comment="keep this removal",
-      side=@mention_context.OriginalRevision
+      side=@mention_context.OriginalRevision,
     ),
   )
   assert_eq(draft.mentions[0].range, None)
@@ -21991,7 +21991,7 @@ test "a finished download stages the release; restarting stays a click away" {
     progressed.update_ux
     is DownloadingUpdate(
       version="0.2.0",
-      progress={ downloaded_bytes: 42, total_bytes: Some(100), }
+      progress={ downloaded_bytes: 42, total_bytes: Some(100), },
     ),
   )
   // Downloaded stages the release instead of swapping it: restarting is the
@@ -23335,7 +23335,7 @@ test "a changed row opens the file tab in review mode" {
         state: TabLoading,
         review: Some({ generation: 1, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
 }
@@ -23653,8 +23653,8 @@ test "the host's typed request for a tab needs no page id" {
       BrowserOpenRequested(
         request="r-1",
         session="s-1",
-        url="https://example.com/"
-      )
+        url="https://example.com/",
+      ),
     ),
   )
 }

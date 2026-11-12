@@ -3,7 +3,7 @@ priv suberror CloudFilesSubscription {
   CloudFilesSubscription(
     @interop.ConversationIdentity,
     CloudFiles,
-    @cmd.Emit[Msg]
+    @cmd.Emit[Msg],
   )
 }
 

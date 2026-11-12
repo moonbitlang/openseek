@@ -255,7 +255,7 @@ priv enum MinimalContent {
     // context-ceiling answer an older store left unstamped, and for the live
     // streaming bubble.
     completed_at~ : Double?,
-    fork~ : ForkAction?
+    fork~ : ForkAction?,
   )
   Activity(Array[MinimalActivity])
   Note(text~ : String, error~ : Bool)

@@ -485,8 +485,8 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
     is Some(
       FromDevice(
         Remote("d1"),
-        FilePanel(FsChanged(root=_, generation="page-a:7", changes=None))
-      )
+        FilePanel(FsChanged(root=_, generation="page-a:7", changes=None)),
+      ),
     ),
   )
   assert_true(
@@ -518,13 +518,13 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
                 Modified(Relative("src/main.mbt")),
                 Renamed(
                   old=Relative("src/old.mbt"),
-                  new=Relative("src/new.mbt")
+                  new=Relative("src/new.mbt"),
                 ),
-              ]
-            )
-          )
-        )
-      )
+              ],
+            ),
+          ),
+        ),
+      ),
     ),
   )
   assert_true(
@@ -544,10 +544,10 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
             channel=Remote("d1"),
             root=_,
             generation="page-a:7",
-            message=@fileeditor.Diagnostic("File watching stopped")
-          )
-        )
-      )
+            message=@fileeditor.Diagnostic("File watching stopped"),
+          ),
+        ),
+      ),
     ),
   )
   // A remote device's relay registration is its host's business.

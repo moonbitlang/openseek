@@ -1849,7 +1849,7 @@ async fn ServeEngine::consume(
           // that file again.
           Some(
             McpConfigUnreadable(path~, error~)
-            | McpConfigInvalid(path~, error~)
+            | McpConfigInvalid(path~, error~),
           ) => {
             if manager.mcp.current_engine_id != Some(engine.id) ||
               manager.mcp.errors.get(path) == Some(error) {
@@ -1917,7 +1917,7 @@ async fn ServeEngine::consume(
               }
             }
           Some(
-            WorkflowStarted(id~, journal~, events~, first_child~, child_count~)
+            WorkflowStarted(id~, journal~, events~, first_child~, child_count~),
           ) =>
             // The bracket names both files by absolute path, so the tail
             // needs no store root; only the per-child PROBE does (it locates

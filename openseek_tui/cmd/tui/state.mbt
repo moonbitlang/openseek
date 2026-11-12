@@ -253,7 +253,7 @@ priv enum Msg {
   CommandResult(
     command~ : String,
     id~ : Int32,
-    Result[@command_context.ShellOutput, Error]
+    Result[@command_context.ShellOutput, Error],
   )
   // A `!` command cancelled by Ctrl-C before it produced a result. It has no
   // output to render or send, but the command line must still survive in the

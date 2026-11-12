@@ -335,10 +335,10 @@ async test "PTC preserves completed calls when the program fails" {
               { "status": "done", "result": { "content": "applied", .. }, .. },
             ],
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
 }
@@ -427,7 +427,7 @@ async test "PTC program exit joins an unawaited request and revokes its endpoint
           {
             data: Some({ "ptc_calls": [{ "status": "interrupted", .. }], .. }),
             ..
-          }
+          },
         ),
       )
       guard handoff.val is Some(env) else { fail("no handoff") }

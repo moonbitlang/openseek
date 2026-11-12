@@ -102,7 +102,7 @@ async test "subagent starts a child and answers with its job at once" {
     assert_true(
       runtime.snapshot(job_id)
       is Some(
-        { subagent: Some({ outcome: Some(Captured), label: "find X", .. }), .. }
+        { subagent: Some({ outcome: Some(Captured), label: "find X", .. }), .. },
       ),
     )
   })

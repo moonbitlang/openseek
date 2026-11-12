@@ -50,7 +50,7 @@ test "native picker results preserve concurrent browser reads and remain pure" {
           assert_true(
             next.active(input).image_error
             is Some(
-              Image(@image_input.Bridge(@interop.External("picker failed")))
+              Image(@image_input.Bridge(@interop.External("picker failed"))),
             ),
           )
           assert_true(next.active(input).attachment_requests.is_empty())

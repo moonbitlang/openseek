@@ -34,7 +34,7 @@ pub fn CancellationTokenSource::cancel(self : CancellationTokenSource) -> Unit {
     None => self.token_value = Some({ state: AlreadyCancelled(self.schedule), })
     Some({ state: SourceMutable(token), }) => token.cancel()
     Some(
-      { state: NeverCancelled | AlreadyCancelled(_) | CompatibilityMutable(_), }
+      { state: NeverCancelled | AlreadyCancelled(_) | CompatibilityMutable(_), },
     ) => ()
   }
 }

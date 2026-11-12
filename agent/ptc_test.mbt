@@ -62,7 +62,7 @@ async test "agent PTC stores nested calls while only selected output reaches the
       nested
       is [
         Some(
-          { "ptc_calls": [{ "name": "web_search", "status": "done", .. }], .. }
+          { "ptc_calls": [{ "name": "web_search", "status": "done", .. }], .. },
         ),
       ],
     )
@@ -165,7 +165,7 @@ async test "agent cancellation persists completed images and interrupted PTC met
             { "status": "interrupted", .. },
           ],
           ..
-        }
+        },
       )
     }),
   )

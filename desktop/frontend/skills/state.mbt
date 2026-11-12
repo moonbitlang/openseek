@@ -234,13 +234,13 @@ pub(all) enum Msg {
     library~ : Library,
     request~ : Int32,
     target~ : PreviewTarget,
-    content~ : String
+    content~ : String,
   )
   PreviewFailed(
     library~ : Library,
     request~ : Int32,
     target~ : PreviewTarget,
-    message~ : String
+    message~ : String,
   )
   BackToList
   SkillsScrolled(Double)

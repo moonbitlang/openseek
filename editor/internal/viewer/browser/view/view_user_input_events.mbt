@@ -37,7 +37,7 @@ pub fn convert_view_to_model_mouse_target(
       mouse_column~,
       position~,
       range~,
-      detail~
+      detail~,
     ) =>
       MouseTargetMargin(
         type_~,
@@ -53,7 +53,7 @@ pub fn convert_view_to_model_mouse_target(
       mouse_column~,
       position~,
       range~,
-      detail~
+      detail~,
     ) =>
       MouseTargetViewZone(
         type_~,
@@ -93,7 +93,7 @@ pub fn convert_view_to_model_mouse_target(
       position~,
       range~,
       outside_position~,
-      outside_distance~
+      outside_distance~,
     ) =>
       MouseTargetOutsideEditor(
         mouse_column~,

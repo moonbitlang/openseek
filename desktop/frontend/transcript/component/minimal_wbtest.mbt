@@ -55,15 +55,15 @@ test "minimal user boundaries group recorded and streaming assistant content" {
     is Minimal(
       Messages(
         [{ content: Prose(..), .. }, { content: Activity(_), .. }],
-        active_group=None
-      )
+        active_group=None,
+      ),
     ),
   )
   assert_true(blocks[2].content is Item(item={ kind: User(..), .. }, ..))
   assert_true(
     blocks[3].content
     is Minimal(
-      Messages([{ content: Prose(live=true, ..), .. }], active_group=None)
+      Messages([{ content: Prose(live=true, ..), .. }], active_group=None),
     ),
   )
   // Subsequent deltas replace the text inside the same keyed message group.
@@ -516,7 +516,7 @@ test "minimal prose keeps the durable completion stamp only when finished" {
     is [
       {
         content: Minimal(
-          Messages([{ content: Prose(completed_at~, ..), .. }], ..)
+          Messages([{ content: Prose(completed_at~, ..), .. }], ..),
         ),
         ..
       },
@@ -530,7 +530,7 @@ test "minimal prose keeps the durable completion stamp only when finished" {
     is [
       {
         content: Minimal(
-          Messages([{ content: Prose(completed_at~, live~, ..), .. }], ..)
+          Messages([{ content: Prose(completed_at~, live~, ..), .. }], ..),
         ),
         ..
       },
@@ -620,8 +620,8 @@ test "a final answer removes the preceding process from minimal mode" {
           content: Minimal(
             Messages(
               [{ content: Prose(text~, finished=true, ..), .. }],
-              active_group=None
-            )
+              active_group=None,
+            ),
           ),
           ..
         },
@@ -651,8 +651,8 @@ test "a final answer removes the preceding process from minimal mode" {
               { content: Prose(finished=false, ..), .. },
               { content: Activity(_), .. },
             ],
-            active_group=None
-          )
+            active_group=None,
+          ),
         ),
         ..
       },

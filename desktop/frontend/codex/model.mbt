@@ -379,7 +379,7 @@ enum Msg {
     thread_id~ : String,
     generation~ : Int32,
     requested_cwd~ : String,
-    reply~ : @protocol.GitPullRequestReply
+    reply~ : @protocol.GitPullRequestReply,
   )
   // The native worktree registry has bound this exact task id to one checkout.
   // This is independent of app-server's settings stream: every frontend sees
@@ -389,7 +389,7 @@ enum Msg {
     project_root~ : String,
     name~ : String,
     path~ : String,
-    present~ : Bool
+    present~ : Bool,
   )
   ToggleGitDetails
   CloseGitDetails
@@ -398,7 +398,7 @@ enum Msg {
     id~ : String,
     cwd~ : String,
     draft~ : @composer.Draft,
-    worktree~ : Bool
+    worktree~ : Bool,
   )
   ChangeDraftProject(cwd~ : String)
   AbandonDraft
@@ -426,7 +426,7 @@ enum Msg {
     request_id~ : Json,
     method_~ : String,
     params~ : Json,
-    generation~ : Int32
+    generation~ : Int32,
   )
 }
 
@@ -3564,7 +3564,7 @@ test "Codex editor annotations stay in chips and preserve model context" {
       end_line=3,
       quote="obsolete()",
       comment="keep this removal",
-      side=@mention_context.OriginalRevision
+      side=@mention_context.OriginalRevision,
     ),
   )
   assert_eq(original.mentions[1].range, None)

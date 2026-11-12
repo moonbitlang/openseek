@@ -65,7 +65,7 @@ test "current PR updates from Review while GitHub is hidden and keeps confirmati
         url: actual,
         updating: true,
         ..
-      }
+      },
     ) &&
     actual == url,
   )

@@ -141,7 +141,7 @@ priv suberror PdfFeedbackSubscription {
     @cmd.Emit[Msg],
     RegionFeedbackDraft,
     Bool,
-    (String, Bool) -> @cmd.Cmd
+    (String, Bool) -> @cmd.Cmd,
   )
 }
 

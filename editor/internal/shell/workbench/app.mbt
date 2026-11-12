@@ -67,7 +67,7 @@ priv enum WorkbenchMsg {
   /// superseded responses are dropped instead of applied.
   RepoDirectoryListed(
     Int32,
-    Result[@remote_protocol.HostDirectoryListing, String]
+    Result[@remote_protocol.HostDirectoryListing, String],
   )
   ConfirmRepoPicker
   RepoSwitchFailed(Int32, String)

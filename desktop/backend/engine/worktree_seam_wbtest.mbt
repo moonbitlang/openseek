@@ -669,7 +669,7 @@ async fn join_worktree_row(
   for row in rows {
     if row
       is Object(
-        { "name": String(row_name), "sessions": Array(members), .. } as fields
+        { "name": String(row_name), "sessions": Array(members), .. } as fields,
       ) &&
       row_name == name {
       fields["sessions"] = Json([..members, Json(session)])

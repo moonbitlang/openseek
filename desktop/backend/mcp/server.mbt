@@ -215,7 +215,7 @@ priv enum Received {
     session~ : String,
     body~ : Bytes,
     groups~ : Array[String],
-    headers~ : @http.Headers
+    headers~ : @http.Headers,
   )
   Refused(Int32, String)
 }
