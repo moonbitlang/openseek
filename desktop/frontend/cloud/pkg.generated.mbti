@@ -274,6 +274,7 @@ pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
+  confirming : Bool
 }
 pub fn MetadataSave::equal(Self, Self) -> Bool
 pub fn MetadataSave::not_equal(Self, Self) -> Bool

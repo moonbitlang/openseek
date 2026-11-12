@@ -150,3 +150,61 @@ test "created sessions inherit both draft inference choices" {
   assert_true(created.model("new") is V4Pro)
   assert_true(created.thinking("new") is ThinkingOff)
 }
+
+///|
+test "uncertain option saves stay fenced until a fresh catalog succeeds" {
+  for
+    (edit, failure) in [
+      (SetModel(V4Pro), @cloud_client.Unreachable),
+      (SetThinking(ThinkingMax), @cloud_client.Http(408)),
+      (SetApproval(ApprovalReview), @cloud_client.Http(502)),
+    ] {
+    let initial = deletion_state()
+    let pending = metadata_update(
+      initial,
+      Edit(account="fixture", session="a", edit~),
+    )
+    let refreshing = metadata_update(pending, Refresh)
+    let old_list = refreshing.list_request
+    let still_saving = metadata_update(
+      refreshing,
+      Listed(2, old_list, initial.sessions),
+    )
+    assert_false(still_saving.can_send("a"))
+    let uncertain = metadata_update(
+      refreshing,
+      EditFailed(2, "a", pending.metadata_saves["a"].request, failure),
+    )
+    assert_false(uncertain.can_send("a"))
+    assert_false(uncertain.can_choose_settings("a"))
+    assert_true(uncertain.list_request > old_list)
+    assert_true(
+      metadata_update(uncertain, Listed(2, old_list, initial.sessions)) ==
+      uncertain,
+    )
+    let failed = metadata_update(
+      uncertain,
+      ListFailed(2, uncertain.list_request, Unreachable),
+    )
+    assert_false(failed.can_send("a"))
+    let retry = metadata_update(failed, Refresh)
+    let sessions = initial.sessions.map(session => {
+      match edit {
+        SetModel(model) => { ..session, model, }
+        SetThinking(thinking) => { ..session, thinking, }
+        SetApproval(approval) => { ..session, approval, }
+        _ => session
+      }
+    })
+    // The response is authoritative whether the uncertain write committed or not.
+    for sessions in [initial.sessions, sessions] {
+      let confirmed = metadata_update(
+        retry,
+        Listed(2, retry.list_request, sessions),
+      )
+      assert_true(confirmed.sessions == sessions)
+      assert_true(confirmed.metadata_saves.is_empty())
+      assert_true(confirmed.can_send("a"))
+    }
+  }
+}

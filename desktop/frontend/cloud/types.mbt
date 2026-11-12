@@ -276,6 +276,8 @@ pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
+  // An uncertain write stays fenced until a fresh catalog confirms its value.
+  confirming : Bool
 }
 
 ///|

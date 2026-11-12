@@ -541,6 +541,12 @@ pub fn update(
         }
       }
       let sessions = sessions.filter(item => !next.retired.contains(item.id))
+      let metadata_saves = next.metadata_saves.copy()
+      for id, save in next.metadata_saves {
+        if save.confirming && request > save.request {
+          metadata_saves.remove(id)
+        }
+      }
       let history : Array[@cmd.Cmd] = []
       for session in sessions {
         if session.archived && !state.is_archived(session.id) {
@@ -558,6 +564,7 @@ pub fn update(
         {
           ..next,
           sessions,
+          metadata_saves,
           cached_sessions: [],
           cached_catalog_pending: false,
           list_status: Idle,
@@ -757,7 +764,7 @@ pub fn update(
       }
       let request = state.sequence + 1
       let metadata_saves = state.metadata_saves.copy()
-      metadata_saves[id] = { request, edit, navigation, }
+      metadata_saves[id] = { request, edit, navigation, confirming: false, }
       (
         { ..state, sequence: request, metadata_saves, notice: None, },
         run(emit, () => {
@@ -818,6 +825,19 @@ pub fn update(
       }
       if error is Http(404) {
         return (state.forget(id), @cmd.none, None)
+      }
+      let uncertain = match error {
+        Unreachable => true
+        Http(status) => status == 408 || status >= 500
+        _ => false
+      }
+      if save.edit is (SetApproval(_) | SetModel(_) | SetThinking(_)) &&
+        uncertain {
+        let metadata_saves = state.metadata_saves.copy()
+        metadata_saves[id] = { ..save, confirming: true, }
+        let (next, _) = { ..state, metadata_saves, }.failed(error)
+        let (next, command) = next.list(token, emit)
+        return (next, command, None)
       }
       let metadata_saves = state.metadata_saves.copy()
       metadata_saves.remove(id)

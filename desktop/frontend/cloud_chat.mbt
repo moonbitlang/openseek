@@ -230,6 +230,7 @@ fn update_cloud(
           request: pending,
           edit: @cloud.Archive(true),
           navigation: generation,
+          ..
         }
       ) &&
       pending == request &&

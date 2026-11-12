@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const model = page => page.locator('.composer').getByRole('button', { name: 'Model', exact: true });
 const effort = page => page.locator('.composer').getByRole('button', { name: 'Reasoning effort', exact: true });
@@ -99,6 +99,44 @@ test('session PATCH holds sending, handles failures and restores saved options f
   await page.locator('#task').fill('Use the saved options'); await page.locator('#send').click();
   await expect.poll(() => commands(cloud).length).toBe(1);
   expect(commands(cloud)[0]).not.toHaveProperty('settings');
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('a lost save response holds sending until session options are confirmed', async ({ page }, testInfo) => {
+  const cloud = new CloudHarness(page);
+  cloud.manualTasks = true;
+  await cloud.install(); await cloud.goto(); await cloud.open(sessionA);
+  await page.locator('#task').fill('Keep this draft until settings are confirmed');
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}`, async route => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    // The server commits the edit, but its acknowledgement never arrives.
+    cloud.sessionSettings.set(sessionA, { model: 'deepseek-flash', thinking: 'high', ...route.request().postDataJSON() });
+    return route.abort('failed');
+  });
+  cloud.listOffline = true;
+  await model(page).click();
+  await page.getByRole('listbox').getByRole('option', { name: 'DeepSeek Pro', exact: true }).click();
+  await expect(page.locator('aside')).toContainText(/Cloud is unreachable|Couldn’t load chats/);
+  await expect(model(page)).toHaveText('DeepSeek Flash');
+  await expect(page.locator('#send')).toBeDisabled();
+  await expect(model(page)).toBeDisabled();
+  const retry = page.locator('aside').getByRole('button', { name: 'Retry', exact: true });
+  await expect(retry).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('cloud-settings-awaiting-confirmation.png') });
+  cloud.listOffline = false;
+  let release; cloud.pauseList = new Promise(resolve => { release = resolve; });
+  await retry.click();
+  try {
+    await expect(retry).toBeDisabled();
+    await expect(page.locator('#send')).toBeDisabled();
+    expect(commands(cloud)).toEqual([]);
+  } finally { release(); cloud.pauseList = null; }
+  await expect(model(page)).toHaveText('DeepSeek Pro');
+  await expect(page.locator('#send')).toBeEnabled();
+  await expect(page.locator('#task')).toHaveValue('Keep this draft until settings are confirmed');
+  await page.locator('#send').click();
+  await expect.poll(() => commands(cloud).length).toBe(1);
+  expect(commands(cloud)[0].command.content).toBe('Keep this draft until settings are confirmed');
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
