@@ -99,10 +99,14 @@ release openseek-api serves at `/cloud`
 (`https://seekmoon.moonbitlang.com/browser/releases/current.json`). That may be
 a Desktop release (`0.2.52`) or a console-only one (`browser-3.1`). These kinds
 share no order, so the app follows whatever the server selects, rollbacks
-included. When that release differs from the one the app runs, the app downloads
-its archive (`/desktop/releases/v<release>/SeekMoon.browser.tar.gz`) in the
-background, checks its gzip CRC, and extracts it into app-private storage,
-leaving out the `.br`/`.gz` copies the server uses. The app runs that release
+included. When that release differs from the one the app runs, the system
+`DownloadManager` fetches its archive
+(`/desktop/releases/v<release>/SeekMoon.browser.tar.gz`) without a
+notification and only on an unmetered, non-roaming network, resuming across
+network loss and process death. Once it completes and the app is in the
+foreground, a background thread checks its gzip CRC and extracts it into
+app-private storage, leaving out the `.br`/`.gz` copies the server uses. A
+download the server's selection has moved past is cancelled. The app runs that release
 from the next time it creates its WebView (normally the next launch), so a page
 never mixes two releases' files. A release the server selects that matches the
 APK's own version switches back to the bundled frontend without a download.

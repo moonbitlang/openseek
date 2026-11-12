@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var fileResult: ValueCallback<Array<Uri>>? = null
     private val updater = AppUpdater(this)
+    private val frontendUpdater = FrontendUpdater(this)
     private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val account = result.data?.getStringExtra("account")
         if (result.resultCode == Activity.RESULT_OK && account != null && ConsoleOrigin.contains(webView.url)) {
@@ -191,11 +192,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         updater.onStart()
-        FrontendUpdater.onStart(this)
+        frontendUpdater.onStart()
     }
 
     override fun onStop() {
         updater.onStop()
+        frontendUpdater.onStop()
         super.onStop()
     }
 
