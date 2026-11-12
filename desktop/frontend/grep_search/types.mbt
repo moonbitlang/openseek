@@ -192,14 +192,10 @@ pub fn Input::cloud(
   owner~ : @interop.ConversationIdentity,
   access~ : @cloud_client.Access,
   root~ : @common.Uri,
+  model~ : String = "deepseek-flash",
+  thinking~ : @protocol.OpenSeekThinking? = Some(ThinkingHigh),
 ) -> Input {
-  {
-    owner,
-    root: Some(root),
-    model: "",
-    thinking: None,
-    cloud_access: Some(access),
-  }
+  { owner, root: Some(root), model, thinking, cloud_access: Some(access), }
 }
 
 ///|

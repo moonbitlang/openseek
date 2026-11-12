@@ -951,10 +951,13 @@ fn Ctx::search_input(self : Ctx) -> @grep_search.Input? {
         return None
       }
       Some(
-        @grep_search.Input::cloud(owner=self.owner, root~, access={
-          token: files.token,
-          epoch: files.epoch,
-        }),
+        @grep_search.Input::cloud(
+          owner=self.owner,
+          root~,
+          model=self.model,
+          thinking=self.thinking,
+          access={ token: files.token, epoch: files.epoch, },
+        ),
       )
     }
   }

@@ -103,3 +103,16 @@ async fn cloud_semantic_search(
     task.wait()
   })
 }
+
+///|
+fn cloud_pattern_repair_body(request : @protocol.PatternRepairPayload) -> Json {
+  let fields : Map[String, Json] = {
+    "pattern": Json(request.pattern),
+    "generation": Json(request.generation),
+    "model": Json(request.model),
+  }
+  if request.thinking is Some(thinking) {
+    fields["thinking"] = thinking.to_json()
+  }
+  Json(fields)
+}

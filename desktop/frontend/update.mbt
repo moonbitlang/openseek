@@ -1373,6 +1373,12 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     .find_conversation(active.owner.channel, active.owner.session)
     .map(conv => conv.engine_model)
     .unwrap_or(model.default_model)
+  let cloud_settings = model.cloud_settings(model.dock_owner())
+  let engine_model = if model.dock_owner() is Cloud(..) {
+    @deepseek.Deepseek(cloud_settings.model)
+  } else {
+    engine_model
+  }
   let file_body_visible = match model.dock_state().active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
@@ -1399,7 +1405,11 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     },
     locale: model.locale,
     model: engine_model.to_string(),
-    thinking: engine_model.thinking(model.reasoning_for(engine_model)),
+    thinking: if model.dock_owner() is Cloud(..) {
+      Some(cloud_settings.thinking)
+    } else {
+      engine_model.thinking(model.reasoning_for(engine_model))
+    },
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
     // panel's monotonic counter with this page's existing random identity so
