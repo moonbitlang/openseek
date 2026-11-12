@@ -60,6 +60,8 @@ async fn run_task_turn(
       } else {
         []
       },
+      skill_env=@options.skill_env(matches),
+      policy_dir="\{session_scratch_dir}/mcp-policies",
       workspace_root~,
     )
     let extra_tools = @execution.build_extra_tools(

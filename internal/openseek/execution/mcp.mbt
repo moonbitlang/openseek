@@ -19,18 +19,21 @@ struct McpRegistry {
 /// server replaces an earlier one of the same name. The servers each of
 /// `skills` brings in its `mcp.json` join them, ahead of the files, so a
 /// file's server replaces a skill's of the same name. A skill's configuration
-/// may reference its own directory as `${OPENSEEK_SKILL_DIR}`, which its stdio
-/// servers also find in their environment. No server connects here: each
-/// connects in the background on `scope`'s group when a script first reaches
-/// it. `on_change` runs each time `status` may have changed since — a server
-/// started connecting or settled, or a connected server's connection closed —
-/// and must not block. Nothing here fails the engine: a file that cannot be used and a server that
-/// cannot be reached are recorded in the registry and reported as the events
-/// they always were.
+/// expands only `${OPENSEEK_SKILL_DIR}`, its own directory, and the variables
+/// named in `skill_env`; its stdio servers run through `moonx` inside a
+/// moonrun policy written under `policy_dir` (see `confine_skill_servers`). No
+/// server connects here: each connects in the background on `scope`'s group
+/// when a script first reaches it. `on_change` runs each time `status` may
+/// have changed since — a server started connecting or settled, or a connected
+/// server's connection closed — and must not block. Nothing here fails the
+/// engine: a file that cannot be used and a server that cannot be reached are
+/// recorded in the registry and reported as the events they always were.
 pub async fn start_mcp(
   scope : @agent_runtime.AgentTaskScope,
   config_paths : Array[String],
   skills~ : Array[@agent_skill.Skill] = [],
+  skill_env~ : Array[String] = [],
+  policy_dir~ : String,
   workspace_root~ : String,
   on_change? : () -> Unit,
 ) -> McpRegistry {
@@ -38,6 +41,7 @@ pub async fn start_mcp(
   async fn load(
     path : String,
     env : Map[String, String],
+    confine : async (Array[@mcpconfig.McpServer]) -> Array[@mcpconfig.McpServer],
   ) -> Array[@mcpconfig.McpServer]? {
     let text = @fs.read_text(path) catch {
       error => {
@@ -47,7 +51,7 @@ pub async fn start_mcp(
         return None
       }
     }
-    let servers = @mcpconfig.decode(@json.parse(text), env~) catch {
+    let servers = confine(@mcpconfig.decode(@json.parse(text), env~)) catch {
       error => {
         let error = "\{error}"
         @emit.emit(McpConfigInvalid(path~, error~))
@@ -59,32 +63,35 @@ pub async fn start_mcp(
     Some(servers)
   }
 
+  let host_env = @env.get_env_vars()
   let skill_servers : Array[@mcpconfig.McpServer] = []
+  let mut policies = 0
   for skill in skills {
     guard skill.mcp_config_path() is Some(path) else { continue }
     let dir = match path.rev_split_once("/") {
       Some((dir, _)) => dir.to_owned()
       None => "."
     }
-    let env = @env.get_env_vars()
+    let env : Map[String, String] = Map([])
+    for name in skill_env {
+      if host_env.get(name) is Some(value) {
+        env[name] = value
+      }
+    }
     env[SkillDirEnv] = dir
-    guard load(path, env) is Some(servers) else { continue }
-    for server in servers {
-      skill_servers.push(
-        match server {
-          Stdio(name~, command~, args~, env~) => {
-            let env = env.copy()
-            env[SkillDirEnv] = dir
-            Stdio(name~, command~, args~, env~)
-          }
-          Http(..) => server
-        },
-      )
+    let confined = load(path, env, servers => {
+      confine_skill_servers(servers, skill_dir=dir, workspace_root~, policy=() => {
+        policies += 1
+        "\{policy_dir}/\{policies}.json"
+      })
+    })
+    if confined is Some(servers) {
+      skill_servers.append(servers)
     }
   }
   let loaded : Array[Array[@mcpconfig.McpServer]] = []
   for path in config_paths {
-    if load(path, @env.get_env_vars()) is Some(servers) {
+    if load(path, host_env, servers => servers) is Some(servers) {
       loaded.push(servers)
     }
   }

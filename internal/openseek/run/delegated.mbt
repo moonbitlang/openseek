@@ -19,7 +19,7 @@ let delegated_options : Array[String] = [
 /// a file (the prompt files, the skills directories) the parent did not grant.
 let delegated_ignored_settings : Array[String] = [
   "mcp-config", "system-prompt-file", "system-prompt-addendum-file", "global-skills-dir",
-  "skills-dir",
+  "skills-dir", "skill-env",
 ]
 
 ///|

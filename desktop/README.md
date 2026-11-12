@@ -256,7 +256,8 @@ user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment applies.
 The host also supplies its own tools, as a `seekmoon` skill it writes under its
 runtime directory (`host-skills/seekmoon/`, with a `SKILL.md` saying what the
 tools do and an `mcp.json` reaching the host) and hands each engine as a
-skills directory. The agent learns of the tools from that skill; a same-named
+skills directory, with `--skill-env` letting that `mcp.json` expand the
+conversation's grant. The agent learns of the tools from that skill; a same-named
 server in the user file replaces it.
 
 An engine connects each server at most once, when a script first reaches it —
