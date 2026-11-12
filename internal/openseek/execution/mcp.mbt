@@ -88,14 +88,16 @@ pub async fn start_mcp(
       loaded.push(servers)
     }
   }
-  let servers = @mcptools.start(
-    scope,
-    @mcpconfig.merge([skill_servers, ..loaded]),
-    client_name="openseek",
-    client_version=McpClientVersion,
-    workspace_root~,
-    on_change?,
-  )
+  let servers = @mcpconfig.merge([skill_servers, ..loaded]).map(server => {
+    @mcptools.Server::new(
+      scope,
+      server,
+      client_name="openseek",
+      client_version=McpClientVersion,
+      workspace_root~,
+      on_change?,
+    )
+  })
   { configs, servers, }
 }
 

@@ -18,8 +18,6 @@ pub async fn discover(String, @mcp.McpClient) -> Array[@mcp.McpTool]
 
 pub async fn settle(Array[Server], server? : String, timeout_ms? : Int32) -> Unit
 
-pub fn start(@agent_runtime.AgentTaskScope, Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32, on_change? : () -> Unit) -> Array[Server]
-
 // Errors
 
 // Types and methods
@@ -34,6 +32,7 @@ pub struct Server {
   // private fields
 }
 pub async fn Server::call(Self, String, @json.Json, wait_ms? : Int32) -> @agent_tool.ToolAction
+pub fn Server::new(@agent_runtime.AgentTaskScope, @config.McpServer, client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32, on_change? : () -> Unit) -> Self
 pub async fn Server::settled(Self) -> ServerEntry
 pub fn Server::started(Self) -> Bool
 pub fn Server::try_wait(Self) -> ServerEntry?
