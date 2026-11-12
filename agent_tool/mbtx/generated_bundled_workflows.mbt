@@ -216,12 +216,17 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/env",
           #|}
           #|---
           #|
+          #|///|
+          #|/// The same args go to both commands, so they must be flags both accept
+          #|/// (`--target`, `-p`, package paths); test-only flags belong to test.mbtx.
           #|async fn main {
+          #|  let args = @env.args()[1:]
           #|  for command in ["check", "test"] {
-          #|    let code = @shell.Cmd("moon", [command]).each_line(line => println(line))
+          #|    let code = @shell.Cmd("moon", [command, ..args]).each_line(line => println(line))
           #|    if code != 0 { fail("moon \{command} failed (exit=\{code})") }
           #|  }
           #|}
@@ -533,6 +538,178 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  }) catch {
           #|    error =>
           #|      fail("CI monitor stopped without a verified successful result: \{error}")
+          #|  }
+          #|}
+          #|
+        ),
+      )
+    "cmd.mbtx" =>
+      Some(
+        (
+          #|---
+          #|import {
+          #|  "moonbitlang/core/async",
+          #|  "moonbitlang/core/async/process",
+          #|  "moonbitlang/core/buffer",
+          #|  "moonbitlang/core/deque",
+          #|  "moonbitlang/core/env",
+          #|  "moonbitlang/core/encoding/utf8",
+          #|  "moonbitlang/x/sys",
+          #|}
+          #|---
+          #|
+          #|///|
+          #|/// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.
+          #|const OutputBytes : Int32 = 40_000
+          #|
+          #|///|
+          #|/// The first lines stream as they arrive; the rest compete for the tail, so a
+          #|/// long run still ends on its last lines, where a test summary usually is.
+          #|const HeadBytes : Int32 = 20_000
+          #|
+          #|///|
+          #|const TailBytes : Int32 = OutputBytes - HeadBytes - 1_000
+          #|
+          #|///|
+          #|/// Longer lines are cut, so one minified blob cannot take the whole budget.
+          #|const MaxLineBytes : Int32 = 2_000
+          #|
+          #|///|
+          #|let usage : String =
+          #|  #|Usage: mbtx(description="...", filename="@builtin/cmd.mbtx", args=["PROGRAM", "ARG", ...])
+          #|  #|Runs one program with these arguments, unchanged: args[0] is the program and
+          #|  #|each later item is one argument. There is no shell, so no pipes, redirection,
+          #|  #|globbing, `&&`, or quoting; e.g. args=["git", "log", "--oneline", "-5"].
+          #|  #|The program is subject to the mbtx sandbox spawn allowlist, exactly like
+          #|  #|`@shell.Cmd` in a script: the mbtx tool description lists the allowed
+          #|  #|programs under "Which programs a snippet may start". A program not listed
+          #|  #|there is refused with the sandbox's refusal message.
+          #|  #|Standard output and standard error are merged and streamed. Output is
+          #|  #|bounded to 40000 UTF-8 bytes: the first and last lines are kept and a note
+          #|  #|counts the omitted ones; lines over 2000 bytes are cut. Stdin is empty.
+          #|  #|The last line is `exit=N`, and the call exits with the program's status.
+          #|  #|Relative paths use cwd (default workspace).
+          #|
+          #|///|
+          #|/// Keeps the first `HeadBytes` of output, printed as it arrives, and the last
+          #|/// `TailBytes`, printed when the program ends.
+          #|struct Bounded {
+          #|  mut head_left : Int32
+          #|  tail : @deque.Deque[(String, Int32)]
+          #|  mut tail_bytes : Int32
+          #|  mut omitted : Int32
+          #|  mut total : Int32
+          #|}
+          #|
+          #|///|
+          #|fn Bounded::push(self : Bounded, line : Bytes, cut : Int32) -> Unit {
+          #|  let text = @utf8.decode_lossy(line) +
+          #|    (if cut > 0 { " [\{cut} bytes cut]" } else { "" })
+          #|  let bytes = @utf8.encode(text).length() + 1
+          #|  self.total += 1
+          #|  if self.tail.length() == 0 && bytes <= self.head_left {
+          #|    println(text)
+          #|    self.head_left -= bytes
+          #|    return
+          #|  }
+          #|  self.head_left = 0
+          #|  self.tail.push_back((text, bytes))
+          #|  self.tail_bytes += bytes
+          #|  while self.tail_bytes > TailBytes {
+          #|    guard self.tail.pop_front() is Some((_, dropped)) else { break }
+          #|    self.tail_bytes -= dropped
+          #|    self.omitted += 1
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|fn Bounded::finish(self : Bounded) -> Unit {
+          #|  if self.omitted > 0 {
+          #|    println(
+          #|      "<system>truncated=true omitted_lines=\{self.omitted} total_lines=\{self.total} note=the first and last lines are shown; narrow the command's output to see the rest</system>",
+          #|    )
+          #|  }
+          #|  for entry in self.tail {
+          #|    println(entry.0)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Split the merged output into lines without holding more than
+          #|/// `MaxLineBytes` of any one of them.
+          #|async fn relay(output : @process.ReadFromProcess, sink : Bounded) -> Unit {
+          #|  let line = @buffer.Buffer()
+          #|  let mut cut = 0
+          #|  while output.read() is Some(chunk) {
+          #|    for byte in chunk {
+          #|      if byte == b'\n' {
+          #|        let bytes = line.to_bytes()
+          #|        let bytes = if bytes is [.. rest, b'\r'] { rest.to_owned() } else { bytes }
+          #|        sink.push(bytes, cut)
+          #|        line.reset()
+          #|        cut = 0
+          #|      } else if line.length() < MaxLineBytes {
+          #|        line.write_byte(byte)
+          #|      } else {
+          #|        cut += 1
+          #|      }
+          #|    }
+          #|  }
+          #|  if line.length() > 0 || cut > 0 {
+          #|    sink.push(line.to_bytes(), cut)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|async fn main {
+          #|  let args = @env.args()[1:]
+          #|  guard args is [program, .. arguments] && !(args is ["--help"]) else {
+          #|    println(usage)
+          #|    return
+          #|  }
+          #|  let sink = Bounded::{
+          #|    head_left: HeadBytes,
+          #|    tail: @deque.Deque([]),
+          #|    tail_bytes: 0,
+          #|    omitted: 0,
+          #|    total: 0,
+          #|  }
+          #|  let mut started = false
+          #|  let mut status = 0
+          #|  @async.with_task_group(group => {
+          #|    let child = @process.spawn(
+          #|      group,
+          #|      program,
+          #|      arguments,
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=DuplicateStdout,
+          #|    )
+          #|    started = true
+          #|    relay(child.stdout, sink)
+          #|    status = child.wait()
+          #|  }) catch {
+          #|    // The error text is kept verbatim: a sandbox refusal reads
+          #|    // `@process.spawn(): Permission denied`, which is what mbtx recognizes to
+          #|    // explain the refusal.
+          #|    error if !started => {
+          #|      println("error: could not start \{program}: \{error}")
+          #|      @sys.exit(127)
+          #|      return
+          #|    }
+          #|    error => {
+          #|      sink.finish()
+          #|      println("error: lost \{program}'s output: \{error}")
+          #|      @sys.exit(1)
+          #|      return
+          #|    }
+          #|  }
+          #|  sink.finish()
+          #|  // A signal comes back negative; report it the way a shell does.
+          #|  let code = if status < 0 { 128 - status } else { status }
+          #|  println(if status < 0 { "exit=\{code} signal=\{-status}" } else { "exit=\{code}" })
+          #|  if code != 0 {
+          #|    @sys.exit(code)
           #|  }
           #|}
           #|
@@ -3763,11 +3940,12 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/env",
           #|}
           #|---
           #|
           #|async fn main {
-          #|  let code = @shell.Cmd("moon", ["test"]).each_line(line => println(line))
+          #|  let code = @shell.Cmd("moon", ["test", ..@env.args()[1:]]).each_line(line => println(line))
           #|  if code != 0 { fail("moon test failed (exit=\{code})") }
           #|}
           #|

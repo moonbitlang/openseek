@@ -34,6 +34,8 @@
 
 普通路径相对于工作区根目录解析；`cwd` 只控制执行目录。保存时不会覆盖内容不同的已有文件：修改已保存的脚本应使用编辑工具。命名空间脚本只读，使用 `@builtin/` 时不得提供 `source`。目前仅支持 `@builtin/`，其他命名空间保留。若要引用工作区中名为 `@builtin` 的真实目录，写作 `./@builtin/check.mbtx`。
 
+运行单条命令用 `mbtx(description="...", filename="@builtin/cmd.mbtx", args=["git", "status"])`：`args` 即 argv，不做拆分，程序须在允许启动的列表中。
+
 一次性脚本可以硬编码输入。共享或可复用脚本应通过 `args`（字符串数组，默认 `[]`）接收输入，使调用者无需修改源码即可改变参数。参数保留空格和空字符串，不做 shell 展开。脚本运行于 wasm。导入 `moonbitlang/core/env`，用 `@env.args()[1:]` 跳过可执行文件名。
 
 例如，调用 `mbtx` 时同时传入 `source`、`filename` 和 `args=["--deny-warn"]`，将以下源码保存为 `scripts/check.mbtx`：

@@ -1792,10 +1792,15 @@ fn description(
     #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
     #|  `["fn parse", "-g", "*.mbt", "."]`. Output is `path:line:text`; no match
     #|  exits 0 with a note.
-    #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
-    #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
+    #|- `@builtin/cmd.mbtx` runs one program: `args[0]` is the program and the
+    #|  rest its arguments, unsplit, e.g. args `["git", "log", "--oneline", "-5"]`.
+    #|  Only programs listed under "Which programs a snippet may start" run.
+    #|  Output (stderr merged) is bounded, keeping the first and last lines, and
+    #|  ends with `exit=N`.
+    #|- `@builtin/check.mbtx` (moon check), `@builtin/test.mbtx` (moon test) and
+    #|  `@builtin/check-test.mbtx` (check, then test) pass `args` on to moon;
     #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
-    #|  `@builtin/check-json.mbtx` (moon check --output-json).
+    #|  `@builtin/check-json.mbtx` (moon check --output-json) take none.
     #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
     #|  args `["PR", "--repo", "OWNER/REPO", "--once"]` take one snapshot.
     #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
