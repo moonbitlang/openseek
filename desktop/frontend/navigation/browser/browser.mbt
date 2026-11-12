@@ -55,11 +55,12 @@ fn canonical_path(path : String) -> String {
 }
 
 ///|
+/// The page owns every application route: the model writes history only for
+/// destinations it accepted, and decides itself whether another device's
+/// route stays in this page or loads that device's own.
 fn install(initial_path : String, emit : (String) -> Unit) -> @js.Value {
-  let device = @routes.device(initial_path)
   let owns = (path : String) => {
-    @routes.is_cloud_path(path) ||
-    (device is Some(owner) && @routes.device(path) == Some(owner))
+    @routes.is_cloud_path(path) || @routes.device(path) is Some(_)
   }
   write_history(canonical_path(initial_path) + search(), replace=true)
   let report = () => emit(pathname() + search())

@@ -593,17 +593,31 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))
   }
   // Every held device's projects share the Work list; each row names its
-  // device.
+  // device. A merged section's own actions (adding or importing a project)
+  // name one device: on a relay page, whose project picker cannot change
+  // device, that is the device the page works on, and with none there is
+  // no such action.
   let work_sections = if !self.devices.is_empty() {
     let combined : Array[@section.Input] = []
     for dev in self.devices {
+      let owns_actions = !self.is_relay_console() || dev.channel == self.focused
       for section in self.work_sidebar_sections(dev) {
+        let section = if owns_actions {
+          section
+        } else {
+          { ..section, action: None, secondary_actions: [], }
+        }
         match
           combined.search_by(item => item.id.source() == section.id.source()) {
           Some(index) => {
             let previous = combined[index]
+            let owner = if self.is_relay_console() && owns_actions {
+              section
+            } else {
+              previous
+            }
             combined[index] = {
-              ..previous,
+              ..owner,
               entries: previous.entries + section.entries,
               activation: match section.activation {
                 Some(_) => section.activation

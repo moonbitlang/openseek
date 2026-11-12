@@ -148,15 +148,37 @@ fn focus_channel(
     file_ctx(model),
   )
   // A browser page works on the device it focuses: its next host route
-  // names that device. The desktop window's page device is its own host.
-  let console = if !model.is_desktop && model.device_state(channel) is Some(_) {
-    { ..model.console, page_device: Some(channel.device_id()), }
+  // names that device, and the caller places the conversation, which
+  // completes the console's deferred boot. Route activation reads the
+  // focused device's catalogs, so the previous device's readiness is
+  // cleared and a connected device's lists are requested again; a device
+  // still connecting clears and fetches them when its bridge comes up. The
+  // desktop window's page device is its own host.
+  let entered = !model.is_desktop && model.device_state(channel) is Some(_)
+  let (console, navigation) = if entered {
+    (
+      { ..model.console, page_device: Some(channel.device_id()), booted: true, },
+      { ..model.navigation, sessions: None, archived: None, },
+    )
   } else {
-    model.console
+    (model.console, model.navigation)
+  }
+  let (catalogs_cmd, model) = if entered &&
+    model.device_state(channel) is Some({ bridge: Connected, .. }) {
+    let (sessions_cmd, model) = request_sessions_refresh(
+      dispatch, channel, model,
+    )
+    let (archived_cmd, model) = request_archived_refresh(
+      dispatch, channel, model,
+    )
+    (@cmd.batch([sessions_cmd, archived_cmd]), model)
+  } else {
+    (@cmd.none, model)
   }
   let next = {
     ..model.reset_api_setup(),
     console,
+    navigation,
     focused: channel,
     active_session: "",
     selected_conversation: None,
@@ -177,7 +199,7 @@ fn focus_channel(
   // refetch reply arrives too late for a chat that was already sent. Its
   // committed prompt default refills the Settings editor the same way.
   (
-    @cmd.batch([focus_cmd, unwatch_cmd]),
+    @cmd.batch([focus_cmd, unwatch_cmd, catalogs_cmd]),
     next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }

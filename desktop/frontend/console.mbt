@@ -832,6 +832,69 @@ test "an action on another roster device moves the page onto it" {
 }
 
 ///|
+test "moving onto another device rebinds its catalogs and its Work actions" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: empty_console_state(None, None),
+  }
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    model,
+  )
+  let metas : Array[DeviceMeta] = [
+    { id: "d_a", name: "A", hostname: None, online: true, },
+    { id: "d_b", name: "B", hostname: None, online: true, },
+  ]
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
+  let connected = listed.devices.fold(init=listed, (model, dev) => {
+    model.replace_device({ ..dev, bridge: Connected, })
+  })
+  // A's catalogs had settled before the page moved to B.
+  let ready = {
+    ..connected,
+    navigation: {
+      ..connected.navigation,
+      sessions: Some(Ok(())),
+      archived: Some(Ok(())),
+    },
+  }
+  // A Cloud page offers no project action until it works on a device.
+  let work_action = (model : Model) => {
+    model.sidebar_component_input().work_sections
+    .iter()
+    .find_first(section => section.id.source() == "openseek.projects")
+    .bind(section => section.action.map(_ => section.id.channel()))
+  }
+  assert_true(work_action(ready) is None)
+  let (_, moved) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), ready)
+  assert_true(moved.navigation.sessions is None)
+  assert_true(moved.navigation.archived is None)
+  guard (ready.device_state(Remote("d_b")), moved.device_state(Remote("d_b")))
+    is (Some(before), Some(after)) else {
+    fail("device B not held")
+  }
+  assert_true(
+    after.sessions_request_generation > before.sessions_request_generation,
+  )
+  assert_true(
+    after.archived_request_generation > before.archived_request_generation,
+  )
+  // Entering a device in place completes the deferred boot, so a later
+  // roster reply does not rotate away the conversation it opened.
+  assert_true(moved.console.booted)
+  assert_eq(
+    work_action(moved),
+    Some(@interop.ChannelId::Remote("d_b").uri_authority()),
+  )
+}
+
+///|
 test "a relay page follows another device's route in place" {
   let dispatch = test_dispatch()
   let model = {
