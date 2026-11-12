@@ -99,9 +99,9 @@ test "queue payloads expose only valid operation-specific data" {
 
 ///|
 test "OpenSeek thinking values round-trip through their closed codec" {
-  let off : @protocol.OpenSeekThinking = @json.from_json(Json("no"))
-  let high : @protocol.OpenSeekThinking = @json.from_json(Json("high"))
-  let max : @protocol.OpenSeekThinking = @json.from_json(Json("max"))
+  let off : @protocol.Thinking = @json.from_json(Json("no"))
+  let high : @protocol.Thinking = @json.from_json(Json("high"))
+  let max : @protocol.Thinking = @json.from_json(Json("max"))
   assert_eq(off, ThinkingOff)
   assert_eq(high, ThinkingHigh)
   assert_eq(max, ThinkingMax)

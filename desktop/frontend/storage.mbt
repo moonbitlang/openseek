@@ -125,7 +125,7 @@ fn save_codex_reasoning_effort(effort : String) -> @cmd.Cmd {
 
 ///|
 /// Persist OpenSeek's typed reasoning choice for its next engine operation.
-fn OpenSeekReasoning::save(self : OpenSeekReasoning) -> @cmd.Cmd {
+fn @protocol.Thinking::save(self : @protocol.Thinking) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(OpenSeekReasoningStorageKey, self.wire()))
 }
 
@@ -133,7 +133,7 @@ fn OpenSeekReasoning::save(self : OpenSeekReasoning) -> @cmd.Cmd {
 /// Persist GLM's reasoning choice independently from DeepSeek's. In
 /// particular, a stored DeepSeek Max must not turn a fresh GLM chat into a
 /// long forced-thinking run.
-fn OpenSeekReasoning::save_for_glm(self : OpenSeekReasoning) -> @cmd.Cmd {
+fn @protocol.Thinking::save_for_glm(self : @protocol.Thinking) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(GlmReasoningStorageKey, self.wire()))
 }
 

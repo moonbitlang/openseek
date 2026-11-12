@@ -32,82 +32,38 @@ fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
 }
 
 ///|
-/// OpenSeek's reasoning choices. These stay distinct from Codex catalog
-/// values: the two agents share the control and request lifecycle, while
-/// each agent sends only values its own service defines.
-#derive(Eq)
-priv enum OpenSeekReasoning {
-  ReasoningOff
-  ReasoningHigh
-  ReasoningMax
-}
-
-///|
-fn OpenSeekReasoning::wire(self : OpenSeekReasoning) -> String {
-  match self {
-    ReasoningOff => "no"
-    ReasoningHigh => "high"
-    ReasoningMax => "max"
-  }
-}
-
-///|
-/// Convert the UI choice into the closed OpenSeek command value. Storage keeps
-/// the UI enum's string representation, while requests cross the Desktop JSON
-/// boundary with the protocol-owned type.
-fn OpenSeekReasoning::protocol(
-  self : OpenSeekReasoning,
-) -> @protocol.OpenSeekThinking {
-  match self {
-    ReasoningOff => ThinkingOff
-    ReasoningHigh => ThinkingHigh
-    ReasoningMax => ThinkingMax
-  }
-}
-
-///|
-fn OpenSeekReasoning::parse(value : String) -> OpenSeekReasoning? {
-  match value.trim() {
-    "no" => Some(ReasoningOff)
-    "high" => Some(ReasoningHigh)
-    "max" => Some(ReasoningMax)
-    _ => None
-  }
-}
-
-///|
-fn OpenSeekReasoning::label(
-  self : OpenSeekReasoning,
+fn @protocol.Thinking::label(
+  self : @protocol.Thinking,
   locale~ : @i18n.Locale = English,
 ) -> String {
   match (locale, self) {
-    (SimplifiedChinese, ReasoningOff) => "关闭"
-    (TraditionalChinese, ReasoningOff) => "關閉"
-    (Japanese, ReasoningOff) => "オフ"
-    (SimplifiedChinese, ReasoningHigh) => "高"
-    (TraditionalChinese, ReasoningHigh) => "高"
-    (Japanese, ReasoningHigh) => "高"
-    (SimplifiedChinese, ReasoningMax) => "最高"
-    (TraditionalChinese, ReasoningMax) => "最高"
-    (Japanese, ReasoningMax) => "最大"
-    (English, ReasoningOff) => "Off"
-    (Spanish, ReasoningOff) => "Desactivado"
-    (English, ReasoningHigh) => "High"
-    (Spanish, ReasoningHigh) => "Alto"
-    (English, ReasoningMax) => "Max"
-    (Spanish, ReasoningMax) => "Máximo"
+    (SimplifiedChinese, ThinkingOff) => "关闭"
+    (TraditionalChinese, ThinkingOff) => "關閉"
+    (Japanese, ThinkingOff) => "オフ"
+    (SimplifiedChinese, ThinkingHigh) => "高"
+    (TraditionalChinese, ThinkingHigh) => "高"
+    (Japanese, ThinkingHigh) => "高"
+    (SimplifiedChinese, ThinkingMax) => "最高"
+    (TraditionalChinese, ThinkingMax) => "最高"
+    (Japanese, ThinkingMax) => "最大"
+    (English, ThinkingOff) => "Off"
+    (Spanish, ThinkingOff) => "Desactivado"
+    (English, ThinkingHigh) => "High"
+    (Spanish, ThinkingHigh) => "Alto"
+    (English, ThinkingMax) => "Max"
+    (Spanish, ThinkingMax) => "Máximo"
   }
 }
 
 ///|
 /// GLM cannot turn thinking off: the shared lowest wire choice becomes its
 /// `low` effort, so the chip must not promise an unavailable Off state.
-fn OpenSeekReasoning::label_for_model(
-  self : OpenSeekReasoning,
+fn @protocol.Thinking::label_for_model(
+  self : @protocol.Thinking,
   model : @deepseek.Model,
   locale~ : @i18n.Locale = English,
 ) -> String {
-  if model is Glm(_) && self is ReasoningOff {
+  if model is Glm(_) && self is ThinkingOff {
     match locale {
       SimplifiedChinese => "低"
       TraditionalChinese => "低"
@@ -125,10 +81,10 @@ fn OpenSeekReasoning::label_for_model(
 /// Kimi keeps the field absent, matching the hidden selector.
 fn @deepseek.Model::thinking(
   self : @deepseek.Model,
-  reasoning : OpenSeekReasoning,
-) -> @protocol.OpenSeekThinking? {
+  reasoning : @protocol.Thinking,
+) -> @protocol.Thinking? {
   if self.supports_reasoning() {
-    Some(reasoning.protocol())
+    Some(reasoning)
   } else {
     None
   }
@@ -1318,8 +1274,8 @@ priv struct Model {
   // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
   // OpenSeek operation. GLM keeps a separate preference below because its
   // forced-thinking low mode is the useful default for ordinary tasks.
-  openseek_reasoning : OpenSeekReasoning
-  glm_reasoning : OpenSeekReasoning
+  openseek_reasoning : @protocol.Thinking
+  glm_reasoning : @protocol.Thinking
   max_steps : String
   // Device-less Cloud's follow-up behavior, kept in the browser (see
   // `CloudFollowupBehaviorStorageKey`); a page with a host uses its settings.
@@ -2783,8 +2739,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     default_agent: OpenSeekAgent,
     conversation_models: [],
     asking_conversations: [],
-    openseek_reasoning: ReasoningHigh,
-    glm_reasoning: ReasoningOff,
+    openseek_reasoning: ThinkingHigh,
+    glm_reasoning: ThinkingOff,
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
@@ -3241,12 +3197,12 @@ fn Model::align_new_chats_with_provider(
 }
 
 ///|
-/// The reasoning preference for one model family. GLM's `ReasoningOff` wire
+/// The reasoning preference for one model family. GLM's `ThinkingOff` wire
 /// value is translated by the engine to its lowest supported effort (`low`).
 fn Model::reasoning_for(
   self : Model,
   engine_model : @deepseek.Model,
-) -> OpenSeekReasoning {
+) -> @protocol.Thinking {
   match engine_model {
     Glm(_) => self.glm_reasoning
     Deepseek(_) | Kimi(_) => self.openseek_reasoning

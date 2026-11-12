@@ -952,7 +952,7 @@ async fn request_agent_start(
 fn start_payload(
   task : String,
   selected_model : @deepseek.Model,
-  reasoning : OpenSeekReasoning,
+  reasoning : @protocol.Thinking,
   max_steps : String,
   session : String,
   submission_id : String,

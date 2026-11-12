@@ -2810,25 +2810,9 @@ pub impl @json.FromJson for OpenSeekApproval
 pub impl @json.ToJson for OpenSeekApproval
 
 #derive(Eq, @debug.Debug)
-pub(all) enum OpenSeekThinking {
-  ThinkingOff
-  ThinkingHigh
-  ThinkingMax
-}
-pub fn OpenSeekThinking::equal(Self, Self) -> Bool
-pub fn OpenSeekThinking::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn OpenSeekThinking::not_equal(Self, Self) -> Bool
-pub fn OpenSeekThinking::parse(String) -> Self?
-pub fn OpenSeekThinking::to_json(Self) -> @json.Json
-pub fn OpenSeekThinking::to_repr(Self) -> @debug.Repr
-pub fn OpenSeekThinking::wire(Self) -> String
-pub impl @json.FromJson for OpenSeekThinking
-pub impl @json.ToJson for OpenSeekThinking
-
-#derive(Eq, @debug.Debug)
 pub(all) struct PatternRepairPayload {
   model : String
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   root : String
   pattern : String
   instruction : String
@@ -3642,7 +3626,7 @@ pub(all) struct SessionCommandSettings {
   system_prompt : String?
   session : String
   model : String?
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
@@ -3749,7 +3733,7 @@ pub(all) struct SessionEditPayload {
   task : String
   images : Array[String]
   attachment_paths : Array[String]
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   approval : OpenSeekApproval?
   max_steps : Int32?
 }
@@ -4428,7 +4412,7 @@ pub(all) struct StartPayload {
   task : String
   submission_id : String?
   model : String?
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   approval : OpenSeekApproval?
   max_steps : Int32?
   session : String
@@ -4728,6 +4712,22 @@ pub fn TextSearchRange::to_json(Self) -> @json.Json
 pub fn TextSearchRange::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for TextSearchRange
 pub impl @json.ToJson for TextSearchRange
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Thinking {
+  ThinkingOff
+  ThinkingHigh
+  ThinkingMax
+}
+pub fn Thinking::equal(Self, Self) -> Bool
+pub fn Thinking::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Thinking::not_equal(Self, Self) -> Bool
+pub fn Thinking::parse(String) -> Self?
+pub fn Thinking::to_json(Self) -> @json.Json
+pub fn Thinking::to_repr(Self) -> @debug.Repr
+pub fn Thinking::wire(Self) -> String
+pub impl @json.FromJson for Thinking
+pub impl @json.ToJson for Thinking
 
 #derive(Eq, @debug.Debug)
 pub(all) struct UiLanguagePreference {

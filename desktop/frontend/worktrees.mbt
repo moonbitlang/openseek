@@ -1901,7 +1901,7 @@ test "a start payload keeps launch choices without naming a worktree" {
   let payload = start_payload(
     "go",
     Deepseek(V4Pro),
-    ReasoningMax,
+    ThinkingMax,
     "1000",
     "desktop-wt",
     "sub-1",
@@ -1921,7 +1921,7 @@ test "a start payload keeps launch choices without naming a worktree" {
   let kimi_model = start_payload(
     "go",
     Kimi(K27Code),
-    ReasoningMax,
+    ThinkingMax,
     "1000",
     "desktop-kimi",
     "sub-2",
