@@ -62,6 +62,7 @@ pub(all) struct Input {
   locale : @i18n.Locale
   mode : Mode
   has_host : Bool
+  work_available : Bool
   skills_available : Bool
   notices : Array[String]
   chat_sections : Array[@section.Input]

@@ -8,6 +8,9 @@ test('Cloud session direct access and refresh do not depend on catalog membershi
   const cloud = new CloudHarness(page);
   cloud.sessionIds = [];
   cloud.histories.set(sessionA, { messages: [{ id: 1, task_id: 'old-task', kind: 'assistant_message', data: { content: 'Deep linked history' }, created_at: 1000 }], generating: false, outcome: null });
+  // The page connects the account's online devices for the Work list; Cloud
+  // must work with none of them reachable.
+  cloud.device.connectionAvailable = false;
   await cloud.install();
   await page.goto(sessionURL(sessionA));
   await expect(page.locator('#transcript')).toContainText('Deep linked history');
@@ -20,7 +23,7 @@ test('Cloud session direct access and refresh do not depend on catalog membershi
   await expect(page.locator('#transcript')).toContainText('Deep linked history');
   await expect(page.locator('#task')).toHaveValue('');
   expect(creations(cloud)).toEqual([]);
-  expect(cloud.device.ticketRequests).toHaveLength(0);
+  expect(cloud.device.socket).toBeNull();
   expect(cloud.device.pageErrors).toEqual([]);
 });
 

@@ -37,12 +37,13 @@ test('the sidebar selector lists Cloud and online devices and switches between t
     { id: 'offline', name: 'Office computer', online: false },
     { id: 'device-b', name: 'Studio', online: true },
   ] } }));
-  // A Cloud page has no device; the selector names Cloud and connects nothing.
+  // A Cloud page works on no device, so the selector names Cloud, but it
+  // connects the online devices for the Work list.
   await page.goto('/cloud');
   await page.locator('.sidebar-toggle').click();
   const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
   await expect(selector).toContainText('Cloud');
-  expect(app.socket).toBeNull();
+  await expect.poll(() => app.socket !== null).toBe(true);
   await selector.click();
   await expect(page.getByRole('menuitem', { name: 'Cloud', exact: true })).toBeDisabled();
   await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeEnabled();

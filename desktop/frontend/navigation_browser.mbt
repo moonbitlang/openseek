@@ -38,10 +38,11 @@ fn apply_browser_navigation(
   let parsed = @routes.parse(
     snapshot.path.split("?").next().unwrap_or(snapshot.path[:]).to_owned(),
   )
-  let navigation = { ..model.navigation, browser_ready: true, }
   match parsed {
     Ok(location) if location.target.is_cloud() ||
-      location.device == model.console.page_device => {
+      model.navigates_in_page(location.device) => {
+      let (enter, model) = model.enter_location_device(dispatch, location)
+      let navigation = { ..model.navigation, browser_ready: true, }
       let location = model.bind_cloud_location(location)
       // An invalid URL retains the covered destination, but returning to that
       // destination must activate it again rather than retain the error phase.
@@ -80,11 +81,13 @@ fn apply_browser_navigation(
           },
         },
       }
-      activate_navigation(dispatch, model)
+      let (activate, model) = activate_navigation(dispatch, model)
+      (@cmd.batch([enter, activate]), model)
     }
     Ok(location) if location.device is Some(_) =>
       (@nav.load(snapshot.path), model)
-    _ =>
+    _ => {
+      let navigation = { ..model.navigation, browser_ready: true, }
       (
         @cmd.none,
         {
@@ -97,6 +100,7 @@ fn apply_browser_navigation(
           navigation: { ..navigation, phase: Invalid, },
         },
       )
+    }
   }
 }
 
@@ -110,7 +114,8 @@ fn follow_navigation_link(
     Internal(url) =>
       match @routes.parse(url.path) {
         Ok(location) if location.target.is_cloud() ||
-          location.device == model.console.page_device => {
+          model.navigates_in_page(location.device) => {
+          let (enter, model) = model.enter_location_device(dispatch, location)
           let location = model.bind_cloud_location(location)
           // Explicit navigation cancels an in-flight creation even when the
           // chosen page is the one still covered by that creation request.
@@ -123,7 +128,7 @@ fn follow_navigation_link(
             ..next,
             navigation: { ..next.navigation, phase: Waiting, },
           })
-          (@cmd.batch([write, activate]), next)
+          (@cmd.batch([enter, write, activate]), next)
         }
         _ => update_msg(dispatch, ExternalLinkClicked(url.to_string()), model)
       }
@@ -157,4 +162,43 @@ fn Model::bind_cloud_location(
       }
     _ => location
   }
+}
+
+///|
+/// Whether a host route stays in this page. A relay page reaches every
+/// device of its account in place; the desktop window and the Local Console
+/// hold one host, so another device's route loads that device's own page.
+fn Model::navigates_in_page(self : Model, device : String?) -> Bool {
+  device is Some(_) &&
+  (device == self.console.page_device || self.is_relay_console())
+}
+
+///|
+/// Move a relay page onto the device a host route names before the route
+/// activates. A device the page holds takes focus; one it does not hold
+/// (offline, or not in the account) leaves the inert Local focus, so the
+/// device gate explains why.
+fn Model::enter_location_device(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  location : @routes.Location,
+) -> (@cmd.Cmd, Model) {
+  guard location.device is Some(device) &&
+    location.device != self.console.page_device else {
+    return (@cmd.none, self)
+  }
+  let channel = @interop.ChannelId::of_device(device)
+  let (command, next) = focus_channel(
+    dispatch,
+    self,
+    if self.device_state(channel) is Some(_) {
+      channel
+    } else {
+      @interop.ChannelId::Local
+    },
+  )
+  (
+    command,
+    { ..next, console: { ..next.console, page_device: Some(device), }, },
+  )
 }

@@ -147,8 +147,16 @@ fn focus_channel(
     dispatch.map(msg => FileEditor(msg)),
     file_ctx(model),
   )
+  // A browser page works on the device it focuses: its next host route
+  // names that device. The desktop window's page device is its own host.
+  let console = if !model.is_desktop && model.device_state(channel) is Some(_) {
+    { ..model.console, page_device: Some(channel.device_id()), }
+  } else {
+    model.console
+  }
   let next = {
     ..model.reset_api_setup(),
+    console,
     focused: channel,
     active_session: "",
     selected_conversation: None,
@@ -4929,7 +4937,7 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          sidebar_mode: if model.has_host() {
+          sidebar_mode: if model.work_available() {
             sidebar_mode
           } else {
             ChatMode
@@ -4951,7 +4959,7 @@ fn update_msg(
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
     SidebarModeLoaded(sidebar_mode) =>
-      if !model.has_host() {
+      if !model.work_available() {
         (@cmd.none, { ..model, sidebar_mode: ChatMode, })
       } else if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&

@@ -159,18 +159,17 @@ fn observe_navigation(
     _ => []
   }
   let durable : Array[(@routes.Location, @routes.Location)] = []
-  if next.console.page_device is Some(device) {
-    for conv in next.conversations {
-      if conv.has_begun() &&
-        previous.find_conversation(conv.device, conv.session_id) is Some(old) &&
-        !old.has_begun() {
-        durable.push(
-          (
-            { device: Some(device), target: ChatDraft(conv.session_id), },
-            { device: Some(device), target: Session(conv.session_id), },
-          ),
-        )
-      }
+  for conv in next.conversations {
+    if next.route_device(conv.device) is Some(device) &&
+      conv.has_begun() &&
+      previous.find_conversation(conv.device, conv.session_id) is Some(old) &&
+      !old.has_begun() {
+      durable.push(
+        (
+          { device: Some(device), target: ChatDraft(conv.session_id), },
+          { device: Some(device), target: Session(conv.session_id), },
+        ),
+      )
     }
   }
   {
@@ -188,5 +187,17 @@ fn observe_navigation(
     retired,
     promotion,
     durable,
+  }
+}
+
+///|
+/// The device a channel's host routes name. A relay page routes each device
+/// by its own id; the desktop window and the Local Console route their one
+/// page device.
+fn Model::route_device(self : Model, channel : @interop.ChannelId) -> String? {
+  if self.is_relay_console() {
+    Some(channel.device_id())
+  } else {
+    self.console.page_device
   }
 }

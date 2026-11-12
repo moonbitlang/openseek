@@ -19,7 +19,7 @@ pub(all) struct Account {
 }
 
 ///|
-/// Where the page works. A page keeps it for its lifetime.
+/// Where the page works.
 #derive(Debug, Eq)
 pub(all) enum Page {
   CloudPage
@@ -55,6 +55,9 @@ pub(all) struct Input {
   locale : @i18n.Locale
   mode : Mode
   has_host : Bool
+  // Whether the Work list has a device to show: the page's own, or any
+  // device a browser page holds before it works on one.
+  work_available : Bool
   // A host's library or a signed-in Cloud account's.
   skills_available : Bool
   notices : Array[String]
@@ -454,7 +457,7 @@ pub fn component(
               ModeChat,
               @icons.icon_comment_discussion,
             ),
-            if input.has_host {
+            if input.work_available {
               actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code)
             } else {
               @html.nothing

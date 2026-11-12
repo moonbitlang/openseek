@@ -161,6 +161,8 @@ test('signed-out entry fits a phone viewport', { tag: '@webkit-layout' }, async 
 test('Cloud conversation fits a small phone and a multiline draft survives a height change', { tag: '@webkit-layout' }, async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 851 });
   const cloud = new CloudHarness(page);
+  // Cloud must work with none of the account's devices reachable.
+  cloud.device.connectionAvailable = false;
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
   await expect(page.locator('#task')).toBeEnabled();
@@ -180,7 +182,6 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   await expect(page.locator('#task')).toHaveValue('An unsent follow-up\nwith a second line\nand a third line');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   expect(cloud.postCount).toBe(1);
-  expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.socket).toBeNull();
   expect(cloud.device.pageErrors).toEqual([]);
 });

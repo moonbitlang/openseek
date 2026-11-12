@@ -2685,7 +2685,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     Some(width) => width <= NarrowBreakpoint
     None => false
   }
-  // A Connect page has one page-lifetime device. The desktop window's is its
+  // The device a Connect page first works on. The desktop window's is its
   // own host, `local`; a browser page names it with `/device/<id>/` (or a
   // legacy `?device=`). Without one, the page serves Cloud Chat. An
   // optional `?workspace=` places that device's first conversation.
@@ -2896,6 +2896,13 @@ fn Model::device_state(
 /// is offline. A browser Cloud page has no device; Desktop always owns its host.
 fn Model::has_host(self : Model) -> Bool {
   self.is_desktop || self.console.page_device is Some(_)
+}
+
+///|
+/// Whether the Work list has a device to show. A browser Cloud page holds its
+/// account's online devices before it works on any of them.
+fn Model::work_available(self : Model) -> Bool {
+  self.has_host() || !self.devices.is_empty()
 }
 
 ///|
