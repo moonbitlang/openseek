@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/downloads"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
 }
 
@@ -34,8 +35,20 @@ pub(all) enum Msg {
   FetchFailed
 }
 
+#derive(Eq, @debug.Debug)
+pub(all) enum Os {
+  MacOS
+  Windows
+  Linux
+  Android
+}
+pub fn Os::equal(Self, Self) -> Bool
+pub fn Os::not_equal(Self, Self) -> Bool
+pub fn Os::to_repr(Self) -> @debug.Repr
+
 #derive(Eq)
 pub struct Target {
+  os : Os
   label : String
   url : String
 }

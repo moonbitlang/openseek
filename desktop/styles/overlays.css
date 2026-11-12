@@ -222,6 +222,11 @@
   color: var(--color-text-primary);
   text-decoration: none;
 }
+.downloads-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
 .downloads-row:hover { background: var(--color-hover-subtle); }
 .downloads-row:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
 .downloads-action {

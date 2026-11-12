@@ -15,9 +15,9 @@ test "a manifest lists installers in platform order and keeps its release page" 
   }
   assert_eq(version, "0.3.1")
   assert_eq(page_url, "https://example.com/r/0.3.1")
-  assert_eq(targets.map(target => (target.label, target.url)), [
-    ("macOS · Apple Silicon", "https://example.com/mac.dmg"),
-    ("Linux · x64", "https://example.com/linux.tar.gz"),
+  assert_eq(targets.map(target => (target.os, target.label, target.url)), [
+    (MacOS, "macOS · Apple Silicon", "https://example.com/mac.dmg"),
+    (Linux, "Linux · x64", "https://example.com/linux.tar.gz"),
   ])
 }
 
