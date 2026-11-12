@@ -28,6 +28,7 @@ import {
   "openseek_desktop/frontend/conversation_overview",
   "openseek_desktop/frontend/user_questions",
   "openseek_desktop/frontend/export_dialog",
+  "openseek_desktop/frontend/download_dialog",
   "moonbit-community/rabbita/dialog",
   "moonbit-community/rui",
   "openseek_desktop/frontend/github",

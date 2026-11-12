@@ -72,6 +72,34 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   expect(app.pageErrors).toEqual([]);
 });
 
+test('a signed-out visitor opens the relay app downloads from the sidebar', async ({ page }) => {
+  const app = await installConsole(page);
+  await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
+  await page.route('**/desktop/releases/latest.json', route => route.fulfill({ json: {
+    version: '0.3.1',
+    url: 'https://example.com/releases/0.3.1',
+    platforms: {
+      'macos-arm64': { url: 'https://example.com/mac.tar.gz' },
+      'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
+      'windows-x64': { url: 'https://example.com/win.zip' },
+    },
+  } }));
+  await page.goto('/cloud');
+  await page.locator('.sidebar-toggle').click();
+  await page.getByRole('button', { name: 'Download apps' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Download apps' });
+  await expect(dialog.getByRole('link', { name: /macOS · Apple Silicon/ }))
+    .toHaveAttribute('href', 'https://example.com/mac.dmg');
+  await expect(dialog.getByRole('link', { name: /Windows · x64/ }))
+    .toHaveAttribute('href', 'https://example.com/win.zip');
+  await expect(dialog.getByRole('link', { name: 'All releases on GitHub' }))
+    .toHaveAttribute('href', 'https://example.com/releases/0.3.1');
+  await assertFits(page);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('the device selector opens upward even when its menu would fit below', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const app = await installConsole(page);

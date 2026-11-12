@@ -28,7 +28,6 @@ pub(all) struct Account {
   notice : String?
   page : Page
   online_devices : Array[DeviceChoice]
-  downloads_url : String?
 }
 pub fn Account::equal(Self, Self) -> Bool
 pub fn Account::not_equal(Self, Self) -> Bool
@@ -42,6 +41,7 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
+  open_downloads : @cmd.Cmd
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
@@ -71,6 +71,7 @@ pub(all) struct Input {
   schedules_active : Bool
   skills_active : Bool
   settings_active : Bool
+  downloads : Bool
   account : Account?
 }
 pub fn Input::equal(Self, Self) -> Bool

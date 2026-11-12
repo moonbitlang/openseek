@@ -1282,6 +1282,7 @@ priv struct Model {
   session_import_dialog : @session_import.Model
   export_dialog : @export_dialog.Model
   file_share_dialog : @export_dialog.Model
+  download_dialog : @download_dialog.Model
   workspace_settings_dialog : WorkspaceSettingsDialog?
   // The user answered "Not now" to the setup modal. Held until a usable
   // endpoint re-arms the announcement, and deliberately not part of the
@@ -1972,6 +1973,8 @@ priv enum Msg {
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
+  OpenDownloads
+  DownloadDialog(@download_dialog.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
   // editor hover's foreign DOM; browser pages keep native new-tab behavior.
@@ -2849,6 +2852,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     session_import_dialog: @session_import.Model(),
     export_dialog: @export_dialog.Model(),
     file_share_dialog: @export_dialog.Model(id_prefix="file-share"),
+    download_dialog: @download_dialog.Model(),
     workspace_settings_dialog: None,
     api_setup_dismissed: false,
     account: None,

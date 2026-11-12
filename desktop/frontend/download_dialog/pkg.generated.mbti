@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/download_dialog"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+#derive(Eq)
+pub struct Model {
+  generation : Int32
+  release : Release
+}
+pub fn Model::Model() -> Self
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::open(Self, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
+pub fn Model::update(Self, Msg) -> Self
+pub fn Model::view(Self, @i18n.Locale) -> @html.Html
+
+pub(all) enum Msg {
+  Fetched(generation~ : Int32, status~ : Int32, body~ : String)
+  FetchFailed(generation~ : Int32)
+}
+
+#derive(Eq, @debug.Debug)
+pub enum Release {
+  Loading
+  Ready(version~ : String, page_url~ : String, targets~ : Array[Target])
+  Unavailable
+}
+pub fn Release::equal(Self, Self) -> Bool
+pub fn Release::not_equal(Self, Self) -> Bool
+pub fn Release::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub struct Target {
+  label : String
+  url : String
+}
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+pub fn Target::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

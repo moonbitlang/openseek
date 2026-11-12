@@ -4960,6 +4960,17 @@ fn update_msg(
         }
       }
     }
+    OpenDownloads => {
+      let (cmd, dialog) = model.download_dialog.open(
+        dispatch.map(msg => DownloadDialog(msg)),
+      )
+      (cmd, { ..model, download_dialog: dialog, })
+    }
+    DownloadDialog(msg) =>
+      (
+        @cmd.none,
+        { ..model, download_dialog: model.download_dialog.update(msg), },
+      )
     OpenSchedules => open_schedules(dispatch, model)
     SchedulePage(msg) => update_schedules(dispatch, msg, model)
     OpenSkills =>

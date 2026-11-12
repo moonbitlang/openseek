@@ -16,9 +16,6 @@ pub(all) struct Account {
   page : Page
   // The account's online devices, in roster order; the selector offers these.
   online_devices : Array[DeviceChoice]
-  // The relay's app download page; None where the page is not served by the
-  // relay (the Local Console).
-  downloads_url : String?
 }
 
 ///|
@@ -68,6 +65,9 @@ pub(all) struct Input {
   schedules_active : Bool
   skills_active : Bool
   settings_active : Bool
+  // Whether the page's relay publishes the apps the footer offers to
+  // download, signed in or not.
+  downloads : Bool
   account : Account?
 }
 
@@ -88,6 +88,7 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
+  open_downloads : @cmd.Cmd
   // Switch the page to the device with this id, or to Cloud with None.
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
@@ -362,6 +363,17 @@ pub fn component(
         ],
       ),
     )
+    if input.downloads {
+      footer.push(
+        @html.button(class="sidebar-button", on_click=actions.open_downloads, [
+          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_down)),
+          @html.span(
+            class="sidebar-label",
+            @messages.text(input.locale, DownloadApps),
+          ),
+        ]),
+      )
+    }
     if input.account is Some(account) {
       let account_row : Array[@html.Html] = []
       if !account.avatar.is_empty() {
@@ -391,26 +403,6 @@ pub fn component(
           @messages.text(input.locale, SignOut),
         ),
       )
-      if account.downloads_url is Some(url) {
-        footer.push(
-          @html.a(
-            class="sidebar-button",
-            href=url,
-            target=Blank,
-            rel="noopener",
-            [
-              @html.span(
-                class="sidebar-icon",
-                @icons.icon(@icons.icon_arrow_down),
-              ),
-              @html.span(
-                class="sidebar-label",
-                @messages.text(input.locale, DownloadApps),
-              ),
-            ],
-          ),
-        )
-      }
       let choose = @messages.text(input.locale, ChooseDevice)
       footer.push(
         @rui.popover_trigger(

@@ -198,6 +198,43 @@
 .export-link-row .export-copy-success { --button-color: var(--color-success); }
 .export-error { color: var(--color-danger); }
 
+.download-dialog-status { margin: 0; color: var(--color-text-secondary); }
+.download-dialog-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.download-dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.download-dialog-row:hover { background: var(--color-hover-subtle); }
+.download-dialog-row:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.download-dialog-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+.download-dialog-note { margin: var(--space-5) 0 0; font-size: var(--font-size-sm); }
+.download-dialog-note a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+}
+
 .notifications {
   position: fixed;
   z-index: var(--z-notification);
