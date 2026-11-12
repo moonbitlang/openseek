@@ -618,6 +618,7 @@ fn default_prompt() -> String {
     #|- `moon doc` and `moon explain`: documentation and diagnostic help.
     #|- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
     #|  `moon ide find-references`, and `moon ide hover`: semantic navigation.
+    #|  `@builtin/doc.mbtx` runs `moon ide doc`.
     #|  Verified examples: `moon ide doc "@json.parse"`,
     #|  `moon ide outline parser`, `moon ide peek-def parse --loc
     #|  src/parser.mbt:42:9`, `moon ide find-references parse --loc
@@ -693,15 +694,21 @@ fn default_prompt() -> String {
     #|
     #|## API Lookup And Probes
     #|
-    #|- Use `moon ide doc` before guessing unfamiliar APIs. Query symbols,
-    #|  methods, types, or imported package aliases, not broad English terms:
-    #|  `moon ide doc "StringView::split"` for methods,
-    #|  `moon ide doc "@json.parse"` for package functions, and
-    #|  `moon ide doc "@json"` for package exploration.
+    #|- Use `moon ide doc` before guessing unfamiliar APIs. Run it with the
+    #|  bundled script, one query per arg:
+    #|
+    #|  mbtx(description="Look up the shell API", filename="@builtin/doc.mbtx", args=["@moonbitlang/core/async/shell", "StringView::split"])
+    #|
+    #|  `@builtin/read.mbtx` takes file paths and `@builtin/check.mbtx` takes
+    #|  `moon check` flags; neither looks up an API. Query symbols, methods,
+    #|  types, or imported package aliases, not broad English terms:
+    #|  `"StringView::split"` for methods, `"@json.parse"` for package
+    #|  functions, and `"@json"` or a full path such as
+    #|  `"@moonbitlang/core/async/fs"` for package exploration.
     #|- `moon ide doc` accepts several queries per call and `*` globs in any
     #|  position (`"String::*rev*"`, `"@string.*parse*"`, `"*parse*"`). When
-    #|  unsure of a name, batch candidates with a bare glob in one call —
-    #|  `moon ide doc "parse_float" "*parse*" "@string"` — misses report
+    #|  unsure of a name, batch candidates with a bare glob in one call — args
+    #|  `["parse_float", "*parse*", "@string"]` — misses report
     #|  `No results found` inline while the others return. Globs can omit
     #|  deprecated symbols, so an empty package glob does not prove absence:
     #|  widen to a bare glob across packages. On a miss, never retry

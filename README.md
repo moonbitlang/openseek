@@ -385,6 +385,8 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 - [`tests/cram/read-workflow.md`](tests/cram/read-workflow.md) — a tested guide
   to `read.mbtx`: numbered files, ranges, errors, and output limits. See
   [Writing cram documentation](tests/cram/README.md) to add a guide for another script.
+- [`tests/cram/doc-workflow.md`](tests/cram/doc-workflow.md) — `doc.mbtx`
+  API lookups through `moon ide doc`: hits, misses, and usage.
 - [`tests/cram/validation-workflows.md`](tests/cram/validation-workflows.md) —
   the bundled check, test, and formatting scripts, exercised on a temporary project.
 - [`tests/live/deepseek.md`](tests/live/deepseek.md) — a real, non-mock DeepSeek

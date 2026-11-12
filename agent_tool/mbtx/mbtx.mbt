@@ -1792,6 +1792,9 @@ fn description(
     #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
     #|  `["fn parse", "-g", "*.mbt", "."]`. Output is `path:line:text`; no match
     #|  exits 0 with a note.
+    #|- `@builtin/doc.mbtx` looks up APIs: `args` go to `moon ide doc` unchanged,
+    #|  one query each, e.g. args `["@moonbitlang/core/async/shell",
+    #|  "StringView::split", "*parse*"]`. Misses are listed and exit 0 with a note.
     #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
     #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
     #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and

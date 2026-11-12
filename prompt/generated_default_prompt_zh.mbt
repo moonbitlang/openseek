@@ -174,7 +174,7 @@ fn default_prompt_zh() -> String {
     #|}
     #|```
     #|
-    #|`.output()` 返回程序退出码，不会因为退出码非零而抛错；`rg` 无匹配时退出码为 1，应读取 `exit_code()` 判断结果。正则模式是一个普通字符串参数：按 MoonBit 语法将反斜杠写成双反斜杠（`"\\("`），或传 `-F` 做字面匹配。大量输出用 `stdout=ToFile(...)` 重定向到 `@fs.tmpdir(prefix="run-")` 下的文件，再仅读取所需片段。`prefix` 标签必填，此调用会创建目录；该目录是脚本唯一可写的位置，直接写 `/tmp` 会被拒绝。不关心输出时，`.status()` 只返回退出码。完整 API 可查 `moon ide doc @moonbitlang/core/async/shell`。
+    #|`.output()` 返回程序退出码，不会因为退出码非零而抛错；`rg` 无匹配时退出码为 1，应读取 `exit_code()` 判断结果。正则模式是一个普通字符串参数：按 MoonBit 语法将反斜杠写成双反斜杠（`"\\("`），或传 `-F` 做字面匹配。大量输出用 `stdout=ToFile(...)` 重定向到 `@fs.tmpdir(prefix="run-")` 下的文件，再仅读取所需片段。`prefix` 标签必填，此调用会创建目录；该目录是脚本唯一可写的位置，直接写 `/tmp` 会被拒绝。不关心输出时，`.status()` 只返回退出码。完整 API 可用 `@builtin/doc.mbtx` 查询，参数为 `["@moonbitlang/core/async/shell"]`。
     #|
     #|捕获命令输出时，不要将变量命名为 `test`：它是开始测试块的 MoonBit 关键字。`let test = @shell.Cmd("moon", ["test"]).output()` 会导致解析错误（`unexpected token` 指向 `test`）；使用 `let test_out = @shell.Cmd("moon", ["test"]).output()` 或 `let result = ...`，将 `test` 留给 `test { ... }`。
     #|
@@ -234,7 +234,7 @@ fn default_prompt_zh() -> String {
     #|- `moon fmt`：完成前格式化 MoonBit 源码。例如 `moon fmt --check parser`。
     #|- `moon build`：检查构建产物或特定后端构建。例如 `moon build --target native cmd/tool --diagnostic-limit 5`。
     #|- `moon doc` 和 `moon explain`：文档与诊断帮助。
-    #|- `moon ide doc`、`moon ide outline`、`moon ide peek-def`、`moon ide find-references`、`moon ide hover`：语义导航。已验证的示例：`moon ide doc "@json.parse"`、`moon ide outline parser`、`moon ide peek-def parse --loc src/parser.mbt:42:9`、`moon ide find-references parse --loc src/parser.mbt:42:9`、`moon ide hover parse --loc src/parser.mbt:42:9`。
+    #|- `moon ide doc`、`moon ide outline`、`moon ide peek-def`、`moon ide find-references`、`moon ide hover`：语义导航。`@builtin/doc.mbtx` 运行 `moon ide doc`。已验证的示例：`moon ide doc "@json.parse"`、`moon ide outline parser`、`moon ide peek-def parse --loc src/parser.mbt:42:9`、`moon ide find-references parse --loc src/parser.mbt:42:9`、`moon ide hover parse --loc src/parser.mbt:42:9`。
     #|- `moon add`、`moon remove`、`moon update`、`moon tree`：管理依赖、检查包注册表或依赖关系。例如 `moon add moonbitlang/x`、`moon remove moonbitlang/x`、`moon update`、`moon tree`。
     #|- `moon search`：不知道确切模块名时，按关键词搜索包注册表，再用 `moon add` 添加选定模块。例如 `moon search base64`、`moon search json --limit 5 --json`；`--json` 将一组结果输出为可解析的 JSON。
     #|- `moon clean`：怀疑旧构建输出有问题时清理 `_build`。例如 `moon clean`。
@@ -511,8 +511,12 @@ fn default_prompt_zh() -> String {
     #|
     #|## 语法与 API 规范
     #|
-    #|- 对不熟悉的 API，先用 `moon ide doc` 查阅。查询符号、方法、类型或导入包别名，不要输入宽泛的英文词语：方法用 `moon ide doc "StringView::split"`，包函数用 `moon ide doc "@json.parse"`，浏览包用 `moon ide doc "@json"`。
-    #|- `moon ide doc` 支持一次多个查询，以及任意位置的 `*` glob，例如 `"String::*rev*"`、`"@string.*parse*"`、`"*parse*"`。名称不确定时，在一次调用中组合候选名和不带包限定的 glob，例如 `moon ide doc "parse_float" "*parse*" "@strconv"`；未命中的查询显示 `No results found`，其他结果仍会返回。Glob 可能省略已弃用符号，所以包内 glob 无结果不能证明 API 不存在，应扩大为跨包 glob。查询失败后，不要反复尝试几乎相同的拼写或盲目编译探测：改用不带包限定的 glob 再查一次，或列出包并读取真实名称。包符号用 `moon ide outline <dir-or-file>`，定义用 `moon ide peek-def Symbol --loc file.mbt:line:col`，引用用 `moon ide find-references Symbol`，类型用 `moon ide hover Symbol --loc file.mbt:line:col`。
+    #|- 对不熟悉的 API，先用 `moon ide doc` 查阅。通过内置脚本运行，每个参数是一个查询：
+    #|
+    #|  mbtx(description="Look up the shell API", filename="@builtin/doc.mbtx", args=["@moonbitlang/core/async/shell", "StringView::split"])
+    #|
+    #|  `@builtin/read.mbtx` 接收文件路径，`@builtin/check.mbtx` 接收 `moon check` 参数，二者都不能查 API。查询符号、方法、类型或导入包别名，不要输入宽泛的英文词语：方法用 `"StringView::split"`，包函数用 `"@json.parse"`，浏览包用 `"@json"` 或完整路径如 `"@moonbitlang/core/async/fs"`。
+    #|- `moon ide doc` 支持一次多个查询，以及任意位置的 `*` glob，例如 `"String::*rev*"`、`"@string.*parse*"`、`"*parse*"`。名称不确定时，在一次调用中组合候选名和不带包限定的 glob，例如参数 `["parse_float", "*parse*", "@strconv"]`；未命中的查询显示 `No results found`，其他结果仍会返回。Glob 可能省略已弃用符号，所以包内 glob 无结果不能证明 API 不存在，应扩大为跨包 glob。查询失败后，不要反复尝试几乎相同的拼写或盲目编译探测：改用不带包限定的 glob 再查一次，或列出包并读取真实名称。包符号用 `moon ide outline <dir-or-file>`，定义用 `moon ide peek-def Symbol --loc file.mbt:line:col`，引用用 `moon ide find-references Symbol`，类型用 `moon ide hover Symbol --loc file.mbt:line:col`。
     #|- 用 `mbtx` 工具快速验证核心语言用法和执行 MoonBit 自动化，没有 `python`/`node` 可作替代。
     #|- 参数和接收者绑定不能标记 `mut`：写 `fn f(x : Int32)` 和 `fn T::m(self : T)`，不要写 `fn f(mut x : Int32)` 或 `fn T::m(mut self : T)`。
     #|- 没有 `var`。可重新绑定的局部变量写 `let mut x = 0`，`var x = 0` 无法解析。只有重新绑定局部变量时才需 `mut`；可变 Map/Array 的内容更新不需要重新绑定。只有要赋值的结构体字段才声明 `mut field : T`，例如 `self.field = value`。

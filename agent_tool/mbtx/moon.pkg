@@ -27,6 +27,7 @@ dev_build(
     "../../share/workflow/check-json.mbtx",
     "../../share/workflow/check-test.mbtx",
     "../../share/workflow/check.mbtx",
+    "../../share/workflow/doc.mbtx",
     "../../share/workflow/ci-watch.mbtx",
     "../../share/workflow/fix-deprecations.mbtx",
     "../../share/workflow/info-fmt.mbtx",

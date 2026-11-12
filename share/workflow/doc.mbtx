@@ -1,0 +1,95 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/sys",
+}
+---
+
+///|
+/// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.
+const OutputBytes : Int32 = 40_000
+
+///|
+let usage : String =
+  #|Usage: mbtx(filename="@builtin/doc.mbtx", args=["QUERY", ...])
+  #|Runs `moon ide doc` with these arguments, unchanged: each one is a query
+  #|for exported APIs and their documentation in the current module, its
+  #|dependencies, moonbitlang/core, and registry indexes.
+  #|Queries: "StringView::split" (method), "@json.parse" (package function),
+  #|"@json" or "@moonbitlang/core/async/shell" (whole package), "String"
+  #|(type), and `*` globs anywhere ("String::*rev*", "*parse*"). Batch
+  #|several queries in one call; each miss is listed and the others return.
+  #|Output is bounded to 40000 UTF-8 bytes; narrow the query when truncated.
+  #|No match exits 0 with a note. cwd (default workspace) selects the module.
+  #|args=["-h"] prints moon ide doc's own flag summary.
+
+///|
+/// The query `moon ide doc` names in a miss line, or `None` for any other
+/// line. It prints these on stdout, inline with the hits, and then exits 1.
+fn missed_query(line : String) -> String? {
+  if line.strip_prefix("No results found for query: '") is Some(rest) &&
+    rest.strip_suffix("'") is Some(query) {
+    return Some(query.to_owned())
+  }
+  // `package NAME not found in MODULE`, or `in workspace` under a moon.work.
+  if line.strip_prefix("package ") is Some(rest) &&
+    rest.split_once(" not found in ") is Some((name, _)) &&
+    !name.contains(" ") {
+    return Some("@\{name}")
+  }
+  None
+}
+
+///|
+async fn main {
+  let args = @env.args()[1:]
+  if args is ([] | ["--help"]) {
+    println(usage)
+    return
+  }
+  let mut remaining = OutputBytes - 1_024
+  let mut shown = 0
+  let mut total = 0
+  let missed : Array[String] = []
+  let doc = @shell.Cmd("moon", ["ide", "doc", ..args], stderr=Inherit)
+  let exit_code = doc.each_line(line => {
+    total += 1
+    if missed_query(line) is Some(query) {
+      missed.push(query)
+    }
+    let bytes = @utf8.encode(line).length() + 1
+    if shown == total - 1 && bytes <= remaining {
+      println(line)
+      shown += 1
+      remaining -= bytes
+    }
+  }) catch {
+    error => {
+      println(
+        "error: could not run moon ide doc (\{error}); put the MoonBit toolchain on PATH",
+      )
+      @sys.exit(2)
+      return
+    }
+  }
+  if shown < total {
+    println(
+      "<system>truncated=true shown_lines=\{shown} total_lines=\{total} note=narrow the query (a package path, Type::method, or a tighter glob) to see the rest</system>",
+    )
+  }
+  match exit_code {
+    0 => ()
+    // A miss is an answer, not a failure: moon ide doc exits 1 when any query
+    // finds nothing, even if the others matched.
+    1 if !missed.is_empty() => {
+      let names = missed.map(query => "\"\{query}\"").join(", ")
+      println(
+        "<system>no matches for \{names}; retry once with a bare glob such as \"*name*\" or list the package (\"@moonbitlang/core/async/fs\") and read the real names</system>",
+      )
+    }
+    code => @sys.exit(code)
+  }
+}

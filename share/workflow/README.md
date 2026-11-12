@@ -10,6 +10,10 @@ this resource root's absolute path.
   its arguments go to rg unchanged (ripgrep flags and Rust regex, not POSIX
   grep; a PATH is required), output is `path:line:text` bounded to 40000
   bytes, and no match exits zero with a note.
+- `doc.mbtx` looks up APIs with `moon ide doc`: each argument is one query
+  (`"@json.parse"`, `"StringView::split"`, `"@moonbitlang/core/async/shell"`,
+  `"*parse*"`), output is bounded to 40000 bytes, and misses exit zero with a
+  note naming them (see [Looking up APIs](../../tests/cram/doc-workflow.md)).
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.

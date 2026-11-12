@@ -71,7 +71,7 @@ An example of using rg in `mbtx`:
 
 [share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
 
-Use `moon ide doc @moonbitlang/core/async/shell` for the full API.
+For the full API, run `@builtin/doc.mbtx` with args `["@moonbitlang/core/async/shell"]`.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
