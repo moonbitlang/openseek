@@ -245,7 +245,7 @@ async test "call_tool returns image content as image input" {
 
 ///|
 /// A server that handshakes but never answers tools/list is skipped at the
-/// discovery deadline instead of hanging engine startup.
+/// discovery deadline instead of hanging the script that reached it.
 async test "connect times out discovery on a wedged server" {
   @async.with_task_group(group => {
     let scope = @agent_runtime.AgentTaskScope(group)

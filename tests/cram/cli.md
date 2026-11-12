@@ -151,7 +151,7 @@ Options:
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
   --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
   --skills-dir <skills-dir>                                    Another skills directory, advertised alongside the user-level and workspace ones, which shadow its same-named skills. Repeat to add more; empty values are ignored. [default: ]
-  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. A skill directory may bring servers of its own in an mcp.json beside its SKILL.md; those connect when a script first reaches them. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
+  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. A skill directory may bring servers of its own in an mcp.json beside its SKILL.md. Each server connects when a script first reaches it. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
   --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
   --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
@@ -541,35 +541,25 @@ $ printf '{"command":"steer","text":"too late","submission_id":"late-steer"}\n' 
 The engine reports what it holds of its MCP servers without being asked: an
 `mcp_status` event as soon as it starts, and another each time that state
 changes. Every one carries the whole state, so a controller keeps the latest.
-Connecting runs in the background, so commands are read meanwhile, and a
-server that has not come to anything yet is `connecting`. With nothing
-configured there are no configs and no servers:
+A server connects in the background when a script first reaches it, so
+commands are read meanwhile. With nothing configured there are no configs and
+no servers:
 
 ```mooncram
 $ env DEEPSEEK=test-key openseek.exe serve </dev/null 2>/dev/null | grep '"event":"mcp_status"'
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
-A server that cannot start is listed with its failure rather than left out:
-first as connecting, then as failed once that is known. The commands stay open
-until it is, so the engine is still running (the `grep -o` stops before the
-error text, which is the operating system's):
+A configured server is listed from the start, `idle` until a script reaches
+it, even one that could never start:
 
 ```mooncram
 $ sh <<'EOF'
 > printf '{"mcpServers":{"notes":{"command":"openseek-no-such-mcp-server"}}}' > mcp.json
-> mkfifo commands
-> env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json <commands >events 2>/dev/null &
-> exec 3>commands
-> i=0
-> until grep -q '"state":"failed"' events || [ "$i" -ge 300 ]; do sleep 0.1; i=$((i + 1)); done
-> exec 3>&-
-> wait
-> grep -o '"event":"mcp_status".*"state":"[a-z_]*"' events
-> rm -f mcp.json commands events
+> env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json </dev/null 2>/dev/null | grep '"event":"mcp_status"'
+> rm -f mcp.json
 > EOF
-"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"connecting"
-"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
+{"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"idle"}]}}
 ```
 
 `serve` takes no positional; a stray task is rejected by the parser before

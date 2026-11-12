@@ -256,12 +256,11 @@ user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment applies.
 The host also supplies its own tools, as a `seekmoon` skill it writes under its
 runtime directory (`host-skills/seekmoon/`, with a `SKILL.md` saying what the
 tools do and an `mcp.json` reaching the host) and hands each engine as a
-skills directory. The agent learns of the tools from that skill, and the server
-connects when a script first reaches it; a same-named server in the user file
-replaces it.
+skills directory. The agent learns of the tools from that skill; a same-named
+server in the user file replaces it.
 
-An engine connects its servers once, when it starts — one set of server
-processes per conversation. The host therefore reads the file before each
+An engine connects each server at most once, when a script first reaches it —
+one set of server processes per conversation. The host therefore reads the file before each
 prompt and keeps a digest of its content among the things that pin an engine
 to its configuration, like the model and the endpoint: an edit starts a new
 engine, and with it every server, on that conversation's next prompt, with no

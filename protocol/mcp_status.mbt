@@ -59,8 +59,7 @@ pub extend McpTransport with Debug::{to_repr}
 /// What the engine holds of one configured server.
 #derive(Eq, Debug)
 pub(all) enum McpServerState {
-  /// It connects when a script first reaches it, and none has yet: a server a
-  /// skill brings.
+  /// It connects when a script first reaches it, and none has yet.
   Idle
   /// Still being connected: it has come to nothing yet.
   Connecting

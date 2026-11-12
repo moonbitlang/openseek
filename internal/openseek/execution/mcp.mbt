@@ -4,34 +4,27 @@ pub const McpClientVersion : String = "0.2.2"
 
 ///|
 /// What this engine holds of MCP: each configuration file and what came of
-/// reading it, and for each server of the merged configuration what
-/// connecting came to, which settles in the background. Built once at startup
+/// reading it, and each server of the merged configuration with what
+/// connecting it came to once a script has reached it. Built once at startup
 /// and kept for the engine's life, because the connections are — it is what an
 /// `mcp_status` event reports.
 struct McpRegistry {
   configs : Array[@protocol.McpConfigStatus]
-  /// Each server of the merged configuration, in order, being connected.
+  /// Each server of the merged configuration, in order.
   servers : Array[@mcptools.Server]
-  /// The task that reports `McpToolsRegistered` once every server has
-  /// settled; `None` when no configuration file loaded, which reports nothing.
-  registered : @async.Task[Unit]?
 }
 
 ///|
 /// Read every configuration file in `config_paths`, in order — a later file's
-/// server replaces an earlier one of the same name — and start connecting the
-/// merged servers in the background on `scope`'s group, without waiting for
-/// any: a server that takes long to connect (or never does, like a headers
-/// helper waiting on the user) does not hold up the engine. The servers each
-/// of `skills` brings in its `mcp.json` join them, ahead of the files, so a
-/// file's server replaces a skill's of the same name; a skill's server
-/// connects only when a script first reaches it. A skill's configuration may
-/// reference its own directory as `${OPENSEEK_SKILL_DIR}`, which its stdio
-/// servers also find in their environment. `on_change` runs each time
-/// `status` may have changed since — a server started connecting or settled,
-/// or a connected server's connection closed — and must not block. Once every
-/// server from the files has settled, `McpToolsRegistered` is reported.
-/// Nothing here fails the engine: a file that cannot be used and a server that
+/// server replaces an earlier one of the same name. The servers each of
+/// `skills` brings in its `mcp.json` join them, ahead of the files, so a
+/// file's server replaces a skill's of the same name. A skill's configuration
+/// may reference its own directory as `${OPENSEEK_SKILL_DIR}`, which its stdio
+/// servers also find in their environment. No server connects here: each
+/// connects in the background on `scope`'s group when a script first reaches
+/// it. `on_change` runs each time `status` may have changed since — a server
+/// started connecting or settled, or a connected server's connection closed —
+/// and must not block. Nothing here fails the engine: a file that cannot be used and a server that
 /// cannot be reached are recorded in the registry and reported as the events
 /// they always were.
 pub async fn start_mcp(
@@ -95,51 +88,15 @@ pub async fn start_mcp(
       loaded.push(servers)
     }
   }
-  // A file's server replaces a skill's of the same name, and connects as the
-  // engine starts, like every server from the files.
-  let from_files : Set[String] = Set([])
-  for servers in loaded {
-    for server in servers {
-      from_files.add(server.name())
-    }
-  }
-  let on_demand : Set[String] = Set(
-    [
-      for server in skill_servers if !from_files.contains(server.name()) => {
-        server.name()
-      }
-    ],
-  )
   let servers = @mcptools.start(
     scope,
     @mcpconfig.merge([skill_servers, ..loaded]),
     client_name="openseek",
     client_version=McpClientVersion,
     workspace_root~,
-    on_demand~,
     on_change?,
   )
-  // Preserve the single-file failure contract: no registration event when
-  // every file failed to load (or none was given). A valid empty file still
-  // registers normally.
-  guard !loaded.is_empty() else {
-    return { configs, servers, registered: None, }
-  }
-  let registered = scope
-    .group()
-    .spawn(no_wait=true, () => {
-      let names : Array[String] = []
-      let eager = servers.filter(server => !server.on_demand)
-      for server in eager {
-        for tool in server.settled().tools {
-          names.push("\{server.config.name()}/\{tool.name}")
-        }
-      }
-      @emit.emit(
-        McpToolsRegistered(servers=eager.length(), tools=names.length(), names~),
-      )
-    })
-  { configs, servers, registered: Some(registered), }
+  { configs, servers, }
 }
 
 ///|
@@ -147,17 +104,6 @@ pub async fn start_mcp(
 /// read: its configuration may reference it as `${OPENSEEK_SKILL_DIR}`, and
 /// its stdio servers find it in their environment.
 pub const SkillDirEnv : String = "OPENSEEK_SKILL_DIR"
-
-///|
-/// Wait until every server from the configuration files has settled and
-/// `McpToolsRegistered` has been reported — for a one-shot run, whose turn
-/// should see every tool there will be. A skill's servers are not waited for:
-/// they connect when a script reaches them.
-pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
-  if self.registered is Some(registered) {
-    registered.wait()
-  }
-}
 
 ///|
 /// Serve these servers to scripts through an MCP host on `scope`'s group,
