@@ -22,12 +22,7 @@ async fn with_toolchain_test_tree(
 /// A complete fake toolchain: the resolver only assembles one around the
 /// executable the desktop spawns — `moon`.
 async fn touch_fake_toolchain(bin_dir : @pathx.Absolute) -> Unit {
-  @fs.write_text(
-    bin_dir.join("moon" + ExecutableSuffix).to_string(),
-    "",
-    create_mode=CreateOrTruncate,
-    permission=0o755,
-  )
+  touch_fake_executable(bin_dir.join("moon" + ExecutableSuffix).to_path())
 }
 
 ///|
@@ -287,7 +282,7 @@ async test "a user toolchain with moonx wins over the bundled seed" {
   with_toolchain_test_tree(root => {
     let engine = fake_packaged_engine(root)
     let user_bin = root.join("user/bin")
-    touch_fake_executable(user_bin.join("moon" + ExecutableSuffix).to_path())
+    touch_fake_toolchain(user_bin)
     touch_fake_executable(user_bin.join("moonx" + ExecutableSuffix).to_path())
     let runtime = root.join("runtime")
     let toolchain = desktop_toolchain(
@@ -306,7 +301,7 @@ async test "a user moon without moonx falls back to the bundled seed" {
   with_toolchain_test_tree(root => {
     let engine = fake_packaged_engine(root)
     let user_bin = root.join("user/bin")
-    touch_fake_executable(user_bin.join("moon" + ExecutableSuffix).to_path())
+    touch_fake_toolchain(user_bin)
     let runtime = root.join("runtime")
     let payload = runtime.join("toolchains/moonbit/macos-arm64").to_path()
     for
