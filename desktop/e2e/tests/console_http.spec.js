@@ -7,7 +7,7 @@ for (const endpoint of ['auth/me', 'devices']) {
     await app.install();
     await page.route(`**/v2/${endpoint}`, route => route.fulfill({ status: 401, body: '' }));
     await page.goto('/index.html?device=device-a');
-    await expect(page.getByRole('link', { name: /Sign in.*GitHub/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -66,7 +66,7 @@ test('same-origin cookies and empty logout POST survive HTTP transport replaceme
     await route.fulfill({ status: 204 });
   });
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('link', { name: /Sign in.*GitHub/i })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   expect(logout.method).toBe('POST');
   expect(logout.body?.length ?? 0).toBe(0);
   expect(logout.headers.cookie).toContain('session=fixture');
