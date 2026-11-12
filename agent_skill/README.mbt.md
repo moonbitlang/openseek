@@ -34,5 +34,5 @@ on Windows; override with `--global-skills-dir` /
 before it, so a project can specialize a shared playbook without renaming it.
 
 A `<name>/SKILL.md` skill may keep an `mcp.json` beside it naming MCP servers
-it brings; `Skill::mcp_config` is its path. The engine connects those servers
+it brings; `Skill::mcp_config_path` is its path. The engine connects those servers
 when a script first reaches them (see the repository README).
