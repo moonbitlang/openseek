@@ -51,12 +51,19 @@ fn git_review_revision(reply : @protocol.GitChangesReply) -> String? {
 /// rejected before bridge access.
 fn list_changes(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   generation : Int32,
   workspace~ : @common.Uri?,
+  cloud? : CloudFiles,
+  locale~ : @i18n.Locale = English,
 ) -> @cmd.Cmd {
-  guard workspace is Some(workspace) &&
-    @resource.belongs_to(workspace, owner.channel) else {
+  guard owner is @interop.Cloud(..) ||
+    (
+      workspace is Some(root) &&
+      owner
+      .host()
+      .map_or(false, host => @resource.belongs_to(root, host.channel))
+    ) else {
     // Settle the in-flight request even when its workspace is unavailable.
     return dispatch(
       ChangesFailed(
@@ -68,10 +75,15 @@ fn list_changes(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        owner.channel,
+      let reply = read_review_source(
+        owner,
+        cloud,
         @commands.git_changes,
-        { session: owner.session, workspace: workspace.path, },
+        {
+          session: owner.session(),
+          workspace: workspace.map_or("", value => value.path),
+        },
+        endpoint="changes",
       ) catch {
         error => {
           scheduler.add(
@@ -79,7 +91,7 @@ fn list_changes(
               ChangesFailed(
                 owner~,
                 generation~,
-                message=@interop.bridge_error_text(error),
+                message=review_error_text(error, locale),
               ),
             ),
           )
@@ -90,7 +102,9 @@ fn list_changes(
       // New hosts pin Review to the selected comparison commit. Older hosts
       // omit `baseline`, so keep their exact HEAD identity.
       let revision = git_review_revision(reply)
-      scheduler.add(dispatch(GitHeadObserved(owner~, head=reply.head)))
+      scheduler.add(
+        dispatch(GitHeadObserved(owner~, generation~, head=reply.head)),
+      )
       scheduler.add(
         dispatch(
           ChangesLoaded(
@@ -114,16 +128,20 @@ fn list_changes(
 /// conversation switch can discard it without touching the Viewer.
 fn read_git_original(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   path : @common.Uri,
   source : @pathx.Relative,
   generation : Int32,
   background~ : Bool = false,
   revision~ : String?,
   workspace~ : @common.Uri?,
+  cloud? : CloudFiles,
+  locale~ : @i18n.Locale = English,
 ) -> @cmd.Cmd {
   match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
+    Some(resource) if owner
+      .host()
+      .map_or(false, host => !@resource.belongs_to(resource, host.channel)) =>
       return dispatch(
         GitOriginalFailed(
           owner~,
@@ -137,15 +155,17 @@ fn read_git_original(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let original = @interop.bridge_request(
-        owner.channel,
+      let original = read_review_source(
+        owner,
+        cloud,
         @commands.git_original_file,
         {
-          session: owner.session,
+          session: owner.session(),
           workspace: workspace.map(value => value.path),
           path: source.0,
           revision,
         },
+        endpoint="original-file",
       ) catch {
         error => {
           scheduler.add(
@@ -155,7 +175,7 @@ fn read_git_original(
                 path~,
                 generation~,
                 background~,
-                message=@interop.bridge_error_text(error),
+                message=review_error_text(error, locale),
               ),
             ),
           )

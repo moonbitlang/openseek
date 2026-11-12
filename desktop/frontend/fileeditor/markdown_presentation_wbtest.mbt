@@ -121,7 +121,7 @@ test "working feedback keeps rendered selection text separate from source range"
       ] else {
       fail("expected one working-file annotation")
     }
-    assert_eq(resource.0, source.uri.to_string())
+    assert_eq(resource.uri, source.uri.to_string())
     assert_eq(file, Relative("README.md"))
     assert_eq(actual_range, range)
     assert_eq(quote, expected)

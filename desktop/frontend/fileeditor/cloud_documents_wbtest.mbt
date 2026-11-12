@@ -1,4 +1,49 @@
 ///|
+test "restoring a Cloud review fences its previous visit's original-file response" {
+  let emit = test_emit()
+  let a = cloud_ctx("account", "a", 1)
+  let b = cloud_ctx("account", "b", 1)
+  let path = a.resource(Relative("saved.txt")).unwrap()
+  let a = { ..a, open_files: [path], active_file: Some(path), }
+  let (state, _) = sync(emit, State::empty(), a)
+  let (_, review) = open_changed_document(
+    emit,
+    state,
+    a,
+    {
+      path: Relative("saved.txt"),
+      original_path: None,
+      index_status: " ",
+      worktree_status: "M",
+      kind: ChangeModified,
+    },
+    had_active=false,
+  )
+  let doc = review.docs.get(path).unwrap()
+  let old_generation = doc.review.unwrap().generation
+  let docs = review.docs.copy()
+  docs[path] = { ..doc, state: TabLoaded(content="working", sig="v1"), }
+  let (away, _) = sync(emit, { ..review, docs, }, b)
+  let (returned, _) = sync(emit, away, a)
+  assert_true(
+    returned.docs.get(path).unwrap().review.unwrap().generation > old_generation,
+  )
+  let (_, ignored) = update(
+    emit,
+    GitOriginalLoaded(
+      owner=a.owner,
+      path~,
+      generation=old_generation,
+      background=false,
+      original=@protocol.OriginalContent("previous visit"),
+    ),
+    returned,
+    a,
+  )
+  assert_true(ignored == returned)
+}
+
+///|
 test "Cloud restores settled open documents through sync and explicit owner preparation" {
   let emit = test_emit()
   let a = cloud_ctx("account", "a", 1)

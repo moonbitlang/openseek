@@ -364,7 +364,10 @@ pub(all) enum MbtiViewMode {
 pub fn MbtiViewMode::equal(Self, Self) -> Bool
 pub fn MbtiViewMode::not_equal(Self, Self) -> Bool
 
-pub struct ModelUri(String)
+pub struct ModelUri {
+  uri : String
+  feedback_source : @common.Uri?
+}
 pub fn ModelUri::of(@common.Uri) -> Self
 pub fn ModelUri::resource(Self) -> @common.Uri
 
@@ -383,7 +386,7 @@ pub(all) enum Msg {
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
   OfficeCitationLaidOut(OfficeCitationNavigation)
   ReviewContextRevealFinished(source~ : @mention_context.ReviewSource, found~ : Bool)
-  ReviewContextChanged(owner~ : @interop.ConversationKey, selection~ : @mention_context.ReviewChanges, adding~ : Bool)
+  ReviewContextChanged(owner~ : @interop.ConversationIdentity, selection~ : @mention_context.ReviewChanges, adding~ : Bool)
   GithubReview(@github_review.Msg)
   UpdatePullRequest
   PullRequestUpdated
@@ -442,17 +445,17 @@ pub(all) enum Msg {
   DirFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, message~ : Failure)
   FilesIndexed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, files~ : Array[@pathx.Relative], truncated~ : Bool)
   FileIndexFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32)
-  ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int32, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
-  ChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int32, message~ : String)
+  ChangesLoaded(owner~ : @interop.ConversationIdentity, generation~ : Int32, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
+  ChangesFailed(owner~ : @interop.ConversationIdentity, generation~ : Int32, message~ : String)
   ChangesPollDue
-  GitHeadObserved(owner~ : @interop.ConversationKey, head~ : String?)
+  GitHeadObserved(owner~ : @interop.ConversationIdentity, generation~ : Int32, head~ : String?)
   GitHistoryRefreshRequested
   GitHistoryLoadMoreRequested
-  GitHistoryLoaded(owner~ : @interop.ConversationKey, generation~ : Int32, append~ : Bool, reply~ : @protocol.GitHistoryReply)
-  GitHistoryFailed(owner~ : @interop.ConversationKey, generation~ : Int32, append~ : Bool, message~ : String)
+  GitHistoryLoaded(owner~ : @interop.ConversationIdentity, generation~ : Int32, append~ : Bool, reply~ : @protocol.GitHistoryReply)
+  GitHistoryFailed(owner~ : @interop.ConversationIdentity, generation~ : Int32, append~ : Bool, message~ : String)
   GitCommitSelected(String)
-  GitCommitChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int32, reply~ : @protocol.GitCommitChangesReply)
-  GitCommitChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int32, commit~ : String, message~ : String)
+  GitCommitChangesLoaded(owner~ : @interop.ConversationIdentity, generation~ : Int32, reply~ : @protocol.GitCommitChangesReply)
+  GitCommitChangesFailed(owner~ : @interop.ConversationIdentity, generation~ : Int32, commit~ : String, message~ : String)
   GitCommitChangesRetry(String)
   HistoricalFileSelected(@dock.GitHistoryDiff)
   ToggleChangesSection
@@ -465,7 +468,7 @@ pub(all) enum Msg {
   ChangedFileSelected(ChangedFile)
   ChangedFileNavigated(ChangedFile, Bool)
   ReviewDiffFileBoundary(Bool)
-  DiffLoadingDue(owner~ : @interop.ConversationKey, path~ : @common.Uri, generation~ : Int32)
+  DiffLoadingDue(owner~ : @interop.ConversationIdentity, path~ : @common.Uri, generation~ : Int32)
   ToggleReviewDiff
   ToggleReviewDiffLayout
   ReviewDiffModeSelected(ReviewDiffMode)
@@ -484,10 +487,10 @@ pub(all) enum Msg {
   ReviewActiveHunkChanged(ready~ : Bool, change~ : ChangedFile, review_generation~ : Int32, surface_generation~ : Int32, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   ToggleActiveReviewHunk
   ToggleReviewHunk(change~ : ChangedFile, review_generation~ : Int32, surface_generation~ : Int32, hunk~ : ReviewHunk, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
-  GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @common.Uri, generation~ : Int32, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
-  GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @common.Uri, generation~ : Int32, background~ : Bool, message~ : String)
-  HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
-  HistoryBlobFailed(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, message~ : String)
+  GitOriginalLoaded(owner~ : @interop.ConversationIdentity, path~ : @common.Uri, generation~ : Int32, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
+  GitOriginalFailed(owner~ : @interop.ConversationIdentity, path~ : @common.Uri, generation~ : Int32, background~ : Bool, message~ : String)
+  HistoryBlobLoaded(owner~ : @interop.ConversationIdentity, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
+  HistoryBlobFailed(owner~ : @interop.ConversationIdentity, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, message~ : String)
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
   FileLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, name~ : String, file~ : FileContent, file_link_generation~ : Int32?, review_generation~ : Int32?, range~ : @common.Range?, annotation~ : String?)
   FileFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, file_link_generation~ : Int32?, review_generation~ : Int32?, message~ : Failure)

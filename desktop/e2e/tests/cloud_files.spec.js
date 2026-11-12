@@ -82,7 +82,7 @@ async function openFiles(page, cloud) {
   await cloud.open();
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const launcher = page.locator('.dock-launcher');
-  await expect(launcher.getByRole('button')).toHaveText([/Search/, /Files/]);
+  await expect(launcher.getByRole('button')).toHaveText([/Search/, /Files/, /Review/]);
   await launcher.getByRole('button', { name: /^Files / }).click();
   await expect(tree(page).getByRole('treeitem').first()).toBeVisible();
 }
@@ -285,7 +285,7 @@ test('Cloud file links and mentions reuse source previews and the composer envel
 test('Cloud browses nested text files through the existing read-only Files pane', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
-  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(1);
   await expect(page.getByRole('tab', { name: 'Search', exact: true })).toHaveCount(1);
   await openText(page);
   expect(cloud.fileRequests.at(-1)).toMatchObject({ session: sessionA, path: 'src/hello #.mbt', content: true });
@@ -411,10 +411,10 @@ test('Cloud text search reuses options, results, keyboard tabs and positioned fi
   });
   await cloud.goto(); await openFiles(page, cloud);
   const filesTab = page.getByRole('tab', { name: 'Files', exact: true });
-  await filesTab.focus(); await page.keyboard.press('ArrowRight');
+  await filesTab.focus(); await page.keyboard.press('End');
   const searchTab = page.getByRole('tab', { name: 'Search', exact: true });
   await expect(searchTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(1);
   const search = page.locator('.workspace-search');
   await expect(search.getByRole('button', { name: 'Code search', exact: true })).toHaveCount(1);
   await search.getByTitle('Match Case', { exact: true }).click();

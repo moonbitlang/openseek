@@ -98,15 +98,15 @@ fn LauncherActions::rows(
       self.files,
     ),
   )
+  entries.push(
+    (
+      ui(locale, ReviewLabel),
+      ui(locale, ReviewHint),
+      @icons.icon_diff_multiple,
+      self.review,
+    ),
+  )
   if self.host_tools {
-    entries.push(
-      (
-        ui(locale, ReviewLabel),
-        ui(locale, ReviewHint),
-        @icons.icon_diff_multiple,
-        self.review,
-      ),
-    )
     entries.push(
       ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
     )

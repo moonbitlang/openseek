@@ -8,15 +8,25 @@
 /// scheme `Uri` naming the file's absolute path) — the document key the
 /// viewer's services (feedback, markers) index by. The newtype keeps
 /// arbitrary strings and filesystem paths out of APIs that mean a viewer
-/// document; mint one with `ModelUri::of`, or wrap only the string form of a
+/// document. Revision/fragment feedback may also retain its Cloud workspace
+/// file identity so it reaches that file's composer. Mint one with
+/// `ModelUri::of`, or wrap only the string form of a
 /// `Uri` that `model_uri_path` just accepted. Read-only outside this
 /// package: the main package carries one in `EditorCommentAdded` and hands
 /// it back to `remove_editor_feedback`, but only this package mints them.
-pub struct ModelUri(String)
+pub struct ModelUri {
+  uri : String
+  feedback_source : @common.Uri?
+}
+
+///|
+fn ModelUri::ModelUri(uri : String, feedback_source? : @common.Uri) -> ModelUri {
+  { uri, feedback_source, }
+}
 
 ///|
 pub fn ModelUri::resource(self : ModelUri) -> @common.Uri {
-  try! @common.Uri::parse(self.0)
+  self.feedback_source.unwrap_or_else(() => try! @common.Uri::parse(self.uri))
 }
 
 ///|
@@ -280,7 +290,7 @@ test "model uris retain resource paths and channels" {
       // The ModelUri string form re-parses to the same document key — the
       // `remove_editor_feedback` path. URI serialization owns escaping while
       // the parsed path and channel remain stable.
-      let reparsed = @common.Uri::parse(ModelUri::of(resource).0)
+      let reparsed = @common.Uri::parse(ModelUri::of(resource).uri)
       assert_eq(reparsed.to_string(), minted.to_string())
       assert_true(model_uri_path(reparsed) == Some(resource))
     }

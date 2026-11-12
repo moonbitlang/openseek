@@ -104,12 +104,4 @@ test "Cloud search actions reach the shared reducer" {
     ctx,
   )
   assert_false(details.search == changed.search)
-  assert_true(
-    explorer_tab_key_target(ExplorerFiles, "ArrowRight", cloud=true)
-    is Some(ExplorerSearch),
-  )
-  assert_true(
-    explorer_tab_key_target(ExplorerSearch, "ArrowLeft", cloud=true)
-    is Some(ExplorerFiles),
-  )
 }

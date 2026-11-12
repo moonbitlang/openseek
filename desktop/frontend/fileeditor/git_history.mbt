@@ -23,15 +23,22 @@ pub fn short_commit(commit : String) -> String {
 ///|
 fn request_git_history(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   generation : Int32,
   append : Bool,
   snapshot : @protocol.GitHistorySnapshot?,
   skip : Int32,
   workspace~ : @common.Uri?,
+  cloud? : CloudFiles,
+  locale~ : @i18n.Locale = English,
 ) -> @cmd.Cmd {
-  guard workspace is Some(workspace) &&
-    @resource.belongs_to(workspace, owner.channel) else {
+  guard owner is @interop.Cloud(..) ||
+    (
+      workspace is Some(root) &&
+      owner
+      .host()
+      .map_or(false, host => @resource.belongs_to(root, host.channel))
+    ) else {
     // Settle the in-flight request even when its workspace is unavailable.
     return dispatch(
       GitHistoryFailed(
@@ -44,16 +51,18 @@ fn request_git_history(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        owner.channel,
+      let reply = read_review_source(
+        owner,
+        cloud,
         @commands.git_history,
         {
-          session: owner.session,
-          workspace: workspace.path,
+          session: owner.session(),
+          workspace: workspace.map_or("", value => value.path),
           snapshot,
           skip,
           limit: GitHistoryPageSize,
         },
+        endpoint="history",
       ) catch {
         error => {
           scheduler.add(
@@ -62,7 +71,7 @@ fn request_git_history(
                 owner~,
                 generation~,
                 append~,
-                message=@interop.bridge_error_text(error),
+                message=review_error_text(error, locale),
               ),
             ),
           )
@@ -80,13 +89,17 @@ fn request_git_history(
 ///|
 fn request_git_commit_changes(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   generation : Int32,
   commit : String,
   workspace~ : @common.Uri?,
+  cloud? : CloudFiles,
+  locale~ : @i18n.Locale = English,
 ) -> @cmd.Cmd {
   match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
+    Some(resource) if owner
+      .host()
+      .map_or(false, host => !@resource.belongs_to(resource, host.channel)) =>
       return dispatch(
         GitCommitChangesFailed(
           owner~,
@@ -99,14 +112,16 @@ fn request_git_commit_changes(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        owner.channel,
+      let reply = read_review_source(
+        owner,
+        cloud,
         @commands.git_commit_changes,
         {
-          session: owner.session,
+          session: owner.session(),
           workspace: workspace.map(value => value.path),
           commit,
         },
+        endpoint="commit-changes",
       ) catch {
         error => {
           scheduler.add(
@@ -115,7 +130,7 @@ fn request_git_commit_changes(
                 owner~,
                 generation~,
                 commit~,
-                message=@interop.bridge_error_text(error),
+                message=review_error_text(error, locale),
               ),
             ),
           )
@@ -133,16 +148,20 @@ fn request_git_commit_changes(
 ///|
 fn request_history_blob(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   key : String,
   generation : Int32,
   side : HistoryDiffSide,
   path : @pathx.Relative,
   revision : String,
   workspace~ : @common.Uri?,
+  cloud? : CloudFiles,
+  locale~ : @i18n.Locale = English,
 ) -> @cmd.Cmd {
   match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
+    Some(resource) if owner
+      .host()
+      .map_or(false, host => !@resource.belongs_to(resource, host.channel)) =>
       return dispatch(
         HistoryBlobFailed(
           owner~,
@@ -156,15 +175,17 @@ fn request_history_blob(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let blob = @interop.bridge_request(
-        owner.channel,
+      let blob = read_review_source(
+        owner,
+        cloud,
         @commands.git_original_file,
         {
-          session: owner.session,
+          session: owner.session(),
           workspace: workspace.map(value => value.path),
           path: path.0,
           revision: Some(revision),
         },
+        endpoint="original-file",
       ) catch {
         error => {
           scheduler.add(
@@ -174,7 +195,7 @@ fn request_history_blob(
                 key~,
                 generation~,
                 side~,
-                message=@interop.bridge_error_text(error),
+                message=review_error_text(error, locale),
               ),
             ),
           )
@@ -195,12 +216,12 @@ fn refresh_git_graph(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   guard state.owner is Some(state_owner) &&
     state_owner == ctx.owner &&
     ctx.checkout_ready() &&
-    !owner.session.is_empty() else {
+    !owner.session().is_empty() else {
     return (@cmd.none, state)
   }
   let generation = state.git_graph_generation + 1
@@ -213,6 +234,8 @@ fn refresh_git_graph(
       None,
       0,
       workspace=ctx.workspace(),
+      cloud?=ctx.cloud_files,
+      locale=ctx.locale,
     ),
     {
       ..state,
@@ -230,7 +253,7 @@ fn load_more_git_history(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   guard state.owner is Some(state_owner) &&
     state_owner == ctx.owner &&
@@ -256,6 +279,8 @@ fn load_more_git_history(
       Some(snapshot),
       commits.length(),
       workspace=ctx.workspace(),
+      cloud?=ctx.cloud_files,
+      locale=ctx.locale,
     ),
     {
       ..state,
@@ -279,7 +304,7 @@ fn select_git_commit(
   ctx : Ctx,
   commit : String,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   if state.git_graph_selected is Some(selected) && selected == commit {
     return (
@@ -303,6 +328,8 @@ fn select_git_commit(
       generation,
       commit,
       workspace=ctx.workspace(),
+      cloud?=ctx.cloud_files,
+      locale=ctx.locale,
     ),
     {
       ..state,
@@ -320,7 +347,7 @@ fn retry_git_commit_changes(
   ctx : Ctx,
   commit : String,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   guard state.git_graph_selected is Some(selected_commit) &&
     selected_commit == commit &&
@@ -336,6 +363,8 @@ fn retry_git_commit_changes(
       generation,
       commit,
       workspace=ctx.workspace(),
+      cloud?=ctx.cloud_files,
+      locale=ctx.locale,
     ),
     {
       ..state,
@@ -359,7 +388,7 @@ fn HistoryBlob::text(self : HistoryBlob) -> String? {
 
 ///|
 fn show_history_doc(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   doc : HistoryDiffDoc,
 ) -> @cmd.Cmd {
   guard doc.original.text() is Some(original) &&
@@ -376,7 +405,7 @@ pub fn open_history_diff(
   ctx : Ctx,
   diff : @dock.GitHistoryDiff,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   guard ctx.placement_ready() && diff.kind == "file" else {
     return (@cmd.none, state)
@@ -414,6 +443,8 @@ pub fn open_history_diff(
         diff.original_path.unwrap_or(diff.path),
         parent,
         workspace=ctx.workspace(),
+        cloud?=ctx.cloud_files,
+        locale=ctx.locale,
       ),
     )
   }
@@ -427,6 +458,8 @@ pub fn open_history_diff(
       diff.path,
       diff.commit,
       workspace=ctx.workspace(),
+      cloud?=ctx.cloud_files,
+      locale=ctx.locale,
     ),
   )
   (@cmd.batch(cmds), { ..state, history_docs, history_generation: generation, })
@@ -439,7 +472,7 @@ pub fn activate_history_diff(
   ctx : Ctx,
   diff : @dock.GitHistoryDiff,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   match state.history_docs.get(history_diff_key(diff)) {
     Some(doc) =>

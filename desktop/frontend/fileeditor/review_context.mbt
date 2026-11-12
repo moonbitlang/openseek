@@ -1,4 +1,13 @@
 ///|
+fn State::review_root(self : State) -> @common.Uri? {
+  match self.owner {
+    Some(@interop.Cloud(account~, session~)) =>
+      @resource.cloud_root(@cloud.CloudOrigin, account, session)
+    _ => self.placement.identity().bind(placement => placement.checkout_root())
+  }
+}
+
+///|
 // Cache the digest of the visible model pair: ordinary composer typing must
 // not re-hash complete files. Equality includes both texts, not a hunk index.
 let review_context_digest : Ref[(String, String, String)?] = Ref(None)
@@ -21,8 +30,7 @@ fn State::review_source(
   self : State,
   change : ChangedFile,
 ) -> @mention_context.ReviewSource? {
-  guard self.placement.identity().bind(placement => placement.checkout_root())
-    is Some(root) &&
+  guard self.review_root() is Some(root) &&
     self.docs.get(@resource.join_relative(root, change.path)) is Some(doc) &&
     doc.review is Some(review) &&
     review.selected == change &&
@@ -30,7 +38,11 @@ fn State::review_source(
     return None
   }
   Some({
-    workspace: root.path,
+    workspace: if self.owner is Some(@interop.Cloud(..)) {
+      "."
+    } else {
+      root.path
+    },
     file: change.path.0,
     original_file: change.original_path.map(path => path.0),
     base: self.changes_head,
@@ -43,8 +55,7 @@ pub fn State::accepts_review_context(
   self : State,
   selection : @mention_context.ReviewChanges,
 ) -> Bool {
-  guard self.placement.identity().bind(placement => placement.checkout_root())
-    is Some(root) &&
+  guard self.review_root() is Some(root) &&
     self.docs.get(
       @resource.join_relative(root, @pathx.Relative(selection.source.file)),
     )
@@ -84,8 +95,7 @@ fn State::review_context_selection(
   change : ChangedFile,
   hunk : ReviewHunk,
 ) -> @mention_context.ReviewChanges? {
-  guard self.placement.identity().bind(placement => placement.checkout_root())
-    is Some(root) &&
+  guard self.review_root() is Some(root) &&
     self.review_source(change) is Some(source) &&
     self.docs.get(@resource.join_relative(root, change.path)) is Some(doc) &&
     doc.visible_diff() is Some((original, modified)) else {

@@ -20,7 +20,7 @@ priv struct ReviewHunkBridgeTarget {
   position : ReviewHunkPosition?
   ready : Bool
   semantic_keys : Array[String]
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   dispatch : (Msg) -> Unit
 }
 
@@ -36,7 +36,7 @@ fn current_review_hunk_bridge_target(
   guard ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some(review) &&
-    state.owner is Some(@interop.Host(owner)) &&
+    state.owner is Some(owner) &&
     doc.visible_diff() is Some((original, modified)) &&
     viewer_state.document == Some(path) &&
     viewer_state.review_diff_inputs == Some((original, modified)) &&

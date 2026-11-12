@@ -455,7 +455,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
                   range,
                   projection.model.get_value_in_range(event.feedback.range),
                   event.feedback.text,
-                  ModelUri(event.feedback.resource.to_string()),
+                  feedback_model_uri(event.feedback.resource),
                   event.feedback.id,
                 ),
               ),
@@ -511,7 +511,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
                 modified_line_number=None,
                 quote~,
                 comment=event.feedback.text,
-                resource=ModelUri(event.feedback.resource.to_string()),
+                resource=feedback_model_uri(event.feedback.resource),
                 feedback_id=event.feedback.id,
               ),
             ),
@@ -524,7 +524,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           // items; only the inline user's explicit action should send a prompt.
           if event.user_count > 0 {
             scheduler.add(
-              dispatch(ApplyEditorFeedback(ModelUri::of(event.resource))),
+              dispatch(ApplyEditorFeedback(feedback_model_uri(event.resource))),
             )
           }
         })
@@ -748,7 +748,7 @@ pub fn remove_editor_feedback(
       guard viewer_state.services is Some(services) else { return }
       // The string is the `to_string()` of a URI this package minted, so the
       // re-parse cannot fail; a stray unparsable string has no bubble anyway.
-      let uri = @common.Uri::parse(resource.0) catch { _ => return }
+      let uri = @common.Uri::parse(resource.uri) catch { _ => return }
       services.feedback.remove_feedback(uri, feedback_id)
     },
     kind=@cmd.after_render,
@@ -772,12 +772,15 @@ pub fn request_viewer_remeasure() -> @cmd.Cmd {
 /// path remains useful for feedback identity and display, but the distinct
 /// scheme prevents every live-checkout language selector from matching it.
 fn original_revision_model_uri(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   document : @common.Uri,
 ) -> @common.Uri? {
   let uri = @common.Uri::from(
     scheme=OriginalRevisionScheme,
-    authority=owner.channel.uri_authority(),
+    authority=match owner {
+      Host(host) => host.channel.uri_authority()
+      Cloud(..) => document.authority
+    },
     path=document.path,
   ) catch {
     _ => return None
@@ -819,7 +822,7 @@ fn clear_diff_comparison() -> Unit {
 /// source Viewer. Equal inputs retain the current pair so selection, scroll,
 /// and feedback UI survive an unchanged review refresh.
 fn show_diff_comparison(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   name : String,
   modified_uri : @common.Uri,
   document : @common.Uri,
@@ -833,7 +836,10 @@ fn show_diff_comparison(
   }
   // The HEAD side takes comments only while the document has a workspace
   // name for their chips.
-  let commentable = viewer_state.navigation is Some(_)
+  let commentable = match owner {
+    Host(_) => viewer_state.navigation is Some(_)
+    Cloud(..) => viewer_state.feedback_root is Some(_)
+  }
   if diff_editor.get_model() is Some(current) &&
     current.original.uri.to_string() == original_uri.to_string() &&
     current.modified.uri.to_string() == modified_uri.to_string() &&
@@ -882,15 +888,22 @@ fn show_diff_comparison(
 
 ///|
 fn history_revision_model_uri(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   revision : String,
   side : String,
   path : @pathx.Relative,
 ) -> @common.Uri? {
   let uri = @common.Uri::from(
     scheme=HistoryRevisionScheme,
-    authority=owner.channel.uri_authority(),
-    path="/\{revision}/\{side}/\{path.0}",
+    authority=match owner {
+      Host(host) => host.channel.uri_authority()
+      Cloud(..) => "cloud"
+    },
+    path=match owner {
+      Host(_) => "/\{revision}/\{side}/\{path.0}"
+      Cloud(account~, session~) =>
+        "/\{account}/\{session}/\{revision}/\{side}/\{path.0}"
+    },
   ) catch {
     _ => return None
   }
@@ -902,7 +915,7 @@ fn history_revision_model_uri(
 /// model represents the working tree, so feedback, quick diff, diagnostics,
 /// and language navigation stay disabled on both sides.
 fn show_history_diff_in_viewer(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   diff : @dock.GitHistoryDiff,
   original_content : String,
   modified_content : String,
@@ -1543,9 +1556,7 @@ fn show_file_in_viewer(
     }
     match diff {
       Some((original, modified)) =>
-        if owner is @interop.Host(host) {
-          show_diff_comparison(host, name, uri, document, original, modified)
-        }
+        show_diff_comparison(owner, name, uri, document, original, modified)
       // The sibling comparison is intentionally parked when the source
       // surface is active or a replacement pair is still loading. CSS alone
       // selects the visible surface; keeping this bounded two-model cache
@@ -1812,4 +1823,20 @@ pub fn sync_feedback_permission(ctx : Ctx) -> @cmd.Cmd {
       )
     }
   })
+}
+
+///|
+/// Revision and semantic models keep their own feedback keys while routing
+/// Cloud comments through the owning workspace file and composer.
+fn feedback_model_uri(resource : @common.Uri) -> ModelUri {
+  let source = viewer_state.document.filter(document => {
+    document.scheme == "openseek-cloud" &&
+    (
+      semantic_feedback_model_projection(resource) is Some(_) ||
+      viewer_state.diff_editor
+      .bind(editor => editor.get_model())
+      .map_or(false, pair => pair.original.uri == resource)
+    )
+  })
+  ModelUri(resource.to_string(), feedback_source?=source)
 }

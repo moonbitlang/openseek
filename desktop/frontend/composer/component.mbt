@@ -391,6 +391,10 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 priv struct Model {
   entries : Array[Entry]
   applied_changes : Int32
+  review_context_snapshot : (
+    @interop.ConversationIdentity,
+    Array[@mention_context.ReviewChanges],
+  )?
   // The clock the running row's elapsed span is measured against, advanced by
   // `ClockTicked` and only while a turn is open. Component state rather than
   // the application's: a value that changes every second belongs to the one
@@ -404,6 +408,7 @@ fn Model::Model(input : Input) -> Model {
   {
     entries: [Entry(input)],
     applied_changes: input.entry_changes.length(),
+    review_context_snapshot: None,
     clock_ms: @interop.now_ms(),
   }
 }
@@ -1111,6 +1116,14 @@ fn Model::update(
       for selection in selections {
         remaining = remaining.with_review_changes(selection, adding=false)
       }
+      if entry.owner is @interop.Cloud(..) {
+        return self.commit_entry_change(
+          entry,
+          { ..entry, draft: remaining, changes_open: false, },
+          @cmd.none,
+          action_emit,
+        )
+      }
       (
         self.with_entry({
           ..entry,
@@ -1470,7 +1483,25 @@ pub fn component(
     input~,
     init=(_, input) => (Model(input), @cmd.none),
     update=(state, input, msg, emit) => {
-      state.update(input, msg, emit, action_emit)
+      let (next, command) = state.update(input, msg, emit, action_emit)
+      let entry = next.active(input)
+      let snapshot = if entry.owner is @interop.Cloud(..) {
+        Some((entry.owner, entry.review_changes()))
+      } else {
+        None
+      }
+      let context = if next.review_context_snapshot != snapshot &&
+        snapshot is Some((_, selections)) {
+        action_emit(
+          ReviewContextChanged(identity=entry.identity(), selections~),
+        )
+      } else {
+        @cmd.none
+      }
+      (
+        { ..next, review_context_snapshot: snapshot, },
+        @cmd.batch([command, context]),
+      )
     },
     subscriptions=(state, input, emit) => state.subscriptions(input, emit),
   )

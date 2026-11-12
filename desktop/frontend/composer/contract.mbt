@@ -355,6 +355,10 @@ pub(all) enum Action {
     present~ : Bool,
     cleared_source~ : Draft?
   )
+  ReviewContextChanged(
+    identity~ : Identity,
+    selections~ : Array[@mention_context.ReviewChanges]
+  )
   ReviewChangesRemoved(
     identity~ : Identity,
     selections~ : Array[@mention_context.ReviewChanges]
@@ -436,6 +440,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | DraftAttachmentsSubmitted(identity~, ..)
     | FollowupSubmitted(identity~, ..)
     | DraftPresenceChanged(identity~, ..)
+    | ReviewContextChanged(identity~, ..)
     | ReviewChangesRemoved(identity~, ..)
     | ReviewChangesOpened(identity~, ..)
     | RootMentionRemoved(identity~, ..)

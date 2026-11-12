@@ -9,6 +9,45 @@ fn cloud_ctx(account : String, session : String, epoch : Int32) -> Ctx {
 }
 
 ///|
+test "Cloud review inventory and HEAD observations reject retired sessions and credentials" {
+  let emit = test_emit()
+  let ctx = cloud_ctx("account", "session", 1)
+  let (state, _) = sync(emit, State::empty(), ctx)
+  let (_, loading) = update(
+    emit,
+    ExplorerModeSelected(ExplorerChanges),
+    state,
+    ctx,
+  )
+  let replies = [
+    ChangesLoaded(
+      owner=ctx.owner,
+      generation=loading.changes_generation,
+      repository=true,
+      head=Some("old-baseline"),
+      files=[],
+    ),
+    GitHeadObserved(
+      owner=ctx.owner,
+      generation=loading.changes_generation,
+      head=Some("old-head"),
+    ),
+  ]
+  for
+    next in [
+      cloud_ctx("account", "other-session", 1),
+      cloud_ctx("other-account", "session", 2),
+      cloud_ctx("account", "session", 3),
+    ] {
+    let (current, _) = sync(emit, loading, next)
+    for reply in replies {
+      let (_, ignored) = update(emit, reply, current, next)
+      assert_true(ignored == current)
+    }
+  }
+}
+
+///|
 test "Cloud file indexes reject retired owners and restart after refresh epochs" {
   let ctx = cloud_ctx("account", "session", 1)
   let emit = test_emit()
@@ -165,13 +204,14 @@ test "Cloud manual and run-finish refreshes retire old reads and keep background
   assert_true(finished.children.is_empty())
   assert_true(finished.loading.is_empty())
   assert_true(finished.docs.get(path) is Some({ stale: true, .. }))
-  let (_, unchanged) = update(
+  let (_, review) = update(
     test_emit(),
     ExplorerModeSelected(ExplorerChanges),
     state,
     ctx,
   )
-  assert_true(unchanged == state)
+  assert_true(review.explorer_mode is ExplorerChanges)
+  assert_true(review.changes is ChangeListLoading(..))
 }
 
 ///|
