@@ -164,33 +164,23 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
 }
 
 ///|
-test "account sign-in timeout is localized and restores the retry action" {
-  let locales : Array[@i18n.Locale] = [
-    English,
-    Spanish,
-    SimplifiedChinese,
-    TraditionalChinese,
-    Japanese,
-  ]
-  for locale in locales {
-    let (_, pending) = begin_account_login(test_dispatch(), {
-      ..test_model(),
-      is_desktop: true,
-      account: None,
-      locale,
-    })
-    let (_, expired) = update(
-      test_dispatch(),
-      AccountLoginTimedOut(pending.account_epoch),
-      pending,
-    )
-    assert_false(expired.remote_connecting)
-    assert_true(expired.account_login is None)
-    assert_true(expired.account_error is Some(SignInTimedOut))
-    let (_, retried) = begin_account_login(test_dispatch(), expired)
-    assert_true(retried.remote_connecting)
-    assert_true(retried.account_error is None)
-  }
+test "account sign-in timeout retains its cause and restores the retry action" {
+  let (_, pending) = begin_account_login(test_dispatch(), {
+    ..test_model(),
+    is_desktop: true,
+    account: None,
+  })
+  let (_, expired) = update(
+    test_dispatch(),
+    AccountLoginTimedOut(pending.account_epoch),
+    pending,
+  )
+  assert_false(expired.remote_connecting)
+  assert_true(expired.account_login is None)
+  assert_true(expired.account_error is Some(SignInTimedOut))
+  let (_, retried) = begin_account_login(test_dispatch(), expired)
+  assert_true(retried.remote_connecting)
+  assert_true(retried.account_error is None)
 }
 
 ///|

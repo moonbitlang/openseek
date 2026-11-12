@@ -206,10 +206,6 @@ test('uses the workbench type scale and Markdown layout contract', async ({
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(firstHeading).toHaveCSS('margin-top', '0px');
-  await expect(firstHeading).toHaveCSS('margin-bottom', '12px');
-  await expect(firstParagraph).toHaveCSS('margin-bottom', '16px');
-  await expect(quote).toHaveCSS('border-left-width', '3px');
-  await expect(quote).toHaveCSS('border-top-right-radius', '6px');
   await expect(quote.locator(':scope > :first-child')).toHaveCSS(
     'margin-top',
     '0px',

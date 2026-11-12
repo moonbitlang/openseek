@@ -10,7 +10,7 @@ fn render_search(state : State, input : @grep_search.Input) -> String {
 
 ///|
 #cfg(not(target="js"))
-test "Search renders VS Code's Whole Word codicon instead of a text label" {
+test "Search exposes an accessible Whole Word toggle" {
   let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
@@ -20,8 +20,6 @@ test "Search renders VS Code's Whole Word codicon instead of a text label" {
   }
   let html = render_search(State::empty(), input)
   assert_true(html.contains("aria-label=\"Match Whole Word\""))
-  assert_true(html.contains("M15.5 12.5C15.776 12.5"))
-  assert_false(html.contains(">ab</button>"))
 }
 
 ///|

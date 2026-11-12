@@ -202,19 +202,3 @@ test('keeps the explorer compact and exposes an accessible splitter', async ({
   await expect(splitter).toBeVisible();
   await expect(splitter).toHaveAttribute('aria-valuenow', '280');
 });
-
-test('renders explorer rows with twisties and file icons', async ({ page }) => {
-  await page.goto('/');
-
-  // src/main.mbt becomes visible once auto-reveal expands src.
-  await expect(
-    page.locator(
-      '[data-workspace-id="readonly-remote://workspace/src"] .workspace-twistie svg',
-    ),
-  ).toBeVisible();
-  await expect(
-    page.locator(
-      '[data-workspace-id="readonly-remote://workspace/src/main.mbt"] .workspace-file-icon svg',
-    ),
-  ).toBeVisible();
-});

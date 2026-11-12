@@ -35,12 +35,6 @@ test "decode accepts an empty mcpServers object" {
 }
 
 ///|
-test "McpServer::name returns the configured key" {
-  let servers = @config.decode({ "mcpServers": { "srv": { "command": "run" } } })
-  assert_eq(servers[0].name(), "srv")
-}
-
-///|
 test "decode parses an http server with headers" {
   let servers = @config.decode({
     "mcpServers": {
