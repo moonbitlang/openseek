@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
         // with the same document below, never fetched from the server, and its
         // /assets/ resources come from the same release: a downloaded Browser
         // release once one is ready, otherwise the APK's own bundle.
-        val release = FrontendUpdater.store(this).activate()
+        val release = FrontendUpdater.activate(this)
         val frontend = release?.let { WebViewAssetLoader.InternalStoragePathHandler(this, it) }
             ?: WebViewAssetLoader.AssetsPathHandler(this)
         val assets = WebViewAssetLoader.Builder()

@@ -3,6 +3,8 @@ package com.moonbit.openseek
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * The Browser releases downloaded for the APK release [shell], under
@@ -102,7 +104,10 @@ internal class FrontendStore(private val parent: File, val shell: String) {
         root.mkdirs()
         val temporary = File(root, "$name.tmp")
         temporary.writeText(release)
-        if (!temporary.renameTo(File(root, name))) throw IOException("unable to record $name")
+        Files.move(
+            temporary.toPath(), File(root, name).toPath(),
+            StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
+        )
     }
 
     companion object {

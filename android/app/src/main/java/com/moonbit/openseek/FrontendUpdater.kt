@@ -30,6 +30,21 @@ internal object FrontendUpdater {
     fun store(context: Context): FrontendStore = store
         ?: FrontendStore(File(context.filesDir, "frontend"), BuildConfig.RELEASE_VERSION).also { store = it }
 
+    /**
+     * The directory to serve this WebView's frontend from, or null for the
+     * APK's own bundle, which also serves when updates are off or the
+     * downloaded release cannot be switched to.
+     */
+    fun activate(context: Context): File? {
+        if (!BuildConfig.FRONTEND_UPDATES) return null
+        return try {
+            store(context).activate()
+        } catch (e: IOException) {
+            Log.w(TAG, "keeping the bundled frontend", e)
+            null
+        }
+    }
+
     /** Starts a background check unless one ran recently. Main thread only. */
     fun onStart(context: Context) {
         if (!BuildConfig.FRONTEND_UPDATES) return
