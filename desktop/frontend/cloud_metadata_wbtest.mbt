@@ -95,7 +95,7 @@ test "Cloud archived rows join the archived page's chats even without a device" 
   )
   assert_true(rows[0].1.rename is None)
   // The sidebar no longer lists archived rows.
-  let sections = model.sidebar_component_sections(model.dev())
+  let sections = model.sidebar_component_input().chat_sections
   assert_true(
     !sections.any(section => {
       section.entries.any(entry => {

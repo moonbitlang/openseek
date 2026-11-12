@@ -15,38 +15,43 @@ fn matching_rows(
 }
 
 ///|
-/// Filter the complete catalog before the project component applies its
-/// compact preview. Folder identities and normal row actions remain intact.
+/// Filter only the selected list before applying its compact preview.
+/// The hidden list retains its catalog and keyed component state.
 pub fn Input::filtered(self : Input) -> Input {
   let query = self.search.query().trim().to_owned().to_lower()
   if query.is_empty() {
     return self
   }
-  let sections = self.sections.filter_map(section => {
-    let entries = section.entries.filter_map(entry => {
-      match entry {
-        @section.Project(project) => {
-          let conversations = matching_rows(project.conversations, query)
-          if conversations.is_empty() {
-            None
-          } else {
-            Some(@section.Project({ ..project, conversations, }))
+  let sections = self
+    .sections(self.mode)
+    .filter_map(section => {
+      let entries = section.entries.filter_map(entry => {
+        match entry {
+          @section.Project(project) => {
+            let conversations = matching_rows(project.conversations, query)
+            if conversations.is_empty() {
+              None
+            } else {
+              Some(@section.Project({ ..project, conversations, }))
+            }
           }
+          @section.Conversation(row) =>
+            matching_rows([row], query)
+            .get(0)
+            .map(row => @section.Conversation(row))
+          @section.Placeholder(_) => None
         }
-        @section.Conversation(row) =>
-          matching_rows([row], query)
-          .get(0)
-          .map(row => @section.Conversation(row))
-        @section.Placeholder(_) => None
+      })
+      if entries.is_empty() && section.label is Some(_) {
+        None
+      } else {
+        Some({ ..section, entries, })
       }
     })
-    if entries.is_empty() && section.label is Some(_) {
-      None
-    } else {
-      Some({ ..section, entries, })
-    }
-  })
-  { ..self, sections, }
+  match self.mode {
+    ChatMode => { ..self, chat_sections: sections, }
+    WorkMode => { ..self, work_sections: sections, }
+  }
 }
 
 ///|
@@ -71,7 +76,7 @@ pub fn Input::search_results(self : Input) -> Array[@conversation.Id] {
   if query.is_empty() {
     return results
   }
-  for section in self.sections {
+  for section in self.sections(self.mode) {
     for entry in section.entries {
       match entry {
         @section.Project(project) =>

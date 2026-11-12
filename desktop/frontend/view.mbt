@@ -378,18 +378,11 @@ fn ordered_by_recency(
 /// conversations nested beneath it, and the archived group at the tail. Rows
 /// stay clickable while runs are active — switching between conversations
 /// mid-run is the point of keeping them concurrent.
-fn Model::sidebar_component_sections(
+fn Model::work_sidebar_sections(
   self : Model,
   dev : DeviceState,
 ) -> Array[@section.Input] {
   let channel = dev.channel.uri_authority()
-  if self.sidebar_mode is ChatMode {
-    return if dev.channel == self.focused {
-      self.chat_sidebar_sections(channel)
-    } else {
-      []
-    }
-  }
   let listed_ids = Set::from_iter(dev.sessions.iter().map(item => item.id))
   let listed = (id : String) => listed_ids.contains(id)
   // An archived record has moved out of the live store, so the live list
@@ -599,10 +592,10 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   if self.focused_device() is Some({ chat_root: Some(Err(message)), .. }) {
     notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))
   }
-  let sections = if self.is_desktop && !self.devices.is_empty() {
+  let work_sections = if self.is_desktop && !self.devices.is_empty() {
     let combined : Array[@section.Input] = []
     for dev in self.devices {
-      for section in self.sidebar_component_sections(dev) {
+      for section in self.work_sidebar_sections(dev) {
         match
           combined.search_by(item => item.id.source() == section.id.source()) {
           Some(index) => {
@@ -623,7 +616,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     combined
   } else {
     match self.focused_device() {
-      Some(dev) => self.sidebar_component_sections(dev)
+      Some(dev) => self.work_sidebar_sections(dev)
       None => {
         if self.console.page_device is Some(_) {
           match self.console.roster_sync {
@@ -638,11 +631,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
               }
           }
         }
-        if self.sidebar_mode is ChatMode {
-          self.chat_sidebar_sections(self.focused.uri_authority())
-        } else {
-          []
-        }
+        []
       }
     }
   }
@@ -696,7 +685,8 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     mode: self.sidebar_mode,
     has_host: self.has_host(),
     skills_available: self.has_host() || self.account is Some(_),
-    sections,
+    chat_sections: self.chat_sidebar_sections(self.focused.uri_authority()),
+    work_sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
     schedules_active: self.management_dialog is Some(Schedules),
@@ -2819,9 +2809,7 @@ test "archived families collapse while a live orphan child stays archivable" {
     ..dev,
     sessions: [placed_archived_item("chat-sr-1")],
   })
-  let orphan_sections = orphan_model.sidebar_component_sections(
-    orphan_model.dev(),
-  )
+  let orphan_sections = orphan_model.work_sidebar_sections(orphan_model.dev())
   // Live rows hang under their project's folder row.
   let mut orphan : @conversation.Input? = None
   for section in orphan_sections {
@@ -2864,7 +2852,7 @@ test "project component receives the complete conversation list" {
     projects: [project],
     sessions,
   })
-  let sections = model.sidebar_component_sections(model.dev())
+  let sections = model.work_sidebar_sections(model.dev())
   let mut project : @project.Input? = None
   for section in sections {
     if section.id().source() == "openseek.projects" {
@@ -2911,7 +2899,7 @@ test "same-id records in two project stores keep distinct row keys" {
     ],
   })
   let keys : Array[String] = []
-  for section in model.sidebar_component_sections(model.dev()) {
+  for section in model.work_sidebar_sections(model.dev()) {
     for entry in section.entries {
       match entry {
         @section.Project(project) =>

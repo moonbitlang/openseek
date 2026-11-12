@@ -1139,6 +1139,19 @@ button.row-twisty:hover {
   padding: var(--space-3) var(--sidebar-inset);
 }
 
+/* Hidden lists stay mounted without taking space or exposing focus targets. */
+.sidebar-section[hidden],
+.sidebar-list-tools[hidden] {
+  display: none;
+}
+
+.sidebar-list-tools {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1em / 14);
+  min-width: 0;
+}
+
 .sidebar-search {
   --icon-size: var(--icon-md);
   display: grid;
