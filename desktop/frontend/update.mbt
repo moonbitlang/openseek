@@ -264,7 +264,12 @@ fn open_session_on(
     guard model.session_project(channel, session_id) is Some(project) else {
       return (@cmd.none, model)
     }
-    let recorded = model.recorded_model(channel, session_id)
+    let recorded = model.recorded_model(
+      channel,
+      session_id,
+      project,
+      LiveRecord,
+    )
     let engine_model = recorded
       .map(recorded => recorded.engine_model)
       .unwrap_or(model.default_model)
@@ -338,10 +343,7 @@ fn Model::open_archived_session_on(
     Some(conv) if conv.is_archived_read_only() && conv.project() == workspace =>
       conv
     _ =>
-      {
-        ..self.stored_conversation(channel, session_id, workspace),
-        record: ArchivedRecord,
-      }
+      self.stored_conversation(channel, session_id, workspace, ArchivedRecord)
   }
   let conversation = if self.device_state(channel) is Some(dev) {
     {
@@ -9374,7 +9376,12 @@ fn update_device_msg(
       // sequence exposes a gap and follows the normal snapshot recovery path.
       let model = if model.find_conversation(channel, session) is None {
         model.replace_conversation(
-          model.stored_conversation(channel, session, commit_project),
+          model.stored_conversation(
+            channel,
+            session,
+            commit_project,
+            LiveRecord,
+          ),
         )
       } else {
         model
@@ -9624,7 +9631,7 @@ fn update_device_msg(
             // below.
             model=selected_model,
             reasoning?=model
-              .recorded_model(channel, session)
+              .recorded_model(channel, session, project, LiveRecord)
               .map(recorded => recorded.reasoning),
           )
         }
@@ -16318,6 +16325,61 @@ test "reopening a stored session recovers the model it recorded" {
   assert_true(unrecorded.active().engine_model is Deepseek(V4Flash))
   assert_true(
     unrecorded.conversation_reasoning(unrecorded.active()) is ThinkingHigh,
+  )
+}
+
+///|
+test "a recorded model belongs to its own store's record" {
+  // One id listed live in one project and archived in another: each record
+  // has its own model.json, and neither may answer for the other.
+  let project = @interop.ChannelId::Local.test_project()
+  guard @resource.of_path(@interop.ChannelId::Local, "/elsewhere")
+    is Some(other) else {
+    fail("no fixture path")
+  }
+  let model = with_listed_session(
+    test_model(),
+    "dup",
+    Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
+  )
+  guard model.device_state(@interop.ChannelId::Local) is Some(dev) else {
+    fail("no local device")
+  }
+  let model = model.replace_device({
+    ..dev,
+    archived: [
+      {
+        id: "dup",
+        title: Some("dup"),
+        workspace: other,
+        workspace_name: "other",
+        updated_at_ms: Some(1.0),
+        model_settings: Some({ model: "deepseek-flash", thinking: ThinkingOff, }),
+      },
+    ],
+  })
+  let live = model.recorded_model(
+    @interop.ChannelId::Local,
+    "dup",
+    project,
+    LiveRecord,
+  )
+  assert_true(
+    live is Some({ engine_model: Deepseek(V4Pro), reasoning: ThinkingMax, }),
+  )
+  let archived = model.recorded_model(
+    @interop.ChannelId::Local,
+    "dup",
+    other,
+    ArchivedRecord,
+  )
+  assert_true(
+    archived
+    is Some({ engine_model: Deepseek(V4Flash), reasoning: ThinkingOff, }),
+  )
+  assert_true(
+    model.recorded_model(@interop.ChannelId::Local, "dup", other, LiveRecord)
+    is None,
   )
 }
 

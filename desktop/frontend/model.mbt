@@ -3669,21 +3669,28 @@ priv struct RecordedModel {
 }
 
 ///|
-/// What `session` on `channel` recorded it runs on. `None` — a session that
-/// recorded no model, one this page has not listed, or a model name this
-/// build does not know — leaves the caller to pick its own fallback: the
-/// page default usually, a live run's tier when the conversation is first
-/// seen through one.
+/// What the record of `session` in `project`'s store recorded it runs on:
+/// the live store's listing for a `LiveRecord`, the archived store's for an
+/// `ArchivedRecord`. Both qualifiers matter because one id can be listed in
+/// more than one store, and each record has its own `model.json`. `None` —
+/// a session that recorded no model, one this page has not listed, or a
+/// model name this build does not know — leaves the caller to pick its own
+/// fallback: the page default usually, a live run's tier when the
+/// conversation is first seen through one.
 fn Model::recorded_model(
   self : Model,
   channel : @interop.ChannelId,
   session : String,
+  project : @common.Uri,
+  record : ConversationRecord,
 ) -> RecordedModel? {
   guard self.device_state(channel) is Some(dev) &&
-    dev.sessions
+    (match record {
+      LiveRecord => dev.sessions
+      ArchivedRecord => dev.archived
+    })
     .iter()
-    .concat(dev.archived.iter())
-    .find_first(item => item.id == session)
+    .find_first(item => item.id == session && item.workspace == project)
     is Some({ model_settings: Some(settings), .. }) &&
     parse_engine_model(settings.model) is Some(engine_model) else {
     return None
@@ -3692,24 +3699,28 @@ fn Model::recorded_model(
 }
 
 ///|
-/// A fresh conversation for stored `session`, on the model its session
-/// recorded or else the page default.
+/// A fresh conversation for `record` of stored `session`, on the model that
+/// record recorded or else the page default.
 fn Model::stored_conversation(
   self : Model,
   channel : @interop.ChannelId,
   session : String,
   project : @common.Uri,
+  record : ConversationRecord,
 ) -> Conversation {
-  let recorded = self.recorded_model(channel, session)
-  empty_conversation(
-    channel,
-    session,
-    project,
-    model=recorded
-      .map(recorded => recorded.engine_model)
-      .unwrap_or(self.default_model),
-    reasoning?=recorded.map(recorded => recorded.reasoning),
-  )
+  let recorded = self.recorded_model(channel, session, project, record)
+  {
+    ..empty_conversation(
+      channel,
+      session,
+      project,
+      model=recorded
+        .map(recorded => recorded.engine_model)
+        .unwrap_or(self.default_model),
+      reasoning?=recorded.map(recorded => recorded.reasoning),
+    ),
+    record,
+  }
 }
 
 ///|
@@ -4079,7 +4090,7 @@ fn Model::activate(
     }
   }
   if !found {
-    let recorded = self.recorded_model(channel, session_id)
+    let recorded = self.recorded_model(channel, session_id, project, LiveRecord)
     let model = recorded
       .map(recorded => recorded.engine_model)
       .unwrap_or(self.default_model)
