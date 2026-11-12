@@ -12,30 +12,50 @@ struct Skill {
 }
 
 ///|
-/// Parse `name:` and `description:` from a markdown frontmatter block — the
-/// lines between a leading `---` and the next `---`. Anything missing falls
-/// back to `fallback_name` / empty: a malformed header demotes the skill's
-/// listing quality, it never hides the skill.
-fn parse_frontmatter(text : String, fallback_name : String) -> (String, String) {
-  let mut name = fallback_name
-  let mut description = ""
+/// Read `name` and `description` from a markdown frontmatter block: the YAML
+/// between a leading `---` line and the next `---` line, the block the skill
+/// registry validates when a skill is published. A missing, unclosed or
+/// malformed block, or a value that is not a string, falls back to
+/// `fallback_name` / empty: a broken header demotes the skill's listing
+/// quality, it never hides the skill. The description is the listing's
+/// one-line summary, so a block scalar's line breaks become spaces.
+pub fn parse_frontmatter(
+  text : String,
+  fallback_name : String,
+) -> (String, String) {
+  let fallback = (fallback_name, "")
   let lines = [..text.split("\n")]
   guard lines is [first, .. rest] && first.trim() == "---" else {
-    return (name, description)
+    return fallback
   }
+  let header : Array[String] = []
+  let mut closed = false
   for line in rest {
     if line.trim() == "---" {
+      closed = true
       break
     }
-    if line.split_once(":") is Some((key, value)) {
-      let key = key.trim()
-      let value = value.trim()
-      match key {
-        "name" => if value != "" { name = "\{value}" }
-        "description" => description = "\{value}"
-        _ => ()
-      }
-    }
+    header.push("\{line}")
+  }
+  guard closed else { return fallback }
+  let documents = @yaml.Yaml::load_from_string(header.join("\n")) catch {
+    _ => return fallback
+  }
+  guard documents is [Map(fields)] else { return fallback }
+  let name = match fields.get("name") {
+    Some(String(name)) if !name.trim().is_empty() => name
+    _ => fallback_name
+  }
+  let description = match fields.get("description") {
+    Some(String(description)) =>
+      description
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => !line.is_empty())
+      .map(line => "\{line}")
+      .collect()
+      .join(" ")
+    _ => ""
   }
   (name, description)
 }

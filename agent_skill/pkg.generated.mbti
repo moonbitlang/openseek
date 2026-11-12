@@ -10,6 +10,8 @@ pub async fn discover_skills(String) -> Array[Skill]
 
 pub fn merge_skills(ArrayView[Skill], overrides~ : ArrayView[Skill]) -> Array[Skill]
 
+pub fn parse_frontmatter(String, String) -> (String, String)
+
 pub fn skills_prompt_section(Array[Skill]) -> String?
 
 // Errors

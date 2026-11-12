@@ -1,9 +1,10 @@
 // The local skills library: installing a registry skill archive into the
 // engine's global skills directory, listing what is there, and removing what
-// this app installed. The directory layout and frontmatter rules deliberately
-// mirror the engine's `agent_skill` discovery (`<name>.md` flat files and
-// `<name>/SKILL.md` directories, here with the archive's supporting files
-// beside the SKILL.md). The panel also lists entries parked under `.disabled`,
+// this app installed. The directory layout deliberately mirrors the engine's
+// `agent_skill` discovery (`<name>.md` flat files and `<name>/SKILL.md`
+// directories, here with the archive's supporting files beside the SKILL.md),
+// and names come from the engine's own frontmatter parser, so the panel shows
+// the names the model will see. The panel also lists entries parked under `.disabled`,
 // which the engine's one-level discovery does not advertise.
 
 ///|
@@ -113,35 +114,6 @@ fn slugify(name : String) -> String {
 }
 
 ///|
-/// Parse `name:` and `description:` from a markdown frontmatter block —
-/// the same rules as the engine's `agent_skill` parser, so the panel shows
-/// the names the model will see. Anything missing falls back to
-/// `fallback_name` / empty.
-fn parse_frontmatter(text : String, fallback_name : String) -> (String, String) {
-  let mut name = fallback_name
-  let mut description = ""
-  let lines = text.split("\n").collect()
-  guard lines is [first, .. rest] && first.trim() == "---" else {
-    return (name, description)
-  }
-  for line in rest {
-    if line.trim() == "---" {
-      break
-    }
-    if line.split_once(":") is Some((key_text, value_text)) {
-      let key = key_text.trim()
-      let value = value_text.to_owned().trim().to_owned()
-      match key {
-        "name" => if !value.is_empty() { name = value }
-        "description" => description = value
-        _ => ()
-      }
-    }
-  }
-  (name, description)
-}
-
-///|
 fn source_label(
   module_name : String,
   version : String,
@@ -235,7 +207,7 @@ async fn install_skill_impl(
     _ =>
       raise SkillsError("the archive for \{entry} holds an unreadable SKILL.md")
   }
-  let (name, description) = parse_frontmatter(text, slug)
+  let (name, description) = @agent_skill.parse_frontmatter(text, slug)
   let provenance : Json = {
     "kind": "standalone",
     "module": module_name,
@@ -323,7 +295,7 @@ async fn SkillLibrary::list_entries(
     if entry is [.. id, .. ".md"] {
       guard @fsx.try_read_text(path) is Some(text) else { continue }
       let id = id.to_owned()
-      let (name, description) = parse_frontmatter(text, id)
+      let (name, description) = @agent_skill.parse_frontmatter(text, id)
       skills.push({
         id,
         name,
@@ -336,7 +308,7 @@ async fn SkillLibrary::list_entries(
       guard @fsx.try_read_text(path.join("SKILL.md")) is Some(text) else {
         continue
       }
-      let (name, description) = parse_frontmatter(text, entry)
+      let (name, description) = @agent_skill.parse_frontmatter(text, entry)
       let installed_source = {
         guard @fsx.try_read_text(path.join(SidecarFile)) is Some(sidecar) else {
           None
