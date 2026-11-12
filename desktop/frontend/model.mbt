@@ -3003,12 +3003,18 @@ fn Model::skills_input(self : Model) -> @skills.Input {
   let switchable = has_host && self.account is Some(_)
   match self.cloud_skills_access() {
     Some(access) if !has_host || self.skills_library is CloudLibrary =>
-      { library: Cloud(access), installed: self.cloud_skills, switchable, }
+      {
+        library: Cloud(access),
+        installed: self.cloud_skills,
+        switchable,
+        locale: self.locale,
+      }
     _ =>
       {
         library: Host(self.focused),
         installed: self.installed_skills,
         switchable,
+        locale: self.locale,
       }
   }
 }

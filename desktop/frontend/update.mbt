@@ -4952,7 +4952,10 @@ fn update_msg(
         // the page shows must come from its source, not a client-side guess.
         Some(LibraryChanged(library~)) =>
           (
-            @cmd.batch([page_cmd, fetch_skills_library(dispatch, library)]),
+            @cmd.batch([
+              page_cmd,
+              fetch_skills_library(dispatch, library, model.locale),
+            ]),
             model,
           )
         Some(LibrarySelected(kind)) => {

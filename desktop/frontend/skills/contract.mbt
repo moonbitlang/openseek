@@ -58,11 +58,13 @@ fn Library::locks_builtins(self : Library) -> Bool {
 ///|
 /// The root-owned facts the page draws against. `switchable` says whether the
 /// page offers the choice between the device's library and Cloud's.
+/// `locale` renders request failures the page reports.
 #derive(Eq)
 pub(all) struct Input {
   library : Library
   installed : Array[InstalledItem]
   switchable : Bool
+  locale : @i18n.Locale
 }
 
 ///|

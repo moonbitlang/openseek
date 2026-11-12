@@ -38,6 +38,7 @@ fn input(installed~ : Array[@skills.InstalledItem] = []) -> @skills.Input {
     library: @skills.Host(@interop.ChannelId::Local),
     installed,
     switchable: false,
+    locale: English,
   }
 }
 
@@ -83,6 +84,7 @@ test "catalog completions cannot cross a device focus switch" {
     library: other_device(),
     installed: [],
     switchable: false,
+    locale: English,
   }
   let (_, remote_loading) = local_loading.opening(emit(), remote_input)
 
@@ -200,6 +202,7 @@ test "a result from another device settles without a local outcome" {
     library: other_device(),
     installed: [],
     switchable: false,
+    locale: English,
   })
   let (_, settled, outcome) = busy.handle(
     emit(),
@@ -504,6 +507,7 @@ test "Cloud built-ins offer no enablement or update" {
     library: cloud_library(),
     installed: [builtin_widget()],
     switchable: false,
+    locale: English,
   }
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
@@ -536,6 +540,7 @@ test "Cloud replies cannot cross an account change" {
     library: cloud_library(epoch=1),
     installed: [],
     switchable: false,
+    locale: English,
   }
   let second = { ..first, library: cloud_library(epoch=2), }
   let (_, opened) = @skills.State::empty().opening(emit(), first)
