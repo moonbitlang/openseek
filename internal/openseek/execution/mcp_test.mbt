@@ -18,19 +18,6 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
 }
 
 ///|
-/// Start connecting the servers of `config_paths` and wait until every one
-/// has settled.
-async fn settled_mcp(
-  scope : @agent_runtime.AgentTaskScope,
-  config_paths : Array[String],
-  workspace_root~ : String,
-) -> @execution.McpRegistry {
-  let registry = @execution.start_mcp(scope, config_paths, workspace_root~)
-  registry.wait()
-  registry
-}
-
-///|
 async test "multiple MCP files merge before connecting and bad files do not hide valid tools" {
   let directory = @fs.tmpdir(prefix="openseek-mcp-merge-")
   defer @fs.rmdir(directory, recursive=true)
@@ -106,7 +93,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       @fs.write_text(first, earlier.stringify())
       @fs.write_text(second, later.stringify())
       @fs.write_text(broken, "invalid JSON")
-      let mcp = settled_mcp(
+      let mcp = @execution.start_mcp(
         AgentTaskScope(group),
         [first, broken, missing, second],
         workspace_root=directory,
@@ -170,10 +157,9 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       }
       assert_eq(t1.map(tool => tool.name), ["echo"])
       assert_eq(t2.map(tool => tool.name), ["echo"])
-      // Failed inputs alone must not publish a successful registration.
-      // In particular, retain the original single-file event contract.
+      // Failed inputs alone leave no server, and each failure is reported.
       for paths in [[broken], [broken, missing]] {
-        let failed = settled_mcp(
+        let failed = @execution.start_mcp(
           AgentTaskScope(group),
           paths,
           workspace_root=directory,
@@ -183,15 +169,10 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         // With no server there is no host to hand scripts.
         assert_true(failed.serve(AgentTaskScope(group)) is None)
         // The sink is process-global and async tests run concurrently, so
-        // match only events this call can have produced: failures by their
-        // path, and a registration by its zero servers, the only count failed
-        // inputs could report. Other tests register configured servers.
+        // match only the failures this call can have produced, by their path.
         let failed_paths : Array[String] = []
         while @emit.poll_line() is Some(line) {
           let event = @json.parse(line)
-          assert_false(
-            event is { "event": "mcp_tools_registered", "servers": 0, .. },
-          )
           if event
             is {
               "event": "mcp_config_invalid"
@@ -238,9 +219,11 @@ async test "the MCP registry tells its owner as a server settles and when it is 
       workspace_root=dir,
       on_change=() => ignore(changed.try_put(()) catch { _ => false }),
     )
-    // Listed from the start, before it has come to anything.
-    assert_true(registry.status().servers is [{ state: Connecting, .. }])
-    while registry.status().servers is [{ state: Connecting, .. }] {
+    // Listed from the start, idle until a script reaches it.
+    assert_true(registry.status().servers is [{ state: Idle, .. }])
+    let host = registry.serve(AgentTaskScope(group))
+    group.spawn_bg(() => ignore(catalog(host)))
+    while registry.status().servers is [{ state: Idle | Connecting, .. }] {
       changed.get()
     }
     guard registry.status().servers is [server] else {
@@ -272,12 +255,12 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     assert_eq([ for tool in tools => tool.name ], ["ping"])
     // Its tools leave the catalog, which says why.
     let lost : Json = { "server": "brief", "error": "the connection was lost" }
-    assert_eq(catalog(registry.serve(AgentTaskScope(group))), [lost])
+    assert_eq(catalog(host), [lost])
   })
 }
 
 ///|
-async test "a skill's MCP server stays idle until a script reaches it" {
+async test "a skill's MCP server reads its directory and connects when a script reaches it" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
   defer @fs.rmdir(dir, recursive=true)
   let skill = "\{dir}/skills/tracker"
@@ -307,7 +290,6 @@ async test "a skill's MCP server stays idle until a script reaches it" {
         skills=@agent_skill.discover_skills("\{dir}/skills"),
         workspace_root=dir,
       )
-      registry.wait()
       guard registry.status().servers is [{ target, state: Idle, .. }] else {
         fail("a skill's server waits for a script to reach it")
       }

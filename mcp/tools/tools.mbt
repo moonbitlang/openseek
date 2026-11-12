@@ -14,7 +14,8 @@ const MaxToolOutputChars : Int32 = 60000
 
 ///|
 /// The deadline for a connected server to answer `tools/list` (including
-/// pagination), so a wedged server delays engine startup instead of hanging it.
+/// pagination), so a wedged server delays the script that reached it instead
+/// of hanging it.
 const DefaultDiscoveryTimeoutMs : Int32 = 30000
 
 ///|
@@ -74,23 +75,20 @@ pub struct ServerEntry {
 
 ///|
 /// One configured server and the task that connects it in the background (see
-/// `start`), whose result is what connecting came to. A server that connects
-/// on demand has no task until a script first reaches it.
+/// `start`), whose result is what connecting came to. It has no task until a
+/// script first reaches it.
 pub struct Server {
   config : @config.McpServer
-  /// Whether it connects only when a script first reaches it, rather than as
-  /// the engine starts.
-  on_demand : Bool
   priv mut connecting : @async.Task[ServerEntry]?
   priv connect : () -> @async.Task[ServerEntry]
 }
 
 ///|
-/// Start connecting every configured server, each in a task of its own on
-/// `scope`'s group, and return them in config order right away. The servers
-/// named in `on_demand` are left until a script first reaches them; every
-/// other one starts now. A server that never settles (a stuck headers helper,
-/// say) holds back only its own task, which ends with the group. Every failure
+/// The configured servers, in config order, each connecting in a task of its
+/// own on `scope`'s group once a script first reaches it (see `settle` and
+/// `Server::call`); none connects here. A server that never settles (a stuck
+/// headers helper, say) holds back only its own task, which ends with the
+/// group. Every failure
 /// a task returns is also reported as the event it always was. The
 /// connections' reader/writer tasks run on `scope`'s group and live until it
 /// ends. `on_change` runs each time what `try_wait` reads may have changed — a
@@ -103,47 +101,39 @@ pub fn start(
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
-  on_demand~ : Set[String] = Set([]),
   on_change? : () -> Unit,
 ) -> Array[Server] {
   servers.map(server => {
-    let configured : Server = {
-      config: server,
-      on_demand: on_demand.contains(server.name()),
-      connecting: None,
-      connect: () => {
-        let task = scope
-          .group()
-          .spawn(no_wait=true, () => {
-            let entry = connect_server(
-              scope,
-              server,
-              client_name~,
-              client_version~,
-              workspace_root?,
-              discovery_timeout_ms~,
-            )
-            if on_change is Some(on_change) {
-              // The close handler goes on first, so a connection that closes
-              // from here on reports itself, and one already closed shows as
-              // lost.
-              if entry.connection is Live(client) {
-                client.set_close_handler(on_change)
-              }
-              on_change()
+    config: server,
+    connecting: None,
+    connect: () => {
+      let task = scope
+        .group()
+        .spawn(no_wait=true, () => {
+          let entry = connect_server(
+            scope,
+            server,
+            client_name~,
+            client_version~,
+            workspace_root?,
+            discovery_timeout_ms~,
+          )
+          if on_change is Some(on_change) {
+            // The close handler goes on first, so a connection that closes
+            // from here on reports itself, and one already closed shows as
+            // lost.
+            if entry.connection is Live(client) {
+              client.set_close_handler(on_change)
             }
-            entry
-          })
-        if on_change is Some(on_change) {
-          on_change()
-        }
-        task
-      },
-    }
-    if !configured.on_demand {
-      ignore(configured.task())
-    }
-    configured
+            on_change()
+          }
+          entry
+        })
+      if on_change is Some(on_change) {
+        on_change()
+      }
+      task
+    },
   })
 }
 
@@ -161,8 +151,8 @@ fn Server::task(self : Server) -> @async.Task[ServerEntry] {
 }
 
 ///|
-/// Whether this server has started connecting: always, unless it connects on
-/// demand and no script has reached it yet.
+/// Whether this server has started connecting, which it does when a script
+/// first reaches it.
 pub fn Server::started(self : Server) -> Bool {
   self.connecting is Some(_)
 }
@@ -198,7 +188,7 @@ async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
 ///|
 /// Wait until the servers a search needs have settled: the one named
 /// `server`, or every server when none is named (one not configured needs
-/// nothing), starting any of them that connects on demand. The wait ends after
+/// nothing), starting any of them that has not started. The wait ends after
 /// `timeout_ms` whatever is left; a server still connecting then is listed as
 /// such.
 pub async fn settle(
@@ -224,7 +214,7 @@ pub async fn settle(
 
 ///|
 /// Call `tool` of this server, as `ServerEntry::call` does, once it has
-/// settled, starting it first if it connects on demand and has not started. A
+/// settled, starting it first if it has not started. A
 /// server still connecting is waited for up to `wait_ms`, and is an
 /// error result saying so when it has not settled by then. The wait counts
 /// against the call's deadline.
@@ -364,7 +354,8 @@ fn cut(text : String, limit : Int32, marked~ : Bool) -> String {
 /// Connect one server and return what that came to with the instructions it
 /// sent and its tools — no tools on any failure (reported as an event),
 /// including discovery outrunning `discovery_timeout_ms`, so a server that
-/// handshakes but never answers `tools/list` cannot hang the engine's startup.
+/// handshakes but never answers `tools/list` cannot hang the script waiting
+/// for it.
 /// Cancellation propagates.
 async fn connect_server(
   scope : @agent_runtime.AgentTaskScope,

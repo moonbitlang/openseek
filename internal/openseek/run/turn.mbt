@@ -1,6 +1,7 @@
 ///|
 /// One headless turn with its own runtime, task group, and tool registry —
-/// including any configured MCP servers' tools, exactly as `serve` wires them.
+/// including any configured MCP servers, which connect when a script reaches
+/// them, exactly as `serve` wires them.
 /// The MCP connections live on the turn's task group and are torn down when the
 /// turn's `with_task_group` ends. How the turn ended is in what `append_item`
 /// recorded: a failed or cancelled turn seals its terminal and then raises.
@@ -61,10 +62,6 @@ async fn run_task_turn(
       },
       workspace_root~,
     )
-    // A one-shot run has a single turn, so it waits for every configured
-    // server rather than start without tools that are about to arrive; a
-    // skill's servers connect when a script reaches them.
-    mcp.wait()
     let extra_tools = @execution.build_extra_tools(
       model~,
       api_key~,

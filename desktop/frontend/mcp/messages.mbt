@@ -140,15 +140,14 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Idle) => "用到时连接"
     (TraditionalChinese, Idle) => "用到時連線"
     (Japanese, Idle) => "初回使用時"
-    (English, IdleReason) =>
-      "A skill brings this server. It connects when the agent first uses it."
+    (English, IdleReason) => "It connects when the agent first uses it."
     (Spanish, IdleReason) =>
-      "Una skill aporta este servidor. Se conecta cuando el agente lo usa por primera vez."
+      "Se conecta cuando el agente lo usa por primera vez."
     (SimplifiedChinese, IdleReason) =>
-      "这个服务器由 skill 提供，agent 第一次用到它时才会连接。"
+      "agent 第一次用到它时才会连接。"
     (TraditionalChinese, IdleReason) =>
-      "這個伺服器由 skill 提供，agent 第一次用到它時才會連線。"
+      "agent 第一次用到它時才會連線。"
     (Japanese, IdleReason) =>
-      "このサーバーはスキルが提供します。エージェントが初めて使うときに接続します。"
+      "エージェントが初めて使うときに接続します。"
   }
 }

@@ -3,7 +3,6 @@ package "moonbitlang/openseek/mcp/tools"
 
 import {
   "moonbitlang/core/json",
-  "moonbitlang/core/set",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/mcp",
@@ -19,7 +18,7 @@ pub async fn discover(String, @mcp.McpClient) -> Array[@mcp.McpTool]
 
 pub async fn settle(Array[Server], server? : String, timeout_ms? : Int32) -> Unit
 
-pub fn start(@agent_runtime.AgentTaskScope, Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32, on_demand? : @set.Set[String], on_change? : () -> Unit) -> Array[Server]
+pub fn start(@agent_runtime.AgentTaskScope, Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32, on_change? : () -> Unit) -> Array[Server]
 
 // Errors
 
@@ -32,7 +31,6 @@ pub enum Connection {
 
 pub struct Server {
   config : @config.McpServer
-  on_demand : Bool
   // private fields
 }
 pub async fn Server::call(Self, String, @json.Json, wait_ms? : Int32) -> @agent_tool.ToolAction

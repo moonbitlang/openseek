@@ -114,7 +114,7 @@ searches or calls it.
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
 file is absent, is passed as `--mcp-config`. A server there replaces the
 skill's same-named one, so a user can override `seekmoon` to customize its
-headers; it then connects as the engine starts, like every configured server.
+headers.
 A broken user file is reported without preventing the skill's server from
 loading.
 The old `seekmoon mcp` stdio relay and executable have been removed.
