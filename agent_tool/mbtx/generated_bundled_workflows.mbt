@@ -1094,7 +1094,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut shown = 0
           #|  let mut truncated = false
           #|  for index in start..<end {
-          #|    // Gutter and separator are ASCII, so their length is their byte count.
+          #|    // `N |text`: the line starts right after the bar, with no separator
+          #|    // space, matching the edit tools' previews. Gutter and separator are
+          #|    // ASCII, so their length is their byte count.
           #|    let gutter = "\{(index + 1).to_string().pad_start(width, ' ')} |"
           #|    let separator = if shown == 0 { "" } else { "\n" }
           #|    let overhead = gutter.length() + separator.length()
@@ -1456,7 +1458,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    }
           #|    out.write_string("\n## " + path + "\n")
           #|    for index, line in excerpt.split("\n").collect() {
-          #|      out.write_string("\{index + 1} | \{line}\n")
+          #|      out.write_string("\{index + 1} |\{line}\n")
           #|    }
           #|    if excerpt.length() < content.length() {
           #|      out.write_string(

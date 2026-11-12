@@ -52,7 +52,9 @@ executable examples of ranges, errors, literal filenames, and output limits.
 
 Selectors are `path`, `path:start`, and `path:start:end`. Lines start at 1;
 both ends are included. A range beyond EOF returns an empty range footer.
-Each file has a JSON-quoted filename heading, numbered content, and the same
+Each file has a JSON-quoted filename heading, content numbered as `N |text`
+(the line, indentation included, starts right after `|`, with no separator
+space; edit previews use the same gutter), and the same
 `start_line`, `shown_lines`, `total_lines`, and `truncated` footer as the former
 read tool. Empty files explicitly report `total_lines=0 note=empty file`.
 Trailing newlines still count as a final blank line. Directory, missing-file,

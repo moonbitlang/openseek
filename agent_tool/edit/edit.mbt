@@ -672,7 +672,7 @@ fn render_site_context(
     }
     let number = "\{line}".pad_start(width, ' ')
     report.write_string(
-      "\{marker} \{number} | \{preview_display_line(line_text_at(content, line_starts, line))}\n",
+      "\{marker} \{number} |\{preview_display_line(line_text_at(content, line_starts, line))}\n",
     )
   }
 }
@@ -1593,7 +1593,7 @@ fn old_string_context(
     } else {
       "  "
     }
-    result.write_string("\{gutter} \{line_no} | \{line_text}\n")
+    result.write_string("\{gutter} \{line_no} |\{line_text}\n")
   }
   result.write_string("```\n")
   result.to_string()
@@ -1697,9 +1697,9 @@ test "old_string_context clamps last_line to end of file" {
   // Should not loop 1M times; last_line clamped to 5 (3 file lines + 2 context_after)
   assert_true(ctx.contains("─── file context"))
   // All 3 file lines should appear; no error from past-EOF iteration
-  assert_true(ctx.contains("1 | a"))
-  assert_true(ctx.contains("2 | b"))
-  assert_true(ctx.contains("3 | c"))
+  assert_true(ctx.contains("1 |a"))
+  assert_true(ctx.contains("2 |b"))
+  assert_true(ctx.contains("3 |c"))
 }
 
 ///|
@@ -1707,9 +1707,9 @@ test "old_string_context shows context lines" {
   let content = "alpha\nbeta\ngamma\n"
   let ctx = old_string_context(content, 2, None)
   // Shows surrounding lines
-  assert_true(ctx.contains("1 | alpha"))
-  assert_true(ctx.contains("> 2 | beta"))
-  assert_true(ctx.contains("3 | gamma"))
+  assert_true(ctx.contains("1 |alpha"))
+  assert_true(ctx.contains("> 2 |beta"))
+  assert_true(ctx.contains("3 |gamma"))
 }
 
 ///|
@@ -1717,7 +1717,7 @@ test "old_string_context shows empty suffix for past-EOF context" {
   let content = "single\n"
   let ctx = old_string_context(content, 1, None)
   // Line 2 and 3 exist as past-EOF context (empty lines)
-  assert_true(ctx.contains("1 | single"))
+  assert_true(ctx.contains("1 |single"))
   assert_true(ctx.contains("2 |"))
   assert_true(ctx.contains("3 |"))
 }
