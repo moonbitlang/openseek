@@ -319,21 +319,6 @@ async fn fake_user_toolchain(
 }
 
 ///|
-test "compiler versions order by release and ignore the build hash" {
-  let stable = parse_compiler_version("0.10.20+b410defd5")
-  assert_true(stable is Some(_))
-  assert_true(
-    parse_compiler_version("v0.10.20+65efd5b93 (2026-11-05)\n") == stable,
-  )
-  guard parse_compiler_version("v0.10.9") is Some(older) &&
-    parse_compiler_version("v0.10.15+943464bfa (2026-10-12)") is Some(newer) else {
-    fail("well-formed versions did not parse")
-  }
-  assert_true(older < newer)
-  assert_true(parse_compiler_version("test-version") is None)
-}
-
-///|
 #cfg(not(platform="windows"))
 async test "a user toolchain no older than the seed wins" {
   with_toolchain_test_tree(root => {

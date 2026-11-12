@@ -141,7 +141,7 @@ fn newer_update(
   guard json is { "version": String(version), .. } else {
     raise MalformedManifest(reason="the manifest carries no version")
   }
-  guard parse_version(version) is Some(_) else {
+  guard @version.parse(version) is Some(_) else {
     raise MalformedManifest(
       reason="the manifest version is not semver: \{version}",
     )
@@ -203,55 +203,12 @@ fn normalized_sha256(text : String) -> String? {
 }
 
 ///|
-/// Whether `candidate` is a strictly newer semantic version than `than`:
-/// numeric `major.minor.patch` compare, tolerant of a leading `v` and a
-/// trailing pre-release or build suffix (which is otherwise ignored).
-/// Malformed versions are never newer.
+/// Whether `candidate` is a strictly newer version than `than` (see
+/// `@version.parse`). Malformed versions are never newer.
 fn is_newer(candidate : String, than~ : String) -> Bool {
-  guard parse_version(candidate) is Some(candidate) else { return false }
-  guard parse_version(than) is Some(current) else { return false }
+  guard @version.parse(candidate) is Some(candidate) else { return false }
+  guard @version.parse(than) is Some(current) else { return false }
   candidate > current
-}
-
-///|
-/// The numeric `(major, minor, patch)` of a version string, or None when it
-/// does not look like semver.
-fn parse_version(text : String) -> (Int32, Int32, Int32)? {
-  let mut view = text.trim()
-  if view.strip_prefix("v") is Some(rest) {
-    view = rest
-  }
-  // `1.2.3-beta.1+build` compares by its numeric triple.
-  for stop in ["-", "+"] {
-    if view.split_once(stop) is Some((before, _)) {
-      view = before
-    }
-  }
-  let parts = [..view.split(".")]
-  guard parts.length() == 3 else { return None }
-  let numbers = []
-  for part in parts {
-    let number = @string.parse_int(part) catch { _ => return None }
-    guard number >= 0 else { return None }
-    numbers.push(number)
-  }
-  Some((numbers[0], numbers[1], numbers[2]))
-}
-
-///|
-test "version comparison is numeric per component" {
-  assert_true(is_newer("0.2.0", than="0.1.0"))
-  assert_true(is_newer("0.1.10", than="0.1.9"))
-  assert_true(is_newer("1.0.0", than="0.9.9"))
-  assert_false(is_newer("0.1.0", than="0.1.0"))
-  assert_false(is_newer("0.1.0", than="0.2.0"))
-}
-
-///|
-test "version comparison tolerates v prefixes and suffixes" {
-  assert_true(is_newer("v0.2.0", than="0.1.0"))
-  assert_true(is_newer("0.2.0-beta.1+build5", than="v0.1.0"))
-  assert_false(is_newer("0.1.0-hotfix", than="0.1.0"))
 }
 
 ///|
