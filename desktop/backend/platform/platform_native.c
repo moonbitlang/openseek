@@ -21,8 +21,6 @@
 
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
-#pragma comment(linker, "/SUBSYSTEM:WINDOWS")
-#pragma comment(linker, "/ENTRY:mainCRTStartup")
 
 #endif
 
