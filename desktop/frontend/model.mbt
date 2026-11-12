@@ -1500,6 +1500,12 @@ priv struct Model {
   // because the composer's `$` completion reads the same list, which is why
   // it refreshes on connect instead of when the Skills page opens.
   installed_skills : Array[@skills.InstalledItem]
+  // The signed-in account's Cloud skills library, mirrored for the same two
+  // readers: the Skills page and the Cloud composer's `$` completion.
+  cloud_skills : Array[@skills.InstalledItem]
+  // Which library a signed-in Desktop's Skills page shows. A page without a
+  // host always shows Cloud's.
+  skills_library : @skills.LibraryKind
   // Advances only when navigation changes which composer is visible. Local
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
@@ -1810,6 +1816,12 @@ priv enum Msg {
   AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
   AccountPreferencesChanged(Bool)
   AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
+  // A Cloud skills library read, fenced by the access it was issued with.
+  CloudSkillsLoaded(
+    @cloud_client.Access,
+    Result[Array[@skills.InstalledItem], String]
+  )
+  CloudSkillsExpired(@cloud_client.Access)
   DeviceAccountExpired(@interop.ChannelId, Int32, String)
   RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
@@ -2848,6 +2860,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
+    cloud_skills: [],
+    skills_library: DeviceLibrary,
     composer_context_generation: 0,
     select_menu: None,
     project_menu_query: "",
@@ -3001,10 +3015,29 @@ fn Model::bridge_state(self : Model) -> BridgeState {
 }
 
 ///|
-/// What the Skills page draws against: the device it acts on, and that
-/// device's library as the root mirrors it.
+/// The signed-in account's Cloud access, as Cloud requests carry it.
+fn Model::cloud_skills_access(self : Model) -> @cloud_client.Access? {
+  self.account.map(account => { token: account.token, epoch: self.cloud.epoch, })
+}
+
+///|
+/// What the Skills page draws against: the library it acts on, and that
+/// library as the root mirrors it. A page with a host shows the focused
+/// device's library unless a signed-in user chose Cloud's; a page without a
+/// host shows Cloud's.
 fn Model::skills_input(self : Model) -> @skills.Input {
-  { channel: self.focused, installed: self.installed_skills, }
+  let has_host = self.has_host()
+  let switchable = has_host && self.account is Some(_)
+  match self.cloud_skills_access() {
+    Some(access) if !has_host || self.skills_library is CloudLibrary =>
+      { library: Cloud(access), installed: self.cloud_skills, switchable, }
+    _ =>
+      {
+        library: Host(self.focused),
+        installed: self.installed_skills,
+        switchable,
+      }
+  }
 }
 
 ///|

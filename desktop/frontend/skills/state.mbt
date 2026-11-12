@@ -9,7 +9,7 @@
 #derive(Eq)
 priv enum Catalog {
   Idle
-  Loading(channel~ : @interop.ChannelId)
+  Loading(library~ : Library)
   Ready(Array[MarketItem])
   Failed(String)
 }
@@ -26,8 +26,8 @@ struct State {
   busy : Array[PendingOperation]
   notices : Array[Notice]
   preview : Preview
-  preview_cache : Map[(@interop.ChannelId, String), String]
-  preview_channel : @interop.ChannelId?
+  preview_cache : Map[(String, String), String]
+  preview_library : Library?
   list_scroll_top : Double
 }
 
@@ -36,16 +36,13 @@ struct State {
 priv enum Notice {
   SkillActionFailed(operation~ : PendingOperation, message~ : String)
   LibraryLoadFailed(String)
-  BuiltinSyncFailed(
-    channel~ : @interop.ChannelId,
-    error~ : @protocol.BuiltinSkillError
-  )
+  BuiltinSyncFailed(library~ : Library, error~ : @protocol.BuiltinSkillError)
 }
 
 ///|
 #derive(Eq)
 priv struct PendingOperation {
-  channel : @interop.ChannelId
+  library : Library
   identity : PendingTarget
   action : PendingSkillAction
 }
@@ -62,12 +59,12 @@ priv enum PendingTarget {
 ///|
 fn Notice::belongs_to(
   self : Notice,
-  channel : @interop.ChannelId,
+  library : Library,
   identity : PendingTarget,
 ) -> Bool {
   match self {
     SkillActionFailed(operation~, ..) =>
-      operation.channel == channel && operation.identity == identity
+      operation.library == library && operation.identity == identity
     LibraryLoadFailed(_) | BuiltinSyncFailed(..) => false
   }
 }
@@ -108,11 +105,11 @@ fn PendingSkillAction::blocks_enablement(self : PendingSkillAction) -> Bool {
 ///|
 fn State::pending_action(
   self : State,
-  channel : @interop.ChannelId,
+  library : Library,
   identity : (String, String),
 ) -> PendingSkillAction? {
   for operation in self.busy {
-    guard operation.channel == channel &&
+    guard operation.library == library &&
       operation.identity == PendingTarget::Registry(identity) else {
       continue
     }
@@ -122,15 +119,11 @@ fn State::pending_action(
 }
 
 ///|
-fn State::pending_enabled(
-  self : State,
-  channel : @interop.ChannelId,
-  id : String,
-) -> Bool {
+fn State::pending_enabled(self : State, library : Library, id : String) -> Bool {
   self.busy
   .iter()
   .any(operation => {
-    operation.channel == channel &&
+    operation.library == library &&
     operation.identity == PendingTarget::LibraryEntry(id)
   })
 }
@@ -138,7 +131,7 @@ fn State::pending_enabled(
 ///|
 fn State::start_action(
   self : State,
-  channel : @interop.ChannelId,
+  library : Library,
   identity : PendingTarget,
   action : PendingSkillAction,
   cmd : @cmd.Cmd,
@@ -146,19 +139,19 @@ fn State::start_action(
   guard !self.busy
     .iter()
     .any(operation => {
-      operation.channel == channel && operation.identity == identity
+      operation.library == library && operation.identity == identity
     }) else {
     return (@cmd.none, self, None)
   }
   let busy = self.busy.copy()
-  busy.push({ channel, identity, action, })
+  busy.push({ library, identity, action, })
   (
     cmd,
     {
       ..self,
       busy,
       notices: self.notices.filter(notice => {
-        !notice.belongs_to(channel, identity)
+        !notice.belongs_to(library, identity)
       }),
     },
     None,
@@ -201,8 +194,8 @@ enum PreviewTarget {
 }
 
 ///|
-pub fn State::detail_open(self : State, channel : @interop.ChannelId) -> Bool {
-  self.preview_channel == Some(channel) && !(self.preview is Closed)
+pub fn State::detail_open(self : State, library : Library) -> Bool {
+  self.preview_library == Some(library) && !(self.preview is Closed)
 }
 
 ///|
@@ -215,7 +208,7 @@ pub fn State::empty() -> State {
     notices: [],
     preview: Closed,
     preview_cache: Map([]),
-    preview_channel: None,
+    preview_library: None,
     list_scroll_top: 0.0,
   }
 }
@@ -224,8 +217,8 @@ pub fn State::empty() -> State {
 pub(all) enum Msg {
   QueryChanged(String)
   RefreshCatalog
-  CatalogLoaded(channel~ : @interop.ChannelId, items~ : Array[MarketItem])
-  CatalogFailed(channel~ : @interop.ChannelId, message~ : String)
+  CatalogLoaded(library~ : Library, items~ : Array[MarketItem])
+  CatalogFailed(library~ : Library, message~ : String)
   Install(MarketItem)
   // Capture the source alongside the library id before the entry disappears.
   Uninstall(InstalledItem)
@@ -234,27 +227,25 @@ pub(all) enum Msg {
   // A skill operation settled: `action` is the operation to release, and
   // an `error` becomes a notice for that skill (a success reports the
   // library change to the root instead).
-  ActionDone(
-    channel~ : @interop.ChannelId,
-    action~ : PendingSkillAction,
-    error~ : String?
-  )
+  ActionDone(library~ : Library, action~ : PendingSkillAction, error~ : String?)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
   PreviewLoaded(
-    channel~ : @interop.ChannelId,
+    library~ : Library,
     request~ : Int32,
     target~ : PreviewTarget,
     content~ : String
   )
   PreviewFailed(
-    channel~ : @interop.ChannelId,
+    library~ : Library,
     request~ : Int32,
     target~ : PreviewTarget,
     message~ : String
   )
   BackToList
   SkillsScrolled(Double)
+  // The library switch: the root decides what the page shows next.
+  SelectLibrary(LibraryKind)
 }
 
 ///|
@@ -270,14 +261,14 @@ pub fn State::opening(
   let (cmd, catalog) = match self.catalog {
     Idle | Failed(_) =>
       (
-        fetch_catalog(emit, input.channel),
-        Catalog::Loading(channel=input.channel),
+        fetch_catalog(emit, input.library),
+        Catalog::Loading(library=input.library),
       )
-    Loading(channel~) =>
-      if channel == input.channel {
+    Loading(library~) =>
+      if library == input.library {
         (@cmd.none, self.catalog)
       } else {
-        (fetch_catalog(emit, input.channel), Loading(channel=input.channel))
+        (fetch_catalog(emit, input.library), Loading(library=input.library))
       }
     current => (@cmd.none, current)
   }
@@ -300,12 +291,12 @@ pub fn State::with_library_error(self : State, message : String) -> State {
 /// Errors can identify a missing builtin, so they are independent of the list.
 pub fn State::with_builtin_errors(
   self : State,
-  channel : @interop.ChannelId,
+  library : Library,
   errors : Array[@protocol.BuiltinSkillError],
 ) -> State {
   let notices = self.notices.filter(notice => !(notice is BuiltinSyncFailed(..)))
   for error in errors {
-    notices.push(BuiltinSyncFailed(channel~, error~))
+    notices.push(BuiltinSyncFailed(library~, error~))
   }
   { ..self, notices, }
 }
@@ -319,8 +310,8 @@ pub fn State::sync_library(
   emit : @cmd.Emit[Msg],
   input : Input,
 ) -> (@cmd.Cmd, State) {
-  guard self.preview_channel == Some(input.channel) else {
-    return (@cmd.none, { ..self, preview: Closed, preview_channel: None, })
+  guard self.preview_library == Some(input.library) else {
+    return (@cmd.none, { ..self, preview: Closed, preview_library: None, })
   }
   let target = match self.preview {
     Closed => return (@cmd.none, self)
@@ -347,7 +338,7 @@ pub fn State::sync_library(
   guard document_changed else { return (@cmd.none, self) }
   let request = preview_request_id(self.preview) + 1
   (
-    fetch_content(emit, input.channel, request, current),
+    fetch_content(emit, input.library, request, current),
     { ..self, preview: Loading(target=current, request~), },
   )
 }
@@ -380,25 +371,26 @@ pub fn State::handle(
     QueryChanged(value) => (@cmd.none, { ..self, query: value, }, None)
     PreviewMarket(item) => {
       let target = preview_target_for_market(input.installed, item)
-      match self.preview_cache.get((input.channel, preview_cache_key(target))) {
+      match
+        self.preview_cache.get((input.library.key(), preview_cache_key(target))) {
         Some(content) =>
           (
             @cmd.none,
             {
               ..self,
               preview: Ready(target~, request=0, content~),
-              preview_channel: Some(input.channel),
+              preview_library: Some(input.library),
             },
             None,
           )
         None => {
           let request = preview_request_id(self.preview) + 1
           (
-            fetch_content(emit, input.channel, request, target),
+            fetch_content(emit, input.library, request, target),
             {
               ..self,
               preview: Loading(target~, request~),
-              preview_channel: Some(input.channel),
+              preview_library: Some(input.library),
             },
             None,
           )
@@ -407,33 +399,34 @@ pub fn State::handle(
     }
     PreviewInstalled(item) => {
       let target = Installed(item)
-      match self.preview_cache.get((input.channel, preview_cache_key(target))) {
+      match
+        self.preview_cache.get((input.library.key(), preview_cache_key(target))) {
         Some(content) =>
           (
             @cmd.none,
             {
               ..self,
               preview: Ready(target~, request=0, content~),
-              preview_channel: Some(input.channel),
+              preview_library: Some(input.library),
             },
             None,
           )
         None => {
           let request = preview_request_id(self.preview) + 1
           (
-            fetch_installed_content(emit, input.channel, request, item),
+            fetch_installed_content(emit, input.library, request, item),
             {
               ..self,
               preview: Loading(target~, request~),
-              preview_channel: Some(input.channel),
+              preview_library: Some(input.library),
             },
             None,
           )
         }
       }
     }
-    PreviewLoaded(channel~, request~, target~, content~) => {
-      guard channel == input.channel && self.preview_channel == Some(channel) else {
+    PreviewLoaded(library~, request~, target~, content~) => {
+      guard library == input.library && self.preview_library == Some(library) else {
         return (@cmd.none, self, None)
       }
       guard self.preview is Loading(request=current, target=current_target) &&
@@ -442,7 +435,7 @@ pub fn State::handle(
         return (@cmd.none, self, None)
       }
       let cache = self.preview_cache.copy()
-      cache[(channel, preview_cache_key(target))] = content
+      cache[(library.key(), preview_cache_key(target))] = content
       (
         @cmd.none,
         {
@@ -453,8 +446,8 @@ pub fn State::handle(
         None,
       )
     }
-    PreviewFailed(channel~, request~, target~, message~) => {
-      guard channel == input.channel && self.preview_channel == Some(channel) else {
+    PreviewFailed(library~, request~, target~, message~) => {
+      guard library == input.library && self.preview_library == Some(library) else {
         return (@cmd.none, self, None)
       }
       guard self.preview is Loading(request=current, target=current_target) &&
@@ -471,37 +464,44 @@ pub fn State::handle(
     BackToList =>
       (
         restore_list_scroll(self.list_scroll_top),
-        { ..self, preview: Closed, preview_channel: None, },
+        { ..self, preview: Closed, preview_library: None, },
         None,
       )
     SkillsScrolled(scroll_top) =>
       (@cmd.none, { ..self, list_scroll_top: scroll_top, }, None)
+    SelectLibrary(kind) =>
+      if input.switchable && kind != input.library.kind() {
+        (@cmd.none, self, Some(LibrarySelected(kind)))
+      } else {
+        (@cmd.none, self, None)
+      }
     RefreshCatalog =>
       match self.catalog {
         // The rendered button is disabled while loading, and this guard also
         // makes programmatic duplicate messages harmless.
-        Loading(channel~) if channel == input.channel => (@cmd.none, self, None)
+        Loading(library~) if library == input.library => (@cmd.none, self, None)
         _ =>
           (
-            fetch_catalog(emit, input.channel),
-            { ..self, catalog: Loading(channel=input.channel), },
+            fetch_catalog(emit, input.library),
+            { ..self, catalog: Loading(library=input.library), },
             None,
           )
       }
-    CatalogLoaded(channel~, items~) => {
+    CatalogLoaded(library~, items~) => {
       // Catalog requests belong to the device that issued them. A completion
       // that outlived a focus switch must not overwrite the focused device's
       // catalog or its newer in-flight request.
-      guard channel == input.channel else { return (@cmd.none, self, None) }
+      guard library == input.library else { return (@cmd.none, self, None) }
       (@cmd.none, { ..self, catalog: Ready(items), }, None)
     }
-    CatalogFailed(channel~, message~) => {
-      guard channel == input.channel else { return (@cmd.none, self, None) }
+    CatalogFailed(library~, message~) => {
+      guard library == input.library else { return (@cmd.none, self, None) }
       (@cmd.none, { ..self, catalog: Failed(message), }, None)
     }
     ToggleEnabled(id) => {
       guard input.installed.iter().find_first(item => item.id == id)
-        is Some(item) else {
+        is Some(item) &&
+        !(item.builtin && input.library.locks_builtins()) else {
         return (@cmd.none, self, None)
       }
       let payload : @protocol.SetSkillEnabledPayload = {
@@ -514,23 +514,29 @@ pub fn State::handle(
         enabled=payload.enabled,
       )
       self.start_action(
-        input.channel,
+        input.library,
         PendingTarget::LibraryEntry(id),
         action,
-        set_enabled(emit, input.channel, payload, action),
+        set_enabled(emit, input.library, payload, action),
       )
     }
     Install(item) | Update(item) => {
+      guard !(input.library.locks_builtins() &&
+        input.installed.any(current => {
+          current.builtin && current.identity() == Some(item.identity())
+        })) else {
+        return (@cmd.none, self, None)
+      }
       let source = source_label(item)
       let action : PendingSkillAction = {
         guard msg is Update(_) else { Installing(source~) }
         Updating(source~)
       }
       self.start_action(
-        input.channel,
+        input.library,
         PendingTarget::Registry(item.identity()),
         action,
-        install(emit, input.channel, item, action),
+        install(emit, input.library, item, action),
       )
     }
     Uninstall(item) => {
@@ -542,36 +548,36 @@ pub fn State::handle(
         return (@cmd.none, self, None)
       }
       self.start_action(
-        input.channel,
+        input.library,
         PendingTarget::Registry(identity),
         Uninstalling(source=item.source, id=item.id),
-        uninstall(emit, input.channel, item),
+        uninstall(emit, input.library, item),
       )
     }
-    ActionDone(channel~, action~, error~) => {
+    ActionDone(library~, action~, error~) => {
       let operation = self.busy
         .iter()
         .find_first(operation => {
-          operation.channel == channel && operation.action == action
+          operation.library == library && operation.action == action
         })
       guard operation is Some(operation) else { return (@cmd.none, self, None) }
       let busy = self.busy.filter(operation => {
-        !(operation.channel == channel && operation.action == action)
+        !(operation.library == library && operation.action == action)
       })
       // A result that outlived a focus switch belongs to its old host: it
       // releases its busy entry, but it neither refreshes the library on
       // screen nor speaks for the page's notice. That host refetches when it
       // is focused again.
-      guard channel == input.channel else {
+      guard library == input.library else {
         return (@cmd.none, { ..self, busy, }, None)
       }
       match error {
         None =>
           // The library changed; what the page shows must come from disk.
-          (@cmd.none, { ..self, busy, }, Some(LibraryChanged(channel~)))
+          (@cmd.none, { ..self, busy, }, Some(LibraryChanged(library~)))
         Some(message) => {
           let notices = self.notices.filter(notice => {
-            !notice.belongs_to(channel, operation.identity)
+            !notice.belongs_to(library, operation.identity)
           })
           notices.push(SkillActionFailed(operation~, message~))
           (@cmd.none, { ..self, busy, notices, }, None)

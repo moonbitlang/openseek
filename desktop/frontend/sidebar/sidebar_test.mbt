@@ -5,6 +5,7 @@ test "the sidebar input keeps peer sections in one component value" {
     locale: English,
     mode: WorkMode,
     has_host: true,
+    skills_available: true,
     notices: [],
     sections: [
       {

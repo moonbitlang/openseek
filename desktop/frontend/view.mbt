@@ -694,6 +694,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     locale: self.locale,
     mode: self.sidebar_mode,
     has_host: self.has_host(),
+    skills_available: self.has_host() || self.account is Some(_),
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),

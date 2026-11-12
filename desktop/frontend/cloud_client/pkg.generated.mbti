@@ -32,6 +32,20 @@ pub async fn read_file_index(String, String) -> Array[String]
 
 pub async fn request(String, String, @http.RequestMethod, token? : String, body? : @json.Json) -> @json.Json
 
+pub async fn skills_catalog(String) -> @protocol.SkillsCatalogReply
+
+pub async fn skills_content(String, @protocol.InstallSkillPayload) -> @protocol.SkillContentReply
+
+pub async fn skills_install(String, @protocol.InstallSkillPayload) -> @protocol.InstallSkillReply
+
+pub async fn skills_installed(String) -> @protocol.InstalledSkillsReply
+
+pub async fn skills_installed_content(String, String) -> @protocol.SkillContentReply
+
+pub async fn skills_set_enabled(String, @protocol.SetSkillEnabledPayload) -> @protocol.SetSkillEnabledReply
+
+pub async fn skills_uninstall(String, String) -> @protocol.UninstallSkillReply
+
 pub async fn watch_files(String, String, (@http.Client) -> Unit, () -> Bool, () -> Unit) -> Unit
 
 // Errors

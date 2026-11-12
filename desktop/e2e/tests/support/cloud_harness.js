@@ -48,6 +48,15 @@ export class CloudHarness {
     this.importStatus = 201;
     this.shareStatus = 200;
     this.exportSnapshots = new Map();
+    // The account's Cloud skills library and the registry catalog it installs
+    // from, as the Cloud service serves them.
+    this.cloudSkills = [{
+      id: 'moonbitlang-typst', name: 'typst', description: 'Compile Typst documents.',
+      source: 'moonbitlang/typst@0.1.10',
+      registry: { module_name: 'moonbitlang/typst', package_path: '' },
+      enabled: true, builtin: true,
+    }];
+    this.skillCatalog = [];
     this.patchStatus = 204;
     this.patchOffline = false;
     this.pausePatch = null;
@@ -378,6 +387,38 @@ export class CloudHarness {
       return json({ accepted: true, task_id: body.task_id, action: body.action, id: body.id });
     }
     if (path === '/v1/me/preferences') return json({ allow_content_improvement: false });
+    if (path === '/v1/skills/catalog') return json({ skills: this.skillCatalog });
+    const preview = path.match(/^\/v1\/skills\/catalog\/([^/]+)\/([^/]+)$/);
+    if (preview) return json({ content: `# ${decodeURIComponent(preview[2])}` });
+    if (path === '/v1/me/skills' && request.method() === 'GET') return json({ skills: this.cloudSkills });
+    if (path === '/v1/me/skills' && request.method() === 'POST') {
+      const { module_name, version } = request.postDataJSON();
+      const market = this.skillCatalog.find(skill => skill.module_name === module_name);
+      if (!market) return route.fulfill({ status: 404, headers, contentType: 'text/plain', body: 'skill not found' });
+      const id = module_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const previous = this.cloudSkills.find(skill => skill.id === id);
+      const skill = {
+        id, name: market.name, description: market.description, source: `${module_name}@${version}`,
+        registry: { module_name, package_path: '' }, enabled: previous?.enabled ?? true, builtin: false,
+      };
+      this.cloudSkills = [...this.cloudSkills.filter(item => item.id !== id), skill];
+      return json(skill);
+    }
+    const skill = path.match(/^\/v1\/me\/skills\/([^/]+)(\/content)?$/);
+    if (skill) {
+      const item = this.cloudSkills.find(entry => entry.id === decodeURIComponent(skill[1]));
+      if (!item) return route.fulfill({ status: 404, headers, contentType: 'text/plain', body: 'skill not found' });
+      if (skill[2]) return json({ content: `# ${item.name}` });
+      if (item.builtin) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: 'built-in skills are always enabled' });
+      if (request.method() === 'PATCH') {
+        item.enabled = request.postDataJSON().enabled;
+        return json(item);
+      }
+      if (request.method() === 'DELETE') {
+        this.cloudSkills = this.cloudSkills.filter(entry => entry !== item);
+        return route.fulfill({ status: 204, headers });
+      }
+    }
     if (path === '/v1/sessions/import' && request.method() === 'POST') {
       if (this.importStatus !== 201) {
         return route.fulfill({ status: this.importStatus, headers, contentType: 'text/plain', body: '' });
