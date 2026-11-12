@@ -175,7 +175,6 @@ async fn run_serve(
       scope,
       @options.mcp_config_paths(matches),
       skills=@setup.skill_library(matches, workspace_root~),
-      skill_env=@options.skill_env(matches),
       policy_dir="\{session_scratch_dir}/mcp-policies",
       workspace_root~,
       on_change=() => ignore(steps.try_put(McpChanged) catch { _ => false }),

@@ -29,8 +29,6 @@ pub fn review_gate_enabled(@argparse.Matches) -> Bool
 
 pub fn root_command() -> @argparse.Command
 
-pub fn skill_env(@argparse.Matches) -> Array[String]
-
 pub fn skills_dirs(@argparse.Matches) -> Array[String]
 
 pub fn task_text(@argparse.Matches) -> String raise

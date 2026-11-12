@@ -1469,6 +1469,7 @@ async fn engine_process_env(
 async fn engine_process_args(
   config : RunConfig,
   runtime_dir? : @pathx.Path,
+  env~ : Map[String, String] = Map([]),
   host_mcp~ : Bool = false,
 ) -> Array[String] {
   // Desktop engines always run in durable-session mode. Passing placement
@@ -1478,7 +1479,7 @@ async fn engine_process_args(
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
   }
-  args.append(engine_mcp_args(config.mcp_config, runtime_dir, host_mcp~))
+  args.append(engine_mcp_args(config.mcp_config, runtime_dir, env, host_mcp~))
   if config.session_root is Some(root) {
     let store = @store.SessionStore(root.to_string())
     if capture_session_prompt(
@@ -1553,6 +1554,7 @@ async fn start_serve_engine(
   let args = engine_process_args(
     config,
     runtime_dir?=manager.runtime_dir,
+    env~,
     host_mcp=manager.mcp.server is Some(_),
   )
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
@@ -3102,42 +3104,48 @@ async test "native engine env has one authoritative bundled moon path" {
       ],
     )
   }
-  // A host serving its own tools hands the engine the skill that tells the
-  // agent about them, beside the user's file. No grant value is written to
-  // disk.
-  let skills_dir = runtime.join("host-skills").resolve()
-  let skill = skills_dir.join(@mcp.SkillName).to_path()
-  assert_eq(
-    engine_process_args(
-      {
-        ..config,
-        mcp_config: Some({
-          path: mcp_path,
-          revision: McpConfigRevision::of_text("{}"),
-        }),
-      },
-      runtime_dir=runtime,
-      host_mcp=true,
-    ),
-    [
-      "serve",
-      "--session=s-env",
-      "--skills-dir=\{skills_dir.to_string()}",
-      "--skill-env=\{@mcp.UrlEnv}",
-      "--skill-env=\{@mcp.TokenEnv}",
-      "--mcp-config=\{mcp_path.to_string()}",
-      "--dir",
-      ".",
-      "--approval",
-      "ask",
-    ],
+  // Automatic host config is first; explicit user files and the environment
+  // fallback remain effective overrides. No grant value is written to disk.
+  let host_path = runtime.join("host-mcp.json").resolve().to_string()
+  let automatic = engine_process_args(
+    config,
+    runtime_dir=runtime,
+    env=granted,
+    host_mcp=true,
   )
-  assert_eq(@fsx.read_text(skill.join("SKILL.md")), @mcp.skill_markdown())
-  let host_text = @fsx.read_text(skill.join("mcp.json"))
+  let skills_dir = runtime.join("host-skills").resolve().to_string()
+  assert_true(automatic.contains("--mcp-config=\{host_path}"))
+  assert_true(automatic.contains("--skills-dir=\{skills_dir}"))
+  // The skill telling the agent about the host's tools sits beside it.
+  assert_eq(
+    @fsx.read_text(Path("\{skills_dir}/\{@mcp.SkillName}/SKILL.md")),
+    @mcp.skill_markdown(),
+  )
+  let host_text = @fsx.read_text(Path(host_path))
   assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_URL}"))
   assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_TOKEN}"))
   assert_false(host_text.contains(server.url()))
   assert_false(host_text.contains(granted[@mcp.TokenEnv]))
+  let fallback = { "OPENSEEK_MCP_CONFIG": "/fallback/mcp.json" }
+  assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=true), [
+    "--skills-dir=\{skills_dir}",
+    "--mcp-config=\{host_path}",
+    "--mcp-config=/fallback/mcp.json",
+  ])
+  assert_eq(
+    engine_mcp_args(
+      Some({ path: mcp_path, revision: McpConfigRevision::of_text("{}"), }),
+      Some(runtime),
+      fallback,
+      host_mcp=true,
+    ),
+    [
+      "--skills-dir=\{skills_dir}",
+      "--mcp-config=\{host_path}",
+      "--mcp-config=\{mcp_path.to_string()}",
+    ],
+  )
+  assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=false), [])
   let moon_bin = moon_home.join("bin").to_string()
   let expected_path = if ambient_path is Some(path) && !path.is_empty() {
     "\{moon_bin}\{@env.path_sep}\{path}"

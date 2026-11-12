@@ -52,13 +52,6 @@ fn prompt_options() -> Array[@argparse.OptionArg] {
       about="Another skills directory, advertised alongside the user-level and workspace ones, which shadow its same-named skills. Repeat to add more; empty values are ignored.",
     ),
     OptionArg(
-      "skill-env",
-      long="skill-env",
-      action=Append,
-      default_values=[""],
-      about="An environment variable a skill's mcp.json may reference as ${NAME}, besides ${OPENSEEK_SKILL_DIR}; no other variable expands there. Repeat to allow more; empty values are ignored.",
-    ),
-    OptionArg(
       "mcp-config",
       long="mcp-config",
       action=Append,
