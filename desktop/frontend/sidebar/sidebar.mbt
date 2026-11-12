@@ -547,12 +547,10 @@ fn notifications_row(
     NeedsInstall => (NotificationsNeedInstall, [])
     Off(..) =>
       (NotificationsOff, [action(TurnOn, actions.turn_on_notifications, false)])
-    Busy =>
-      (NotificationsOn, [action(TurnOff, actions.turn_off_notifications, true)])
-    On(..) =>
+    Busy | On(..) =>
       (
         NotificationsOn,
-        [action(TurnOff, actions.turn_off_notifications, false)],
+        [action(TurnOff, actions.turn_off_notifications, notifications is Busy)],
       )
     Blocked => (NotificationsBlocked, [])
   }

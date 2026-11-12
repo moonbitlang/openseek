@@ -32,12 +32,16 @@ fn PushNotifier::PushNotifier(seed : @protocol.RunsReply) -> PushNotifier {
       runs[started.run_id] = started.session
     }
   }
-  {
-    runs,
-    known_approvals: Set::from_iter(
-      seed.approvals.iter().map(approval => (approval.session, approval.id)),
-    ),
-  }
+  { runs, known_approvals: approval_keys(seed.approvals), }
+}
+
+///|
+fn approval_keys(
+  approvals : Array[@protocol.PendingApprovalPayload],
+) -> Set[(String, String)] {
+  Set::from_iter(
+    approvals.iter().map(approval => (approval.session, approval.id)),
+  )
 }
 
 ///|
@@ -82,11 +86,7 @@ fn PushNotifier::observe(
           )
         }
       }
-      self.known_approvals = Set::from_iter(
-        snapshot.approvals
-        .iter()
-        .map(approval => (approval.session, approval.id)),
-      )
+      self.known_approvals = approval_keys(snapshot.approvals)
       events
     }
     _ => []

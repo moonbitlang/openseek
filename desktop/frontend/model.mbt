@@ -1953,6 +1953,9 @@ priv enum Msg {
   // notification extension: open the owning local run or Cloud conversation.
   // The native extension brings the window forward before emitting the click.
   NotificationClicked(run_id~ : String)
+  // A clicked push notification's path, on this page; it opens like a link
+  // and closes any dialog covering the conversation.
+  NotificationLinkOpened(String)
   // A host-side action with no conversation of its own (opening a non-text
   // path in the system app, opening an external URL, launching an app) failed:
   // pops an error toast.

@@ -22,11 +22,19 @@ extern "js" fn install_handlers(
   visit : (String, Bool) -> Unit,
   promote : (String, String) -> Unit,
   pop : () -> Unit,
+  open : (String) -> Bool,
 ) -> @js.Value =
-  #|(visit, promote, pop) => {
-  #|  const handle = { visit, promote, pop };
+  #|(visit, promote, pop, open) => {
+  #|  // sw.js asks an open page to show a notification's link in place and
+  #|  // falls back to a full navigation unless the page answers true.
+  #|  const message = event => {
+  #|    if (event.data?.type !== 'seekmoon.open' || typeof event.data.url !== 'string') return;
+  #|    event.ports[0]?.postMessage(open(event.data.url));
+  #|  };
+  #|  const handle = { visit, promote, pop, message };
   #|  window.__seekmoonApplicationHistory = handle;
   #|  window.addEventListener('popstate', pop);
+  #|  navigator.serviceWorker?.addEventListener('message', message);
   #|  return handle;
   #|}
 
@@ -34,6 +42,7 @@ extern "js" fn install_handlers(
 extern "js" fn dispose(handle : @js.Value) -> Unit =
   #|handle => {
   #|  window.removeEventListener('popstate', handle.pop);
+  #|  navigator.serviceWorker?.removeEventListener('message', handle.message);
   #|  if (window.__seekmoonApplicationHistory === handle) delete window.__seekmoonApplicationHistory;
   #|}
 

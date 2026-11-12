@@ -6,31 +6,42 @@ pub(all) struct Snapshot {
 
 ///|
 priv suberror Subscription {
-  Subscription(String, @cmd.Emit[Snapshot])
+  Subscription(String, @cmd.Emit[Snapshot], @cmd.Emit[String])
 }
 
 ///|
-pub fn listen(initial_path : String, emit : @cmd.Emit[Snapshot]) -> @sub.Sub {
+/// Follow the page's history. `opened` receives the path of a clicked push
+/// notification this page shows, for the application to visit as it would a
+/// link; sw.js navigates the page itself for any other path.
+pub fn listen(
+  initial_path : String,
+  emit : @cmd.Emit[Snapshot],
+  opened~ : @cmd.Emit[String],
+) -> @sub.Sub {
   @sub.custom_sub(
     "application-history",
     Global,
-    Subscription(initial_path, emit),
+    Subscription(initial_path, emit, opened),
     loader,
   )
 }
 
 ///|
 fn loader(payload : Error, scheduler : &@cmd.Scheduler) -> @sub.RunningSub? {
-  guard payload is Subscription(initial_path, original_emit) else {
+  guard payload is Subscription(initial_path, original_emit, original_opened) else {
     return None
   }
   let mut emit = original_emit
-  let handle = install(initial_path, path => scheduler.add(emit({ path, })))
+  let mut opened = original_opened
+  let handle = install(initial_path, path => scheduler.add(emit({ path, })), path => {
+    scheduler.add(opened(path))
+  })
   Some({
     unload: _ => dispose(handle),
     update_tagger: payload => {
-      if payload is Subscription(_, next) {
+      if payload is Subscription(_, next, next_opened) {
         emit = next
+        opened = next_opened
       }
     },
   })
@@ -58,7 +69,11 @@ fn canonical_path(path : String) -> String {
 /// The page owns every application route: the model writes history only for
 /// destinations it accepted, and decides itself whether another device's
 /// route stays in this page or loads that device's own.
-fn install(initial_path : String, emit : (String) -> Unit) -> @js.Value {
+fn install(
+  initial_path : String,
+  emit : (String) -> Unit,
+  opened : (String) -> Unit,
+) -> @js.Value {
   let owns = (path : String) => {
     @routes.is_cloud_path(path) || @routes.device(path) is Some(_)
   }
@@ -91,6 +106,11 @@ fn install(initial_path : String, emit : (String) -> Unit) -> @js.Value {
         write_history(canonical + search(), replace=true)
       }
       report()
+    },
+    path => {
+      guard owns(path) else { return false }
+      opened(path)
+      true
     },
   )
   report()

@@ -1764,6 +1764,7 @@ fn update(
     | OpenCodex
     | NewChatRequested
     | ExplorerRequested(_)
+    | NotificationLinkOpened(_)
     | SidebarModeSelected(_) => true
     _ => false
   }
@@ -6272,6 +6273,8 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
+    NotificationLinkOpened(path) =>
+      follow_page_path(dispatch, path, model).unwrap_or((@cmd.none, model))
     UserMessageEditRequested(slot~, sequence~, draft~) =>
       model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>

@@ -53,7 +53,7 @@ test "turning on ends on, blocked, off, or off with the failure" {
 }
 
 ///|
-test "an enabled device turns off or sends a test, keeping failures visible" {
+test "an enabled device turns off, keeping failures visible" {
   let on = step(
     @web_push.State(),
     Probed(Ready(key="k", permission=Granted, subscribed=true)),

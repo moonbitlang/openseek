@@ -50,8 +50,10 @@ async fn registration() -> @js.Value {
 }
 
 ///|
-async fn current_subscription() -> @js.Value? {
-  let manager : @js.Value = registration().get_with_string("pushManager")
+/// This registration's subscription. `getSubscription` does not need the
+/// worker active, unlike `subscribe`.
+async fn subscription_of(registration : @js.Value) -> @js.Value? {
+  let manager : @js.Value = registration.get_with_string("pushManager")
   let subscription = call(manager, "getSubscription", undefined())
   if subscription.is_null() || subscription.is_undefined() {
     None
@@ -125,8 +127,15 @@ async fn register_with_relay(subscription : @js.Value, ctx : Ctx) -> Unit {
 }
 
 ///|
-fn endpoint_of(subscription : @js.Value) -> String {
-  subscription.get_with_string("endpoint")
+/// The relay's VAPID public key, or None when it has push off.
+async fn relay_key() -> String? {
+  let (status, body) = relay("/v2/push/key", Get)
+  guard status == 200 &&
+    (@json.parse(body) catch { _ => return None })
+    is { "public_key": String(key), .. } else {
+    return None
+  }
+  Some(key)
 }
 
 ///|
@@ -140,18 +149,22 @@ pub fn probe(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
     },
     () => {
       guard service_worker() is Some(container) else { return NoPushApi }
-      // Served at the root, so its default scope covers every page.
-      ignore(call(container, "register", @js.Value::cast_from("/sw.js")))
-      let (status, body) = relay("/v2/push/key", Get)
-      guard status == 200 &&
-        (@json.parse(body) catch { _ => return NoRelayKey })
-        is { "public_key": String(key), .. } else {
-        return NoRelayKey
+      // Served at the root, so its default scope covers every page. The key
+      // request does not wait for it.
+      let registering = @interop.js_method_promise(
+        container,
+        "register",
+        @js.Value::cast_from("/sw.js"),
+      )
+      let key = relay_key() catch { _ => None }
+      let registration = registering.wait() catch {
+        error => raise PushError("register failed: \{error}")
       }
+      guard key is Some(key) else { return NoRelayKey }
       Ready(
         key~,
         permission=permission(),
-        subscribed=current_subscription() is Some(_),
+        subscribed=subscription_of(registration) is Some(_),
       )
     },
   )
@@ -204,12 +217,15 @@ fn turn_off(ctx : Ctx, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
       )
     },
     () => {
-      guard current_subscription() is Some(subscription) else { return }
+      guard subscription_of(registration()) is Some(subscription) else {
+        return
+      }
+      let endpoint : String = subscription.get_with_string("endpoint")
       let (status, _) = relay(
         "/v2/push/subscription",
         Delete,
         token=ctx.token,
-        body={ "endpoint": endpoint_of(subscription) },
+        body={ "endpoint": endpoint },
       )
       expect_success("removing this device", status)
       ignore(call(subscription, "unsubscribe", undefined()))
@@ -221,7 +237,7 @@ fn turn_off(ctx : Ctx, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// Register the existing subscription again; nothing waits on the result.
 fn resync(ctx : Ctx) -> @cmd.Cmd {
   @cmd.attempt((_ : Result[Unit, Error]) => @cmd.none, () => {
-    if current_subscription() is Some(subscription) {
+    if subscription_of(registration()) is Some(subscription) {
       register_with_relay(subscription, ctx)
     }
   })
@@ -232,8 +248,11 @@ fn resync(ctx : Ctx) -> @cmd.Cmd {
 /// row goes with the signed-out session, so nothing is sent there.
 pub fn forget() -> @cmd.Cmd {
   @cmd.attempt((_ : Result[Unit, Error]) => @cmd.none, () => {
-    guard service_worker() is Some(_) else { return }
-    if current_subscription() is Some(subscription) {
+    // `ready` would never settle where no worker was registered.
+    guard service_worker() is Some(container) else { return }
+    let registration = call(container, "getRegistration", undefined())
+    guard !registration.is_undefined() else { return }
+    if subscription_of(registration) is Some(subscription) {
       ignore(call(subscription, "unsubscribe", undefined()))
     }
   })

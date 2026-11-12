@@ -30,7 +30,6 @@ pub fn State::State() -> State {
 
 ///|
 /// The browser's answer to `Notification.permission`.
-#derive(Debug, Eq)
 pub(all) enum Permission {
   Granted
   Denied
@@ -39,7 +38,6 @@ pub(all) enum Permission {
 
 ///|
 /// What one probe of this browser and the relay found.
-#derive(Debug, Eq)
 pub(all) enum Probe {
   NoPushApi
   NoRelayKey
@@ -47,7 +45,6 @@ pub(all) enum Probe {
 }
 
 ///|
-#derive(Debug, Eq)
 pub(all) enum Msg {
   Probed(Probe)
   TurnOn
@@ -65,7 +62,6 @@ pub(all) enum Msg {
 ///|
 /// The account the relay calls are made as, and the locale the relay stores
 /// with the subscription so the worker formats pushes in it.
-#derive(Debug, Eq)
 pub(all) struct Ctx {
   token : String
   locale : String
@@ -109,27 +105,3 @@ pub extend State with Debug::{to_repr}
 
 ///|
 pub extend State with Eq::{equal, not_equal}
-
-///|
-pub extend Permission with Debug::{to_repr}
-
-///|
-pub extend Permission with Eq::{equal, not_equal}
-
-///|
-pub extend Probe with Debug::{to_repr}
-
-///|
-pub extend Probe with Eq::{equal, not_equal}
-
-///|
-pub extend Msg with Debug::{to_repr}
-
-///|
-pub extend Msg with Eq::{equal, not_equal}
-
-///|
-pub extend Ctx with Debug::{to_repr}
-
-///|
-pub extend Ctx with Eq::{equal, not_equal}

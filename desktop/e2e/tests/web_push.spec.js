@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // The page registers the real /sw.js and drives the real Push API calls.
@@ -46,7 +46,6 @@ async function relayPush(page, { key = 'BKEY' } = {}) {
   await page.route('**/v2/push/subscription', async route => {
     const request = route.request();
     calls.push({
-      path: 'subscription',
       method: request.method(),
       authorization: (await request.allHeaders()).authorization,
       body: JSON.parse(request.postData() ?? 'null'),
@@ -74,7 +73,6 @@ test('turning notifications on registers the worker and the subscription with th
   expect(await page.evaluate(() => window.__push.prompts)).toBe(1);
   expect(await page.evaluate(() => window.__push.options)).toEqual({ userVisibleOnly: true, applicationServerKey: 'BKEY' });
   expect(calls).toEqual([{
-    path: 'subscription',
     method: 'PUT',
     authorization: 'Bearer ts_fixture-account',
     body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture', keys: { p256dh: 'BPUB', auth: 'AUTH' }, locale: 'en' },
@@ -82,7 +80,7 @@ test('turning notifications on registers the worker and the subscription with th
 
   await page.getByRole('button', { name: 'Turn off', exact: true }).click();
   await expect(page.getByText('Notifications off', { exact: true })).toBeVisible();
-  expect(calls[1]).toMatchObject({ path: 'subscription', method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
+  expect(calls[1]).toMatchObject({ method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
   expect(await page.evaluate(() => window.__push.unsubscribed)).toBe(1);
   expect(app.pageErrors).toEqual([]);
 });
@@ -138,6 +136,34 @@ test('a subscribed browser registers again with the relay when the page loads', 
   await page.goto('/index.html?device=device-a');
   await expect(page.getByText('Notifications on', { exact: true })).toBeVisible();
   await expect.poll(() => calls.length).toBe(1);
-  expect(calls[0]).toMatchObject({ path: 'subscription', method: 'PUT', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/kept' } });
+  expect(calls[0]).toMatchObject({ method: 'PUT', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/kept' } });
+  expect(app.pageErrors).toEqual([]);
+});
+
+// sw.js asks an open page to show a clicked notification's link in place and
+// navigates only when the page declines; this is the page's side.
+test('an open page shows a notification link in place and declines a non-application path', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await page.goto('/device/device-a/chat');
+  await page.evaluate(() => { window.__sameDocument = true; });
+  const ask = url => page.evaluate(url => new Promise(resolve => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = event => resolve(event.data);
+    navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'seekmoon.open', url },
+      ports: [channel.port2],
+    }));
+  }), url);
+
+  expect(await ask('/device/device-a/chat/session/session-1')).toBe(true);
+  await expect(page).toHaveURL(/\/device\/device-a\/chat\/session\/session-1$/);
+  await expect(page.locator('#transcript')).toContainText('Browser result');
+  expect(await page.evaluate(() => window.__sameDocument)).toBe(true);
+  // A relay page reaches every device of its account in place.
+  expect(await ask('/device/device-b/chat')).toBe(true);
+  await expect(page).toHaveURL(/\/device\/device-b\/chat$/);
+  expect(await page.evaluate(() => window.__sameDocument)).toBe(true);
+  expect(await ask('/sw.js')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });

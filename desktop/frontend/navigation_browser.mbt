@@ -112,27 +112,42 @@ fn follow_navigation_link(
 ) -> (@cmd.Cmd, Model) {
   match request {
     Internal(url) =>
-      match @routes.parse(url.path) {
-        Ok(location) if location.target.is_cloud() ||
-          model.navigates_in_page(location.device) => {
-          let (enter, model) = model.enter_location_device(dispatch, location)
-          let location = model.bind_cloud_location(location)
-          // Explicit navigation cancels an in-flight creation even when the
-          // chosen page is the one still covered by that creation request.
-          let model = {
-            ..model,
-            chat_navigation_generation: model.chat_navigation_generation + 1,
-          }
-          let (write, next) = navigation_visit(model, location, replace=false)
-          let (activate, next) = activate_navigation(dispatch, {
-            ..next,
-            navigation: { ..next.navigation, phase: Waiting, },
-          })
-          (@cmd.batch([enter, write, activate]), next)
-        }
-        _ => update_msg(dispatch, ExternalLinkClicked(url.to_string()), model)
+      match follow_page_path(dispatch, url.path, model) {
+        Some(result) => result
+        None =>
+          update_msg(dispatch, ExternalLinkClicked(url.to_string()), model)
       }
     External(url) => update_msg(dispatch, ExternalLinkClicked(url), model)
+  }
+}
+
+///|
+/// Visit a path this page shows, as an explicit navigation; None for a host
+/// route that loads another device's own page.
+fn follow_page_path(
+  dispatch : @cmd.Emit[Msg],
+  path : String,
+  model : Model,
+) -> (@cmd.Cmd, Model)? {
+  match @routes.parse(path) {
+    Ok(location) if location.target.is_cloud() ||
+      model.navigates_in_page(location.device) => {
+      let (enter, model) = model.enter_location_device(dispatch, location)
+      let location = model.bind_cloud_location(location)
+      // Explicit navigation cancels an in-flight creation even when the
+      // chosen page is the one still covered by that creation request.
+      let model = {
+        ..model,
+        chat_navigation_generation: model.chat_navigation_generation + 1,
+      }
+      let (write, next) = navigation_visit(model, location, replace=false)
+      let (activate, next) = activate_navigation(dispatch, {
+        ..next,
+        navigation: { ..next.navigation, phase: Waiting, },
+      })
+      Some((@cmd.batch([enter, write, activate]), next))
+    }
+    _ => None
   }
 }
 

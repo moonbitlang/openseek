@@ -42,17 +42,15 @@ pub(all) enum PushEvent {
 ///|
 fn PushEvent::to_json(self : PushEvent) -> Json {
   match self {
-    Finished(session~, status~, answer~) => {
-      let event : Json = {
+    Finished(session~, status~, answer=None) =>
+      { "kind": "finished", "session": session, "status": status }
+    Finished(session~, status~, answer=Some(answer)) =>
+      {
         "kind": "finished",
         "session": session,
         "status": status,
+        "answer": answer,
       }
-      if answer is Some(answer) && event is Object(fields) {
-        fields["answer"] = Json(answer)
-      }
-      event
-    }
     Approval(session~, tool~, detail~) =>
       { "kind": "approval", "session": session, "tool": tool, "detail": detail }
   }
@@ -67,13 +65,14 @@ fn PushEvent::from_json(json : Json) -> PushEvent? {
       "status": String(status),
       "answer"? : answer,
       ..
-    } =>
-      match answer {
-        None => Some(Finished(session~, status~, answer=None))
-        Some(String(answer)) =>
-          Some(Finished(session~, status~, answer=Some(answer)))
-        Some(_) => None
+    } => {
+      let answer = match answer {
+        None => None
+        Some(String(answer)) => Some(answer)
+        Some(_) => return None
       }
+      Some(Finished(session~, status~, answer~))
+    }
     {
       "kind": "approval",
       "session": String(session),

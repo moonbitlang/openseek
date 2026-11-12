@@ -24,7 +24,7 @@ function worker({ windows = [] } = {}) {
       openWindow: async (url) => opened.push(url),
     },
   };
-  vm.runInNewContext(source, { self, URL });
+  vm.runInNewContext(source, { self, URL, MessageChannel, setTimeout, clearTimeout });
   async function dispatch(type, event) {
     const pending = [];
     listeners.get(type)({ ...event, waitUntil: (promise) => pending.push(promise) });
@@ -123,17 +123,39 @@ test("an unreadable push still shows a notification", async () => {
   assert.equal(sw.shown[3].tag, "/cloud");
 });
 
-test("a click focuses an open window and navigates it", async () => {
-  const navigated = [];
+// An open window; `answer` is what its page replies to an open request, or
+// undefined for a page that never replies.
+function openWindow(answer) {
   const client = {
     url: "https://seekmoon.example/cloud",
+    asked: [],
+    navigated: [],
     focus: async () => {},
-    navigate: async (url) => navigated.push(url),
+    navigate: async (url) => client.navigated.push(url),
+    postMessage: (message, [port]) => {
+      client.asked.push({ ...message });
+      if (answer !== undefined) port.postMessage(answer);
+    },
   };
+  return client;
+}
+
+test("a click shows the link in place in an open console page", async () => {
+  const client = openWindow(true);
   const sw = worker({ windows: [client] });
   await sw.click({ url: "/device/d/chat/session/s" });
-  assert.deepEqual(navigated, ["https://seekmoon.example/device/d/chat/session/s"]);
+  assert.deepEqual(client.asked, [{ type: "seekmoon.open", url: "/device/d/chat/session/s" }]);
+  assert.deepEqual(client.navigated, []);
   assert.deepEqual(sw.opened, []);
+});
+
+test("a click navigates a page that declines or does not answer", async () => {
+  for (const answer of [false, undefined]) {
+    const client = openWindow(answer);
+    const sw = worker({ windows: [client] });
+    await sw.click({ url: "/device/d/chat/session/s" });
+    assert.deepEqual(client.navigated, ["https://seekmoon.example/device/d/chat/session/s"]);
+  }
 });
 
 test("a click with no open window opens one", async () => {

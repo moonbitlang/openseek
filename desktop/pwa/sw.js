@@ -129,16 +129,36 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// Ask an open console page to show the link in place, the way its own links
+// do, so a click does not reload the page. It answers true when it did; any
+// other page, or a link to a device the page does not own, gets a full
+// navigation instead.
+function openInPlace(client, path) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const done = (shown) => {
+      clearTimeout(timer);
+      channel.port1.close();
+      resolve(shown);
+    };
+    const timer = setTimeout(() => done(false), 1000);
+    channel.port1.onmessage = (event) => done(event.data === true);
+    client.postMessage({ type: "seekmoon.open", url: path }, [channel.port2]);
+  });
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url ?? "/cloud", self.location.origin).href;
+  const target = new URL(event.notification.data?.url ?? "/cloud", self.location.origin);
+  const url = target.href;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const client of windows) {
         if (new URL(client.url).origin === self.location.origin && "focus" in client) {
           await client.focus();
-          if ("navigate" in client) await client.navigate(url);
+          const shown = await openInPlace(client, target.pathname + target.search);
+          if (!shown && "navigate" in client) await client.navigate(url);
           return;
         }
       }
