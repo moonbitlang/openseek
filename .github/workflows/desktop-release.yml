@@ -111,70 +111,16 @@ jobs:
 
   # The Browser bundle is platform-neutral. Building it apart from the macOS
   # packager lets Android package the same bytes without waiting for Apple
-  # signing and notarization.
+  # signing and notarization. The Browser release workflow owns the build and,
+  # called with a version, only builds: this release's publish job selects the
+  # console together with the Desktop manifest.
   release-browser:
-    name: Build Browser
+    name: Browser
     needs: release-needed
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
-
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Stamp release version
-        shell: bash
-        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
-
-      - name: Set up MoonBit
-        run: |
-          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
-          test -n "$version"
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-
-      - name: Show MoonBit version
-        run: moon version --all
-
-      - name: Update MoonBit package registry
-        run: moon update
-
-      # Keep one compressed Browser archive beside the Desktop artifacts. The
-      # GitHub release stores it as a release asset; the API receives the same
-      # small archive only because `/console/` must remain on the API origin.
-      # The browser build never touches the window host, so call the build
-      # program directly, as desktop CI does.
-      - name: Build browser release artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          node desktop/package/build.mjs browser --release
-          test -f desktop/dist/browser/index.html
-          test -f desktop/dist/browser/assets/frontend.js
-          # openseek-api serves these .br/.gz copies by Accept-Encoding.
-          node desktop/package/precompress.mjs desktop/dist/browser
-          test -f desktop/dist/browser/assets/frontend.js.br
-          tar -C desktop/dist -czf desktop/dist/SeekMoon.browser.tar.gz browser
-
-      # Only a hand-off to the Android builder and the publish job, which
-      # attaches it to the GitHub release.
-      - name: Hand Browser archive to the Android builder and the publish job
-        uses: actions/upload-artifact@v4
-        with:
-          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}-build
-          overwrite: true
-          path: desktop/dist/SeekMoon.browser.tar.gz
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
+    uses: ./.github/workflows/browser-release.yml
+    with:
+      version: ${{ needs.release-needed.outputs.version }}
 
   release-macos:
     name: Build, sign, and notarize macOS
@@ -505,6 +451,11 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # A console-only Browser release takes the same group, so it cannot move
+    # the console between this publish and its verification.
+    concurrency:
+      group: browser-console-publish
+      cancel-in-progress: false
     permissions:
       actions: read
       contents: write
