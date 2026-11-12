@@ -26,12 +26,14 @@ for (const desktop of [true, false]) {
     });
     seed(sessionA, 'Cached question A', 'Saved reply A');
     seed(sessionB, 'Cached question B', 'Saved reply B');
+    cloud.histories.get(sessionA).settings = { model: 'deepseek-v4-pro', thinking: 'max' };
     await cloud.install();
     await cloud.goto();
     await cloud.open(sessionA);
     await cloud.open(sessionB);
     await expect.poll(async () => (await cache()).size).toBe(2);
     const etag = (await cache()).get(sessionA).etag;
+    expect((await cache()).get(sessionA).settings).toEqual({ model: 'deepseek-v4-pro', thinking: 'max' });
 
     let releaseList;
     cloud.pauseList = new Promise(resolve => { releaseList = resolve; });
@@ -50,6 +52,8 @@ for (const desktop of [true, false]) {
     expect(await firstRead.headerValue('if-none-match')).toBe(etag);
     const transcript = page.locator('#transcript');
     await expect(transcript.getByText('Saved reply A')).toBeVisible();
+    await expect(page.locator('.composer').getByRole('button', {name: 'Model', exact: true})).toHaveText('DeepSeek Pro');
+    await expect(page.locator('.composer').getByRole('button', {name: 'Reasoning effort', exact: true})).toHaveText('Max');
     await cloud.row(sessionB).click();
     await expect(transcript.getByText('Saved reply B')).toBeVisible();
     await expect(transcript).toContainText('Cloud is unreachable');

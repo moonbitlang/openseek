@@ -99,3 +99,46 @@ test('Cloud queued turns and running controls retain the current engine configur
   expect(cloud.requests.filter(r => r.method === 'PATCH')).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
 });
+
+test('Cloud restores latest history settings, protects unsent edits, and retains them with 304', async ({ page }, testInfo) => {
+  const cloud = new CloudHarness(page);
+  const remote = { model: 'deepseek-v4-pro', thinking: 'max' };
+  cloud.histories.set(sessionA, { settings: remote, messages: [], generating: false });
+  await cloud.install(); await cloud.goto(); await cloud.open(sessionA);
+  await expect(model(page)).toHaveText('DeepSeek Pro'); await expect(effort(page)).toHaveText('Max');
+  const reads = () => cloud.requests.filter(r => r.method === 'GET' && r.path.endsWith(`${sessionA}/messages`));
+  await cloud.open(sessionB);
+  cloud.histories.get(sessionA).settings = { model: 'deepseek-v4-pro', thinking: 'high' };
+  let release;
+  cloud.pauseHistory = new Promise(resolve => { release = resolve; });
+  const count = reads().length;
+  await cloud.open(sessionA);
+  await expect.poll(() => reads().length).toBeGreaterThan(count);
+  await choose(page, model, 'DeepSeek Flash'); await choose(page, effort, 'Off');
+  release(); cloud.pauseHistory = null;
+  await expect(model(page)).toHaveText('DeepSeek Flash'); await expect(effort(page)).toHaveText('Off');
+  await page.reload(); await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await cloud.open(sessionA);
+  await expect(model(page)).toHaveText('DeepSeek Pro'); await expect(effort(page)).toHaveText('High');
+  const response = page.waitForResponse(r => new URL(r.url()).pathname.endsWith(`${sessionA}/messages`));
+  await cloud.open(sessionB); await cloud.open(sessionA);
+  expect((await response).status()).toBe(304);
+  await expect(effort(page)).toHaveText('High');
+  await page.screenshot({ path: testInfo.outputPath('cloud-history-settings.png') });
+  // The setting changes without changing native transcript data, and must change ETag.
+  cloud.histories.get(sessionA).settings = { model: 'deepseek-flash', thinking: 'high' };
+  await cloud.open(sessionB); await cloud.open(sessionA);
+  await expect(model(page)).toHaveText('DeepSeek Flash'); await expect(effort(page)).toHaveText('High');
+  // Earlier pages carry the latest metadata too, but paging never changes the selection.
+  cloud.historyTurns.set(sessionA, ['Earlier question', 'Latest question'].map((text, index) => ({
+    messages: [{task_id: `task-${index}`, kind: 'user', data: {content: text}, created_at: index + 1}], events: [],
+  })));
+  await cloud.open(sessionB); await cloud.open(sessionA);
+  await choose(page, model, 'DeepSeek Pro'); await choose(page, effort, 'Off');
+  const older = page.waitForRequest(r => r.method() === 'GET' && new URL(r.url()).pathname.endsWith(`${sessionA}/messages`) && new URL(r.url()).searchParams.get('offset') === '0');
+  await page.locator('#transcript').hover(); await page.mouse.wheel(0, -200);
+  await older;
+  await expect(page.locator('#transcript')).toContainText('Earlier question');
+  await expect(model(page)).toHaveText('DeepSeek Pro'); await expect(effort(page)).toHaveText('Off');
+  expect(cloud.device.pageErrors).toEqual([]);
+});

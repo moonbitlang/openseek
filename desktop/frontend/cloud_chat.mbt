@@ -152,6 +152,25 @@ fn update_cloud(
     None => (@cmd.none, model)
   }
   let command = @cmd.batch([command, preference_cmd])
+  let model = match message {
+    @cloud.Submit(owner, _) | @cloud.SubmitAttachments(owner, _, _) if cloud.sequence !=
+      before.sequence =>
+      model.with_cloud_choice(
+        owner,
+        Submitted(model.cloud_settings(owner), cloud.sequence),
+      )
+    @cloud.SendFailed(epoch, session, request, _) if epoch == before.epoch &&
+      before.user_id is Some(account) &&
+      before.conversations.get(session)
+      is Some({ send_request, pending: Some(_), .. }) &&
+      send_request == request =>
+      model.retry_cloud_settings(account, session, request)
+    @cloud.CreateFailed(epoch, request, _) if epoch == before.epoch &&
+      before.user_id is Some(account) &&
+      before.creation is Some(creation) =>
+      model.retry_cloud_settings(account, creation.id, request)
+    _ => model
+  }
   let completion = if model.account.map(account => account.user.user_id) ==
     before.user_id {
     cloud_finished_notification(before, cloud, message)
@@ -196,6 +215,17 @@ fn update_cloud(
     (@cmd.none, model)
   }
   let command = @cmd.batch([command, created_preferences])
+  let model = if created is Some(session) &&
+    before.draft_identity() is Some(Cloud(account~, session=draft)) {
+    let edits = model.cloud_settings_edits.copy()
+    if edits.get(cloud_preference_key(account, Some(draft))) is Some(edit) {
+      edits.remove(cloud_preference_key(account, Some(draft)))
+      edits[cloud_preference_key(account, Some(session))] = edit
+    }
+    { ..model, cloud_settings_edits: edits, }
+  } else {
+    model
+  }
   if created is Some(session) &&
     before.draft_identity() is Some(owner) &&
     cloud.user_id is Some(account) {

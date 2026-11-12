@@ -452,7 +452,7 @@ export class CloudHarness {
           page: { offset },
         };
       }
-      const body = JSON.stringify(history.session ? history : { ...history, ...this.nativeHistory(session, history) });
+      const body = JSON.stringify({ settings: null, ...(history.session ? history : { ...history, ...this.nativeHistory(session, history) }) });
       const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';
       if (this.pauseHistory) await this.pauseHistory;
       const cacheHeaders = { ...headers, ETag: etag, 'Cache-Control': 'no-store' };
@@ -482,7 +482,7 @@ export class CloudHarness {
     ];
     const previous = this.histories.get(session)?.messages || [];
     const messages = [...previous, { task_id: task, kind: 'user', data: { content: body.content }, created_at: 1000 }];
-    this.histories.set(session, { messages, generating: true, outcome: null });
+    this.histories.set(session, { settings, messages, generating: true, outcome: null });
     if (this.disconnectSend) return route.abort('failed');
     await json({ accepted: true }, 202);
     await this.publishTaskStream(session, task, data);

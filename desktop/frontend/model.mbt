@@ -1313,6 +1313,7 @@ priv struct Model {
   // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
   cloud_preferences : Array[(String, @cloud.CommandSettings)]
+  cloud_settings_edits : Map[String, CloudSettingsChoice]
   // The conversations whose permission questions the person answers (see
   // `ConversationApprovalsStorageKey`); a reviewer answers every other one.
   asking_conversations : Array[String]
@@ -2785,6 +2786,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     default_agent: OpenSeekAgent,
     conversation_models: [],
     cloud_preferences: [],
+    cloud_settings_edits: Map([]),
     asking_conversations: [],
     openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,

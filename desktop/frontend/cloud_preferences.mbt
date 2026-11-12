@@ -1,4 +1,11 @@
 ///|
+#derive(Eq)
+priv enum CloudSettingsChoice {
+  Editing(@cloud.CommandSettings)
+  Submitted(@cloud.CommandSettings, Int32)
+}
+
+///|
 const CloudPreferencesStorageKey : String = "openseek.cloud_model_preferences"
 
 ///|
@@ -14,15 +21,30 @@ fn Model::cloud_settings(
   guard owner is Cloud(account~, session~) else {
     return @cloud.CommandSettings::default()
   }
-  for
-    key in [
-      cloud_preference_key(account, Some(session)),
-      cloud_preference_key(account, None),
-    ] {
-    if self.cloud_preferences.iter().find_first(entry => entry.0 == key)
-      is Some((_, settings)) {
-      return settings
-    }
+  let key = cloud_preference_key(account, Some(session))
+  let history = if self.cloud.user_id == Some(account) {
+    self.cloud.conversations.get(session)
+  } else {
+    None
+  }
+  match self.cloud_settings_edits.get(key) {
+    Some(Editing(settings)) => return settings
+    Some(Submitted(settings, request)) if history.map_or(true, conversation => {
+        conversation.settings_request <= request
+      }) => return settings
+    _ => ()
+  }
+  if history is Some({ settings: Some(settings), .. }) {
+    return settings
+  }
+  if self.cloud_preferences.iter().find_first(entry => entry.0 == key)
+    is Some((_, settings)) {
+    return settings
+  }
+  let key = cloud_preference_key(account, None)
+  if self.cloud_preferences.iter().find_first(entry => entry.0 == key)
+    is Some((_, settings)) {
+    return settings
   }
   @cloud.CommandSettings::default()
 }
@@ -134,5 +156,37 @@ fn Model::choose_cloud_settings(
     settings,
     default=true,
   )
-  (command, { ..model, select_menu: None, })
+  (
+    command,
+    { ..model.with_cloud_choice(owner, Editing(settings)), select_menu: None, },
+  )
+}
+
+///|
+fn Model::with_cloud_choice(
+  self : Model,
+  owner : @interop.ConversationIdentity,
+  choice : CloudSettingsChoice,
+) -> Model {
+  guard owner is Cloud(account~, session~) else { return self }
+  let edits = self.cloud_settings_edits.copy()
+  edits[cloud_preference_key(account, Some(session))] = choice
+  { ..self, cloud_settings_edits: edits, }
+}
+
+///|
+fn Model::retry_cloud_settings(
+  self : Model,
+  account : String,
+  session : String,
+  request : Int32,
+) -> Model {
+  let owner : @interop.ConversationIdentity = Cloud(account~, session~)
+  if self.cloud_settings_edits.get(cloud_preference_key(account, Some(session)))
+    is Some(Submitted(settings, submitted)) &&
+    submitted == request {
+    self.with_cloud_choice(owner, Editing(settings))
+  } else {
+    self
+  }
 }
