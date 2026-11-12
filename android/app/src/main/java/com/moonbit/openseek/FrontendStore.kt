@@ -56,6 +56,7 @@ internal class FrontendStore(private val parent: File, val shell: String) {
     fun prune() = synchronized(lock) {
         parent.listFiles()?.forEach { if (it.name != shell) it.deleteRecursively() }
         File(root, PARTIAL).deleteRecursively()
+        File(root, ARCHIVE).delete()
         val kept = served + setOfNotNull(read(NEXT))
         releases.listFiles()?.forEach { if (it.name !in kept) it.deleteRecursively() }
     }
@@ -77,21 +78,28 @@ internal class FrontendStore(private val parent: File, val shell: String) {
     }
 
     /**
-     * Extracts [archive] as [release] and makes it `next`, unless the bundle
-     * declares that it needs a newer APK; that release is then remembered as
-     * refused and never downloaded again. Returns whether it was adopted.
-     * One call at a time.
+     * Extracts [archive] as [release] and makes it `next`, unless its bytes
+     * are not those of [sha256] or the bundle declares that it needs a newer
+     * APK; that release is then remembered as refused and never downloaded
+     * again. Returns whether it was adopted. The archive is copied into
+     * private storage before it is verified, so nothing can change it between
+     * the check and the extraction. One call at a time.
      */
-    fun install(release: String, archive: InputStream): Boolean {
+    fun install(release: String, sha256: String, archive: InputStream): Boolean {
         val partial = File(root, PARTIAL)
+        val copy = File(root, ARCHIVE)
         partial.deleteRecursively()
         partial.mkdirs()
         try {
-            BundleArchive.extract(archive, partial)
+            val digest = copy.outputStream().use { AppUpdate.copyWithSha256(archive, it) }
+            if (digest != sha256) throw BundleArchive.Malformed("the archive does not match its sha256")
+            copy.inputStream().use { BundleArchive.extract(it, partial) }
             if (!complete(partial)) throw BundleArchive.Malformed("the archive has no index.html and frontend.js")
         } catch (e: Exception) {
             partial.deleteRecursively()
             throw e
+        } finally {
+            copy.delete()
         }
         val requirement = File(partial, FrontendUpdate.REQUIREMENT).takeIf { it.isFile }?.readText()
         if (!FrontendUpdate.admits(requirement, shell)) {
@@ -130,5 +138,6 @@ internal class FrontendStore(private val parent: File, val shell: String) {
         private const val NEXT = "next"
         private const val REFUSED = "refused"
         private const val PARTIAL = "partial"
+        private const val ARCHIVE = "archive.tar.gz"
     }
 }

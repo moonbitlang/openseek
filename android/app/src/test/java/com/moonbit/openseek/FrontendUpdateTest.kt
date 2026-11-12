@@ -31,10 +31,26 @@ class FrontendUpdateTest {
         )
     )
 
-    @Test fun currentReleaseNamesOnePathSegment() {
-        assertEquals("browser-3.1", FrontendUpdate.currentRelease("""{"version":"browser-3.1"}"""))
-        assertEquals("0.2.52", FrontendUpdate.currentRelease("""{"version":"0.2.52"}"""))
-        for (bad in listOf("""{"version":"../x"}""", """{"version":""}""", "{}", "nope")) {
+    private fun sha256(bytes: ByteArray) = AppUpdate.copyWithSha256(ByteArrayInputStream(bytes), null)
+
+    private fun FrontendStore.install(release: String, bytes: ByteArray) =
+        install(release, sha256(bytes), ByteArrayInputStream(bytes))
+
+    @Test fun currentReleaseNamesOnePathSegmentAndItsDigest() {
+        val digest = "a".repeat(64)
+        assertEquals(
+            FrontendUpdate.Current("browser-3.1", digest),
+            FrontendUpdate.currentRelease("""{"version":"browser-3.1","sha256":"$digest"}"""),
+        )
+        assertEquals(FrontendUpdate.Current("0.2.52", null), FrontendUpdate.currentRelease("""{"version":"0.2.52"}"""))
+        assertEquals(
+            FrontendUpdate.Current("0.2.52", null),
+            FrontendUpdate.currentRelease("""{"version":"0.2.52","sha256":null}"""),
+        )
+        for (bad in listOf(
+            """{"version":"../x"}""", """{"version":""}""", "{}", "nope",
+            """{"version":"0.2.52","sha256":"abc"}""", """{"version":"0.2.52","sha256":1}""",
+        )) {
             assertThrows(FrontendUpdate.MalformedRelease::class.java) { FrontendUpdate.currentRelease(bad) }
         }
         assertEquals(
@@ -77,16 +93,22 @@ class FrontendUpdateTest {
         }
     }
 
-    @Test fun aTruncatedDownloadIsNotAdopted() {
+    @Test fun aTruncatedOrUnverifiedDownloadIsNotAdopted() {
         val bytes = release()
         val parent = temp.newFolder()
         val store = FrontendStore(parent, "0.2.52")
         store.activate()
         assertThrows(Exception::class.java) {
-            store.install("browser-3.1", ByteArrayInputStream(bytes.copyOf(bytes.size - 16)))
+            store.install("browser-3.1", bytes.copyOf(bytes.size - 16))
+        }
+        // Bytes other than the selection's digest, though a valid archive.
+        assertThrows(BundleArchive.Malformed::class.java) {
+            store.install("browser-3.1", sha256(release(script = "other")), ByteArrayInputStream(bytes))
         }
         assertNull(store.activate())
+        assertTrue(store.wants("browser-3.1"))
         assertFalse(File(parent, "0.2.52/partial").exists())
+        assertFalse(File(parent, "0.2.52/archive.tar.gz").exists())
     }
 
     @Test fun aReleaseRunsFromTheNextWebViewAndTheServerCanReturnToTheBundle() {
@@ -99,7 +121,7 @@ class FrontendUpdateTest {
 
         assertFalse(store.wants("0.2.52"))
         assertTrue(store.wants("browser-3.1"))
-        assertTrue(store.install("browser-3.1", ByteArrayInputStream(release(script = "hot"))))
+        assertTrue(store.install("browser-3.1", release(script = "hot")))
         assertFalse(store.wants("browser-3.1"))
 
         val directory = store.activate()!!
@@ -124,7 +146,7 @@ class FrontendUpdateTest {
     @Test fun aReleaseNeedingANewerAppIsRefusedOnce() {
         val store = FrontendStore(temp.newFolder(), "0.2.52")
         store.activate()
-        assertFalse(store.install("0.2.60", ByteArrayInputStream(release(minimum = "0.2.60"))))
+        assertFalse(store.install("0.2.60", release(minimum = "0.2.60")))
         assertFalse(store.wants("0.2.60"))
         assertNull(store.activate())
     }

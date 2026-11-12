@@ -19,17 +19,33 @@ internal object FrontendUpdate {
     /** One path segment, as openseek-api names release directories. */
     private val releasePattern = Regex("[A-Za-z0-9][A-Za-z0-9._-]*")
 
+    private val sha256Pattern = Regex("[0-9a-f]{64}")
+
     /** The server answered with a release pointer that cannot be used. */
     class MalformedRelease(message: String) : Exception(message)
 
-    fun currentRelease(json: String): String {
-        val release = try {
-            JSONObject(json).optString("version")
+    /**
+     * The selected release and its archive's SHA-256. Pointers published
+     * before openseek-api recorded the digest have none, and their archives
+     * are never downloaded: nothing else authenticates them.
+     */
+    data class Current(val release: String, val sha256: String?)
+
+    fun currentRelease(json: String): Current {
+        val root = try {
+            JSONObject(json)
         } catch (e: JSONException) {
             throw MalformedRelease("the current release is not valid JSON")
         }
+        val release = root.optString("version")
         if (!releasePattern.matches(release)) throw MalformedRelease("the current release has no valid version")
-        return release
+        val sha256 = when (val digest = root.opt("sha256")) {
+            null, JSONObject.NULL -> null
+            is String -> digest.takeIf { sha256Pattern.matches(it) }
+                ?: throw MalformedRelease("the current release has no valid sha256")
+            else -> throw MalformedRelease("the current release has no valid sha256")
+        }
+        return Current(release, sha256)
     }
 
     /** Where openseek-api keeps each Browser release's uploaded archive. */

@@ -20,13 +20,19 @@ import kotlin.concurrent.thread
 
 /**
  * Keeps the app on the frontend that browsers get. Whenever the app comes to
- * the foreground, at most once per [CHECK_INTERVAL_MS], it reads which Browser
- * release openseek-api selects. A different one is fetched by the system
- * download manager, silently and only on an unmetered network; it resumes
- * across network loss and process death. Once the download is complete and
- * the app is in the foreground, a background thread extracts it, and the app
- * runs it from the next time it creates its WebView. Failures stay in the
- * log: the app keeps the frontend it has.
+ * the foreground, at most once per [CHECK_INTERVAL_MS], and whenever a
+ * download completes, one background job reads which Browser release
+ * openseek-api selects and acts on it:
+ *
+ * - A completed download of that release is verified against the selection's
+ *   SHA-256 and extracted; the app runs it from the next time it creates its
+ *   WebView. A download of any other release is discarded.
+ * - A different release is fetched by the system download manager, silently
+ *   and only on an unmetered network; it resumes across network loss and
+ *   process death. A selection without a digest is never downloaded.
+ *
+ * Jobs never overlap, so a download is always judged against a fresh
+ * selection. Failures stay in the log: the app keeps the frontend it has.
  */
 internal class FrontendUpdater(private val activity: Activity) {
     /** A download this app enqueued and has not yet extracted. */
@@ -36,8 +42,10 @@ internal class FrontendUpdater(private val activity: Activity) {
     private val downloads by lazy { activity.getSystemService(DownloadManager::class.java) }
     private val prefs by lazy { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
     private val downloadComplete = object : BroadcastReceiver() {
-        // Anyone can send this action; the download manager's own record decides.
-        override fun onReceive(context: Context, intent: Intent) = finishDownload()
+        // Anyone can send this action; the job asks the download manager itself.
+        override fun onReceive(context: Context, intent: Intent) {
+            if (pending() != null) run()
+        }
     }
 
     fun onStart() {
@@ -47,40 +55,71 @@ internal class FrontendUpdater(private val activity: Activity) {
             activity, downloadComplete,
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED
         )
-        finishDownload()
-        checkIfDue()
+        val due = lastCheck?.let { SystemClock.elapsedRealtime() - it >= CHECK_INTERVAL_MS } ?: true
+        if (due || pending()?.let { status(it)?.first == DownloadManager.STATUS_SUCCESSFUL } == true) run()
     }
 
     fun onStop() {
         if (BuildConfig.FRONTEND_UPDATES) activity.unregisterReceiver(downloadComplete)
     }
 
-    private fun checkIfDue() {
-        val now = SystemClock.elapsedRealtime()
-        lastCheck?.let { if (now - it < CHECK_INTERVAL_MS) return }
+    /** Starts the job unless one is running. Main thread only. */
+    private fun run() {
         val archives = archivesDir() ?: return
         if (!busy.compareAndSet(false, true)) return
-        lastCheck = now
+        lastCheck = SystemClock.elapsedRealtime()
         val store = store(activity)
         thread(name = "frontend-update", isDaemon = true) {
             try {
                 store.prune()
-                val release = currentRelease()
-                val pending = pending()
-                if (pending?.release == release) return@thread
-                pending?.let(::discard)
-                // A refused or abandoned archive is never read again.
-                archives.listFiles()?.forEach { it.delete() }
-                if (store.wants(release) && !store.select(release)) enqueue(release)
+                update(store, currentRelease(), archives)
             } catch (e: Exception) {
-                Log.w(TAG, "frontend update check failed", e)
+                Log.w(TAG, "frontend update failed", e)
             } finally {
                 busy.set(false)
             }
         }
     }
 
-    private fun currentRelease(): String {
+    private fun update(store: FrontendStore, current: FrontendUpdate.Current, archives: File) {
+        pending()?.let { pending ->
+            val row = status(pending)
+            when {
+                row == null || row.first == DownloadManager.STATUS_FAILED || pending.release != current.release ->
+                    discard(pending)
+                row.first == DownloadManager.STATUS_SUCCESSFUL -> {
+                    clearPending()
+                    val archive = row.second?.toUri()?.path?.let(::File)
+                    try {
+                        if (archive != null && current.sha256 != null && store.wants(current.release)) {
+                            val adopted = archive.inputStream().use { store.install(current.release, current.sha256, it) }
+                            Log.i(TAG, if (adopted) "frontend ${current.release} is ready" else "frontend ${current.release} needs a newer app")
+                        }
+                    } finally {
+                        archive?.delete()
+                    }
+                    return
+                }
+                // Still downloading the selected release.
+                else -> return
+            }
+        }
+        // A refused, abandoned or discarded archive is never read again.
+        archives.listFiles()?.forEach { it.delete() }
+        if (store.wants(current.release) && !store.select(current.release) && current.sha256 != null) {
+            enqueue(current.release)
+        }
+    }
+
+    /** The download's status and local URI, or null once the user removed it. */
+    private fun status(pending: Pending): Pair<Int, String?>? =
+        downloads.query(DownloadManager.Query().setFilterById(pending.id)).use { cursor ->
+            if (!cursor.moveToFirst()) null
+            else cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) to
+                cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+        }
+
+    private fun currentRelease(): FrontendUpdate.Current {
         val connection = URL(FrontendUpdate.CURRENT_URL).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 15_000
@@ -105,56 +144,6 @@ internal class FrontendUpdater(private val activity: Activity) {
             putLong(KEY_ID, id)
             putString(KEY_RELEASE, release)
         }
-    }
-
-    /**
-     * Extracts a completed download in the background, or drops a failed one.
-     * While a check or an earlier extraction holds [busy], the next start retries.
-     */
-    private fun finishDownload() {
-        if (!busy.compareAndSet(false, true)) return
-        var extracting = false
-        try {
-            extracting = finish()
-        } finally {
-            if (!extracting) busy.set(false)
-        }
-    }
-
-    /** Returns whether an extraction thread took over [busy]. */
-    private fun finish(): Boolean {
-        val pending = pending() ?: return false
-        val row = downloads.query(DownloadManager.Query().setFilterById(pending.id)).use { cursor ->
-            if (!cursor.moveToFirst()) null
-            else cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) to
-                cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-        }
-        when (row?.first) {
-            // The user removed the download from the download manager.
-            null -> clearPending()
-            DownloadManager.STATUS_SUCCESSFUL -> {
-                clearPending()
-                val archive = row.second?.toUri()?.path?.let(::File)
-                val store = store(activity)
-                thread(name = "frontend-extract", isDaemon = true) {
-                    try {
-                        if (archive != null && store.wants(pending.release)) {
-                            val adopted = archive.inputStream().use { store.install(pending.release, it) }
-                            Log.i(TAG, if (adopted) "frontend ${pending.release} is ready" else "frontend ${pending.release} needs a newer app")
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "extracting frontend ${pending.release} failed", e)
-                    } finally {
-                        archive?.delete()
-                        busy.set(false)
-                    }
-                }
-                return true
-            }
-            DownloadManager.STATUS_FAILED -> discard(pending)
-            else -> Unit
-        }
-        return false
     }
 
     private fun pending(): Pending? {
