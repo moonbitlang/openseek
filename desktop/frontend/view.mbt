@@ -592,16 +592,32 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   if self.focused_device() is Some({ chat_root: Some(Err(message)), .. }) {
     notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))
   }
-  let work_sections = if self.is_desktop && !self.devices.is_empty() {
+  // Every held device's projects share the Work list; each row names its
+  // device. A merged section's own actions (adding or importing a project)
+  // name one device: on a relay page, whose project picker cannot change
+  // device, that is the device the page works on, and with none there is
+  // no such action.
+  let work_sections = if !self.devices.is_empty() {
     let combined : Array[@section.Input] = []
     for dev in self.devices {
+      let owns_actions = !self.is_relay_console() || dev.channel == self.focused
       for section in self.work_sidebar_sections(dev) {
+        let section = if owns_actions {
+          section
+        } else {
+          { ..section, action: None, secondary_actions: [], }
+        }
         match
           combined.search_by(item => item.id.source() == section.id.source()) {
           Some(index) => {
             let previous = combined[index]
+            let owner = if self.is_relay_console() && owns_actions {
+              section
+            } else {
+              previous
+            }
             combined[index] = {
-              ..previous,
+              ..owner,
               entries: previous.entries + section.entries,
               activation: match section.activation {
                 Some(_) => section.activation
@@ -615,25 +631,19 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     }
     combined
   } else {
-    match self.focused_device() {
-      Some(dev) => self.work_sidebar_sections(dev)
-      None => {
-        if self.console.page_device is Some(_) {
-          match self.console.roster_sync {
-            RosterLoading =>
-              notices.push(shell_text(self.locale, LoadingDevice))
-            RosterFailed(message) => notices.push(message.text(self.locale))
-            RosterReady =>
-              if self.console.roster.is_empty() {
-                notices.push(shell_text(self.locale, NoDevices))
-              } else {
-                notices.push(shell_text(self.locale, NoOnlineDevice))
-              }
+    if self.console.page_device is Some(_) {
+      match self.console.roster_sync {
+        RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
+        RosterFailed(message) => notices.push(message.text(self.locale))
+        RosterReady =>
+          if self.console.roster.is_empty() {
+            notices.push(shell_text(self.locale, NoDevices))
+          } else {
+            notices.push(shell_text(self.locale, NoOnlineDevice))
           }
-        }
-        []
       }
     }
+    []
   }
   // The footer's update button tracks the automatic download so its progress
   // stays visible from any screen, and asks for the restart once the release
@@ -684,6 +694,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     locale: self.locale,
     mode: self.sidebar_mode,
     has_host: self.has_host(),
+    work_available: self.work_available(),
     skills_available: self.has_host() || self.account is Some(_),
     chat_sections: self.chat_sidebar_sections(self.focused.uri_authority()),
     work_sections,
@@ -2004,7 +2015,7 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 ///|
 /// The console's full-screen gate. A missing `?device=` stops before sign-in;
 /// authentication gets its own progress/retry states, and a signed-in page
-/// stays here until its one query-selected device is available. A host built
+/// stays here until the device it works on is available. A host built
 /// for another protocol revision stays here until the page is reloaded.
 /// `account_error` is the Cloud account's failure: on the relay that account
 /// is the page's sign-in, so the gate shows it where a page-access failure

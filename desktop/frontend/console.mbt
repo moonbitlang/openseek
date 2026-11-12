@@ -1,10 +1,11 @@
 // The page's account layer: the relay session and the device roster. A
 // browser console signs in against the relay, fetches the devices the
-// account owns. A `/device/<id>/` page holds only that device's channel;
-// without one, the page serves Cloud Chat, and the sidebar's device
-// selector loads a device's own page. The roster verifies the page's device
-// and reports its availability; it never makes the page fall through to
-// another device. The desktop window owns its host outright, so it carries the same state already settled: it
+// account owns, and holds a channel to every online one, so the Work list
+// shows all of them. The page works on the device its `/device/<id>/` route
+// names; without one, it serves Cloud Chat until the user opens a device's
+// project or conversation, which moves the page there in place. The roster
+// verifies the page's device and reports its availability; it never makes
+// the page fall through to another device. The desktop window owns its host outright, so it carries the same state already settled: it
 // is signed in to its one device `local` from the first render
 // (`local_console_state`) and never asks the relay anything.
 
@@ -53,17 +54,17 @@ fn DeviceMeta::device_choice(self : DeviceMeta) -> @sidebar.DeviceChoice {
 #derive(Eq)
 priv struct ConsoleState {
   auth : ConsoleAuth
-  // The account's devices in the relay's order. The page uses this metadata
-  // only to verify and describe its one query-selected device.
+  // The account's devices in the relay's order: the page connects the
+  // online ones and names each in the Work list.
   roster : Array[DeviceMeta]
   roster_sync : RosterSync
   // The newest device-roster request. Replies carry this generation so a
   // slower pre-mutation snapshot cannot overwrite a newer roster.
   roster_request_generation : Int32
-  // The `/device/<id>/` path (or a legacy `?device=`) names this page's
-  // Connect host for its entire lifetime. Cloud Chat needs no host; a page
-  // never falls through to another roster entry, and choosing another
-  // device loads that device's own page.
+  // The device the page works on: first the `/device/<id>/` path (or a
+  // legacy `?device=`), then whichever device the user moves to in place.
+  // Cloud Chat needs no host; a page never falls through to another roster
+  // entry on its own.
   page_device : String?
   // The exact page-local pathname and query to restore after OAuth. Packaged
   // releases retain their versioned frontend instead of falling through to
@@ -336,11 +337,14 @@ fn update_console_msg(
 }
 
 ///|
-/// Fold one device-roster reply into the model. Only `page_device` may own a
-/// channel: every other roster entry stays metadata, and a missing, revoked,
-/// or offline target never falls through to another device. A retired target
-/// loses its state here; if the same relay id is later re-added, its fresh
-/// WebSocket epoch also rejects delayed callbacks from the retired connection.
+/// Fold one device-roster reply into the model. Every device the roster
+/// grants keeps or gains a channel, so the Work list shows all of them; the
+/// page works on `page_device`, and a missing, revoked, or offline target
+/// never falls through to another device. A page opened without one (Cloud)
+/// works on no device until the user opens one. A retired device loses its
+/// state here;
+/// if the same relay id is later re-added, its fresh WebSocket epoch also
+/// rejects delayed callbacks from the retired connection.
 fn apply_roster(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -351,24 +355,22 @@ fn apply_roster(
   let page_channel : @interop.ChannelId? = model.console.page_device.map(id => {
     @interop.ChannelId::of_device(id)
   })
-  // Retire first: anything other than this page's target, or a target the
-  // roster no longer grants, drops its state and conversations and disposes
-  // its PTYs. Removing the device also removes its root subscription, whose
-  // unload closes the socket before update's commands run.
+  // Retire first: a device the roster no longer grants drops its state and
+  // conversations and disposes its PTYs. Removing the device also removes
+  // its root subscription, whose unload closes the socket before update's
+  // commands run.
   let devices = model.devices.filter(dev => {
-    Some(dev.channel) == page_channel &&
     metas.any(meta => meta.id == dev.channel.device_id())
   })
   let conversations = model.conversations.filter(conv => {
     devices.any(dev => dev.channel == conv.device)
   })
-  // Connect only the query-selected target when the roster reports it online.
-  // A held target keeps its reconnect loop when the advisory `online` flag
-  // drops; a page first opened while it is offline waits for a later refresh.
-  if model.console.page_device is Some(id) &&
-    metas.any(meta => meta.id == id && meta.online) {
-    let channel = @interop.ChannelId::of_device(id)
-    if !devices.any(dev => dev.channel == channel) {
+  // Connect every device the roster reports online. A held device keeps its
+  // reconnect loop when the advisory `online` flag drops; one first listed
+  // while offline waits for a later refresh.
+  for meta in metas {
+    let channel = @interop.ChannelId::of_device(meta.id)
+    if meta.online && !devices.any(dev => dev.channel == channel) {
       websocket_epoch += 1
       devices.push({ ..empty_device_state(channel), websocket_epoch, })
     }
@@ -497,61 +499,62 @@ test "the sidebar's device selector names the page device and lists only online 
 }
 
 ///|
-test "sign-in loads the roster and connects only the page device" {
-  let dispatch = test_dispatch()
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="octocat", avatar="a.png")),
-    console_test_model(),
-  )
-  assert_true(
-    signed.console.auth is AuthSignedIn(login="octocat", avatar="a.png"),
-  )
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
-    signed,
-  )
-  // The query-selected online device gets the page's only channel. Other
-  // roster entries remain metadata whether they are online or offline.
-  inspect(listed.devices.length(), content="1")
-  assert_true(listed.device_state(Remote("d_on")) is Some(_))
-  assert_true(listed.device_state(Remote("d_off")) is None)
-  assert_true(listed.focused == Remote("d_on"))
-  assert_true(listed.console.roster_sync is RosterReady)
-  inspect(listed.console.roster.length(), content="2")
-  inspect(listed.console.roster[0].name, content="Mac")
-  assert_true(listed.console.roster[1].hostname is None)
-  assert_true(listed.console.booted)
-}
-
-///|
-test "a browser page without device never selects the first online roster entry" {
+/// A browser page signed in and given `metas` as its first roster.
+fn roster_test_model(
+  page_device : String?,
+  metas : Array[DeviceMeta],
+  preselect_project? : @common.Uri,
+) -> Model {
   let dispatch = test_dispatch()
   let model = {
     ..console_test_model(),
-    console: empty_console_state(None, None),
+    console: empty_console_state(page_device, preselect_project),
   }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
     model,
   )
-  let (_, listed_once) = update(
+  let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(RosterLoaded(metas, generation=1)),
     signed,
   )
-  let (_, listed_twice) = update(
-    dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
-    signed,
+  listed
+}
+
+///|
+test "the roster connects every online device and the page works only on its own" {
+  let metas : Array[DeviceMeta] = [
+    { id: "d_one", name: "One", hostname: None, online: true, },
+    { id: "d_two", name: "Two", hostname: None, online: true, },
+    { id: "d_off", name: "Off", hostname: None, online: false, },
+  ]
+  let workspace = @interop.ChannelId::Remote("d_two").test_resource(
+    "/home/u/proj",
   )
-  inspect(listed_once.devices.length(), content="0")
-  assert_true(listed_once.focused == @interop.ChannelId::Local)
-  assert_true(listed_once.console.page_device is None)
-  assert_false(listed_once.console.booted)
-  assert_true(listed_once.console == listed_twice.console)
+  // The Work list holds every online device; the deep link's workspace
+  // lands on the page's own.
+  let page = roster_test_model(
+    Some("d_two"),
+    metas,
+    preselect_project=workspace,
+  )
+  assert_true(page.focused == Remote("d_two"))
+  assert_true(page.device_state(Remote("d_one")) is Some(_))
+  assert_true(page.device_state(Remote("d_off")) is None)
+  assert_true(
+    page.device_state(Remote("d_two")) is Some({ active_project: Some(p), .. }) &&
+    p == workspace,
+  )
+  // A Cloud page lists them too but works on none until the user opens one.
+  let cloud = roster_test_model(None, metas)
+  assert_true(cloud.focused == @interop.ChannelId::Local)
+  assert_true(cloud.work_available() && !cloud.has_host())
+  // An offline page device never falls through to an online one.
+  let offline = roster_test_model(Some("d_off"), metas)
+  assert_true(offline.focused == @interop.ChannelId::Local)
+  assert_true(offline.is_console_gated())
 }
 
 ///|
@@ -582,73 +585,7 @@ test "a 401 anywhere signs the console out and drops every channel" {
 }
 
 ///|
-test "the page device is the only connection and receives the initial workspace" {
-  let dispatch = test_dispatch()
-  let workspace = @interop.ChannelId::Remote("d_two").test_resource(
-    "/home/u/proj",
-  )
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("d_two"), Some(workspace)),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
-  let metas : Array[DeviceMeta] = [
-    { id: "d_one", name: "One", hostname: None, online: true, },
-    { id: "d_two", name: "Two", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  assert_true(listed.focused == Remote("d_two"))
-  inspect(listed.devices.length(), content="1")
-  assert_true(listed.device_state(Remote("d_one")) is None)
-  guard listed.device_state(Remote("d_two")) is Some(dev) else {
-    fail("page device not held")
-  }
-  assert_eq(dev.active_project, Some(workspace))
-  assert_true(listed.console.page_device == Some("d_two"))
-  assert_true(listed.console.preselect_project is None)
-}
-
-///|
-test "an unavailable page device never falls through to an online device" {
-  let dispatch = test_dispatch()
-  let workspace = @interop.ChannelId::Remote("offline").test_resource(
-    "/home/u/proj",
-  )
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("offline"), Some(workspace)),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
-  let metas : Array[DeviceMeta] = [
-    { id: "online", name: "Online", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  assert_true(listed.focused == @interop.ChannelId::Local)
-  inspect(listed.devices.length(), content="0")
-  assert_true(listed.device_state(Remote("online")) is None)
-  assert_true(listed.console.page_device == Some("offline"))
-  assert_eq(listed.console.preselect_project, Some(workspace))
-  assert_false(listed.console.booted)
-}
-
-///|
-test "a revoked page device is retired without connecting a survivor" {
+test "a revoked page device takes its settings and conversations with it" {
   let dispatch = test_dispatch()
   let model = {
     ..console_test_model(),
@@ -717,7 +654,6 @@ test "a revoked page device is retired without connecting a survivor" {
   )
   assert_true(refreshed.focused == @interop.ChannelId::Local)
   assert_true(refreshed.device_state(Remote("d_a")) is None)
-  assert_true(refreshed.device_state(Remote("d_b")) is None)
   assert_eq(refreshed.installed_skills.length(), 0)
   // The retired device's settings left with its device state.
   assert_false(refreshed.host_settings_loaded())
@@ -776,87 +712,56 @@ test "an older roster reply cannot restore a device removed by a newer one" {
   inspect(stale.console.roster.length(), content="1")
   inspect(stale.console.roster[0].id, content="d_b")
   assert_true(stale.device_state(Remote("d_a")) is None)
-  assert_true(stale.device_state(Remote("d_b")) is None)
   assert_true(stale.focused == @interop.ChannelId::Local)
 }
 
 ///|
-test "an action for another roster device cannot move page focus" {
+test "opening another device's work moves the page onto that device" {
   let dispatch = test_dispatch()
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("d_a"), None),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
   let metas : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true, },
     { id: "d_b", name: "B", hostname: None, online: true, },
   ]
-  let (_, listed) = update(
+  // A sidebar row on another device.
+  let page = roster_test_model(Some("d_a"), metas)
+  let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), page)
+  assert_true(opened.focused == Remote("d_b"))
+  assert_true(opened.navigation_location() is Some({ device: Some("d_b"), .. }))
+  // Another device's route, as Back or a link reaches it, stays in the page;
+  // one the account does not hold shows the device gate.
+  let (_, routed) = apply_browser_navigation(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
+    { path: @routes.device_entry_path("d_b"), },
+    page,
   )
-  assert_true(listed.focused == Remote("d_a"))
-  assert_true(listed.device_state(Remote("d_b")) is None)
-  let seeded = listed.with_host_settings(mirror => {
-    ..mirror,
-    current: Some(
-      host_settings(
-        provider="custom",
-        revision=7,
-        custom_api_url="https://old.example/chat",
-      ),
-    ),
-  })
-  let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), seeded)
-  assert_true(opened.focused == Remote("d_a"))
-  assert_true(opened.active_session != "s-b")
-  assert_true(opened.api_provider() is Custom)
-  inspect(
-    opened.test_endpoint().custom_api_url,
-    content="https://old.example/chat",
+  assert_true(routed.focused == Remote("d_b"))
+  let (_, missing) = apply_browser_navigation(
+    dispatch,
+    { path: @routes.device_entry_path("d_gone"), },
+    routed,
   )
-  assert_true(opened.host_settings() is Some({ revision: 7, .. }))
-}
-
-///|
-test "new chat and workspace picker reject another roster device" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("d_a"), None),
+  assert_true(missing.is_console_gated())
+  // An import from a Cloud page opens on the device it imported into.
+  let cloud = roster_test_model(None, metas)
+  guard cloud.device_state(Remote("d_b")) is Some(dev) else {
+    fail("device B not held")
   }
-  let (_, signed) = update(
+  let (_, imported) = open_host_import(
     dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
+    @cmd.none,
+    cloud,
+    {
+      channel: Remote("d_b"),
+      connection_generation: dev.connection_generation,
+      workspace: "/home/u/proj",
+      worktree_of: None,
+    },
+    "imported",
   )
-  let metas : Array[DeviceMeta] = [
-    { id: "d_a", name: "A", hostname: None, online: true, },
-    { id: "d_b", name: "B", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
+  assert_true(
+    imported.navigation.location
+    is Some({ device: Some("d_b"), target: Session("imported"), }),
   )
-  let (_, chat_once) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
-  let (_, chat_twice) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
-  let (_, picker_once) = update(dispatch, PickProject(Remote("d_b")), listed)
-  let (_, picker_twice) = update(dispatch, PickProject(Remote("d_b")), listed)
-  assert_true(chat_once.focused == Remote("d_a"))
-  assert_true(chat_twice.focused == Remote("d_a"))
-  assert_true(chat_once.active_session == listed.active_session)
-  assert_true(chat_twice.active_session == listed.active_session)
-  assert_true(picker_once.focused == Remote("d_a"))
-  assert_true(picker_twice.focused == Remote("d_a"))
-  assert_true(picker_once.project_picker is None)
-  assert_true(picker_twice.project_picker is None)
 }
 
 ///|

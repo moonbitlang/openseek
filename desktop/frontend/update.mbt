@@ -147,8 +147,38 @@ fn focus_channel(
     dispatch.map(msg => FileEditor(msg)),
     file_ctx(model),
   )
+  // A browser page works on the device it focuses: its next host route
+  // names that device, and the caller places the conversation, which
+  // completes the console's deferred boot. Route activation reads the
+  // focused device's catalogs, so the previous device's readiness is
+  // cleared and a connected device's lists are requested again; a device
+  // still connecting clears and fetches them when its bridge comes up. The
+  // desktop window's page device is its own host.
+  let entered = !model.is_desktop && model.device_state(channel) is Some(_)
+  let (console, navigation) = if entered {
+    (
+      { ..model.console, page_device: Some(channel.device_id()), booted: true, },
+      { ..model.navigation, sessions: None, archived: None, },
+    )
+  } else {
+    (model.console, model.navigation)
+  }
+  let (catalogs_cmd, model) = if entered &&
+    model.device_state(channel) is Some({ bridge: Connected, .. }) {
+    let (sessions_cmd, model) = request_sessions_refresh(
+      dispatch, channel, model,
+    )
+    let (archived_cmd, model) = request_archived_refresh(
+      dispatch, channel, model,
+    )
+    (@cmd.batch([sessions_cmd, archived_cmd]), model)
+  } else {
+    (@cmd.none, model)
+  }
   let next = {
     ..model.reset_api_setup(),
+    console,
+    navigation,
     focused: channel,
     active_session: "",
     selected_conversation: None,
@@ -169,7 +199,7 @@ fn focus_channel(
   // refetch reply arrives too late for a chat that was already sent. Its
   // committed prompt default refills the Settings editor the same way.
   (
-    @cmd.batch([focus_cmd, unwatch_cmd]),
+    @cmd.batch([focus_cmd, unwatch_cmd, catalogs_cmd]),
     next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }
@@ -4929,7 +4959,7 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          sidebar_mode: if model.has_host() {
+          sidebar_mode: if model.work_available() {
             sidebar_mode
           } else {
             ChatMode
@@ -4951,7 +4981,7 @@ fn update_msg(
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
     SidebarModeLoaded(sidebar_mode) =>
-      if !model.has_host() {
+      if !model.work_available() {
         (@cmd.none, { ..model, sidebar_mode: ChatMode, })
       } else if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
@@ -24853,7 +24883,7 @@ fn open_host_import(
 ) -> (@cmd.Cmd, Model) {
   guard model.device_state(target.channel) is Some(dev) &&
     dev.connection_generation == target.connection_generation &&
-    model.console.page_device is Some(device) else {
+    model.route_device(target.channel) is Some(device) else {
     return (cmd, model)
   }
   let (focus, model) = focus_channel(dispatch, model, target.channel)
