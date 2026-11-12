@@ -222,7 +222,7 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
         .title()
         .unwrap_or_else(() => session_title(listing.first_prompt())),
         "updated_at_ms": updated_at_ms,
-        "model_settings": match listing.model() {
+        "model_settings": match store.model(listing.id()) {
           Some(model) => ToJson::to_json(model)
           None => null
         },

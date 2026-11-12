@@ -275,7 +275,7 @@ async fn run_general(
       guard model.api_key(matches.values) is Some(api_key) else {
         fail("an API key is required for \{model}: pass --api-key")
       }
-      let record_model = @setup.session_model_recorder(
+      let writer = @setup.SessionWriter(
         store,
         id,
         { model, thinking, },
@@ -311,11 +311,7 @@ async fn run_general(
       run_task_turn(
         matches,
         session,
-        append_item=(session, item) => {
-          let next = store.append(session, item)
-          record_model()
-          turn.record(next)
-        },
+        append_item=(session, item) => turn.record(writer.append(session, item)),
         job_log_dir=store.job_logs_dir(id),
         session_scratch_dir=store.scratch_dir(id),
         api_key~,
@@ -382,6 +378,9 @@ async fn run_preset(
       // The inbox sits beside the transcript and is opened just BEFORE the
       // first record: a session with a transcript and no inbox is then one
       // that takes no instructions, never one that has not got to it yet.
+      // A preset's session is new, so it records the model it runs on with
+      // its first append; `echo` appends nothing and records nothing.
+      let writer = @setup.SessionWriter(store, id, { model, thinking, }, None)
       let inbox = if kind.takes_instructions() {
         Some(store.inbox_path(id))
       } else {
@@ -395,7 +394,7 @@ async fn run_preset(
           if turn.session is None && inbox is Some(path) {
             @inbox.open(path)
           }
-          let next = store.append(session, item)
+          let next = writer.append(session, item)
           if turn.session is None {
             // Recorded: a claimed session is an ordinary one from here on.
             if claim_token(matches) is Some(_) {

@@ -9,8 +9,6 @@ import {
 // Values
 pub fn agent_settings(@argparse.Matches) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
 
-pub fn configured(@argparse.Matches, String) -> Bool
-
 pub fn deepseek_api_key(@argparse.Matches) -> String?
 
 pub fn explicitly_provided(@argparse.Matches, String) -> Bool

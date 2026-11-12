@@ -6,13 +6,6 @@ pub fn explicitly_provided(matches : @argparse.Matches, name : String) -> Bool {
 }
 
 ///|
-/// Whether the user configured `name` — on the command line or through its
-/// environment variable — rather than the built-in default filling it in.
-pub fn configured(matches : @argparse.Matches, name : String) -> Bool {
-  matches.sources.get(name) is Some(Argv | Env)
-}
-
-///|
 /// Resolve the model, thinking mode, and optional endpoint from parsed arguments.
 pub fn agent_settings(
   matches : @argparse.Matches,

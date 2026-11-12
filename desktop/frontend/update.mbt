@@ -264,26 +264,22 @@ fn open_session_on(
     guard model.session_project(channel, session_id) is Some(project) else {
       return (@cmd.none, model)
     }
-    let recorded = model.recorded_model(
+    // Reopening a stored conversation recovers the model its session
+    // recorded, not whatever was picked last in some other chat.
+    let conversation = model.stored_conversation(
       channel,
       session_id,
       project,
       LiveRecord,
     )
-    let engine_model = recorded
-      .map(recorded => recorded.engine_model)
-      .unwrap_or(model.default_model)
-    let conversation = empty_conversation(
-      channel,
-      session_id,
-      project,
-      // Reopening a stored conversation recovers the model its session
-      // recorded, not whatever was picked last in some other chat.
-      model=engine_model,
-      reasoning?=recorded.map(recorded => recorded.reasoning),
+    let conversation = {
+      ..conversation,
       // A listed directory may still be an unsent draft with no transcript.
-      system_prompt?=model.draft_system_prompt(channel, engine_model),
-    )
+      system_prompt: model.draft_system_prompt(
+        channel,
+        conversation.engine_model,
+      ),
+    }
     let conversation = if model.device_state(channel) is Some(dev) {
       {
         ..conversation,
@@ -1370,12 +1366,10 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     active.owner.channel,
     active.owner.session,
   )
-  let engine_model = active_conversation
-    .map(conv => conv.engine_model)
-    .unwrap_or(model.default_model)
-  let reasoning = active_conversation
-    .map(conv => model.conversation_reasoning(conv))
-    .unwrap_or_else(() => model.reasoning_for(engine_model))
+  let (engine_model, reasoning) = match active_conversation {
+    Some(conv) => (conv.engine_model, model.conversation_reasoning(conv))
+    None => (model.default_model, model.reasoning_for(model.default_model))
+  }
   let file_body_visible = match model.dock_state().active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
@@ -16280,23 +16274,10 @@ fn with_listed_session(
   model : Model,
   session : String,
   model_settings : @protocol.SessionModelSettings?,
-) -> Model {
-  guard model.device_state(@interop.ChannelId::Local) is Some(dev) else {
-    return model
-  }
-  model.replace_device({
+) -> Model raise {
+  model.with_dev(dev => {
     ..dev,
-    sessions: [
-      ..dev.sessions,
-      {
-        id: session,
-        title: Some(session),
-        workspace: @interop.ChannelId::Local.test_project(),
-        workspace_name: "project",
-        updated_at_ms: Some(1.0),
-        model_settings,
-      },
-    ],
+    sessions: [..dev.sessions, { ..archived_item(session), model_settings, }],
   })
 }
 
@@ -16342,18 +16323,12 @@ test "a recorded model belongs to its own store's record" {
     "dup",
     Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
   )
-  guard model.device_state(@interop.ChannelId::Local) is Some(dev) else {
-    fail("no local device")
-  }
-  let model = model.replace_device({
+  let model = model.with_dev(dev => {
     ..dev,
     archived: [
       {
-        id: "dup",
-        title: Some("dup"),
+        ..archived_item("dup"),
         workspace: other,
-        workspace_name: "other",
-        updated_at_ms: Some(1.0),
         model_settings: Some({ model: "deepseek-flash", thinking: ThinkingOff, }),
       },
     ],

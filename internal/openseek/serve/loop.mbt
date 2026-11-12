@@ -61,31 +61,27 @@ async fn run_serve(
   }
   // A durable session resumes on the model it recorded unless this process
   // was configured with another one.
-  let durable = match session_id {
+  let (durable, recorded) = match session_id {
     Some(id) => {
       let store = @store.SessionStore(
         @setup.session_root(matches, workspace_root~),
       )
-      Some((store, id, store.model(id)))
+      (Some((store, id)), store.model(id))
     }
-    None => None
+    None => (None, None)
   }
-  let (model, thinking, api_url) = match durable {
-    Some((_, _, recorded)) => @setup.session_agent_settings(matches, recorded)
-    None => @options.agent_settings(matches)
-  }
+  let (model, thinking, api_url) = @setup.session_agent_settings(
+    matches, recorded,
+  )
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   let max_steps = @options.max_steps(matches)
   let review_deadline_ms = @options.review_deadline_ms(matches)
-  // Called after every durable append; records the model once.
-  let record_model = match durable {
-    Some((store, id, recorded)) =>
-      Some(
-        @setup.session_model_recorder(store, id, { model, thinking, }, recorded),
-      )
+  let writer = match durable {
+    Some((store, id)) =>
+      Some(@setup.SessionWriter(store, id, { model, thinking, }, recorded))
     None => None
   }
   let ephemeral_scratch = if session_id is None {
@@ -97,7 +93,7 @@ async fn run_serve(
     @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
   })
   let (store, initial_session) = match durable {
-    Some((store, id, _)) =>
+    Some((store, id)) =>
       (
         Some(store),
         @setup.load_or_new_session(store, id, matches, model, workspace_root~),
@@ -356,19 +352,17 @@ async fn run_serve(
       item : @agent_session.SessionItem,
       what : String,
     ) -> Bool {
-      session = if store is Some(store) {
-        let next = store.append(session, item) catch {
-          error => {
-            @emit.emit(SessionError(error="failed to append \{what}: \{error}"))
-            return false
+      session = match writer {
+        Some(writer) =>
+          writer.append(session, item) catch {
+            error => {
+              @emit.emit(
+                SessionError(error="failed to append \{what}: \{error}"),
+              )
+              return false
+            }
           }
-        }
-        if record_model is Some(record) {
-          record()
-        }
-        next
-      } else {
-        session.append(item)
+        None => session.append(item)
       }
       true
     }
@@ -503,12 +497,9 @@ async fn run_serve(
           submission_id?,
           on_goal_met?,
           append_item=(current, item) => {
-            let next = match store {
-              Some(store) => store.append(current, item)
+            let next = match writer {
+              Some(writer) => writer.append(current, item)
               None => current.append(item)
-            }
-            if record_model is Some(record) {
-              record()
             }
             session = next
             next

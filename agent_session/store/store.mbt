@@ -591,11 +591,7 @@ pub async fn SessionStore::fork(
       write_text_atomic(self.title_path(fork), title, dirs~)
     }
     if model is Some(model) {
-      write_text_atomic(
-        self.model_path(fork),
-        ToJson::to_json(model).stringify(),
-        dirs~,
-      )
+      write_text_atomic(self.model_path(fork), session_model_text(model), dirs~)
     }
     write_text_atomic(path, session_file_text(copy), dirs~)
     record_mark(self, copy)
@@ -616,7 +612,6 @@ struct SessionListing {
   last_active_unix_seconds : Int64?
   first_prompt : String
   title : String?
-  model : SessionModel?
 }
 
 ///|
@@ -656,13 +651,6 @@ pub fn SessionListing::first_prompt(self : SessionListing) -> String {
 /// uses its first prompt as the display label.
 pub fn SessionListing::title(self : SessionListing) -> String? {
   self.title
-}
-
-///|
-/// Return the model the session last ran on, or `None` when none is
-/// recorded (see `SessionStore::model`).
-pub fn SessionListing::model(self : SessionListing) -> SessionModel? {
-  self.model
 }
 
 ///|
@@ -790,7 +778,6 @@ pub async fn SessionStore::listings(
           last_active_unix_seconds: None,
           first_prompt: "",
           title: self.title(id),
-          model: self.model(id),
         })
         continue
       }
@@ -804,7 +791,6 @@ pub async fn SessionStore::listings(
           last_active_unix_seconds: Some(seconds),
           first_prompt: first_prompt_in_log(path),
           title: self.title(id),
-          model: self.model(id),
         },
         seconds,
         nanoseconds,

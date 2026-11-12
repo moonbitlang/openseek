@@ -145,12 +145,12 @@ pub fn session_agent_settings(
   let (model, thinking, api_url) = @options.agent_settings(matches)
   guard recorded is Some(recorded) else { return (model, thinking, api_url) }
   (
-    if @options.configured(matches, "model") {
+    if matches.sources.get("model") is Some(Argv | Env) {
       model
     } else {
       recorded.model
     },
-    if @options.configured(matches, "thinking") {
+    if matches.sources.get("thinking") is Some(Argv | Env) {
       thinking
     } else {
       recorded.thinking
@@ -160,29 +160,50 @@ pub fn session_agent_settings(
 }
 
 ///|
-/// A hook for a run's durable appends that records `model` as the session's
-/// model (`SessionStore::save_model`) after the first one, unless the
-/// session already recorded exactly that. It waits for an append so a run
-/// that fails before recording anything still leaves nothing behind.
+/// Writes one run's appends to a durable session. The first append also
+/// records the model the run uses as the session's model
+/// (`SessionStore::save_model`), unless the session already recorded exactly
+/// that; recording waits for an append so a run that fails before recording
+/// anything still leaves nothing behind.
 ///
 /// The transcript is the record that matters: a failed model write is
 /// reported as a `session_error` and not retried, rather than failing a
 /// turn whose events were already written.
-pub fn session_model_recorder(
+struct SessionWriter {
+  store : @store.SessionStore
+  id : @agent_session.SessionId
+  model : @store.SessionModel
+  mut model_pending : Bool
+}
+
+///|
+/// `recorded` is what the session's `model.json` held when the run started.
+pub fn SessionWriter::SessionWriter(
   store : @store.SessionStore,
   id : @agent_session.SessionId,
   model : @store.SessionModel,
   recorded : @store.SessionModel?,
-) -> async () -> Unit noraise {
-  let mut pending = recorded != Some(model)
-  async fn() noraise {
-    guard pending else { return }
-    pending = false
-    store.save_model(id, model) catch {
+) -> SessionWriter {
+  { store, id, model, model_pending: recorded != Some(model), }
+}
+
+///|
+/// Append `item` to the session's transcript, and record the model on the
+/// first append.
+pub async fn SessionWriter::append(
+  self : SessionWriter,
+  session : @agent_session.Session,
+  item : @agent_session.SessionItem,
+) -> @agent_session.Session {
+  let next = self.store.append(session, item)
+  if self.model_pending {
+    self.model_pending = false
+    self.store.save_model(self.id, self.model) catch {
       error =>
         @emit.emit(
           SessionError(error="failed to record the session model: \{error}"),
         )
     }
   }
+  next
 }

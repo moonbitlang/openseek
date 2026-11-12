@@ -1,5 +1,5 @@
 ///|
-async test "a recorded session model is listed and carried into forks" {
+async test "a recorded session model is read back and carried into forks" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let id = @agent_session.SessionId("origin")
@@ -16,7 +16,6 @@ async test "a recorded session model is listed and carried into forks" {
     @fs.read_text("\{store.root()}/sessions/origin/model.json"),
     "{\"model\":\"deepseek-v4-pro\",\"thinking\":\"max\"}",
   )
-  assert_eq(store.listings()[0].model(), Some(pro))
   let flash : @store.SessionModel = { model: Deepseek(V4Flash), thinking: No, }
   store.save_model(id, flash)
   assert_eq(store.model(id), Some(flash))

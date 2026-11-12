@@ -12,6 +12,7 @@ pub(all) struct SessionModel {
 }
 
 ///|
+#doc(hidden)
 #deprecated
 pub extend SessionModel with Eq::{equal, not_equal}
 
@@ -30,6 +31,11 @@ pub extend SessionModel with ToJson::{to_json}
 /// accept.
 pub impl ToJson for SessionModel with fn to_json(self) {
   { "model": self.model.to_string(), "thinking": self.thinking.to_string() }
+}
+
+///|
+fn session_model_text(model : SessionModel) -> String {
+  ToJson::to_json(model).stringify()
 }
 
 ///|
@@ -83,7 +89,7 @@ pub async fn SessionStore::save_model(
   with_session_lock(self, id, Exclusive, () => {
     write_text_atomic(
       self.model_path(id),
-      ToJson::to_json(model).stringify(),
+      session_model_text(model),
       dirs=self.session_dir_chain(id),
     )
   })

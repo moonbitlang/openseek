@@ -260,12 +260,14 @@ pub impl ToJson for SessionModelSettings with fn to_json(self) {
 
 ///|
 pub impl FromJson for SessionModelSettings with fn from_json(json, path) {
-  guard json is Object(fields) &&
-    fields.get("model") is Some(String(model)) &&
-    fields.get("thinking") is Some(thinking) else {
-    raise JsonDecodeError((path, "expected session model settings"))
+  let object = JsonObject::decode(json, path, "SessionModelSettings")
+  {
+    model: object.required_string("model"),
+    thinking: @json.from_json(
+      object.required_json("thinking"),
+      path=path.add_key("thinking"),
+    ),
   }
-  { model, thinking: @json.from_json(thinking, path=path.add_key("thinking")), }
 }
 
 ///|
@@ -285,7 +287,7 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
   // the row on the default model rather than dropping the row.
   let model_settings : SessionModelSettings? = match
     fields.get("model_settings") {
-    Some(Object(_) as value) => Some(@json.from_json(value)) catch { _ => None }
+    Some(value) => Some(@json.from_json(value)) catch { _ => None }
     _ => None
   }
   guard fields.get("id") is Some(String(id)) else {

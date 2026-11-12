@@ -24,7 +24,6 @@ type SessionListing
 pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
-pub fn SessionListing::model(Self) -> SessionModel?
 pub fn SessionListing::title(Self) -> String?
 
 #derive(Eq, @debug.Debug)
@@ -32,10 +31,6 @@ pub(all) struct SessionModel {
   model : @deepseek.Model
   thinking : @deepseek.ThinkingMode
 }
-#deprecated
-pub fn SessionModel::equal(Self, Self) -> Bool
-#deprecated
-pub fn SessionModel::not_equal(Self, Self) -> Bool
 pub impl @json.ToJson for SessionModel
 
 #derive(@debug.Debug)

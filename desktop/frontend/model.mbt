@@ -4090,20 +4090,16 @@ fn Model::activate(
     }
   }
   if !found {
-    let recorded = self.recorded_model(channel, session_id, project, LiveRecord)
-    let model = recorded
-      .map(recorded => recorded.engine_model)
-      .unwrap_or(self.default_model)
-    conversations.push(
-      empty_conversation(
-        channel,
-        session_id,
-        project,
-        system_prompt?=self.draft_system_prompt(channel, model),
-        model~,
-        reasoning?=recorded.map(recorded => recorded.reasoning),
-      ),
+    let conv = self.stored_conversation(
+      channel,
+      session_id,
+      project,
+      LiveRecord,
     )
+    conversations.push({
+      ..conv,
+      system_prompt: self.draft_system_prompt(channel, conv.engine_model),
+    })
   }
   // Activating a conversation is also what moves the UI's focus to its
   // device — a no-op while the app runs a single channel.
