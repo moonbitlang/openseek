@@ -6,6 +6,7 @@
 //   node scripts/release.mjs verify [vX.Y.Z]   check the live release through its public URLs
 //   node scripts/release.mjs rollback vX.Y.Z   republish an existing version
 //   node scripts/release.mjs status            list API-owned release state
+//   node scripts/release.mjs browser vbrowser-N.M  release dist/'s Browser archive to /console/ alone
 //
 // GitHub Releases store the artifacts: the release tagged vX.Y.Z holds one
 // asset per file below. Manifests link to openseek-api's own
@@ -19,6 +20,12 @@
 // OPENSEEK_DEPLOY_TOKEN, GITHUB_REPOSITORY (owner/name), and an authenticated
 // gh CLI; upload also needs GITHUB_SHA, the commit a new release tags. verify
 // needs only OPENSEEK_API_ORIGIN and the checkout's archives in dist/.
+//
+// browser releases only the console: it stages dist/'s Browser archive with the
+// API and selects it, leaving latest.json and GitHub untouched. Its version is
+// a key of its own (`vbrowser-<run>.<attempt>`), so it can never take a
+// Desktop vX.Y.Z that a later Desktop release would need. It needs
+// OPENSEEK_API_ORIGIN and OPENSEEK_DEPLOY_TOKEN.
 
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -56,7 +63,8 @@ const Usage = `usage:
   node scripts/release.mjs publish [vX.Y.Z]
   node scripts/release.mjs verify [vX.Y.Z]
   node scripts/release.mjs rollback vX.Y.Z
-  node scripts/release.mjs status`;
+  node scripts/release.mjs status
+  node scripts/release.mjs browser vbrowser-N.M`;
 
 export class Release {
   constructor() {
@@ -271,6 +279,11 @@ export class Release {
 
     // `/console/` remains on the API origin, so the Browser archive is also
     // uploaded to the API. Desktop packages live only on GitHub.
+    await this.stageBrowser(version);
+    console.log(`${version} is ready to publish`);
+  }
+
+  async stageBrowser(version) {
     const browser = await this.localArtifact(Browser);
     const recorded = await this.fetchJson(`/desktop/releases/${version}/${Browser.file}?platform=browser`, {
       method: "PUT", body: await readFile(browser.path),
@@ -278,7 +291,38 @@ export class Release {
     if (recorded.sha256 !== browser.sha256) {
       throw new Error(`DIGEST MISMATCH: API recorded ${recorded.sha256} for Browser`);
     }
-    console.log(`${version} is ready to publish`);
+    return browser;
+  }
+
+  // A console release without a Desktop release. A retry of a version the API
+  // already extracted skips the upload, which the API refuses for an extracted
+  // version, and publishes again: the API compares the staged archive with
+  // dist/'s digest, so only a retry with the same bytes can succeed.
+  async publishBrowser(version) {
+    if (!/^vbrowser-[0-9]+\.[0-9]+$/.test(version)) {
+      throw new Error(`Browser-only versions are vbrowser-<run>.<attempt>, never a Desktop version: ${version}`);
+    }
+    await this.unpackBrowser();
+    const browser = await this.isPublished(version)
+      ? await this.localArtifact(Browser)
+      : await this.stageBrowser(version);
+    const bare = version.replace(/^v/, "");
+    const published = await this.fetchJson(`/browser/releases/${version}/publish`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ file: Browser.file, sha256: browser.sha256 }),
+    });
+    if (published.version !== bare) throw new Error(`API published Browser ${published.version}, not ${bare}`);
+    const consoleUrl = await this.verifyConsole(bare);
+    const summary = [
+      `## Browser release ${version}`,
+      "",
+      `- API: ${this.apiOrigin()}`,
+      `- ${Browser.label} SHA-256: \`${browser.sha256}\``,
+      `- Browser console: ${consoleUrl}`,
+      "",
+    ].join("\n");
+    console.log(summary);
+    if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
   }
 
   // The publishing runner builds nothing, so the Browser directory that the
@@ -350,9 +394,27 @@ export class Release {
 
     await this.verifyDownloads(manifest);
 
-    // The API serves this version as its one current Browser bundle: the same
-    // document at every page route, with its resources under /assets/.
-    const bare = version.replace(/^v/, "");
+    const consoleUrl = await this.verifyConsole(version.replace(/^v/, ""));
+
+    const summary = [
+      `## Desktop release ${version}`,
+      "",
+      `- API: ${this.apiOrigin()}`,
+      ...Artifacts.flatMap(artifact => [
+        `- ${artifact.label}: ${manifest.platforms[artifact.platform].url}`,
+        `- ${artifact.label} SHA-256: \`${platforms[artifact.platform].sha256}\``,
+      ]),
+      `- Browser console: ${consoleUrl}`,
+      "",
+    ].join("\n");
+    console.log(summary);
+    if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
+  }
+
+  // The API serves this version as its one current Browser bundle: the same
+  // document at every page route, with its resources under /assets/, each
+  // compared with dist/browser.
+  async verifyConsole(bare) {
     const current = await this.fetchJson("/browser/releases/current.json", { auth: false });
     if (current?.version !== bare) throw new Error(`browser current.json version ${current?.version} is not ${bare}`);
     for (const [file, path] of [
@@ -368,20 +430,7 @@ export class Release {
     }
     const consoleUrl = `${this.apiOrigin()}/cloud`;
     console.log(`browser console ok: ${consoleUrl}`);
-
-    const summary = [
-      `## Desktop release ${version}`,
-      "",
-      `- API: ${this.apiOrigin()}`,
-      ...Artifacts.flatMap(artifact => [
-        `- ${artifact.label}: ${manifest.platforms[artifact.platform].url}`,
-        `- ${artifact.label} SHA-256: \`${platforms[artifact.platform].sha256}\``,
-      ]),
-      `- Browser console: ${consoleUrl}`,
-      "",
-    ].join("\n");
-    console.log(summary);
-    if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
+    return consoleUrl;
   }
 
   async verifyDownloads(manifest) {
@@ -420,6 +469,7 @@ export class Release {
       case "verify": return await this.verify(await version());
       case "rollback": return await this.publish(argument ?? "", { fromCheckout: false });
       case "status": return await this.status();
+      case "browser": return await this.publishBrowser(argument ?? "");
       default: {
         console.error(Usage);
         process.exitCode = 64;

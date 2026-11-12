@@ -482,3 +482,64 @@ test("public verification follows redirects and hashes the downloaded bytes", as
   corrupt = true;
   await assert.rejects(release.verifyDownloads(manifest), /download digest mismatch/);
 });
+
+test("browser releases dist/'s archive to the console alone, and a retry publishes the staged bytes again", async t => {
+  const release = new Release();
+  release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-browser-"));
+  t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
+  const archive = Buffer.from("browser archive fixture");
+  const sha256 = createHash("sha256").update(archive).digest("hex");
+  await fs.writeFile(join(release.dist, "SeekMoon.browser.tar.gz"), archive);
+  t.mock.method(release, "unpackBrowser", async () => {
+    await fs.mkdir(join(release.dist, "browser/assets"), { recursive: true });
+    await fs.writeFile(join(release.dist, "browser/index.html"), "packaged document");
+    await fs.writeFile(join(release.dist, "browser/assets/frontend.js"), "packaged frontend");
+  });
+  t.mock.method(release, "env", name => {
+    assert.equal(name, "OPENSEEK_DEPLOY_TOKEN");
+    return "deploy-token";
+  });
+  let extracted = false;
+  let current;
+  const requests = [];
+  const url = await server(t, async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks);
+    requests.push(`${request.method} ${request.url}`);
+    if (request.url === "/console/releases/vbrowser-3.1/index.html") {
+      response.writeHead(extracted ? 200 : 404);
+      response.end();
+    } else if (request.method === "PUT") {
+      assert.equal(request.url, "/desktop/releases/vbrowser-3.1/SeekMoon.browser.tar.gz?platform=browser");
+      response.end(JSON.stringify({ sha256: createHash("sha256").update(body).digest("hex") }));
+    } else if (request.method === "POST") {
+      assert.equal(request.url, "/browser/releases/vbrowser-3.1/publish");
+      assert.deepEqual(JSON.parse(body), { file: "SeekMoon.browser.tar.gz", sha256 });
+      extracted = true;
+      current = "browser-3.1";
+      response.end(JSON.stringify({ version: current }));
+    } else if (request.url === "/browser/releases/current.json") {
+      response.end(JSON.stringify({ version: current }));
+    } else if (request.url === "/cloud") {
+      response.end("packaged document");
+    } else if (request.url === "/assets/frontend.js") {
+      response.end("packaged frontend");
+    } else {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  t.mock.method(release, "apiOrigin", () => url);
+
+  await release.run("browser", "vbrowser-3.1");
+  assert.equal(requests.filter(line => line.startsWith("PUT ")).length, 1);
+  assert.ok(!requests.some(line => line.includes("latest.json")), "a console release never touches the Desktop manifest");
+
+  requests.length = 0;
+  await release.run("browser", "vbrowser-3.1");
+  assert.equal(requests.filter(line => line.startsWith("PUT ")).length, 0, "an extracted version is not uploaded again");
+  assert.equal(requests.filter(line => line.startsWith("POST ")).length, 1);
+
+  await assert.rejects(release.publishBrowser("v0.1.9"), /never a Desktop version/);
+});

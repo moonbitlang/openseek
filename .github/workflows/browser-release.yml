@@ -1,0 +1,147 @@
+name: Browser release
+
+run-name: Browser console release by @${{ github.actor }}
+
+# Dispatched on its own, this builds main's Browser bundle and makes it the
+# console the API serves at /cloud, without a Desktop release: latest.json,
+# GitHub releases, and Desktop versions stay as they are.
+#
+# Desktop release calls it with its version to build the same bundle for
+# Android and its own publish job; that call only builds, because a Desktop
+# release publishes the Browser together with the Desktop manifest.
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Desktop version the calling release stamps before building
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Browser
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      release: ${{ steps.resolve.outputs.release }}
+      artifact: ${{ steps.resolve.outputs.artifact }}
+    steps:
+      # A Desktop release names the bundle after its own version. A console
+      # release takes a key of its own that no Desktop vX.Y.Z can collide with;
+      # the attempt keeps a full rerun's rebuild from reusing an extracted key.
+      - name: Resolve release
+        id: resolve
+        shell: bash
+        env:
+          DESKTOP_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$DESKTOP_VERSION" ]]; then
+            release="v$DESKTOP_VERSION"
+          else
+            release="vbrowser-$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "artifact=SeekMoon-browser-$release-build" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout main
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stamp Desktop release version
+        if: inputs.version != ''
+        shell: bash
+        env:
+          DESKTOP_VERSION: ${{ inputs.version }}
+        run: node desktop/scripts/release.mjs stamp "$DESKTOP_VERSION"
+
+      - name: Set up MoonBit
+        run: |
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      # Keep one compressed Browser archive. A Desktop release stores it as a
+      # GitHub release asset; the API receives the same small archive because
+      # `/console/` must remain on the API origin. The browser build never
+      # touches the window host, so call the build program directly, as
+      # desktop CI does.
+      - name: Build browser release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node desktop/package/build.mjs browser --release
+          test -f desktop/dist/browser/index.html
+          test -f desktop/dist/browser/assets/frontend.js
+          # openseek-api serves these .br/.gz copies by Accept-Encoding.
+          node desktop/package/precompress.mjs desktop/dist/browser
+          test -f desktop/dist/browser/assets/frontend.js.br
+          tar -C desktop/dist -czf desktop/dist/SeekMoon.browser.tar.gz browser
+
+      # Only a hand-off to the job that publishes it: below for a console
+      # release, or the calling Desktop release's Android and publish jobs.
+      - name: Hand Browser archive to the publishing jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.resolve.outputs.artifact }}
+          overwrite: true
+          path: desktop/dist/SeekMoon.browser.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    name: Publish console
+    needs: build
+    if: inputs.version == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Desktop's publish job takes the same group: both select the console, and
+    # Desktop's verification expects its own version to stay selected. The
+    # default queue keeps one waiting job and cancels it when another arrives,
+    # which would drop a waiting Desktop publish after its builds succeeded.
+    concurrency:
+      group: browser-console-publish
+      cancel-in-progress: false
+      queue: max
+    env:
+      OPENSEEK_API_ORIGIN: https://seekmoon.moonbitlang.com
+      RELEASE: ${{ needs.build.outputs.release }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Collect Browser archive
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: desktop/dist
+
+      # Stages the archive with the API, selects it for /console/, and checks
+      # the console the API then serves against the archive.
+      - name: Publish and verify console
+        shell: bash
+        env:
+          OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}
+        run: node desktop/scripts/release.mjs browser "$RELEASE"
