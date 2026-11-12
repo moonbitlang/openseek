@@ -18,7 +18,7 @@ async test "a screenshot asks for no clip, and may be larger than other replies"
         let reply : Json = { "id": 1, "result": { "data": Json(data) } }
         ws.send_text(reply.stringify())
       })
-      let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
+      let connection = connect("ws://127.0.0.1:\{server.addr.port}")
       defer connection.close()
       assert_eq(
         connection.capture_screenshot(quality=80).length(),

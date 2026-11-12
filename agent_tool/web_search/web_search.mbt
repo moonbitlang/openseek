@@ -246,9 +246,10 @@ async fn perform_search(
       "Anthropic-Version": AnthropicVersion,
     })
   }
-  guard @async.with_timeout_opt(timeout_ms, attempt) is Some((resp, text)) else {
+  guard @async.with_timeout_opt(timeout_ms, attempt) is Some((resp, body)) else {
     raise SearchFailure("web search timed out after \{timeout_ms}ms")
   }
+  let text = body.text()
   guard resp.code >= 200 && resp.code < 300 else {
     raise SearchFailure(
       "DeepSeek search API error \{resp.code}: \{error_detail(text)}",

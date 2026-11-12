@@ -55,7 +55,7 @@ async fn earlier_record(
     guard file.kind() is Regular else { return None }
     let size = file.size()
     guard size <= 1048576L else { return None }
-    let bytes = file.read_exactly_at(size.to_int(), position=0L)
+    let bytes = file.at(0L).read_exactly(size.to_int())
     @json.from_json(@json.parse(@utf8.decode(bytes)))
   } catch {
     _ => return None

@@ -30,7 +30,7 @@ fn history_record(generation : String, id : String) -> @protocol.JobRecord {
 /// Store `record` in its generation under `root`, as an engine publishes it.
 async fn store_record(root : String, record : @protocol.JobRecord) -> Unit {
   let directory = "\{root}/\{record.generation}"
-  @fs.mkdir(directory, recursive=true, allow_exist=true)
+  @fs.mkdir(directory, recursive=true, allow_existing=true)
   @fs.write_text(
     "\{directory}/\{@protocol.job_storage_name(record.id)}.json",
     record.to_json().stringify(),

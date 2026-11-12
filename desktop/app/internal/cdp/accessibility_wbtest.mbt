@@ -123,7 +123,7 @@ async test "a page's tree may be larger than other replies" {
         }
         ws.send_text(reply.stringify())
       })
-      let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
+      let connection = connect("ws://127.0.0.1:\{server.addr.port}")
       defer connection.close()
       let nodes = connection.accessibility_tree()
       assert_eq(nodes.length(), 1)

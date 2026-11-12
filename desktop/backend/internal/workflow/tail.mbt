@@ -98,9 +98,9 @@ async fn FileTail::poll(self : FileTail) -> Array[String] {
   }
   let want = size - self.offset
   let take = @cmp.minimum(want, workflow_tail_max_chunk)
-  let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
-    _ => return []
-  }
+  let chunk = file.at(self.offset).read_exactly(take.to_int()) catch {
+      _ => return []
+    }
   self.offset += take
   let pending = self.carry + chunk
   let lines : Array[String] = []

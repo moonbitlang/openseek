@@ -30,5 +30,5 @@ async fn serve_chat_completions(
       max_connections~,
     )
   }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  Some("http://127.0.0.1:\{server.addr.port}/chat/completions")
 }

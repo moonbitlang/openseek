@@ -11,7 +11,7 @@ async test "local console access does not require credentials" {
     let origin = console.origin()
     assert_eq(console.entry_url(), origin + "/device/host/chat")
     for query in ["", "?device=host&workspace=%2Ftmp"] {
-      let (response, _) = @http.get_text(origin + "/" + query)
+      let (response, _) = @http.get(origin + "/" + query)
       assert_eq(response.code, 302)
       assert_eq(
         response.headers.get("Location"),
@@ -19,12 +19,14 @@ async test "local console access does not require credentials" {
       )
       assert_eq(response.headers.get("Set-Cookie"), None)
     }
-    let (me, body) = @http.get_text(origin + "/v1/auth/me")
+    let (me, body) = @http.get(origin + "/v1/auth/me")
+    let body = body.text()
     assert_eq(me.code, 200)
     assert_true(@json.parse(body) is { "login": "local", .. })
-    let (devices, body) = @http.get_text(origin + "/v1/devices", headers={
+    let (devices, body) = @http.get(origin + "/v1/devices", headers={
       "Origin": origin,
     })
+    let body = body.text()
     assert_eq(devices.code, 200)
     assert_true(
       @json.parse(body)
@@ -34,7 +36,7 @@ async test "local console access does not require credentials" {
       "Origin": origin,
     })
     assert_eq(logout.code, 204)
-    let (me, _) = @http.get_text(origin + "/v1/auth/me", headers={
+    let (me, _) = @http.get(origin + "/v1/auth/me", headers={
       "Cookie": "seekmoon_session=expired",
     })
     assert_eq(me.code, 200)
@@ -82,7 +84,7 @@ async test "local console rejects unrelated web origins and hostnames" {
         "/v2/auth/login", "/cb",
       ] {
       for foreign in ["https://example.com", "http://127.0.0.1:1", "null"] {
-        let (response, _) = @http.get_text(origin + path, headers={
+        let (response, _) = @http.get(origin + path, headers={
           "Origin": foreign,
         })
         assert_eq(response.code, 403)
@@ -136,7 +138,7 @@ async test "local login returns canonical shared routes for this device only" {
         ("/device/host/chat/session/%00", "/device/host/chat"),
         ("/device/host/chat/session/a\r\nb", "/device/host/chat"),
       ] {
-      let (response, _) = @http.get_text(
+      let (response, _) = @http.get(
         origin +
         "/v1/auth/login?return_to=" +
         @uri.encode_component(destination),
@@ -145,9 +147,9 @@ async test "local login returns canonical shared routes for this device only" {
       assert_eq(response.headers.get("Location"), Some(expected))
       assert_eq(response.headers.get("Set-Cookie"), None)
     }
-    let (missing, _) = @http.get_text(origin + "/v1/auth/login")
+    let (missing, _) = @http.get(origin + "/v1/auth/login")
     assert_eq(missing.headers.get("Location"), Some("/device/host/chat"))
-    let (invalid_header, _) = @http.get_text(
+    let (invalid_header, _) = @http.get(
       origin +
       "/v1/auth/login?return_to=" +
       @uri.encode_component("/device/host/chat?x=\r\nInjected: yes"),
@@ -155,7 +157,7 @@ async test "local login returns canonical shared routes for this device only" {
     assert_eq(invalid_header.code, 400)
     assert_eq(invalid_header.headers.get("Location"), None)
     // Local access is always available, including after a login redirect.
-    let (response, _) = @http.get_text(origin + "/v1/auth/me")
+    let (response, _) = @http.get(origin + "/v1/auth/me")
     assert_eq(response.code, 200)
   })
 }
@@ -182,7 +184,7 @@ async test "local browser sign-in and logout are independent of Desktop and keep
   defer issuer.close()
   let console = @remote.LocalConsole::bind(
     port=0,
-    account_origin="http://127.0.0.1:\{issuer.addr.port()}",
+    account_origin="http://127.0.0.1:\{issuer.addr.port}",
   )
   let exchanges : Array[String] = []
   let logouts : Array[String?] = []
@@ -226,12 +228,12 @@ async test "local browser sign-in and logout are independent of Desktop and keep
     let headers : Map[@http.CaseInsensitiveString, String] = {
       "Origin": origin,
     }
-    let (foreign, _) = @http.get_text(login, headers={
+    let (foreign, _) = @http.get(login, headers={
       "Origin": "https://other.example",
     })
     assert_eq(foreign.code, 403)
     // A fresh browser starts account sign-in without any local credentials.
-    let (start, _) = @http.get_text(login)
+    let (start, _) = @http.get(login)
     assert_eq(start.headers.get("Set-Cookie"), None)
     assert_eq(start.code, 302)
     guard start.headers.get("Location") is Some(location) &&
@@ -243,14 +245,15 @@ async test "local browser sign-in and logout are independent of Desktop and keep
     // State and PKCE authorize this browser account exchange independently
     // of the local host access that is already available.
     let callback = origin + "/cb?code=browser-code&state=\{oauth_state}"
-    let (response, body) = @http.get_text(callback)
+    let (response, body) = @http.get(callback)
+    let body = body.text()
     assert_eq(response.code, 200)
     assert_eq(response.headers.get("Cache-Control"), Some("no-store"))
     assert_eq(response.cookies.length(), 0)
     assert_true(body.contains("ts_browser-token"))
     assert_false(body.contains(desktop_account.token))
     assert_true(body.contains("location.replace(\"/cloud\")"))
-    let (replay, _) = @http.get_text(callback)
+    let (replay, _) = @http.get(callback)
     assert_eq(replay.code, 400)
     assert_eq(exchanges.length(), 1)
     let (foreign_logout, _) = @http.post_text(origin + "/v2/auth/logout", "", headers={
@@ -266,9 +269,10 @@ async test "local browser sign-in and logout are independent of Desktop and keep
     assert_eq(signed_out.code, 200)
     assert_eq(logouts, [Some("Bearer ts_browser-token")])
     assert_true(store.account() == Some(desktop_account))
-    let (roster, _) = @http.get_text(origin + "/v1/devices", headers~)
+    let (roster, _) = @http.get(origin + "/v1/devices", headers~)
     assert_eq(roster.code, 200)
-    let (removed, body) = @http.get_text(origin + "/v1/auth/session", headers~)
+    let (removed, body) = @http.get(origin + "/v1/auth/session", headers~)
+    let body = body.text()
     assert_eq(removed.code, 404)
     assert_false(body.contains(desktop_account.token))
   })
@@ -292,16 +296,18 @@ async test "local console documents identify their server without exposing accou
     })
     let origin = console.origin()
     for path in ["/cloud", "/device/host/chat", "/index.html"] {
-      let (response, body) = @http.get_text(origin + path)
+      let (response, body) = @http.get(origin + path)
+      let body = body.text()
       assert_eq(response.code, 200)
       assert_true(body.contains("<meta name=\"seekmoon-local-console\" />"))
       assert_eq(response.headers.get("Set-Cookie"), None)
       assert_eq(response.cookies.length(), 0)
     }
-    let (asset, body) = @http.get_binary(origin + "/asset.bin")
+    let (asset, body) = @http.get(origin + "/asset.bin")
+    let body = body.binary()
     assert_eq(asset.code, 200)
     assert_eq(body, binary)
-    let (login, _) = @http.get_text(origin + "/v2/auth/login")
+    let (login, _) = @http.get(origin + "/v2/auth/login")
     assert_eq(login.code, 302)
     assert_eq(login.headers.get("Set-Cookie"), None)
   })

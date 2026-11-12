@@ -98,7 +98,7 @@ async fn main {
   guard !directory.is_empty() else {
     fail("output directory must not be empty")
   }
-  @fs.mkdir(directory, recursive=true, allow_exist=true)
+  @fs.mkdir(directory, recursive=true, allow_existing=true)
   guard @fs.kind(directory, follow_symlink=false) is Directory else {
     fail("output directory must be a regular directory")
   }

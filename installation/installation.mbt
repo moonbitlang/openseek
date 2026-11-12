@@ -86,7 +86,7 @@ async fn moonbit_available(
 ///|
 async fn copy_tree(source : String, destination : String) -> Unit {
   if @fs.kind(source) is Directory {
-    @fs.mkdir(destination, recursive=true, allow_exist=true)
+    @fs.mkdir(destination, recursive=true, allow_existing=true)
     for name in @fs.readdir(source, include_hidden=true) {
       copy_tree(source + "/" + name, destination + "/" + name)
     }
@@ -106,7 +106,7 @@ async fn install(
   let source = @path.Path(source_cli).dirname().dirname().to_string()
   let root = home + "/.openseek"
   let bin = root + "/bin"
-  @fs.mkdir(bin, recursive=true, allow_exist=true)
+  @fs.mkdir(bin, recursive=true, allow_existing=true)
   let lock = @fs.open(
     root + "/setup.lock",
     mode=ReadWrite,

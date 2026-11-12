@@ -358,7 +358,7 @@ pub async fn Launcher::start(
     workspace,
   }
   let (child_stdin, writer) = try {
-    @fs.mkdir(self.result_dir, recursive=true, allow_exist=true)
+    @fs.mkdir(self.result_dir, recursive=true, allow_existing=true)
     @process.write_to_process()
   } catch {
     error => {

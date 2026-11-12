@@ -37,7 +37,7 @@ async test "initial and image-only steering input survive replay and reach the p
       submission_id="image-submit",
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url="http://127.0.0.1:\{server.addr.port()}/chat/completions",
+      api_url="http://127.0.0.1:\{server.addr.port}/chat/completions",
     )
     assert_eq(requests.length(), 1)
     let mut restored = @agent_session.Session(
@@ -61,7 +61,7 @@ async test "initial and image-only steering input survive replay and reach the p
       content=Content([Text("Describe again")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url="http://127.0.0.1:\{server.addr.port()}/chat/completions",
+      api_url="http://127.0.0.1:\{server.addr.port}/chat/completions",
     )
     assert_eq(requests.length(), 2)
     for index, request in requests {

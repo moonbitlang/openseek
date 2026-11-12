@@ -356,7 +356,7 @@ pub fn Program::env(self : Program) -> Map[String, String] {
     "OPENSEEK_PTC": (
       {
         "version": 1,
-        "url": "http://127.0.0.1:\{self.service.server.addr.port()}/call",
+        "url": "http://127.0.0.1:\{self.service.server.addr.port}/call",
         "token": self.token,
         "approval_tools": Json(
           [

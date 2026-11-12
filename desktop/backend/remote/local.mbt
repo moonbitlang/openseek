@@ -37,7 +37,7 @@ const LocalConsoleDevice = "host"
 /// The port this console is bound on. Private: consumers read the bound
 /// address through `origin()`, the exported accessor.
 fn LocalConsole::port(self : LocalConsole) -> Int32 {
-  self.server.addr.port()
+  self.server.addr.port.to_int()
 }
 
 ///|
@@ -144,11 +144,14 @@ async fn LocalConsole::handle(
         respond_status(conn, 401, "Unauthorized")
         return
       }
-      let (response, body) = @http.post_text(
-        self.account_origin + "/v2/auth/logout",
-        "",
-        headers={ "Authorization": authorization },
-      ) catch {
+      let (response, body) = try {
+        let (response, body) = @http.post_text(
+          self.account_origin + "/v2/auth/logout",
+          "",
+          headers={ "Authorization": authorization },
+        )
+        (response, body.text())
+      } catch {
         _ => {
           respond_status(conn, 502, "Bad Gateway")
           return

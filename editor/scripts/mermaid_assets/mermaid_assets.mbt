@@ -71,7 +71,7 @@ async fn ensure_cached_archive(cache_dir : String) -> String {
     remove_path_if_exists(path)
   }
   println("downloading \{MermaidArchiveUrl}")
-  let (response, body) = @http.get_binary(MermaidArchiveUrl) catch {
+  let (response, body) = @http.get(MermaidArchiveUrl) catch {
     error =>
       raise MermaidAssetError(
         "failed to download \{MermaidArchiveUrl}: \{error}",
@@ -82,7 +82,7 @@ async fn ensure_cached_archive(cache_dir : String) -> String {
       "failed to download \{MermaidArchiveUrl}: HTTP \{response.code} \{response.reason}",
     )
   }
-  @asyncfs.write_binary(path, body, create_mode=CreateOrTruncate)
+  @asyncfs.write_binary(path, body.binary(), create_mode=CreateOrTruncate)
   let actual = archive_digest(path)
   if actual != MermaidArchiveSha256 {
     remove_path_if_exists(path)

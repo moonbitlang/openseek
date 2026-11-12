@@ -17,9 +17,10 @@ pub(all) struct ShellOutput {
 /// The platform shell that interprets command text: `powershell.exe` on
 /// Windows — always installed, unlike `pwsh` — and `sh` elsewhere. Select at
 /// runtime so a wasm build follows the host running it.
-let shell_program : String = match @async.platform {
-  Windows => "powershell.exe"
-  Linux | MacOS => "sh"
+let shell_program : String = if @async.platform is Windows {
+  "powershell.exe"
+} else {
+  "sh"
 }
 
 ///|
@@ -27,16 +28,16 @@ let shell_program : String = match @async.platform {
 /// switched to UTF-8 output so non-ASCII text arrives as valid UTF-8 rather
 /// than the active code page.
 fn shell_args(cmd : String) -> Array[String] {
-  match @async.platform {
-    Windows =>
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
-        cmd,
-      ]
-    Linux | MacOS => ["-c", cmd]
+  if @async.platform is Windows {
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
+      cmd,
+    ]
+  } else {
+    ["-c", cmd]
   }
 }
 

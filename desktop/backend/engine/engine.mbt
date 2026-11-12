@@ -349,6 +349,11 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
     let command = self.commands.get() catch { _ => break }
     self.writer.write(@utf8.encode(command.command.to_jsonl())) catch {
       error => {
+        let error : Error = if error is TransportError(cause, ..) {
+          cause
+        } else {
+          error
+        }
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
         failure = Some(reason)

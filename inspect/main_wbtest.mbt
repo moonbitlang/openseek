@@ -506,7 +506,7 @@ async test "session_envelope_reply answers unchanged while the size matches" {
 async test "a second --ensure reuses the first; the token and Host gate the rest" {
   @vfs.with_tmpdir(prefix="openseek-viz-ensure-", root => {
     let session_root = "\{root}/.openseek"
-    @fs.mkdir(session_root, recursive=true, allow_exist=true)
+    @fs.mkdir(session_root, recursive=true, allow_existing=true)
     let identity = server_identity(session_root, [])
     let ports = ensure_ports(identity)
     guard ensure_server(session_root, identity, ports)
@@ -537,16 +537,17 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
       assert_eq(t2, token)
       let base = "http://127.0.0.1:\{port}"
       // /api/info is open, and names the sessions served.
-      let (info, body) = @http.get_text("\{base}/api/info")
+      let (info, body) = @http.get("\{base}/api/info")
+      let body = body.text()
       assert_eq(info.code, 200)
       assert_true(
         @json.parse(body) is { "identity": String(served), .. } &&
         served == identity,
       )
       // Everything else needs the token, as ?t= or the cookie it sets.
-      let (denied, _) = @http.get_text("\{base}/api/sessions")
+      let (denied, _) = @http.get("\{base}/api/sessions")
       assert_eq(denied.code, 403)
-      let (allowed, _) = @http.get_text("\{base}/api/sessions?t=\{token}")
+      let (allowed, _) = @http.get("\{base}/api/sessions?t=\{token}")
       assert_eq(allowed.code, 200)
       // Opening with ?t= leaves the token in an HttpOnly cookie for the page.
       assert_true(
@@ -559,7 +560,7 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
           cookie.path == Some("/")
         }),
       )
-      let (by_cookie, _) = @http.get_text("\{base}/api/sessions", headers={
+      let (by_cookie, _) = @http.get("\{base}/api/sessions", headers={
         "Cookie": "openseek_inspect_\{port}=\{token}",
       })
       assert_eq(by_cookie.code, 200)
@@ -576,7 +577,7 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
       assert_eq(tcp.read_until(b"\r\n"), Some(b"HTTP/1.1 403 Forbidden"))
       // Other sessions never take over a busy port.
       let other = "\{root}/other/.openseek"
-      @fs.mkdir(other, recursive=true, allow_exist=true)
+      @fs.mkdir(other, recursive=true, allow_existing=true)
       let other_identity = server_identity(other, [])
       assert_true(other_identity != identity)
       let taken = try ensure_server(other, other_identity, [port]) catch {
@@ -597,7 +598,7 @@ async test "a second --ensure reuses the first; the token and Host gate the rest
 async test "an idle server exits and clears its own record" {
   @vfs.with_tmpdir(prefix="openseek-viz-idle-", root => {
     let session_root = "\{root}/.openseek"
-    @fs.mkdir(session_root, recursive=true, allow_exist=true)
+    @fs.mkdir(session_root, recursive=true, allow_existing=true)
     let identity = server_identity(session_root, [])
     guard ensure_server(session_root, identity, ensure_ports(identity))
       is Started(server, port, token) else {
@@ -642,7 +643,7 @@ async test "inspect_version matches moon.mod" {
 async test "a server exits once its session root is deleted" {
   @vfs.with_tmpdir(prefix="openseek-viz-root-", root => {
     let session_root = "\{root}/.openseek"
-    @fs.mkdir(session_root, recursive=true, allow_exist=true)
+    @fs.mkdir(session_root, recursive=true, allow_existing=true)
     let identity = server_identity(session_root, [])
     guard ensure_server(session_root, identity, ensure_ports(identity))
       is Started(server, port, token) else {

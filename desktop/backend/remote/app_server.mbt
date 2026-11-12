@@ -30,7 +30,7 @@ async fn run_app_server(
   @async.with_task_group(group => {
     state.start_services(group)
     let announcement = AppServerAnnouncement::{
-      port: server.addr.port(),
+      port: server.addr.port.to_int(),
       instance,
     }
     announce.write(@utf8.encode(@json.to_json(announcement).stringify() + "\n"))

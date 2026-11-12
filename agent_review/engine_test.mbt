@@ -26,7 +26,7 @@ async fn review_test_server(
       max_connections=8,
     )
   }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  Some("http://127.0.0.1:\{server.addr.port}/chat/completions")
 }
 
 ///|

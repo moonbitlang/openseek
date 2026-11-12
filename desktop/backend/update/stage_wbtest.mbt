@@ -26,13 +26,10 @@ async test "package download streams to disk and reports byte progress" {
     defer @fs.rmdir(dir, recursive=true)
     let destination = "\{dir}/package.zip"
     let progress : Array[(Int32, Int32?)] = []
-    download(
-      "http://127.0.0.1:\{server.addr.port()}/package.zip",
-      destination,
-      (downloaded_bytes, total_bytes) => {
-        progress.push((downloaded_bytes, total_bytes))
-      },
-    )
+    download("http://127.0.0.1:\{server.addr.port}/package.zip", destination, (
+      downloaded_bytes,
+      total_bytes,
+    ) => progress.push((downloaded_bytes, total_bytes)))
     assert_eq(@fs.read_text(destination), "abcdef")
     assert_true(progress.length() >= 2)
     assert_eq(progress[0].0, 0)
@@ -63,8 +60,8 @@ async test "package download follows HTTP 302 redirects" {
           assert_eq(request.headers.get("Accept-Encoding"), Some("identity"))
           let redirect = match request.path {
             "/package.zip" =>
-              Some((302, "http://127.0.0.1:\{server.addr.port()}/301"))
-            "/301" => Some((301, "//127.0.0.1:\{server.addr.port()}/303"))
+              Some((302, "http://127.0.0.1:\{server.addr.port}/301"))
+            "/301" => Some((301, "//127.0.0.1:\{server.addr.port}/303"))
             "/303" => Some((303, "/307"))
             "/307" => Some((307, "/308"))
             "/308" => Some((308, "/asset.zip"))
@@ -91,13 +88,10 @@ async test "package download follows HTTP 302 redirects" {
     defer @fs.rmdir(dir, recursive=true)
     let destination = "\{dir}/package.zip"
     let progress : Array[(Int32, Int32?)] = []
-    download(
-      "http://127.0.0.1:\{server.addr.port()}/package.zip",
-      destination,
-      (downloaded_bytes, total_bytes) => {
-        progress.push((downloaded_bytes, total_bytes))
-      },
-    )
+    download("http://127.0.0.1:\{server.addr.port}/package.zip", destination, (
+      downloaded_bytes,
+      total_bytes,
+    ) => progress.push((downloaded_bytes, total_bytes)))
     assert_eq(@fs.read_text(destination), "abcdef")
     assert_eq(progress.length(), 2)
     assert_eq(progress[0].0, 0)
@@ -151,11 +145,10 @@ async test "package download reports redirect and final response failures" {
           ("/forbidden", "update download returned HTTP 403"),
         ] {
         try
-          download(
-            "http://127.0.0.1:\{server.addr.port()}\{path}",
-            destination,
-            (_, _) => fail("a failed download must not report package progress"),
-          )
+          download("http://127.0.0.1:\{server.addr.port}\{path}", destination, (
+            _,
+            _,
+          ) => fail("a failed download must not report package progress"))
         catch {
           UpdateError(message) => assert_eq(message, expected)
           error => raise error

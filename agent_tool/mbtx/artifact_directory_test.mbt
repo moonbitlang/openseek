@@ -15,7 +15,7 @@ async test "explicit artifact paths use existing scratch permissions without gra
       #|async fn main {
       #|  let dir = @env.args()[1]
       #|  let value = @env.args()[2]
-      #|  @fs.mkdir(dir, recursive=true, allow_exist=true)
+      #|  @fs.mkdir(dir, recursive=true, allow_existing=true)
       #|  @fs.write_text(dir + "/chart.html", value, create_mode=CreateNew)
       #|  println("scratch/artifact/chart.html")
       #|}

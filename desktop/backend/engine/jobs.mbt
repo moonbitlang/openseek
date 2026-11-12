@@ -108,7 +108,7 @@ async fn read_job_record(
   guard size <= 1048576L else {
     raise EngineError("job metadata exceeds 1 MiB")
   }
-  let bytes = file.read_exactly_at(size.to_int(), position=0L)
+  let bytes = file.at(0L).read_exactly(size.to_int())
   let record : @wire.JobRecord = @json.from_json(
     @json.parse(@utf8.decode(bytes)),
   )
@@ -499,7 +499,7 @@ async fn read_job_page(
     raise EngineError("job output was truncated; reload its tail")
   }
   let length = (size - start).min(limit.to_int64()).to_int()
-  let bytes = file.read_exactly_at(length, position=start)
+  let bytes = file.at(start).read_exactly(length)
   let (skip, end) = job_utf8_window(bytes, offset is None && start > 0L)
   let next = start + end.to_int64()
   {

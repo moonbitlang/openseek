@@ -148,8 +148,13 @@ async fn ShellOutputSink::append_locked(
     }
     if self.file is Some(file) {
       let bytes = @utf8.encode(text)
-      file.write_at(bytes, position=self.file_bytes) catch {
+      file.at(self.file_bytes).write(bytes) catch {
         error => {
+          let error : Error = if error is TransportError(cause, ..) {
+            cause
+          } else {
+            error
+          }
           let message = "failed to write output log: \{error}"
           self.failure = Some(message)
           fail(message)
@@ -190,7 +195,7 @@ async fn ShellOutputSink::open_spill(
     self.file_created = true
     errdefer file.close()
     let seed = @utf8.encode(self.head.to_string())
-    file.write_at(seed, position=0)
+    file.at(0).write(seed)
     self.file = Some(file)
     self.file_bytes = seed.length().to_int64()
   } catch {
@@ -311,7 +316,7 @@ async fn ShellOutputSink::read_all(self : ShellOutputSink) -> String {
       // read this immutable prefix without backpressuring the pipe writer.
       let file = @fs.open(path, mode=ReadOnly)
       defer file.close()
-      @utf8.decode_lossy(file.read_exactly_at(committed.to_int(), position=0))
+      @utf8.decode_lossy(file.at(0).read_exactly(committed.to_int()))
     }
     None => head
   }
@@ -333,10 +338,7 @@ async fn ShellOutputSink::read_tail(
     defer file.close()
     let want = n.to_int64() * 4 + 4
     let start = (self.file_bytes - want).max(0)
-    let bytes = file.read_exactly_at(
-      (self.file_bytes - start).to_int(),
-      position=start,
-    )
+    let bytes = file.at(start).read_exactly((self.file_bytes - start).to_int())
     last_chars(@utf8.decode_lossy(bytes), n)
   } else {
     last_chars(self.head.to_string(), n)

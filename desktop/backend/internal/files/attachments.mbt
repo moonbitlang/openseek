@@ -52,7 +52,7 @@ async fn load_attachment(
       }
       {
         name: path.to_path().basename().to_owned(),
-        bytes: file.read_exactly_at(size.to_int(), position=0),
+        bytes: file.at(0).read_exactly(size.to_int()),
         path: Some(path),
       }
     }
@@ -127,7 +127,7 @@ async fn ensure_attachment_directory(
   guard root.contains(@pathx.Path(@fs.realpath(parent.to_string())).resolve()) else {
     raise InvalidRequest("attachment directory escapes the workspace")
   }
-  @fs.mkdir(target.to_string(), recursive=true, allow_exist=true)
+  @fs.mkdir(target.to_string(), recursive=true, allow_existing=true)
   guard root.contains(@pathx.Path(@fs.realpath(target.to_string())).resolve()) else {
     raise InvalidRequest("attachment directory escapes the workspace")
   }

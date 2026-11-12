@@ -361,7 +361,7 @@ async fn execute(
   mcp_service? : @mcphost.Service,
 ) -> @agent_tool.ToolAction {
   if scratch_dir is Some(dir) {
-    @fs.mkdir(dir, recursive=true, permission=0o700, allow_exist=true)
+    @fs.mkdir(dir, recursive=true, permission=0o700, allow_existing=true)
     guard @fs.kind(dir, follow_symlink=false) is Directory else {
       fail("scratch directory must not be a symlink")
     }
@@ -1544,7 +1544,7 @@ async fn denial_scan_region(
     } else {
       DenialScanChunkBytes
     }
-    let n = file.read_at(buf, position~, len=want) catch { _ => break }
+    let n = file.at(position).read_into(buf, max_len=want) catch { _ => break }
     if n <= 0 {
       break
     }
@@ -1581,8 +1581,8 @@ async fn read_capped(path : String) -> String {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
   let buf = FixedArray::make(OutputCapBytes, b'\x00')
-  // `read_at` comes back short only at EOF.
-  let filled = file.read_at(buf, position=0)
+  // A positional read comes back short only at EOF.
+  let filled = file.at(0).read_into(buf)
   let text = @utf8.decode_lossy(Bytes::from_array(buf[:filled]))
   // If we filled the cap there may be more; note the truncation.
   if filled == OutputCapBytes {

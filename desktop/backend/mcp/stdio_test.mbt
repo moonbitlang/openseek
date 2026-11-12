@@ -2,11 +2,11 @@
 async fn with_stdio(
   dispatcher : @mcp.Dispatcher,
   session : String,
-  body : async (@pipe.PipeRead, @pipe.PipeWrite) -> Unit,
+  body : async (@io.MemoryPipeRead, @io.MemoryPipeWrite) -> Unit,
   groups~ : Array[String] = [],
 ) -> Unit {
-  let (input, requests) = @pipe.pipe()
-  let (responses, output) = @pipe.pipe()
+  let (input, requests) = @io.memory_pipe()
+  let (responses, output) = @io.memory_pipe()
   defer input.close()
   defer requests.close()
   defer responses.close()
@@ -30,7 +30,10 @@ async fn read_stdio_reply(reader : @io.Utf8Reader) -> Json {
 }
 
 ///|
-async fn send_stdio_request(writer : @pipe.PipeWrite, message : Json) -> Unit {
+async fn send_stdio_request(
+  writer : @io.MemoryPipeWrite,
+  message : Json,
+) -> Unit {
   writer.write(@utf8.encode(message.stringify() + "\n"))
 }
 
@@ -279,7 +282,7 @@ async test "stdio rejects an oversized line before dispatching it" {
     writer.write(Bytes::make(1048577, b'x'))
   })
   defer input.close()
-  let (responses, output) = @pipe.pipe()
+  let (responses, output) = @io.memory_pipe()
   defer responses.close()
   defer output.close()
   try dispatcher.serve_stdio(input, output, session="host-session") catch {
@@ -440,7 +443,7 @@ async test "a broken stdio response pipe ends the adapter" {
     writer.write(@utf8.encode(request(1, "ping", {}).stringify() + "\n"))
   })
   defer input.close()
-  let (responses, output) = @pipe.pipe()
+  let (responses, output) = @io.memory_pipe()
   responses.close()
   defer output.close()
   let failed = try

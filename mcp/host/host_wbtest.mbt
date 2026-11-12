@@ -12,6 +12,7 @@ async fn send_body(
   let (response, reply) = @http.post_text(url, body.stringify(), headers={
     "Authorization": "Bearer \{token.unwrap_or(handed)}",
   })
+  let reply = reply.text()
   if response.code == 200 {
     (response.code, Some(@json.parse(reply)))
   } else {

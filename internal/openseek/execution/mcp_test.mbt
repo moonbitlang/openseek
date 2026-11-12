@@ -11,6 +11,7 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
   let (_, body) = @http.post_text(url, request.stringify(), headers={
     "Authorization": "Bearer \{token}",
   })
+  let body = body.text()
   guard @json.parse(body) is { "data": { "items": Array(items), .. }, .. } else {
     fail("expected the whole catalog in one listing")
   }
@@ -93,7 +94,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
           allow_failure=true,
         )
       })
-      let base = "http://127.0.0.1:\{server.addr.port()}"
+      let base = "http://127.0.0.1:\{server.addr.port}"
       let earlier : Json = {
         "mcpServers": {
           "seekmoon": { "url": base + "/overridden" },

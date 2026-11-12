@@ -291,14 +291,9 @@ pub async fn read_file(
       // Retain signature-based PDF routing even for a file with no .pdf
       // suffix. Only the small header is read before the allocation limit.
       let size = source.size()
-      let header = source.read_exactly_at(
-        if size < 12 {
-          size.to_int()
-        } else {
-          12
-        },
-        position=0,
-      )
+      let header = source
+        .at(0)
+        .read_exactly(if size < 12 { size.to_int() } else { 12 })
       if @filekind.classify(header) is Pdf {
         Some("application/pdf")
       } else {
