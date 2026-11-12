@@ -613,6 +613,7 @@ fn State::apply_composer_action(
         @cmd.none
       })
     @composer.DraftPresenceChanged(..)
+    | @composer.ReviewContextChanged(..)
     | @composer.ReviewChangesOpened(..)
     | @composer.MentionOpened(..)
     | @composer.GoalEditStarted(..)

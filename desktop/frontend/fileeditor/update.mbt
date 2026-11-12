@@ -152,8 +152,7 @@ fn delayed_diff_loading(
   path : @common.Uri,
   doc : Doc,
 ) -> @cmd.Cmd {
-  guard owner is @interop.Host(owner) &&
-    doc.diff_pending_generation() is Some(generation) else {
+  guard doc.diff_pending_generation() is Some(generation) else {
     return @cmd.none
   }
   @cmd.delay(
@@ -716,19 +715,17 @@ pub fn open_changed_document(
   if !missing_rename_source {
     let source = change.original_path.unwrap_or(change.path)
     cmds.push(
-      ctx.owner
-      .host()
-      .map_or(@cmd.none, host => {
-        read_git_original(
-          dispatch,
-          host,
-          path,
-          source,
-          generation,
-          revision=state.changes_head,
-          workspace=ctx.workspace(),
-        )
-      }),
+      read_git_original(
+        dispatch,
+        ctx.owner,
+        path,
+        source,
+        generation,
+        revision=state.changes_head,
+        workspace=ctx.workspace(),
+        cloud?=ctx.cloud_files,
+        locale=ctx.locale,
+      ),
     )
   }
   if change.has_working_tree_file() {
@@ -1049,19 +1046,17 @@ fn reconcile_reviews_after_changes(
         if !missing_rename_source {
           let source = change.original_path.unwrap_or(change.path)
           cmds.push(
-            ctx.owner
-            .host()
-            .map_or(@cmd.none, host => {
-              read_git_original(
-                dispatch,
-                host,
-                path,
-                source,
-                generation,
-                revision=head,
-                workspace=ctx.workspace(),
-              )
-            }),
+            read_git_original(
+              dispatch,
+              ctx.owner,
+              path,
+              source,
+              generation,
+              revision=head,
+              workspace=ctx.workspace(),
+              cloud?=ctx.cloud_files,
+              locale=ctx.locale,
+            ),
           )
         }
         if has_working_file {
@@ -1703,7 +1698,7 @@ fn changes_live(state : State, ctx : Ctx) -> Bool {
 /// asked separately: a retained inventory is not permission to keep addressing
 /// the host that lost it.
 fn changes_poll_wanted(state : State, ctx : Ctx) -> Bool {
-  ctx.host_ready() &&
+  ctx.checkout_ready() &&
   state.owner is Some(state_owner) &&
   state_owner == ctx.owner &&
   !ctx.owner.session().is_empty() &&
@@ -1844,20 +1839,18 @@ fn refresh_unknown_head_reviews(
     docs[path] = { ..doc, review: Some({ ..review, generation, }), }
     background_review_requests[path] = generation
     cmds.push(
-      ctx.owner
-      .host()
-      .map_or(@cmd.none, host => {
-        read_git_original(
-          dispatch,
-          host,
-          path,
-          source,
-          generation,
-          background=true,
-          revision=None,
-          workspace=ctx.workspace(),
-        )
-      }),
+      read_git_original(
+        dispatch,
+        ctx.owner,
+        path,
+        source,
+        generation,
+        background=true,
+        revision=None,
+        workspace=ctx.workspace(),
+        cloud?=ctx.cloud_files,
+        locale=ctx.locale,
+      ),
     )
   }
   (cmds, docs, review_generation, background_review_requests)
@@ -1873,11 +1866,11 @@ fn refresh_changes(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+  let owner = ctx.owner
 
   guard state.owner is Some(state_owner) &&
     state_owner == ctx.owner &&
-    !owner.session.is_empty() else {
+    !owner.session().is_empty() else {
     return (@cmd.none, state)
   }
   match state.changes {
@@ -1911,7 +1904,14 @@ fn refresh_changes(
       } else {
         let generation = state.changes_generation + 1
         (
-          list_changes(dispatch, owner, generation, workspace=ctx.workspace()),
+          list_changes(
+            dispatch,
+            owner,
+            generation,
+            workspace=ctx.workspace(),
+            cloud?=ctx.cloud_files,
+            locale=ctx.locale,
+          ),
           {
             ..state,
             changes_generation: generation,
@@ -1927,7 +1927,14 @@ fn refresh_changes(
     ChangeListIdle | ChangeListFailed(_) => {
       let generation = state.changes_generation + 1
       (
-        list_changes(dispatch, owner, generation, workspace=ctx.workspace()),
+        list_changes(
+          dispatch,
+          owner,
+          generation,
+          workspace=ctx.workspace(),
+          cloud?=ctx.cloud_files,
+          locale=ctx.locale,
+        ),
         {
           ..state,
           changes: ChangeListLoading(refresh_again=false),
@@ -2098,6 +2105,24 @@ pub fn sync(
       let (docs, _) = empty.switch_documents(ctx.owner, ctx.open_files)
       (docs, state.cloud_documents)
     }
+    // Parked Cloud tabs retain text, but requests from their previous visit
+    // must not settle a restored review, including an A → B → A switch.
+    let mut review_generation = state.review_generation
+    if ctx.owner is @interop.Cloud(..) {
+      for path, doc in docs {
+        if doc.review is Some(review) {
+          review_generation += 1
+          docs[path] = {
+            ..doc,
+            review: Some({
+              ..review,
+              generation: review_generation,
+              working_generation: review_generation,
+            }),
+          }
+        }
+      }
+    }
     let cmds = [clear_viewer()]
     // A workspace or resolved root/worktree transition can leave an otherwise
     // identical watch configuration attached to the old checkout. Explicitly
@@ -2151,11 +2176,7 @@ pub fn sync(
         office_prefer_system_fonts: state.office_prefer_system_fonts,
         pdf_generation: state.pdf_generation,
         excel_copy_generation: state.excel_copy_generation,
-        explorer_mode: if ctx.owner is @interop.Cloud(..) {
-          ExplorerFiles
-        } else {
-          state.explorer_mode
-        },
+        explorer_mode: state.explorer_mode,
         search: state.search.reset_checkout(),
         review_diff_layout: state.review_diff_layout,
         review_diff_mode: state.review_diff_mode,
@@ -2179,7 +2200,7 @@ pub fn sync(
         } else {
           state.file_link_generation
         },
-        review_generation: state.review_generation,
+        review_generation,
         package_graph_generation: state.package_graph_generation + 1,
         git_graph_generation: if owner_changed || placement_identity_changed {
           state.git_graph_generation + 1
@@ -2191,7 +2212,7 @@ pub fn sync(
         // Like filesystem request epochs, watcher identities must outlive the
         // per-conversation cache or an A→B→A cycle could reuse one.
         watch_generation: reroot_watch_generation,
-        review_recovery_pending: false,
+        review_recovery_pending: ctx.owner is @interop.Cloud(..),
         background_review_requests: Map([]),
         // Preserve the last host configuration long enough for `with_watch`
         // to retire or replace it on the way out.
@@ -2361,7 +2382,7 @@ pub fn sync(
           explorer_is_visible &&
           !watching.directories.contains(@pathx.Relative::root())
         )
-      None => true
+      None => ctx.owner.host() is Some(_) || explorer_reopened
     })
   let state = { ..state, explorer_was_visible: explorer_is_visible, }
   // The mode selection survives re-rooting, but its inventory does not. Load
@@ -3004,7 +3025,7 @@ fn update_inner(
       }
     DiffLoadingDue(owner~, path~, generation~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         ctx.active_file is Some(active) &&
         active == path &&
         state.docs.get(path) is Some(doc) &&
@@ -3279,7 +3300,7 @@ fn update_inner(
               { ..state, explorer_mode: ExplorerFiles, },
               ctx,
             )
-          ExplorerChanges => return (@cmd.none, state)
+          ExplorerChanges => ()
           ExplorerSearch => ()
         }
       }
@@ -3592,8 +3613,8 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
-    GitHeadObserved(owner~, head~) =>
-      if state.owner != Some(@interop.Host(owner)) {
+    GitHeadObserved(owner~, generation~, head~) =>
+      if state.owner != Some(owner) || state.changes_generation != generation {
         (@cmd.none, state)
       } else {
         let changed = state.git_actual_head_known &&
@@ -3614,8 +3635,7 @@ fn update_inner(
     GitHistoryRefreshRequested => refresh_git_graph(dispatch, state, ctx)
     GitHistoryLoadMoreRequested => load_more_git_history(dispatch, state, ctx)
     GitHistoryLoaded(owner~, generation~, append~, reply~) =>
-      if state.owner != Some(@interop.Host(owner)) ||
-        state.git_graph_generation != generation {
+      if state.owner != Some(owner) || state.git_graph_generation != generation {
         (@cmd.none, state)
       } else if append {
         match state.git_graph {
@@ -3662,8 +3682,7 @@ fn update_inner(
         )
       }
     GitHistoryFailed(owner~, generation~, append~, message~) =>
-      if state.owner != Some(@interop.Host(owner)) ||
-        state.git_graph_generation != generation {
+      if state.owner != Some(owner) || state.git_graph_generation != generation {
         (@cmd.none, state)
       } else if append {
         match state.git_graph {
@@ -3690,7 +3709,7 @@ fn update_inner(
     GitCommitSelected(commit) => select_git_commit(dispatch, state, ctx, commit)
     GitCommitChangesLoaded(owner~, generation~, reply~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         state.git_commit_files_generation == generation &&
         state.git_graph_selected is Some(selected_commit) &&
         selected_commit == reply.commit &&
@@ -3711,7 +3730,7 @@ fn update_inner(
       }
     GitCommitChangesFailed(owner~, generation~, commit~, message~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         state.git_commit_files_generation == generation &&
         state.git_graph_selected is Some(selected) &&
         selected == commit {
@@ -3728,8 +3747,7 @@ fn update_inner(
     GitCommitChangesRetry(commit) =>
       retry_git_commit_changes(dispatch, state, ctx, commit)
     ChangesLoaded(owner~, generation~, repository~, head~, files~) =>
-      if state.owner != Some(@interop.Host(owner)) ||
-        state.changes_generation != generation {
+      if state.owner != Some(owner) || state.changes_generation != generation {
         (@cmd.none, state)
       } else {
         let refresh_again = match state.changes {
@@ -3763,8 +3781,10 @@ fn update_inner(
         // baseline there when present; modern root conversations use resolved
         // HEAD. An unborn root or legacy host can leave `None`; rows that make
         // the latter ambiguous trigger live-HEAD revalidation below.
-        let head_changed = state.changes_head_known &&
-          state.changes_head != head
+        let head_changed = (
+            ctx.owner is @interop.Cloud(..) && state.review_recovery_pending
+          ) ||
+          (state.changes_head_known && state.changes_head != head)
         let (review_cmds, docs, review_generation) = if follow_up {
           ([], state.docs, state.review_generation)
         } else {
@@ -3802,6 +3822,8 @@ fn update_inner(
             owner,
             next_generation,
             workspace=ctx.workspace(),
+            cloud?=ctx.cloud_files,
+            locale=ctx.locale,
           )
         } else {
           @cmd.none
@@ -3864,8 +3886,7 @@ fn update_inner(
         )
       }
     ChangesFailed(owner~, generation~, message~) =>
-      if state.owner != Some(@interop.Host(owner)) ||
-        state.changes_generation != generation {
+      if state.owner != Some(owner) || state.changes_generation != generation {
         (@cmd.none, state)
       } else {
         match state.changes {
@@ -3881,6 +3902,8 @@ fn update_inner(
                   owner,
                   next_generation,
                   workspace=ctx.workspace(),
+                  cloud?=ctx.cloud_files,
+                  locale=ctx.locale,
                 ),
                 {
                   ..state,
@@ -3904,6 +3927,8 @@ fn update_inner(
                   owner,
                   next_generation,
                   workspace=ctx.workspace(),
+                  cloud?=ctx.cloud_files,
+                  locale=ctx.locale,
                 ),
                 {
                   ..state,
@@ -3969,7 +3994,7 @@ fn update_inner(
         path, generation, background,
       )
       guard state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some(current_review) &&
         current_review.generation == generation &&
@@ -4012,7 +4037,7 @@ fn update_inner(
         path, generation, background,
       )
       guard state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some(current_review) &&
         current_review.generation == generation else {
@@ -4050,7 +4075,7 @@ fn update_inner(
     }
     HistoryBlobLoaded(owner~, key~, generation~, side~, blob~) => {
       guard state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         state.history_docs.get(key) is Some(doc) &&
         doc.generation == generation else {
         return (@cmd.none, state)
@@ -4077,7 +4102,7 @@ fn update_inner(
     }
     HistoryBlobFailed(owner~, key~, generation~, side~, message~) => {
       guard state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
         state.history_docs.get(key) is Some(doc) &&
         doc.generation == generation else {
         return (@cmd.none, state)
@@ -4110,6 +4135,9 @@ fn update_inner(
             doc.name,
             range=None,
             cloud?=ctx.cloud_files,
+            review_generation?=doc.review.map(review => {
+              review.working_generation
+            }),
           ),
           state,
         )
@@ -5444,7 +5472,7 @@ test "changed-file review fences paired replies and Content opens retain compari
   let (_, ignored) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       background=false,
       path=file,
       generation=1,
@@ -5462,7 +5490,7 @@ test "changed-file review fences paired replies and Content opens retain compari
   let (_, reviewed) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       background=false,
       path=file,
       generation=2,
@@ -5645,7 +5673,7 @@ test "changed-file review preserves a stale cached working document until reload
   let (_, baseline_first) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       background=false,
       path=file,
       generation=1,
@@ -5748,7 +5776,7 @@ test "review failures settle precisely and missing rename sources stay unavailab
   let (_, failed) = update(
     emit,
     GitOriginalFailed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       background=false,
       path=file,
       generation=1,
@@ -5824,7 +5852,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   let (_, preview) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       background=false,
       path=test_file(deleted_path.0),
       generation=1,
@@ -5907,7 +5935,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   let (_, baseline_first) = update(
     emit,
     GitOriginalLoaded(
-      owner=live_ctx.owner.host().unwrap(),
+      owner=live_ctx.owner,
       background=false,
       path=test_file(live_path.0),
       generation=1,
@@ -6406,7 +6434,7 @@ test "a placement change retains absolute document identities and fences old rep
   let (_, after_old_changes) = update(
     emit,
     ChangesLoaded(
-      owner=worktree_ctx.owner.host().unwrap(),
+      owner=worktree_ctx.owner,
       generation=state.changes_generation,
       repository=true,
       head=Some("root-head"),
@@ -6741,7 +6769,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
   let (_, after_reply) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner.host().unwrap(),
+      owner=present.owner,
       generation=1,
       repository=true,
       head=None,
@@ -6840,7 +6868,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
   let (_, restarted) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner.host().unwrap(),
+      owner=present.owner,
       generation=3,
       repository=true,
       head=Some("same-head"),
@@ -6921,7 +6949,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
   let (_, failed_again) = update(
     emit,
     ChangesFailed(
-      owner=present.owner.host().unwrap(),
+      owner=present.owner,
       generation=3,
       message="Git still unavailable",
     ),
@@ -6934,7 +6962,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
   let (_, restarted) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner.host().unwrap(),
+      owner=present.owner,
       generation=3,
       repository=true,
       head=Some("same-head"),
@@ -6990,7 +7018,7 @@ test "ordinary Changes polls do not supersede healthy in-flight reviews" {
   let (_, polled) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner.host().unwrap(),
+      owner=present.owner,
       generation=1,
       repository=true,
       head=Some("same-head"),
@@ -7309,7 +7337,7 @@ test "selecting Changes loads once and coalesces an in-flight refresh" {
   let (_, following_up) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -7402,7 +7430,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, ready) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -7423,10 +7451,10 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale) = update(
     emit,
     ChangesLoaded(
-      owner={
+      owner=@interop.Host({
         channel: @interop.ChannelId::Remote("other"),
         session: "desktop-test",
-      },
+      }),
       generation=1,
       repository=true,
       head=None,
@@ -7439,10 +7467,10 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale_failure) = update(
     emit,
     ChangesFailed(
-      owner={
+      owner=@interop.Host({
         channel: @interop.ChannelId::Remote("other"),
         session: "desktop-test",
-      },
+      }),
       generation=1,
       message="stale git failure",
     ),
@@ -7453,7 +7481,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale_generation) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=0,
       repository=true,
       head=None,
@@ -7467,7 +7495,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale_idle_failure) = update(
     emit,
     ChangesFailed(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       message="stale git failure",
     ),
@@ -7504,7 +7532,7 @@ test "a settled Changes snapshot re-stats loaded reviews whose rows disappeared"
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -7556,13 +7584,9 @@ test "a review that becomes a symlink clears its cached regular-file source" {
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, unavailable) = update(
     test_emit(),
-    ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
-      generation=1,
-      repository=true,
-      head=None,
-      files=[symlink],
-    ),
+    ChangesLoaded(owner=ctx.owner, generation=1, repository=true, head=None, files=[
+      symlink,
+    ]),
     {
       ..owned_state(),
       explorer_mode: ExplorerChanges,
@@ -7697,13 +7721,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
   )
   let (_, settled) = update(
     test_emit(),
-    ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
-      generation=1,
-      repository=true,
-      head=None,
-      files=[],
-    ),
+    ChangesLoaded(owner=ctx.owner, generation=1, repository=true, head=None, files=[]),
     {
       ..reloading,
       changes: ChangeListLoading(refresh_again=false),
@@ -7920,7 +7938,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
   let (_, following_up) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -7952,7 +7970,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=2,
       repository=true,
       head=Some("new-head"),
@@ -7979,7 +7997,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
   let (_, refreshed) = update(
     test_emit(),
     GitOriginalLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       path=file,
       generation=4,
       background=false,
@@ -8031,7 +8049,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
   let (_, refreshed) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8070,7 +8088,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
   let (_, baseline_ready) = update(
     test_emit(),
     GitOriginalLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       background=false,
       path=file,
       generation=4,
@@ -8146,7 +8164,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -8183,7 +8201,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let (_, coalesced) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=2,
       repository=true,
       head=None,
@@ -8201,7 +8219,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let (_, refreshed) = update(
     test_emit(),
     GitOriginalLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       path=file,
       generation=4,
       background=true,
@@ -8259,7 +8277,7 @@ test "unborn repository polls do not churn untracked reviews" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -8318,7 +8336,7 @@ test "legacy HEAD omission refreshes a missing baseline once tracking is proven"
   let (_, refreshed) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -8379,7 +8397,7 @@ test "Changes reconciliation preserves the selected duplicate-path row" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8446,7 +8464,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
   let (_, became_deleted) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8485,7 +8503,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
   let (_, became_loading) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8552,7 +8570,7 @@ test "a changed rename source refreshes its review without moving HEAD" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=Some("same-head"),
@@ -8755,7 +8773,7 @@ test "a parked checkout stops the fallback poll until repair" {
   let (_, settled) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner.host().unwrap(),
+      owner=present.owner,
       generation=restored.changes_generation,
       repository=true,
       head=Some("same-head"),
@@ -8784,7 +8802,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   let (_, loaded) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=4,
       repository=true,
       head=None,
@@ -8799,11 +8817,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   )
   let (_, failed_refresh) = update(
     emit,
-    ChangesFailed(
-      owner=test_ctx().owner.host().unwrap(),
-      generation=4,
-      message="git failed",
-    ),
+    ChangesFailed(owner=test_ctx().owner, generation=4, message="git failed"),
     refreshing,
     hidden,
   )
@@ -8819,11 +8833,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   }
   let (_, failed_load) = update(
     emit,
-    ChangesFailed(
-      owner=test_ctx().owner.host().unwrap(),
-      generation=4,
-      message="git failed",
-    ),
+    ChangesFailed(owner=test_ctx().owner, generation=4, message="git failed"),
     loading,
     hidden,
   )
@@ -8831,11 +8841,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   assert_true(failed_load.changes is ChangeListIdle)
   let (_, failed_unlatched_load) = update(
     emit,
-    ChangesFailed(
-      owner=test_ctx().owner.host().unwrap(),
-      generation=4,
-      message="git failed",
-    ),
+    ChangesFailed(owner=test_ctx().owner, generation=4, message="git failed"),
     { ..loading, changes: ChangeListLoading(refresh_again=false), },
     hidden,
   )
@@ -8918,7 +8924,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
   let (_, following_up) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=1,
       repository=true,
       head=None,
@@ -8940,7 +8946,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
   let (_, settled) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       generation=2,
       repository=true,
       head=None,
@@ -9153,11 +9159,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
   }
   let (_, failed) = update(
     emit,
-    ChangesFailed(
-      owner=test_ctx().owner.host().unwrap(),
-      generation=1,
-      message="git failed",
-    ),
+    ChangesFailed(owner=test_ctx().owner, generation=1, message="git failed"),
     state,
     test_ctx(),
   )
@@ -9562,7 +9564,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
   let (_, ordinary) = update(
     emit,
     ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       generation=1,
       repository=true,
       head=Some("same-head"),
@@ -9646,7 +9648,7 @@ test "a vanished review retries a failed ordinary read" {
   let (_, ordinary) = update(
     emit,
     ChangesLoaded(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       generation=1,
       repository=true,
       head=Some("new-head"),

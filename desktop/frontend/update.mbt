@@ -1499,13 +1499,21 @@ fn sync_file_panel(
     dispatch.map(msg => FileEditor(msg)),
     model.file_panel,
     file_ctx(model),
-    review_context=@mention_context.review_changes(
-      (if model.screen is Codex {
-        model.codex_composer_input().draft.mentions
+    review_context=if model.cloud_identity() is Some(owner) {
+      if model.file_panel.owner == Some(owner) {
+        model.file_panel.review_context
       } else {
-        model.active_conversation().map(conv => conv.mentions).unwrap_or([])
-      }).map(mention => mention.ref_),
-    ),
+        []
+      }
+    } else {
+      @mention_context.review_changes(
+        (if model.screen is Codex {
+          model.codex_composer_input().draft.mentions
+        } else {
+          model.active_conversation().map(conv => conv.mentions).unwrap_or([])
+        }).map(mention => mention.ref_),
+      )
+    },
   )
   ({ ..model, file_panel: panel, }, cmd)
 }
@@ -2674,6 +2682,25 @@ fn update_msg(
               annotation?=target.annotation,
             )
           }
+          @composer.ReviewContextChanged(identity~, selections~) => {
+            guard model.cloud_identity() == Some(identity.owner) &&
+              model.file_panel.owner == Some(identity.owner) else {
+              return (@cmd.none, model)
+            }
+            return (
+              @cmd.none,
+              {
+                ..model,
+                file_panel: { ..model.file_panel, review_context: selections, },
+              },
+            )
+          }
+          @composer.ReviewChangesOpened(identity~, selection~) => {
+            guard model.cloud_identity() == Some(identity.owner) else {
+              return (@cmd.none, model)
+            }
+            return open_review_context(dispatch, model, selection)
+          }
           @composer.FileIndexEnsured(identity~) => {
             guard model.cloud_identity() == Some(identity.owner) else {
               return (@cmd.none, model)
@@ -2747,7 +2774,8 @@ fn update_msg(
       match action {
         @composer.DraftAttachmentsSubmitted(..)
         | @composer.CommandResultSubmitted(..)
-        | @composer.CommandResultRecovered(..) => (@cmd.none, model)
+        | @composer.CommandResultRecovered(..)
+        | @composer.ReviewContextChanged(..) => (@cmd.none, model)
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
         | @composer.SelectMenuDismissed(..)
@@ -3299,7 +3327,7 @@ fn update_msg(
       (@cmd.batch([command, notice]), next)
     }
     FileEditor(@fileeditor.ReviewContextChanged(owner~, selection~, adding~)) => {
-      guard file_ctx(model).owner == @interop.Host(owner) &&
+      guard file_ctx(model).owner == owner &&
         model.file_panel.accepts_review_context(selection) else {
         return (@cmd.none, model)
       }
@@ -3310,6 +3338,25 @@ fn update_msg(
             ..model,
             codex: model.codex.with_review_changes(selection, adding~),
           },
+        )
+      }
+      if owner is @interop.Cloud(..) {
+        guard model.composer_input().quote_target() is Some(identity) &&
+          identity.owner == owner else {
+          return (@cmd.none, model)
+        }
+        return (
+          dispatch(
+            ComposerReply({
+              identity,
+              content: @composer.ReviewChanges(selection, adding~),
+              images: [],
+              send: false,
+              accepted: @cmd.none,
+              declined: @cmd.none,
+            }),
+          ),
+          model,
         )
       }
       guard model.active_conversation() is Some(conv) else {
@@ -3394,6 +3441,29 @@ fn update_msg(
       let comment_range = range.unwrap_or(
         @common.Range(line_number, 1, line_number, end_column),
       )
+      if resource.map_or(false, value => {
+          value.resource().scheme == "openseek-cloud"
+        }) {
+        let command = resource
+          .bind(resource => {
+            model.cloud_feedback_reply(
+              resource,
+              @composer.Annotation(
+                @composer.Mention::editor_annotation(
+                  file.0,
+                  comment_range,
+                  quote,
+                  comment,
+                  side~,
+                ),
+              ),
+              send=false,
+              accepted=clear_feedback,
+            )
+          })
+          .map_or(@cmd.none, reply => dispatch(ComposerReply(reply)))
+        return (command, model)
+      }
       if model.screen is Codex {
         return (
           clear_feedback,
@@ -3776,11 +3846,16 @@ fn update_msg(
     // current path as their tab identity.
     FileEditor(ChangedFileSelected(change))
     | FileEditor(ChangedFileNavigated(change, _)) => {
-      let placement = file_ctx(model).placement
-      guard placement is Some(value) && value.is_ready() else {
+      let ctx = file_ctx(model)
+      guard ctx.root() is Some(_) &&
+        (
+          ctx.owner is @interop.Cloud(..) ||
+          (ctx.placement is Some(value) && value.is_ready())
+        ) else {
         return (@cmd.none, model)
       }
-      guard model.workspace_resource(change.path) is Some(resource) else {
+      guard ctx.root().map(root => @resource.join_relative(root, change.path))
+        is Some(resource) else {
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
@@ -3818,8 +3893,12 @@ fn update_msg(
     // Historical rows open immutable commit/path identities rather than
     // joining the ordinary filesystem tab projection.
     FileEditor(HistoricalFileSelected(diff)) => {
-      let placement = file_ctx(model).placement
-      guard placement is Some(value) && value.is_ready() else {
+      let ctx = file_ctx(model)
+      guard ctx.root() is Some(_) &&
+        (
+          ctx.owner is @interop.Cloud(..) ||
+          (ctx.placement is Some(value) && value.is_ready())
+        ) else {
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
@@ -6625,7 +6704,7 @@ fn update_msg(
       )
       if model.github.review_pending &&
         msg is @fileeditor.ChangesLoaded(owner~, generation~, files~, ..) &&
-        model.file_panel.owner == Some(@interop.Host(owner)) &&
+        model.file_panel.owner == Some(owner) &&
         model.file_panel.changes_generation == generation &&
         panel.changes_generation == generation &&
         panel.changes is ChangeListReady(refreshing=false, ..) {
@@ -24506,7 +24585,7 @@ test "file context inherits the conversation model and its reasoning family" {
 ///|
 #derive(Eq)
 priv struct PendingReviewContext {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   navigation : Int32
   selection : @mention_context.ReviewChanges
 }
@@ -24517,11 +24596,11 @@ fn PendingReviewContext::is_current(
   model : Model,
 ) -> Bool {
   let ctx = file_ctx(model)
-  @interop.Host(self.owner) == ctx.owner &&
+  self.owner == ctx.owner &&
   self.navigation == model.file_panel.file_link_generation &&
-  ctx.placement
-  .bind(placement => placement.checkout_root())
-  .map(root => root.path) ==
+  ctx
+  .root()
+  .map(root => if ctx.owner is @interop.Cloud(..) { "." } else { root.path }) ==
   Some(self.selection.source.workspace)
 }
 
@@ -24532,10 +24611,10 @@ fn open_review_context(
   selection : @mention_context.ReviewChanges,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
-  guard ctx.owner is @interop.Host(owner) &&
-    ctx.placement
-    .bind(placement => placement.checkout_root())
-    .map(root => root.path) ==
+  let owner = ctx.owner
+  guard ctx
+    .root()
+    .map(root => if ctx.owner is @interop.Cloud(..) { "." } else { root.path }) ==
     Some(selection.source.workspace) else {
     return model.notify_notice(dispatch, ReviewSelectionUnavailable)
   }
@@ -24579,7 +24658,7 @@ fn finish_review_context_load(
   }
   // A coalesced refresh is still loading. Stale/duplicate replies cannot
   // complete a newer jump, and an intermediate empty list is not deletion.
-  guard before.owner == Some(@interop.Host(owner)) &&
+  guard before.owner == Some(owner) &&
     pending.owner == owner &&
     before.changes_generation == generation &&
     model.file_panel.changes_generation == generation &&

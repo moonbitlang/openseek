@@ -27,6 +27,7 @@ pub(all) enum ReplyContent {
   Text(quote~ : String?, comment~ : String)
   OfficeSelection(String)
   Annotation(Mention)
+  ReviewChanges(@mention_context.ReviewChanges, adding~ : Bool)
 }
 
 ///|
@@ -105,7 +106,7 @@ fn Model::quote_replied(
     return (self, reply.declined)
   }
   let insertion = match reply.content {
-    OfficeSelection(_) | Annotation(_) => ""
+    OfficeSelection(_) | Annotation(_) | ReviewChanges(_, ..) => ""
     Text(quote=Some(quote), comment~) =>
       quote_insertion(entry.draft.task, quote, comment)
     Text(quote=None, comment~) => {
@@ -126,6 +127,8 @@ fn Model::quote_replied(
     Annotation({ ref_: @mention_context.InteractiveAnswer(snapshot), .. }) =>
       entry.draft.with_artifact_snapshot(snapshot)
     Annotation(mention) => entry.draft.with_mention(mention)
+    ReviewChanges(selection, adding~) =>
+      entry.draft.with_review_changes(selection, adding~)
     Text(..) => entry.draft
   }
   let (model, changed) = self.commit_entry_change(

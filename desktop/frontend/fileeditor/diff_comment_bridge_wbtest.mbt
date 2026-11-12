@@ -52,7 +52,7 @@ test "full-diff comments cross the Desktop boundary without losing line identity
       original_line_number=Some(12),
       modified_line_number=None,
       resource=Some(
-        ModelUri("openseek-review-original://workspace/src/main.mbt")
+        { uri: "openseek-review-original://workspace/src/main.mbt", .. }
       ),
       feedback_id=Some("feedback-12"),
       ..

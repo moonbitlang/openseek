@@ -999,7 +999,7 @@ pub(all) enum Msg {
     found~ : Bool
   )
   ReviewContextChanged(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     selection~ : @mention_context.ReviewChanges,
     adding~ : Bool
   )
@@ -1141,14 +1141,14 @@ pub(all) enum Msg {
   // resolved HEAD. `None` means no commit exists or a legacy host omitted the
   // identity. The owner fence rejects late responses.
   ChangesLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     repository~ : Bool,
     head~ : String?,
     files~ : Array[ChangedFile]
   )
   ChangesFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     message~ : String
   )
@@ -1161,29 +1161,33 @@ pub(all) enum Msg {
   ChangesPollDue
   // The actual checkout HEAD is separate from Review's possibly older
   // comparison boundary. It invalidates the graph without rebasing reviews.
-  GitHeadObserved(owner~ : @interop.ConversationKey, head~ : String?)
+  GitHeadObserved(
+    owner~ : @interop.ConversationIdentity,
+    generation~ : Int32,
+    head~ : String?
+  )
   GitHistoryRefreshRequested
   GitHistoryLoadMoreRequested
   GitHistoryLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     append~ : Bool,
     reply~ : @protocol.GitHistoryReply
   )
   GitHistoryFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     append~ : Bool,
     message~ : String
   )
   GitCommitSelected(String)
   GitCommitChangesLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     reply~ : @protocol.GitCommitChangesReply
   )
   GitCommitChangesFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
     commit~ : String,
     message~ : String
@@ -1212,7 +1216,7 @@ pub(all) enum Msg {
   // Reveal a still-pending full-diff notice only after its short grace period.
   // Owner, path, and request generation fence timers that outlive navigation.
   DiffLoadingDue(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     path~ : @common.Uri,
     generation~ : Int32
   )
@@ -1288,28 +1292,28 @@ pub(all) enum Msg {
   // changed path (the dock/document key), even when the host read its rename
   // source from `original_path`.
   GitOriginalLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     path~ : @common.Uri,
     generation~ : Int32,
     background~ : Bool,
     original~ : @protocol.GitOriginalFileReply
   )
   GitOriginalFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     path~ : @common.Uri,
     generation~ : Int32,
     background~ : Bool,
     message~ : String
   )
   HistoryBlobLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     key~ : String,
     generation~ : Int32,
     side~ : HistoryDiffSide,
     blob~ : @protocol.GitOriginalFileReply
   )
   HistoryBlobFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     key~ : String,
     generation~ : Int32,
     side~ : HistoryDiffSide,

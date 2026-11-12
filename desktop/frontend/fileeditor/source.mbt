@@ -24,11 +24,6 @@ fn reference_file(
 }
 
 ///|
-fn Ctx::host_ready(self : Ctx) -> Bool {
-  self.owner is @interop.Host(_) && self.checkout_ready()
-}
-
-///|
 fn Doc::cloud_signature(
   self : Doc,
   owner : @interop.ConversationIdentity,
@@ -234,7 +229,8 @@ fn refresh_cloud_files(
   let docs = state.docs.map((_, doc) => { ..doc, stale: true, })
   if ctx.panel_open &&
     ctx.active_file is Some(path) &&
-    docs.get(path) is Some(doc) {
+    docs.get(path) is Some(doc) &&
+    doc.review.map_or(true, review => review.selected.has_working_tree_file()) {
     docs[path] = doc.prepare_read()
     commands.push(
       read_file(
@@ -246,21 +242,72 @@ fn refresh_cloud_files(
         range=None,
         cloud?=ctx.cloud_files,
         cached_sig?=doc.cloud_signature(ctx.owner),
+        review_generation?=doc.review.map(review => review.working_generation),
       ),
     )
   }
-  (
-    @cmd.batch(commands),
-    {
-      ..state,
-      request_epoch: epoch,
-      index,
-      docs,
-      children,
-      loading: directories,
-      removed_directory_reads: Map([]),
-      directory_errors: Map([]),
-      error: None,
-    },
-  )
+  let next = {
+    ..state,
+    request_epoch: epoch,
+    review_progress: [],
+    review_active_hunk: None,
+    review_hunk_ready: None,
+    index,
+    docs,
+    children,
+    loading: directories,
+    removed_directory_reads: Map([]),
+    directory_errors: Map([]),
+    error: None,
+  }
+  let (review, next) = if changes_live(next, ctx) {
+    refresh_changes(dispatch, next, ctx)
+  } else {
+    (@cmd.none, next)
+  }
+  (@cmd.batch([@cmd.batch(commands), review]), next)
+}
+
+///|
+/// Reuse the host's typed review contracts. Cloud derives the workspace and
+/// session from its authenticated URL, so neither host routing field is sent.
+async fn[Payload : ToJson, Reply : FromJson] read_review_source(
+  owner : @interop.ConversationIdentity,
+  cloud : CloudFiles?,
+  command : @commands.Command[Payload, Reply],
+  payload : Payload,
+  endpoint~ : String,
+) -> Reply {
+  match owner {
+    Host(owner) => @interop.bridge_request(owner.channel, command, payload)
+    Cloud(session~, ..) => {
+      guard cloud is Some(cloud) else {
+        raise SourceError(CloudFileOwnershipLost)
+      }
+      let body = payload.to_json()
+      if body is Object(fields) {
+        fields.remove("workspace")
+        fields.remove("session")
+      }
+      let json = @cloud_client.request(
+        @cloud.CloudOrigin,
+        "/v1/sessions/\{@uri.encode_component(session)}/review/\{endpoint}",
+        Post,
+        token=cloud.token,
+        body~,
+      )
+      @json.from_json(json) catch {
+        _ => raise @cloud_client.RequestError(@cloud_client.Malformed)
+      }
+    }
+  }
+}
+
+///|
+fn review_error_text(error : Error, locale : @i18n.Locale) -> String {
+  match error {
+    @cloud_client.RequestError(failure) => failure.text(locale)
+    SourceError(failure) => failure.text(locale)
+    _ => @interop.bridge_error_text(error)
+  }
 }
