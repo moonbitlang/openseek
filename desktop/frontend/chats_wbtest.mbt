@@ -34,19 +34,15 @@ test "Chats exclude retired local history and user named workspaces remain proje
   assert_eq(model.transcript_projects().length(), 2)
   // Each list is its own sidebar mode; archived conversations are on
   // Settings' archived page.
-  let labels = (model : Model) => {
-    model.sidebar_component_sections(model.dev()).map(section => section.label)
-  }
-  let work = { ..model, sidebar_mode: WorkMode, }
-  assert_eq(labels(work), [None])
-  assert_eq(work.sidebar_component_sections(work.dev())[0].entries.length(), 2)
-  let chat = { ..model, sidebar_mode: ChatMode, }
-  assert_eq(labels(chat), [None])
-  assert_true(chat.sidebar_component_sections(chat.dev())[0].entries is [_])
+  let input = model.sidebar_component_input()
+  assert_eq(input.work_sections.map(section => section.label), [None])
+  assert_eq(input.work_sections[0].entries.length(), 2)
+  assert_eq(input.chat_sections.map(section => section.label), [None])
+  assert_true(input.chat_sections[0].entries is [_])
   // The retired chat's archive reaches neither the sidebar nor the archived
   // page.
-  assert_true(chat.archived_chat_groups().is_empty())
-  assert_true(chat.account is None)
+  assert_true(model.archived_chat_groups().is_empty())
+  assert_true(model.account is None)
 }
 
 ///|
@@ -75,9 +71,9 @@ test "managed Codex chats are excluded from Chat and Work lists" {
       },
     }),
   }
-  for mode in ([ChatMode, WorkMode] : Array[@sidebar.Mode]) {
-    let model = { ..model, sidebar_mode: mode, }
-    for section in model.sidebar_component_sections(model.dev()) {
+  let input = model.sidebar_component_input()
+  for sections in [input.chat_sections, input.work_sections] {
+    for section in sections {
       assert_false(
         section.entries.any(entry => entry is @section.Conversation(_)),
       )

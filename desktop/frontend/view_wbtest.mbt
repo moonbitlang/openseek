@@ -42,7 +42,7 @@ test "sidebar preserves the focused host storage error in desktop and browser vi
 
 ///|
 fn sidebar_project_for_test(model : Model) -> @project.Input raise {
-  for section in model.sidebar_component_sections(model.dev()) {
+  for section in model.work_sidebar_sections(model.dev()) {
     guard section.id().source() == "openseek.projects" else { continue }
     for entry in section.entries {
       if entry is @section.Project(project) {

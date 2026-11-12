@@ -117,12 +117,12 @@ test "Cloud import belongs to the signed-in account's Chats section" {
     Cloud(account="fixture-user"),
   )
   assert_true(opened.session_import_dialog == dialog)
-  let chats = model.sidebar_component_sections(model.dev())[0]
+  let chats = model.sidebar_component_input().chat_sections[0]
   assert_eq(chats.secondary_actions, [ImportConversation(disabled=false)])
   let signed_out = { ..model, account: None, }
   let (_, refused) = update(test_dispatch(), OpenCloudImport, signed_out)
   assert_false(refused.session_import_dialog.is_open())
-  let chats = signed_out.sidebar_component_sections(signed_out.dev())[0]
+  let chats = signed_out.sidebar_component_input().chat_sections[0]
   assert_eq(chats.secondary_actions, [ImportConversation(disabled=true)])
 }
 

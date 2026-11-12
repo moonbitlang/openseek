@@ -309,9 +309,7 @@ test "renaming SSH preserves connected projects and host ordering" {
   assert_eq(saved.ssh_ui.pick_after_connect, None)
   let projects : Array[@project.Input] = []
   for
-    section in saved.sidebar_component_sections(
-      saved.device_state(channel).unwrap(),
-    ) {
+    section in saved.work_sidebar_sections(saved.device_state(channel).unwrap()) {
     for entry in section.entries {
       if entry is @section.Project(project) {
         projects.push(project)

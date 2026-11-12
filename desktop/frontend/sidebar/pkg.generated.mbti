@@ -63,7 +63,8 @@ pub(all) struct Input {
   has_host : Bool
   skills_available : Bool
   notices : Array[String]
-  sections : Array[@section.Input]
+  chat_sections : Array[@section.Input]
+  work_sections : Array[@section.Input]
   update_label : String?
   update_enabled : Bool
   schedules_active : Bool

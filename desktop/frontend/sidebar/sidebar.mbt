@@ -58,13 +58,22 @@ pub(all) struct Input {
   // A host's library or a signed-in Cloud account's.
   skills_available : Bool
   notices : Array[String]
-  sections : Array[@section.Input]
+  chat_sections : Array[@section.Input]
+  work_sections : Array[@section.Input]
   update_label : String?
   update_enabled : Bool
   schedules_active : Bool
   skills_active : Bool
   settings_active : Bool
   account : Account?
+}
+
+///|
+fn Input::sections(self : Input, mode : Mode) -> Array[@section.Input] {
+  match mode {
+    ChatMode => self.chat_sections
+    WorkMode => self.work_sections
+  }
 }
 
 ///|
@@ -181,32 +190,38 @@ fn Actions::mode_option(
 }
 
 ///|
-/// The whole left column is one Rabbita component. Its section vector is
-/// associated by stable section identity; each Section then associates its
-/// own Project and Conversation children in their packages.
-pub fn component(
+#derive(Eq)
+priv struct RenderedList {
+  tools : @html.Html
+  content : @html.Html
+}
+
+///|
+fn Actions::list_component(
+  self : Actions,
   input : @rabbita.Val[Input],
-  actions : Actions,
-) -> @rabbita.Val[@html.Html] {
+  mode : Mode,
+) -> @rabbita.Val[RenderedList] {
   // Locale and search presentation travel with the keyed section data.
-  // Separate global dependencies can render a child before its input updates.
+  // The hidden list keeps its catalog and receives no search presentation.
   let section_inputs = input.map(input => {
     let results = input.search_results()
+    let query = if input.mode == mode { input.search.query() } else { "" }
     let search : @conversation.Search = {
-      query: input.search.query(),
-      selected: if input.search.query().is_blank() {
+      query,
+      selected: if query.is_blank() {
         None
       } else {
         results.get(input.search.selected(results.length()))
       },
     }
     @vector.from_array(
-      input.sections.map(section => (input.locale, section, search)),
+      input.sections(mode).map(section => (input.locale, section, search)),
     )
   })
   let section_rows = section_inputs.assoc_by(
     (id, section) => {
-      actions.section_component(
+      self.section_component(
         id,
         section.map(pair => pair.1),
         section.map(pair => pair.0),
@@ -215,31 +230,58 @@ pub fn component(
     },
     by=section => section.1.id(),
   )
-  let overlay = @action_menu.component(input, (input, target) => {
-    input.menu_definition(target, actions)
-  })
-  input.map3(section_rows, overlay, (input, section_rows, overlay) => {
-    // Key each section in the outer container; sections key their own content
-    // rows so insertions and reordering keep each row's DOM and event slots.
+  input.map2(section_rows, (input, section_rows) => {
+    let hidden = input.mode != mode
+    // Sections key their own content rows; retain their DOM on reordering.
     let rows : Map[String, @html.Html] = Map([])
-    for index, notice in input.notices {
-      rows["notice:\{index}"] = @html.div(
-        class="conversation-row placeholder",
-        [@html.span(class="sidebar-label sidebar-notice", title=notice, notice)],
-      )
-    }
-    for group in section_rows {
-      for row in group.rows {
+    let tools : Array[@html.Html] = []
+    for section in section_rows {
+      tools.push(section.tools)
+      for row in section.rows {
         rows[row.0] = row.1
       }
     }
-    if !input.search.query().is_blank() && input.search_results().is_empty() {
+    if !hidden &&
+      !input.search.query().is_blank() &&
+      input.search_results().is_empty() {
       rows["search:empty"] = @html.div(
         class="conversation-row placeholder",
         @html.span(
           class="sidebar-label sidebar-notice",
           @messages.text(input.locale, NoMatchingConversations),
         ),
+      )
+    }
+    {
+      tools: @html.div(class="sidebar-list-tools", hidden~, tools),
+      content: @html.div(class="sidebar-section sessions", hidden~, rows),
+    }
+  })
+}
+
+///|
+/// Both lists stay mounted: selecting a mode only hides the other list,
+/// preserving its keyed Project and Conversation component state.
+pub fn component(
+  input : @rabbita.Val[Input],
+  actions : Actions,
+) -> @rabbita.Val[@html.Html] {
+  let chat_list = actions.list_component(input, ChatMode)
+  let work_list = actions.list_component(input, WorkMode)
+  let overlay = @action_menu.component(input, (input, target) => {
+    input.menu_definition(target, actions)
+  })
+  input.map4(chat_list, work_list, overlay, (
+    input,
+    chat_list,
+    work_list,
+    overlay,
+  ) => {
+    let rows : Map[String, @html.Html] = Map([])
+    for index, notice in input.notices {
+      rows["notice:\{index}"] = @html.div(
+        class="conversation-row placeholder",
+        [@html.span(class="sidebar-label sidebar-notice", title=notice, notice)],
       )
     }
     let footer : Array[@html.Html] = []
@@ -381,12 +423,6 @@ pub fn component(
         footer.push(@html.div(class="console-notice", notice))
       }
     }
-    let tools : Array[@html.Html] = [
-      input.search.view(input.locale, actions.search),
-    ]
-    for section in section_rows {
-      tools.push(section.tools)
-    }
     @html.aside([
       // The leading edge stays clear for the shell-owned fixed toggle and
       // native controls; the mode switch sits at the trailing edge.
@@ -411,9 +447,19 @@ pub fn component(
           ],
         ),
       ]),
-      @html.div(class="sidebar-tools", tools),
+      @html.div(class="sidebar-tools", [
+        input.search.view(input.locale, actions.search),
+        chat_list.tools,
+        work_list.tools,
+      ]),
       @html.div(class="sidebar-main", [
-        @html.div(class="sidebar-section sessions", rows),
+        if input.notices.is_empty() {
+          @html.nothing
+        } else {
+          @html.div(class="sidebar-section", rows)
+        },
+        chat_list.content,
+        work_list.content,
       ]),
       @html.div(class="sidebar-footer", footer),
       // The action-menu component owns open/replace/position/dismiss state;

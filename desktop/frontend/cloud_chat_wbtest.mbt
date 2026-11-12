@@ -299,7 +299,7 @@ test "Chats use the shared section with existing ordering and create action" {
       ],
     },
   }
-  let sections = model.sidebar_component_sections(model.dev())
+  let sections = model.sidebar_component_input().chat_sections
   let ids = (section : @section.Input) => {
     section.entries.filter_map(entry => {
       match entry {

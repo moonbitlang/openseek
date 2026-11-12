@@ -16769,7 +16769,7 @@ test "Codex threads share the Projects section's project rows" {
       },
     ],
   })
-  let sections = model.sidebar_component_sections(model.dev())
+  let sections = model.work_sidebar_sections(model.dev())
   // Work shows Projects, shared across both agents; archived conversations
   // live on Settings' archived page.
   assert_eq(sections.length(), 1)
