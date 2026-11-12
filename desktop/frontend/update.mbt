@@ -123,9 +123,7 @@ fn focus_channel(
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, Model) {
   guard channel != model.focused else { return (@cmd.none, model) }
-  let focus_cmd = if channel is Remote(id) &&
-    model.ssh_ui.hosts.any(host => host.id == id) &&
-    !model.ssh_online(id) {
+  let focus_cmd = if model.offline_ssh_host(channel) is Some(_) {
     @cmd.none
   } else if model.device_state(channel) is Some(dev) {
     @cmd.batch([
@@ -1763,8 +1761,7 @@ fn update(
     | CodexOpenThread(_)
     | OpenCodex
     | NewChatRequested
-    | ExplorerRequested(_)
-    | SidebarModeSelected(_) => true
+    | ExplorerRequested(_) => true
     _ => false
   }
   let model = if navigates {
@@ -1800,6 +1797,8 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  let (launch_mode_cmd, model) = settle_launch_mode(dispatch, model)
+  let model = model.remember_mode_return()
   let detail_was_open = previous.skills_detail_dialog_open()
   let detail_open = model.skills_detail_dialog_open()
   let dialog_cmd = if (previous.management_dialog is Some(_)) ==
@@ -1904,9 +1903,14 @@ fn update(
   // On the narrow layout the sidebar is a full-screen drawer, so any
   // navigation that lands somewhere else — switching or creating a
   // conversation, opening Skills or Settings — closes it; centralizing the
-  // rule here keeps every navigation handler drawer-agnostic.
+  // rule here keeps every navigation handler drawer-agnostic. The Chat/Work
+  // switch is the exception: it moves the column so the drawer can show the
+  // other list, and closing it would hide the list just picked, including
+  // when the new chat it opens arrives later.
   let model = if model.narrow &&
     model.sidebar_open &&
+    !(msg is SidebarModeSelected(_)) &&
+    !previous.completes_mode_switch(msg) &&
     (
       model.active_session != previous.active_session ||
       model.focused != previous.focused ||
@@ -1919,8 +1923,9 @@ fn update(
   }
   // The sidebar lists one kind of conversation at a time, so a conversation
   // arriving on screen by any route — a click, Cmd+N, a toast, a restored
-  // session — brings its own list with it. The stamp makes this an edge: the
-  // header switch can browse the other list while the conversation stays up.
+  // session — brings its own list with it. The stamp makes this an edge, so
+  // a mode picked over a page that claims no list (Cloud home, a Cloud
+  // draft) holds while that page stays up.
   let model = match model.sidebar_activation() {
     Some((sidebar_mode, _)) as revealed if revealed != model.sidebar_revealed =>
       { ..model, sidebar_mode, sidebar_revealed: revealed, }
@@ -2156,6 +2161,7 @@ fn update(
     @cmd.batch([
       cmd,
       navigation_cmd,
+      launch_mode_cmd,
       preferences_cmd,
       notification_badge_cmd,
       sidebar_mode_cmd,
@@ -4954,18 +4960,18 @@ fn update_msg(
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
     CloseSidebar => (@cmd.none, { ..model, sidebar_open: false, })
-    SidebarModeSelected(sidebar_mode) =>
-      (
-        @cmd.none,
-        {
-          ..model,
-          sidebar_mode: if model.work_available() {
-            sidebar_mode
-          } else {
-            ChatMode
-          },
-        },
-      )
+    SidebarModeSelected(sidebar_mode) => {
+      guard model.work_available() else {
+        return (@cmd.none, { ..model, sidebar_mode: ChatMode, })
+      }
+      // A manual pick supersedes the stored one still waiting for its page.
+      let model = { ..model, reopen_in_chat: false, }
+      if model.mode_switch_moves_column(sidebar_mode) {
+        switch_mode_column(dispatch, model, sidebar_mode, replace=false)
+      } else {
+        (@cmd.none, { ..model, sidebar_mode, })
+      }
+    }
     DeviceChosen(device) =>
       (
         @nav.load(
@@ -4978,18 +4984,23 @@ fn update_msg(
         model,
       )
     // A conversation already on screen has claimed the list, and a Cloud
-    // destination shows the Chat list; the stored pick only decides what any
-    // other empty page shows.
-    SidebarModeLoaded(sidebar_mode) =>
-      if !model.work_available() {
-        (@cmd.none, { ..model, sidebar_mode: ChatMode, })
-      } else if model.sidebar_revealed is None &&
+    // destination shows the Chat list; the stored pick decides what any other
+    // empty page shows. `settle_launch_mode` also moves a blank Work start
+    // page to Chat once that page is known, so the app reopens in the mode
+    // it was left in.
+    SidebarModeLoaded(sidebar_mode) => {
+      guard model.work_available() else {
+        return (@cmd.none, { ..model, sidebar_mode: ChatMode, })
+      }
+      let model = { ..model, reopen_in_chat: sidebar_mode is ChatMode, }
+      if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
         location.target.is_cloud()) {
         (@cmd.none, { ..model, sidebar_mode, })
       } else {
         (@cmd.none, model)
       }
+    }
     WindowFocusChanged(focused) => {
       // Returning to a visible transcript marks its completed turn read.
       // Permission questions remain actionable until answered and therefore

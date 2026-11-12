@@ -123,12 +123,13 @@ fn follow_navigation_link(
             ..model,
             chat_navigation_generation: model.chat_navigation_generation + 1,
           }
-          let (write, next) = navigation_visit(model, location, replace=false)
-          let (activate, next) = activate_navigation(dispatch, {
-            ..next,
-            navigation: { ..next.navigation, phase: Waiting, },
-          })
-          (@cmd.batch([enter, write, activate]), next)
+          let (visit, model) = enter_location(
+            dispatch,
+            model,
+            location,
+            replace=false,
+          )
+          (@cmd.batch([enter, visit]), model)
         }
         _ => update_msg(dispatch, ExternalLinkClicked(url.to_string()), model)
       }
