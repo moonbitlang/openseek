@@ -21,8 +21,15 @@ internal class FrontendStore(private val parent: File, val shell: String) {
     private val releases = File(root, "releases")
     private val lock = Any()
 
-    /** The release this process's WebView runs; set by [activate]. */
+    /** The release the newest WebView runs; set by [activate]. */
     private var running: String? = null
+
+    /**
+     * Every release a WebView of this process was given. An older activity's
+     * WebView may still load from its release, so none is deleted before the
+     * process ends.
+     */
+    private val served = mutableSetOf<String>()
 
     /**
      * Switches to the `next` release and returns the directory to serve the
@@ -36,17 +43,20 @@ internal class FrontendStore(private val parent: File, val shell: String) {
         val current = read(CURRENT)?.takeIf { it != shell }
         val directory = current?.let { File(releases, it) }?.takeIf { complete(it) }
         if (current != null && directory == null) File(root, CURRENT).delete()
-        running = directory?.name ?: shell
+        running = (directory?.name ?: shell).also { served += it }
         directory
     }
 
     /**
-     * Deletes the releases that neither run nor wait, and every other APK
-     * release's directory. Off the main thread: a release has hundreds of files.
+     * Deletes the releases that neither a WebView of this process was given
+     * nor wait, an install a killed process left behind, and every other APK
+     * release's directory. Off the main thread, never during [install]: a
+     * release has hundreds of files.
      */
     fun prune() = synchronized(lock) {
         parent.listFiles()?.forEach { if (it.name != shell) it.deleteRecursively() }
-        val kept = setOfNotNull(running, read(NEXT))
+        File(root, PARTIAL).deleteRecursively()
+        val kept = served + setOfNotNull(read(NEXT))
         releases.listFiles()?.forEach { if (it.name !in kept) it.deleteRecursively() }
     }
 
@@ -61,7 +71,7 @@ internal class FrontendStore(private val parent: File, val shell: String) {
      * bundle, or the release this process already runs. Returns whether it did.
      */
     fun select(release: String): Boolean = synchronized(lock) {
-        if (release != shell && !(release == running && complete(File(releases, release)))) return false
+        if (release != shell && !(release in served && complete(File(releases, release)))) return false
         write(NEXT, release)
         true
     }
@@ -73,11 +83,16 @@ internal class FrontendStore(private val parent: File, val shell: String) {
      * One call at a time.
      */
     fun install(release: String, archive: InputStream): Boolean {
-        val partial = File(root, "partial")
+        val partial = File(root, PARTIAL)
         partial.deleteRecursively()
         partial.mkdirs()
-        BundleArchive.extract(archive, partial)
-        if (!complete(partial)) throw BundleArchive.Malformed("the archive has no index.html and frontend.js")
+        try {
+            BundleArchive.extract(archive, partial)
+            if (!complete(partial)) throw BundleArchive.Malformed("the archive has no index.html and frontend.js")
+        } catch (e: Exception) {
+            partial.deleteRecursively()
+            throw e
+        }
         val requirement = File(partial, FrontendUpdate.REQUIREMENT).takeIf { it.isFile }?.readText()
         if (!FrontendUpdate.admits(requirement, shell)) {
             partial.deleteRecursively()
@@ -114,5 +129,6 @@ internal class FrontendStore(private val parent: File, val shell: String) {
         private const val CURRENT = "current"
         private const val NEXT = "next"
         private const val REFUSED = "refused"
+        private const val PARTIAL = "partial"
     }
 }

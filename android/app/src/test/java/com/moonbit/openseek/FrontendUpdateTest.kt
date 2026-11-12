@@ -79,12 +79,14 @@ class FrontendUpdateTest {
 
     @Test fun aTruncatedDownloadIsNotAdopted() {
         val bytes = release()
-        val store = FrontendStore(temp.newFolder(), "0.2.52")
+        val parent = temp.newFolder()
+        val store = FrontendStore(parent, "0.2.52")
         store.activate()
         assertThrows(Exception::class.java) {
             store.install("browser-3.1", ByteArrayInputStream(bytes.copyOf(bytes.size - 16)))
         }
         assertNull(store.activate())
+        assertFalse(File(parent, "0.2.52/partial").exists())
     }
 
     @Test fun aReleaseRunsFromTheNextWebViewAndTheServerCanReturnToTheBundle() {
@@ -105,11 +107,17 @@ class FrontendUpdateTest {
         assertFalse(File(directory, "assets/frontend.js.br").exists())
         assertEquals(directory, store.activate())
 
-        // The server rolls back to the release this APK bundles.
+        // The server rolls back to the release this APK bundles. An older
+        // activity's WebView may still load from the downloaded one, so only
+        // the next process deletes it.
         assertTrue(store.wants("0.2.52"))
         assertTrue(store.select("0.2.52"))
         assertNull(store.activate())
         store.prune()
+        assertTrue(directory.exists())
+        val restarted = FrontendStore(parent, "0.2.52")
+        assertNull(restarted.activate())
+        restarted.prune()
         assertFalse(directory.exists())
     }
 
