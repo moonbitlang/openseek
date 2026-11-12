@@ -20,7 +20,7 @@ pub fn skills_prompt_section(Array[Skill]) -> String?
 #derive(@debug.Debug)
 type Skill
 pub fn Skill::description(Self) -> String
-pub fn Skill::mcp_config(Self) -> String?
+pub fn Skill::mcp_config_path(Self) -> String?
 pub fn Skill::name(Self) -> String
 pub fn Skill::path(Self) -> String
 

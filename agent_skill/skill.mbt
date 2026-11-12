@@ -9,9 +9,9 @@ struct Skill {
   name : String
   description : String
   path : String
-  /// The `mcp.json` beside a `<name>/SKILL.md`, naming the MCP servers the
-  /// skill brings; `None` when it brings none.
-  mcp_config : String?
+  /// Path of the `mcp.json` beside a `<name>/SKILL.md`, naming the MCP servers
+  /// the skill brings; `None` when it brings none.
+  mcp_config_path : String?
 }
 
 ///|
@@ -99,8 +99,8 @@ pub async fn discover_skills(dir : String) -> Array[Skill] {
       if has_nested {
         let config = "\{entry_path}/mcp.json"
         let has_config = @fs.exists(config) catch { _ => false }
-        let mcp_config = if has_config { Some(config) } else { None }
-        add_skill_file(skills, nested, mcp_config?)
+        let mcp_config_path = if has_config { Some(config) } else { None }
+        add_skill_file(skills, nested, mcp_config_path?)
       }
     }
   }
@@ -112,7 +112,7 @@ pub async fn discover_skills(dir : String) -> Array[Skill] {
 async fn add_skill_file(
   skills : Array[Skill],
   path : String,
-  mcp_config? : String,
+  mcp_config_path? : String,
 ) -> Unit {
   let text = @fs.read_text(path) catch { _ => return }
   let fallback = match file_stem(path) {
@@ -131,7 +131,7 @@ async fn add_skill_file(
     stem => stem
   }
   let (name, description) = parse_frontmatter(text, fallback)
-  skills.push({ name, description, path, mcp_config, })
+  skills.push({ name, description, path, mcp_config_path, })
 }
 
 ///|

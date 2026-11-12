@@ -68,7 +68,7 @@ pub async fn start_mcp(
 
   let skill_servers : Array[@mcpconfig.McpServer] = []
   for skill in skills {
-    guard skill.mcp_config() is Some(path) else { continue }
+    guard skill.mcp_config_path() is Some(path) else { continue }
     let dir = match path.rev_split_once("/") {
       Some((dir, _)) => dir.to_owned()
       None => "."
