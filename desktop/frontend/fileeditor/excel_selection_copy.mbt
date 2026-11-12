@@ -213,10 +213,7 @@ fn State::copy_excel_selection(
     return (@cmd.none, self)
   }
   guard table.text(format) is Some(text) else {
-    return (
-      @cmd.none,
-      { ..self, error: Some(ui(ctx.locale, ExcelCopyTooLarge)), },
-    )
+    return (@cmd.none, { ..self, error: Some(ExcelCopyTooLarge), })
   }
   let generation = self.excel_copy_generation + 1
   (

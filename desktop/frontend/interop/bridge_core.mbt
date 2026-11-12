@@ -19,6 +19,14 @@ priv suberror BridgeError {
   // strictly before anything is written to the transport, which is what lets
   // callers treat it as "nothing landed" rather than "unknown".
   BridgeUnsent(String)
+  BridgeUnavailable
+  BridgeMalformedReply(String)
+  BridgeSshUnavailable
+  BridgeSshReplyRetired
+  BridgeConnectionDown
+  BridgeConnectionClosed
+  BridgeConnectionLost
+  BridgeRequestFailed
 }
 
 ///|
@@ -28,6 +36,22 @@ impl Show for BridgeError with fn output(self, logger) {
     | BridgeError(message)
     | BridgeUnsent(message)
     | BridgeDisconnected(message) => logger.write_string(message)
+    BridgeUnavailable =>
+      logger.write_string(BridgeProblem::Unavailable.text(English))
+    BridgeMalformedReply(op) =>
+      logger.write_string(BridgeProblem::MalformedReply(op).text(English))
+    BridgeSshUnavailable =>
+      logger.write_string(BridgeProblem::SshUnavailable.text(English))
+    BridgeSshReplyRetired =>
+      logger.write_string(BridgeProblem::SshReplyRetired.text(English))
+    BridgeConnectionDown =>
+      logger.write_string(BridgeProblem::ConnectionDown.text(English))
+    BridgeConnectionClosed =>
+      logger.write_string(BridgeProblem::ConnectionClosed.text(English))
+    BridgeConnectionLost =>
+      logger.write_string(BridgeProblem::ConnectionLost.text(English))
+    BridgeRequestFailed =>
+      logger.write_string(BridgeProblem::RequestFailed.text(English))
   }
 }
 
@@ -52,7 +76,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
   let reply = match channel {
     Local => {
       guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
-        raise BridgeUnsent("SeekMoon bridge unavailable")
+        raise BridgeUnavailable
       }
       wait_bridge_promise(js_method_promise(api, op, payload))
     }
@@ -79,11 +103,11 @@ fn[Reply : @json.FromJson] decode_reply(
     Json::empty_object()
   } else {
     reply.to_json() catch {
-      _ => raise BridgeError("Malformed reply from \{op}")
+      _ => raise BridgeMalformedReply(op)
     }
   }
   @json.from_json(json) catch {
-    _ => raise BridgeError("Malformed reply from \{op}")
+    _ => raise BridgeMalformedReply(op)
   }
 }
 
@@ -196,7 +220,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
     let reply = match channel {
       Local => {
         guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
-          raise BridgeUnsent("SeekMoon bridge unavailable")
+          raise BridgeUnavailable
         }
         wait_bridge_promise(js_ordered_method_promise(api, op, payload))
       }
@@ -257,6 +281,14 @@ pub fn bridge_error_text(error : Error) -> String {
     | BridgeError(message)
     | BridgeUnsent(message)
     | BridgeDisconnected(message) => message
+    BridgeUnavailable => BridgeProblem::Unavailable.text(English)
+    BridgeMalformedReply(op) => BridgeProblem::MalformedReply(op).text(English)
+    BridgeSshUnavailable => BridgeProblem::SshUnavailable.text(English)
+    BridgeSshReplyRetired => BridgeProblem::SshReplyRetired.text(English)
+    BridgeConnectionDown => BridgeProblem::ConnectionDown.text(English)
+    BridgeConnectionClosed => BridgeProblem::ConnectionClosed.text(English)
+    BridgeConnectionLost => BridgeProblem::ConnectionLost.text(English)
+    BridgeRequestFailed => BridgeProblem::RequestFailed.text(English)
     @js.Error_(value) =>
       if js_prop(value, "message") is Some(message) &&
         (@js.Cast::into(message) : String?) is Some(text) &&
@@ -266,6 +298,22 @@ pub fn bridge_error_text(error : Error) -> String {
         value.to_string()
       }
     _ => "\{error}"
+  }
+}
+
+///|
+pub fn bridge_problem(error : Error) -> BridgeProblem {
+  let error = local_bridge_error(error).unwrap_or(error)
+  match error {
+    BridgeUnavailable => Unavailable
+    BridgeMalformedReply(op) => MalformedReply(op)
+    BridgeSshUnavailable => SshUnavailable
+    BridgeSshReplyRetired => SshReplyRetired
+    BridgeConnectionDown => ConnectionDown
+    BridgeConnectionClosed => ConnectionClosed
+    BridgeConnectionLost => ConnectionLost
+    BridgeRequestFailed => RequestFailed
+    _ => External(bridge_error_text(error))
   }
 }
 
@@ -299,13 +347,22 @@ pub(all) enum BridgeFailure {
 /// `ws_request` names its own failures before they get here, so a bare
 /// `@js.Error_` reaching this point came from the local path.
 pub fn bridge_failure(error : Error) -> BridgeFailure {
+  let error = local_bridge_error(error).unwrap_or(error)
   match error {
-    BridgeRefused(_) => Refused
-    BridgeUnsent(_) => Unsent
+    BridgeRefused(_) | BridgeRequestFailed => Refused
+    BridgeUnsent(_)
+    | BridgeUnavailable
+    | BridgeSshUnavailable
+    | BridgeConnectionDown => Unsent
     // A reply that arrived and could not be decoded, or a socket that died
     // under a request already sent: it went out, and the answer is what is
     // lost.
-    BridgeError(_) | BridgeDisconnected(_) => Unknown
+    BridgeError(_)
+    | BridgeDisconnected(_)
+    | BridgeMalformedReply(_)
+    | BridgeSshReplyRetired
+    | BridgeConnectionClosed
+    | BridgeConnectionLost => Unknown
     @js.Error_(value) =>
       if openseek_api() is Some(_) || browser_rpc_error_is_definite(value) {
         Refused
@@ -342,6 +399,15 @@ let ordered_method_tail : Ref[@js.Value] = {
 /// The connection owner already schedules reconnection; callers must not
 /// restart that loop or replay a request whose delivery is unknown.
 pub fn bridge_connection_lost(channel : ChannelId, error : Error) -> Bool {
+  let error = local_bridge_error(error).unwrap_or(error)
   channel is Remote(_) &&
-  (error is BridgeDisconnected(_) || error is BridgeUnsent(_))
+  (
+    error is BridgeDisconnected(_) ||
+    error is BridgeUnsent(_) ||
+    error is BridgeUnavailable ||
+    error is BridgeSshUnavailable ||
+    error is BridgeConnectionDown ||
+    error is BridgeConnectionClosed ||
+    error is BridgeConnectionLost
+  )
 }

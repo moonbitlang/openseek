@@ -1118,7 +1118,12 @@ fn mount_generated_svg_viewport(
   wrapper.set_attribute("data-diagram-language", "uml")
   wrapper.set_inner_html(svg)
   host.append_child(wrapper.as_node())
-  @diagram_viewport.DiagramViewports(host, () => (), fill_container=true)
+  @diagram_viewport.DiagramViewports(
+    host,
+    () => (),
+    fill_container=true,
+    localization=viewer_localization,
+  )
 }
 
 ///|

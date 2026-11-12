@@ -2,7 +2,7 @@
 test "ordinary retries without previewable content enter loading but successful refreshes retain content" {
   let file = test_file("retry.txt")
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
-  for previous in [TabBinary, TabOversized, TabReadFailed("failed")] {
+  for previous in [TabBinary, TabOversized, TabReadFailed(Diagnostic("failed"))] {
     let state = {
       ..owned_state(),
       docs: Map([
@@ -57,7 +57,7 @@ test "ordinary retries preserve a review's visible or pending baseline" {
     let review = { ..original.review.unwrap(), baseline, }
     let doc = {
       ..original,
-      state: TabReadFailed("failed"),
+      state: TabReadFailed(Diagnostic("failed")),
       review: Some(review),
     }
     let state = { ..owned_state(), docs: Map([(file, doc)]), }
@@ -71,7 +71,13 @@ test "ordinary retries preserve a review's visible or pending baseline" {
     )
     assert_true(
       retrying.docs.get(file)
-      is Some({ state: TabReadFailed("failed"), review: Some(retained), .. }) &&
+      is Some(
+        {
+          state: TabReadFailed(Diagnostic("failed")),
+          review: Some(retained),
+          ..
+        }
+      ) &&
       retained.baseline == baseline,
     )
   }

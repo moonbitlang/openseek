@@ -2,6 +2,12 @@
 priv enum DynamicMessage {
   DReviewedFiles(Int32, Int32)
   DLoadingDiff(String)
+  DDeletedWithoutBaseline(String)
+  DDeletedOnDisk(String)
+  DBinaryFile(String)
+  DLargeFile(String)
+  DBinaryHistoryFile(String)
+  DLargeHistoryFile(String)
   DLoadingBaseline(String)
   DBinaryBaseline(String)
   DLargeBaseline(String)
@@ -40,6 +46,60 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
       "\{reviewed} / \{total} レビュー済み"
     (Spanish, DReviewedFiles(reviewed, total)) =>
       "\{reviewed} / \{total} revisados"
+    (English, DDeletedWithoutBaseline(name)) =>
+      "\{name} was deleted and has no review baseline to preview."
+    (Spanish, DDeletedWithoutBaseline(name)) =>
+      "Se eliminó \{name} y no tiene una base de revisión que previsualizar."
+    (SimplifiedChinese, DDeletedWithoutBaseline(name)) =>
+      "\{name} 已删除，且没有可预览的审阅基准。"
+    (TraditionalChinese, DDeletedWithoutBaseline(name)) =>
+      "\{name} 已刪除，且沒有可預覽的審閱基準。"
+    (Japanese, DDeletedWithoutBaseline(name)) =>
+      "\{name} は削除されており、プレビューできるレビュー基準がありません。"
+    (English, DDeletedOnDisk(name)) => "\{name} was deleted on disk."
+    (Spanish, DDeletedOnDisk(name)) => "Se eliminó \{name} del disco."
+    (SimplifiedChinese, DDeletedOnDisk(name)) => "\{name} 已从磁盘删除。"
+    (TraditionalChinese, DDeletedOnDisk(name)) =>
+      "\{name} 已從磁碟刪除。"
+    (Japanese, DDeletedOnDisk(name)) =>
+      "\{name} はディスクから削除されました。"
+    (English, DBinaryFile(name)) =>
+      "\{name} is a binary file and cannot be previewed."
+    (Spanish, DBinaryFile(name)) =>
+      "\{name} es un archivo binario y no se puede previsualizar."
+    (SimplifiedChinese, DBinaryFile(name)) =>
+      "\{name} 是二进制文件，无法预览。"
+    (TraditionalChinese, DBinaryFile(name)) =>
+      "\{name} 是二進位檔案，無法預覽。"
+    (Japanese, DBinaryFile(name)) =>
+      "\{name} はバイナリファイルのためプレビューできません。"
+    (English, DLargeFile(name)) => "\{name} is too large to preview."
+    (Spanish, DLargeFile(name)) =>
+      "\{name} es demasiado grande para previsualizarlo."
+    (SimplifiedChinese, DLargeFile(name)) => "\{name} 过大，无法预览。"
+    (TraditionalChinese, DLargeFile(name)) => "\{name} 過大，無法預覽。"
+    (Japanese, DLargeFile(name)) =>
+      "\{name} は大きすぎるためプレビューできません。"
+    (English, DBinaryHistoryFile(name)) =>
+      "\{name} is binary at this revision and cannot be previewed."
+    (Spanish, DBinaryHistoryFile(name)) =>
+      "\{name} es binario en esta revisión y no se puede previsualizar."
+    (SimplifiedChinese, DBinaryHistoryFile(name)) =>
+      "\{name} 在此版本中是二进制文件，无法预览。"
+    (TraditionalChinese, DBinaryHistoryFile(name)) =>
+      "\{name} 在此版本中是二進位檔案，無法預覽。"
+    (Japanese, DBinaryHistoryFile(name)) =>
+      "このリビジョンの \{name} はバイナリファイルのためプレビューできません。"
+    (English, DLargeHistoryFile(name)) =>
+      "\{name} is too large at this revision to preview."
+    (Spanish, DLargeHistoryFile(name)) =>
+      "\{name} es demasiado grande en esta revisión para previsualizarlo."
+    (SimplifiedChinese, DLargeHistoryFile(name)) =>
+      "\{name} 在此版本中过大，无法预览。"
+    (TraditionalChinese, DLargeHistoryFile(name)) =>
+      "\{name} 在此版本中過大，無法預覽。"
+    (Japanese, DLargeHistoryFile(name)) =>
+      "このリビジョンの \{name} は大きすぎるためプレビューできません。"
     (English, DLoadingDiff(p0)) => "Loading diff for \{p0}…"
     (Spanish, DLoadingDiff(p0)) => "Cargando diferencias de \{p0}…"
     (SimplifiedChinese, DLoadingDiff(p0)) => "正在加载 \{p0} 的差异…"

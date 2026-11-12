@@ -21,11 +21,16 @@ test "a relay account read failure is an account error, not a page-access error"
   let model = relay_console_test_model()
   let (_, failed) = update(
     test_dispatch(),
-    AccountLoaded(model.account_epoch, Err("the relay is unreachable")),
+    AccountLoaded(
+      model.account_epoch,
+      Err(Diagnostic("the relay is unreachable")),
+    ),
     model,
   )
-  assert_eq(failed.account_error, Some("the relay is unreachable"))
-  assert_eq(failed.console.access_error, None)
+  assert_true(
+    failed.account_error is Some(Diagnostic("the relay is unreachable")),
+  )
+  assert_true(failed.console.access_error is None)
   assert_true(failed.account_checked)
   assert_true(failed.console.auth is AuthChecking)
 }
@@ -36,30 +41,24 @@ test "the local console keeps host sign-in failures apart from the Cloud account
   let model = local_console_test_model()
   let (_, failed) = update(
     dispatch,
-    Console(MeFailed("the sign-in check answered HTTP 500")),
+    Console(MeFailed(SignInCheckHttp(500))),
     model,
   )
-  assert_eq(
-    failed.console.access_error,
-    Some("the sign-in check answered HTTP 500"),
-  )
-  assert_eq(failed.account_error, None)
+  assert_true(failed.console.access_error is Some(SignInCheckHttp(500)))
+  assert_true(failed.account_error is None)
   // A Cloud account read says nothing about the host's sign-in.
   let (_, loaded) = update(
     dispatch,
     AccountLoaded(failed.account_epoch, Ok(None)),
     failed,
   )
-  assert_eq(
-    loaded.console.access_error,
-    Some("the sign-in check answered HTTP 500"),
-  )
+  assert_true(loaded.console.access_error is Some(SignInCheckHttp(500)))
   let (_, signed_in) = update(
     dispatch,
     Console(MeLoaded(login="local", avatar="")),
     loaded,
   )
-  assert_eq(signed_in.console.access_error, None)
+  assert_true(signed_in.console.access_error is None)
 }
 
 ///|
@@ -77,20 +76,20 @@ test "a failed sign-out lands on the login it was for" {
   }
   let (_, failed) = update(
     dispatch,
-    Console(SignOutFailed("logout failed", token=Some("ts_A"))),
+    Console(SignOutFailed(Diagnostic("logout failed"), token=Some("ts_A"))),
     cloud,
   )
-  assert_eq(failed.account_error, Some("logout failed"))
-  assert_eq(failed.console.access_error, None)
+  assert_true(failed.account_error is Some(Diagnostic("logout failed")))
+  assert_true(failed.console.access_error is None)
   assert_false(failed.console.busy)
   let host = { ..cloud, account: None, }
   let (_, failed) = update(
     dispatch,
-    Console(SignOutFailed("logout failed", token=None)),
+    Console(SignOutFailed(Diagnostic("logout failed"), token=None)),
     host,
   )
-  assert_eq(failed.console.access_error, Some("logout failed"))
-  assert_eq(failed.account_error, None)
+  assert_true(failed.console.access_error is Some(Diagnostic("logout failed")))
+  assert_true(failed.account_error is None)
   assert_false(failed.console.busy)
 }
 
@@ -99,32 +98,32 @@ test "starting a sign-out clears both kinds of failure" {
   let model = {
     ..local_console_test_model(),
     account: Some(account_error_test_account("ts_A")),
-    account_error: Some("old account failure"),
+    account_error: Some(Diagnostic("old account failure")),
     console: {
       ..local_console_test_model().console,
       auth: AuthSignedIn(login="local", avatar=""),
-      access_error: Some("old host failure"),
+      access_error: Some(Diagnostic("old host failure")),
     },
   }
   let (_, signing_out) = update(test_dispatch(), Console(SignOutClicked), model)
   assert_true(signing_out.console.busy)
-  assert_eq(signing_out.account_error, None)
-  assert_eq(signing_out.console.access_error, None)
+  assert_true(signing_out.account_error is None)
+  assert_true(signing_out.console.access_error is None)
 }
 
 ///|
 test "the console retry clears both kinds of failure" {
   let model = {
     ..local_console_test_model(),
-    account_error: Some("account storage is unavailable"),
+    account_error: Some(Diagnostic("account storage is unavailable")),
     console: {
       ..local_console_test_model().console,
-      access_error: Some("the relay is unreachable"),
+      access_error: Some(Diagnostic("the relay is unreachable")),
     },
   }
   let (_, retried) = update(test_dispatch(), Console(RefreshClicked), model)
-  assert_eq(retried.account_error, None)
-  assert_eq(retried.console.access_error, None)
+  assert_true(retried.account_error is None)
+  assert_true(retried.console.access_error is None)
 }
 
 ///|
@@ -135,17 +134,20 @@ test "the account retry rereads the account in every environment" {
     local_console_test_model(),
   ]
   for model in models {
-    let model = { ..model, account_error: Some("could not read the account"), }
+    let model = {
+      ..model,
+      account_error: Some(Diagnostic("could not read the account")),
+    }
     let (_, retried) = update(test_dispatch(), AccountRetryClicked, model)
-    assert_eq(retried.account_error, None)
+    assert_true(retried.account_error is None)
     assert_eq(retried.account_epoch, model.account_epoch + 1)
     // The retry's own reply settles; the read it replaced cannot.
     let (_, stale) = update(
       test_dispatch(),
-      AccountLoaded(model.account_epoch, Err("stale")),
+      AccountLoaded(model.account_epoch, Err(Diagnostic("stale"))),
       retried,
     )
-    assert_eq(stale.account_error, None)
+    assert_true(stale.account_error is None)
   }
 }
 
@@ -155,11 +157,11 @@ test "the account retry waits for a sign-in in flight" {
     ..test_model(),
     is_desktop: true,
     remote_connecting: true,
-    account_error: Some("old failure"),
+    account_error: Some(Diagnostic("old failure")),
   }
   let (_, unchanged) = update(test_dispatch(), AccountRetryClicked, model)
   assert_eq(unchanged.account_epoch, model.account_epoch)
-  assert_eq(unchanged.account_error, Some("old failure"))
+  assert_true(unchanged.account_error is Some(Diagnostic("old failure")))
 }
 
 ///|
@@ -172,7 +174,7 @@ test "the Cloud home learns the account once a read settles" {
     model,
   )
   assert_true(signed_out.account_checked)
-  assert_eq(signed_out.account_error, None)
+  assert_true(signed_out.account_error is None)
 }
 
 ///|
@@ -185,7 +187,7 @@ test "a Remote access failure stays out of the account" {
     model,
   )
   assert_eq(failed.remote_access_error, Some("bridge down"))
-  assert_eq(failed.account_error, None)
+  assert_true(failed.account_error is None)
   // An account read leaves the switch's failure in place.
   let (_, loaded) = update(
     dispatch,

@@ -68,7 +68,7 @@ fn project_codelens_range(
 
 ///|
 priv struct MoonIdeCodeLensProvider {
-  on_error : (@interop.ConversationKey, String) -> Unit
+  on_error : (@interop.ConversationKey, Failure) -> Unit
 }
 
 ///|
@@ -138,7 +138,7 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
                 if is_current() {
                   (self.on_error)(
                     projection.context.owner,
-                    "Find references failed: \{@interop.bridge_error_text(error)}",
+                    ReferencesFailed(@interop.bridge_problem(error)),
                   )
                 }
                 return
@@ -156,7 +156,7 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
 
 ///|
 fn register_moon_ide_code_lens_provider(
-  on_error : (@interop.ConversationKey, String) -> Unit,
+  on_error : (@interop.ConversationKey, Failure) -> Unit,
 ) -> @common.Disposable {
   @languages.languages.register_code_lens_provider(
     LanguageFilter(LanguageFilter(language="moonbit", scheme=@resource.Scheme)),

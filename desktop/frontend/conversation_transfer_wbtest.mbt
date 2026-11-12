@@ -15,8 +15,8 @@ test "import belongs to the project menu rather than the active conversation" {
   let (_, opened) = update(test_dispatch(), msg, model)
   let (_, repeated) = update(test_dispatch(), msg, model)
   let (_, dialog) = model.session_import_dialog.open(Host(expected))
-  assert_eq(opened.session_import_dialog, dialog)
-  assert_eq(opened.session_import_dialog, repeated.session_import_dialog)
+  assert_true(opened.session_import_dialog == dialog)
+  assert_true(opened.session_import_dialog == repeated.session_import_dialog)
   assert_eq(model.session_import_target(Local, workspace), Some(expected))
   let (_, detached) = update(test_dispatch(), msg, test_model())
   assert_false(detached.session_import_dialog.is_open())
@@ -36,7 +36,7 @@ test "import waits for the normal catalog without patching inventory and ignores
     opened,
   )
   let (_, pending) = update(emit, SessionImport(ImportLink), typed)
-  let completed = SessionImport(Imported(2, Success("imported")))
+  let completed = SessionImport(Imported(2, Ok("imported")))
   let (_, waiting) = update(emit, completed, pending)
   let (_, repeated) = update(emit, completed, pending)
   assert_true(waiting.navigation == repeated.navigation)
@@ -115,7 +115,7 @@ test "Cloud import belongs to the signed-in account's Chats section" {
   let (_, dialog) = model.session_import_dialog.open(
     Cloud(account="fixture-user"),
   )
-  assert_eq(opened.session_import_dialog, dialog)
+  assert_true(opened.session_import_dialog == dialog)
   let chats = model.sidebar_component_sections(model.dev())[0]
   assert_eq(chats.secondary_actions, [ImportConversation(disabled=false)])
   let signed_out = { ..model, account: None, }
@@ -135,7 +135,7 @@ test "a finished Cloud import refreshes the list and opens the new chat" {
     opened,
   )
   let (_, pending) = update(emit, SessionImport(ImportLink), typed)
-  let completed = SessionImport(Imported(2, Success("cloud-imported")))
+  let completed = SessionImport(Imported(2, Ok("cloud-imported")))
   let (_, imported) = update(emit, completed, pending)
   assert_false(imported.session_import_dialog.is_open())
   assert_true(imported.screen is Chat)

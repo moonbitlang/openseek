@@ -48,7 +48,7 @@ test "PDF-only dock retains the watcher without opening text documents" {
     preview_files: [preview, preview],
   }
   assert_true(duplicate.observed_files() == [preview])
-  let failed = { ..state, watch_error: Some("watch stopped"), }
+  let failed = { ..state, watch_error: Some(Diagnostic("watch stopped")), }
   assert_true(failed.polled_files(duplicate) == [preview])
   let outside = @resource.of_path(
     @interop.ChannelId::Local,

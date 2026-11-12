@@ -54,12 +54,13 @@ test "Cloud renders native history through the Local projector including goals a
     watermark: None,
     prediction: None,
   })
-  assert_true(conversation.items() == shared.items)
+  assert_true(conversation.items(English) == shared.items)
   assert_true(
-    conversation.items()[0].kind is User(content=Content([Text("hello")])),
+    conversation.items(English)[0].kind
+    is User(content=Content([Text("hello")])),
   )
   assert_true(
-    conversation.items()[1].kind
+    conversation.items(English)[1].kind
     is Assistant(
       reasoning=Some("Thinking"),
       calls=[{ outcome: Done(..), .. }],
@@ -67,7 +68,9 @@ test "Cloud renders native history through the Local projector including goals a
     ),
   )
   assert_true(
-    conversation.items().any(item => item.kind is Summary("Earlier context")),
+    conversation
+    .items(English)
+    .any(item => item.kind is Summary("Earlier context")),
   )
   assert_true(
     conversation.restore_goal(document).controls.goal
@@ -89,8 +92,8 @@ test "Cloud renders native history through the Local projector including goals a
   let once = metadata_update(state, Loaded(1, "session", 9, history))
   let twice = metadata_update(once, Loaded(1, "session", 9, history))
   assert_true(
-    once.conversations["session"].items() ==
-    twice.conversations["session"].items(),
+    once.conversations["session"].items(English) ==
+    twice.conversations["session"].items(English),
   )
 }
 
@@ -114,7 +117,9 @@ test "Cloud requires the native session document and preserves reasoning-only re
       ],
     },
   })
-  let items = { ..Conversation::empty(), document: history.session, }.items()
+  let items = { ..Conversation::empty(), document: history.session, }.items(
+    English,
+  )
   assert_true(
     items
     is [
@@ -168,7 +173,7 @@ test "Cloud preserves submitted input and startup failure when the native log is
     base,
     Loaded(1, "session", base.conversations["session"].request, history),
   )
-  let items = loaded.conversations["session"].items()
+  let items = loaded.conversations["session"].items(English)
   assert_true(
     items
     is [
@@ -181,7 +186,7 @@ test "Cloud preserves submitted input and startup failure when the native log is
     controls_fixture(),
     Loaded(1, "session", 0, history),
   )
-  assert_true(reopened.conversations["session"].items() == items)
+  assert_true(reopened.conversations["session"].items(English) == items)
 }
 
 ///|
@@ -219,7 +224,7 @@ test "Cloud supplements a failed service turn after native history and removes t
   ]
   let conversation = { ..Conversation::empty(), document, records, }
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [
       { kind: User(content=Content([Text("Earlier")])), .. },
       { kind: Assistant(prose=Some("Earlier answer"), ..), .. },
@@ -259,7 +264,7 @@ test "Cloud supplements a failed service turn after native history and removes t
     }),
   }
   let shared = caught_up.session_view().items
-  assert_true(caught_up.items() == shared)
+  assert_true(caught_up.items(English) == shared)
 }
 
 ///|
@@ -305,7 +310,7 @@ test "Cloud service supplements preserve repeated and rich inputs without dedupl
       },
     ],
   }
-  let items = conversation.items()
+  let items = conversation.items(English)
   assert_eq(items.filter(item => item.kind is User(..)).length(), 2)
   assert_true(
     items[2].kind
@@ -339,7 +344,10 @@ test "Cloud service supplements preserve repeated and rich inputs without dedupl
       },
     ],
   }
-  assert_eq(repeated.items().filter(item => item.kind is User(..)).length(), 3)
+  assert_eq(
+    repeated.items(English).filter(item => item.kind is User(..)).length(),
+    3,
+  )
 }
 
 ///|
@@ -366,7 +374,7 @@ test "Cloud shows a live service failure before the next history read without du
     ],
   }
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [{ kind: User(..), .. }, { kind: Failure("Start failed"), .. }],
   )
   let saved = {
@@ -383,9 +391,9 @@ test "Cloud shows a live service failure before the next history read without du
     ],
   }
   assert_true(
-    saved.items() ==
+    saved.items(English) ==
     conversation
-    .items()
+    .items(English)
     .mapi((index, item) => {
       if index == 1 {
         { ..item, ts: Some(101), }
@@ -471,13 +479,13 @@ test "Cloud maps repeated prompts by engine sequence after a failed startup" {
   }
   let base = controls_fixture()
   let loaded = metadata_update(base, Loaded(1, "session", 0, history))
-  expected(loaded.conversations["session"].items())
+  expected(loaded.conversations["session"].items(English))
   // A fresh model loading the same persisted response has the same order.
   let reopened = metadata_update(
     controls_fixture(),
     Loaded(1, "session", 0, history),
   )
-  expected(reopened.conversations["session"].items())
+  expected(reopened.conversations["session"].items(English))
 }
 
 ///|
@@ -512,7 +520,7 @@ test "Cloud engine sequence is optional and only identifies a native User" {
       document: history.session,
     }
     assert_eq(
-      conversation.items().length(),
+      conversation.items(English).length(),
       if expected is Some(_) {
         1
       } else {
@@ -561,7 +569,7 @@ test "Cloud engine sequence is optional and only identifies a native User" {
   }
   assert_true(
     conversation
-    .items()
+    .items(English)
     .any(item => {
       item.kind is User(content=Content([Text("Unrepresented prompt")]))
     }),

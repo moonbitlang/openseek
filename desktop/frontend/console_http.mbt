@@ -50,20 +50,17 @@ fn fetch_console_me(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
                 200 =>
                   match parse_console_me(body) {
                     Some(msg) => msg
-                    None =>
-                      MeFailed("the sign-in check answered malformed JSON")
+                    None => MeFailed(SignInCheckMalformed)
                   }
                 401 => MeUnauthorized
-                _ => MeFailed("the sign-in check answered HTTP \{status}")
+                _ => MeFailed(SignInCheckHttp(status))
               },
             ),
           ),
         )
       },
       detail => {
-        scheduler.add(
-          dispatch(Console(MeFailed("the relay is unreachable: \{detail}"))),
-        )
+        scheduler.add(dispatch(Console(MeFailed(RelayUnreachable(detail)))))
       },
     )
   })
@@ -110,17 +107,10 @@ fn fetch_console_roster(
                   match parse_console_roster(body) {
                     Some(metas) => RosterLoaded(metas, generation~)
                     None =>
-                      RosterFailed(
-                        message="the device list answered malformed JSON",
-                        generation~,
-                      )
+                      RosterFailed(message=DeviceListMalformed, generation~)
                   }
                 401 => RosterUnauthorized(generation~, token~)
-                _ =>
-                  RosterFailed(
-                    message="the device list answered HTTP \{status}",
-                    generation~,
-                  )
+                _ => RosterFailed(message=DeviceListHttp(status), generation~)
               },
             ),
           ),
@@ -129,12 +119,7 @@ fn fetch_console_roster(
       detail => {
         scheduler.add(
           dispatch(
-            Console(
-              RosterFailed(
-                message="the relay is unreachable: \{detail}",
-                generation~,
-              ),
-            ),
+            Console(RosterFailed(message=RelayUnreachable(detail), generation~)),
           ),
         )
       },
@@ -145,12 +130,12 @@ fn fetch_console_roster(
 ///|
 /// The error line of a failed sign-out: the relay's `{error}` body when it
 /// sent one, the HTTP status otherwise.
-fn sign_out_error(status : Int32, body : String) -> String {
+fn sign_out_error(status : Int32, body : String) -> @account_failure.Failure {
   if (@json.parse(body) catch { _ => null }) is Object(fields) &&
     @jsonx.json_text(fields, "error") is Some(message) {
-    return message
+    return Diagnostic(message)
   }
-  "the relay answered HTTP \{status}"
+  RelayHttp(status)
 }
 
 ///|
@@ -179,11 +164,7 @@ fn sign_out(dispatch : @cmd.Emit[Msg], token? : String) -> @cmd.Cmd {
       },
       detail => {
         scheduler.add(
-          dispatch(
-            Console(
-              SignOutFailed("the relay is unreachable: \{detail}", token~),
-            ),
-          ),
+          dispatch(Console(SignOutFailed(RelayUnreachable(detail), token~))),
         )
       },
     )

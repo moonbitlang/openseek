@@ -367,9 +367,14 @@ fn update_cloud(
     before.conversations.get(creation.id)
     is Some({ outgoing: Some({ input: @cloud.Terminal(shell), .. }), .. }) {
     if shell is Some(shell) {
-      return cloud_shell_not_started(dispatch, next, shell.id, failure.label())
+      return cloud_shell_not_started(
+        dispatch,
+        next,
+        shell.id,
+        CloudFailure(failure),
+      )
     }
-    let (report, next) = next.notify_error(dispatch, failure.label())
+    let (report, next) = next.notify_cloud_error(dispatch, failure)
     return (@cmd.batch([command, ..file_commands, report]), next)
   }
   // Earlier turns arrive from the network or from cached pages rejoining the
@@ -425,7 +430,7 @@ fn update_cloud(
       @cloud.EditFailed(_, _, _, error) =>
         update_msg(
           dispatch,
-          ConversationRenameFailed(id=rename.id, message=error.label()),
+          ConversationRenameFailed(id=rename.id, message=Cloud(error)),
           { ..next, cloud: { ..next.cloud, notice: None, }, },
         )
       _ => next.finish_conversation_rename(rename)

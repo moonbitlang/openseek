@@ -57,7 +57,7 @@ fn State::sync_office_navigation(
               {
                 ..self,
                 office_navigation: None,
-                error: Some(ui(ctx.locale, OfficeCitationUnavailable)),
+                error: Some(OfficeCitationUnavailable),
               },
             )
           }
@@ -73,7 +73,7 @@ fn State::sync_office_navigation(
         {
           ..self,
           office_navigation: None,
-          error: Some(ui(ctx.locale, OfficeCitationUnavailable)),
+          error: Some(OfficeCitationUnavailable),
         },
       )
   }

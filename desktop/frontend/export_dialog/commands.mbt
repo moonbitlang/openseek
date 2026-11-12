@@ -1,13 +1,13 @@
 ///|
 priv suberror ExportError {
-  ExportError(String)
+  ExportError(Failure)
   AccountUnauthorized
 }
 
 ///|
 impl Show for ExportError with fn output(self, logger) {
   match self {
-    ExportError(message) => logger.write_string(message)
+    ExportError(failure) => logger.write_string(failure.text(English))
     AccountUnauthorized => logger.write_string("Your account sign-in expired.")
   }
 }
@@ -25,7 +25,7 @@ fn Model::share(
   let generation = self.generation
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = try {
+      let reply : Result[@protocol.SessionShareReply, Failure] = try {
         let crypto : @js.Value = @js.globalThis.get_with_string("crypto")
         let first : String = crypto.apply_with_string(
           "randomUUID",
@@ -38,63 +38,64 @@ fn Model::share(
         let idempotency_key = (first + second).replace_all(old="-", new="")
         if source is File(CloudFile(account=owner, ..)) &&
           owner != account.user.user_id {
-          raise ExportError(
-            "Sign-in changed before sharing. Try sharing again.",
-          )
+          raise ExportError(SignInChanged)
         }
-        match source {
-          Host(channel, payload) => {
-            let authorization = share_authorization(
-              channel,
-              idempotency_key,
-              account,
-              desktop~,
-            )
-            @interop.bridge_request(channel, @commands.session_share, {
-              generation,
-              source: payload,
-              idempotency_key,
-              authorization,
-            })
-          }
-          File(HostFile(channel, payload)) => {
-            let authorization = share_authorization(
-              channel,
-              idempotency_key,
-              account,
-              desktop~,
-            )
-            @interop.bridge_request(channel, @commands.fs_share_file, {
-              source: payload,
-              idempotency_key,
-              authorization,
-            })
-          }
-          Cloud(session~) | File(CloudFile(session~, ..)) => {
-            scheduler.add(
-              emit(Progress({ generation, progress: Waiting(attempt=1), })),
-            )
-            let url = @cloud.share(
-              account.token,
-              session,
-              idempotency_key,
-              path?=match source {
-                File(CloudFile(path~, ..)) => Some(path)
-                _ => None
-              },
-            ) catch {
-              @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
-                raise AccountUnauthorized
-              @cloud.RequestError::RequestError(error) =>
-                raise ExportError(error.label())
-              _ => raise ExportError(@cloud.Failure::Unreachable.label())
+        Ok(
+          match source {
+            Host(channel, payload) => {
+              let authorization = share_authorization(
+                channel,
+                idempotency_key,
+                account,
+                desktop~,
+              )
+              @interop.bridge_request(channel, @commands.session_share, {
+                generation,
+                source: payload,
+                idempotency_key,
+                authorization,
+              })
             }
-            @protocol.Shared(url~)
-          }
-        }
+            File(HostFile(channel, payload)) => {
+              let authorization = share_authorization(
+                channel,
+                idempotency_key,
+                account,
+                desktop~,
+              )
+              @interop.bridge_request(channel, @commands.fs_share_file, {
+                source: payload,
+                idempotency_key,
+                authorization,
+              })
+            }
+            Cloud(session~) | File(CloudFile(session~, ..)) => {
+              scheduler.add(
+                emit(Progress({ generation, progress: Waiting(attempt=1), })),
+              )
+              let url = @cloud.share(
+                account.token,
+                session,
+                idempotency_key,
+                path?=match source {
+                  File(CloudFile(path~, ..)) => Some(path)
+                  _ => None
+                },
+              ) catch {
+                @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
+                  raise AccountUnauthorized
+                @cloud.RequestError::RequestError(error) =>
+                  raise ExportError(Cloud(error))
+                _ => raise ExportError(Cloud(@cloud.Failure::Unreachable))
+              }
+              @protocol.Shared(url~)
+            }
+          },
+        )
       } catch {
-        AccountUnauthorized => @protocol.SignInRequired
-        error => @protocol.Failed(message=@interop.bridge_error_text(error))
+        AccountUnauthorized => Ok(@protocol.SignInRequired)
+        ExportError(failure) => Err(failure)
+        error => Err(Bridge(@interop.bridge_problem(error)))
       }
       scheduler.add(emit(Published(generation~, reply)))
     })
@@ -117,7 +118,7 @@ async fn upload_grant(
   }
   let url = match @base_browser.resolve_url("/v2/shares/upload-grants", base~) {
     Ok((url, _)) => url
-    Err(message) => raise ExportError(message)
+    Err(message) => raise ExportError(Diagnostic(message))
   }
   let body : Json = { "device_id": device, "idempotency_key": idempotency_key }
   let (response, result) = @http.post(url, body.stringify(), headers={
@@ -128,12 +129,10 @@ async fn upload_grant(
     raise AccountUnauthorized
   }
   guard response.code == 201 else {
-    raise ExportError(
-      "Could not prepare sharing (HTTP \{response.code}). Try sharing again.",
-    )
+    raise ExportError(ShareAuthorizationHttp(response.code))
   }
   let json = result.json() catch {
-    _ => raise ExportError("Invalid share upload permission.")
+    _ => raise ExportError(InvalidUploadPermission)
   }
   guard json
     is {
@@ -144,7 +143,7 @@ async fn upload_grant(
     upload_token.has_prefix("sug_") &&
     expires_in > 0 &&
     expires_in == expires_in.to_int().to_double() else {
-    raise ExportError("Invalid share upload permission.")
+    raise ExportError(InvalidUploadPermission)
   }
   @protocol.UploadGrant(upload_token~)
 }
@@ -157,17 +156,15 @@ async fn capture(
   match source {
     Host(channel, payload) =>
       @interop.bridge_request(channel, @commands.session_snapshot, payload)
-    File(_) => raise ExportError("Download files from the file panel.")
+    File(_) => raise ExportError(DownloadFromFilePanel)
     Cloud(session~) => {
-      guard account is Some(account) else {
-        raise ExportError("Sign in to export Cloud history.")
-      }
+      guard account is Some(account) else { raise ExportError(SignInToExport) }
       @cloud.export_snapshot(account.token, session) catch {
         @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
           raise AccountUnauthorized
         @cloud.RequestError::RequestError(error) =>
-          raise ExportError(error.label())
-        _ => raise ExportError(@cloud.Failure::Unreachable.label())
+          raise ExportError(Cloud(error))
+        _ => raise ExportError(Cloud(@cloud.Failure::Unreachable))
       }
     }
   }
@@ -184,7 +181,7 @@ fn Model::download(
   let generation = self.generation
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.SessionExportReply, String] = try {
+      let result : Result[@protocol.SessionExportReply, Failure] = try {
         let reply = if desktop && source is Host(Local, payload) {
           @interop.bridge_request(Local, @commands.session_export, payload)
         } else {
@@ -194,8 +191,7 @@ fn Model::download(
               session: match source {
                 Host(_, payload) => payload.session
                 Cloud(session~) => session
-                File(_) =>
-                  raise ExportError("Download files from the file panel.")
+                File(_) => raise ExportError(DownloadFromFilePanel)
               },
               html: files.html,
             })
@@ -232,10 +228,13 @@ fn Model::download(
         Ok(reply)
       } catch {
         AccountUnauthorized => {
-          scheduler.add(emit(Published(generation~, @protocol.SignInRequired)))
-          Err("Your account sign-in expired.")
+          scheduler.add(
+            emit(Published(generation~, Ok(@protocol.SignInRequired))),
+          )
+          Err(AccountSignInExpired)
         }
-        error => Err(@interop.bridge_error_text(error))
+        ExportError(failure) => Err(failure)
+        error => Err(Bridge(@interop.bridge_problem(error)))
       }
       scheduler.add(emit(Downloaded(generation~, result)))
     })

@@ -67,6 +67,33 @@ priv struct SshAuthentication {
 
 ///|
 #derive(Eq)
+priv enum SshConnectionPhase {
+  Connecting
+  Authenticating
+  AuthenticationRequired
+  Downloading
+  Installing
+}
+
+///|
+fn SshConnectionPhase::text(
+  self : SshConnectionPhase,
+  locale : @i18n.Locale,
+) -> String {
+  ssh_text(
+    locale,
+    match self {
+      Connecting => Connecting
+      Authenticating => Authenticating
+      AuthenticationRequired => AuthenticationRequired
+      Downloading => Downloading
+      Installing => Installing
+    },
+  )
+}
+
+///|
+#derive(Eq)
 priv struct SshUi {
   pending_open : SshPendingOpen?
   next_attempt : Int32
@@ -88,7 +115,7 @@ priv struct SshUi {
   remove_confirm : String?
   removed_hosts : Array[String]
   error : String?
-  connecting : Map[String, String]
+  connecting : Map[String, SshConnectionPhase]
   host_errors : Map[String, String]
 }
 
@@ -422,7 +449,7 @@ fn update_ssh(
       let authentication = ui.authentication.copy()
       authentication[id] = { ..auth, submitting: true, }
       let connecting = ui.connecting.copy()
-      connecting[id] = "Authenticating…"
+      connecting[id] = Authenticating
       (
         ssh_submit_auth(dispatch, id, attempt, auth),
         {
@@ -692,7 +719,7 @@ fn update_ssh(
         Background
       }
       let connecting = ui.connecting.copy()
-      connecting[id] = "Connecting…"
+      connecting[id] = Connecting
       let host_errors = ui.host_errors.copy()
       host_errors.remove(id)
       @interop.set_ssh_epoch(Remote(id), None)
@@ -814,7 +841,7 @@ fn update_ssh(
         let authentication = ui.authentication.copy()
         authentication[id] = { request, epoch, submitting: false, }
         let connecting = ui.connecting.copy()
-        connecting[id] = "Authentication required"
+        connecting[id] = AuthenticationRequired
         let visible = ssh_visible_host(ui) == Some(id)
         let open = !ui.editor_open &&
           ui.details is None &&
@@ -861,7 +888,7 @@ fn update_ssh(
         let authentication = ui.authentication.copy()
         authentication.remove(id)
         let connecting = ui.connecting.copy()
-        connecting[id] = "Connecting…"
+        connecting[id] = Connecting
         return (
           @cmd.none,
           { ..model, ssh_ui: { ..ui, authentication, connecting, }, },
@@ -872,9 +899,9 @@ fn update_ssh(
         !ui.authentication.contains(id) {
         let connecting = ui.connecting.copy()
         connecting[id] = match stage {
-          "downloading" => "Downloading OpenSeek…"
-          "installing" => "Running openseek setup…"
-          _ => "Connecting…"
+          "downloading" => Downloading
+          "installing" => Installing
+          _ => Connecting
         }
         return (@cmd.none, { ..model, ssh_ui: { ..ui, connecting, }, })
       }
@@ -900,12 +927,19 @@ fn update_ssh(
           // Retire the attempt before closing its native connection, so queued
           // readiness/disconnect events cannot revive it or hide the mismatch.
           let (close, model) = update_ssh(dispatch, Disconnect(id), model)
-          let host = ui.hosts.iter().find_first(host => host.id == id)
-          let message = ssh_protocol_mismatch(
-            model.locale,
-            host.map(host => host.display_label()).unwrap_or(id),
-            payload.protocol,
-          )
+          let host = ui.hosts
+            .iter()
+            .find_first(host => host.id == id)
+            .map(host => host.display_label())
+            .unwrap_or(id)
+          let expected = @protocol.HostProtocolRevision
+          let message : SshMessage = match payload.protocol {
+            Some(remote) if remote > expected =>
+              ProtocolRequiresLocalUpdate(host, expected, remote)
+            Some(remote) => ProtocolRequiresRemoteUpdate(host, expected, remote)
+            None => ProtocolVersionMissing(host, expected)
+          }
+          let message = ssh_text(model.locale, message)
           let host_errors = model.ssh_ui.host_errors.copy()
           host_errors[id] = message
           let (gate, model) = update_device_msg(
@@ -1109,17 +1143,20 @@ fn Model::ssh_online(self : Model, id : String) -> Bool {
 /// Shared by the header, unopened project and terminal: being offline does
 /// not imply that a connection attempt is still running.
 fn ssh_connection_status(model : Model, id : String) -> String {
-  model.ssh_ui.connecting
-  .get(id)
-  .unwrap_or(
-    if model.ssh_online(id) {
-      "Connected"
-    } else if model.ssh_ui.host_errors.contains(id) {
-      "Connection failed"
-    } else {
-      "Disconnected"
-    },
-  )
+  match model.ssh_ui.connecting.get(id) {
+    Some(phase) => phase.text(model.locale)
+    None =>
+      ssh_text(
+        model.locale,
+        if model.ssh_online(id) {
+          Connected
+        } else if model.ssh_ui.host_errors.contains(id) {
+          ConnectionFailed
+        } else {
+          Disconnected
+        },
+      )
+  }
 }
 
 ///|
@@ -1149,6 +1186,7 @@ fn ssh_connection_button(
   id : String,
   in_modal~ : Bool = false,
 ) -> @html.Html {
+  let locale = model.locale
   let connecting = model.ssh_ui.connecting.contains(id)
   let online = model.ssh_online(id)
   if model.ssh_ui.authentication.contains(id) &&
@@ -1156,7 +1194,7 @@ fn ssh_connection_button(
     return @html.button(
       class="button primary",
       on_click=dispatch(Ssh(Details(id))),
-      "Enter password",
+      ssh_text(locale, EnterPassword),
     )
   }
   if online || (!connecting && !model.ssh_ui.host_errors.contains(id)) {
@@ -1173,15 +1211,16 @@ fn ssh_connection_button(
       Ssh(if connecting { Disconnect(id) } else { Connect(id) }),
     ),
     if connecting {
-      "Cancel connection"
+      ssh_text(locale, CancelConnection)
     } else {
-      "Retry connection"
+      ssh_text(locale, RetryConnection)
     },
   )
 }
 
 ///|
 fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let locale = model.locale
   let rows : Array[@html.Html] = []
   for host in model.ssh_ui.hosts {
     rows.push(
@@ -1201,21 +1240,21 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             @html.button(
               class="button primary",
               on_click=dispatch(Ssh(Details(host.id))),
-              "Enter password",
+              ssh_text(locale, EnterPassword),
             )
           } else {
             @html.button(
               class="button secondary",
               disabled=model.ssh_ui.connecting.contains(host.id),
               on_click=dispatch(Ssh(Select(Remote(host.id)))),
-              "Add project",
+              ssh_text(locale, AddProject),
             )
           },
           @html.button(
             class="ssh-more",
-            title="Connection details",
+            title=ssh_text(locale, ConnectionDetails),
             attrs=@html.Attrs::build().aria_label(
-              "Connection details for " + host.display_label(),
+              ssh_text(locale, HostConnectionDetails(host.display_label())),
             ),
             on_click=dispatch(Ssh(Details(host.id))),
             @icons.icon(@icons.icon_more),
@@ -1225,12 +1264,7 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   if rows.is_empty() {
-    rows.push(
-      @html.p(
-        class="ssh-empty",
-        "Connect a host to work on its projects over SSH.",
-      ),
-    )
+    rows.push(@html.p(class="ssh-empty", ssh_text(locale, NoHosts)))
   }
   rows.push(
     @html.div(class="ssh-settings-footer", [
@@ -1238,9 +1272,9 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         id="ssh-settings-add-host",
         class="button secondary",
         on_click=dispatch(Ssh(Open)),
-        [@icons.icon(@icons.icon_add), @html.span("Add SSH host")],
+        [@icons.icon(@icons.icon_add), @html.span(ssh_text(locale, AddHost))],
       ),
-      @html.span("Connections stay on this computer."),
+      @html.span(ssh_text(locale, ConnectionsLocal)),
     ]),
   )
   if model.ssh_ui.error is Some(error) {
@@ -1261,6 +1295,7 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 
 ///|
 fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let locale = model.locale
   let choices = [
     @html.button(
       class=if model.focused == Local {
@@ -1269,7 +1304,7 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         "ssh-location"
       },
       on_click=dispatch(Ssh(Select(Local))),
-      "This computer",
+      ssh_text(locale, ThisComputer),
     ),
   ]
   for host in model.ssh_ui.hosts {
@@ -1288,9 +1323,9 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @icons.icon(@icons.icon_server),
           @html.span(host.display_label()),
           if model.ssh_ui.connecting.get(host.id) is Some(progress) {
-            @html.small(progress)
+            @html.small(progress.text(model.locale))
           } else if !model.ssh_online(host.id) {
-            @html.small("Disconnected")
+            @html.small(ssh_text(locale, Disconnected))
           } else {
             @html.span("")
           },
@@ -1303,7 +1338,7 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       id="ssh-add-host",
       class="ssh-location add",
       on_click=dispatch(Ssh(Open)),
-      [@icons.icon(@icons.icon_add), @html.span("Add SSH host")],
+      [@icons.icon(@icons.icon_add), @html.span(ssh_text(locale, AddHost))],
     ),
   )
   if model.ssh_ui.error is Some(error) {
@@ -1317,7 +1352,7 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   @html.div(
     class="ssh-locations",
-    attrs=@html.Attrs::build().aria_label("Project location"),
+    attrs=@html.Attrs::build().aria_label(ssh_text(locale, ProjectLocation)),
     choices,
   )
 }
@@ -1325,24 +1360,25 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 ///|
 fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let ui = model.ssh_ui
+  let locale = model.locale
   let content : Array[@html.Html] = []
   let actions : Array[@html.Html] = []
-  let mut title = "Add SSH host"
+  let mut title = ssh_text(locale, AddHost)
   if ui.editor_open {
     let draft = ssh_draft(ui)
     let editing = ui.editing is Some(_)
     let pending = ui.pick_after_connect
     let connecting = pending is Some(id) && ui.connecting.contains(id)
     if editing {
-      title = "Rename SSH host"
+      title = ssh_text(locale, RenameHost)
     }
     content.push(
       @html.p(
         class="ssh-subtitle",
         if editing {
-          "This name appears beside projects and in host lists."
+          ssh_text(locale, RenameHelp)
         } else {
-          "Paste your SSH command. Choose a name to recognize this host."
+          ssh_text(locale, AddHostHelp)
         },
       ),
     )
@@ -1352,7 +1388,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           "label",
           @html.Attrs::build().class("ssh-field").for_("ssh-command"),
           [
-            @html.span("SSH command"),
+            @html.span(ssh_text(locale, SshCommand)),
             @html.input(
               class="field-surface",
               autofocus=true,
@@ -1361,7 +1397,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               on_input=dispatch.map(value => Ssh(Command(value))),
               attrs=@html.Attrs::build()
                 .id("ssh-command")
-                .aria_label("SSH command")
+                .aria_label(ssh_text(locale, SshCommand))
                 .data_set("focus-owner", "")
                 .disabled(ui.busy || pending is Some(_)),
             ),
@@ -1376,9 +1412,9 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         [
           @html.span(
             if editing {
-              "Display name"
+              ssh_text(locale, DisplayName)
             } else {
-              "Display name (optional)"
+              ssh_text(locale, OptionalDisplayName)
             },
           ),
           @html.input(
@@ -1389,7 +1425,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             on_input=dispatch.map(value => Ssh(Name(value))),
             attrs=@html.Attrs::build()
               .id("ssh-display-name")
-              .aria_label("Display name")
+              .aria_label(ssh_text(locale, DisplayName))
               .data_set("focus-owner", "")
               .disabled(ui.busy || pending is Some(_)),
           ),
@@ -1403,16 +1439,11 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.div(class="ssh-preview-title", draft.display_label()),
           @html.div(class="ssh-host-address", draft.connection_label()),
         ]),
-        @html.small("Preview"),
+        @html.small(ssh_text(locale, Preview)),
       ]),
     )
     if !editing {
-      content.push(
-        @html.p(
-          class="ssh-help",
-          "Uses your SSH configuration. You will be prompted if authentication is required.",
-        ),
-      )
+      content.push(@html.p(class="ssh-help", ssh_text(locale, ConfigHelp)))
     }
     if pending is Some(id) && !ui.authentication.contains(id) {
       content.push(ssh_status(model, id))
@@ -1427,7 +1458,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       )
     }
     if pending is Some(id) && ui.authentication.get(id) is Some(auth) {
-      content.push(ssh_auth_region(dispatch, ui, auth))
+      content.push(ssh_auth_region(locale, dispatch, ui, auth))
     } else {
       actions.push(
         @rui.dialog_footer([
@@ -1436,9 +1467,9 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             disabled=ui.busy,
             on_click=dispatch(Ssh(Close)),
             if connecting {
-              "Cancel connection"
+              ssh_text(locale, CancelConnection)
             } else {
-              "Cancel"
+              ssh_text(locale, Cancel)
             },
           ),
           @html.button(
@@ -1453,15 +1484,15 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               ),
             ),
             if ui.busy {
-              "Saving…"
+              ssh_text(locale, Saving)
             } else if connecting {
-              "Connecting…"
+              ssh_text(locale, Connecting)
             } else if pending is Some(_) {
-              "Retry connection"
+              ssh_text(locale, RetryConnection)
             } else if editing {
-              "Save name"
+              ssh_text(locale, SaveName)
             } else {
-              "Add and connect"
+              ssh_text(locale, AddAndConnect)
             },
           ),
         ]),
@@ -1481,8 +1512,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     }
     content.push(
       @html.details(class="ssh-command-details", [
-        @html.summary("Connection details"),
-        @html.p(class="ssh-help", "Original SSH command"),
+        @html.summary(ssh_text(locale, ConnectionDetails)),
+        @html.p(class="ssh-help", ssh_text(locale, OriginalCommand)),
         @html.pre(host.command),
       ]),
     )
@@ -1496,13 +1527,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       )
     }
     if ui.remove_confirm == Some(id) {
-      title = "Remove SSH host?"
-      content.push(
-        @html.p(
-          class="ssh-help",
-          "Remove this host from this computer. Its connection and running tasks will stop. Remote files, projects and conversation history will remain on the host.",
-        ),
-      )
+      title = ssh_text(locale, RemoveHostQuestion)
+      content.push(@html.p(class="ssh-help", ssh_text(locale, RemoveHostHelp)))
       actions.push(
         @rui.dialog_footer([
           @html.button(
@@ -1510,22 +1536,22 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             attrs=@html.Attrs::build().id("ssh-remove-cancel"),
             disabled=ui.busy,
             on_click=dispatch(Ssh(CancelRemove)),
-            "Cancel",
+            ssh_text(locale, Cancel),
           ),
           @html.button(
             class="button danger",
             disabled=ui.busy,
             on_click=dispatch(Ssh(ConfirmRemove(id))),
             if ui.busy {
-              "Removing…"
+              ssh_text(locale, Removing)
             } else {
-              "Remove host"
+              ssh_text(locale, RemoveHost)
             },
           ),
         ]),
       )
     } else if ui.authentication.get(id) is Some(auth) {
-      content.push(ssh_auth_region(dispatch, ui, auth))
+      content.push(ssh_auth_region(locale, dispatch, ui, auth))
     } else if ui.connecting.contains(id) {
       actions.push(
         @rui.dialog_footer([
@@ -1538,20 +1564,20 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="button secondary",
             on_click=dispatch(Ssh(Rename(id))),
-            "Rename",
+            ssh_text(locale, Rename),
           ),
           @html.button(
             class="button danger",
             attrs=@html.Attrs::build().id("ssh-remove"),
             on_click=dispatch(Ssh(Remove(id))),
-            "Remove host",
+            ssh_text(locale, RemoveHost),
           ),
           ssh_connection_button(dispatch, model, id, in_modal=true),
           @html.button(
             class="button primary",
             disabled=ui.connecting.contains(id),
             on_click=dispatch(Ssh(Select(Remote(id)))),
-            "Add project",
+            ssh_text(locale, AddProject),
           ),
         ]),
       )
@@ -1561,7 +1587,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     id="ssh-modal",
     class="dialog-size-medium",
     show_close=!ui.busy,
-    close_label="Close SSH dialog",
+    close_label=ssh_text(locale, CloseDialog),
     closedby=if ui.busy ||
       (ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id)) {
       "closerequest"
@@ -1690,6 +1716,7 @@ fn ssh_submit_auth(
 
 ///|
 fn ssh_auth_region(
+  locale : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
   ui : SshUi,
   auth : SshAuthentication,
@@ -1697,8 +1724,8 @@ fn ssh_auth_region(
   let request = auth.request
   let confirm = request.kind == Confirm
   let label = match (request.kind, request.target) {
-    (Password, Some(target)) => "Password for " + target
-    (Passphrase, Some(target)) => "Passphrase for " + target
+    (Password, Some(target)) => ssh_text(locale, PasswordFor(target))
+    (Passphrase, Some(target)) => ssh_text(locale, PassphraseFor(target))
     _ => request.prompt
   }
   @html.div(
@@ -1708,11 +1735,11 @@ fn ssh_auth_region(
         class="ssh-auth-heading",
         attrs=@html.Attrs::build().role("status"),
         if auth.submitting {
-          "Authenticating…"
+          ssh_text(locale, Authenticating)
         } else if confirm {
-          "Confirm host identity"
+          ssh_text(locale, ConfirmIdentity)
         } else {
-          "Authentication required"
+          ssh_text(locale, AuthenticationRequired)
         },
       ),
       ..if request.retry {
@@ -1720,7 +1747,7 @@ fn ssh_auth_region(
           @html.pre(
             class="ssh-error",
             attrs=@html.Attrs::build().role("alert"),
-            "Authentication failed. Enter your password again.",
+            ssh_text(locale, AuthenticationFailed),
           ),
         ]
       } else {
@@ -1752,30 +1779,30 @@ fn ssh_auth_region(
                   attrs=@html.Attrs::build()
                     .aria_label(
                       if ui.revealed {
-                        "Hide password"
+                        ssh_text(locale, HidePassword)
                       } else {
-                        "Show password"
+                        ssh_text(locale, ShowPassword)
                       },
                     )
                     .aria_pressed(if ui.revealed { "true" } else { "false" }),
                   on_click=dispatch(Ssh(RevealAuth)),
                   if ui.revealed {
-                    "Hide"
+                    ssh_text(locale, Hide)
                   } else {
-                    "Show"
+                    ssh_text(locale, Show)
                   },
                 ),
               ]),
             ],
           ),
-          @html.p(class="ssh-help", "Used for this connection only. Not saved."),
+          @html.p(class="ssh-help", ssh_text(locale, SecretHelp)),
         ]
       },
       @html.div(class="ssh-auth-actions", [
         @html.button(
           class="button secondary",
           on_click=dispatch(Ssh(Close)),
-          "Cancel connection",
+          ssh_text(locale, CancelConnection),
         ),
         @html.button(
           class="button primary",
@@ -1783,17 +1810,17 @@ fn ssh_auth_region(
           attrs=@html.Attrs::build().id("ssh-auth-continue"),
           on_click=dispatch(Ssh(SubmitAuth)),
           if auth.submitting {
-            "Authenticating…"
+            ssh_text(locale, Authenticating)
           } else if confirm {
-            "Accept"
+            ssh_text(locale, Accept)
           } else if request.retry {
-            "Try again"
+            ssh_text(locale, TryAgain)
           } else {
-            "Continue"
+            ssh_text(locale, Continue)
           },
         ),
       ]),
-      @html.p(class="ssh-auth-keys", "Enter to continue · Esc to cancel"),
+      @html.p(class="ssh-auth-keys", ssh_text(locale, AuthKeys)),
     ],
   )
 }

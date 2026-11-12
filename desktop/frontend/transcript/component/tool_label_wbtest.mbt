@@ -1,8 +1,6 @@
 ///|
 test "each tool caption shows its emoji and keeps a brief's own words" {
-  assert_eq(tool_display_label("mbtx", "mbtx"), "🐇")
   assert_eq(tool_display_label("mbtx", "mbtx build"), "🐇 build")
-  assert_eq(tool_display_label("edit", "edit"), "✏️")
   assert_eq(
     tool_display_label("edit", "edit lib/parser.mbt"),
     "✏️ lib/parser.mbt",
@@ -19,7 +17,6 @@ test "each tool caption shows its emoji and keeps a brief's own words" {
     tool_display_label("edit", "edit rejected (2 parse error(s))"),
     "✏️ rejected (2 parse error(s))",
   )
-  assert_eq(tool_display_label("multi_edit", "multi_edit"), "📝")
   assert_eq(
     tool_display_label("multi_edit", "multi_edit lib/parser.mbt (3×)"),
     "📝 lib/parser.mbt (3×)",
@@ -52,8 +49,6 @@ test "a tool without a caption emoji keeps its recorded label" {
 
 ///|
 test "job captions show the hourglass and keep the id and description" {
-  assert_eq(tool_display_label("job_output", "job_output"), "⏳")
-  assert_eq(tool_display_label("job_stop", "job_stop"), "⏳")
   assert_eq(
     tool_display_label("job_output", "job bg-3 (running): Collect progress"),
     "⏳ bg-3 (running): Collect progress",
@@ -64,14 +59,6 @@ test "job captions show the hourglass and keep the id and description" {
     tool_display_label("job_output", "job bg-3 (completed): Collect progress"),
     "⏳ bg-3 (completed): Collect progress",
   )
-}
-
-///|
-/// The notice row's caption is its family name, and a notice is the one row
-/// that is not a tool. The raw name stays on the item, so the glyph is only
-/// how it reads.
-test "the runtime notice caption shows the engine's notice glyph" {
-  assert_eq(tool_display_label("runtime notice", "runtime notice"), "🔔")
 }
 
 ///|

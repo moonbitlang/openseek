@@ -1,6 +1,7 @@
 import {
   "moonbitlang/editor/base/browser" @base_browser,
   "openseek_desktop/uri",
+  "openseek_desktop/frontend/i18n",
   "moonbitlang/core/async",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",

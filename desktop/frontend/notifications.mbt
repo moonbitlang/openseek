@@ -13,7 +13,31 @@ const NotificationLifetimeMs : Int32 = 6000
 #derive(Eq)
 priv struct Notification {
   id : Int32
-  message : String
+  message : NotificationMessage
+}
+
+///|
+#derive(Eq)
+priv enum NotificationMessage {
+  Raw(String)
+  FileFailure(@fileeditor.Failure)
+  Notice(NoticeMessage)
+  CloudFailure(@cloud_client.Failure)
+  ShellUnavailable
+}
+
+///|
+fn NotificationMessage::text(
+  self : NotificationMessage,
+  locale : @i18n.Locale,
+) -> String {
+  match self {
+    Raw(message) => message
+    FileFailure(failure) => failure.text(locale)
+    Notice(message) => notice_text(locale, message)
+    CloudFailure(failure) => failure.text(locale)
+    ShellUnavailable => shell_text(locale, ShellTerminalUnavailable)
+  }
 }
 
 ///|
@@ -55,6 +79,42 @@ fn Model::notify_error(
   self : Model,
   dispatch : @cmd.Emit[Msg],
   message : String,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, Raw(message))
+}
+
+///|
+fn Model::notify_file_error(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  failure : @fileeditor.Failure,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, FileFailure(failure))
+}
+
+///|
+fn Model::notify_notice(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  message : NoticeMessage,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, Notice(message))
+}
+
+///|
+fn Model::notify_cloud_error(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  failure : @cloud_client.Failure,
+) -> (@cmd.Cmd, Model) {
+  self.notify(dispatch, CloudFailure(failure))
+}
+
+///|
+fn Model::notify(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  message : NotificationMessage,
 ) -> (@cmd.Cmd, Model) {
   let toast : Notification = { id: self.notification_seq, message, }
   let notifications = self.notifications.copy()

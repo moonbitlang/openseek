@@ -47,7 +47,7 @@ fn SearchRequest::generation(self : SearchRequest) -> Int32 {
 priv enum LoadedReply {
   TextLoaded(@protocol.SearchTextReply)
   SemanticLoaded(@protocol.SearchSemanticReply)
-  RequestFailed(String)
+  RequestFailed(RequestFailure)
 }
 
 ///|
@@ -128,7 +128,7 @@ fn search_request_loader(
                 payload,
               ),
             ) catch {
-              error => RequestFailed(@interop.bridge_error_text(error))
+              error => RequestFailed(Bridge(@interop.bridge_problem(error)))
             }
           CloudText(access, payload) =>
             TextLoaded(
@@ -144,8 +144,8 @@ fn search_request_loader(
               ),
             ) catch {
               @cloud_client.RequestError(failure) =>
-                RequestFailed(failure.label())
-              _ => RequestFailed(@cloud_client.Failure::Malformed.label())
+                RequestFailed(Cloud(failure))
+              _ => RequestFailed(Cloud(@cloud_client.Failure::Malformed))
             }
           CloudSemantic(access, payload) =>
             SemanticLoaded(
@@ -172,8 +172,8 @@ fn search_request_loader(
               ),
             ) catch {
               @cloud_client.RequestError(failure) =>
-                RequestFailed(failure.label())
-              _ => RequestFailed(@cloud_client.Failure::Malformed.label())
+                RequestFailed(Cloud(failure))
+              _ => RequestFailed(Cloud(@cloud_client.Failure::Malformed))
             }
           Semantic(payload) =>
             SemanticLoaded(
@@ -183,7 +183,7 @@ fn search_request_loader(
                 payload,
               ),
             ) catch {
-              error => RequestFailed(@interop.bridge_error_text(error))
+              error => RequestFailed(Bridge(@interop.bridge_problem(error)))
             }
         }
         settled = true

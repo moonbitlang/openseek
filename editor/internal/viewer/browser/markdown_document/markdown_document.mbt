@@ -136,6 +136,7 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
   root.append_child(overlay_mount.as_node())
   let (rendered, diagram_viewports) = render_markdown_document_presentation(
     source, language_id, base_uri, resource_kind, theme, article, on_size_changed,
+    localization,
   )
   let view : MarkdownDocumentView = {
     localization,
@@ -227,6 +228,7 @@ fn render_markdown_document_presentation(
   theme : String,
   article : @rdom.Element,
   on_size_changed : () -> Unit,
+  localization : @localization.Localization,
 ) -> (@browser_markdown.RenderedMarkdown, @diagram_viewport.DiagramViewports) {
   let mut diagram_viewports_slot : @diagram_viewport.DiagramViewports? = None
   let on_rendered_size_changed = () => {
@@ -240,7 +242,9 @@ fn render_markdown_document_presentation(
     source, language_id, base_uri, resource_kind, theme, article, on_rendered_size_changed,
   )
   let diagram_viewports = @diagram_viewport.DiagramViewports(
-    article, on_size_changed,
+    article,
+    on_size_changed,
+    localization~,
   )
   diagram_viewports_slot = Some(diagram_viewports)
   (rendered, diagram_viewports)
@@ -523,6 +527,7 @@ pub fn MarkdownDocumentView::replace_source(
     self.theme,
     self.article,
     self.on_size_changed,
+    self.localization,
   )
   self.rendered = rendered
   self.diagram_viewports = diagram_viewports

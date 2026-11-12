@@ -593,7 +593,7 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
 fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   let notices : Array[String] = []
   if self.cloud.notice is Some(notice) {
-    notices.push(notice)
+    notices.push(notice.text(self.locale))
   }
   if self.focused_device() is Some({ chat_root: Some(Err(message)), .. }) {
     notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))
@@ -628,7 +628,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
           match self.console.roster_sync {
             RosterLoading =>
               notices.push(shell_text(self.locale, LoadingDevice))
-            RosterFailed(message) => notices.push(message)
+            RosterFailed(message) => notices.push(message.text(self.locale))
             RosterReady =>
               if self.console.roster.is_empty() {
                 notices.push(shell_text(self.locale, NoDevices))
@@ -672,7 +672,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     login: identity.0,
     avatar: identity.1,
     busy: self.console.busy,
-    notice: self.account_error,
+    notice: self.account_error.map(failure => failure.text(self.locale)),
     page: if self.console.page_device is Some(id) {
       DevicePage(
         id~,
@@ -843,15 +843,15 @@ fn codex_account_rows(
   if @interop.is_native_ssh(channel) {
     rows.push(
       @ui.form_row(
-        "Remote Codex",
+        @settings.text(model.locale, RemoteCodex),
         [
           @html.button(
             class="button secondary",
             on_click=dispatch(Codex(channel~, @codex.Msg::refresh())),
-            "Refresh account",
+            @settings.text(model.locale, RefreshAccount),
           ),
         ],
-        desc="Run codex login --device-auth in this host's terminal. Configure ~/.codex/config.toml on the remote host; credentials remain there.",
+        desc=@settings.text(model.locale, RemoteCodexDescription),
       ),
     )
     return rows
@@ -956,9 +956,9 @@ fn settings_account_rows(
           @settings.text(
             model.locale,
             if preferences.value is Some(_) {
-              PreferencesSaveFailed(error)
+              PreferencesSaveFailed(error.text(model.locale))
             } else {
-              PreferencesReadFailed(error)
+              PreferencesReadFailed(error.text(model.locale))
             },
           ),
         ),
@@ -972,9 +972,13 @@ fn settings_account_rows(
       ),
     )
   }
-  if model.settings_section() == Account && model.account_error is Some(message) {
+  if model.settings_section() == Account && model.account_error is Some(failure) {
     rows.push(
-      @ui.form_row(@settings.text(model.locale, Problem), [], desc=message),
+      @ui.form_row(
+        @settings.text(model.locale, Problem),
+        [],
+        desc=failure.text(model.locale),
+      ),
     )
   }
   rows
@@ -990,17 +994,20 @@ fn remote_access_rows(
   if model.is_desktop && model.console_url is Some(url) {
     rows.push(
       @ui.form_row(
-        "Local console",
+        @settings.text(model.locale, LocalConsole),
         [
           @html.a(
             class="button secondary setting-link",
             href=url,
             target=Blank,
             rel="noopener noreferrer",
-            [icon(icon_link_external), @html.span("Open")],
+            [
+              icon(icon_link_external),
+              @html.span(@settings.text(model.locale, Open)),
+            ],
           ),
         ],
-        desc="Development build — open the console this host serves in a browser on this machine.",
+        desc=@settings.text(model.locale, LocalConsoleDescription),
       ),
     )
   }
@@ -1295,15 +1302,15 @@ fn api_settings_rows(
   if @interop.is_native_ssh(model.focused) {
     return [
       @ui.form_row(
-        "API key fallback from this computer",
+        @settings.text(model.locale, LocalApiFallback),
         [
           @html.button(
             class="button secondary",
             on_click=dispatch(OpenLocalApiSettings),
-            "Open local API settings",
+            @settings.text(model.locale, OpenLocalApiSettings),
           ),
         ],
-        desc="Remote API settings take priority. This computer supplies a fallback API key; the remote provider, endpoint and model stay unchanged. Reconnect after changing the local key.",
+        desc=@settings.text(model.locale, LocalApiFallbackDescription),
       ),
     ]
   }
@@ -2019,7 +2026,7 @@ fn console_gate_view(
 ) -> @html.Html {
   let card : Array[@html.Html] = []
   let error = if console.access_error is Some(_) {
-    console.access_error
+    console.access_error.map(failure => failure.text(locale))
   } else {
     account_error
   }
@@ -2061,7 +2068,7 @@ fn console_gate_view(
             card.push(@html.p(shell_text(locale, CheckingDevice)))
           RosterFailed(message) => {
             card.push(@html.h2(shell_text(locale, CannotLoadDevice)))
-            card.push(@html.p(message))
+            card.push(@html.p(message.text(locale)))
             card.push(
               @html.button(
                 class="button primary",
@@ -2334,7 +2341,9 @@ fn view(
             locale=model.locale,
             dispatch,
             model.console,
-            account_error=model.account_error,
+            account_error=model.account_error.map(failure => {
+              failure.text(model.locale)
+            }),
             host_incompatible=model.host_incompatible(),
           ),
         ]
@@ -2453,7 +2462,9 @@ fn view(
         locale=model.locale,
         dispatch,
         model.console,
-        account_error=model.account_error,
+        account_error=model.account_error.map(failure => {
+          failure.text(model.locale)
+        }),
         host_incompatible=true,
       ),
     ]
@@ -2777,7 +2788,7 @@ fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         class="notification",
         title=shell_text(model.locale, DismissLabel),
         on_click=dispatch(DismissNotification(toast.id)),
-        toast.message,
+        toast.message.text(model.locale),
       ),
     )
   }
@@ -3017,8 +3028,8 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @sidebar_messages.text(locale, CloudSignInHint),
     ),
   ]
-  if model.account_error is Some(message) {
-    children.push(@html.p(class="empty-detail", message))
+  if model.account_error is Some(failure) {
+    children.push(@html.p(class="empty-detail", failure.text(locale)))
     children.push(
       @html.button(
         class="button primary",

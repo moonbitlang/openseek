@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 priv enum NoticeMessage {
   SaveSettings(String)
   WorkspaceFailure(String)
@@ -9,11 +10,91 @@ priv enum NoticeMessage {
   ListSessions(String)
   UpdateServer(String)
   UpdateReply(String)
+  LanguageStorageFailure(String)
+  RenameFailure(ConversationRenameFailure)
+  ReviewSelectionUnavailable
+  ReviewSelectionMismatch
+  ReviewLoadFailed(String)
+}
+
+///|
+fn rename_failure_text(
+  locale : @i18n.Locale,
+  failure : ConversationRenameFailure,
+) -> String {
+  match (locale, failure) {
+    (_, Bridge(problem)) => problem.text(locale)
+    (_, Cloud(problem)) => problem.text(locale)
+    (English, UnavailableChannel) => "Conversation channel is unavailable"
+    (Spanish, UnavailableChannel) =>
+      "El canal de la conversación no está disponible"
+    (SimplifiedChinese, UnavailableChannel) => "对话连接不可用"
+    (TraditionalChinese, UnavailableChannel) => "對話連線不可用"
+    (Japanese, UnavailableChannel) =>
+      "チャットの接続が利用できません"
+    (English, UnavailableWorkspace) => "Conversation workspace is unavailable"
+    (Spanish, UnavailableWorkspace) =>
+      "El espacio de trabajo de la conversación no está disponible"
+    (SimplifiedChinese, UnavailableWorkspace) => "对话工作区不可用"
+    (TraditionalChinese, UnavailableWorkspace) => "對話工作區不可用"
+    (Japanese, UnavailableWorkspace) =>
+      "チャットのワークスペースが利用できません"
+    (English, UnsupportedConversation) => "This conversation cannot be renamed"
+    (Spanish, UnsupportedConversation) =>
+      "No se puede cambiar el nombre de esta conversación"
+    (SimplifiedChinese, UnsupportedConversation) => "无法重命名此对话"
+    (TraditionalChinese, UnsupportedConversation) =>
+      "無法重新命名此對話"
+    (Japanese, UnsupportedConversation) =>
+      "このチャットの名前を変更できません"
+  }
 }
 
 ///|
 fn notice_text(locale : @i18n.Locale, message : NoticeMessage) -> String {
   match (locale, message) {
+    (_, LanguageStorageFailure(detail)) =>
+      @settings.text(locale, LanguageStorageFailed(detail))
+    (English, RenameFailure(failure)) =>
+      "Rename failed: \{rename_failure_text(locale, failure)}"
+    (Spanish, RenameFailure(failure)) =>
+      "No se pudo cambiar el nombre: \{rename_failure_text(locale, failure)}"
+    (SimplifiedChinese, RenameFailure(failure)) =>
+      "重命名失败：\{rename_failure_text(locale, failure)}"
+    (TraditionalChinese, RenameFailure(failure)) =>
+      "重新命名失敗：\{rename_failure_text(locale, failure)}"
+    (Japanese, RenameFailure(failure)) =>
+      "名前を変更できませんでした：\{rename_failure_text(locale, failure)}"
+    (English, ReviewSelectionUnavailable) =>
+      "This selection belongs to a review that is no longer available. Its saved context is unchanged."
+    (Spanish, ReviewSelectionUnavailable) =>
+      "Esta selección pertenece a una revisión que ya no está disponible. Su contexto guardado no ha cambiado."
+    (SimplifiedChinese, ReviewSelectionUnavailable) =>
+      "此选择所属的审阅已不可用。已保存的上下文保持不变。"
+    (TraditionalChinese, ReviewSelectionUnavailable) =>
+      "此選取範圍所屬的審閱已無法使用。已儲存的內容脈絡保持不變。"
+    (Japanese, ReviewSelectionUnavailable) =>
+      "この選択範囲のレビューは利用できなくなりました。保存済みのコンテキストは変更されていません。"
+    (English, ReviewSelectionMismatch) =>
+      "These saved changes no longer match the current review or are hidden by its filters. The saved context is unchanged."
+    (Spanish, ReviewSelectionMismatch) =>
+      "Estos cambios guardados ya no coinciden con la revisión actual o están ocultos por sus filtros. El contexto guardado no ha cambiado."
+    (SimplifiedChinese, ReviewSelectionMismatch) =>
+      "这些已保存的更改已不匹配当前审阅，或被其筛选条件隐藏。已保存的上下文保持不变。"
+    (TraditionalChinese, ReviewSelectionMismatch) =>
+      "這些已儲存的變更已不符合目前的審閱，或已被篩選條件隱藏。已儲存的內容脈絡保持不變。"
+    (Japanese, ReviewSelectionMismatch) =>
+      "保存済みの変更は現在のレビューと一致しないか、フィルターで非表示になっています。保存済みのコンテキストは変更されていません。"
+    (English, ReviewLoadFailed(detail)) =>
+      "Unable to load the current review: \{detail}"
+    (Spanish, ReviewLoadFailed(detail)) =>
+      "No se pudo cargar la revisión actual: \{detail}"
+    (SimplifiedChinese, ReviewLoadFailed(detail)) =>
+      "无法加载当前审阅：\{detail}"
+    (TraditionalChinese, ReviewLoadFailed(detail)) =>
+      "無法載入目前的審閱：\{detail}"
+    (Japanese, ReviewLoadFailed(detail)) =>
+      "現在のレビューを読み込めません：\{detail}"
     (English, SaveSettings(p0)) => "Saving settings failed: \{p0}"
     (Spanish, SaveSettings(p0)) => "No se pudo guardar la configuración: \{p0}"
     (SimplifiedChinese, SaveSettings(p0)) => "保存设置失败：\{p0}"

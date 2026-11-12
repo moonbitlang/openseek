@@ -264,9 +264,9 @@ test "Cloud missing model credentials reject goal and restore the submitted edit
     refused.conversations["session"].controls.input().draft,
     Some("Ship it"),
   )
-  assert_eq(
-    refused.conversations["session"].notice,
-    Some(Failure::ServiceNotConfigured.label()),
+  assert_true(
+    refused.conversations["session"].notice
+    is Some(Notice::Failure(Failure::ServiceNotConfigured)),
   )
   for failure in ([Unreachable, Http(503), Malformed] : Array[Failure]) {
     let unknown = metadata_update(

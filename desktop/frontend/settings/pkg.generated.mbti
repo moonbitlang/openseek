@@ -35,7 +35,15 @@ pub(all) enum Message {
   Configuration
   OpenConfig
   ConfigDescription
+  RemoteCodex
+  RefreshAccount
+  RemoteCodexDescription
+  LocalApiFallback
+  OpenLocalApiSettings
+  LocalApiFallbackDescription
   RemoteControl
+  LocalConsole
+  LocalConsoleDescription
   HelpImproveSeekMoon
   ContentImprovementDescription
   PreferencesReadFailed(String)
@@ -50,7 +58,6 @@ pub(all) enum Message {
   DevicePage
   RegisterRelay
   WaitingBrowser
-  SignInTimedOut
   ConnectGitHub
   Cancel
   Problem

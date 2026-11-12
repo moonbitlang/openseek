@@ -38,7 +38,7 @@ pub fn RpcSession::receive(
 ///|
 pub fn RpcSession::close(self : RpcSession) -> Unit {
   self.open_ = false
-  reject_all(self, "SeekMoon connection closed")
+  reject_all(self, Closed)
   self.socket.set_with_string(
     "onmessage",
     (@js.Optional::undefined() : @js.Optional[Unit]),
@@ -153,7 +153,7 @@ pub fn ws_connect(
   })
   socket.set_with_string("onclose", (_event : @js.Value) => {
     session.open_ = false
-    reject_all(session, "SeekMoon connection lost")
+    reject_all(session, Lost)
     // Only the channel's current session reports down — a replaced socket's
     // late close must not double-trigger that channel's reconnect loop.
     if channels.get(channel) is Some(current) &&
@@ -174,7 +174,7 @@ pub fn ws_close(channel : ChannelId) -> Unit {
   guard channels.get(channel) is Some(session) else { return }
   channels.remove(channel)
   session.open_ = false
-  reject_all(session, "SeekMoon connection closed")
+  reject_all(session, Closed)
   let _ : @js.Value = session.socket.apply_with_string(
     "close",
     ([] : FixedArray[@js.Value]),
@@ -189,7 +189,7 @@ async fn ws_request(
   payload : @js.Value,
 ) -> @js.Value {
   guard channels.get(channel) is Some(session) && session.open_ else {
-    raise BridgeUnsent("SeekMoon connection is down")
+    raise BridgeConnectionDown
   }
   session.request_raw(op, payload)
 }
@@ -200,7 +200,7 @@ async fn RpcSession::request_raw(
   op : String,
   payload : @js.Value,
 ) -> @js.Value {
-  guard session.open_ else { raise BridgeUnsent("SeekMoon connection is down") }
+  guard session.open_ else { raise BridgeConnectionDown }
   let id = session.next_id
   session.next_id += 1
   let frame = @js.Object::new()
@@ -238,6 +238,24 @@ async fn RpcSession::request_raw(
 }
 
 ///|
+fn local_bridge_error(error : Error) -> Error? {
+  guard error is @js.Error_(value) &&
+    js_prop(value, "__openseek_bridge_problem") is Some(tag_value) &&
+    (@js.Cast::into(tag_value) : String?) is Some(tag) else {
+    return None
+  }
+  let lost = js_prop(value, "__openseek_connection_lost") is Some(marker) &&
+    (@js.Cast::into(marker) : Bool?) is Some(true)
+  match tag {
+    "connection-closed" if lost => Some(BridgeConnectionClosed)
+    "connection-lost" if lost => Some(BridgeConnectionLost)
+    "request-failed" if browser_rpc_error_is_definite(value) =>
+      Some(BridgeRequestFailed)
+    _ => None
+  }
+}
+
+///|
 /// How a rejected reply is reported. `handle_message` marks a peer's own
 /// JSON-RPC error; `reject_all` does not, because a socket that dies under an
 /// in-flight request is not an answer to it. Name that difference here rather
@@ -245,6 +263,18 @@ async fn RpcSession::request_raw(
 /// page drives remote channels too, so "this page has an embedded host" says
 /// nothing about a request that went out over a socket.
 fn ws_reply_failure(error : Error) -> Error {
+  let error = local_bridge_error(error).unwrap_or(error)
+  match error {
+    BridgeUnavailable
+    | BridgeMalformedReply(_)
+    | BridgeSshUnavailable
+    | BridgeSshReplyRetired
+    | BridgeConnectionDown
+    | BridgeConnectionClosed
+    | BridgeConnectionLost
+    | BridgeRequestFailed => return error
+    _ => ()
+  }
   if error is @js.Error_(value) &&
     js_prop(value, "__openseek_connection_lost") is Some(marker) &&
     (@js.Cast::into(marker) : Bool?) is Some(true) {
@@ -308,14 +338,20 @@ fn handle_message(
   session.pending.remove(id)
   match js_prop(envelope, "error") {
     Some(error_value) => {
-      let message = match (error_value.to_json() catch { _ => null }) {
-        { "message": String(message), .. } => message
-        _ => "request failed"
+      let (message, problem_tag) = match
+        (error_value.to_json() catch { _ => null }) {
+        { "message": String(message), .. } => (message, None)
+        _ =>
+          (BridgeProblem::RequestFailed.text(English), Some("request-failed"))
       }
       // Mark a peer JSON-RPC error separately from a socket loss. Both reject
       // the same JS promise, but submission recovery must restore a draft only
       // when the host definitively answered this exact request.
-      settle(deferred, "reject", js_error(message, rpc_rejection=true))
+      settle(
+        deferred,
+        "reject",
+        js_error(message, rpc_rejection=true, problem_tag?),
+      )
     }
     None => {
       let result = match js_prop(envelope, "result") {
@@ -330,14 +366,29 @@ fn handle_message(
 }
 
 ///|
+priv enum SocketEnd {
+  Closed
+  Lost
+}
+
+///|
 /// Fail every in-flight request — the socket is gone; callers surface the
 /// message wherever the op's error lands.
-fn reject_all(session : RpcSession, message : String) -> Unit {
+fn reject_all(session : RpcSession, end : SocketEnd) -> Unit {
+  let (problem, problem_tag) = match end {
+    Closed => (BridgeProblem::ConnectionClosed, "connection-closed")
+    Lost => (BridgeProblem::ConnectionLost, "connection-lost")
+  }
   for _, deferred in session.pending {
     settle(
       deferred,
       "reject",
-      js_error(message, rpc_rejection=false, connection_lost=true),
+      js_error(
+        problem.text(English),
+        rpc_rejection=false,
+        connection_lost=true,
+        problem_tag~,
+      ),
     )
   }
   session.pending.clear()
@@ -353,6 +404,7 @@ fn js_error(
   message : String,
   rpc_rejection~ : Bool,
   connection_lost~ : Bool = false,
+  problem_tag? : String,
 ) -> @js.Value {
   let ctor : @js.Value = @js.globalThis.get_with_string("Error")
   let error : @js.Value = ctor.new([message])
@@ -361,6 +413,9 @@ fn js_error(
   }
   if connection_lost {
     error.set_with_string("__openseek_connection_lost", true)
+  }
+  if problem_tag is Some(tag) {
+    error.set_with_string("__openseek_bridge_problem", tag)
   }
   error
 }
@@ -467,24 +522,14 @@ test "a call that never left is not the same as one that went unanswered" {
   // two-state view says the same thing about them — and a caller holding
   // optimistic state then has to keep waiting on a command that provably
   // never reached anything.
-  assert_true(
-    bridge_failure(BridgeUnsent("SeekMoon bridge unavailable")) is Unsent,
-  )
-  assert_true(
-    bridge_failure(BridgeUnsent("SeekMoon connection is down")) is Unsent,
-  )
+  assert_true(bridge_failure(BridgeUnavailable) is Unsent)
+  assert_true(bridge_failure(BridgeConnectionDown) is Unsent)
   // A reply that arrived and could not be decoded went out: the host acted,
   // and it is its answer that was lost.
-  assert_true(
-    bridge_failure(BridgeError("Malformed reply from agent.command")) is Unknown,
-  )
+  assert_true(bridge_failure(BridgeMalformedReply("agent.command")) is Unknown)
   // Neither is a refusal, which is what keeps the start and steer paths
   // behaving exactly as before.
-  for
-    error in [
-      BridgeUnsent("SeekMoon bridge unavailable"),
-      BridgeError("Malformed reply from agent.command"),
-    ] {
+  for error in [BridgeUnavailable, BridgeMalformedReply("agent.command")] {
     assert_false(bridge_error_is_definite(error))
   }
 }

@@ -4,7 +4,7 @@ priv struct AccountPreferences {
   request : Int32
   value : Bool?
   pending : Bool
-  error : String?
+  error : @cloud_client.Failure?
 }
 
 ///|
@@ -151,12 +151,12 @@ fn account_preferences_loaded(
   }
   if result is Err(Unauthorized as error) {
     let (command, next) = expire_account(dispatch, model)
-    return (command, { ..next, account_error: Some(error.label()), })
+    return (command, { ..next, account_error: Some(Cloud(error)), })
   }
   let preferences = match result {
     Ok(value) =>
       { ..preferences, value: Some(value), pending: false, error: None, }
-    Err(error) => { ..preferences, pending: false, error: Some(error.label()), }
+    Err(error) => { ..preferences, pending: false, error: Some(error), }
   }
   (@cmd.none, { ..model, account_preferences: preferences, })
 }

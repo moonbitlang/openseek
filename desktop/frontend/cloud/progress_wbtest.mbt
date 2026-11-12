@@ -207,7 +207,7 @@ test "Cloud rereads a turn cached while running once the next turn is latest" {
   assert_true(conversation.pending_assistants.is_empty())
   assert_true(conversation.history_turn_request is None)
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [
       { kind: User(..), sequence: Some(1), .. },
       { kind: Assistant(prose=Some("First answer"), ..), sequence: Some(2), .. },
@@ -242,7 +242,7 @@ test "Cloud hides a sealed reasoning preview only after this step committed it" 
   assert_eq(conversation.reasoning_frontier, 2)
   // Identical reasoning from an earlier step is a different reply.
   assert_eq(
-    conversation.visible_reasoning(conversation.items()),
+    conversation.visible_reasoning(conversation.items(English)),
     (Some("Plan"), true),
   )
   // The delayed read pinned the journal after this step was saved.
@@ -258,7 +258,10 @@ test "Cloud hides a sealed reasoning preview only after this step committed it" 
     ]),
   })
   let conversation = committed.conversations["session"]
-  assert_eq(conversation.visible_reasoning(conversation.items()), (None, true))
+  assert_eq(
+    conversation.visible_reasoning(conversation.items(English)),
+    (None, true),
+  )
 }
 
 ///|
@@ -301,7 +304,7 @@ test "Cloud keeps an assistant preview when the latest page moves past its turn"
     HistoryUnchanged(1, "session", rechecking.sequence, "latest"),
   )
   assert_true(
-    validated.conversations["session"].items()
+    validated.conversations["session"].items(English)
     is [{ kind: Assistant(prose=Some("First answer"), ..), sequence: None, .. }],
   )
   let older = metadata_update(validated, LoadOlder("session"))
@@ -310,7 +313,7 @@ test "Cloud keeps an assistant preview when the latest page moves past its turn"
     OlderLoaded(1, "session", older.sequence, first),
   )
   assert_true(
-    settled.conversations["session"].items()
+    settled.conversations["session"].items(English)
     is [
       { kind: Assistant(prose=Some("First answer"), ..), sequence: Some(_), .. },
     ],
@@ -329,7 +332,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     Some("Consider the input"),
   )
   assert_false(conversation.live.reasoning.map_or(false, r => r.complete))
-  assert_true(conversation.items().is_empty())
+  assert_true(conversation.items(English).is_empty())
   let settled = partial
     .progress_test_event(4, "reasoning_message", {
       "content": "Complete reasoning",
@@ -349,7 +352,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     "reasoning_content": "Complete reasoning",
   })
   assert_true(
-    pending.conversations["session"].items()
+    pending.conversations["session"].items(English)
     is [
       {
         kind: Assistant(
@@ -401,9 +404,9 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
   assert_false(canonical.conversations["session"].history_reading)
   let conversation = canonical.conversations["session"]
   assert_true(conversation.live.reasoning.map(r => r.content) is None)
-  assert_eq(conversation.items().length(), 2)
+  assert_eq(conversation.items(English).length(), 2)
   assert_true(
-    conversation.items()[1].kind
+    conversation.items(English)[1].kind
     is Assistant(reasoning=Some("Complete reasoning"), prose=Some("Answer"), ..),
   )
   let next = canonical
@@ -574,14 +577,14 @@ test "Cloud compaction follows native lifecycle without treating failure as a ta
       "summary": "Earlier work",
     })
     assert_false(finished.conversations["session"].controls.is_compacting())
-    assert_true(finished.conversations["session"].items().is_empty())
+    assert_true(finished.conversations["session"].items(English).is_empty())
     let failed = compacting.progress_test_event(3, prefix + "_failed", {
       "error": "Compaction failed",
     })
     assert_false(failed.conversations["session"].controls.is_compacting())
     assert_true(failed.conversations["session"].notice is None)
     assert_true(failed.conversations["session"].generating)
-    assert_true(failed.conversations["session"].items().is_empty())
+    assert_true(failed.conversations["session"].items(English).is_empty())
   }
 }
 
@@ -684,7 +687,7 @@ test "Cloud hands a reply to a read that began before its notification when the 
   let conversation = settled.conversations["session"]
   assert_true(conversation.pending_assistants.is_empty())
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [
       { kind: User(..), sequence: Some(1), .. },
       { kind: Assistant(prose=Some("Hello!"), ..), sequence: Some(2), .. },
@@ -699,7 +702,7 @@ test "Cloud hands a reply to a read that began before its notification when the 
   let conversation = notified.conversations["session"]
   assert_true(conversation.pending_assistants.is_empty())
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [
       { kind: User(..), sequence: Some(1), .. },
       { kind: Assistant(prose=Some("Hello!"), ..), sequence: Some(2), .. },
@@ -774,7 +777,7 @@ test "Cloud tool loop hands identical replies to their own native records" {
   assert_false(conversation.history_reading)
   assert_true(conversation.pending_assistants.is_empty())
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [
       { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
       { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(3), .. },
@@ -819,7 +822,7 @@ test "Cloud keeps a joined task's preview until a read that began after its noti
   let conversation = validated.conversations["session"]
   assert_true(conversation.pending_assistants.is_empty())
   assert_true(
-    conversation.items()
+    conversation.items(English)
     is [{ kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. }],
   )
 }

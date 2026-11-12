@@ -1,17 +1,14 @@
 ///|
-test "shell classes leave native geometry to the window subscription" {
-  assert_eq(app_shell_class(true), "app")
-  assert_eq(app_shell_class(false), "app sidebar-collapsed")
-}
-
-///|
 test "sidebar preserves the focused host storage error in desktop and browser views" {
   let remote : @interop.ChannelId = Remote("storage-test")
   for desktop in [true, false] {
     let base = {
       ..test_model(),
       is_desktop: desktop,
-      cloud: { ..test_model().cloud, notice: Some("cloud notice"), },
+      cloud: {
+        ..test_model().cloud,
+        notice: Some(EngineDetail("cloud notice")),
+      },
       devices: test_model().devices +
       [
         {

@@ -4,6 +4,7 @@
 priv enum UiMessage {
   NewTab
   JobsLabel
+  GithubHint
   JobsHint
   WorkflowsLabel
   WorkflowsHint
@@ -23,6 +24,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, NewTab) => "新建标签页"
     (TraditionalChinese, NewTab) => "新建標籤頁"
     (Japanese, NewTab) => "新しいタブ"
+    (English, GithubHint) => "GitHub pull requests and issues"
+    (Spanish, GithubHint) => "Solicitudes de cambios e incidencias de GitHub"
+    (SimplifiedChinese, GithubHint) => "GitHub 拉取请求和议题"
+    (TraditionalChinese, GithubHint) => "GitHub 提取要求和議題"
+    (Japanese, GithubHint) => "GitHub のプルリクエストと Issue"
     (English, JobsLabel) => "Jobs"
     (Spanish, JobsLabel) => "Trabajos"
     (SimplifiedChinese, JobsLabel) => "后台任务"

@@ -163,9 +163,9 @@ test "Cloud missing model credentials reject compact without retaining a queued 
   assert_false(refused.conversations["session"].controls.is_compact_queued())
   assert_true(refused.conversations["session"].controls.compact_request is None)
   assert_true(refused.can_send("session"))
-  assert_eq(
-    refused.conversations["session"].notice,
-    Some(Failure::ServiceNotConfigured.label()),
+  assert_true(
+    refused.conversations["session"].notice
+    is Some(Notice::Failure(Failure::ServiceNotConfigured)),
   )
   for failure in ([Unreachable, Http(503), Malformed] : Array[Failure]) {
     let unknown = metadata_update(

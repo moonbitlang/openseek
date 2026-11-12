@@ -191,7 +191,7 @@ fn State::failed(self : State, error : Failure) -> (State, @cmd.Cmd) {
     {
       ..self,
       needs_sign_in: error is Unauthorized,
-      notice: Some(error.label()),
+      notice: Some(Notice::Failure(error)),
     },
     @cmd.none,
   )
@@ -411,14 +411,26 @@ pub fn update(
         state,
         run(emit, () => {
           try deliver_question_input(token, session, text, id) catch {
+            @cloud_client.RequestError(failure) =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                QuestionAnswerFailed(failure),
+              )
             error =>
               QuestionInputFailed(
                 state.epoch,
                 session,
-                "Could not deliver question answer: \{error}",
+                QuestionAnswerDetail("\{error}"),
               )
           } noraise {
-            _ => QuestionInputDelivered(state.epoch, session)
+            Accepted => QuestionInputDelivered(state.epoch, session)
+            Rejected(reason) =>
+              QuestionInputFailed(
+                state.epoch,
+                session,
+                QuestionAnswerDetail(reason),
+              )
           }
         }),
         None,
@@ -670,7 +682,7 @@ pub fn update(
           outgoing: None,
           controls,
           notice: match submission.input {
-            Prompt(..) | Native(_) => Some(error.label())
+            Prompt(..) | Native(_) => Some(Notice::Failure(error))
             Terminal(_) => None
           },
         },
@@ -768,16 +780,7 @@ pub fn update(
       let (next, command) = { ..state, metadata_saves, }.failed(error)
       // A turn that began before the save reached the server holds the mode.
       if save.edit is SetApproval(_) && error is Http(409) {
-        return (
-          {
-            ..next,
-            notice: Some(
-              "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
-            ),
-          },
-          command,
-          None,
-        )
+        return ({ ..next, notice: Some(ApprovalSaveRaced), }, command, None)
       }
       (next, command, None)
     }
@@ -825,12 +828,7 @@ pub fn update(
       let (next, command) = { ..state, deletions, }.failed(error)
       (
         if error is Busy {
-          {
-            ..next,
-            notice: Some(
-              "This conversation is generating. Try deleting it after it finishes.",
-            ),
-          }
+          { ..next, notice: Some(DeleteWhileGenerating), }
         } else {
           next
         },
@@ -981,7 +979,7 @@ pub fn update(
               ..conversation,
               controls: conversation.controls.host_failed(),
               last_seq: Some(seq),
-              notice: Some(error),
+              notice: Some(EngineDetail(error)),
             }),
             @cmd.none,
             None,
@@ -1024,7 +1022,7 @@ pub fn update(
         notice: if retry {
           conversation.notice
         } else {
-          error.map(error => error.label())
+          error.map(error => Notice::Failure(error))
         },
       })
       let next = { ..next, sequence: request, }
@@ -1431,7 +1429,7 @@ pub fn update(
         notice: if recovering && retry {
           conversation.notice
         } else {
-          Some(error.label())
+          Some(Notice::Failure(error))
         },
       })
       (
@@ -1629,7 +1627,7 @@ pub fn update(
       let next = state.replace(id, {
         ..conversation.clear_progress(),
         sending: false,
-        notice: Some(error.label()),
+        notice: Some(Notice::Failure(error)),
         history_required: if configuration {
           false
         } else {
@@ -1736,7 +1734,7 @@ fn State::submit(
       return (
         state.replace(id, {
           ..state.conversations[id],
-          notice: Some(failure.label()),
+          notice: Some(Notice::Failure(failure)),
         }),
         @cmd.none,
         None,

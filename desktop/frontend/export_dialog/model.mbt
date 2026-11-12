@@ -1,7 +1,7 @@
 ///|
 /// Each opening captures its source and advances a generation. Late replies
 /// from a dismissed dialog cannot overwrite a later conversation's dialog.
-#derive(Eq, Debug)
+#derive(Eq)
 struct Model {
   id_prefix : String
   generation : Int32
@@ -10,7 +10,7 @@ struct Model {
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv enum Source {
   Host(@interop.ChannelId, @protocol.SessionExportPayload)
   Cloud(session~ : String)
@@ -25,7 +25,7 @@ pub(all) enum FileSource {
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv struct Content {
   source : Source
   operation : Operation
@@ -34,27 +34,27 @@ priv struct Content {
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv enum Operation {
   Ready
   Downloading
   Sharing(@protocol.ShareProgress)
   SigningIn
   SignInRequired
-  SignInFailed(String)
+  SignInFailed(@account_failure.Failure)
   Saved(path~ : String, opened~ : Bool)
-  Failed(String)
+  Failed(Failure)
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv struct Publication {
   url : String
   copy : CopyState
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv enum CopyState {
   Available
   Copied
@@ -67,11 +67,11 @@ pub(all) enum Msg {
   Download
   Share
   SignIn
-  Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, String])
+  Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, Failure])
   Progress(@protocol.SessionShareProgress)
   HostProgress(@interop.ChannelId, @protocol.SessionShareProgress)
-  Published(generation~ : Int32, @protocol.SessionShareReply)
-  SignedIn(generation~ : Int32, Result[Unit, String])
+  Published(generation~ : Int32, Result[@protocol.SessionShareReply, Failure])
+  SignedIn(generation~ : Int32, Result[Unit, @account_failure.Failure])
   ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 
@@ -183,9 +183,9 @@ pub fn Model::update(
             ..content,
             operation: Failed(
               if content.source is File(_) {
-                "Sharing is unavailable in the local debug console. Use SeekMoonDev.app or the hosted browser console."
+                LocalFileSharingUnavailable
               } else {
-                "Sharing is unavailable in the local debug console. Use SeekMoonDev.app or the hosted browser console. You can still download this conversation."
+                LocalConversationSharingUnavailable
               },
             ),
           }),
@@ -220,14 +220,16 @@ pub fn Model::update(
       )
     Published(reply, ..) if content.operation is Sharing(_) => {
       let content = match reply {
-        Shared(url~) =>
+        Ok(Shared(url~)) =>
           {
             ..content,
             operation: Ready,
             publication: Some({ url, copy: Available, }),
           }
-        SignInRequired => { ..content, operation: SignInRequired, }
-        Failed(message~) => { ..content, operation: Failed(message), }
+        Ok(SignInRequired) => { ..content, operation: SignInRequired, }
+        Ok(@protocol.Failed(message~)) =>
+          { ..content, operation: Failed(Diagnostic(message)), }
+        Err(failure) => { ..content, operation: Failed(failure), }
       }
       (@cmd.none, self.showing(content))
     }
@@ -257,9 +259,6 @@ pub fn Model::update(
 pub extend Model with Eq::{equal, not_equal}
 
 ///|
-pub extend Model with @debug.Debug::{to_repr}
-
-///|
 /// Native browser panels must hide while this modal owns the screen.
 pub fn Model::is_open(self : Model) -> Bool {
   self.visible
@@ -287,7 +286,7 @@ pub fn Model::open_cloud(self : Model, session~ : String) -> (@cmd.Cmd, Model) {
 /// export reply and published link from the old account.
 pub fn Model::account_changed(
   self : Model,
-  result : Result[Unit, String],
+  result : Result[Unit, @account_failure.Failure],
 ) -> (@cmd.Cmd, Model) {
   if self.content is Some({ operation: SigningIn, .. }) {
     self.update(_ => @cmd.none, SignedIn(generation=self.generation, result))
@@ -312,7 +311,7 @@ pub fn Model::account_changed(
 ///|
 pub fn Model::account_expired(self : Model, msg : Msg) -> Bool {
   self.content is Some({ operation: Sharing(_) | Downloading, .. }) &&
-  msg is Published(generation~, @protocol.SignInRequired) &&
+  msg is Published(generation~, Ok(@protocol.SignInRequired)) &&
   generation == self.generation
 }
 

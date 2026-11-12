@@ -1547,7 +1547,7 @@ priv struct Model {
   account_checked : Bool
   // The last Cloud account failure in any environment: a failed read,
   // sign-in, cancellation, sign-out or disconnect, or an expired session.
-  account_error : String?
+  account_error : @account_failure.Failure?
   // The last failure of the Remote access switch, shown in Connections.
   remote_access_error : String?
 }
@@ -1778,7 +1778,10 @@ priv enum Msg {
   CheckForUpdates
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
   // sign-in state moved.
-  AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
+  AccountLoaded(
+    Int32,
+    Result[@protocol.AccountSession?, @account_failure.Failure]
+  )
   AccountPreferencesChanged(Bool)
   AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
   // A Cloud skills library read, fenced by the access it was issued with.
@@ -1801,7 +1804,7 @@ priv enum Msg {
   RemoteCancelClicked
   AccountLoginCancelled(Int32)
   AccountLoginTimedOut(Int32)
-  AccountCancelFailed(Int32, String)
+  AccountCancelFailed(Int32, @account_failure.Failure)
   AccountCancelFinished(Int32)
   // The account's Sign out button.
   RemoteDisconnectClicked
@@ -1970,7 +1973,7 @@ priv enum Msg {
   CloudFilePreviewCreated(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,
-    result~ : Result[String, String]
+    result~ : Result[String, @fileeditor.Failure]
   )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
@@ -2050,7 +2053,10 @@ priv enum Msg {
     edit~ : @conversation.RenameEdit
   )
   ConversationRenameSucceeded(@conversation.Id)
-  ConversationRenameFailed(id~ : @conversation.Id, message~ : String)
+  ConversationRenameFailed(
+    id~ : @conversation.Id,
+    message~ : ConversationRenameFailure
+  )
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)

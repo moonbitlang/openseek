@@ -422,9 +422,9 @@ test "Cloud failed input preparation is definite and preserves the editable sour
     .unwrap()
   assert_eq(failed.conversations["session"].control_inputs.length(), 0)
   assert_eq(failed.conversations["session"].submission_sequence, 0)
-  assert_eq(
-    failed.conversations["session"].notice,
-    Some(Failure::InvalidImage.label()),
+  assert_true(
+    failed.conversations["session"].notice
+    is Some(Notice::Failure(Failure::InvalidImage)),
   )
   let (expired, _) = state
     .update_control(
@@ -658,9 +658,9 @@ test "a refused or undelivered Cloud approval answer returns the card to the per
   let (refused, _) = answered
     .update_control(replies[0], _ => @cmd.none, Some("token"))
     .unwrap()
-  assert_eq(
-    refused.conversations["session"].notice,
-    Some("Cloud did not accept the answer: task_not_running."),
+  assert_true(
+    refused.conversations["session"].notice
+    is Some(AnswerRejected("task_not_running")),
   )
   // The person may answer again; the server fences it to the question.
   assert_true(

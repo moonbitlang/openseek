@@ -251,7 +251,7 @@ test "Cloud host failure settles idle commands without closing observation" {
     restored.controls.is_compacting() || restored.controls.is_compact_queued(),
   )
   assert_true(restored.controls.compact_request is None)
-  assert_eq(restored.notice, Some("Engine could not start"))
+  assert_true(restored.notice is Some(EngineDetail("Engine could not start")))
   assert_true(stream.active && restored.watch_status == Watching)
   assert_eq(restored.generating, conversation.generating)
   let settled = watch_snapshot(failed, stream, Some("task"), 4, {

@@ -9,6 +9,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "openseek_desktop/commands",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
 }
 
@@ -24,6 +25,8 @@ pub fn bridge_error_is_definite(Error) -> Bool
 pub fn bridge_error_text(Error) -> String
 
 pub fn bridge_failure(Error) -> BridgeFailure
+
+pub fn bridge_problem(Error) -> BridgeProblem
 
 pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] bridge_request(ChannelId, @commands.Command[Payload, Reply], Payload) -> Reply
 
@@ -75,6 +78,22 @@ pub(all) enum BridgeFailure {
   Unsent
   Unknown
 }
+
+#derive(Eq)
+pub(all) enum BridgeProblem {
+  Unavailable
+  MalformedReply(String)
+  SshUnavailable
+  SshReplyRetired
+  ConnectionDown
+  ConnectionClosed
+  ConnectionLost
+  RequestFailed
+  External(String)
+}
+pub fn BridgeProblem::equal(Self, Self) -> Bool
+pub fn BridgeProblem::not_equal(Self, Self) -> Bool
+pub fn BridgeProblem::text(Self, @i18n.Locale) -> String
 
 #derive(Eq, Hash, @debug.Debug)
 pub(all) enum ChannelId {

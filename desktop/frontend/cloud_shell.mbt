@@ -57,12 +57,7 @@ fn run_cloud_shell(
     @terminal.CommandStarted(command, terminal) =>
       (command, { ..model, terminal, })
     @terminal.CommandUnavailable | @terminal.CommandUnresolved =>
-      cloud_shell_not_started(
-        dispatch,
-        model,
-        shell.id,
-        shell_text(model.locale, ShellTerminalUnavailable),
-      )
+      cloud_shell_not_started(dispatch, model, shell.id, ShellUnavailable)
   }
 }
 
@@ -71,7 +66,7 @@ fn cloud_shell_not_started(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   id : String,
-  message : String,
+  notice : NotificationMessage,
 ) -> (@cmd.Cmd, Model) {
   guard model.cloud.user_id is Some(account) &&
     model.cloud.conversations
@@ -96,6 +91,6 @@ fn cloud_shell_not_started(
         ComposerCommandResult(@composer.Restore(input, "!" + pending.command)),
       )
     })
-  let (report, model) = model.notify_error(dispatch, message)
+  let (report, model) = model.notify(dispatch, notice)
   (@cmd.batch([report, restore]), model)
 }

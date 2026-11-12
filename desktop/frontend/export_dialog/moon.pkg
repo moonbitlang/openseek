@@ -6,7 +6,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbit-community/rabbita/dom",
   "openseek_desktop/frontend/i18n",
-  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/account_failure",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/dialog",

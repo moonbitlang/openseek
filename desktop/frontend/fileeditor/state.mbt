@@ -61,7 +61,7 @@ pub(all) enum TabState {
   // The host could not read this file. Unlike `TabDeleted`, this keeps the
   // failure reason without guessing whether the cause was removal,
   // permissions, or a transient filesystem error.
-  TabReadFailed(String)
+  TabReadFailed(Failure)
   // Git proved that the path is not an ordinary file the editor may open
   // (currently a symlink, submodule, or directory). Keep the tab as a bookmark
   // without retaining source that belonged to an earlier regular file.
@@ -642,7 +642,7 @@ pub(all) struct State {
   // Keep either failure separate from directory/file requests so a later
   // successful listing does not hide the loss of live updates. The root app
   // owns its toast presentation; this state only prevents a retry loop.
-  watch_error : String?
+  watch_error : Failure?
   // The file tree's keyboard entry, independent of the editor's DOM focus.
   tree_focus : @pathx.Relative?
   // Follow editor changes or directory links once, then leave manual scrolling alone.
@@ -657,7 +657,7 @@ pub(all) struct State {
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[@pathx.Relative, Array[FileEntry]]
   // Parallel directory replies clear only their own failures.
-  directory_errors : Map[@pathx.Relative, String]
+  directory_errors : Map[@pathx.Relative, Failure]
   // Each open document, keyed by device-bound absolute URI. The key set
   // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
   // adds an entry when it opens a tab and drops it when the tab closes.
@@ -683,7 +683,7 @@ pub(all) struct State {
   index : FileIndex
   // The last file operation failure, surfaced in the panel header;
   // `None` while nothing has failed.
-  error : String?
+  error : Failure?
 }
 
 ///|
@@ -990,7 +990,7 @@ pub(all) enum Msg {
     auth_epoch~ : Int32,
     generation~ : Int32,
     path~ : @common.Uri,
-    result~ : Result[Unit, String]
+    result~ : Result[Unit, Failure]
   )
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
   OfficeCitationLaidOut(OfficeCitationNavigation)
@@ -1123,7 +1123,7 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @pathx.Relative,
-    message~ : String
+    message~ : Failure
   )
   // A workspace snapshot reply. The owner/epoch pair rejects a result that
   // outlived a conversation or concrete-root transition.
@@ -1359,7 +1359,7 @@ pub(all) enum Msg {
     path~ : @common.Uri,
     file_link_generation~ : Int32?,
     review_generation~ : Int32?,
-    message~ : String
+    message~ : Failure
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
   // generation identifies the exact watcher configuration that produced it.
@@ -1367,7 +1367,7 @@ pub(all) enum Msg {
     channel~ : @interop.ChannelId,
     root~ : @common.Uri,
     generation~ : String,
-    message~ : String
+    message~ : Failure
   )
   // A new watcher sends `changes=None` once it is attached, requesting a full
   // baseline reconciliation. Later pushes contain the exact debounced events.
@@ -1426,7 +1426,7 @@ pub(all) enum Msg {
   // A user-invoked Definition/References request reached the host but failed.
   // The root app intercepts this message and shows its transient toast; the
   // owner prevents a late reply from surfacing over another conversation.
-  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
+  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : Failure)
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input). NOT handled by this package's `update`:
   // the comment becomes a chip on the main package's composer draft, so the

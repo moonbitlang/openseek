@@ -8,22 +8,34 @@ fn import_source(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = match target {
+      let reply : Result[String, Failure] = match target {
         Host(target) =>
-          @interop.bridge_request(target.channel, @commands.session_import, {
-            source,
-            workspace: target.workspace,
-            worktree_of: target.worktree_of,
-          }) catch {
-            error => @protocol.Failed(@interop.bridge_error_text(error))
+          try {
+            match
+              @interop.bridge_request(
+                target.channel,
+                @commands.session_import,
+                {
+                  source,
+                  workspace: target.workspace,
+                  worktree_of: target.worktree_of,
+                },
+              ) {
+              Success(id) => Ok(id)
+              Failed(message) => Err(Diagnostic(message))
+            }
+          } catch {
+            error => Err(Bridge(@interop.bridge_problem(error)))
           }
         // The dialog outlives the sign-in it opened under; a changed account
         // must not receive another account's import.
         Cloud(account=owner) =>
           match account {
             Some(session) if session.user.user_id == owner =>
-              @cloud.import_session(session.token, source)
-            _ => Failed(@cloud_client.Failure::Unauthorized.label())
+              @cloud.import_session(session.token, source).map_err(failure => {
+                Failure::Cloud(failure)
+              })
+            _ => Err(Failure::Cloud(@cloud_client.Unauthorized))
           }
       }
       scheduler.add(emit(Imported(generation, reply)))
@@ -72,10 +84,10 @@ fn pick_file(generation : Int32, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
         @js.Promise::from_async(() => {
           let blob : @dom.Blob = file.cast()
           let result = if blob.get_size() > 16 * 1024 * 1024 {
-            Err("JSON must be no larger than 16 MiB.")
+            Err(FileTooLarge)
           } else {
             Ok(Some(blob.text())) catch {
-              error => Err(@interop.bridge_error_text(error))
+              error => Err(Bridge(@interop.bridge_problem(error)))
             }
           }
           scheduler.add(emit(Picked(generation, result)))

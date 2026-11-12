@@ -2,7 +2,7 @@
 const DialogId = "session-import-dialog"
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 struct Model {
   generation : Int32
   content : Content?
@@ -27,7 +27,7 @@ pub(all) enum Target {
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv struct Content {
   target : Target
   link : String
@@ -35,12 +35,12 @@ priv struct Content {
 }
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 priv enum Operation {
   Ready
   Reading
   Importing
-  Failed(String)
+  Failed(Failure)
 }
 
 ///|
@@ -49,8 +49,8 @@ pub(all) enum Msg {
   PickFile
   LinkChanged(String)
   ImportLink
-  Picked(Int32, Result[String?, String])
-  Imported(Int32, @protocol.SessionImportReply)
+  Picked(Int32, Result[String?, Failure])
+  Imported(Int32, Result[String, Failure])
 }
 
 ///|
@@ -134,13 +134,13 @@ pub fn Model::update(
       }
     Imported(_, reply) if content.operation is Importing =>
       match reply {
-        Success(reply) =>
+        Ok(reply) =>
           (
             @dialog.close(DialogId),
             { ..self, content: None, },
             Some((content.target, reply)),
           )
-        Failed(message) =>
+        Err(message) =>
           (
             @cmd.none,
             {
@@ -172,9 +172,6 @@ fn Model::import_source(
 
 ///|
 pub extend Model with Eq::{equal, not_equal}
-
-///|
-pub extend Model with @debug.Debug::{to_repr}
 
 ///|
 pub extend HostTarget with Eq::{equal, not_equal}
