@@ -75,7 +75,7 @@ pub struct ServerEntry {
 
 ///|
 /// One configured server and the task that connects it in the background (see
-/// `start`), whose result is what connecting came to. It has no task until a
+/// `Server::new`), whose result is what connecting came to. It has no task until a
 /// script first reaches it.
 pub struct Server {
   config : @config.McpServer
@@ -84,27 +84,25 @@ pub struct Server {
 }
 
 ///|
-/// The configured servers, in config order, each connecting in a task of its
-/// own on `scope`'s group once a script first reaches it (see `settle` and
-/// `Server::call`); none connects here. A server that never settles (a stuck
-/// headers helper, say) holds back only its own task, which ends with the
-/// group. Every failure
-/// a task returns is also reported as the event it always was. The
-/// connections' reader/writer tasks run on `scope`'s group and live until it
-/// ends. `on_change` runs each time what `try_wait` reads may have changed — a
-/// server started connecting or settled, or a connected server's connection
-/// closed — and must not block.
-pub fn start(
+/// `config`, to connect in a task of its own on `scope`'s group once a script
+/// first reaches it (see `settle` and `Server::call`); nothing connects here.
+/// A server that never settles (a stuck headers helper, say) holds back only
+/// its own task, which ends with the group. A failure the task returns is also
+/// reported as the event it always was. The connection's reader/writer tasks
+/// run on `scope`'s group and live until it ends. `on_change` runs each time
+/// what `try_wait` reads may have changed — the server started connecting or
+/// settled, or its connection closed — and must not block.
+pub fn Server::new(
   scope : @agent_runtime.AgentTaskScope,
-  servers : Array[@config.McpServer],
+  config : @config.McpServer,
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
   on_change? : () -> Unit,
-) -> Array[Server] {
-  servers.map(server => {
-    config: server,
+) -> Server {
+  {
+    config,
     connecting: None,
     connect: () => {
       let task = scope
@@ -112,7 +110,7 @@ pub fn start(
         .spawn(no_wait=true, () => {
           let entry = connect_server(
             scope,
-            server,
+            config,
             client_name~,
             client_version~,
             workspace_root?,
@@ -134,7 +132,7 @@ pub fn start(
       }
       task
     },
-  })
+  }
 }
 
 ///|
