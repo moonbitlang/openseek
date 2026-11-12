@@ -89,6 +89,8 @@ jobs:
           node desktop/package/build.mjs browser --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/assets/frontend.js
+          # Without it, the Android app never adopts this release.
+          test -f desktop/dist/browser/android.json
           # openseek-api serves these .br/.gz copies by Accept-Encoding.
           node desktop/package/precompress.mjs desktop/dist/browser
           test -f desktop/dist/browser/assets/frontend.js.br

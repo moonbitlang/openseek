@@ -24,6 +24,8 @@ android {
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersion
+        // The Browser release built with this APK, which it also bundles.
+        buildConfigField("String", "RELEASE_VERSION", "\"$appVersion\"")
     }
     signingConfigs {
         create("release") {
@@ -38,10 +40,16 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            buildConfigField("boolean", "FRONTEND_UPDATES", "true")
         }
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // A debug build runs the frontend of its checkout unless
+            // -PfrontendUpdates asks it to follow the published one.
+            buildConfigField(
+                "boolean", "FRONTEND_UPDATES", providers.gradleProperty("frontendUpdates").isPresent.toString()
+            )
         }
     }
     buildFeatures { buildConfig = true }
