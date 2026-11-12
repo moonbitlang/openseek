@@ -28,13 +28,17 @@ fn emit() -> @cmd.Emit[@skills.Msg] {
 }
 
 ///|
-fn other_device() -> @interop.ChannelId {
-  @interop.ChannelId::Remote("d_b")
+fn other_device() -> @skills.Library {
+  @skills.Host(@interop.ChannelId::Remote("d_b"))
 }
 
 ///|
 fn input(installed~ : Array[@skills.InstalledItem] = []) -> @skills.Input {
-  { channel: @interop.ChannelId::Local, installed, }
+  {
+    library: @skills.Host(@interop.ChannelId::Local),
+    installed,
+    switchable: false,
+  }
 }
 
 ///|
@@ -58,7 +62,7 @@ test "a duplicate refresh while loading is a no-op" {
   let (_, opened) = @skills.State::empty().opening(emit(), input())
   let (_, ready, _) = opened.handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
+    @skills.CatalogLoaded(library=@skills.Host(@interop.ChannelId::Local), items=[
       market_item(),
     ]),
     input(),
@@ -75,7 +79,11 @@ test "a duplicate refresh while loading is a no-op" {
 ///|
 test "catalog completions cannot cross a device focus switch" {
   let (_, local_loading) = @skills.State::empty().opening(emit(), input())
-  let remote_input : @skills.Input = { channel: other_device(), installed: [], }
+  let remote_input : @skills.Input = {
+    library: other_device(),
+    installed: [],
+    switchable: false,
+  }
   let (_, remote_loading) = local_loading.opening(emit(), remote_input)
 
   // Opening on the new device replaces the loading owner and issues that
@@ -83,7 +91,7 @@ test "catalog completions cannot cross a device focus switch" {
   assert_false(remote_loading == local_loading)
   let (_, ignored_loaded, _) = remote_loading.handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
+    @skills.CatalogLoaded(library=@skills.Host(@interop.ChannelId::Local), items=[
       market_item(),
     ]),
     remote_input,
@@ -92,7 +100,7 @@ test "catalog completions cannot cross a device focus switch" {
   let (_, ignored_failed, _) = ignored_loaded.handle(
     emit(),
     @skills.CatalogFailed(
-      channel=@interop.ChannelId::Local,
+      library=@skills.Host(@interop.ChannelId::Local),
       message="old host offline",
     ),
     remote_input,
@@ -101,7 +109,7 @@ test "catalog completions cannot cross a device focus switch" {
 
   let (_, ready, _) = ignored_failed.handle(
     emit(),
-    @skills.CatalogLoaded(channel=other_device(), items=[market_item()]),
+    @skills.CatalogLoaded(library=other_device(), items=[market_item()]),
     remote_input,
   )
   assert_false(ready == remote_loading)
@@ -111,7 +119,7 @@ test "catalog completions cannot cross a device focus switch" {
 test "an install marks its entry busy exactly once" {
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
+    @skills.CatalogLoaded(library=@skills.Host(@interop.ChannelId::Local), items=[
       market_item(),
     ]),
     input(),
@@ -136,7 +144,7 @@ test "an install marks its entry busy exactly once" {
 test "a settled install releases its entry and asks for a library re-read" {
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
+    @skills.CatalogLoaded(library=@skills.Host(@interop.ChannelId::Local), items=[
       market_item(),
     ]),
     input(),
@@ -149,16 +157,16 @@ test "a settled install releases its entry and asks for a library re-read" {
   let (_, done, outcome) = busy.handle(
     emit(),
     @skills.ActionDone(
-      channel=@interop.ChannelId::Local,
+      library=@skills.Host(@interop.ChannelId::Local),
       action=@skills.Installing(source="acme/widget@1.0.0"),
       error=None,
     ),
     input(),
   )
-  guard outcome is Some(LibraryChanged(channel~)) else {
+  guard outcome is Some(LibraryChanged(library~)) else {
     fail("a successful install should report the library change")
   }
-  assert_true(channel == @interop.ChannelId::Local)
+  assert_true(library == @skills.Host(@interop.ChannelId::Local))
 
   // A failure surfaces as the page's notice instead, and reports nothing.
   let (_, retried, _) = done.handle(
@@ -169,7 +177,7 @@ test "a settled install releases its entry and asks for a library re-read" {
   let (_, failed, failure_outcome) = retried.handle(
     emit(),
     @skills.ActionDone(
-      channel=@interop.ChannelId::Local,
+      library=@skills.Host(@interop.ChannelId::Local),
       action=@skills.Installing(source="acme/widget@1.0.0"),
       error=Some("digest mismatch"),
     ),
@@ -183,19 +191,20 @@ test "a settled install releases its entry and asks for a library re-read" {
 test "a result from another device settles without a local outcome" {
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
+    @skills.CatalogLoaded(library=@skills.Host(@interop.ChannelId::Local), items=[
       market_item(),
     ]),
     input(),
   )
   let (_, busy, _) = ready.handle(emit(), @skills.Install(market_item()), {
-    channel: other_device(),
+    library: other_device(),
     installed: [],
+    switchable: false,
   })
   let (_, settled, outcome) = busy.handle(
     emit(),
     @skills.ActionDone(
-      channel=other_device(),
+      library=other_device(),
       action=@skills.Installing(source="acme/widget@1.0.0"),
       error=Some("digest mismatch"),
     ),
@@ -360,7 +369,7 @@ test "an install blocks uninstall after a library refresh until completion" {
   let (_, blocked, _) = busy.handle(emit(), @skills.Uninstall(skill), refreshed)
   assert_true(blocked == busy)
   let completion = @skills.ActionDone(
-    channel=@interop.ChannelId::Local,
+    library=@skills.Host(@interop.ChannelId::Local),
     action=@skills.Installing(source=skill.source),
     error=None,
   )
@@ -419,7 +428,7 @@ test "an uninstall retains its source after removal and releases only itself" {
   let (_, other_done, _) = concurrent.handle(
     emit(),
     @skills.ActionDone(
-      channel=@interop.ChannelId::Local,
+      library=@skills.Host(@interop.ChannelId::Local),
       action=@skills.Installing(source=@skills.source_label(other)),
       error=None,
     ),
@@ -429,7 +438,7 @@ test "an uninstall retains its source after removal and releases only itself" {
   let (_, done, outcome) = other_done.handle(
     emit(),
     @skills.ActionDone(
-      channel=@interop.ChannelId::Local,
+      library=@skills.Host(@interop.ChannelId::Local),
       action=@skills.Uninstalling(source=skill.source, id=skill.id),
       error=Some("cleanup failed"),
     ),
@@ -469,4 +478,95 @@ test "detail navigation preserves library errors without mutating state" {
     assert_true(opened == repeated)
     assert_true(failed == clean.with_library_error("library unreadable"))
   }
+}
+
+///|
+fn cloud_library(epoch~ : Int32 = 1) -> @skills.Library {
+  @skills.Cloud({ token: "ts_A", epoch, })
+}
+
+///|
+fn builtin_widget() -> @skills.InstalledItem {
+  {
+    id: "acme-widget",
+    name: "widget",
+    description: "",
+    source: "acme/widget@0.9.0",
+    registry: Some({ module_name: "acme/widget", package_path: "", }),
+    enabled: true,
+    builtin: true,
+  }
+}
+
+///|
+test "Cloud built-ins offer no enablement or update" {
+  let cloud : @skills.Input = {
+    library: cloud_library(),
+    installed: [builtin_widget()],
+    switchable: false,
+  }
+  let (_, ready, _) = @skills.State::empty().handle(
+    emit(),
+    @skills.CatalogLoaded(library=cloud_library(), items=[market_item()]),
+    cloud,
+  )
+  for
+    msg in [
+      @skills.ToggleEnabled("acme-widget"),
+      @skills.Update(market_item()),
+      @skills.Uninstall(builtin_widget()),
+    ] {
+    let (_, after, outcome) = ready.handle(emit(), msg, cloud)
+    assert_true(after == ready)
+    assert_true(outcome is None)
+  }
+  // A device library's built-in can still be switched off.
+  let device = { ..cloud, library: @skills.Host(@interop.ChannelId::Local), }
+  let (_, toggled, _) = ready.handle(
+    emit(),
+    @skills.ToggleEnabled("acme-widget"),
+    device,
+  )
+  assert_true(toggled != ready)
+}
+
+///|
+test "Cloud replies cannot cross an account change" {
+  let first : @skills.Input = {
+    library: cloud_library(epoch=1),
+    installed: [],
+    switchable: false,
+  }
+  let second = { ..first, library: cloud_library(epoch=2), }
+  let (_, opened) = @skills.State::empty().opening(emit(), first)
+  let (_, stale, _) = opened.handle(
+    emit(),
+    @skills.CatalogLoaded(library=cloud_library(epoch=1), items=[market_item()]),
+    second,
+  )
+  assert_true(stale == opened)
+}
+
+///|
+test "the library switch reports a choice only when it changes the library" {
+  let switchable = { ..input(), switchable: true, }
+  let state = @skills.State::empty()
+  let (_, _, chosen) = state.handle(
+    emit(),
+    @skills.SelectLibrary(CloudLibrary),
+    switchable,
+  )
+  assert_true(chosen is Some(LibrarySelected(CloudLibrary)))
+  let (_, _, same) = state.handle(
+    emit(),
+    @skills.SelectLibrary(DeviceLibrary),
+    switchable,
+  )
+  assert_true(same is None)
+  let (_, _, fixed) = state.handle(
+    emit(),
+    @skills.SelectLibrary(CloudLibrary),
+    input(),
+  )
+  assert_true(fixed is None)
 }

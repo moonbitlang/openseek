@@ -46,7 +46,7 @@ fn list_component(
         class="skill-action",
       ).map2(input, (menu, input) => (input.item.id, menu))
     },
-    by=input => "\{input.channel.uri_authority()}:\{input.item.id}",
+    by=input => "\{input.library}:\{input.item.id}",
   )
   localized.map2(list_menus, (localized, menus) => {
     let (state, input, locale) = localized
@@ -61,7 +61,7 @@ fn detail_component(
 ) -> @rabbita.Val[@html.Html] {
   let detail_input = localized.map(localized => {
     let (state, input, locale) = localized
-    guard state.detail_open(input.channel) else { return None }
+    guard state.detail_open(input.library) else { return None }
     let target = match state.preview {
       Closed => return None
       Loading(target~, ..) | Ready(target~, ..) | Failed(target~, ..) => target
@@ -80,7 +80,7 @@ fn detail_component(
   )
   localized.map2(detail_menu, (localized, menu) => {
     let (state, input, locale) = localized
-    if state.detail_open(input.channel) {
+    if state.detail_open(input.library) {
       detail_page(locale~, state, input, emit, menu)
     } else {
       @html.nothing

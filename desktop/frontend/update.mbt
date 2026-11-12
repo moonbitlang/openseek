@@ -4345,6 +4345,14 @@ fn update_msg(
       change_account_preferences(dispatch, model, enabled)
     AccountPreferencesLoaded(request, result) =>
       account_preferences_loaded(dispatch, model, request, result)
+    CloudSkillsLoaded(access, result) =>
+      cloud_skills_loaded(dispatch, model, access, result)
+    CloudSkillsExpired(access) =>
+      if model.cloud_skills_access() == Some(access) {
+        expire_account(dispatch, model)
+      } else {
+        (@cmd.none, model)
+      }
     DeviceAccountExpired(channel, epoch, token) => {
       guard model.account.map(account => account.token) == Some(token) &&
         model.device_state(channel) is Some(device) &&
@@ -4952,24 +4960,11 @@ fn update_msg(
     }
     OpenSchedules => open_schedules(dispatch, model)
     SchedulePage(msg) => update_schedules(dispatch, msg, model)
-    OpenSkills => {
-      // The page decides whether its catalog still needs fetching; the
-      // installed list is the root's mirror, cheap, and refreshed on every
-      // open.
-      let (_, skills, _) = model.skills.handle(
-        dispatch.map(msg => Skills(msg)),
-        @skills.BackToList,
-        model.skills_input(),
-      )
-      let (page_cmd, skills) = skills.opening(
-        dispatch.map(msg => Skills(msg)),
-        model.skills_input(),
-      )
-      (
-        @cmd.batch([page_cmd, fetch_installed_skills(dispatch, model.focused)]),
-        { ..model, management_dialog: Some(Skills), skills, },
-      )
-    }
+    OpenSkills =>
+      open_skills_library(dispatch, {
+        ..model,
+        management_dialog: Some(Skills),
+      })
     Skills(msg) => {
       let (page_cmd, skills, outcome) = model.skills.handle(
         dispatch.map(next => Skills(next)),
@@ -4977,13 +4972,23 @@ fn update_msg(
         model.skills_input(),
       )
       let model = { ..model, skills, }
-      // A settled skill operation changed the library the root owns;
-      // what the page shows must come from disk, not from a client-side
-      // guess.
-      guard outcome is Some(@skills.LibraryChanged(channel~)) else {
-        return (page_cmd, model)
+      match outcome {
+        // A settled skill operation changed a library the root owns; what
+        // the page shows must come from its source, not a client-side guess.
+        Some(LibraryChanged(library~)) =>
+          (
+            @cmd.batch([page_cmd, fetch_skills_library(dispatch, library)]),
+            model,
+          )
+        Some(LibrarySelected(kind)) => {
+          let (open_cmd, model) = open_skills_library(dispatch, {
+            ..model,
+            skills_library: kind,
+          })
+          (@cmd.batch([page_cmd, open_cmd]), model)
+        }
+        None => (page_cmd, model)
       }
-      (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
     Send | SendFollowup(_) | SendInBackground | SendArtifactFollowup => {
       // Re-pinning is for the reader of this conversation's transcript.
@@ -7707,16 +7712,19 @@ fn update_device_msg(
   match msg {
     InstalledSkillsLoaded(items, builtin_errors~) => {
       guard channel == model.focused else { return (@cmd.none, model) }
+      let model = { ..model, installed_skills: items, }
+      // The mirror serves the device composer even while the page shows the
+      // Cloud library; only a page showing this host syncs to it.
+      guard model.skills_input().library == Host(channel) else {
+        return (@cmd.none, model)
+      }
       let (cmd, skills) = model.skills
-        .with_builtin_errors(channel, builtin_errors)
-        .sync_library(dispatch.map(msg => Skills(msg)), {
-          channel,
-          installed: items,
-        })
-      (cmd, { ..model, installed_skills: items, skills, })
+        .with_builtin_errors(Host(channel), builtin_errors)
+        .sync_library(dispatch.map(msg => Skills(msg)), model.skills_input())
+      (cmd, { ..model, skills, })
     }
     InstalledSkillsFailed(message) =>
-      if channel == model.focused {
+      if model.skills_input().library == Host(channel) {
         (
           @cmd.none,
           { ..model, skills: model.skills.with_library_error(message), },
@@ -20177,7 +20185,8 @@ test "installed skills replies are scoped to their source device" {
   assert_eq(applied.installed_skills.length(), 1)
   assert_eq(applied.installed_skills[0].id, "new")
   assert_true(
-    applied.skills == ignored.skills.with_builtin_errors(Remote("d_b"), errors),
+    applied.skills ==
+    ignored.skills.with_builtin_errors(Host(Remote("d_b")), errors),
   )
   let (_, missing) = update(
     dispatch,
@@ -20195,7 +20204,8 @@ test "installed skills replies are scoped to their source device" {
     missing,
   )
   assert_true(
-    recovered.skills == missing.skills.with_builtin_errors(Remote("d_b"), []),
+    recovered.skills ==
+    missing.skills.with_builtin_errors(Host(Remote("d_b")), []),
   )
   assert_true(recovered.skills != missing.skills)
 }

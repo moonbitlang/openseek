@@ -344,9 +344,22 @@ fn account_loaded(
   } else {
     @cmd.none
   }
+  // The Cloud skills mirror belongs to one account: drop the old one and read
+  // the new one, which the Cloud composer's `$` completion lists.
+  let (skills_command, next) = if changed {
+    let next = { ..next, cloud_skills: [], }
+    (
+      next
+      .cloud_skills_access()
+      .map_or(@cmd.none, access => fetch_cloud_skills(dispatch, access)),
+      next,
+    )
+  } else {
+    (@cmd.none, next)
+  }
   let command = @cmd.batch([
     export_command, file_command, retire_command, command, persistence, console_command,
-    remote_status,
+    remote_status, skills_command,
   ])
   (command, next)
 }

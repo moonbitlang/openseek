@@ -55,6 +55,8 @@ pub(all) struct Input {
   locale : @i18n.Locale
   mode : Mode
   has_host : Bool
+  // A host's library or a signed-in Cloud account's.
+  skills_available : Bool
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?
@@ -254,7 +256,7 @@ pub fn component(
         ),
       )
     }
-    if input.has_host {
+    if input.skills_available {
       footer.push(
         @html.button(
           class=if input.skills_active {
@@ -275,6 +277,8 @@ pub fn component(
           ],
         ),
       )
+    }
+    if input.has_host {
       footer.push(
         @html.button(
           class=if input.schedules_active {

@@ -557,7 +557,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
     active_file: self.active_workspace_file(),
-    installed_skills: [],
+    installed_skills: self.cloud_skills,
     submission_sequence: conversation.submission_sequence,
     file_index: if self.file_panel.owner == Some(owner) {
       self.composer_file_index()

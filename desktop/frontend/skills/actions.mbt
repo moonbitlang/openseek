@@ -1,7 +1,7 @@
 ///|
 #derive(Debug, Eq)
 priv struct InstalledMenuInput {
-  channel : @interop.ChannelId
+  library : String
   locale : @i18n.Locale
   item : InstalledItem
   update : MarketItem?
@@ -16,13 +16,17 @@ fn installed_menu_input(
   item : InstalledItem,
 ) -> InstalledMenuInput {
   {
-    channel: input.channel,
+    library: input.library.key(),
     locale,
     item,
-    update: state.update_candidate(item),
+    update: if item.builtin && input.library.locks_builtins() {
+      None
+    } else {
+      state.update_candidate(item)
+    },
     pending: item
     .identity()
-    .bind(identity => state.pending_action(input.channel, identity))
+    .bind(identity => state.pending_action(input.library, identity))
     is Some(_),
   }
 }

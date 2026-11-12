@@ -13,7 +13,7 @@ fn wb_skill(enabled~ : Bool, name~ : String = "widget") -> InstalledItem {
 
 ///|
 fn wb_input(installed~ : Array[InstalledItem]) -> Input {
-  { channel: @interop.ChannelId::Local, installed, }
+  { library: Host(@interop.ChannelId::Local), installed, switchable: false, }
 }
 
 ///|
@@ -50,7 +50,7 @@ test "enablement-only refresh preserves an open preview and its pending read" {
   let (_, ready, _) = unchanged.handle(
     wb_emit(),
     PreviewLoaded(
-      channel=@interop.ChannelId::Local,
+      library=Host(@interop.ChannelId::Local),
       request~,
       target=Installed(skill),
       content="body",
@@ -60,7 +60,7 @@ test "enablement-only refresh preserves an open preview and its pending read" {
   guard ready.preview is Ready(content="body", ..) else {
     fail("the read issued before the toggle must still settle")
   }
-  assert_true(ready.detail_open(@interop.ChannelId::Local))
+  assert_true(ready.detail_open(Host(@interop.ChannelId::Local)))
 }
 
 ///|
@@ -83,7 +83,7 @@ test "a library change to the document reloads it and drops the old read" {
   let (_, ignored, _) = reloading.handle(
     wb_emit(),
     PreviewLoaded(
-      channel=@interop.ChannelId::Local,
+      library=Host(@interop.ChannelId::Local),
       request=old_request,
       target=Installed(skill),
       content="stale",
@@ -94,7 +94,7 @@ test "a library change to the document reloads it and drops the old read" {
   let (_, ready, _) = reloading.handle(
     wb_emit(),
     PreviewLoaded(
-      channel=@interop.ChannelId::Local,
+      library=Host(@interop.ChannelId::Local),
       request=next_request,
       target=Installed(renamed),
       content="fresh",
