@@ -45,6 +45,8 @@ export class LocalConsoleHarness extends CloudHarness {
       }
       if (url.pathname === '/v1/auth/me') return json({ login: 'local' });
       if (url.pathname === '/v1/devices') return json({ devices: [{ id: 'host', name: 'Local fixture computer', online: true }] });
+      // A relay without Web Push configured; web_push.spec.js covers the rest.
+      if (url.pathname === '/v2/push/key') return route.fulfill({ status: 404 });
       throw new Error(`Unexpected local console request: ${url.pathname}`);
     });
     await this.page.routeWebSocket(url => url.origin === this.origin.replace(/^http/, 'ws') &&
