@@ -52,12 +52,19 @@ fn prompt_options() -> Array[@argparse.OptionArg] {
       about="Another skills directory, advertised alongside the user-level and workspace ones, which shadow its same-named skills. Repeat to add more; empty values are ignored.",
     ),
     OptionArg(
+      "skill-env",
+      long="skill-env",
+      action=Append,
+      default_values=[""],
+      about="An environment variable a skill's mcp.json may reference as ${NAME}, besides ${OPENSEEK_SKILL_DIR}; no other variable expands there. Repeat to allow more; empty values are ignored.",
+    ),
+    OptionArg(
       "mcp-config",
       long="mcp-config",
       action=Append,
       env="OPENSEEK_MCP_CONFIG",
       default_values=[""],
-      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. A skill directory may bring servers of its own in an mcp.json beside its SKILL.md. Each server connects when a script first reaches it. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP.",
+      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. A skill directory may bring servers of its own in an mcp.json beside its SKILL.md; a skill's stdio server must run moonx, sandboxed. Each server connects when a script first reaches it. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone loads no file, even with OPENSEEK_MCP_CONFIG set.",
     ),
   ]
 }

@@ -3123,6 +3123,8 @@ async test "native engine env has one authoritative bundled moon path" {
       "serve",
       "--session=s-env",
       "--skills-dir=\{skills_dir.to_string()}",
+      "--skill-env=\{@mcp.UrlEnv}",
+      "--skill-env=\{@mcp.TokenEnv}",
       "--mcp-config=\{mcp_path.to_string()}",
       "--dir",
       ".",

@@ -128,6 +128,13 @@ pub fn mcp_config_paths(matches : @argparse.Matches) -> Array[String] {
 }
 
 ///|
+/// The `--skill-env` names a skill's `mcp.json` may expand; empty values name
+/// none.
+pub fn skill_env(matches : @argparse.Matches) -> Array[String] {
+  matches.values.get("skill-env").unwrap_or([]).filter(name => !name.is_empty())
+}
+
+///|
 /// The `--skills-dir` paths, in order; empty values name no directory.
 pub fn skills_dirs(matches : @argparse.Matches) -> Array[String] {
   matches.values

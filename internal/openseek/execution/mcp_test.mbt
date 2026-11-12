@@ -96,6 +96,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       let mcp = @execution.start_mcp(
         AgentTaskScope(group),
         [first, broken, missing, second],
+        policy_dir="\{directory}/policies",
         workspace_root=directory,
       )
       let items = catalog(mcp.serve(AgentTaskScope(group)))
@@ -162,6 +163,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         let failed = @execution.start_mcp(
           AgentTaskScope(group),
           paths,
+          policy_dir="\{directory}/policies",
           workspace_root=directory,
         )
         assert_true(failed.status().servers is [])
@@ -216,6 +218,7 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     let registry = @execution.start_mcp(
       AgentTaskScope(group),
       [path],
+      policy_dir="\{dir}/policies",
       workspace_root=dir,
       on_change=() => ignore(changed.try_put(()) catch { _ => false }),
     )
@@ -260,40 +263,137 @@ async test "the MCP registry tells its owner as a server settles and when it is 
 }
 
 ///|
-async test "a skill's MCP server reads its directory and connects when a script reaches it" {
-  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
-  defer @fs.rmdir(dir, recursive=true)
-  let skill = "\{dir}/skills/tracker"
+/// Write a skill named `name` under `dir`/skills whose `mcp.json` is `config`.
+async fn write_skill(dir : String, name : String, config : Json) -> Unit {
+  let skill = "\{dir}/skills/\{name}"
   @fs.mkdir(skill, recursive=true)
   @fs.write_text(
     "\{skill}/SKILL.md",
-    "---\nname: tracker\n---\n",
+    "---\nname: \{name}\n---\n",
     create_mode=CreateOrTruncate,
   )
-  // A command that does not exist settles at once as failed, whether or not
-  // the sandbox allows spawning.
-  let config : Json = {
-    "mcpServers": {
-      "tracker": { "command": "${OPENSEEK_SKILL_DIR}/no-such-server" },
-    },
-  }
   @fs.write_text(
     "\{skill}/mcp.json",
     config.stringify(),
     create_mode=CreateOrTruncate,
   )
+}
+
+///|
+async test "a skill's stdio server runs moonx confined to a policy the engine writes" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.rmdir(dir, recursive=true)
+  let home = @env.get_env_vars().get("HOME").unwrap_or("/")
+  write_skill(dir, "tracker", {
+    "mcpServers": {
+      "tracker": {
+        "command": "moonx",
+        "args": ["${OPENSEEK_SKILL_DIR}/server.mbtx"],
+        "env": { "LOGIN": "${HOME}" },
+      },
+    },
+  })
+  @async.with_task_group(group => {
+    let registry = @execution.start_mcp(
+      AgentTaskScope(group),
+      [],
+      skills=@agent_skill.discover_skills("\{dir}/skills"),
+      skill_env=["HOME"],
+      policy_dir="\{dir}/policies",
+      workspace_root=dir,
+    )
+    guard registry.status()
+      is {
+        configs: [{ state: Loaded, .. }],
+        servers: [{ target, state: Idle, .. }],
+      } else {
+      fail("a moonx server from a skill should load, idle")
+    }
+    assert_eq(target, "moonx")
+    // Reading the skill's directory and the workspace, nothing else; its
+    // environment is its own `env` and its directory.
+    let skill = "\{dir}/skills/tracker"
+    assert_eq(@json.parse(@fs.read_text("\{dir}/policies/1.json")), {
+      "fs": { "read": [Json(skill), Json(dir)] },
+      "env": {
+        "set": { "LOGIN": Json(home), "OPENSEEK_SKILL_DIR": Json(skill) },
+      },
+    })
+  })
+}
+
+///|
+async test "a skill's server that leaves the sandbox makes its configuration invalid" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.rmdir(dir, recursive=true)
+  let rejected : Array[(String, Json)] = [
+    ("native", { "native": { "command": "node", "args": ["server.js"] } }),
+    (
+      "own-policy",
+      {
+        "own-policy": {
+          "command": "moonx",
+          "args": ["--experimental-policy", "open.json", "a/b/c"],
+        },
+      },
+    ),
+    (
+      "helper",
+      {
+        "helper": {
+          "url": "https://example.com/mcp",
+          "headersHelper": "print-token",
+        },
+      },
+    ),
+    // Only the variables `skill_env` names expand.
+    (
+      "secret",
+      {
+        "secret": {
+          "url": "https://example.com/mcp",
+          "headers": { "Authorization": "${HOME}" },
+        },
+      },
+    ),
+  ]
+  for entry in rejected {
+    let (name, servers) = entry
+    write_skill(dir, name, { "mcpServers": servers })
+  }
+  @async.with_task_group(group => {
+    let registry = @execution.start_mcp(
+      AgentTaskScope(group),
+      [],
+      skills=@agent_skill.discover_skills("\{dir}/skills"),
+      policy_dir="\{dir}/policies",
+      workspace_root=dir,
+    )
+    let status = registry.status()
+    assert_true(status.servers is [])
+    assert_eq(status.configs.length(), rejected.length())
+    assert_true(status.configs.all(config => config.state is Failed(_)))
+  })
+}
+
+///|
+async test "a skill's HTTP server connects when a script reaches it" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.rmdir(dir, recursive=true)
+  // Nothing listens on port 9, so connecting settles at once as failed.
+  write_skill(dir, "tracker", {
+    "mcpServers": { "tracker": { "url": "http://127.0.0.1:9/mcp" } },
+  })
   @async.with_timeout(10000, () => {
     @async.with_task_group(group => {
       let registry = @execution.start_mcp(
         AgentTaskScope(group),
         [],
         skills=@agent_skill.discover_skills("\{dir}/skills"),
+        policy_dir="\{dir}/policies",
         workspace_root=dir,
       )
-      guard registry.status().servers is [{ target, state: Idle, .. }] else {
-        fail("a skill's server waits for a script to reach it")
-      }
-      assert_eq(target, "\{skill}/no-such-server")
+      assert_true(registry.status().servers is [{ state: Idle, .. }])
       ignore(catalog(registry.serve(AgentTaskScope(group))))
       assert_true(registry.status().servers is [{ state: Failed(_), .. }])
       group.return_immediately()

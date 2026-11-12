@@ -371,8 +371,8 @@ test "an inherited MCP configuration counts as one the engine will load" {
 /// what OPENSEEK_MCP_CONFIG names), and, from a host serving its own tools,
 /// the skill that tells the agent about them. That skill is written under the
 /// runtime directory as `host-skills/seekmoon/` — its `SKILL.md` and an
-/// `mcp.json` reaching the host — and handed over as a skills directory, so
-/// the host's server connects when a script first reaches it.
+/// `mcp.json` reaching the host — and handed over as a skills directory,
+/// with the grant's two variables as the ones that `mcp.json` may expand.
 async fn engine_mcp_args(
   config : McpConfig?,
   runtime_dir : @pathx.Path?,
@@ -406,6 +406,11 @@ async fn engine_mcp_args(
       }
     }
     args.push("--skills-dir=\{skills.to_string()}")
+    // The skill's `mcp.json` reaches the host through the conversation's
+    // grant, the only variables it may expand besides its own directory.
+    for name in [@mcp.UrlEnv, @mcp.TokenEnv] {
+      args.push("--skill-env=\{name}")
+    }
   }
   if config is Some(mcp) {
     args.push("--mcp-config=\{mcp.path.to_string()}")

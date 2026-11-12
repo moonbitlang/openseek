@@ -105,9 +105,11 @@ store directory when no runtime directory was supplied) and passes
 }
 ```
 
-OpenSeek expands the HTTP URL and header values from the engine's environment
-when it connects. Missing variables are errors, so a process that was not
-granted access cannot connect through this entry. The agent learns of the tools
+OpenSeek expands the HTTP URL and header values from the engine's environment.
+A skill's configuration may expand only the variables an engine is told it
+may, so the host passes `--skill-env` for these two. Missing variables are
+errors, so a process that was not granted access cannot connect through this
+entry. The agent learns of the tools
 from the skill, and the engine connects the server when a script first
 searches or calls it.
 
