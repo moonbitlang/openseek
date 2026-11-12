@@ -2274,8 +2274,15 @@ fn update_msg(
       } else {
         @cmd.none
       }
+      // The sign-in page lists the relay's apps before anyone signs in.
+      let (downloads_fetch, downloads) = if model.is_relay_console() {
+        @downloads.Model::load(fetch_downloads(dispatch))
+      } else {
+        (@cmd.none, model.downloads)
+      }
       (
         @cmd.batch([
+          downloads_fetch,
           fetch_account(
             dispatch,
             model.is_desktop,
@@ -2289,7 +2296,7 @@ fn update_msg(
           request_sidebar_resize_mount(),
           measure_scrollbar_lane(),
         ]),
-        model,
+        { ..model, downloads, },
       )
     }
     DeleteCloudSession(account~, session~) => {
@@ -4960,6 +4967,12 @@ fn update_msg(
         }
       }
     }
+    OpenDownloads => {
+      let (cmd, downloads) = model.downloads.open(fetch_downloads(dispatch))
+      (cmd, { ..model, downloads, })
+    }
+    Downloads(msg) =>
+      (@cmd.none, { ..model, downloads: @downloads.Model::update(msg), })
     OpenSchedules => open_schedules(dispatch, model)
     SchedulePage(msg) => update_schedules(dispatch, msg, model)
     OpenSkills =>

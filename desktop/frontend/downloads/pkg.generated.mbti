@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/downloads"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+pub const ManifestPath : String = "/desktop/releases/latest.json"
+
+// Errors
+
+// Types and methods
+#derive(Eq)
+pub enum Model {
+  Idle
+  Loading
+  Ready(version~ : String, page_url~ : String, targets~ : Array[Target])
+  Unavailable
+}
+pub fn Model::Model() -> Self
+pub fn Model::dialog(Self, @i18n.Locale) -> @html.Html
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::list(Self, @i18n.Locale) -> @html.Html
+pub fn Model::load(@cmd.Cmd) -> (@cmd.Cmd, Self)
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::open(Self, @cmd.Cmd) -> (@cmd.Cmd, Self)
+pub fn Model::update(Msg) -> Self
+
+pub(all) enum Msg {
+  Fetched(status~ : Int32, body~ : String)
+  FetchFailed
+}
+
+#derive(Eq)
+pub struct Target {
+  label : String
+  url : String
+}
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

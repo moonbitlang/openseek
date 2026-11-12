@@ -29,7 +29,7 @@ test('Cloud login returns to the exact deep link without creating a session', as
   await cloud.install();
   const destination = `${sessionURL(sessionA)}?source=shared`;
   await page.goto(destination);
-  const login = page.locator('.cloud-home').getByRole('button', { name: /Sign in.*GitHub/i });
+  const login = page.locator('.cloud-home').getByRole('button', { name: 'Sign in', exact: true });
   await expect(login).toBeVisible();
   const request = page.waitForRequest(request => new URL(request.url()).pathname === '/v2/auth/login');
   await login.click();

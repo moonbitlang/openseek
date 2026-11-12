@@ -190,3 +190,18 @@ fn parse_console_roster(body : String) -> Array[DeviceMeta]? {
   }
   Some(metas)
 }
+
+///|
+/// GET the relay's desktop manifest for the app downloads.
+fn fetch_downloads(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    console_request(
+      @downloads.ManifestPath,
+      Get,
+      (status, body) => {
+        scheduler.add(dispatch(Downloads(Fetched(status~, body~))))
+      },
+      _ => scheduler.add(dispatch(Downloads(FetchFailed))),
+    )
+  })
+}

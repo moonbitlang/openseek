@@ -31,6 +31,7 @@ test "the sidebar input keeps peer sections in one component value" {
     schedules_active: false,
     skills_active: false,
     settings_active: false,
+    downloads: false,
     account: None,
   }
   assert_eq(input.work_sections.length(), 2)

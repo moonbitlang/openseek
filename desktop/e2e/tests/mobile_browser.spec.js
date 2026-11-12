@@ -150,7 +150,7 @@ test('signed-out entry fits a phone viewport', { tag: '@webkit-layout' }, async 
   await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/device/device-a/chat');
-  const login = page.getByRole('link', { name: 'Sign in with GitHub' });
+  const login = page.getByRole('link', { name: 'Sign in', exact: true });
   await expect(login).toBeVisible();
   await assertFits(page);
   const box = await login.boundingBox();

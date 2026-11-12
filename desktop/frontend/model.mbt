@@ -1282,6 +1282,7 @@ priv struct Model {
   session_import_dialog : @session_import.Model
   export_dialog : @export_dialog.Model
   file_share_dialog : @export_dialog.Model
+  downloads : @downloads.Model
   workspace_settings_dialog : WorkspaceSettingsDialog?
   // The user answered "Not now" to the setup modal. Held until a usable
   // endpoint re-arms the announcement, and deliberately not part of the
@@ -1972,6 +1973,8 @@ priv enum Msg {
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
+  OpenDownloads
+  Downloads(@downloads.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
   // editor hover's foreign DOM; browser pages keep native new-tab behavior.
@@ -2849,6 +2852,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     session_import_dialog: @session_import.Model(),
     export_dialog: @export_dialog.Model(),
     file_share_dialog: @export_dialog.Model(id_prefix="file-share"),
+    downloads: @downloads.Model(),
     workspace_settings_dialog: None,
     api_setup_dismissed: false,
     account: None,
@@ -2867,6 +2871,13 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
 /// Local host access and Cloud sign-in are independent on this page.
 fn Model::is_local_console(self : Model) -> Bool {
   !self.is_desktop && self.console.page_device == Some("host")
+}
+
+///|
+/// The browser console served by a relay, as opposed to the desktop window
+/// or the Local Console.
+fn Model::is_relay_console(self : Model) -> Bool {
+  !self.is_desktop && self.console.page_device != Some("host")
 }
 
 ///|

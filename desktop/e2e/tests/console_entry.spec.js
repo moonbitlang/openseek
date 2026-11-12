@@ -19,12 +19,12 @@ test('a signed-out device page offers login and preserves the page return path',
   const app = await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/device/device-a/chat');
-  await expect(page.getByRole('link', { name: 'Sign in with GitHub' })).toHaveAttribute('href',
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute('href',
     '/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fdevice-a%2Fchat');
   expect(app.socket).toBeNull();
   await assertFits(page);
   await page.route('**/v2/auth/login?*', route => route.fulfill({ contentType: 'text/html', body: '<h1>OAuth fixture</h1>' }));
-  await page.getByRole('link', { name: 'Sign in with GitHub' }).click();
+  await page.getByRole('link', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'OAuth fixture' })).toBeVisible();
   await expect(page).toHaveURL(/\/v2\/auth\/login\?/);
   expect(app.pageErrors).toEqual([]);
@@ -72,6 +72,45 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   expect(app.pageErrors).toEqual([]);
 });
 
+test('a signed-out visitor finds the relay app downloads beside sign-in and in the sidebar', async ({ page }) => {
+  const app = await installConsole(page);
+  await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
+  let manifestRequests = 0;
+  await page.route('**/desktop/releases/latest.json', route => {
+    manifestRequests += 1;
+    return route.fulfill({ json: {
+      version: '0.3.1',
+      url: 'https://example.com/releases/0.3.1',
+      platforms: {
+        'macos-arm64': { url: 'https://example.com/mac.tar.gz' },
+        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
+        'windows-x64': { url: 'https://example.com/win-setup.exe' },
+        browser: { url: 'https://example.com/console.tar.gz' },
+      },
+    } });
+  });
+  await page.goto('/cloud');
+  const inline = page.getByRole('main').getByRole('region', { name: 'Download apps' });
+  await expect(inline.getByRole('link', { name: /macOS · Apple Silicon/ }))
+    .toHaveAttribute('href', 'https://example.com/mac.dmg');
+  await expect(inline.getByRole('link', { name: /Windows · x64/ }))
+    .toHaveAttribute('href', 'https://example.com/win-setup.exe');
+  await expect(inline.getByRole('link', { name: 'All releases on GitHub' }))
+    .toHaveAttribute('href', 'https://example.com/releases/0.3.1');
+  await expect(inline.getByRole('link')).toHaveCount(3);
+  await assertFits(page);
+  // The sidebar's dialog shows the list the page already read.
+  await page.locator('.sidebar-toggle').click();
+  await page.getByRole('button', { name: 'Download apps' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Download apps' });
+  await expect(dialog.getByRole('link', { name: /macOS · Apple Silicon/ }))
+    .toHaveAttribute('href', 'https://example.com/mac.dmg');
+  expect(manifestRequests).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('the device selector opens upward even when its menu would fit below', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const app = await installConsole(page);
@@ -113,7 +152,7 @@ test('Chat is the signed-out launch page and a saved Work preference cannot repl
   await page.goto('/index.html');
   await expect(page).toHaveURL(/\/cloud$/);
   await expect(page.getByRole('main').getByRole('heading', { name: 'Sign in to view conversations', level: 2, exact: true })).toBeVisible();
-  await expect(page.getByRole('main').getByRole('button', { name: 'Sign in with GitHub' })).toBeEnabled();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
   // Device choice lives in the signed-in sidebar, not on the Cloud home.
   await expect(page.getByRole('main').getByRole('link', { name: 'Choose a device' })).toHaveCount(0);
   // The phone drawer starts closed, so query the mode switch by markup.

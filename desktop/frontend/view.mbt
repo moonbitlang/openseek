@@ -575,11 +575,6 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
 }
 
 ///|
-/// The relay's download page. Signed-in visits to the relay's `/` go straight
-/// to the console, so the homepage's downloads live at their own path.
-const DownloadsUrl : String = "/download"
-
-///|
 /// The sole root-to-sidebar projection. This method is data-only and is
 /// mapped into `Val[Input]` once in `boot`; the sidebar package owns all DOM
 /// composition and child state after that boundary. Both the desktop window
@@ -682,11 +677,6 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     online_devices: self.console.roster
     .filter(meta => meta.online)
     .map(meta => meta.device_choice()),
-    downloads_url: if self.is_local_console() {
-      None
-    } else {
-      Some(DownloadsUrl)
-    },
   })
   @sidebar.Input::{
     search: self.session_search,
@@ -702,6 +692,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     schedules_active: self.management_dialog is Some(Schedules),
     skills_active: self.management_dialog is Some(Skills),
     settings_active: self.management_dialog is Some(Settings(_)),
+    downloads: self.is_relay_console(),
     account,
   }.filtered()
 }
@@ -2059,7 +2050,7 @@ fn console_gate_view(
             class="portal-button-link",
             href=console.login_url(),
             escape=true,
-            shell_text(locale, SignInGitHub),
+            shell_text(locale, SignInLabel),
           ),
         )
       }
@@ -2589,6 +2580,7 @@ fn view(
       locale=model.locale,
       dispatch.map(msg => FileShareDialog(msg)),
     ),
+    model.downloads.dialog(model.locale),
     // Authentication input is deliberately DOM-only. Keep this slot before
     // conditional overlays so resize/toasts cannot replace its input node.
     if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
@@ -3050,7 +3042,20 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         class="button primary",
         type_="button",
         on_click=dispatch(RemoteConnectClicked),
-        shell_text(locale, SignInGitHub),
+        shell_text(locale, SignInLabel),
+      ),
+    )
+  }
+  // A first visit lands here with the phone sidebar closed, before any
+  // account exists, so the downloads are listed beside sign-in too.
+  if model.is_relay_console() {
+    children.push(
+      @html.section(
+        class="cloud-home-downloads",
+        attrs=@html.Attrs::build().aria_label(
+          @sidebar_messages.text(locale, DownloadApps),
+        ),
+        model.downloads.list(locale),
       ),
     )
   }
