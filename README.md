@@ -361,13 +361,13 @@ A `<name>/SKILL.md` skill can bring MCP servers in an `mcp.json` beside it, in
 the shape `--mcp-config` reads. A skill may come from a checkout or a library
 nobody vetted, so its servers are confined:
 
-- Its entries expand only `${OPENSEEK_SKILL_DIR}`, the skill's own directory,
-  and the variables named with `--skill-env` (none by default); referencing
-  any other variable makes the file invalid.
+- Its entries expand only `${OPENSEEK_SKILL_DIR}`, the skill's own directory;
+  referencing any other variable makes the file invalid. A server that needs
+  a secret from the environment belongs in an `--mcp-config` file.
 - A stdio server must run `moonx` (a `.mbtx` script or a registry package, as
   Wasm); the engine runs the first `moonx` in an absolute `PATH` directory, so
-  a checkout's own `moonx` never stands in for it. The engine writes a moonrun policy for it and passes it as
-  `--experimental-policy`: it may read the skill's directory and the
+  a checkout's own `moonx` never stands in for it. The engine writes a moonrun
+  policy for it and passes it as `--experimental-policy`: it may read the skill's directory and the
   workspace, and nothing else — no writes, no network, no processes — and its
   environment is its own `env` plus `OPENSEEK_SKILL_DIR`. A server that runs
   another command or names a policy of its own makes the file invalid.

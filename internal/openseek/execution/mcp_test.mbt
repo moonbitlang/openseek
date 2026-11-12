@@ -283,13 +283,12 @@ async fn write_skill(dir : String, name : String, config : Json) -> Unit {
 async test "a skill's stdio server runs moonx confined to a policy the engine writes" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
   defer @fs.rmdir(dir, recursive=true)
-  let home = @env.get_env_vars().get("HOME").unwrap_or("/")
   write_skill(dir, "tracker", {
     "mcpServers": {
       "tracker": {
         "command": "moonx",
         "args": ["${OPENSEEK_SKILL_DIR}/server.mbtx"],
-        "env": { "LOGIN": "${HOME}" },
+        "env": { "MODE": "read-only" },
       },
     },
   })
@@ -298,7 +297,6 @@ async test "a skill's stdio server runs moonx confined to a policy the engine wr
       AgentTaskScope(group),
       [],
       skills=@agent_skill.discover_skills("\{dir}/skills"),
-      skill_env=["HOME"],
       policy_dir="\{dir}/policies",
       workspace_root=dir,
     )
@@ -317,7 +315,7 @@ async test "a skill's stdio server runs moonx confined to a policy the engine wr
     assert_eq(@json.parse(@fs.read_text("\{dir}/policies/1.json")), {
       "fs": { "read": [Json(skill), Json(dir)] },
       "env": {
-        "set": { "LOGIN": Json(home), "OPENSEEK_SKILL_DIR": Json(skill) },
+        "set": { "MODE": "read-only", "OPENSEEK_SKILL_DIR": Json(skill) },
       },
     })
   })
@@ -347,7 +345,7 @@ async test "a skill's server that leaves the sandbox makes its configuration inv
         },
       },
     ),
-    // Only the variables `skill_env` names expand.
+    // No variable of the engine's environment expands.
     (
       "secret",
       {

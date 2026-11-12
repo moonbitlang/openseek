@@ -19,8 +19,9 @@ struct McpRegistry {
 /// server replaces an earlier one of the same name. The servers each of
 /// `skills` brings in its `mcp.json` join them, ahead of the files, so a
 /// file's server replaces a skill's of the same name. A skill's configuration
-/// expands only `${OPENSEEK_SKILL_DIR}`, its own directory, and the variables
-/// named in `skill_env`; its stdio servers run through `moonx` inside a
+/// expands only `${OPENSEEK_SKILL_DIR}`, its own directory — no variable of
+/// the engine's environment, which a skill nobody vetted could carry off;
+/// its stdio servers run through `moonx` inside a
 /// moonrun policy written under `policy_dir` (see `confine_skill_servers`). No
 /// server connects here: each connects in the background on `scope`'s group
 /// when a script first reaches it. `on_change` runs each time `status` may
@@ -32,7 +33,6 @@ pub async fn start_mcp(
   scope : @agent_runtime.AgentTaskScope,
   config_paths : Array[String],
   skills~ : Array[@agent_skill.Skill] = [],
-  skill_env~ : Array[String] = [],
   policy_dir~ : String,
   workspace_root~ : String,
   on_change? : () -> Unit,
@@ -77,14 +77,7 @@ pub async fn start_mcp(
       Some((dir, _)) => dir.to_owned()
       None => "."
     }
-    let env : Map[String, String] = Map([])
-    for name in skill_env {
-      if host_env.get(name) is Some(value) {
-        env[name] = value
-      }
-    }
-    env[SkillDirEnv] = dir
-    let confined = load(path, env, servers => {
+    let confined = load(path, Map([(SkillDirEnv, dir)]), servers => {
       confine_skill_servers(servers, skill_dir=dir, workspace_root~, moonx~, policy=() => {
         policies += 1
         "\{policy_dir}/\{policies}.json"

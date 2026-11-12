@@ -194,16 +194,16 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
         @fs.rmdir(runtime.to_string(), recursive=true)
       })
     })
-    let args = engine_mcp_args(None, Some(runtime), host_mcp=true)
-    let host_path = runtime.join("host-skills/\{@mcp.SkillName}/mcp.json")
+    let args = engine_mcp_args(None, Some(runtime), {}, host_mcp=true)
+    let host_path = runtime.join("host-mcp.json")
     let template = @fsx.read_text(host_path)
     // A valid default remains usable when its directory becomes read-only.
     @fs.chmod(runtime.to_string(), 0o500)
-    assert_eq(engine_mcp_args(None, Some(runtime), host_mcp=true), args)
+    assert_eq(engine_mcp_args(None, Some(runtime), {}, host_mcp=true), args)
     @fs.chmod(runtime.to_string(), 0o700)
     // A changed template is still regenerated when writing is possible.
     @fsx.write_text(host_path, "stale configuration")
-    assert_eq(engine_mcp_args(None, Some(runtime), host_mcp=true), args)
+    assert_eq(engine_mcp_args(None, Some(runtime), {}, host_mcp=true), args)
     assert_eq(@fsx.read_text(host_path), template)
     // Stands in for a serve engine pointed at the user's configuration. With
     // an error to report it says it could not decode the file; with none it
@@ -366,16 +366,18 @@ test "an inherited MCP configuration counts as one the engine will load" {
 }
 
 ///|
-/// The arguments that give an engine its MCP servers: the user's
-/// configuration file, when there is one (otherwise the engine falls back to
-/// what OPENSEEK_MCP_CONFIG names), and, from a host serving its own tools,
-/// the skill that tells the agent about them. That skill is written under the
-/// runtime directory as `host-skills/seekmoon/` — its `SKILL.md` and an
-/// `mcp.json` reaching the host — and handed over as a skills directory,
-/// with the grant's two variables as the ones that `mcp.json` may expand.
+/// Put the host defaults before the user's configuration. Once an explicit
+/// host path is passed, argparse no longer reads OPENSEEK_MCP_CONFIG, so carry
+/// that fallback explicitly when the user's usual file is absent. The host's
+/// server comes with the skill that tells the agent about it, written as
+/// `host-skills/seekmoon/SKILL.md` and handed over as a skills directory; the
+/// server itself stays in the host's configuration rather than the skill's
+/// `mcp.json`, because it expands the conversation's grant, and a skill's
+/// `mcp.json` expands no host variable.
 async fn engine_mcp_args(
   config : McpConfig?,
   runtime_dir : @pathx.Path?,
+  env : Map[String, String],
   host_mcp~ : Bool,
 ) -> Array[String] {
   let args : Array[String] = []
@@ -391,29 +393,29 @@ async fn engine_mcp_args(
         root.to_path()
       }
     }
+    let path = directory.join("host-mcp.json").resolve()
     let skills = directory.join("host-skills").resolve()
-    let skill = skills.join(@mcp.SkillName).to_path()
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
-    let config_text =
+    let text =
       #|{"mcpServers":{"seekmoon":{"url":"${OPENSEEK_DESKTOP_TOOLS_URL}","headers":{"Authorization":"Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"}}}}
-    for file in [("SKILL.md", @mcp.skill_markdown()), ("mcp.json", config_text)] {
-      let (name, text) = file
-      let path = skill.join(name)
+    let skill = skills.join("\{@mcp.SkillName}/SKILL.md").to_path()
+    for file in [(path.to_path(), text), (skill, @mcp.skill_markdown())] {
+      let (path, text) = file
       if @fsx.read_text_if_exists(path) != Some(text) {
-        @fsx.ensure_dir(skill)
+        @fsx.ensure_dir(path.dirname())
         @fsx.write_text_atomic(path, text)
       }
     }
     args.push("--skills-dir=\{skills.to_string()}")
-    // The skill's `mcp.json` reaches the host through the conversation's
-    // grant, the only variables it may expand besides its own directory.
-    for name in [@mcp.UrlEnv, @mcp.TokenEnv] {
-      args.push("--skill-env=\{name}")
-    }
+    args.push("--mcp-config=\{path.to_string()}")
   }
   if config is Some(mcp) {
     args.push("--mcp-config=\{mcp.path.to_string()}")
+  } else if host_mcp &&
+    env.get("OPENSEEK_MCP_CONFIG") is Some(path) &&
+    !path.is_empty() {
+    args.push("--mcp-config=\{path}")
   }
   args
 }
