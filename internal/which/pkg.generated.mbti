@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/internal/which"
+
+// Values
+pub async fn find(String, path~ : String) -> String?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

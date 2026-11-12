@@ -1,0 +1,18 @@
+import {
+  "moonbitlang/core/async/fs",
+}
+
+import {
+  "moonbitlang/core/async",
+} for "wbtest"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)
