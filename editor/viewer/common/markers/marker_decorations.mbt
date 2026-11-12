@@ -128,8 +128,7 @@ fn MarkerDecorations::get_markers(
   self : MarkerDecorations,
 ) -> Array[(@base_common.Range, Marker)] {
   let res : Array[(@base_common.Range, Marker)] = []
-  for entry in self.entries {
-    let (marker, id) = entry
+  for (marker, id) in self.entries {
     if self.model.get_decoration_range(id) is Some(range) {
       res.push((range, marker))
     }

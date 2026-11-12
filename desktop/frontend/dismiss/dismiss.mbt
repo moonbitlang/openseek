@@ -29,7 +29,7 @@ pub fn on_outside_click(
 ) -> @sub.Sub {
   @sub.custom_sub(
     key,
-    @sub.Scope::Global,
+    Global,
     DismissSubscription(trigger, emit),
     dismiss_sub_loader,
   )

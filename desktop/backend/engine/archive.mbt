@@ -104,8 +104,7 @@ fn release_family_claims(
   for claim in claims.rev_iter() {
     claim.release(manager)
   }
-  for entry in guards.rev_iter() {
-    let (record_key, record_state) = entry
+  for (record_key, record_state) in guards.rev_iter() {
     manager.release_record_move(record_key, record_state)
   }
 }
@@ -252,8 +251,7 @@ async fn EngineManager::claim_session_family_move(
   }
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
-  for entry in guards {
-    let (_, record_state) = entry
+  for (_, record_state) in guards {
     record_state.wait_until_idle()
   }
   // Validate the complete family before closing any idle process. A running

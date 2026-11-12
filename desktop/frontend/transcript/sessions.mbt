@@ -132,8 +132,7 @@ pub fn session_tree(items : Array[SessionListItem]) -> Array[SessionTreeRow] {
       }
     }
   })
-  for entry in folded {
-    let (_, root, item) = entry
+  for (_, root, item) in folded {
     match row_at.get(root) {
       Some(index) => rows[index].children.push(item)
       // `fold_target` only walks through listed parents, so the root it

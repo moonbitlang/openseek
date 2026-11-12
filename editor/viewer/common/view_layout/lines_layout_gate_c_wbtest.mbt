@@ -301,15 +301,13 @@ test "LinesLayout bulk ordering matches delicate inserts at Int extremes" {
     (0, 0, 8),
   ]
   let delicate = LinesLayout(1, 10, 0, 0)
-  for entry in entries {
-    let (after_line_number, ordinal, height) = entry
+  for (after_line_number, ordinal, height) in entries {
     gate_c_insert_whitespace(delicate, after_line_number, ordinal, height, 0)
     |> ignore
   }
   let bulk = LinesLayout(1, 10, 0, 0)
   bulk.change_whitespace(accessor => {
-    for entry in entries {
-      let (after_line_number, ordinal, height) = entry
+    for (after_line_number, ordinal, height) in entries {
       accessor.insert_whitespace(
         after_line_number,
         ordinal,

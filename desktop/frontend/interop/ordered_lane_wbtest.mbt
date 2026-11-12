@@ -31,13 +31,7 @@ async test "an ordered request failure releases its channel lane" {
   let failures = []
   for _ in 0..<2 {
     @js.Promise::from_async(() => {
-      ignore(
-        bridge_request_in_order(
-          Local,
-          @commands.fs_unwatch,
-          @protocol.EmptyPayload::NoPayload,
-        ),
-      ) catch {
+      ignore(bridge_request_in_order(Local, @commands.fs_unwatch, NoPayload)) catch {
         _ => {
           failures.push(true)
           return

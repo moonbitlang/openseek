@@ -268,8 +268,7 @@ fn spawn_list_markdown() -> String {
   // `Map` iterates in insertion order, which is the table's first-appearance
   // order.
   let by_program : Map[String, Array[Array[String]]] = Map([])
-  for entry in spawnable_commands {
-    let (program, args_prefix) = entry
+  for (program, args_prefix) in spawnable_commands {
     by_program.get_or_init(program, () => []).push(args_prefix)
   }
   let bullets : Array[String] = []
@@ -508,8 +507,7 @@ fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] 
 /// constant, so the rules are built once rather than per run.
 let spawn_allow_rules : Json = Json(
   [
-    for entry in spawnable_commands => {
-      let (program, args_prefix) = entry
+    for (program, args_prefix) in spawnable_commands => {
       let rule : Json = if args_prefix.is_empty() {
         { "program": program }
       } else {
@@ -786,8 +784,11 @@ test "a write root inside the workspace is never excluded" {
   // Along the root's path each level excludes its own entries and the other
   // children; the root itself gets nothing.
   let expected = []
-  for level in [("/w", "{[!s]*,s,s[!c]*,sc?*}"), ("/w/sc", "{[!a]*,a?*}")] {
-    let (prefix, others) = level
+  for
+    (prefix, others) in [
+      ("/w", "{[!s]*,s,s[!c]*,sc?*}"),
+      ("/w/sc", "{[!a]*,a?*}"),
+    ] {
     for tail in tails {
       expected.push("\{prefix}/\{tail}")
       expected.push("\{prefix}/\{others}/**/\{tail}")

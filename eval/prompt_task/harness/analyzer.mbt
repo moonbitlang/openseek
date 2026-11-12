@@ -525,8 +525,7 @@ fn probe_output_result(
     ("stdout", spec.stdout_contains, stdout),
     ("stderr", spec.stderr_contains, stderr),
   ]
-  for check in text_checks {
-    let (label, expected, haystack) = check
+  for (label, expected, haystack) in text_checks {
     if expected != "" && !contains_expected_text(haystack, expected) {
       return ProbeResult(
         name=spec.name,

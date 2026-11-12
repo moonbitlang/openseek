@@ -38,16 +38,14 @@ test "LinesLayout applies exact JavaScript ToInt32 to raw whitespace numbers" {
   let layout = LinesLayout(3, 10, 0, 0)
   let ids : Array[String] = []
   layout.change_whitespace(accessor => {
-    for index, pair in cases {
-      let (raw, _) = pair
+    for index, (raw, _) in cases {
       ids.push(accessor.insert_whitespace(0, index, raw, raw))
     }
   })
   |> ignore
   let whitespaces = layout.get_whitespaces()
   assert_eq(whitespaces.length(), cases.length())
-  for index, pair in cases {
-    let (_, expected) = pair
+  for index, (_, expected) in cases {
     assert_eq(whitespaces[index].id, ids[index])
     assert_eq(whitespaces[index].height, expected)
     assert_eq(whitespaces[index].min_width, expected)

@@ -155,8 +155,7 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
     ),
     ("timeout", [pending], false, "without a verified successful result", true),
   ])
-  for case in cases {
-    let (name, sequence, success, expected, watch) = case
+  for (name, sequence, success, expected, watch) in cases {
     let dir = temp + "/ci-" + name
     @fs.mkdir(dir)
     let fixture : Array[Json] = sequence.map(value => {

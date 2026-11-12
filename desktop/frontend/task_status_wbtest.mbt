@@ -50,11 +50,10 @@ test "Codex outcomes behind a maximized terminal stay unread until revealed" {
     registered_projects: ["/workspace"],
   }
   for
-    outcome in [
+    (wire_status, expected) in [
       ("completed", @conversation.CompletedMark),
       ("failed", @conversation.FailedMark),
     ] {
-    let (wire_status, expected) = outcome
     let model = {
       ..test_model(),
       screen: Codex,
@@ -105,13 +104,11 @@ test "Codex outcomes remain unread while the editor covers the transcript" {
     registered_projects: ["/workspace"],
   }
   for
-    outcome in [
+    (wire_status, expected) in [
       ("completed", @conversation.CompletedMark),
       ("failed", @conversation.FailedMark),
     ] {
-    let (wire_status, expected) = outcome
-    for layout in [(false, true), (true, false), (true, true)] {
-      let (narrow, expanded) = layout
+    for (narrow, expanded) in [(false, true), (true, false), (true, true)] {
       let model = {
         ..test_model(),
         screen: Codex,
@@ -207,8 +204,7 @@ test "Codex outcomes are read when the transcript remains visible beside the edi
 ///|
 test "OpenSeek outcomes remain unread while the editor covers the transcript" {
   let dispatch = test_dispatch()
-  for layout in [(false, true), (true, false), (true, true)] {
-    let (narrow, expanded) = layout
+  for (narrow, expanded) in [(false, true), (true, false), (true, true)] {
     let model = {
       ..running_model(),
       window_focused: true,

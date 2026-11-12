@@ -116,8 +116,7 @@ fn join_cases_win32_only() -> Array[(Array[String], String)] {
 ///|
 test "join" {
   let failures : Array[String] = []
-  for case in join_cases() {
-    let (args, expected) = case
+  for (args, expected) in join_cases() {
     let actual = Posix::join(args)
     if actual != expected {
       failures.push(
@@ -135,8 +134,7 @@ test "join" {
       )
     }
   }
-  for case in join_cases_win32_only() {
-    let (args, expected) = case
+  for (args, expected) in join_cases_win32_only() {
     let actual = Win32::join(args)
     let actual_alt = actual.replace_all(old="\\", new="/")
     if actual != expected && actual_alt != expected {
@@ -274,8 +272,7 @@ fn extname_cases() -> Array[(String, String)] {
 ///|
 test "extname" {
   let failures : Array[String] = []
-  for case in extname_cases() {
-    let (input, expected) = case
+  for (input, expected) in extname_cases() {
     let posix_actual = Posix::extname(input)
     if posix_actual != expected {
       failures.push(
@@ -354,8 +351,7 @@ test "resolve" {
       "C:\\foo\\tmp.3\\cycles\\root.js",
     ),
   ]
-  for case in win32_cases {
-    let (args, expected) = case
+  for (args, expected) in win32_cases {
     let actual = Win32::resolve(args)
     // On non-Windows hosts the JS test accepts the slash-normalized form.
     let actual_alt = actual.replace_all(old="\\", new="/")
@@ -371,8 +367,7 @@ test "resolve" {
     (["/some/dir", ".", "/absolute/"], "/absolute"),
     (["/foo/tmp.3/", "../tmp.3/cycles/root.js"], "/foo/tmp.3/cycles/root.js"),
   ]
-  for case in posix_cases {
-    let (args, expected) = case
+  for (args, expected) in posix_cases {
     let actual = Posix::resolve(args)
     if actual != expected {
       failures.push(
@@ -525,8 +520,7 @@ test "relative" {
     ("C:\\baz", "\\\\foo\\bar\\baz", "\\\\foo\\bar\\baz"),
     ("\\\\foo\\bar\\baz", "C:\\baz", "C:\\baz"),
   ]
-  for case in win32_cases {
-    let (from, to, expected) = case
+  for (from, to, expected) in win32_cases {
     let actual = Win32::relative(from, to)
     if actual != expected {
       failures.push(
@@ -548,8 +542,7 @@ test "relative" {
     ("/baz-quux", "/baz", "../baz"),
     ("/baz", "/baz-quux", "../baz-quux"),
   ]
-  for case in posix_cases {
-    let (from, to, expected) = case
+  for (from, to, expected) in posix_cases {
     let actual = Posix::relative(from, to)
     if actual != expected {
       failures.push(

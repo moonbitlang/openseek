@@ -140,10 +140,9 @@ pub fn ViewLayout::compute_scroll_left_to_reveal(
 ) -> Double? {
   guard ranges is [(first_left, first_width), ..] else { return None }
   let (box_start_x, box_end_x) = for
-    range in ranges[1:]
+    (left, width) in ranges[1:]
     box_start_x = first_left.round(),
     box_end_x = (first_left + first_width).round() {
-    let (left, width) = range
     continue box_start_x.min(left.round()),
       box_end_x.max((left + width).round())
   } nobreak {

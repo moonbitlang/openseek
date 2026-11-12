@@ -11,7 +11,7 @@ test "selection offers actions before explicitly starting a reply" {
     y: 200,
     below: false,
   }
-  let emit : @cmd.Emit[SelectionMsg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[SelectionMsg] = Emit(_ => @cmd.none)
   let deliver = (_ : QuoteReply[String]) => @cmd.none
   let (offered, _) = initial.update(
     Some("session"),

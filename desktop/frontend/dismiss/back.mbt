@@ -46,7 +46,7 @@ const BACK_EVENT : String = "openseek-back"
 pub fn host_back() -> @sub.Sub {
   @sub.custom_sub(
     "host-back",
-    @sub.Scope::Global,
+    Global,
     HostBackSubscription,
     host_back_sub_loader,
   )
@@ -88,12 +88,7 @@ pub fn on_back(
   level~ : Level = Popup,
   emit : @cmd.Emit[Unit],
 ) -> @sub.Sub {
-  @sub.custom_sub(
-    key,
-    @sub.Scope::Global,
-    BackSubscription(level, emit),
-    back_sub_loader,
-  )
+  @sub.custom_sub(key, Global, BackSubscription(level, emit), back_sub_loader)
 }
 
 ///|

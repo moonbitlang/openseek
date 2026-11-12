@@ -442,7 +442,7 @@ fn[Input : Eq] menu_component(
             Some("top") {
             @rui.Top
           } else {
-            @rui.Bottom
+            Bottom
           }
           let align = if trigger.bind(element => {
               element.get_attribute("data-action-menu-align")
@@ -450,7 +450,7 @@ fn[Input : Eq] menu_component(
             Some("start") {
             @rui.Start
           } else {
-            @rui.End
+            End
           }
           input.switch_by(
             input => {
@@ -600,7 +600,7 @@ pub fn[Input : Eq] component(
     subscriptions=(state, _, emit) => {
       @sub.batch(
         [
-          open_subscription(emit.map(open => Msg::Open(open))),
+          open_subscription(emit.map(open => Open(open))),
           ..state.menu.map_or([], open => {
             [
               @dismiss.on_back("action-menu-back", level=TopLayer, _ => {

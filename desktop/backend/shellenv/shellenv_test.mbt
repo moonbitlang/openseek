@@ -33,8 +33,7 @@ test "path activation follows the target shell's syntax" {
       "C:\\Windows\\System32\\cmd.exe", windows_dirs, true, "set \"Path=C:\\Users\\Moon User\\toolchain\\bin;C:\\Program Files\\SeekMoon\\bin;%Path%\"\r",
     ),
   ]
-  for row in cases {
-    let (shell, bin_dirs, windows, expected) = row
+  for (shell, bin_dirs, windows, expected) in cases {
     assert_eq(
       @shellenv.path_prepend_command(shell, bin_dirs, windows~),
       Some(expected),

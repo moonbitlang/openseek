@@ -831,8 +831,7 @@ fn project_text_match(
 ) -> (@protocol.TextSearchMatch?, Int32, Bool) {
   let ranges : Array[@protocol.TextSearchRange] = []
   let mut overflow = false
-  for byte_range in parsed.byte_ranges {
-    let (start_byte, end_byte) = byte_range
+  for (start_byte, end_byte) in parsed.byte_ranges {
     guard utf16_offset_for_byte(parsed.line, start_byte) is Some(start) &&
       utf16_offset_for_byte(parsed.line, end_byte) is Some(end) &&
       end >= start else {

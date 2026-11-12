@@ -8,8 +8,7 @@ test "EDITOR_FONT_DEFAULTS platform matrix" {
     ("Windows", Windows, default_windows_font_family, 14.0, 1.35),
     ("Other", Other, default_linux_font_family, 14.0, 1.35),
   ]
-  for case in cases {
-    let (name, platform, font_family, font_size, ratio) = case
+  for (name, platform, font_family, font_size, ratio) in cases {
     let defaults = editor_font_defaults_for_platform(platform)
     assert_eq(defaults.font_family, font_family, msg=name)
     assert_eq(defaults.font_weight, "normal", msg=name)

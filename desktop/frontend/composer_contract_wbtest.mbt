@@ -171,11 +171,10 @@ test "a background retirement expires old actions without poisoning a reopened i
 ///|
 test "composer follow-up overrides route the message without changing the default" {
   for
-    pair in [
+    (choice, default) in [
       (@composer.QueueNext, FollowupSteer),
       (@composer.SteerNow, FollowupQueue),
     ] {
-    let (choice, default) = pair
     let model = running_model().with_host_endpoint(followup_behavior=default)
     let identity = model.composer_input().identity
     let (_, submitted) = update(

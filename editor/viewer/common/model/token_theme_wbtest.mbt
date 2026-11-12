@@ -89,8 +89,7 @@ test "tag_to_metadata yields the expected mtk class per tag" {
     (Attribute, "mtk4"),
     (Invalid, "mtk13"),
   ]
-  for case in cases {
-    let (tag, expected) = case
+  for (tag, expected) in cases {
     let metadata = tag_to_metadata(tag)
     assert_eq(@common_tokens.TokenMetadata(metadata).get_class_name(), expected)
   }

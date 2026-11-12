@@ -701,7 +701,7 @@ async test "install refuses every bad fixture and leaves no library directory" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     for
-      row in [
+      (scenario, module_name, reason, directory) in [
         (
           "archive metadata must match the release", "acme/mismatch", "Archive name does not match",
           "acme-mismatch",
@@ -735,7 +735,6 @@ async test "install refuses every bad fixture and leaves no library directory" {
           "acme-slip",
         ),
       ] {
-      let (scenario, module_name, reason, directory) = row
       let lib = @fs.tmpdir(prefix="skillmarket-")
       let message = install_failure(base, lib, module_name)
       assert_true(message.contains(reason), msg="case: \{scenario}: \{message}")

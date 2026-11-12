@@ -45,8 +45,7 @@ fn view_tokens_changed_event(
   changed_ranges : Array[(Int32, Int32)],
 ) -> @view.ViewTokensChangedEvent {
   let ranges : Array[@view.ViewTokenChangeRange] = []
-  for range in changed_ranges {
-    let (from_line_number, to_line_number) = range
+  for (from_line_number, to_line_number) in changed_ranges {
     ranges.push(ViewTokenChangeRange(from_line_number, to_line_number))
   }
   ViewTokensChangedEvent(ranges)
