@@ -724,13 +724,15 @@ test('preview_open reuses Local file reads and the existing HTML preview command
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('Cloud AI pattern repair uses the selected model and reasoning', async ({ page }) => {
+test('Cloud AI pattern repair uses session configuration without client overrides', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   const repairs = [];
   await cloud.install(); await cloud.goto(); await cloud.open();
   for (const [picker, option] of [['Model', 'DeepSeek Pro'], ['Reasoning effort', 'Max']]) {
     await page.locator('.composer').getByRole('button', { name: picker, exact: true }).click();
     await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
+    await expect(page.locator('.composer').getByRole('button', { name: picker, exact: true })).toHaveText(option);
+    await expect(page.locator('.composer').getByRole('button', { name: picker, exact: true })).toBeEnabled();
   }
   await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic**`, async route => {
     const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -750,7 +752,7 @@ test('Cloud AI pattern repair uses the selected model and reasoning', async ({ p
   await search.getByRole('textbox', { name: 'pattern', exact: true }).fill('broken');
   await search.locator('.pattern-repair-button').click();
   await expect.poll(() => repairs.length).toBe(1);
-  expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number), settings: { model: 'deepseek-v4-pro', thinking: 'max' } });
+  expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number) });
   await expect(search.getByRole('textbox', { name: 'pattern', exact: true })).toHaveValue('inspect($_)');
   expect(cloud.device.pageErrors).toEqual([]);
 });
