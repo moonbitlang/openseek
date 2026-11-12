@@ -277,7 +277,9 @@ class Build {
       cwd: this.desktop,
     });
     await this.webAssets();
-    await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
+    // The diagram module holds the renderers frontend.js loads on the first
+    // diagram; boot names /assets/diagrams.js.
+    await this.commandRun("moon", ["build", "cmd/viz_app", "editor/viewer/diagrams/module", "--target", "js", ...release], { cwd: this.repo });
     if (browser) {
       // The console bundle openseek-api serves: the same document and
       // frontend.js the packaged app loads, so the e2e suite can drive one
@@ -295,21 +297,27 @@ class Build {
     return join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/frontend.js`);
   }
 
+  // The ES module of the diagram renderers.
+  diagramsBundle(profile) {
+    return join(this.repo, `_build/js/${profile}/build/moonbitlang/editor/viewer/diagrams/module/module.js`);
+  }
+
   // Every host serves one frontend: the document at its page routes and its
   // resources under the fixed /assets/ prefix that index.html names.
   async stageFrontend(output, profile, minify = false) {
     const assets = join(output, "assets");
     await mkdir(assets, { recursive: true });
     await cp(join(this.desktop, "index.html"), join(output, "index.html"));
-    if (minify) {
-      // Keep the compiler's IIFE scope; only minify, never bundle/tree-shake.
-      await this.commandRun(this.esbuildBinary, [
-        this.frontendBundle(profile), "--minify", "--format=iife", "--platform=browser",
-        `--outfile=${join(assets, "frontend.js")}`,
+    // Keep each compiler output's module format; only minify, never
+    // bundle/tree-shake.
+    const stage = async (bundle, name, format) => {
+      if (!minify) return await cp(bundle, join(assets, name));
+      this.commandRun(this.esbuildBinary, [
+        bundle, "--minify", `--format=${format}`, "--platform=browser", `--outfile=${join(assets, name)}`,
       ]);
-    } else {
-      await cp(this.frontendBundle(profile), join(assets, "frontend.js"));
-    }
+    };
+    await stage(this.frontendBundle(profile), "frontend.js", "iife");
+    await stage(this.diagramsBundle(profile), "diagrams.js", "esm");
     await this.sharedWeb(assets);
     // The web app manifest and its icons; index.html links them.
     for (const name of PwaFiles) {

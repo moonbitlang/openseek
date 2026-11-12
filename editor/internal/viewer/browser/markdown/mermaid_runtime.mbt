@@ -179,7 +179,7 @@ fn MermaidRenderRequest::commit(
   guard committed else { return }
   try_bind_mermaid_result(result, self.diagram.wrapper)
   if self.is_current() {
-    match self.lifetime.on_size_changed {
+    match self.lifetime.options.on_size_changed {
       Some(on_size_changed) => on_size_changed()
       None => ()
     }

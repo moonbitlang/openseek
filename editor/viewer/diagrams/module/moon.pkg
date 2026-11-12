@@ -1,0 +1,11 @@
+import {
+  "moonbit-community/rabbita/js",
+  "moonbitlang/editor/viewer/diagrams",
+  "moonbitlang/editor/viewer/diagrams/svg",
+}
+
+supported_targets = "js"
+
+options(
+  link: { "js": { "exports": [ "render_diagram" ], "format": "esm" } },
+)

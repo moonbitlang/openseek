@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "js+native"
+
+options(
+  targets: { "module_loader.mbt": [ "js" ] },
+)

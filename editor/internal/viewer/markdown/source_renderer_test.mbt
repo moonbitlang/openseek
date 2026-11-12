@@ -203,7 +203,7 @@ test "built-in diagrams retain their original source-bearing root" {
     assert_true(
       mapped.html.has_prefix("<div class=\"moonbit-viewer-markdown-diagram\""),
     )
-    assert_true(mapped.html.contains("<svg"))
+    assert_true(mapped.html.contains("data-diagram-state=\"fallback\""))
     assert_true(
       mapped.html.contains(
         @markdown.markdown_source_attributes(anchor.source_range),

@@ -197,20 +197,22 @@ fn code_block_body(
   // cmark also parses unfinished fences as code blocks. Only compile closed
   // diagrams, so each growing prefix stays source, including saved messages
   // whose author never supplied a closing fence.
-  let diagram = language == "mermaid" ||
-    language == "d2" ||
-    language == "diago" ||
-    language == "uml" ||
-    language == "plantuml"
+  let diagram_kind = @diagrams.DiagramKind::from_fence(language)
+  let diagram = language == "mermaid" || diagram_kind is Some(_)
   if diagram && block.layout is Fenced({ closing_fence: None, .. }) {
     return @html.pre(@html.code(class="language-\{language}", source))
   }
-  if language == "mermaid" || language == "d2" || language == "diago" {
+  if diagram {
     // Rabbita owns only this container and its source attribute. The transcript
     // subscription owns its children, including the escaped loading fallback,
     // so asynchronous SVG replacement cannot invalidate Rabbita child nodes.
+    let container_class = match diagram_kind {
+      None => "chat-mermaid"
+      Some(Uml) => "chat-uml"
+      Some(_) => "chat-diago"
+    }
     return @html.div(
-      class=if language == "mermaid" { "chat-mermaid" } else { "chat-diago" },
+      class=container_class,
       attrs=@html.Attrs::build()
         .data_set("transcript-diagram", language)
         .data_set("transcript-diagram-source", source)
@@ -219,19 +221,6 @@ fn code_block_body(
         ),
       ([] : Array[@html.Html]),
     )
-  }
-  if language == "uml" || language == "plantuml" {
-    match @editor_viewer.render_uml_diagram_svg(source) {
-      Some(svg) =>
-        return @html.div(
-          class="chat-markdown-diagram moonbit-viewer-markdown-diagram",
-          attrs=@html.Attrs::build()
-            .data_set("diagram-language", "uml")
-            .inner_html(svg),
-          ([] : Array[@html.Html]),
-        )
-      None => ()
-    }
   }
   // MoonBit fences in model prose get the same syntax colors as an `mbtx`
   // argument card or a composer approval body: the shared code helper runs the

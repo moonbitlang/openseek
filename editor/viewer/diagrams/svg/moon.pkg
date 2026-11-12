@@ -1,0 +1,8 @@
+import {
+  "moonbit-community/diago",
+  "moonbit-community/uml/api" @uml,
+  "moonbit-community/uml/style" @uml_style,
+  "moonbitlang/editor/viewer/diagrams",
+}
+
+supported_targets = "js+native"
