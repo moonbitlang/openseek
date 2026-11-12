@@ -162,3 +162,16 @@ test "Cloud semantic search keeps workspace ownership and shares request limits"
   assert_eq(body.get("session_key"), None)
   assert_eq(body.get("patterns"), Some(Json(["inspect($_)"])))
 }
+
+///|
+test "Cloud pattern repair runs without a client model" {
+  let input = cloud_input()
+  let state = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "broken"), input)
+    .handle(FixPattern, input)
+  assert_true(input.pattern_repair_route() is Some(CloudRepair(_, _)))
+  assert_true(
+    state.page.pattern_repair_target(input) is Some({ pattern: "broken", .. }),
+  )
+}

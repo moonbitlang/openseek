@@ -5,11 +5,48 @@
 const DefaultPatternRepairInstruction : String = "Repair this MoonBit pattern with the smallest syntax-only change."
 
 ///|
+/// The pattern one repair is asked to fix, and the search it belongs to.
+priv struct PatternRepairTarget {
+  root : String
+  pattern : String
+  generation : Int32
+}
+
+///|
+/// Where one repair runs. The host runs it on the conversation's model and
+/// reasoning; Cloud runs it on the session's own settings, so its request
+/// carries only the pattern.
+priv enum PatternRepairRoute {
+  HostRepair(
+    @interop.ConversationKey,
+    model~ : @wire.Model,
+    thinking~ : @wire.ThinkingMode?
+  )
+  CloudRepair(@interop.ConversationIdentity, @cloud_client.Access)
+}
+
+///|
+/// The host's request for `target`, run on `model` and `thinking`.
+fn PatternRepairTarget::host_payload(
+  self : PatternRepairTarget,
+  model~ : @wire.Model,
+  thinking~ : @wire.ThinkingMode?,
+) -> @protocol.PatternRepairPayload {
+  {
+    model,
+    thinking,
+    root: self.root,
+    pattern: self.pattern,
+    instruction: DefaultPatternRepairInstruction,
+    generation: self.generation,
+  }
+}
+
+///|
 priv suberror PatternRepairRequestSub {
   PatternRepairRequest(
-    @interop.ConversationIdentity,
-    @protocol.PatternRepairPayload,
-    @cloud_client.Access?,
+    PatternRepairRoute,
+    PatternRepairTarget,
     Int32,
     @cmd.Emit[Msg]
   )
@@ -22,9 +59,8 @@ fn pattern_repair_request_loader(
 ) -> @sub.RunningSub? {
   guard payload
     is PatternRepairRequestSub::PatternRepairRequest(
-      owner,
+      route,
       request,
-      access,
       delay_ms,
       emit
     ) else {
@@ -38,17 +74,14 @@ fn pattern_repair_request_loader(
       guard active else { return }
       @js.Promise::from_async(() => {
         let reply = Some(
-          match owner {
-            Host(owner) =>
+          match route {
+            HostRepair(owner, model~, thinking~) =>
               @interop.bridge_request(
                 owner.channel,
                 @commands.pattern_repair,
-                request,
+                request.host_payload(model~, thinking~),
               )
-            Cloud(..) => {
-              guard access is Some(access) else {
-                raise @cloud_client.RequestError(Unauthorized)
-              }
+            CloudRepair(owner, access) => {
               let json = @cloud_client.request(
                 @cloud_client.CloudOrigin,
                 "/v1/sessions/\{@uri.encode_component(owner.session())}/files/search/semantic/repair",
@@ -94,7 +127,7 @@ fn pattern_repair_request_loader(
     },
     update_tagger: payload => {
       guard payload
-        is PatternRepairRequestSub::PatternRepairRequest(_, _, _, _, next_emit) else {
+        is PatternRepairRequestSub::PatternRepairRequest(_, _, _, next_emit) else {
         return
       }
       emit = next_emit
@@ -103,25 +136,33 @@ fn pattern_repair_request_loader(
 }
 
 ///|
-fn Page::pattern_repair_request_payload(
+fn Page::pattern_repair_target(
   self : Page,
   input : Input,
-) -> @protocol.PatternRepairPayload? {
+) -> PatternRepairTarget? {
   guard self.mode is Semantic &&
     self.pattern_repair_phase is PatternRepairRequested &&
-    input.root is Some(root) &&
-    input.model is Some(model) else {
+    input.root is Some(root) else {
     return None
   }
   guard self.semantic.patterns.length() > 0 else { return None }
   Some({
-    model,
-    thinking: input.thinking,
     root: root.path,
     pattern: self.semantic.patterns[0],
-    instruction: DefaultPatternRepairInstruction,
     generation: self.generation,
   })
+}
+
+///|
+/// Where `input`'s repair runs: its host, on the conversation's model, or
+/// Cloud with the session's access.
+fn Input::pattern_repair_route(self : Input) -> PatternRepairRoute? {
+  match (self.owner, self.model, self.cloud_access) {
+    (Host(owner), Some(model), _) =>
+      Some(HostRepair(owner, model~, thinking=self.thinking))
+    (Cloud(..) as owner, _, Some(access)) => Some(CloudRepair(owner, access))
+    _ => None
+  }
 }
 
 ///|
@@ -146,22 +187,16 @@ fn State::pattern_repair_subscription(
   guard page.pattern_repair_phase is PatternRepairRequested &&
     input.root is Some(root) &&
     input.owns_root(root) &&
-    (input.owner is Host(_) || input.cloud_access is Some(_)) else {
+    input.pattern_repair_route() is Some(route) else {
     return @sub.none
   }
-  guard page.pattern_repair_request_payload(input) is Some(request) else {
+  guard page.pattern_repair_target(input) is Some(request) else {
     return @sub.none
   }
   @sub.custom_sub(
     "grep-pattern-repair:\{input.owner.key()}:\{input.cloud_access.map(access => access.epoch).unwrap_or(0)}:\{request.root}:\{request.generation}",
     Local,
-    PatternRepairRequestSub::PatternRepairRequest(
-      input.owner,
-      request,
-      input.cloud_access,
-      0,
-      emit,
-    ),
+    PatternRepairRequestSub::PatternRepairRequest(route, request, 0, emit),
     @sub.SubLoader(pattern_repair_request_loader),
   )
 }

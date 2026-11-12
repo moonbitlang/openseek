@@ -11,9 +11,11 @@ test "pattern repair carries model and thinking through the request codec" {
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg)"), input)
     .handle(FixPattern, input)
-  guard state.page.pattern_repair_request_payload(input) is Some(request) else {
-    fail("submitted repair must produce a request")
+  guard state.page.pattern_repair_target(input) is Some(target) &&
+    input.pattern_repair_route() is Some(HostRepair(_, model~, thinking~)) else {
+    fail("submitted repair must produce a host request")
   }
+  let request = target.host_payload(model~, thinking~)
   let decoded : @protocol.PatternRepairPayload = @json.from_json(
     request.to_json(),
   )
