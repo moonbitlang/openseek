@@ -13,7 +13,7 @@ pub fn skill_markdown() -> String {
   (
     $|---
     $|name: \{SkillName}
-    $|description: Tools of the SeekMoon desktop app you run in: drive browser tabs the user can watch, read and message the user's other chats, ask the user questions, and attach this session's pull requests and branches.
+    $|description: Tools of the SeekMoon desktop app you run in: drive browser tabs the user can watch, read and message the user's other chats, ask the user questions, show workspace files to the user, and attach this session's pull requests and branches.
     $|---
     $|The SeekMoon desktop app offers tools through its MCP server
     $|`\{SkillName}`, in groups named by the tools' prefix:
@@ -24,6 +24,8 @@ pub fn skill_markdown() -> String {
     $|- `session_*`: list and read the user's other chats, and send one a message
     $|  the user approves.
     $|- `ask_user`: ask the user questions, with suggested answers.
+    $|- `preview_open`: show a workspace file (HTML, PDF, an image, an Office
+    $|  document, code) to the user.
     $|- `artifacts_*`: list and attach this session's pull requests and branches.
     $|
     $|From an mbtx script, find which of them this host offers, and their
