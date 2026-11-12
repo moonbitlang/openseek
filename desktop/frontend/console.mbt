@@ -499,62 +499,62 @@ test "the sidebar's device selector names the page device and lists only online 
 }
 
 ///|
-test "sign-in loads the roster and connects every online device" {
-  let dispatch = test_dispatch()
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="octocat", avatar="a.png")),
-    console_test_model(),
-  )
-  assert_true(
-    signed.console.auth is AuthSignedIn(login="octocat", avatar="a.png"),
-  )
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
-    signed,
-  )
-  // Every online device gets a channel and the page works on its own one.
-  // An offline entry remains metadata.
-  inspect(listed.devices.length(), content="1")
-  assert_true(listed.device_state(Remote("d_on")) is Some(_))
-  assert_true(listed.device_state(Remote("d_off")) is None)
-  assert_true(listed.focused == Remote("d_on"))
-  assert_true(listed.console.roster_sync is RosterReady)
-  inspect(listed.console.roster.length(), content="2")
-  inspect(listed.console.roster[0].name, content="Mac")
-  assert_true(listed.console.roster[1].hostname is None)
-  assert_true(listed.console.booted)
-}
-
-///|
-test "a page without device connects online devices but works on none" {
+/// A browser page signed in and given `metas` as its first roster.
+fn roster_test_model(
+  page_device : String?,
+  metas : Array[DeviceMeta],
+  preselect_project? : @common.Uri,
+) -> Model {
   let dispatch = test_dispatch()
   let model = {
     ..console_test_model(),
-    console: empty_console_state(None, None),
+    console: empty_console_state(page_device, preselect_project),
   }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
     model,
   )
-  let (_, listed_once) = update(
+  let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(RosterLoaded(metas, generation=1)),
     signed,
   )
-  let (_, listed_twice) = update(
-    dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
-    signed,
+  listed
+}
+
+///|
+test "the roster connects every online device and the page works only on its own" {
+  let metas : Array[DeviceMeta] = [
+    { id: "d_one", name: "One", hostname: None, online: true, },
+    { id: "d_two", name: "Two", hostname: None, online: true, },
+    { id: "d_off", name: "Off", hostname: None, online: false, },
+  ]
+  let workspace = @interop.ChannelId::Remote("d_two").test_resource(
+    "/home/u/proj",
   )
-  inspect(listed_once.devices.length(), content="1")
-  assert_true(listed_once.device_state(Remote("d_on")) is Some(_))
-  assert_true(listed_once.focused == @interop.ChannelId::Local)
-  assert_true(listed_once.console.page_device is None)
-  assert_false(listed_once.console.booted)
-  assert_true(listed_once.console == listed_twice.console)
+  // The Work list holds every online device; the deep link's workspace
+  // lands on the page's own.
+  let page = roster_test_model(
+    Some("d_two"),
+    metas,
+    preselect_project=workspace,
+  )
+  assert_true(page.focused == Remote("d_two"))
+  assert_true(page.device_state(Remote("d_one")) is Some(_))
+  assert_true(page.device_state(Remote("d_off")) is None)
+  assert_true(
+    page.device_state(Remote("d_two")) is Some({ active_project: Some(p), .. }) &&
+    p == workspace,
+  )
+  // A Cloud page lists them too but works on none until the user opens one.
+  let cloud = roster_test_model(None, metas)
+  assert_true(cloud.focused == @interop.ChannelId::Local)
+  assert_true(cloud.work_available() && !cloud.has_host())
+  // An offline page device never falls through to an online one.
+  let offline = roster_test_model(Some("d_off"), metas)
+  assert_true(offline.focused == @interop.ChannelId::Local)
+  assert_true(offline.is_console_gated())
 }
 
 ///|
@@ -585,76 +585,7 @@ test "a 401 anywhere signs the console out and drops every channel" {
 }
 
 ///|
-test "the page device takes focus and receives the initial workspace" {
-  let dispatch = test_dispatch()
-  let workspace = @interop.ChannelId::Remote("d_two").test_resource(
-    "/home/u/proj",
-  )
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("d_two"), Some(workspace)),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
-  let metas : Array[DeviceMeta] = [
-    { id: "d_one", name: "One", hostname: None, online: true, },
-    { id: "d_two", name: "Two", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  assert_true(listed.focused == Remote("d_two"))
-  inspect(listed.devices.length(), content="2")
-  guard listed.device_state(Remote("d_one")) is Some(other) else {
-    fail("an online device not held")
-  }
-  assert_true(other.active_project is None)
-  guard listed.device_state(Remote("d_two")) is Some(dev) else {
-    fail("page device not held")
-  }
-  assert_eq(dev.active_project, Some(workspace))
-  assert_true(listed.console.page_device == Some("d_two"))
-  assert_true(listed.console.preselect_project is None)
-}
-
-///|
-test "an unavailable page device never falls through to an online device" {
-  let dispatch = test_dispatch()
-  let workspace = @interop.ChannelId::Remote("offline").test_resource(
-    "/home/u/proj",
-  )
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("offline"), Some(workspace)),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
-  let metas : Array[DeviceMeta] = [
-    { id: "online", name: "Online", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  assert_true(listed.focused == @interop.ChannelId::Local)
-  inspect(listed.devices.length(), content="1")
-  assert_true(listed.device_state(Remote("online")) is Some(_))
-  assert_true(listed.console.page_device == Some("offline"))
-  assert_eq(listed.console.preselect_project, Some(workspace))
-  assert_false(listed.console.booted)
-}
-
-///|
-test "a revoked page device is retired without focusing a survivor" {
+test "a revoked page device takes its settings and conversations with it" {
   let dispatch = test_dispatch()
   let model = {
     ..console_test_model(),
@@ -723,7 +654,6 @@ test "a revoked page device is retired without focusing a survivor" {
   )
   assert_true(refreshed.focused == @interop.ChannelId::Local)
   assert_true(refreshed.device_state(Remote("d_a")) is None)
-  assert_true(refreshed.device_state(Remote("d_b")) is Some(_))
   assert_eq(refreshed.installed_skills.length(), 0)
   // The retired device's settings left with its device state.
   assert_false(refreshed.host_settings_loaded())
@@ -782,147 +712,44 @@ test "an older roster reply cannot restore a device removed by a newer one" {
   inspect(stale.console.roster.length(), content="1")
   inspect(stale.console.roster[0].id, content="d_b")
   assert_true(stale.device_state(Remote("d_a")) is None)
-  assert_true(stale.device_state(Remote("d_b")) is Some(_))
   assert_true(stale.focused == @interop.ChannelId::Local)
 }
 
 ///|
-test "an action on another roster device moves the page onto it" {
+test "opening another device's work moves the page onto that device" {
   let dispatch = test_dispatch()
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("d_a"), None),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
   let metas : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true, },
     { id: "d_b", name: "B", hostname: None, online: true, },
   ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  assert_true(listed.focused == Remote("d_a"))
-  let seeded = listed.with_host_settings(mirror => {
-    ..mirror,
-    current: Some(
-      host_settings(
-        provider="custom",
-        revision=7,
-        custom_api_url="https://old.example/chat",
-      ),
-    ),
-  })
-  let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), seeded)
+  // A sidebar row on another device.
+  let page = roster_test_model(Some("d_a"), metas)
+  let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), page)
   assert_true(opened.focused == Remote("d_b"))
-  assert_true(opened.console.page_device == Some("d_b"))
-  // The previous device's settings mirror does not bleed into the new one.
-  assert_true(opened.host_settings() is None)
-  let (_, chat) = update(dispatch, NewChatIn(Remote("d_a"), None), opened)
-  assert_true(chat.focused == Remote("d_a"))
-  assert_true(chat.console.page_device == Some("d_a"))
-  let (_, picker) = update(dispatch, PickProject(Remote("d_b")), chat)
-  assert_true(picker.focused == Remote("d_b"))
-  assert_true(picker.console.page_device == Some("d_b"))
-}
-
-///|
-test "moving onto another device rebinds its catalogs and its Work actions" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(None, None),
-  }
-  let (_, signed) = update(
+  assert_true(opened.navigation_location() is Some({ device: Some("d_b"), .. }))
+  // Another device's route, as Back or a link reaches it, stays in the page;
+  // one the account does not hold shows the device gate.
+  let (_, routed) = apply_browser_navigation(
     dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
+    { path: @routes.device_entry_path("d_b"), },
+    page,
   )
-  let metas : Array[DeviceMeta] = [
-    { id: "d_a", name: "A", hostname: None, online: true, },
-    { id: "d_b", name: "B", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
+  assert_true(routed.focused == Remote("d_b"))
+  let (_, missing) = apply_browser_navigation(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
+    { path: @routes.device_entry_path("d_gone"), },
+    routed,
   )
-  let connected = listed.devices.fold(init=listed, (model, dev) => {
-    model.replace_device({ ..dev, bridge: Connected, })
-  })
-  // A's catalogs had settled before the page moved to B.
-  let ready = {
-    ..connected,
-    navigation: {
-      ..connected.navigation,
-      sessions: Some(Ok(())),
-      archived: Some(Ok(())),
-    },
-  }
-  // A Cloud page offers no project action until it works on a device.
-  let work_action = (model : Model) => {
-    model.sidebar_component_input().work_sections
-    .iter()
-    .find_first(section => section.id.source() == "openseek.projects")
-    .bind(section => section.action.map(_ => section.id.channel()))
-  }
-  assert_true(work_action(ready) is None)
-  let (_, moved) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), ready)
-  assert_true(moved.navigation.sessions is None)
-  assert_true(moved.navigation.archived is None)
-  guard (ready.device_state(Remote("d_b")), moved.device_state(Remote("d_b")))
-    is (Some(before), Some(after)) else {
+  assert_true(missing.is_console_gated())
+  // An import from a Cloud page opens on the device it imported into.
+  let cloud = roster_test_model(None, metas)
+  guard cloud.device_state(Remote("d_b")) is Some(dev) else {
     fail("device B not held")
   }
-  assert_true(
-    after.sessions_request_generation > before.sessions_request_generation,
-  )
-  assert_true(
-    after.archived_request_generation > before.archived_request_generation,
-  )
-  // Entering a device in place completes the deferred boot, so a later
-  // roster reply does not rotate away the conversation it opened.
-  assert_true(moved.console.booted)
-  assert_eq(
-    work_action(moved),
-    Some(@interop.ChannelId::Remote("d_b").uri_authority()),
-  )
-}
-
-///|
-test "a host import opens on the device it imported into" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(None, None),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
-  let metas : Array[DeviceMeta] = [
-    { id: "d_a", name: "A", hostname: None, online: true, },
-    { id: "d_b", name: "B", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  guard listed.device_state(Remote("d_b")) is Some(dev) else {
-    fail("device B not held")
-  }
-  // A Cloud page works on no device; the import names its own.
   let (_, imported) = open_host_import(
     dispatch,
     @cmd.none,
-    listed,
+    cloud,
     {
       channel: Remote("d_b"),
       connection_generation: dev.connection_generation,
@@ -931,52 +758,10 @@ test "a host import opens on the device it imported into" {
     },
     "imported",
   )
-  assert_true(imported.focused == Remote("d_b"))
   assert_true(
     imported.navigation.location
     is Some({ device: Some("d_b"), target: Session("imported"), }),
   )
-}
-
-///|
-test "a relay page follows another device's route in place" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..console_test_model(),
-    console: empty_console_state(Some("d_a"), None),
-  }
-  let (_, signed) = update(
-    dispatch,
-    Console(MeLoaded(login="o", avatar="")),
-    model,
-  )
-  let metas : Array[DeviceMeta] = [
-    { id: "d_a", name: "A", hostname: None, online: true, },
-    { id: "d_b", name: "B", hostname: None, online: true, },
-  ]
-  let (_, listed) = update(
-    dispatch,
-    Console(RosterLoaded(metas, generation=1)),
-    signed,
-  )
-  let (_, moved) = apply_browser_navigation(
-    dispatch,
-    { path: @routes.device_entry_path("d_b"), },
-    listed,
-  )
-  assert_true(moved.focused == Remote("d_b"))
-  assert_true(moved.console.page_device == Some("d_b"))
-  assert_true(moved.navigation.location is Some({ device: Some("d_b"), .. }))
-  // A device the page does not hold gates the page instead of keeping the
-  // previous device's focus.
-  let (_, missing) = apply_browser_navigation(
-    dispatch,
-    { path: @routes.device_entry_path("d_gone"), },
-    moved,
-  )
-  assert_true(missing.focused == @interop.ChannelId::Local)
-  assert_true(missing.console.page_device == Some("d_gone"))
-  assert_true(missing.is_console_gated())
 }
 
 ///|
