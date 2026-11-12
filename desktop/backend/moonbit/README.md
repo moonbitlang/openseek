@@ -17,8 +17,8 @@ assets. `moonbit` has three policies:
 
 - `DesktopBundle`: discover the desktop seed relative to the engine. Use the
   user's installation found by the `External` search instead when its `bin`
-  also holds `moonx` and its `moonc -v` release (`X.Y.Z`, build hash ignored)
-  is no older than the seed's version marker; an unreadable version keeps the
+  also holds `moonx` and its `moonc -v` version is no older than the seed's
+  version marker (semver order, so the `+build` hash is ignored); an unreadable version keeps the
   seed. Without a seed, use the external toolchain.
 - `External`: search absolute PATH entries, then `~/.moon/bin`.
 - `Bundled`: prepare an explicitly selected seed. Use `bundled_source` to

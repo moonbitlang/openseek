@@ -1,6 +1,6 @@
 import {
   "moonbitlang/core/async",
-  "openseek_desktop/backend/internal/version",
+  "mizchi/semver",
   "openseek_desktop/backend/pathx",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/http",

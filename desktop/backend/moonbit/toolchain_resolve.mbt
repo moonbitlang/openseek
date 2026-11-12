@@ -143,9 +143,9 @@ async fn can_replace_seed(
   }
   let seed_version = bundled_moonbit_seed_version(seed_dir)
   if seed_version is Some(stamp) &&
-    @version.parse(stamp) is Some(required) &&
+    parse_compiler_version(stamp) is Some(required) &&
     compiler_version(toolchain.bin_dir) is Some(found) &&
-    found >= required {
+    found.compare(required) >= 0 {
     return true
   }
   @xlog.debug() <?
