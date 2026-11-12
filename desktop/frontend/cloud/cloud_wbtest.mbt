@@ -80,6 +80,8 @@ fn live_test_session() -> Session {
     generating: false,
     archived: false,
     approval: ApprovalAsk,
+    model: @deepseek.V4Flash,
+    thinking: @protocol.ThinkingHigh,
   }
 }
 
@@ -103,7 +105,6 @@ test "Busy cannot allow another send before authoritative history recovers" {
   let (loaded, _, _) = update(
     opened,
     Loaded(1, "session", request, {
-      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -155,7 +156,6 @@ test "Busy cannot allow another send before authoritative history recovers" {
   let (recovered, _, _) = update(
     blocked,
     Loaded(1, "session", blocked.sequence, {
-      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -217,7 +217,6 @@ test "history recovery clears a send error only when the pending submission was 
         navigation=0,
       )
       let history : History = {
-        settings: None,
         prediction: None,
         session: native_document([]),
         etag: None,
@@ -320,7 +319,6 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
   let full = metadata_update(
     full,
     Loaded(1, "session", full.conversations["session"].request, {
-      settings: None,
       prediction: None,
       generating: true,
       session: native_document([
@@ -419,7 +417,6 @@ test "desktop Cloud sending waits for client MCP readiness and fences old socket
   let base = { ..base, client_tools: true, }
   let original = base.conversations["session"]
   let outgoing : PendingCommand = {
-    settings: CommandSettings::default(),
     request: base.sequence + 1,
     input: Prompt(
       draft={ task: "Hello", mentions: [], images: [], },

@@ -670,7 +670,6 @@ pub impl @json.FromJson for CloudHistoryCacheEntry
 pub impl @json.ToJson for CloudHistoryCacheEntry
 
 pub(all) struct CloudHistoryCachePage {
-  settings : @json.Json?
   session : SessionDocument
   messages : Array[@json.Json]
   prediction : @openseek_protocol.PredictionRecord?

@@ -1373,12 +1373,6 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     .find_conversation(active.owner.channel, active.owner.session)
     .map(conv => conv.engine_model)
     .unwrap_or(model.default_model)
-  let cloud_settings = model.cloud_settings(model.dock_owner())
-  let engine_model = if model.dock_owner() is Cloud(..) {
-    @deepseek.Deepseek(cloud_settings.model)
-  } else {
-    engine_model
-  }
   let file_body_visible = match model.dock_state().active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
@@ -1405,11 +1399,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     },
     locale: model.locale,
     model: engine_model.to_string(),
-    thinking: if model.dock_owner() is Cloud(..) {
-      Some(cloud_settings.thinking)
-    } else {
-      engine_model.thinking(model.reasoning_for(engine_model))
-    },
+    thinking: engine_model.thinking(model.reasoning_for(engine_model)),
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
     // panel's monotonic counter with this page's existing random identity so
@@ -2385,14 +2375,6 @@ fn update_msg(
         { ..model, locale, },
       )
     }
-    CloudPreferencesLoaded(value) => {
-      let entries = value.map(parse_cloud_preferences).unwrap_or([])
-      let mut preferences = entries
-      for (key, settings) in model.cloud_preferences.rev() {
-        preferences = cloud_preferences_with(preferences, key, settings)
-      }
-      (@cmd.none, { ..model, cloud_preferences: preferences, })
-    }
     CloudFollowupLoaded(value) => {
       guard !model.has_host() && value is Some(value) else {
         return (@cmd.none, model)
@@ -2709,55 +2691,24 @@ fn update_msg(
               model,
             )
           }
-          @composer.ModelMenuToggled(identity~)
+          // All three options share the draft and server-save lifecycle.
+          @composer.ApprovalMenuToggled(identity~)
+          | @composer.ModelMenuToggled(identity~)
           | @composer.ReasoningMenuToggled(identity~) => {
-            guard selected && model.cloud.can_compose(identity.owner.session()) else {
+            guard model.screen is Chat &&
+              selected &&
+              model.cloud.can_choose_settings(identity.owner.session()) else {
               return (@cmd.none, model)
             }
             return update_msg(
               dispatch,
               ToggleSelectMenu(
-                if action is @composer.ModelMenuToggled(..) {
-                  OpenSeekModelMenu
-                } else {
-                  OpenSeekReasoningMenu
+                match action {
+                  @composer.ModelMenuToggled(..) => OpenSeekModelMenu
+                  @composer.ReasoningMenuToggled(..) => OpenSeekReasoningMenu
+                  _ => OpenSeekApprovalMenu
                 },
               ),
-              model,
-            )
-          }
-          @composer.ModelSelected(identity~, value~, ..) => {
-            guard ModelChoice::parse(value)
-              is Some(OpenSeekModel(Deepseek(engine_model))) else {
-              return (@cmd.none, model)
-            }
-            let settings = model.cloud_settings(identity.owner)
-            return model.choose_cloud_settings(identity.owner, {
-              ..settings,
-              model: engine_model,
-            })
-          }
-          @composer.ReasoningSelected(identity~, value~) => {
-            guard @protocol.Thinking::parse(value) is Some(thinking) else {
-              return (@cmd.none, model)
-            }
-            let settings = model.cloud_settings(identity.owner)
-            return model.choose_cloud_settings(identity.owner, {
-              ..settings,
-              thinking,
-            })
-          }
-          // Drafts keep the mode locally until creation. Existing sessions
-          // save it on the server and lock it while a turn is running.
-          @composer.ApprovalMenuToggled(identity~) => {
-            guard model.screen is Chat &&
-              selected &&
-              model.cloud.can_choose_approval(identity.owner.session()) else {
-              return (@cmd.none, model)
-            }
-            return update_msg(
-              dispatch,
-              ToggleSelectMenu(OpenSeekApprovalMenu),
               model,
             )
           }
@@ -2765,15 +2716,34 @@ fn update_msg(
             guard selected else { return (@cmd.none, model) }
             return update_msg(dispatch, CloseSelectMenu, model)
           }
-          @composer.ApprovalSelected(identity~, mode~) => {
+          @composer.ApprovalSelected(identity~, ..)
+          | @composer.ModelSelected(identity~, ..)
+          | @composer.ReasoningSelected(identity~, ..) => {
             guard selected &&
               identity.owner is @interop.Cloud(account~, session~) else {
               return (@cmd.none, model)
             }
+            let edit = match action {
+              @composer.ApprovalSelected(mode~, ..) => @cloud.SetApproval(mode)
+              @composer.ModelSelected(value~, ..) => {
+                guard ModelChoice::parse(value)
+                  is Some(OpenSeekModel(Deepseek(engine_model))) else {
+                  return (@cmd.none, model)
+                }
+                @cloud.SetModel(engine_model)
+              }
+              @composer.ReasoningSelected(value~, ..) => {
+                guard @protocol.Thinking::parse(value) is Some(thinking) else {
+                  return (@cmd.none, model)
+                }
+                @cloud.SetThinking(thinking)
+              }
+              _ => return (@cmd.none, model)
+            }
             let (close, closed) = update_msg(dispatch, CloseSelectMenu, model)
             let (save, next) = update_cloud(
               dispatch,
-              @cloud.Edit(account~, session~, edit=SetApproval(mode)),
+              @cloud.Edit(account~, session~, edit~),
               closed,
             )
             return (@cmd.batch([close, save]), next)

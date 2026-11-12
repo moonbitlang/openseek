@@ -38,7 +38,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool, settings? : (String) -> CommandSettings) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -51,19 +51,6 @@ pub enum CommandInput {
 }
 pub fn CommandInput::equal(Self, Self) -> Bool
 pub fn CommandInput::not_equal(Self, Self) -> Bool
-
-#derive(Eq)
-pub(all) struct CommandSettings {
-  model : @deepseek.DsVariant
-  thinking : @protocol.Thinking
-}
-pub fn CommandSettings::default() -> Self
-pub fn CommandSettings::equal(Self, Self) -> Bool
-pub fn CommandSettings::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn CommandSettings::not_equal(Self, Self) -> Bool
-pub fn CommandSettings::to_json(Self) -> @json.Json
-pub impl @json.FromJson for CommandSettings
-pub impl @json.ToJson for CommandSettings
 
 #derive(Eq)
 pub struct ControlApproval {
@@ -164,8 +151,6 @@ pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct Conversation {
-  settings : CommandSettings?
-  settings_request : Int32
   records : Array[Record]
   history_cached : Bool
   history_etag : String?
@@ -236,6 +221,8 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   approval : @protocol.OpenSeekApproval
+  model : @deepseek.DsVariant
+  thinking : @protocol.Thinking
 }
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
@@ -263,7 +250,6 @@ pub fn Event::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct History {
-  settings : CommandSettings?
   etag : String?
   offset : Int32?
   prediction : @openseek_protocol.PredictionRecord?
@@ -354,7 +340,7 @@ pub(all) enum Notice {
   AnswerRejected(String)
   QuestionAnswerFailed(@cloud_client.Failure)
   QuestionAnswerDetail(String)
-  ApprovalSaveRaced
+  SettingsSaveRaced
   DeleteWhileGenerating
   AdditionalInputNotApplied
 }
@@ -373,7 +359,6 @@ pub fn PendingAssistant::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub struct PendingCommand {
-  settings : CommandSettings
   request : Int32
   input : CommandInput
 }
@@ -409,6 +394,8 @@ pub(all) struct Session {
   generating : Bool
   archived : Bool
   approval : @protocol.OpenSeekApproval
+  model : @deepseek.DsVariant
+  thinking : @protocol.Thinking
 }
 pub fn Session::equal(Self, Self) -> Bool
 pub fn Session::not_equal(Self, Self) -> Bool
@@ -418,6 +405,8 @@ pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
   SetApproval(@protocol.OpenSeekApproval)
+  SetModel(@deepseek.DsVariant)
+  SetThinking(@protocol.Thinking)
 }
 pub fn SessionEdit::equal(Self, Self) -> Bool
 pub fn SessionEdit::not_equal(Self, Self) -> Bool
@@ -451,7 +440,7 @@ pub(all) struct State {
   notice : Notice?
 }
 pub fn State::approval(Self, String) -> @protocol.OpenSeekApproval
-pub fn State::can_choose_approval(Self, String) -> Bool
+pub fn State::can_choose_settings(Self, String) -> Bool
 pub fn State::can_compose(Self, String) -> Bool
 pub fn State::can_delete(Self, String) -> Bool
 pub fn State::can_edit(Self, String, SessionEdit) -> Bool
@@ -462,9 +451,11 @@ pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
 pub fn State::mark_read(Self, String) -> Self
+pub fn State::model(Self, String) -> @deepseek.DsVariant
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::replace(Self, String, Conversation) -> Self
 pub fn State::sidebar_sessions(Self) -> Array[Session]
+pub fn State::thinking(Self, String) -> @protocol.Thinking
 
 #derive(Eq)
 pub struct SteerReceipt {

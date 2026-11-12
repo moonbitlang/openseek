@@ -248,7 +248,6 @@ test "a completed archive wins over an earlier history response's running flag" 
     Edit(account="fixture", session="a", edit=Archive(true)),
   )
   let old_history = Loaded(2, "a", pending.conversations["a"].request, {
-    settings: None,
     prediction: None,
     session: native_document([]),
     etag: None,
@@ -275,7 +274,6 @@ test "a completed archive wins over an earlier history response's running flag" 
   for
     state in [pending, metadata_update(pending, old_history), pending_recovery] {
     let old_history = Loaded(2, "a", state.conversations["a"].request, {
-      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -317,7 +315,6 @@ test "a completed archive wins over an earlier history response's running flag" 
     let ready = metadata_update(
       late,
       Loaded(2, "a", late.conversations["a"].request, {
-        settings: None,
         prediction: None,
         session: native_document([]),
         etag: None,
@@ -374,7 +371,6 @@ test "externally archived inventory fences pending history through restoration" 
     Listed(2, created.list_request, sessions),
   )
   let old_history = Loaded(2, "a", old_request, {
-    settings: None,
     prediction: None,
     session: native_document([]),
     etag: None,
@@ -399,7 +395,6 @@ test "externally archived inventory fences pending history through restoration" 
   let ready = metadata_update(
     restored,
     Loaded(2, "a", restored.conversations["a"].request, {
-      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -494,7 +489,7 @@ test "Cloud sessions decode their approval mode and treat an absent one as ask" 
 ///|
 test "approval mode saves only between turns and holds sending until saved" {
   let initial = deletion_state()
-  assert_true(initial.can_choose_approval("a"))
+  assert_true(initial.can_choose_settings("a"))
   assert_true(initial.approval("a") is ApprovalAsk)
   // Choosing the mode already in effect saves nothing.
   assert_true(
@@ -508,7 +503,7 @@ test "approval mode saves only between turns and holds sending until saved" {
     ..initial,
     sessions: initial.sessions.map(item => { ..item, generating: true, }),
   }
-  assert_false(running.can_choose_approval("a"))
+  assert_false(running.can_choose_settings("a"))
   assert_true(
     metadata_update(
       running,
@@ -520,7 +515,7 @@ test "approval mode saves only between turns and holds sending until saved" {
     ..initial.conversations["a"],
     generating: true,
   })
-  assert_false(streaming.can_choose_approval("a"))
+  assert_false(streaming.can_choose_settings("a"))
   let archived = {
     ..initial,
     sessions: initial.sessions.map(item => { ..item, archived: true, }),
@@ -532,7 +527,7 @@ test "approval mode saves only between turns and holds sending until saved" {
   )
   assert_true(pending.metadata_saves["a"].edit is SetApproval(ApprovalReview))
   assert_true(pending.approval("a") is ApprovalAsk)
-  assert_false(pending.can_choose_approval("a"))
+  assert_false(pending.can_choose_settings("a"))
   // The next turn's engine starts with the mode the server holds.
   assert_false(pending.can_send("a"))
   let saved = metadata_update(
@@ -542,7 +537,7 @@ test "approval mode saves only between turns and holds sending until saved" {
   assert_true(saved.approval("a") is ApprovalReview)
   assert_true(saved.metadata_saves.is_empty())
   assert_true(saved.can_send("a"))
-  assert_true(saved.can_choose_approval("a"))
+  assert_true(saved.can_choose_settings("a"))
   let pending = metadata_update(
     saved,
     Edit(account="fixture", session="a", edit=SetApproval(ApprovalAsk)),
@@ -552,12 +547,12 @@ test "approval mode saves only between turns and holds sending until saved" {
     EditFailed(2, "a", pending.metadata_saves["a"].request, Http(409)),
   )
   assert_true(refused.approval("a") is ApprovalReview)
-  assert_true(refused.can_choose_approval("a"))
+  assert_true(refused.can_choose_settings("a"))
   assert_true(refused.can_send("a"))
-  assert_true(refused.notice is Some(ApprovalSaveRaced))
+  assert_true(refused.notice is Some(SettingsSaveRaced))
   // A draft can choose its first engine policy before the server creates it.
   let drafting = metadata_update(initial, Create)
   guard drafting.creation is Some(creation) else { fail("expected a draft") }
-  assert_true(drafting.can_choose_approval(creation.id))
+  assert_true(drafting.can_choose_settings(creation.id))
   assert_true(drafting.approval(creation.id) is ApprovalAsk)
 }

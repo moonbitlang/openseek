@@ -142,7 +142,6 @@ test "Cloud predictions ahead of history wait for the exact frontier and survive
   let loaded = metadata_update(
     received,
     Loaded(1, "session", conversation.request, {
-      settings: None,
       session: prediction_document(20),
       etag: None,
       offset: None,
@@ -162,7 +161,6 @@ test "Cloud predictions ahead of history wait for the exact frontier and survive
   let advanced = metadata_update(
     loaded,
     Loaded(1, "session", conversation.request, {
-      settings: None,
       session: prediction_document(21),
       etag: None,
       offset: None,

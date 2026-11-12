@@ -54,7 +54,10 @@ fn pattern_repair_request_loader(
                 "/v1/sessions/\{@uri.encode_component(owner.session())}/files/search/semantic/repair",
                 Post,
                 token=access.token,
-                body=cloud_pattern_repair_body(request),
+                body={
+                  "pattern": request.pattern,
+                  "generation": request.generation,
+                },
               )
               let fields : Map[String, Json] = @json.from_json(json)
               fields["root"] = Json(request.root)

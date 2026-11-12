@@ -121,9 +121,8 @@ async fn send_command(
   command : @wire.Command,
   task_id? : String,
   api_key? : String,
-  settings~ : CommandSettings = CommandSettings::default(),
 ) -> ControlResult {
-  let body : CommandRequest = { command, task_id, api_key, settings, }
+  let body : CommandRequest = { command, task_id, api_key, }
   let (response, data) = @http.request(
     CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/commands",
     Post,
@@ -260,7 +259,6 @@ async fn deliver_question_input(
   session : String,
   text : String,
   id : String,
-  settings~ : CommandSettings = CommandSettings::default(),
 ) -> ControlResult {
   let snapshot = read_control(token, session)
   let content = @wire.Content([Text(text)])
@@ -271,14 +269,12 @@ async fn deliver_question_input(
         session,
         @wire.Steer(content~, submission_id=Some(id)),
         task_id=task,
-        settings~,
       )
     None =>
       send_command(
         token,
         session,
         @wire.Prompt(content~, submission_id=Some(id)),
-        settings~,
       )
   }
   // TODO: retain failed delayed answers for manual retry. Never automatically

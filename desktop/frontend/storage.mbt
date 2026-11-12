@@ -38,9 +38,6 @@ fn load_saved_settings(
         ),
       ),
     )
-    scheduler.add(
-      dispatch(CloudPreferencesLoaded(load_setting(CloudPreferencesStorageKey))),
-    )
     if load_setting(SidebarModeStorageKey).bind(parse_sidebar_mode)
       is Some(mode) {
       scheduler.add(dispatch(SidebarModeLoaded(mode)))

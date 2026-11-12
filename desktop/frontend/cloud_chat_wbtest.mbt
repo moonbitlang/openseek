@@ -12,6 +12,8 @@ fn integrated_cloud_model() -> Model {
         generating: false,
         archived: false,
         approval: ApprovalAsk,
+        model: @deepseek.V4Flash,
+        thinking: @protocol.ThinkingHigh,
       },
     ],
   }
@@ -34,7 +36,6 @@ fn integrated_cloud_model() -> Model {
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(3, "cloud-a", request, {
-        settings: None,
         prediction: None,
         session: {
           version: None,
@@ -280,6 +281,8 @@ test "Chats use the shared section with existing ordering and create action" {
           generating: false,
           archived: false,
           approval: ApprovalAsk,
+          model: @deepseek.V4Flash,
+          thinking: @protocol.ThinkingHigh,
         },
         {
           id: "cloud-b",
@@ -288,6 +291,8 @@ test "Chats use the shared section with existing ordering and create action" {
           generating: false,
           archived: false,
           approval: ApprovalAsk,
+          model: @deepseek.V4Flash,
+          thinking: @protocol.ThinkingHigh,
         },
       ],
     },
@@ -408,7 +413,6 @@ test "same-account sign-out retires old composer actions, while the new entry ca
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(epoch, "cloud-a", request, {
-        settings: None,
         prediction: None,
         session: {
           version: None,

@@ -27,6 +27,8 @@ fn State::submit_command(
           required_string(
             request(CloudOrigin, "/v1/sessions", Post, token~, body={
               "approval": creation.approval.to_json(),
+              "model": Json(@deepseek.Deepseek(creation.model).to_string()),
+              "thinking": creation.thinking.to_json(),
             }),
             "id",
           ),
@@ -126,15 +128,7 @@ fn State::send_pending(
             (@wire.Prompt(content~, submission_id=None), None)
           }
         }
-        Ok(
-          send_command(
-            token,
-            session,
-            command,
-            task_id?,
-            settings=submission.settings,
-          ),
-        )
+        Ok(send_command(token, session, command, task_id?))
       } catch {
         @cloud_client.RequestError(failure) => Err(failure)
         _ => Err(Unreachable)

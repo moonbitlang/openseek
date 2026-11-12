@@ -133,44 +133,7 @@ fn update_cloud(
     token?=model.account.map(account => account.token),
     navigation=model.chat_navigation_generation,
     client_tools=model.is_desktop,
-    settings=id => {
-      before.user_id
-      .map(account => model.cloud_settings(@interop.Cloud(account~, session=id)))
-      .unwrap_or(@cloud.CommandSettings::default())
-    },
   )
-  let submitted_owner = match message {
-    @cloud.Submit(owner, _)
-    | @cloud.SubmitAttachments(owner, _, _)
-    | @cloud.ControlAction(owner, _) if cloud.sequence != before.sequence =>
-      Some(owner)
-    _ => None
-  }
-  let (preference_cmd, model) = match submitted_owner {
-    Some(owner) =>
-      model.remember_cloud_settings(owner, model.cloud_settings(owner))
-    None => (@cmd.none, model)
-  }
-  let command = @cmd.batch([command, preference_cmd])
-  let model = match message {
-    @cloud.Submit(owner, _) | @cloud.SubmitAttachments(owner, _, _) if cloud.sequence !=
-      before.sequence =>
-      model.with_cloud_choice(
-        owner,
-        Submitted(model.cloud_settings(owner), cloud.sequence),
-      )
-    @cloud.SendFailed(epoch, session, request, _) if epoch == before.epoch &&
-      before.user_id is Some(account) &&
-      before.conversations.get(session)
-      is Some({ send_request, pending: Some(_), .. }) &&
-      send_request == request =>
-      model.retry_cloud_settings(account, session, request)
-    @cloud.CreateFailed(epoch, request, _) if epoch == before.epoch &&
-      before.user_id is Some(account) &&
-      before.creation is Some(creation) =>
-      model.retry_cloud_settings(account, creation.id, request)
-    _ => model
-  }
   let completion = if model.account.map(account => account.user.user_id) ==
     before.user_id {
     cloud_finished_notification(before, cloud, message)
@@ -203,28 +166,6 @@ fn update_cloud(
       creation.request == request &&
       cloud.creation is None => Some(session)
     _ => None
-  }
-  let (created_preferences, model) = if created is Some(session) &&
-    before.draft_identity() is Some(owner) &&
-    cloud.user_id is Some(account) {
-    model.remember_cloud_settings(
-      @interop.Cloud(account~, session~),
-      model.cloud_settings(owner),
-    )
-  } else {
-    (@cmd.none, model)
-  }
-  let command = @cmd.batch([command, created_preferences])
-  let model = if created is Some(session) &&
-    before.draft_identity() is Some(Cloud(account~, session=draft)) {
-    let edits = model.cloud_settings_edits.copy()
-    if edits.get(cloud_preference_key(account, Some(draft))) is Some(edit) {
-      edits.remove(cloud_preference_key(account, Some(draft)))
-      edits[cloud_preference_key(account, Some(session))] = edit
-    }
-    { ..model, cloud_settings_edits: edits, }
-  } else {
-    model
   }
   if created is Some(session) &&
     before.draft_identity() is Some(owner) &&
@@ -348,11 +289,11 @@ fn update_cloud(
     },
     cloud,
     navigation,
-    // Creation or a turn starting in the selected Cloud conversation locks
-    // its approval mode, so the menu closes with it.
-    select_menu: if model.select_menu is Some(OpenSeekApprovalMenu) &&
+    // Creation, saving or a turn starting locks all session options.
+    select_menu: if model.select_menu
+      is Some(OpenSeekApprovalMenu | OpenSeekModelMenu | OpenSeekReasoningMenu) &&
       approval_owner is Some(owner) &&
-      !cloud.can_choose_approval(owner.session()) {
+      !cloud.can_choose_settings(owner.session()) {
       None
     } else {
       model.select_menu
@@ -535,9 +476,8 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
-  let settings = self.cloud_settings(owner)
-  let model = @deepseek.Deepseek(settings.model)
-  let reasoning = settings.thinking
+  let model = @deepseek.Deepseek(self.cloud.model(owner.session()))
+  let settings_enabled = self.cloud.can_choose_settings(owner.session())
   let native_users = Map([])
   for event in conversation.document.events.unwrap_or([]) {
     if event.item is @protocol.User(user) {
@@ -660,23 +600,23 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
           id: "openseek-model-picker",
           groups: [{ ..openseek_model_group(Deepseek, model), label: "Cloud", }],
           selected: ModelChoice::OpenSeekModel(model).wire(),
-          disabled: !self.cloud.can_compose(owner.session()),
+          disabled: !settings_enabled,
           open: self.select_menu is Some(OpenSeekModelMenu),
           title: model.label(),
         }),
         @composer.ReasoningStatus(
           openseek_reasoning_control(
             model,
-            reasoning,
+            self.cloud.thinking(owner.session()),
             locale=self.locale,
             open=self.select_menu is Some(OpenSeekReasoningMenu),
-            disabled=!self.cloud.can_compose(owner.session()),
+            disabled=!settings_enabled,
           ),
         ),
         @composer.ApprovalStatus({
           mode: self.cloud.approval(owner.session()),
           open: self.select_menu is Some(OpenSeekApprovalMenu),
-          enabled: self.cloud.can_choose_approval(owner.session()),
+          enabled: self.cloud.can_choose_settings(owner.session()),
         }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),

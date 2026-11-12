@@ -36,7 +36,7 @@ pub(all) struct Input {
   cloud_access : @cloud_client.Access?
 }
 pub fn Input::Input(model~ : String, thinking~ : @protocol.Thinking?, owner~ : @interop.ConversationKey, root~ : @common.Uri?) -> Self
-pub fn Input::cloud(owner~ : @interop.ConversationIdentity, access~ : @cloud_client.Access, root~ : @common.Uri, model? : String, thinking? : @protocol.Thinking?) -> Self
+pub fn Input::cloud(owner~ : @interop.ConversationIdentity, access~ : @cloud_client.Access, root~ : @common.Uri) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

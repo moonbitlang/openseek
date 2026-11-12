@@ -464,7 +464,6 @@ fn State::begin_control(
   token : String,
   draft? : @composer.Draft,
   attachments~ : Array[@protocol.AttachmentSource] = [],
-  settings~ : CommandSettings = CommandSettings::default(),
 ) -> (State, @cmd.Cmd) {
   let conversation = self.conversations[session]
   let key = match operation {
@@ -547,7 +546,7 @@ fn State::begin_control(
           session,
           input.task_id,
           input.key,
-          control(token, session, input.task_id, operation, settings~),
+          control(token, session, input.task_id, operation),
         ) catch {
           @cloud_client.RequestError(failure) =>
             ControlFailed(
@@ -611,7 +610,6 @@ fn State::update_control(
   message : Msg,
   emit : @cmd.Emit[Msg],
   token : String?,
-  settings~ : (String) -> CommandSettings = _ => CommandSettings::default(),
 ) -> (State, @cmd.Cmd)? {
   if message is ControlChecked(epoch, session, task, snapshot) {
     guard epoch == self.epoch &&
@@ -808,7 +806,6 @@ fn State::update_control(
         return Some((self, @cmd.none))
       }
       let (next, command) = self.begin_control(
-        settings=settings(session),
         session,
         task,
         Approve(id=question.id, allow~),
@@ -888,14 +885,7 @@ fn State::update_control(
         return Some((self, @cmd.none))
       }
       return Some(
-        self.begin_control(
-          settings=settings(session),
-          session,
-          task,
-          QueueWithdraw(id~),
-          emit,
-          token,
-        ),
+        self.begin_control(session, task, QueueWithdraw(id~), emit, token),
       )
     }
     ControlAction(_, @composer.QueuedInputSteerRequested(id~, ..)) => {
@@ -909,7 +899,6 @@ fn State::update_control(
       }
       return Some(
         self.begin_control(
-          settings=settings(session),
           session,
           task,
           QueueSteer(id~),
@@ -947,7 +936,6 @@ fn State::update_control(
       }
       return Some(
         self.begin_control(
-          settings=settings(session),
           session,
           task,
           QueueEdit(id=edit, content~),
@@ -962,7 +950,6 @@ fn State::update_control(
   }
   Some(
     self.begin_control(
-      settings=settings(session),
       session,
       task,
       operation,

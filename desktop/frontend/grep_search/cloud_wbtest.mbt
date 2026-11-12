@@ -162,34 +162,3 @@ test "Cloud semantic search keeps workspace ownership and shares request limits"
   assert_eq(body.get("session_key"), None)
   assert_eq(body.get("patterns"), Some(Json(["inspect($_)"])))
 }
-
-///|
-test "Cloud pattern repair carries selected engine settings without Host routing fields" {
-  let input = {
-    ..cloud_input(),
-    model: "deepseek-v4-pro",
-    thinking: Some(ThinkingMax),
-  }
-  let state = State::empty()
-    .handle(ModeChanged(Semantic), input)
-    .handle(PatternChanged(0, "broken"), input)
-    .handle(FixPattern, input)
-  let request = state.page.pattern_repair_request_payload(input).unwrap()
-  assert_eq(cloud_pattern_repair_body(request), {
-    "pattern": "broken",
-    "generation": Json(request.generation),
-    "settings": { "model": "deepseek-v4-pro", "thinking": "max" },
-  })
-  assert_eq(
-    cloud_pattern_repair_body({
-      ..request,
-      model: "deepseek-flash",
-      thinking: None,
-    }),
-    {
-      "pattern": "broken",
-      "generation": Json(request.generation),
-      "settings": { "model": "deepseek-flash" },
-    },
-  )
-}

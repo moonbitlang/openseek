@@ -5,18 +5,15 @@ async fn control(
   session : String,
   task_id : String,
   operation : ControlOperation,
-  settings~ : CommandSettings = CommandSettings::default(),
 ) -> ControlResult {
   let body : QueueRequest = match operation {
-    Stop =>
-      return send_command(token, session, @wire.Cancel, task_id~, settings~)
+    Stop => return send_command(token, session, @wire.Cancel, task_id~)
     Steer(submission_id~, content~) =>
       return send_command(
         token,
         session,
         @wire.Steer(content~, submission_id=Some(submission_id)),
         task_id~,
-        settings~,
       )
     QueueAdd(id~, content~) =>
       { task_id, action: "add", id, content: Some(content), }
@@ -30,7 +27,6 @@ async fn control(
         session,
         @protocol.approval(id, allow~),
         task_id~,
-        settings~,
       )
   }
   let (response, data) = @http.request(

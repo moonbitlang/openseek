@@ -8,6 +8,8 @@ pub(all) struct Session {
   archived : Bool
   // The policy the next engine starts with; a running turn keeps its own.
   approval : @protocol.OpenSeekApproval
+  model : @deepseek.DsVariant
+  thinking : @protocol.Thinking
 }
 
 ///|
@@ -24,7 +26,6 @@ pub(all) struct Record {
 ///|
 #derive(Eq)
 pub(all) struct History {
-  settings : CommandSettings?
   etag : String?
   offset : Int32?
   prediction : @wire.PredictionRecord?
@@ -87,9 +88,6 @@ pub extend PendingAssistant with Eq::{equal, not_equal}
 ///|
 #derive(Eq)
 pub(all) struct Conversation {
-  settings : CommandSettings?
-  // Latest-page read/revalidation owning this metadata; zero for disk hydration.
-  settings_request : Int32
   records : Array[Record]
   history_cached : Bool
   history_etag : String?
@@ -162,8 +160,6 @@ pub(all) struct Conversation {
 ///|
 fn Conversation::empty() -> Conversation {
   {
-    settings: None,
-    settings_request: 0,
     records: [],
     history_cached: false,
     history_etag: None,
@@ -229,13 +225,14 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   approval : @protocol.OpenSeekApproval
+  model : @deepseek.DsVariant
+  thinking : @protocol.Thinking
 }
 
 ///|
 /// One unsent submission, retained on the conversation until its HTTP handoff.
 #derive(Eq)
 pub struct PendingCommand {
-  settings : CommandSettings
   request : Int32
   input : CommandInput
 }
@@ -258,6 +255,8 @@ pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
   SetApproval(@protocol.OpenSeekApproval)
+  SetModel(@deepseek.DsVariant)
+  SetThinking(@protocol.Thinking)
 }
 
 ///|
@@ -266,6 +265,8 @@ impl ToJson for SessionEdit with fn to_json(self) {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
     SetApproval(mode) => { "approval": mode.to_json() }
+    SetModel(model) => { "model": Json(@deepseek.Deepseek(model).to_string()) }
+    SetThinking(thinking) => { "thinking": thinking.to_json() }
   }
 }
 
@@ -477,6 +478,20 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
         }
       _ => raise @cloud_client.RequestError(Malformed)
     },
+    model: match item {
+      Object(fields) if !fields.contains("model") => V4Flash
+      { "model": "deepseek-flash", .. } => V4Flash
+      { "model": "deepseek-v4-pro", .. } => V4Pro
+      _ => raise @cloud_client.RequestError(Malformed)
+    },
+    thinking: match item {
+      Object(fields) if !fields.contains("thinking") => ThinkingHigh
+      Object(fields) =>
+        @json.from_json(fields["thinking"]) catch {
+          _ => raise @cloud_client.RequestError(Malformed)
+        }
+      _ => raise @cloud_client.RequestError(Malformed)
+    },
   })
 }
 
@@ -516,14 +531,6 @@ fn decode_history(json : Json) -> History raise RequestError {
     _ => None
   }
   {
-    // Missing during rollout, null, or malformed metadata stays unknown.
-    settings: match json {
-      { "settings": value, .. } =>
-        Some(@json.from_json(value)) catch {
-          _ => None
-        }
-      _ => None
-    },
     etag: None,
     offset: match json {
       { "page": { "offset": Number(offset, ..), .. }, .. } if offset >= 0 &&
