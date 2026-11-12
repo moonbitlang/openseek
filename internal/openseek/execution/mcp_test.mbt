@@ -309,7 +309,8 @@ async test "a skill's stdio server runs moonx confined to a policy the engine wr
       } else {
       fail("a moonx server from a skill should load, idle")
     }
-    assert_eq(target, "moonx")
+    // The trusted `moonx`, by its absolute path, not whatever the name finds.
+    assert_true(target != "moonx" && target.contains("moonx"))
     // Reading the skill's directory and the workspace, nothing else; its
     // environment is its own `env` and its directory.
     let skill = "\{dir}/skills/tracker"

@@ -365,7 +365,8 @@ nobody vetted, so its servers are confined:
   and the variables named with `--skill-env` (none by default); referencing
   any other variable makes the file invalid.
 - A stdio server must run `moonx` (a `.mbtx` script or a registry package, as
-  Wasm). The engine writes a moonrun policy for it and passes it as
+  Wasm); the engine runs the first `moonx` in an absolute `PATH` directory, so
+  a checkout's own `moonx` never stands in for it. The engine writes a moonrun policy for it and passes it as
   `--experimental-policy`: it may read the skill's directory and the
   workspace, and nothing else — no writes, no network, no processes — and its
   environment is its own `env` plus `OPENSEEK_SKILL_DIR`. A server that runs

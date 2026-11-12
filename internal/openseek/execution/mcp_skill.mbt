@@ -13,10 +13,59 @@ const SkillServerProgram : String = "moonx"
 const PolicyOption : String = "--experimental-policy"
 
 ///|
+#cfg(platform="windows")
+const ProgramFile : String = "moonx.exe"
+
+///|
+#cfg(not(platform="windows"))
+const ProgramFile : String = "moonx"
+
+///|
+#cfg(platform="windows")
+const PathListSeparator : String = ";"
+
+///|
+#cfg(not(platform="windows"))
+const PathListSeparator : String = ":"
+
+///|
+#cfg(platform="windows")
+fn is_absolute_dir(dir : String) -> Bool {
+  dir.has_prefix("\\\\") || dir is [_, ':', '\\' | '/', ..]
+}
+
+///|
+#cfg(not(platform="windows"))
+fn is_absolute_dir(dir : String) -> Bool {
+  dir.has_prefix("/")
+}
+
+///|
+/// The `moonx` a skill's server runs: the first one in an absolute directory
+/// of `path` (the engine's `PATH`), so that a checkout's own `moonx`, found
+/// through the current directory or a relative entry, never stands in for
+/// it. `None` when there is none.
+async fn trusted_moonx(path : String) -> String? {
+  for dir in path.split(PathListSeparator) {
+    let dir = dir.to_owned()
+    guard is_absolute_dir(dir) else { continue }
+    let candidate = "\{dir}/\{ProgramFile}"
+    let found = @fs.exists(candidate) catch { _ => false }
+    if found {
+      break Some(candidate)
+    }
+  } nobreak {
+    None
+  }
+}
+
+///|
 /// Why a skill's server cannot be used as its `mcp.json` writes it.
 priv suberror SkillServerRejected {
   /// A stdio server whose command is not `moonx`.
   NotMoonx(server~ : String, command~ : String)
+  /// A `moonx` server where no `moonx` is in an absolute `PATH` directory.
+  NoMoonx(server~ : String)
   /// A `moonx` server that names a policy of its own.
   OwnPolicy(server~ : String)
   /// An HTTP server that runs a headers helper command.
@@ -29,6 +78,10 @@ impl Show for SkillServerRejected with fn output(self, logger) {
     NotMoonx(server~, command~) =>
       logger.write_string(
         "skill server `\{server}`: runs `\{command}`; a skill's stdio server must run through `\{SkillServerProgram}`",
+      )
+    NoMoonx(server~) =>
+      logger.write_string(
+        "skill server `\{server}`: no `\{SkillServerProgram}` in an absolute PATH directory",
       )
     OwnPolicy(server~) =>
       logger.write_string(
@@ -43,7 +96,8 @@ impl Show for SkillServerRejected with fn output(self, logger) {
 
 ///|
 /// `servers` as a skill in `skill_dir` may run them. A stdio server must run
-/// `moonx`; it gets a moonrun policy, written to the path `policy` names,
+/// `moonx`, and runs `moonx` (the trusted one `trusted_moonx` found, by its
+/// absolute path); it gets a moonrun policy, written to the path `policy` names,
 /// that lets it read `skill_dir` and `workspace_root` and nothing else: no
 /// writes, no network, no processes, and an environment of just its own `env`
 /// plus `OPENSEEK_SKILL_DIR`. The `moonx` process itself gets no variables
@@ -54,6 +108,7 @@ async fn confine_skill_servers(
   servers : Array[@mcpconfig.McpServer],
   skill_dir~ : String,
   workspace_root~ : String,
+  moonx~ : String?,
   policy~ : () -> String,
 ) -> Array[@mcpconfig.McpServer] {
   let confined : Array[@mcpconfig.McpServer] = []
@@ -68,6 +123,7 @@ async fn confine_skill_servers(
         }) else {
           raise OwnPolicy(server=name)
         }
+        guard moonx is Some(program) else { raise NoMoonx(server=name) }
         let program_env = env.copy()
         program_env[SkillDirEnv] = skill_dir
         let rules : Json = {
@@ -81,7 +137,12 @@ async fn confine_skill_servers(
         }
         @fs.write_text(path, rules.stringify(), create_mode=CreateOrTruncate)
         confined.push(
-          Stdio(name~, command~, args=[PolicyOption, path, ..args], env=Map([])),
+          Stdio(
+            name~,
+            command=program,
+            args=[PolicyOption, path, ..args],
+            env=Map([]),
+          ),
         )
       }
       Http(name~, headers_helper=Some(_), ..) =>

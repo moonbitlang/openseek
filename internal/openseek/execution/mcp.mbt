@@ -65,6 +65,11 @@ pub async fn start_mcp(
 
   let host_env = @env.get_env_vars()
   let skill_servers : Array[@mcpconfig.McpServer] = []
+  let moonx = if skills.any(skill => skill.mcp_config_path() is Some(_)) {
+    trusted_moonx(host_env.get("PATH").unwrap_or(""))
+  } else {
+    None
+  }
   let mut policies = 0
   for skill in skills {
     guard skill.mcp_config_path() is Some(path) else { continue }
@@ -80,7 +85,7 @@ pub async fn start_mcp(
     }
     env[SkillDirEnv] = dir
     let confined = load(path, env, servers => {
-      confine_skill_servers(servers, skill_dir=dir, workspace_root~, policy=() => {
+      confine_skill_servers(servers, skill_dir=dir, workspace_root~, moonx~, policy=() => {
         policies += 1
         "\{policy_dir}/\{policies}.json"
       })
