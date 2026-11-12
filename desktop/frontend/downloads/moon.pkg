@@ -1,17 +1,12 @@
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dialog",
-  "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
-  "moonbit-community/rabbita/js",
   "moonbit-community/rui",
-  "moonbitlang/async/http",
-  "moonbitlang/core/debug",
-  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
-  "moonbitlang/editor/base/browser" @base_browser,
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/sidebar/messages" @sidebar_messages,
 }
 
 supported_targets = "js"

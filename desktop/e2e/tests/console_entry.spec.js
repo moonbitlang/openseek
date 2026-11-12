@@ -84,7 +84,7 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
       platforms: {
         'macos-arm64': { url: 'https://example.com/mac.tar.gz' },
         'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
-        'windows-x64': { url: 'https://example.com/win.zip' },
+        'windows-x64': { url: 'https://example.com/win-setup.exe' },
         browser: { url: 'https://example.com/console.tar.gz' },
       },
     } });
@@ -94,7 +94,7 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
   await expect(inline.getByRole('link', { name: /macOS · Apple Silicon/ }))
     .toHaveAttribute('href', 'https://example.com/mac.dmg');
   await expect(inline.getByRole('link', { name: /Windows · x64/ }))
-    .toHaveAttribute('href', 'https://example.com/win.zip');
+    .toHaveAttribute('href', 'https://example.com/win-setup.exe');
   await expect(inline.getByRole('link', { name: 'All releases on GitHub' }))
     .toHaveAttribute('href', 'https://example.com/releases/0.3.1');
   await expect(inline.getByRole('link')).toHaveCount(3);

@@ -2275,8 +2275,8 @@ fn update_msg(
         @cmd.none
       }
       // The sign-in page lists the relay's apps before anyone signs in.
-      let (downloads_fetch, downloads) = if model.relay_downloads() {
-        model.downloads.load(dispatch.map(msg => Downloads(msg)))
+      let (downloads_fetch, downloads) = if model.is_relay_console() {
+        @downloads.Model::load(fetch_downloads(dispatch))
       } else {
         (@cmd.none, model.downloads)
       }
@@ -4968,13 +4968,11 @@ fn update_msg(
       }
     }
     OpenDownloads => {
-      let (cmd, downloads) = model.downloads.open(
-        dispatch.map(msg => Downloads(msg)),
-      )
+      let (cmd, downloads) = model.downloads.open(fetch_downloads(dispatch))
       (cmd, { ..model, downloads, })
     }
     Downloads(msg) =>
-      (@cmd.none, { ..model, downloads: model.downloads.update(msg), })
+      (@cmd.none, { ..model, downloads: @downloads.Model::update(msg), })
     OpenSchedules => open_schedules(dispatch, model)
     SchedulePage(msg) => update_schedules(dispatch, msg, model)
     OpenSkills =>

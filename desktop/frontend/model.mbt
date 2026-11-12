@@ -2874,9 +2874,10 @@ fn Model::is_local_console(self : Model) -> Bool {
 }
 
 ///|
-/// Only a relay publishes the apps; the window and the Local Console do not.
-fn Model::relay_downloads(self : Model) -> Bool {
-  !self.is_desktop && !self.is_local_console()
+/// The browser console served by a relay, as opposed to the desktop window
+/// or the Local Console.
+fn Model::is_relay_console(self : Model) -> Bool {
+  !self.is_desktop && self.console.page_device != Some("host")
 }
 
 ///|

@@ -1,7 +1,7 @@
 ///|
 /// The downloads alone, for a page that shows them in place.
 pub fn Model::list(self : Model, locale : @i18n.Locale) -> @html.Html {
-  match self.release {
+  match self {
     Idle | Loading =>
       @html.p(
         class="downloads-status",
@@ -11,7 +11,7 @@ pub fn Model::list(self : Model, locale : @i18n.Locale) -> @html.Html {
     Unavailable =>
       @html.div([
         @html.p(class="downloads-status", text(locale, NotPublished)),
-        release_link(FallbackReleasesUrl, text(locale, BrowseReleases)),
+        release_link(FallbackReleasesUrl, text(locale, GitHubReleases)),
       ])
     Ready(version~, page_url~, targets~) =>
       @html.div([
@@ -23,7 +23,7 @@ pub fn Model::list(self : Model, locale : @i18n.Locale) -> @html.Html {
             targets.map(target => {
               @html.li(
                 @html.a(class="downloads-row", href=target.url, escape=true, [
-                  @html.span(class="downloads-platform", target.label),
+                  @html.span(target.label),
                   @html.span(class="downloads-action", [
                     @html.text(text(locale, DownloadVersion(version))),
                     @icons.icon(@icons.icon_arrow_down),
@@ -33,7 +33,7 @@ pub fn Model::list(self : Model, locale : @i18n.Locale) -> @html.Html {
             }),
           )
         },
-        release_link(page_url, text(locale, AllReleases)),
+        release_link(page_url, text(locale, GitHubReleases)),
       ])
   }
 }
@@ -48,7 +48,10 @@ pub fn Model::dialog(self : Model, locale : @i18n.Locale) -> @html.Html {
     attrs=@html.Attrs::build().aria_labelledby(DialogId + "-title"),
     [
       @rui.dialog_header([
-        @rui.dialog_title(id=DialogId + "-title", text(locale, Title)),
+        @rui.dialog_title(
+          id=DialogId + "-title",
+          @sidebar_messages.text(locale, DownloadApps),
+        ),
       ]),
       self.list(locale),
     ],

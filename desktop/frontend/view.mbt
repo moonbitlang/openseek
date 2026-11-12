@@ -692,7 +692,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     schedules_active: self.management_dialog is Some(Schedules),
     skills_active: self.management_dialog is Some(Skills),
     settings_active: self.management_dialog is Some(Settings(_)),
-    downloads: self.relay_downloads(),
+    downloads: self.is_relay_console(),
     account,
   }.filtered()
 }
@@ -3048,7 +3048,7 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   // A first visit lands here with the phone sidebar closed, before any
   // account exists, so the downloads are listed beside sign-in too.
-  if model.relay_downloads() {
+  if model.is_relay_console() {
     children.push(
       @html.section(
         class="cloud-home-downloads",

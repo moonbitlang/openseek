@@ -4,53 +4,43 @@ package "openseek_desktop/frontend/downloads"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
-  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
 }
 
 // Values
+pub const ManifestPath : String = "/desktop/releases/latest.json"
 
 // Errors
 
 // Types and methods
 #derive(Eq)
-pub struct Model {
-  generation : Int32
-  release : Release
-}
-pub fn Model::Model() -> Self
-pub fn Model::dialog(Self, @i18n.Locale) -> @html.Html
-pub fn Model::equal(Self, Self) -> Bool
-pub fn Model::list(Self, @i18n.Locale) -> @html.Html
-pub fn Model::load(Self, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
-pub fn Model::not_equal(Self, Self) -> Bool
-pub fn Model::open(Self, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
-pub fn Model::update(Self, Msg) -> Self
-
-pub(all) enum Msg {
-  Fetched(generation~ : Int32, status~ : Int32, body~ : String)
-  FetchFailed(generation~ : Int32)
-}
-
-#derive(Eq, @debug.Debug)
-pub enum Release {
+pub enum Model {
   Idle
   Loading
   Ready(version~ : String, page_url~ : String, targets~ : Array[Target])
   Unavailable
 }
-pub fn Release::equal(Self, Self) -> Bool
-pub fn Release::not_equal(Self, Self) -> Bool
-pub fn Release::to_repr(Self) -> @debug.Repr
+pub fn Model::Model() -> Self
+pub fn Model::dialog(Self, @i18n.Locale) -> @html.Html
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::list(Self, @i18n.Locale) -> @html.Html
+pub fn Model::load(@cmd.Cmd) -> (@cmd.Cmd, Self)
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::open(Self, @cmd.Cmd) -> (@cmd.Cmd, Self)
+pub fn Model::update(Msg) -> Self
 
-#derive(Eq, @debug.Debug)
+pub(all) enum Msg {
+  Fetched(status~ : Int32, body~ : String)
+  FetchFailed
+}
+
+#derive(Eq)
 pub struct Target {
   label : String
   url : String
 }
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
-pub fn Target::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

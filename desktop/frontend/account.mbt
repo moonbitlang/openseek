@@ -285,9 +285,7 @@ fn account_loaded(
     account_error: None,
     console: { ..model.console, busy: false, },
   }
-  let (retire_command, next) = if changed &&
-    !model.is_desktop &&
-    !model.is_local_console() {
+  let (retire_command, next) = if changed && model.is_relay_console() {
     console_signed_out(dispatch, next)
   } else {
     (@cmd.none, next)
@@ -316,8 +314,7 @@ fn account_loaded(
       }
     })
   }
-  let (console_command, next) = if !model.is_desktop &&
-    !model.is_local_console() {
+  let (console_command, next) = if model.is_relay_console() {
     match account {
       Some(account) =>
         update_console_msg(

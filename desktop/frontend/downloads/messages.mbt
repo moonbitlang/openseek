@@ -2,23 +2,16 @@
 
 ///|
 priv enum Message {
-  Title
   Checking
   NotPublished
   NoTargets
   DownloadVersion(String)
-  AllReleases
-  BrowseReleases
+  GitHubReleases
 }
 
 ///|
 fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
-    (English, Title) => "Download apps"
-    (Spanish, Title) => "Descargar las apps"
-    (SimplifiedChinese, Title) => "下载客户端"
-    (TraditionalChinese, Title) => "下載用戶端"
-    (Japanese, Title) => "アプリをダウンロード"
     (English, Checking) => "Checking the latest release…"
     (Spanish, Checking) => "Buscando la última versión…"
     (SimplifiedChinese, Checking) => "正在获取最新版本…"
@@ -43,15 +36,10 @@ fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, DownloadVersion(version)) => "下载 v\{version}"
     (TraditionalChinese, DownloadVersion(version)) => "下載 v\{version}"
     (Japanese, DownloadVersion(version)) => "v\{version} をダウンロード"
-    (English, AllReleases) => "All releases on GitHub"
-    (Spanish, AllReleases) => "Todas las versiones en GitHub"
-    (SimplifiedChinese, AllReleases) => "在 GitHub 查看全部版本"
-    (TraditionalChinese, AllReleases) => "在 GitHub 查看全部版本"
-    (Japanese, AllReleases) => "GitHub ですべてのリリースを見る"
-    (English, BrowseReleases) => "Browse releases on GitHub"
-    (Spanish, BrowseReleases) => "Ver versiones en GitHub"
-    (SimplifiedChinese, BrowseReleases) => "前往 GitHub 查看版本"
-    (TraditionalChinese, BrowseReleases) => "前往 GitHub 查看版本"
-    (Japanese, BrowseReleases) => "GitHub でリリースを見る"
+    (English, GitHubReleases) => "All releases on GitHub"
+    (Spanish, GitHubReleases) => "Todas las versiones en GitHub"
+    (SimplifiedChinese, GitHubReleases) => "在 GitHub 查看全部版本"
+    (TraditionalChinese, GitHubReleases) => "在 GitHub 查看全部版本"
+    (Japanese, GitHubReleases) => "GitHub ですべてのリリースを見る"
   }
 }
