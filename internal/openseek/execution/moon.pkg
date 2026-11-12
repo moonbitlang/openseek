@@ -26,6 +26,7 @@ import {
   "moonbitlang/openseek/internal/openseek/setup",
   "moonbitlang/openseek/agent_tool/web_search",
   "moonbitlang/workflow/spawn",
+  "moonbitlang/openseek/internal/which",
 }
 
 import {

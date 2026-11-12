@@ -13,53 +13,6 @@ const SkillServerProgram : String = "moonx"
 const PolicyOption : String = "--experimental-policy"
 
 ///|
-#cfg(platform="windows")
-const ProgramFile : String = "moonx.exe"
-
-///|
-#cfg(not(platform="windows"))
-const ProgramFile : String = "moonx"
-
-///|
-#cfg(platform="windows")
-const PathListSeparator : String = ";"
-
-///|
-#cfg(not(platform="windows"))
-const PathListSeparator : String = ":"
-
-///|
-#cfg(platform="windows")
-fn is_absolute_dir(dir : String) -> Bool {
-  dir.has_prefix("\\\\") || dir is [_, ':', '\\' | '/', ..]
-}
-
-///|
-#cfg(not(platform="windows"))
-fn is_absolute_dir(dir : String) -> Bool {
-  dir.has_prefix("/")
-}
-
-///|
-/// The `moonx` a skill's server runs: the first one in an absolute directory
-/// of `path` (the engine's `PATH`), so that a checkout's own `moonx`, found
-/// through the current directory or a relative entry, never stands in for
-/// it. `None` when there is none.
-async fn trusted_moonx(path : String) -> String? {
-  for dir in path.split(PathListSeparator) {
-    let dir = dir.to_owned()
-    guard is_absolute_dir(dir) else { continue }
-    let candidate = "\{dir}/\{ProgramFile}"
-    let found = @fs.exists(candidate) catch { _ => false }
-    if found {
-      break Some(candidate)
-    }
-  } nobreak {
-    None
-  }
-}
-
-///|
 /// Why a skill's server cannot be used as its `mcp.json` writes it.
 priv suberror SkillServerRejected {
   /// A stdio server whose command is not `moonx`.
@@ -96,9 +49,9 @@ impl Show for SkillServerRejected with fn output(self, logger) {
 
 ///|
 /// `servers` as a skill in `skill_dir` may run them. A stdio server must run
-/// `moonx`, and runs `moonx` (the trusted one `trusted_moonx` found, by its
-/// absolute path); it gets a moonrun policy, written to the path `policy` names,
-/// that lets it read `skill_dir` and `workspace_root` and nothing else: no
+/// `moonx`, and runs `moonx` (the first in an absolute `PATH` directory, by
+/// its absolute path; see `@which.find`); it gets a moonrun policy, written
+/// to the path `policy` names, that lets it read `skill_dir` and `workspace_root` and nothing else: no
 /// writes, no network, no processes, and an environment of just its own `env`
 /// plus `OPENSEEK_SKILL_DIR`. The `moonx` process itself gets no variables
 /// from the skill, which could steer it. An HTTP server keeps its URL and

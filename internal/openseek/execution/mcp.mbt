@@ -66,7 +66,7 @@ pub async fn start_mcp(
   let host_env = @env.get_env_vars()
   let skill_servers : Array[@mcpconfig.McpServer] = []
   let moonx = if skills.any(skill => skill.mcp_config_path() is Some(_)) {
-    trusted_moonx(host_env.get("PATH").unwrap_or(""))
+    @which.find(SkillServerProgram, path=host_env.get("PATH").unwrap_or(""))
   } else {
     None
   }
