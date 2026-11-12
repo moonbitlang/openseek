@@ -160,7 +160,7 @@ fn Account::device_menu(
 ///|
 fn Actions::section_component(
   self : Actions,
-  _id : @section.Id,
+  _source : String,
   input : @rabbita.Val[@section.Input],
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
@@ -235,7 +235,10 @@ fn Actions::list_component(
         section.map(parts => parts.2),
       )
     },
-    by=section => section.1.id(),
+    // One list merges same-source sections across devices, so the source
+    // keys a section's component: its id's channel follows the device its
+    // actions name without remounting the projects inside it.
+    by=section => section.1.id().source(),
   )
   input.map2(section_rows, (input, section_rows) => {
     let hidden = input.mode != mode

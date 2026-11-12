@@ -895,6 +895,50 @@ test "moving onto another device rebinds its catalogs and its Work actions" {
 }
 
 ///|
+test "a host import opens on the device it imported into" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: empty_console_state(None, None),
+  }
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    model,
+  )
+  let metas : Array[DeviceMeta] = [
+    { id: "d_a", name: "A", hostname: None, online: true, },
+    { id: "d_b", name: "B", hostname: None, online: true, },
+  ]
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
+  guard listed.device_state(Remote("d_b")) is Some(dev) else {
+    fail("device B not held")
+  }
+  // A Cloud page works on no device; the import names its own.
+  let (_, imported) = open_host_import(
+    dispatch,
+    @cmd.none,
+    listed,
+    {
+      channel: Remote("d_b"),
+      connection_generation: dev.connection_generation,
+      workspace: "/home/u/proj",
+      worktree_of: None,
+    },
+    "imported",
+  )
+  assert_true(imported.focused == Remote("d_b"))
+  assert_true(
+    imported.navigation.location
+    is Some({ device: Some("d_b"), target: Session("imported"), }),
+  )
+}
+
+///|
 test "a relay page follows another device's route in place" {
   let dispatch = test_dispatch()
   let model = {

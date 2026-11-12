@@ -24883,7 +24883,7 @@ fn open_host_import(
 ) -> (@cmd.Cmd, Model) {
   guard model.device_state(target.channel) is Some(dev) &&
     dev.connection_generation == target.connection_generation &&
-    model.console.page_device is Some(device) else {
+    model.route_device(target.channel) is Some(device) else {
     return (cmd, model)
   }
   let (focus, model) = focus_channel(dispatch, model, target.channel)
