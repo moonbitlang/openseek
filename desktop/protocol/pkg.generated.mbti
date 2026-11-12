@@ -3893,6 +3893,7 @@ pub(all) struct SessionListEntry {
   id : String
   title : String?
   updated_at_ms : Double?
+  model_settings : SessionModelSettings?
 }
 pub fn SessionListEntry::equal(Self, Self) -> Bool
 pub fn SessionListEntry::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3901,6 +3902,19 @@ pub fn SessionListEntry::to_json(Self) -> @json.Json
 pub fn SessionListEntry::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionListEntry
 pub impl @json.ToJson for SessionListEntry
+
+#derive(Eq, @debug.Debug)
+pub(all) struct SessionModelSettings {
+  model : String
+  thinking : Thinking
+}
+pub fn SessionModelSettings::equal(Self, Self) -> Bool
+pub fn SessionModelSettings::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionModelSettings::not_equal(Self, Self) -> Bool
+pub fn SessionModelSettings::to_json(Self) -> @json.Json
+pub fn SessionModelSettings::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionModelSettings
+pub impl @json.ToJson for SessionModelSettings
 
 #derive(Eq, @debug.Debug)
 pub(all) struct SessionPayload {

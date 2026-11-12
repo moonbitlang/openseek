@@ -31,6 +31,10 @@ pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
 
 pub async fn self_executable() -> String
 
+pub fn session_agent_settings(@argparse.Matches, @store.SessionModel?) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
+
+pub fn session_model_recorder(@store.SessionStore, @agent_session.SessionId, @store.SessionModel, @store.SessionModel?) -> async () -> Unit noraise
+
 pub fn session_root(@argparse.Matches, workspace_root? : String) -> String raise
 
 pub fn workflow_launch(String) -> (String, Array[String])

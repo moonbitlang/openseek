@@ -200,12 +200,14 @@ fn session_list_format(matches : @argparse.Matches) -> SessionListFormat raise {
 
 ///|
 /// The store's listings as JSON for machine consumers (e.g. the desktop
-/// client's sidebar): an array of `{id, title, updated_at_ms}`, most
-/// recently active first. `title` is the untruncated first line of the first
+/// client's sidebar): an array of `{id, title, updated_at_ms,
+/// model_settings}`, most recently active first. `title` is the untruncated first line of the first
 /// user prompt unless an explicit title sidecar overrides it;
 /// `updated_at_ms` is the session file mtime rounded down to milliseconds, or
 /// `null` for a directory whose session files cannot be stat-ed (such husks
-/// sort last, like the human-readable listing).
+/// sort last, like the human-readable listing). `model_settings` is the
+/// session's `model.json` (`{model, thinking}`), or `null` when the session
+/// has not recorded one.
 async fn session_list_json(store : @store.SessionStore) -> Json {
   let entries : Array[Json] = [
     for listing in store.listings() => {
@@ -220,6 +222,10 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
         .title()
         .unwrap_or_else(() => session_title(listing.first_prompt())),
         "updated_at_ms": updated_at_ms,
+        "model_settings": match listing.model() {
+          Some(model) => ToJson::to_json(model)
+          None => null
+        },
       }
     }
   ]

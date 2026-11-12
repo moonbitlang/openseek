@@ -12,6 +12,8 @@ priv struct ConversationFork {
   source_title : String
   kind : ConversationForkKind
   engine_model : @deepseek.Model
+  // The source's reasoning, which the fork keeps like its tier.
+  reasoning : @protocol.Thinking
   // The source's approval choice, which the fork keeps like its tier.
   approval : @protocol.OpenSeekApproval
   connection_generation : Int32
@@ -49,6 +51,7 @@ fn Model::request_fork(
     source_sequence: conv.durable_frontier(),
     kind: AfterAnswer(through~),
     engine_model: conv.engine_model,
+    reasoning: self.conversation_reasoning(conv),
     approval: self.approval_for(conv.device, conv.session_id),
     connection_generation: self.focused_connection_generation(),
   }
@@ -99,14 +102,15 @@ fn Model::finish_fork(
         workspace: pending.source.workspace,
         workspace_name: @resource.label(pending.source.workspace),
         updated_at_ms: None,
+        // Until the next listing reports the fork's own record, opening it
+        // starts from the source conversation's choice.
+        model_settings: Some({
+          model: pending.engine_model.to_string(),
+          thinking: pending.reasoning,
+        }),
       })
       let mut model = model
         .replace_device({ ..dev, sessions, })
-        .remember_model(
-          pending.source.channel,
-          reply.session,
-          pending.engine_model,
-        )
         .with_approval(pending.source.channel, reply.session, pending.approval)
       if pending.is_edit() {
         let conv = model
@@ -117,6 +121,7 @@ fn Model::finish_fork(
               reply.session,
               pending.source.workspace,
               model=pending.engine_model,
+              reasoning=pending.reasoning,
             )
           })
         model = model.replace_conversation({
@@ -140,11 +145,10 @@ fn Model::finish_fork(
           }),
         }
       }
-      let key = conversation_model_key(pending.source.channel, reply.session)
-      let save = @cmd.batch([
-        save_conversation_model(key, pending.engine_model),
-        save_conversation_approval(key, pending.approval),
-      ])
+      let save = save_conversation_approval(
+        conversation_storage_key(pending.source.channel, reply.session),
+        pending.approval,
+      )
       // A completed background request must not take the reader away from
       // another conversation or screen they chose while it was pending.
       guard should_open else { return (save, model) }

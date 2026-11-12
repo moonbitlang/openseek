@@ -45,13 +45,6 @@ async fn run_serve(
   matches : @argparse.Matches,
   workspace_root~ : String,
 ) -> Unit {
-  let (model, thinking, api_url) = @options.agent_settings(matches)
-  guard model.api_key(matches.values) is Some(api_key) else {
-    fail("an API key is required for \{model}: pass --api-key")
-  }
-  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
-  let max_steps = @options.max_steps(matches)
-  let review_deadline_ms = @options.review_deadline_ms(matches)
   let session_id = match matches {
     {
       values: {
@@ -66,6 +59,35 @@ async fn run_serve(
         session => Some(@agent_session.SessionId("\{session}"))
       }
   }
+  // A durable session resumes on the model it recorded unless this process
+  // was configured with another one.
+  let durable = match session_id {
+    Some(id) => {
+      let store = @store.SessionStore(
+        @setup.session_root(matches, workspace_root~),
+      )
+      Some((store, id, store.model(id)))
+    }
+    None => None
+  }
+  let (model, thinking, api_url) = match durable {
+    Some((_, _, recorded)) => @setup.session_agent_settings(matches, recorded)
+    None => @options.agent_settings(matches)
+  }
+  guard model.api_key(matches.values) is Some(api_key) else {
+    fail("an API key is required for \{model}: pass --api-key")
+  }
+  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
+  let max_steps = @options.max_steps(matches)
+  let review_deadline_ms = @options.review_deadline_ms(matches)
+  // Called after every durable append; records the model once.
+  let record_model = match durable {
+    Some((store, id, recorded)) =>
+      Some(
+        @setup.session_model_recorder(store, id, { model, thinking, }, recorded),
+      )
+    None => None
+  }
   let ephemeral_scratch = if session_id is None {
     Some(@fs.tmpdir(prefix="openseek-session-"))
   } else {
@@ -74,16 +96,12 @@ async fn run_serve(
   defer (if ephemeral_scratch is Some(dir) {
     @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
   })
-  let (store, initial_session) = match session_id {
-    Some(id) => {
-      let store = @store.SessionStore(
-        @setup.session_root(matches, workspace_root~),
-      )
+  let (store, initial_session) = match durable {
+    Some((store, id, _)) =>
       (
         Some(store),
         @setup.load_or_new_session(store, id, matches, model, workspace_root~),
       )
-    }
     // No durable session requested: the conversation still spans every
     // prompt of this process's lifetime, it just leaves nothing behind.
     None =>
@@ -339,12 +357,16 @@ async fn run_serve(
       what : String,
     ) -> Bool {
       session = if store is Some(store) {
-        store.append(session, item) catch {
+        let next = store.append(session, item) catch {
           error => {
             @emit.emit(SessionError(error="failed to append \{what}: \{error}"))
             return false
           }
         }
+        if record_model is Some(record) {
+          record()
+        }
+        next
       } else {
         session.append(item)
       }
@@ -484,6 +506,9 @@ async fn run_serve(
             let next = match store {
               Some(store) => store.append(current, item)
               None => current.append(item)
+            }
+            if record_model is Some(record) {
+              record()
             }
             session = next
             next

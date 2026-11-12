@@ -131,3 +131,58 @@ pub async fn load_or_new_session(
     fresh()
   }
 }
+
+///|
+/// The model, thinking mode, and endpoint a run on a durable session uses.
+/// What the session recorded (`SessionStore::model`) stands in for whichever
+/// of `--model` and `--thinking` the user did not configure, by flag or by
+/// environment, so resuming a session keeps the model it ran on; a
+/// configured value wins and becomes the session's from this run on.
+pub fn session_agent_settings(
+  matches : @argparse.Matches,
+  recorded : @store.SessionModel?,
+) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise {
+  let (model, thinking, api_url) = @options.agent_settings(matches)
+  guard recorded is Some(recorded) else { return (model, thinking, api_url) }
+  (
+    if @options.configured(matches, "model") {
+      model
+    } else {
+      recorded.model
+    },
+    if @options.configured(matches, "thinking") {
+      thinking
+    } else {
+      recorded.thinking
+    },
+    api_url,
+  )
+}
+
+///|
+/// A hook for a run's durable appends that records `model` as the session's
+/// model (`SessionStore::save_model`) after the first one, unless the
+/// session already recorded exactly that. It waits for an append so a run
+/// that fails before recording anything still leaves nothing behind.
+///
+/// The transcript is the record that matters: a failed model write is
+/// reported as a `session_error` and not retried, rather than failing a
+/// turn whose events were already written.
+pub fn session_model_recorder(
+  store : @store.SessionStore,
+  id : @agent_session.SessionId,
+  model : @store.SessionModel,
+  recorded : @store.SessionModel?,
+) -> async () -> Unit noraise {
+  let mut pending = recorded != Some(model)
+  async fn() noraise {
+    guard pending else { return }
+    pending = false
+    store.save_model(id, model) catch {
+      error =>
+        @emit.emit(
+          SessionError(error="failed to record the session model: \{error}"),
+        )
+    }
+  }
+}

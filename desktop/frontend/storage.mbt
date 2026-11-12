@@ -28,7 +28,6 @@ fn load_saved_settings(
             Some("false"),
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == Some("true"),
           model=load_setting(ModelStorageKey),
-          conversation_models=load_setting(ConversationModelsStorageKey),
           conversation_approvals=load_setting(ConversationApprovalsStorageKey),
           agent=load_setting(AgentStorageKey),
           codex_model=load_setting(CodexModelStorageKey),
@@ -138,36 +137,17 @@ fn @protocol.Thinking::save_for_glm(self : @protocol.Thinking) -> @cmd.Cmd {
 }
 
 ///|
-/// Pin one conversation's tier, merging into the rows already stored rather
-/// than writing this page's whole list over them. Relay console pages share
-/// one browser origin, so a second tab holds a copy loaded at its own
-/// startup; dumping that stale copy would delete whatever the other tab has
-/// since chosen for unrelated conversations — a scalar preference next to
-/// this one only races over its own value, but a collection loses rows.
+/// Persist one conversation's approval choice, merging into the rows already
+/// stored rather than writing this page's whole list over them. Relay
+/// console pages share one browser origin, so a second tab holds a copy
+/// loaded at its own startup; dumping that stale copy would delete whatever
+/// the other tab has since chosen for unrelated conversations — a scalar
+/// preference next to this one only races over its own value, but a
+/// collection loses rows.
 ///
 /// This preserves those rows; it does not make tabs live-consistent. A tab
 /// still learns another's choices only when it reloads, which is the same
 /// staleness every other preference here already has.
-///
-/// The list is written as an array, not an object: newest first is the cap's
-/// eviction order, which an object's key order would not promise.
-fn save_conversation_model(key : String, model : @deepseek.Model) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    let stored = load_setting(ConversationModelsStorageKey)
-      .map(parse_conversation_models)
-      .unwrap_or([])
-    let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
-      "key": Json(entry.key),
-      "model": Json(entry.model.to_string()),
-    })
-    save_setting(ConversationModelsStorageKey, Json(rows).stringify())
-  })
-}
-
-///|
-/// Persist one conversation's approval choice, folded into the stored list
-/// for the same reason `save_conversation_model` folds: another tab's rows
-/// survive.
 fn save_conversation_approval(
   key : String,
   approval : @protocol.OpenSeekApproval,
@@ -190,34 +170,12 @@ fn parse_conversation_approvals(text : String) -> Array[String] {
   let json = @json.parse(text) catch { _ => return keys }
   guard json is Array(rows) else { return keys }
   for row in rows {
-    guard keys.length() < ConversationModelsLimit else { break }
+    guard keys.length() < ConversationApprovalsLimit else { break }
     if row is String(key) && !key.is_empty() && !keys.contains(key) {
       keys.push(key)
     }
   }
   keys
-}
-
-///|
-/// Read them back. Storage is an input boundary shared with older and newer
-/// builds: a store that will not parse degrades to remembering nothing, and a
-/// single malformed row is skipped rather than discarding the rest.
-fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
-  let entries : Array[StoredConversationModel] = []
-  guard !text.is_blank() else { return entries }
-  let json = @json.parse(text) catch { _ => return entries }
-  guard json is Array(rows) else { return entries }
-  for row in rows {
-    guard entries.length() < ConversationModelsLimit else { break }
-    if row is Object(fields) &&
-      fields.get("key") is Some(String(key)) &&
-      !key.is_empty() &&
-      fields.get("model") is Some(String(wire)) &&
-      parse_engine_model(wire) is Some(model) {
-      entries.push({ key, model, })
-    }
-  }
-  entries
 }
 
 ///|

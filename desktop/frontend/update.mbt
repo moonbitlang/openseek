@@ -264,16 +264,18 @@ fn open_session_on(
     guard model.session_project(channel, session_id) is Some(project) else {
       return (@cmd.none, model)
     }
-    let engine_model = model
-      .remembered_model(channel, session_id)
+    let recorded = model.recorded_model(channel, session_id)
+    let engine_model = recorded
+      .map(recorded => recorded.engine_model)
       .unwrap_or(model.default_model)
     let conversation = empty_conversation(
       channel,
       session_id,
       project,
-      // Reopening a stored conversation recovers the tier it was left on,
-      // not whatever was picked last in some other chat.
+      // Reopening a stored conversation recovers the model its session
+      // recorded, not whatever was picked last in some other chat.
       model=engine_model,
+      reasoning?=recorded.map(recorded => recorded.reasoning),
       // A listed directory may still be an unsent draft with no transcript.
       system_prompt?=model.draft_system_prompt(channel, engine_model),
     )
@@ -337,14 +339,7 @@ fn Model::open_archived_session_on(
       conv
     _ =>
       {
-        ..empty_conversation(
-          channel,
-          session_id,
-          workspace,
-          model=self
-            .remembered_model(channel, session_id)
-            .unwrap_or(self.default_model),
-        ),
+        ..self.stored_conversation(channel, session_id, workspace),
         record: ArchivedRecord,
       }
   }
@@ -1369,10 +1364,16 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
       placement => placement
     }
   }
-  let engine_model = model
-    .find_conversation(active.owner.channel, active.owner.session)
+  let active_conversation = model.find_conversation(
+    active.owner.channel,
+    active.owner.session,
+  )
+  let engine_model = active_conversation
     .map(conv => conv.engine_model)
     .unwrap_or(model.default_model)
+  let reasoning = active_conversation
+    .map(conv => model.conversation_reasoning(conv))
+    .unwrap_or_else(() => model.reasoning_for(engine_model))
   let file_body_visible = match model.dock_state().active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
@@ -1399,7 +1400,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     },
     locale: model.locale,
     model: engine_model.to_string(),
-    thinking: engine_model.thinking(model.reasoning_for(engine_model)),
+    thinking: engine_model.thinking(reasoning),
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
     // panel's monotonic counter with this page's existing random identity so
@@ -2392,7 +2393,6 @@ fn update_msg(
       fps_overlay_enabled~,
       minimal_transcript~,
       model=stored,
-      conversation_models=remembered,
       conversation_approvals~,
       agent~,
       codex_model~,
@@ -2466,9 +2466,6 @@ fn update_msg(
         minimal_transcript,
         default_model,
         default_agent,
-        conversation_models: remembered
-        .map(parse_conversation_models)
-        .unwrap_or([]),
         asking_conversations: conversation_approvals
         .map(parse_conversation_approvals)
         .unwrap_or([]),
@@ -2912,7 +2909,7 @@ fn update_msg(
               // the host gives the conversation a new engine when it differs.
               (
                 save_conversation_approval(
-                  conversation_model_key(conv.device, conv.session_id),
+                  conversation_storage_key(conv.device, conv.session_id),
                   approval,
                 ),
                 closed.with_approval(conv.device, conv.session_id, approval),
@@ -4013,33 +4010,31 @@ fn update_msg(
               },
             )
           } else {
-            // The selector changes the conversation on screen. The tier is
-            // pinned to that conversation right away — a chat can be given a
-            // tier and left unsent for days — and becomes what the next new
-            // chat starts from. (Starting a run pins it too; see `Started`.)
-            // A turn already in flight keeps the model it was started with;
-            // this takes effect on the next.
+            // The selector changes the conversation on screen. While it is
+            // a new chat the pick is also what the next new chat starts
+            // from; once the conversation has started it belongs to that
+            // session alone, which records it when the next turn runs (a
+            // pick left unsent is not kept). A turn already in flight keeps
+            // the model it was started with; this takes effect on the next.
             guard model.active_conversation() is Some(conv) else {
               return (@cmd.none, model)
             }
-            let next = model
-              .replace_conversation({ ..conv, engine_model, })
-              .remember_model(conv.device, conv.session_id, engine_model)
-            (
-              @cmd.batch([
-                save_default_model(engine_model),
-                save_default_agent(OpenSeekAgent),
-                save_conversation_model(
-                  conversation_model_key(conv.device, conv.session_id),
-                  engine_model,
-                ),
-              ]),
-              {
-                ..next,
-                default_model: engine_model,
-                default_agent: OpenSeekAgent,
-              },
-            )
+            let next = model.replace_conversation({ ..conv, engine_model, })
+            if model.conversation_is_new_chat(conv) {
+              (
+                @cmd.batch([
+                  save_default_model(engine_model),
+                  save_default_agent(OpenSeekAgent),
+                ]),
+                {
+                  ..next,
+                  default_model: engine_model,
+                  default_agent: OpenSeekAgent,
+                },
+              )
+            } else {
+              (@cmd.none, next)
+            }
           }
         CodexModel(id) => {
           let (model_cmd, codex) = @codex.update(
@@ -4136,7 +4131,17 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      if conv.engine_model is Glm(_) {
+      // Like the model pick: a new chat's choice is the page preference new
+      // chats start from; a started conversation keeps it to itself.
+      if !model.conversation_is_new_chat(conv) {
+        (
+          @cmd.none,
+          {
+            ..model.replace_conversation({ ..conv, reasoning: Some(reasoning), }),
+            select_menu: None,
+          },
+        )
+      } else if conv.engine_model is Glm(_) {
         (
           reasoning.save_for_glm(),
           { ..model, glm_reasoning: reasoning, select_menu: None, },
@@ -5177,6 +5182,9 @@ fn update_msg(
           // concerned: the wait they are watching starts here, not at the
           // host's `started`.
           run_started_ms: Some(@interop.now_ms()),
+          // The session records what this turn runs on; a later pick in a
+          // new chat must not move it.
+          reasoning: Some(model.conversation_reasoning(conv)),
         }
         // The worktree launch mode's first submit creates the environment
         // (the host names it, binds this conversation) and starts inside
@@ -5185,7 +5193,7 @@ fn update_msg(
         let payload = start_payload(
           task,
           conv.engine_model,
-          model.reasoning_for(conv.engine_model),
+          model.conversation_reasoning(conv),
           model.max_steps,
           conv.session_id,
           submission_id,
@@ -9226,6 +9234,7 @@ fn update_device_msg(
           workspace: key.workspace,
           workspace_name: "",
           updated_at_ms: None,
+          model_settings: None,
         }
         for live in dev.sessions {
           if key.matches(live) {
@@ -9365,14 +9374,7 @@ fn update_device_msg(
       // sequence exposes a gap and follows the normal snapshot recovery path.
       let model = if model.find_conversation(channel, session) is None {
         model.replace_conversation(
-          empty_conversation(
-            channel,
-            session,
-            commit_project,
-            model=model
-              .remembered_model(channel, session)
-              .unwrap_or(model.default_model),
-          ),
+          model.stored_conversation(channel, session, commit_project),
         )
       } else {
         model
@@ -9615,14 +9617,15 @@ fn update_device_msg(
             session,
             project,
             // A conversation this page is meeting for the first time takes
-            // the tier its run is on — better evidence than the default,
-            // and no choice exists yet to contradict it. A remembered choice
-            // still outranks it: that is what the user meant to send next,
-            // while the run may have been started elsewhere. A conversation
-            // the page already holds keeps its own tier — see below.
-            model=model
-              .remembered_model(channel, session)
-              .unwrap_or(selected_model),
+            // the tier its run is on — the run is what its session records
+            // next, so it is newer evidence than the listing's record. The
+            // record's reasoning still applies; the run does not report one.
+            // A conversation the page already holds keeps its own tier — see
+            // below.
+            model=selected_model,
+            reasoning?=model
+              .recorded_model(channel, session)
+              .map(recorded => recorded.reasoning),
           )
         }
       }
@@ -9766,22 +9769,6 @@ fn update_device_msg(
           ),
         )
       }
-      // A run is what makes a conversation durable, so this is where its tier
-      // gets pinned — the chip is not the only way to acquire one. A tier
-      // merely inherited from the page default and then used would otherwise
-      // stay unremembered, and the conversation would come back on whatever
-      // default an unrelated chat has moved to since. Re-pinning the same
-      // tier only reorders the list, so consecutive turns write once.
-      let pinned = updated.remember_model(channel, session, conv.engine_model)
-      if pinned.conversation_models != model.conversation_models {
-        commands.push(
-          save_conversation_model(
-            conversation_model_key(channel, session),
-            conv.engine_model,
-          ),
-        )
-      }
-      let updated = pinned
       // The model rode in on the conversation above; max steps is still one
       // global setting, so sync it only when this start belongs to the
       // conversation on screen. A slow background start (the user switched
@@ -10838,6 +10825,7 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
           workspace: @interop.ChannelId::Local.test_project(),
           workspace_name: "work",
           updated_at_ms: None,
+          model_settings: None,
         } : @transcript.SessionListItem)
     }),
   })
@@ -12308,6 +12296,7 @@ test "sessions loaded replaces the sidebar list" {
       workspace: @interop.ChannelId::Local.test_project(),
       workspace_name: "",
       updated_at_ms: None,
+      model_settings: None,
     },
   ]
   let (_, once) = update(dispatch, sessions_loaded(items), test_model())
@@ -12358,6 +12347,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
           workspace,
           workspace_name: "foreign",
           updated_at_ms: None,
+          model_settings: None,
         },
       ],
       request_generation=committed.dev().sessions_request_generation,
@@ -12479,6 +12469,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
         workspace: listed,
         workspace_name: "work",
         updated_at_ms: None,
+        model_settings: None,
       },
       {
         id: "desktop-listed-only",
@@ -12486,6 +12477,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
         workspace: listed,
         workspace_name: "work",
         updated_at_ms: None,
+        model_settings: None,
       },
     ],
   })
@@ -12543,6 +12535,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
         workspace: listed,
         workspace_name: "work",
         updated_at_ms: None,
+        model_settings: None,
       },
     ],
   })
@@ -12624,6 +12617,7 @@ test "a background session list updates only its channel's same-id workspace" {
             workspace: remote.test_resource("/remote-new"),
             workspace_name: "remote-new",
             updated_at_ms: None,
+            model_settings: None,
           },
         ],
         connection_generation=0,
@@ -12685,6 +12679,7 @@ test "session list assigns a Started-first conversation to its durable workspace
         workspace,
         workspace_name: "started-first",
         updated_at_ms: None,
+        model_settings: None,
       },
     ]),
     started,
@@ -13430,6 +13425,7 @@ test "a restored session keeps the placement its listing named" {
         workspace: @interop.ChannelId::Local.test_project(),
         workspace_name: "work",
         updated_at_ms: None,
+        model_settings: None,
       },
     ]),
     test_model(),
@@ -13578,6 +13574,7 @@ test "reselecting a synced active session reloads idle external writes" {
         workspace: @interop.ChannelId::Local.test_project(),
         workspace_name: "",
         updated_at_ms: None,
+        model_settings: None,
       },
     ],
   })
@@ -14085,6 +14082,7 @@ test "session loaded swaps the active conversation onto the stored session" {
           workspace: @interop.ChannelId::Local.test_project(),
           workspace_name: "work",
           updated_at_ms: None,
+          model_settings: None,
         },
       ],
     })
@@ -16118,9 +16116,6 @@ test "loaded UI preferences parse their wire names" {
       fps_overlay_enabled=true,
       minimal_transcript=false,
       model=Some("deepseek-v4-flash"),
-      conversation_models=Some(
-        "[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
-      ),
       conversation_approvals=Some("[\"local/desktop-test\", 7]"),
       agent=Some("codex"),
       codex_model=Some("gpt-5.4-codex"),
@@ -16137,8 +16132,6 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ThinkingHigh)
   assert_true(restored.glm_reasoning is ThinkingMax)
-  // The stored conversation outranks the stored default for its own chat.
-  assert_true(restored.active().engine_model is Deepseek(V4Pro))
   // Its stored approval choice comes back too; a malformed row is skipped.
   assert_true(
     restored.approval_for(@interop.ChannelId::Local, "desktop-test")
@@ -16158,7 +16151,6 @@ test "loaded UI preferences parse their wire names" {
       fps_overlay_enabled=false,
       minimal_transcript=false,
       model=None,
-      conversation_models=Some("not json"),
       conversation_approvals=None,
       agent=Some("broken"),
       codex_model=None,
@@ -16174,8 +16166,6 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.openseek_reasoning is ThinkingHigh)
   assert_true(unknown.glm_reasoning is ThinkingOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
-  // A store that will not parse remembers nothing rather than wedging.
-  assert_eq(unknown.conversation_models.length(), 0)
 }
 
 ///|
@@ -16214,7 +16204,6 @@ test "the model selector switches one conversation, not the app" {
     flash_again.active().engine_model,
   )
   @debug.assert_eq(flash.default_model, flash_again.default_model)
-  @debug.assert_eq(flash.conversation_models, flash_again.conversation_models)
   // The conversation next door keeps the tier it was already on.
   guard flash.find_conversation(@interop.ChannelId::Local, "other-chat")
     is Some(other) else {
@@ -16278,11 +16267,72 @@ test "a start never overrides the tier picked for the next turn" {
 }
 
 ///|
-test "reopening a conversation recovers its own tier, not the last pick" {
+/// `test_model` with `session` listed on the local host, carrying the model
+/// record its `model.json` would report.
+fn with_listed_session(
+  model : Model,
+  session : String,
+  model_settings : @protocol.SessionModelSettings?,
+) -> Model {
+  guard model.device_state(@interop.ChannelId::Local) is Some(dev) else {
+    return model
+  }
+  model.replace_device({
+    ..dev,
+    sessions: [
+      ..dev.sessions,
+      {
+        id: session,
+        title: Some(session),
+        workspace: @interop.ChannelId::Local.test_project(),
+        workspace_name: "project",
+        updated_at_ms: Some(1.0),
+        model_settings,
+      },
+    ],
+  })
+}
+
+///|
+test "reopening a stored session recovers the model it recorded" {
+  // The page default and preference say flash/high; the session's record
+  // says pro/max, and that is what reopening it must show and send.
+  let model = with_listed_session(
+    test_model(),
+    "stored-chat",
+    Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
+  )
+  let reopened = model.activate(
+    @interop.ChannelId::Local,
+    "stored-chat",
+    @interop.ChannelId::Local.test_project(),
+  )
+  assert_true(reopened.active().engine_model is Deepseek(V4Pro))
+  assert_true(reopened.conversation_reasoning(reopened.active()) is ThinkingMax)
+  // A session without a record opens on the page's defaults.
+  let unrecorded = with_listed_session(test_model(), "old-chat", None).activate(
+    @interop.ChannelId::Local,
+    "old-chat",
+    @interop.ChannelId::Local.test_project(),
+  )
+  assert_true(unrecorded.active().engine_model is Deepseek(V4Flash))
+  assert_true(
+    unrecorded.conversation_reasoning(unrecorded.active()) is ThinkingHigh,
+  )
+}
+
+///|
+test "picks in a started conversation leave new chats' defaults alone" {
   let dispatch = test_dispatch()
-  // Set the chat on screen to Deepseek(V4Flash), then open a different one and put it
-  // back on Deepseek(V4Pro). The second pick moves the default new chats inherit — it
-  // must not follow the first conversation home.
+  let stored = with_listed_session(
+    test_model(),
+    "stored-chat",
+    Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
+  ).activate(
+    @interop.ChannelId::Local,
+    "stored-chat",
+    @interop.ChannelId::Local.test_project(),
+  )
   let (_, flash) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-flash", draft={
@@ -16290,14 +16340,19 @@ test "reopening a conversation recovers its own tier, not the last pick" {
       mentions: [],
       images: [],
     }),
-    test_model(),
+    stored,
   )
-  let other = flash.activate(
+  let (_, off) = update(dispatch, OpenSeekEffortPicked("no"), flash)
+  assert_true(off.active().engine_model is Deepseek(V4Flash))
+  assert_true(off.conversation_reasoning(off.active()) is ThinkingOff)
+  assert_true(off.default_model is Deepseek(V4Flash))
+  assert_true(off.openseek_reasoning is ThinkingHigh)
+  // The same picks while composing a new chat do move the defaults.
+  let fresh = off.activate(
     @interop.ChannelId::Local,
-    "other-chat",
+    "fresh-chat",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(other.active().engine_model is Deepseek(V4Flash))
   let (_, pro) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-pro", draft={
@@ -16305,64 +16360,11 @@ test "reopening a conversation recovers its own tier, not the last pick" {
       mentions: [],
       images: [],
     }),
-    other,
+    fresh,
   )
-  assert_true(pro.default_model is Deepseek(V4Pro))
-  // Reopening drops the conversation and mints it again (nothing was sent,
-  // so `activate` does not retain it) — exactly the path that used to hand
-  // back the unrelated default.
-  let reopened = pro.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
-  assert_true(reopened.active().engine_model is Deepseek(V4Flash))
-}
-
-///|
-test "a run pins an inherited tier the user never clicked for" {
-  let dispatch = test_dispatch()
-  // This chat never touched the chip — it just inherited Deepseek(V4Pro) and ran. That
-  // still has to pin, or a later toggle elsewhere silently retiers it.
-  let (_, ran) = update_dev(
-    dispatch,
-    Started(
-      run_id="r1",
-      session="desktop-test",
-      model=Deepseek(V4Pro),
-      max_steps=1000,
-      session_root=None,
-      submission_id=None,
-    ),
-    test_model(),
-  )
-  assert_true(
-    ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
-    is Some(Deepseek(V4Pro)),
-  )
-  // Another chat moves the page default to Deepseek(V4Flash)...
-  let elsewhere = ran.activate(
-    @interop.ChannelId::Local,
-    "other-chat",
-    @interop.ChannelId::Local.test_project(),
-  )
-  let (_, moved) = update(
-    dispatch,
-    ModelPicked("openseek:deepseek-v4-flash", draft={
-      task: "",
-      mentions: [],
-      images: [],
-    }),
-    elsewhere,
-  )
-  assert_true(moved.default_model is Deepseek(V4Flash))
-  // ...and the first one still comes back on the tier it ran with.
-  let reopened = moved.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
-  assert_true(reopened.active().engine_model is Deepseek(V4Pro))
+  let (_, max) = update(dispatch, OpenSeekEffortPicked("max"), pro)
+  assert_true(max.default_model is Deepseek(V4Pro))
+  assert_true(max.openseek_reasoning is ThinkingMax)
 }
 
 ///|
@@ -16692,6 +16694,7 @@ test "Codex threads share the Projects section's project rows" {
         workspace: @interop.ChannelId::Local.test_project(),
         workspace_name: "work",
         updated_at_ms: Some(3_000_000.0),
+        model_settings: None,
       },
       {
         id: "desktop-older",
@@ -16699,6 +16702,7 @@ test "Codex threads share the Projects section's project rows" {
         workspace: @interop.ChannelId::Local.test_project(),
         workspace_name: "work",
         updated_at_ms: Some(1_000_000.0),
+        model_settings: None,
       },
     ],
   })
@@ -16720,105 +16724,6 @@ test "Codex threads share the Projects section's project rows" {
   // With the Codex page on screen, its active task claims the activation.
   assert_eq(sections[0].activation, Some("codex-thread-1"))
   assert_eq(model.sidebar_activation(), Some((WorkMode, "codex-thread-1")))
-}
-
-///|
-test "remembered tiers survive a round trip through storage" {
-  let dispatch = test_dispatch()
-  let (_, chosen) = update(
-    dispatch,
-    ModelPicked("openseek:deepseek-v4-flash", draft={
-      task: "",
-      mentions: [],
-      images: [],
-    }),
-    test_model(),
-  )
-  let restored = parse_conversation_models(
-    encoded_conversation_models(chosen.conversation_models),
-  )
-  assert_eq(restored, chosen.conversation_models)
-  assert_true(
-    restored is [{ key: "local/desktop-test", model: Deepseek(V4Flash), }],
-  )
-}
-
-///|
-test "a write merges into the stored rows instead of replacing them" {
-  // A sibling console tab on the same origin wrote these while this page held
-  // a copy loaded at its own startup. Pinning here must not drop the other
-  // tab's row — that conversation would silently revert to the default.
-  let stored = parse_conversation_models(
-    encoded_conversation_models([
-      { key: "remote.b/sibling-chat", model: Deepseek(V4Flash), },
-      { key: "remote.a/desktop-test", model: Deepseek(V4Pro), },
-    ]),
-  )
-  let merged = remembered_with(
-    stored,
-    "remote.a/desktop-test",
-    Deepseek(V4Flash),
-  )
-  assert_true(
-    merged
-    is [
-      { key: "remote.a/desktop-test", model: Deepseek(V4Flash), },
-      { key: "remote.b/sibling-chat", model: Deepseek(V4Flash), },
-    ],
-  )
-}
-
-///|
-/// Test-only: the stored spelling of a remembered list, as
-/// `save_conversation_model` writes it.
-fn encoded_conversation_models(
-  entries : Array[StoredConversationModel],
-) -> String {
-  let rows : Array[Json] = entries.map(entry => {
-    "key": Json(entry.key),
-    "model": Json(entry.model.to_string()),
-  })
-  Json(rows).stringify()
-}
-
-///|
-test "the remembered list stays capped, newest first" {
-  let mut model = test_model()
-  // One past the cap, so the first conversation chosen for is the one that
-  // falls off and reverts to the page default.
-  for index in 0..<=ConversationModelsLimit {
-    model = model.remember_model(
-      @interop.ChannelId::Local,
-      "session-\{index}",
-      if index % 2 == 0 {
-        Deepseek(V4Flash)
-      } else {
-        Deepseek(V4Pro)
-      },
-    )
-  }
-  assert_eq(model.conversation_models.length(), ConversationModelsLimit)
-  assert_true(
-    model.remembered_model(@interop.ChannelId::Local, "session-0") is None,
-  )
-  assert_true(
-    model.remembered_model(
-      @interop.ChannelId::Local,
-      "session-\{ConversationModelsLimit}",
-    )
-    is Some(Deepseek(V4Flash)),
-  )
-  // Re-choosing an existing conversation moves it, never duplicates it.
-  let again = model.remember_model(
-    @interop.ChannelId::Local,
-    "session-1",
-    Deepseek(V4Flash),
-  )
-  assert_eq(again.conversation_models.length(), ConversationModelsLimit)
-  assert_true(
-    again.remembered_model(@interop.ChannelId::Local, "session-1")
-    is Some(Deepseek(V4Flash)),
-  )
 }
 
 ///|
@@ -17106,7 +17011,6 @@ test "the GLM provider aligns only a fresh chat to its model family" {
       fps_overlay_enabled=false,
       minimal_transcript=false,
       model=Some("deepseek-v4-pro"),
-      conversation_models=None,
       conversation_approvals=None,
       agent=None,
       codex_model=None,
@@ -18323,6 +18227,7 @@ fn archived_item(
     workspace: channel.test_project(),
     workspace_name: "work",
     updated_at_ms: None,
+    model_settings: None,
   }
 }
 
@@ -18336,6 +18241,7 @@ fn placed_archived_item(id : String) -> @transcript.SessionListItem {
     workspace: @interop.ChannelId::Local.test_project(),
     workspace_name: "work",
     updated_at_ms: None,
+    model_settings: None,
   }
 }
 
@@ -19717,6 +19623,7 @@ test "an older same-connection live list cannot replace a newer reply" {
     workspace: @interop.ChannelId::Local.test_project(),
     workspace_name: "",
     updated_at_ms: None,
+    model_settings: None,
   }
   let current = { ..old, title: Some("current title"), }
   let model = test_model().with_dev(dev => {
@@ -19746,6 +19653,7 @@ test "an older same-connection archived list cannot replace a newer reply" {
     workspace: @interop.ChannelId::Local.test_project(),
     workspace_name: "",
     updated_at_ms: None,
+    model_settings: None,
   }
   let current = { ..old, title: Some("current title"), }
   let model = test_model().with_dev(dev => {
@@ -22968,6 +22876,7 @@ test "a late commit cannot resurrect a locally known archived session" {
         workspace: @interop.ChannelId::Local.test_project(),
         workspace_name: "",
         updated_at_ms: None,
+        model_settings: None,
       },
     ],
   })

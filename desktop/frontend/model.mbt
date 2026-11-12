@@ -91,18 +91,12 @@ fn @deepseek.Model::thinking(
 }
 
 ///|
-/// One conversation's remembered tier. `ConversationKey` is a frontend value
-/// that deliberately never crosses a boundary, so persistence spells the same
-/// identity out itself: the channel's stable URI authority joined to the
-/// session id, which keeps two hosts' identical session ids apart.
-#derive(Eq, Debug)
-priv struct StoredConversationModel {
-  key : String
-  model : @deepseek.Model
-}
-
-///|
-fn conversation_model_key(
+/// A conversation's identity in page-local storage. `ConversationKey` is a
+/// frontend value that deliberately never crosses a boundary, so persistence
+/// spells the same identity out itself: the channel's stable URI authority
+/// joined to the session id, which keeps two hosts' identical session ids
+/// apart.
+fn conversation_storage_key(
   channel : @interop.ChannelId,
   session : String,
 ) -> String {
@@ -179,8 +173,9 @@ const OverviewStorageKey : String = "openseek.overview_open"
 const AppFontSizeStorageKey : String = "openseek.font_size"
 
 ///|
-/// The tier new conversations are born with — the last one picked in the
-/// composer, and the fallback for a conversation nothing remembers.
+/// The tier new conversations are born with — the last one picked while
+/// composing a new chat, and the fallback for a stored session that recorded
+/// no model.
 const ModelStorageKey : String = "openseek.model"
 
 ///|
@@ -219,30 +214,22 @@ const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 const CloudFollowupBehaviorStorageKey : String = "openseek.cloud_followup_behavior"
 
 ///|
-/// Every conversation whose tier the user has chosen, so reopening one
-/// recovers its own tier instead of inheriting whatever was picked last in
-/// some unrelated chat. Page-local like the rest of this file: the desktop
-/// window and a browser console remember separately, and the host never sees
-/// this. Rows are newest first.
-const ConversationModelsStorageKey : String = "openseek.conversation_models"
-
-///|
 /// Every conversation set to request approval, so reopening one keeps
 /// asking. Only that choice is stored: a conversation missing here is
 /// auto-reviewed, which is also what a new conversation does — asking is
 /// opted into per conversation, never inherited from an unrelated one. Rows
-/// are keys (`conversation_model_key`), newest first, capped at
-/// `ConversationModelsLimit`. Builds that asked by default stored the opposite
+/// are keys (`conversation_storage_key`), newest first, capped at
+/// `ConversationApprovalsLimit`. Builds that asked by default stored the opposite
 /// list under `openseek.conversation_approvals`; it is no longer read, since
 /// every conversation it held is auto-reviewed now anyway.
 const ConversationApprovalsStorageKey : String = "openseek.conversation_asks"
 
 ///|
-/// How many conversations remember their tier. Conversations are unbounded
-/// and this is one localStorage value, so the list is capped; past the cap
-/// the least recently chosen conversation forgets and opens on the default,
-/// exactly like one the user never chose a tier for.
-const ConversationModelsLimit : Int32 = 200
+/// How many conversations remember that they ask for approval.
+/// Conversations are unbounded and this is one localStorage value, so the
+/// list is capped; past the cap the least recently chosen conversation
+/// forgets and is auto-reviewed, exactly like one the user never set to ask.
+const ConversationApprovalsLimit : Int32 = 200
 
 ///|
 /// The app's appearance choice. System preference is tracked separately on
@@ -655,11 +642,19 @@ priv struct Conversation {
   // The model this conversation's next turn runs with, chosen on the
   // composer's chip. Per conversation, not per app: a long refactor can sit
   // on the high tier while a quick question beside it stays cheap. Born from
-  // the page's `default_model` — or, for a conversation the page first meets
-  // through a live run, from that run's tier. Nothing but the chip changes it
+  // the model its session recorded (`model.json`, via the sidebar listing),
+  // else the page's `default_model` — or, for a conversation the page first
+  // meets through a live run, from that run's tier. Nothing but the chip changes it
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
   engine_model : @deepseek.Model
+  // The reasoning this conversation runs on. `None` follows the page's
+  // preference for the model's family (`Model::reasoning_for`): a new chat,
+  // or a stored session that recorded no model. It is pinned when the
+  // conversation is opened from its session's record, when its first turn
+  // is submitted, and when the chip picks one for a started conversation —
+  // a later pick in some new chat must not change this one.
+  reasoning : @protocol.Thinking?
   // Complete base prompt captured for this draft; stored chats keep their prompt.
   // None while a new draft awaits its host's first settings snapshot.
   system_prompt : String?
@@ -1261,19 +1256,14 @@ priv struct Model {
   // unified model chip was last picked from, persisted page-locally. An
   // existing conversation never reads this — its agent is fixed at creation.
   default_agent : AgentChoice
-  // Each conversation's pinned tier, newest first and capped at
-  // `ConversationModelsLimit`. A conversation is pinned when the chip gives
-  // it a tier and when a run makes it durable — an inherited tier that was
-  // actually used counts, or the conversation would come back on whatever
-  // default an unrelated chat has moved to since. Reopening recovers from
-  // here; `default_model` is only for conversations this list has never held.
-  conversation_models : Array[StoredConversationModel]
   // The conversations whose permission questions the person answers (see
   // `ConversationApprovalsStorageKey`); a reviewer answers every other one.
   asking_conversations : Array[String]
-  // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
-  // OpenSeek operation. GLM keeps a separate preference below because its
-  // forced-thinking low mode is the useful default for ordinary tasks.
+  // The DeepSeek (and non-GLM custom-model) reasoning choice new chats start
+  // from, and the fallback for a stored session that recorded none. GLM
+  // keeps a separate preference below because its forced-thinking low mode
+  // is the useful default for ordinary tasks. A started conversation runs on
+  // its own `Conversation::reasoning` once it has one.
   openseek_reasoning : @protocol.Thinking
   glm_reasoning : @protocol.Thinking
   max_steps : String
@@ -1686,7 +1676,6 @@ priv enum Msg {
     fps_overlay_enabled~ : Bool,
     minimal_transcript~ : Bool,
     model~ : String?,
-    conversation_models~ : String?,
     conversation_approvals~ : String?,
     agent~ : String?,
     codex_model~ : String?,
@@ -2637,6 +2626,7 @@ fn empty_conversation(
   session_id : String,
   project : @common.Uri,
   model~ : @deepseek.Model = Deepseek(V4Pro),
+  reasoning? : @protocol.Thinking,
   system_prompt? : String,
 ) -> Conversation {
   {
@@ -2646,6 +2636,7 @@ fn empty_conversation(
     workspace: Project(root=project),
     worktree_mode: false,
     engine_model: model,
+    reasoning,
     system_prompt,
     task: "",
     images: [],
@@ -2755,7 +2746,6 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     default_model: Deepseek(V4Flash),
     default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
-    conversation_models: [],
     asking_conversations: [],
     openseek_reasoning: ThinkingHigh,
     glm_reasoning: ThinkingOff,
@@ -3242,6 +3232,16 @@ fn Model::align_new_chats_with_provider(
 }
 
 ///|
+/// The reasoning `conv`'s next operation runs with: its own when it has one,
+/// otherwise the page's preference for its model's family.
+fn Model::conversation_reasoning(
+  self : Model,
+  conv : Conversation,
+) -> @protocol.Thinking {
+  conv.reasoning.unwrap_or_else(() => self.reasoning_for(conv.engine_model))
+}
+
+///|
 /// The reasoning preference for one model family. GLM's `ThinkingOff` wire
 /// value is translated by the engine to its lowest supported effort (`low`).
 fn Model::reasoning_for(
@@ -3661,39 +3661,55 @@ fn Model::can_reload_transcript(self : Model, conv : Conversation) -> Bool {
 }
 
 ///|
-/// The tier this conversation was last given, if the page still remembers
-/// one. `None` — never chosen, or dropped by the cap — leaves the caller to
-/// pick its own fallback: the page default usually, a live run's tier when
-/// the conversation is first seen through one.
-fn Model::remembered_model(
-  self : Model,
-  channel : @interop.ChannelId,
-  session : String,
-) -> @deepseek.Model? {
-  let key = conversation_model_key(channel, session)
-  self.conversation_models
-  .iter()
-  .find_first(entry => entry.key == key)
-  .map(entry => entry.model)
+/// The model a stored session last ran on, as its record (`model.json`)
+/// reached this page through the sidebar listing.
+priv struct RecordedModel {
+  engine_model : @deepseek.Model
+  reasoning : @protocol.Thinking
 }
 
 ///|
-/// Remember a conversation's tier, moving it to the front so the cap drops
-/// whichever conversation the user has gone longest without choosing for.
-fn Model::remember_model(
+/// What `session` on `channel` recorded it runs on. `None` — a session that
+/// recorded no model, one this page has not listed, or a model name this
+/// build does not know — leaves the caller to pick its own fallback: the
+/// page default usually, a live run's tier when the conversation is first
+/// seen through one.
+fn Model::recorded_model(
   self : Model,
   channel : @interop.ChannelId,
   session : String,
-  model : @deepseek.Model,
-) -> Model {
-  {
-    ..self,
-    conversation_models: remembered_with(
-      self.conversation_models,
-      conversation_model_key(channel, session),
-      model,
-    ),
+) -> RecordedModel? {
+  guard self.device_state(channel) is Some(dev) &&
+    dev.sessions
+    .iter()
+    .concat(dev.archived.iter())
+    .find_first(item => item.id == session)
+    is Some({ model_settings: Some(settings), .. }) &&
+    parse_engine_model(settings.model) is Some(engine_model) else {
+    return None
   }
+  Some({ engine_model, reasoning: settings.thinking, })
+}
+
+///|
+/// A fresh conversation for stored `session`, on the model its session
+/// recorded or else the page default.
+fn Model::stored_conversation(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  project : @common.Uri,
+) -> Conversation {
+  let recorded = self.recorded_model(channel, session)
+  empty_conversation(
+    channel,
+    session,
+    project,
+    model=recorded
+      .map(recorded => recorded.engine_model)
+      .unwrap_or(self.default_model),
+    reasoning?=recorded.map(recorded => recorded.reasoning),
+  )
 }
 
 ///|
@@ -3703,7 +3719,7 @@ fn Model::approval_for(
   channel : @interop.ChannelId,
   session : String,
 ) -> @protocol.OpenSeekApproval {
-  let key = conversation_model_key(channel, session)
+  let key = conversation_storage_key(channel, session)
   if self.asking_conversations.contains(key) {
     ApprovalAsk
   } else {
@@ -3723,7 +3739,7 @@ fn Model::with_approval(
     ..self,
     asking_conversations: approvals_with(
       self.asking_conversations,
-      conversation_model_key(channel, session),
+      conversation_storage_key(channel, session),
       approval,
     ),
   }
@@ -3732,7 +3748,9 @@ fn Model::with_approval(
 ///|
 /// Fold one conversation's approval choice into the asking list: an ask
 /// moves the key to the front (dropping the oldest past the cap), a review
-/// removes it. Free-standing for the same reason as `remembered_with`.
+/// removes it. Free-standing because the durable store folds the same way:
+/// a write merges into the rows already there rather than replacing them
+/// (see `save_conversation_approval`).
 fn approvals_with(
   keys : Array[String],
   key : String,
@@ -3740,27 +3758,8 @@ fn approvals_with(
 ) -> Array[String] {
   let merged : Array[String] = if approval is ApprovalAsk { [key] } else { [] }
   for existing in keys {
-    if existing != key && merged.length() < ConversationModelsLimit {
+    if existing != key && merged.length() < ConversationApprovalsLimit {
       merged.push(existing)
-    }
-  }
-  merged
-}
-
-///|
-/// Move one conversation to the front of a remembered list, dropping the
-/// least recently chosen once the cap is reached. Free-standing because the
-/// durable store folds the same way: a write merges into the rows already
-/// there rather than replacing them (see `save_conversation_model`).
-fn remembered_with(
-  entries : Array[StoredConversationModel],
-  key : String,
-  model : @deepseek.Model,
-) -> Array[StoredConversationModel] {
-  let merged : Array[StoredConversationModel] = [{ key, model, }]
-  for entry in entries {
-    if entry.key != key && merged.length() < ConversationModelsLimit {
-      merged.push(entry)
     }
   }
   merged
@@ -4080,8 +4079,9 @@ fn Model::activate(
     }
   }
   if !found {
-    let model = self
-      .remembered_model(channel, session_id)
+    let recorded = self.recorded_model(channel, session_id)
+    let model = recorded
+      .map(recorded => recorded.engine_model)
       .unwrap_or(self.default_model)
     conversations.push(
       empty_conversation(
@@ -4090,6 +4090,7 @@ fn Model::activate(
         project,
         system_prompt?=self.draft_system_prompt(channel, model),
         model~,
+        reasoning?=recorded.map(recorded => recorded.reasoning),
       ),
     )
   }
