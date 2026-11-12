@@ -18,9 +18,27 @@ pub enum Model {
 pub extend Model with Eq::{equal, not_equal}
 
 ///|
+/// The operating system an artifact installs on; the view marks each row
+/// with its logo.
+#derive(Eq, Debug)
+pub(all) enum Os {
+  MacOS
+  Windows
+  Linux
+  Android
+}
+
+///|
+pub extend Os with Eq::{equal, not_equal}
+
+///|
+pub extend Os with Debug::{to_repr}
+
+///|
 /// One downloadable artifact, labeled for display.
 #derive(Eq)
 pub struct Target {
+  os : Os
   label : String
   url : String
 }
@@ -75,14 +93,14 @@ pub fn Model::update(msg : Msg) -> Model {
 
 ///|
 /// The platforms a person can install, in display order.
-let platforms : Array[(String, String)] = [
-  ("macos-arm64", "macOS · Apple Silicon"),
-  ("macos-x64", "macOS · Intel"),
-  ("windows-x64", "Windows · x64"),
-  ("windows-arm64", "Windows · ARM64"),
-  ("linux-x64", "Linux · x64"),
-  ("linux-arm64", "Linux · ARM64"),
-  ("android", "Android · APK"),
+let platforms : Array[(String, Os, String)] = [
+  ("macos-arm64", MacOS, "macOS · Apple Silicon"),
+  ("macos-x64", MacOS, "macOS · Intel"),
+  ("windows-x64", Windows, "Windows · x64"),
+  ("windows-arm64", Windows, "Windows · ARM64"),
+  ("linux-x64", Linux, "Linux · x64"),
+  ("linux-arm64", Linux, "Linux · ARM64"),
+  ("android", Android, "Android · APK"),
 ]
 
 ///|
@@ -103,11 +121,11 @@ fn parse_manifest(body : String) -> Model {
   }
   let targets : Array[Target] = []
   for platform in platforms {
-    let (key, label) = platform
+    let (key, os, label) = platform
     // macOS publishes its updater archive under the bare key and the
     // installer a person downloads under `<key>-dmg`.
     match (entry_url(entries.get("\{key}-dmg")), entry_url(entries.get(key))) {
-      (Some(url), _) | (None, Some(url)) => targets.push({ label, url, })
+      (Some(url), _) | (None, Some(url)) => targets.push({ os, label, url, })
       (None, None) => ()
     }
   }

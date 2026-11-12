@@ -12,6 +12,10 @@ pub fn icon(() -> @html.Html) -> @html.Html
 
 pub fn icon_add() -> @html.Html
 
+pub fn icon_android() -> @html.Html
+
+pub fn icon_apple() -> @html.Html
+
 pub fn icon_archive() -> @html.Html
 
 pub fn icon_arrow_down() -> @html.Html
@@ -96,6 +100,8 @@ pub fn icon_lightbulb() -> @html.Html
 
 pub fn icon_link_external() -> @html.Html
 
+pub fn icon_linux() -> @html.Html
+
 pub fn icon_loading() -> @html.Html
 
 pub fn icon_logo() -> @html.Html
@@ -153,6 +159,8 @@ pub fn icon_trash() -> @html.Html
 pub fn icon_vm() -> @html.Html
 
 pub fn icon_watch() -> @html.Html
+
+pub fn icon_windows() -> @html.Html
 
 pub fn icon_worktree() -> @html.Html
 

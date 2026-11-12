@@ -23,7 +23,10 @@ pub fn Model::list(self : Model, locale : @i18n.Locale) -> @html.Html {
             targets.map(target => {
               @html.li(
                 @html.a(class="downloads-row", href=target.url, escape=true, [
-                  @html.span(target.label),
+                  @html.span(class="downloads-platform", [
+                    @icons.icon(os_icon(target.os)),
+                    @html.text(target.label),
+                  ]),
                   @html.span(class="downloads-action", [
                     @html.text(text(locale, DownloadVersion(version))),
                     @icons.icon(@icons.icon_arrow_down),
@@ -67,4 +70,14 @@ fn release_link(url : String, label : String) -> @html.Html {
       @icons.icon(@icons.icon_link_external),
     ]),
   )
+}
+
+///|
+fn os_icon(os : Os) -> () -> @html.Html {
+  match os {
+    MacOS => @icons.icon_apple
+    Windows => @icons.icon_windows
+    Linux => @icons.icon_linux
+    Android => @icons.icon_android
+  }
 }
