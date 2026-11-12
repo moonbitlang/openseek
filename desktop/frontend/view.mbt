@@ -2050,7 +2050,7 @@ fn console_gate_view(
             class="portal-button-link",
             href=console.login_url(),
             escape=true,
-            shell_text(locale, SignInGitHub),
+            shell_text(locale, SignInLabel),
           ),
         )
       }
@@ -3042,7 +3042,7 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         class="button primary",
         type_="button",
         on_click=dispatch(RemoteConnectClicked),
-        shell_text(locale, SignInGitHub),
+        shell_text(locale, SignInLabel),
       ),
     )
   }

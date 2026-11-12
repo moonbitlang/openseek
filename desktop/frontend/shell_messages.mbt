@@ -35,7 +35,6 @@ priv enum ShellMessage {
   TryAgain
   SignInLabel
   BrowserAccess
-  SignInGitHub
   CheckingDevice
   CannotLoadDevice
   WaitingConnection
@@ -307,11 +306,6 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "透過瀏覽器訪問此 SeekMoon 裝置。"
     (Japanese, BrowserAccess) =>
       "ブラウザーからこの SeekMoon デバイスにアクセスします。"
-    (English, SignInGitHub) => "Sign in with GitHub"
-    (Spanish, SignInGitHub) => "Iniciar sesión con GitHub"
-    (SimplifiedChinese, SignInGitHub) => "使用 GitHub 登录"
-    (TraditionalChinese, SignInGitHub) => "使用 GitHub 登入"
-    (Japanese, SignInGitHub) => "GitHub でログイン"
     (English, CheckingDevice) => "Checking device…"
     (Spanish, CheckingDevice) => "Comprobando dispositivo…"
     (SimplifiedChinese, CheckingDevice) => "正在检查设备…"

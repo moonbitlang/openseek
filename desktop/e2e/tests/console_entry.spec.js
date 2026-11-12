@@ -19,12 +19,12 @@ test('a signed-out device page offers login and preserves the page return path',
   const app = await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/device/device-a/chat');
-  await expect(page.getByRole('link', { name: 'Sign in with GitHub' })).toHaveAttribute('href',
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute('href',
     '/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fdevice-a%2Fchat');
   expect(app.socket).toBeNull();
   await assertFits(page);
   await page.route('**/v2/auth/login?*', route => route.fulfill({ contentType: 'text/html', body: '<h1>OAuth fixture</h1>' }));
-  await page.getByRole('link', { name: 'Sign in with GitHub' }).click();
+  await page.getByRole('link', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'OAuth fixture' })).toBeVisible();
   await expect(page).toHaveURL(/\/v2\/auth\/login\?/);
   expect(app.pageErrors).toEqual([]);
@@ -152,7 +152,7 @@ test('Chat is the signed-out launch page and a saved Work preference cannot repl
   await page.goto('/index.html');
   await expect(page).toHaveURL(/\/cloud$/);
   await expect(page.getByRole('main').getByRole('heading', { name: 'Sign in to view conversations', level: 2, exact: true })).toBeVisible();
-  await expect(page.getByRole('main').getByRole('button', { name: 'Sign in with GitHub' })).toBeEnabled();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
   // Device choice lives in the signed-in sidebar, not on the Cloud home.
   await expect(page.getByRole('main').getByRole('link', { name: 'Choose a device' })).toHaveCount(0);
   // The phone drawer starts closed, so query the mode switch by markup.
