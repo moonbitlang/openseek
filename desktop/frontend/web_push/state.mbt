@@ -1,6 +1,6 @@
 // Whether this browser receives the relay's Web Push, as the console's
 // account settings show and toggle it. The window never runs this: its banners
-// come from the host. docs/plans/web-push.md has the server side.
+// come from the host. The relay's routes live in moonbitlang/openseek-api.
 
 ///|
 /// One browser installation's push state. The relay's VAPID key rides the

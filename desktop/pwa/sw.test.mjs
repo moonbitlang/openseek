@@ -1,5 +1,5 @@
 // Runs sw.js against a fake ServiceWorkerGlobalScope and checks what each
-// payload of the relay contract (docs/plans/web-push.md) shows.
+// payload of the relay contract (README.md, "Push payload") shows.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";

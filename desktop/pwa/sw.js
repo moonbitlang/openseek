@@ -1,7 +1,7 @@
 // The console's push-only service worker. It is served at /sw.js so its
 // default scope `/` covers every application route; it has no fetch handler
 // and caches nothing. The relay's payload contract and the reason the text
-// lives here are in docs/plans/web-push.md. The strings mirror
+// lives here are in README.md beside it. The strings mirror
 // frontend/system_notification.mbt, which formats the window's banners.
 
 const BodyMaxChars = 180;

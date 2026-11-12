@@ -2,7 +2,7 @@
 // moments the window raises a system banner for (frontend/
 // system_notification.mbt), derived from the hub instead of the page, so a
 // closed phone app hears about them too. The relay fans each `notify` frame
-// out as Web Push (docs/plans/web-push.md).
+// out as Web Push (docs/remote-protocol.md, `notify`).
 
 ///|
 /// The window's banner length; the frame carries no more than it shows.

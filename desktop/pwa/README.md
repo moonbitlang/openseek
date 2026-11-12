@@ -22,14 +22,50 @@ served at `/sw.js` because a worker's default scope is its own directory, and
 header. The local console and the console proxy already serve root bundle
 files; openseek-api has its own `/sw.js` route.
 
-The page registers it only in a browser, never in the window. The payload it
-reads is the relay's contract in `docs/plans/web-push.md`, and its strings
-mirror `frontend/system_notification.mbt`. `sw.test.mjs` runs it against a
-fake worker scope:
+The page registers it only in a browser, never in the window. Its strings
+mirror `frontend/system_notification.mbt`, and live here because a closed
+app has no page to format them. `sw.test.mjs` runs it against a fake worker
+scope:
 
 ```bash
 node --test sw.test.mjs
 ```
+
+A click focuses an open console window and asks its page, with a
+`seekmoon.open` message and a reply port, to show the link in place; the
+worker navigates the window only when the page does not answer `true`
+within a second. With no window open, it opens one.
+
+## Push payload
+
+The relay (moonbitlang/openseek-api) encrypts this JSON with RFC 8291; the
+worker and the relay's sender must agree on it:
+
+```json
+{"v":1,"kind":"finished","locale":"zh-Hans","url":"/device/d_1/chat/session/s1",
+ "device_name":"MacBook","status":"finished","answer":"…"}
+{"v":1,"kind":"approval","locale":"en","url":"/device/d_1/chat/session/s1",
+ "device_name":"MacBook","tool":"mbtx","detail":"…"}
+{"v":1,"kind":"cloud_finished","locale":"en","url":"/cloud/session/c1",
+ "status":"completed","answer":"…"}
+{"v":1,"kind":"test","locale":"en","url":"/cloud"}
+```
+
+- `locale` is the subscription's stored tag, one of the `@i18n.Locale::tag`
+  values: `en`, `zh-Hans`, `zh-Hant`, `ja`, `es`. Anything else reads as
+  `en`.
+- `url` is a root-relative application path, resolved against the worker's
+  origin. It is also the notification `tag`, so a newer push about the same
+  conversation replaces the older one.
+- `answer` is optional; without it the body is the fallback text.
+- `status` is the host's run status for `finished`: `finished`,
+  `max_steps_exhausted`, or anything else, which reads as failed. For
+  `cloud_finished` it is Cloud's `completed` or `failed`.
+- A payload the worker cannot parse still shows a generic "SeekMoon"
+  notification: iOS revokes subscriptions whose pushes show nothing.
+
+The host side of `finished` and `approval` is the `notify` control frame in
+`docs/remote-protocol.md`.
 
 ## Icons
 
