@@ -171,7 +171,7 @@ pub fn State::selected_semantic_reference(
 #derive(Eq)
 pub(all) struct Input {
   model : String
-  thinking : @protocol.OpenSeekThinking?
+  thinking : @protocol.Thinking?
   owner : @interop.ConversationIdentity
   root : @common.Uri?
   cloud_access : @cloud_client.Access?
@@ -180,7 +180,7 @@ pub(all) struct Input {
 ///|
 pub fn Input::Input(
   model~ : String,
-  thinking~ : @protocol.OpenSeekThinking?,
+  thinking~ : @protocol.Thinking?,
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
 ) -> Input {

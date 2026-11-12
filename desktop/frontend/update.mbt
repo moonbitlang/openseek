@@ -2420,10 +2420,10 @@ fn update_msg(
         .bind(AgentChoice::parse)
         .unwrap_or(model.default_agent)
       let openseek_reasoning = openseek_effort
-        .bind(OpenSeekReasoning::parse)
+        .bind(@protocol.Thinking::parse)
         .unwrap_or(model.openseek_reasoning)
       let glm_reasoning = glm_effort
-        .bind(OpenSeekReasoning::parse)
+        .bind(@protocol.Thinking::parse)
         .unwrap_or(model.glm_reasoning)
       // The stored Codex pick seeds Codex's own selection state. When the
       // catalog arrives, `with_models` keeps this id if it is still listed
@@ -4150,7 +4150,7 @@ fn update_msg(
       )
     }
     OpenSeekEffortPicked(value) => {
-      guard OpenSeekReasoning::parse(value) is Some(reasoning) else {
+      guard @protocol.Thinking::parse(value) is Some(reasoning) else {
         return (@cmd.none, model)
       }
       guard model.active_conversation() is Some(conv) else {
@@ -11108,7 +11108,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
     Deepseek(V4Pro),
-    ReasoningMax,
+    ThinkingMax,
     "1000",
     conv.session_id,
     "test-submission",
@@ -16161,8 +16161,8 @@ test "loaded UI preferences parse their wire names" {
   assert_eq(restored.app_font_size, Some(AppFontSize(15)))
   assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
-  assert_true(restored.openseek_reasoning is ReasoningHigh)
-  assert_true(restored.glm_reasoning is ReasoningMax)
+  assert_true(restored.openseek_reasoning is ThinkingHigh)
+  assert_true(restored.glm_reasoning is ThinkingMax)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is Deepseek(V4Pro))
   // Its stored approval choice comes back too; a malformed row is skipped.
@@ -16197,8 +16197,8 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
   assert_true(unknown.default_model is Deepseek(V4Flash))
-  assert_true(unknown.openseek_reasoning is ReasoningHigh)
-  assert_true(unknown.glm_reasoning is ReasoningOff)
+  assert_true(unknown.openseek_reasoning is ThinkingHigh)
+  assert_true(unknown.glm_reasoning is ThinkingOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
   // A store that will not parse remembers nothing rather than wedging.
   assert_eq(unknown.conversation_models.length(), 0)
@@ -17105,8 +17105,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
   // from the High preference DeepSeek keeps.
-  assert_true(glm.reasoning_for(glm.active().engine_model) is ReasoningOff)
-  assert_true(glm.openseek_reasoning is ReasoningHigh)
+  assert_true(glm.reasoning_for(glm.active().engine_model) is ThinkingOff)
+  assert_true(glm.openseek_reasoning is ThinkingHigh)
   // A host snapshot on a later launch performs the same alignment even
   // though the page-local model preference loads before host settings do.
   let (_, restored) = update_dev(
@@ -18234,15 +18234,15 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_eq(control.title, "Reasoning effort: Low")
   // Max is not DeepSeek's default, so the two sides stay distinguishable.
   let (_, glm_max) = update(dispatch, OpenSeekEffortPicked("max"), glm)
-  assert_true(glm_max.glm_reasoning is ReasoningMax)
-  assert_true(glm_max.openseek_reasoning is ReasoningHigh)
+  assert_true(glm_max.glm_reasoning is ThinkingMax)
+  assert_true(glm_max.openseek_reasoning is ThinkingHigh)
   let deepseek = glm_max.replace_conversation({
     ..glm_max.active(),
     engine_model: Deepseek(V4Pro),
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
-  assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
-  assert_true(deepseek_off.glm_reasoning is ReasoningMax)
+  assert_true(deepseek_off.openseek_reasoning is ThinkingOff)
+  assert_true(deepseek_off.glm_reasoning is ThinkingMax)
 }
 
 ///|
@@ -24505,8 +24505,8 @@ test "file context inherits the conversation model and its reasoning family" {
   let model = {
     ..test_model(),
     default_model: Deepseek(V4Pro),
-    openseek_reasoning: ReasoningMax,
-    glm_reasoning: ReasoningOff,
+    openseek_reasoning: ThinkingMax,
+    glm_reasoning: ThinkingOff,
   }
   let conv = test_conversation()
   for engine_model in [@deepseek.Model::Deepseek(V4Flash), Glm(G53)] {

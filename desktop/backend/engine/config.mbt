@@ -25,7 +25,7 @@ priv struct RunConfig {
   // default for the model's provider.
   api_url : String?
   model : String
-  thinking : @protocol.OpenSeekThinking
+  thinking : @protocol.Thinking
   // Complete base system prompt used only when creating a new session.
   system_prompt : String?
   // Who answers the engine's permission questions: its `--approval`.
@@ -44,13 +44,13 @@ priv struct RunConfig {
 /// A typed request value outranks the inherited process setting. Older clients
 /// omit the field and retain the CLI-compatible environment/default behavior.
 fn RunConfig::configured_thinking(
-  value : @protocol.OpenSeekThinking?,
-) -> @protocol.OpenSeekThinking raise EngineError {
+  value : @protocol.Thinking?,
+) -> @protocol.Thinking raise EngineError {
   if value is Some(thinking) {
     return thinking
   }
   if @env.get("OPENSEEK_THINKING") is Some(value) {
-    guard @protocol.OpenSeekThinking::parse(value) is Some(thinking) else {
+    guard @protocol.Thinking::parse(value) is Some(thinking) else {
       raise EngineError("OPENSEEK_THINKING must be one of no, high, or max")
     }
     return thinking
@@ -224,7 +224,7 @@ async fn serve_config(
   task : String,
   manager : EngineManager,
   model? : String,
-  thinking? : @protocol.OpenSeekThinking,
+  thinking? : @protocol.Thinking,
   system_prompt? : String,
   approval? : @protocol.OpenSeekApproval,
   max_steps? : Int32,

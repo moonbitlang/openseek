@@ -13,14 +13,14 @@
 /// protocol package makes every Desktop command reject schema drift before an
 /// engine's current phase can affect how the request is handled.
 #derive(Debug, Eq)
-pub(all) enum OpenSeekThinking {
+pub(all) enum Thinking {
   ThinkingOff
   ThinkingHigh
   ThinkingMax
 }
 
 ///|
-pub fn OpenSeekThinking::wire(self : OpenSeekThinking) -> String {
+pub fn Thinking::wire(self : Thinking) -> String {
   match self {
     ThinkingOff => "no"
     ThinkingHigh => "high"
@@ -31,7 +31,7 @@ pub fn OpenSeekThinking::wire(self : OpenSeekThinking) -> String {
 ///|
 /// Parse the same wire spelling from non-JSON configuration such as the
 /// inherited OPENSEEK_THINKING environment variable.
-pub fn OpenSeekThinking::parse(value : String) -> OpenSeekThinking? {
+pub fn Thinking::parse(value : String) -> Thinking? {
   match value {
     "no" => Some(ThinkingOff)
     "high" => Some(ThinkingHigh)
@@ -87,7 +87,7 @@ pub(all) struct StartPayload {
   model : String?
   // Optional keeps older clients compatible; a present value is decoded into
   // the closed protocol type before the command reaches the host operation.
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?
@@ -175,7 +175,7 @@ pub(all) struct SessionCommandSettings {
   session : String
   // A resumed conversation may need a new engine process with these settings.
   model : String?
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?
@@ -630,7 +630,7 @@ pub(all) struct CancelSearchSemanticPayload {
 #derive(Debug, Eq)
 pub(all) struct PatternRepairPayload {
   model : String
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   root : String
   pattern : String
   instruction : String
@@ -2234,16 +2234,16 @@ pub extend OpenSeekApproval with Eq::{equal, not_equal}
 pub extend OpenSeekApproval with ToJson::{to_json}
 
 ///|
-pub extend OpenSeekThinking with Debug::{to_repr}
+pub extend Thinking with Debug::{to_repr}
 
 ///|
-pub extend OpenSeekThinking with FromJson::{from_json}
+pub extend Thinking with FromJson::{from_json}
 
 ///|
-pub extend OpenSeekThinking with Eq::{equal, not_equal}
+pub extend Thinking with Eq::{equal, not_equal}
 
 ///|
-pub extend OpenSeekThinking with ToJson::{to_json}
+pub extend Thinking with ToJson::{to_json}
 
 ///|
 pub extend OpenPathPayload with Debug::{to_repr}

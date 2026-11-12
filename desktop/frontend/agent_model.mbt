@@ -219,16 +219,19 @@ fn Model::openseek_reasoning_chip(
   let reasoning = self.reasoning_for(conv.engine_model)
   let options : Array[@composer.ModelOption] = [
     {
-      value: ReasoningOff.wire(),
-      label: ReasoningOff.label_for_model(locale=self.locale, conv.engine_model),
+      value: @protocol.ThinkingOff.wire(),
+      label: @protocol.ThinkingOff.label_for_model(
+        locale=self.locale,
+        conv.engine_model,
+      ),
     },
     {
-      value: ReasoningHigh.wire(),
-      label: ReasoningHigh.label(locale=self.locale),
+      value: @protocol.ThinkingHigh.wire(),
+      label: @protocol.ThinkingHigh.label(locale=self.locale),
     },
     {
-      value: ReasoningMax.wire(),
-      label: ReasoningMax.label(locale=self.locale),
+      value: @protocol.ThinkingMax.wire(),
+      label: @protocol.ThinkingMax.label(locale=self.locale),
     },
   ]
   Some({
