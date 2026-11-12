@@ -10,6 +10,7 @@ fn selector_account(
     notice: None,
     page,
     online_devices,
+    downloads_url: None,
   }
 }
 

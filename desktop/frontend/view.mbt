@@ -575,6 +575,11 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
 }
 
 ///|
+/// The relay's download page. Signed-in visits to the relay's `/` go straight
+/// to the console, so the homepage's downloads live at their own path.
+const DownloadsUrl : String = "/download"
+
+///|
 /// The sole root-to-sidebar projection. This method is data-only and is
 /// mapped into `Val[Input]` once in `boot`; the sidebar package owns all DOM
 /// composition and child state after that boundary. Both the desktop window
@@ -677,6 +682,11 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     online_devices: self.console.roster
     .filter(meta => meta.online)
     .map(meta => meta.device_choice()),
+    downloads_url: if self.is_local_console() {
+      None
+    } else {
+      Some(DownloadsUrl)
+    },
   })
   @sidebar.Input::{
     search: self.session_search,
