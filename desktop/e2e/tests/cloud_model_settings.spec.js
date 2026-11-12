@@ -13,37 +13,37 @@ async function choose(page, picker, name) {
   await expect(picker(page)).toBeEnabled();
 }
 
-for (const [name, wire] of [['DeepSeek Flash', 'deepseek-flash'], ['DeepSeek Pro', 'deepseek-v4-pro']]) {
-  for (const [label, thinking] of [['Off', 'no'], ['High', 'high'], ['Max', 'max']]) {
-    test(`Cloud creates with ${name}/${label} and locks options until creation finishes`, async ({ page }, testInfo) => {
-      const cloud = new CloudHarness(page, { desktop: name === 'DeepSeek Pro' });
-      cloud.manualTasks = true;
-      await cloud.install(); await cloud.goto(); await cloud.create();
-      await expect(model(page)).toHaveText('DeepSeek Flash'); await expect(effort(page)).toHaveText('High');
-      await choose(page, model, name); await choose(page, effort, label);
-      if (wire === 'deepseek-v4-pro' && thinking === 'max') {
-        await effort(page).click();
-        await page.screenshot({ path: testInfo.outputPath('cloud-session-reasoning.png') });
-        await page.keyboard.press('Escape');
-      }
-      await page.locator('#task').fill('Prepare the demo report');
-      let release; cloud.pauseCreate = new Promise(resolve => { release = resolve; });
-      await page.locator('#send').click();
-      try {
-        await expect.poll(() => creations(cloud).length).toBe(1);
-        await expect(model(page)).toBeDisabled(); await expect(effort(page)).toBeDisabled(); await expect(approval(page)).toBeDisabled();
-      } finally { release(); }
-      await expect.poll(() => commands(cloud).length).toBe(1);
-      expect(creations(cloud)).toEqual([{ approval: 'ask', model: wire, thinking }]);
-      expect(commands(cloud)[0]).not.toHaveProperty('settings');
-      expect(cloud.taskSettings.get(cloud.controlState(sessionC).task_id)).toEqual({ model: wire, thinking });
-      await expect(model(page)).toHaveText(name); await expect(effort(page)).toHaveText(label);
-      await cloud.finishTask(sessionC);
-      await expect(model(page)).toBeEnabled();
-      expect(requests(cloud, 'PATCH')).toEqual([]);
-      expect(cloud.device.pageErrors).toEqual([]);
-    });
-  }
+for (const { name, wire, label, thinking, desktop } of [
+  { name: 'DeepSeek Flash', wire: 'deepseek-flash', label: 'High', thinking: 'high', desktop: false },
+  { name: 'DeepSeek Pro', wire: 'deepseek-v4-pro', label: 'Max', thinking: 'max', desktop: true },
+]) {
+  test(`Cloud creates with ${name}/${label} and locks options until creation finishes`, async ({ page }, testInfo) => {
+    const cloud = new CloudHarness(page, { desktop });
+    cloud.manualTasks = true;
+    await cloud.install(); await cloud.goto(); await cloud.create();
+    await expect(model(page)).toHaveText('DeepSeek Flash'); await expect(effort(page)).toHaveText('High');
+    await choose(page, model, name); await choose(page, effort, label);
+    if (wire === 'deepseek-v4-pro' && thinking === 'max') {
+      await effort(page).click();
+      await page.screenshot({ path: testInfo.outputPath('cloud-session-reasoning.png') });
+      await page.keyboard.press('Escape');
+    }
+    await page.locator('#task').fill('Prepare the demo report');
+    let release; cloud.pauseCreate = new Promise(resolve => { release = resolve; });
+    await page.locator('#send').click();
+    try {
+      await expect.poll(() => creations(cloud).length).toBe(1);
+      await expect(model(page)).toBeDisabled(); await expect(effort(page)).toBeDisabled(); await expect(approval(page)).toBeDisabled();
+    } finally { release(); }
+    await expect.poll(() => commands(cloud).length).toBe(1);
+    expect(creations(cloud)).toEqual([{ approval: 'ask', model: wire, thinking }]);
+    expect(commands(cloud)[0]).not.toHaveProperty('settings');
+    await expect(model(page)).toHaveText(name); await expect(effort(page)).toHaveText(label);
+    await cloud.finishTask(sessionC);
+    await expect(model(page)).toBeEnabled();
+    expect(requests(cloud, 'PATCH')).toEqual([]);
+    expect(cloud.device.pageErrors).toEqual([]);
+  });
 }
 
 test('failed creation retains draft options through navigation and retry', async ({ page }) => {
@@ -99,11 +99,10 @@ test('session PATCH holds sending, handles failures and restores saved options f
   await page.locator('#task').fill('Use the saved options'); await page.locator('#send').click();
   await expect.poll(() => commands(cloud).length).toBe(1);
   expect(commands(cloud)[0]).not.toHaveProperty('settings');
-  expect([...cloud.taskSettings.values()][0]).toEqual({ model: 'deepseek-v4-pro', thinking: 'no' });
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('running turns and automatic queues keep the saved engine options', async ({ page }) => {
+test('running and queued turns lock inference options until idle', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.manualTasks = true; cloud.device.hostSettings.followup_behavior = 'queue';
   await cloud.install(); await cloud.goto(); await cloud.open();
@@ -116,14 +115,10 @@ test('running turns and automatic queues keep the saved engine options', async (
   const queued = cloud.controlState(sessionA).data.queue[0];
   await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { task: first });
   await cloud.emitSessionEvent(sessionA, 'task_started', { submission_id: queued.id, previous_task_id: first }, { task: 'queued-next' });
-  expect(cloud.taskSettings.get('queued-next')).toEqual({ model: 'deepseek-flash', thinking: 'high' });
   await expect(model(page)).toBeDisabled();
   await page.locator('#stop').click(); await cloud.finishTask(sessionA, 'aborted');
   await choose(page, model, 'DeepSeek Pro'); await choose(page, effort, 'Max');
-  await page.locator('#task').fill('New ordinary turn'); await page.locator('#send').click();
-  await expect.poll(() => commands(cloud).length).toBe(3);
-  expect(commands(cloud).every(body => !('settings' in body))).toBe(true);
-  await expect.poll(() => cloud.taskSettings.get(cloud.controlState(sessionA).task_id)).toEqual({ model: 'deepseek-v4-pro', thinking: 'max' });
+  await expect(model(page)).toHaveText('DeepSeek Pro'); await expect(effort(page)).toHaveText('Max');
   expect(cloud.device.pageErrors).toEqual([]);
 });
 

@@ -724,7 +724,7 @@ test('preview_open reuses Local file reads and the existing HTML preview command
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('Cloud AI pattern repair uses session configuration without client overrides', async ({ page }) => {
+test('Cloud AI pattern repair sends no client configuration overrides', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   const repairs = [];
   await cloud.install(); await cloud.goto(); await cloud.open();

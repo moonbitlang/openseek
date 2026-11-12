@@ -83,7 +83,6 @@ export class CloudHarness {
     this.archived = new Set();
     this.approvals = new Map();
     this.sessionSettings = new Map();
-    this.taskSettings = new Map();
     this.histories = new Map();
     this.historyTurns = new Map();
     this.nativeNotices = new Map();
@@ -523,7 +522,6 @@ export class CloudHarness {
     const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
     if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
-    this.taskSettings.set(task, { model: 'deepseek-flash', thinking: 'high', ...this.sessionSettings.get(session) });
     const data = this.manualTasks ? [['task_started', {}]] : this.streamEvents || [
       ['task_started', {}],
       ['tool_call', { id: `calc-${task}`, name: 'mbtx', arguments: '{"source":"println(2)"}' }],
@@ -607,7 +605,6 @@ export class CloudHarness {
     if (kind === 'task_started') {
       const queued = old.data.queue.find(item => item.id === data.submission_id);
       if (queued) {
-        this.taskSettings.set(task, this.taskSettings.get(old.task_id));
         queueAdvanced = true;
         const history = this.histories.get(session) || { messages: [] };
         this.histories.set(session, { ...history, generating: true, messages: [...history.messages, { task_id: task, kind: 'user', data: { content: queued.content }, created_at: 1010 }] });

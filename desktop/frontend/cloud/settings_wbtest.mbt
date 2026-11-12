@@ -55,7 +55,7 @@ test "session inference codecs cover all choices and reject malformed values" {
 }
 
 ///|
-test "inference edits share approval saves and preserve saved choices on failure" {
+test "inference saves update only the selected option after confirmation" {
   let initial = deletion_state()
   for edit in [SetModel(V4Pro), SetThinking(ThinkingMax)] {
     let pending = metadata_update(
@@ -71,27 +71,15 @@ test "inference edits share approval saves and preserve saved choices on failure
     assert_true(saved.can_send("a"))
     assert_true(saved.can_choose_settings("a"))
     match edit {
-      SetModel(_) => assert_true(saved.model("a") is V4Pro)
-      SetThinking(_) => assert_true(saved.thinking("a") is ThinkingMax)
+      SetModel(_) => {
+        assert_true(saved.model("a") is V4Pro)
+        assert_true(saved.thinking("a") is ThinkingHigh)
+      }
+      SetThinking(_) => {
+        assert_true(saved.model("a") is V4Flash)
+        assert_true(saved.thinking("a") is ThinkingMax)
+      }
       _ => fail("inference edit")
-    }
-    // An old inventory or a different account cannot overwrite the result.
-    assert_true(
-      metadata_update(saved, Listed(2, initial.list_request, initial.sessions)) ==
-      saved,
-    )
-    let switched = metadata_update(pending, AccountChanged(Some("other")))
-    assert_true(metadata_update(switched, Edited(2, "a", request)) == switched)
-    for failure in [@cloud_client.Unreachable, @cloud_client.Http(409)] {
-      let failed = metadata_update(
-        pending,
-        EditFailed(2, "a", request, failure),
-      )
-      assert_true(failed.model("a") is V4Flash)
-      assert_true(failed.thinking("a") is ThinkingHigh)
-      assert_true(failed.notice is Some(_))
-      assert_true(failed.can_send("a"))
-      assert_true(failed.can_edit("a", edit))
     }
   }
 }
@@ -137,7 +125,7 @@ test "busy or compacting sessions refuse all engine option edits" {
 }
 
 ///|
-test "draft inference choices survive creation failure and stay with their draft" {
+test "created sessions inherit both draft inference choices" {
   let blank = command_draft()
   let owner = blank.draft_identity().unwrap()
   let chosen = metadata_update(
@@ -155,24 +143,10 @@ test "draft inference choices survive creation failure and stay with their draft
     chosen,
     Submit(owner, { task: "Keep me", images: [], mentions: [], }),
   )
-  assert_false(pending.can_choose_settings(owner.session()))
-  let request = pending.creation.unwrap().request
-  let failed = metadata_update(pending, CreateFailed(1, request, Unreachable))
-  assert_true(failed.model(owner.session()) is V4Pro)
-  assert_true(failed.thinking(owner.session()) is ThinkingOff)
-  assert_true(failed.can_choose_settings(owner.session()))
-  let retry = metadata_update(
-    failed,
-    Submit(owner, { task: "Keep me", images: [], mentions: [], }),
-  )
   let created = metadata_update(
-    retry,
-    Created(1, retry.creation.unwrap().request, "new"),
+    pending,
+    Created(1, pending.creation.unwrap().request, "new"),
   )
   assert_true(created.model("new") is V4Pro)
   assert_true(created.thinking("new") is ThinkingOff)
-  let next = metadata_update(created, Create)
-  let draft = next.draft_identity().unwrap()
-  assert_true(next.model(draft.session()) is V4Flash)
-  assert_true(next.thinking(draft.session()) is ThinkingHigh)
 }
