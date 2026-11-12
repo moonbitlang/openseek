@@ -31,6 +31,8 @@ pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
 
 pub async fn self_executable() -> String
 
+pub fn session_agent_settings(@argparse.Matches, @store.SessionModel?) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
+
 pub fn session_root(@argparse.Matches, workspace_root? : String) -> String raise
 
 pub fn workflow_launch(String) -> (String, Array[String])
@@ -38,6 +40,9 @@ pub fn workflow_launch(String) -> (String, Array[String])
 // Errors
 
 // Types and methods
+type SessionWriter
+pub fn SessionWriter::SessionWriter(@store.SessionStore, @agent_session.SessionId, @store.SessionModel, @store.SessionModel?) -> Self
+pub async fn SessionWriter::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 
 // Type aliases
 

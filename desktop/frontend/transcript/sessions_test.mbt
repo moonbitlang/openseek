@@ -21,8 +21,14 @@ test "session list projection preserves grouping and skips empty ids" {
               id: "desktop-b",
               title: Some("newest"),
               updated_at_ms: Some(2.0),
+              model_settings: None,
             },
-            { id: "", title: Some("no id"), updated_at_ms: None, },
+            {
+              id: "",
+              title: Some("no id"),
+              updated_at_ms: None,
+              model_settings: None,
+            },
           ],
         },
         {
@@ -30,7 +36,14 @@ test "session list projection preserves grouping and skips empty ids" {
           name: "proj",
           session_root: "/home/user/proj/.openseek",
           error: "",
-          sessions: [{ id: "tui-a", title: Some(""), updated_at_ms: None, }],
+          sessions: [
+            {
+              id: "tui-a",
+              title: Some(""),
+              updated_at_ms: None,
+              model_settings: None,
+            },
+          ],
         },
       ],
     },
@@ -60,7 +73,12 @@ test "a group naming no readable workspace contributes no rows" {
           session_root: "/home/user/.openseek",
           error: "",
           sessions: [
-            { id: "desktop-b", title: Some("newest"), updated_at_ms: None, },
+            {
+              id: "desktop-b",
+              title: Some("newest"),
+              updated_at_ms: None,
+              model_settings: None,
+            },
           ],
         },
       ],
@@ -651,6 +669,7 @@ fn listed(ids : Array[String]) -> Array[@transcript.SessionListItem] {
     workspace: listed_workspace("/work"),
     workspace_name: "work",
     updated_at_ms: None,
+    model_settings: None,
   })
 }
 

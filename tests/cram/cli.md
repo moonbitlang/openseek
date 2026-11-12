@@ -436,6 +436,41 @@ $ sh <<'EOF'
 ephemeral
 ```
 
+## A Session Keeps Its Model
+
+A durable session records the model and thinking mode it runs on in
+`model.json`, beside its transcript, once the run has recorded something.
+Resuming the session with `--session` runs on that model again; a `--model` or
+`--thinking` the run was configured with (by flag or by `OPENSEEK_MODEL` /
+`OPENSEEK_THINKING`) wins and becomes the session's from then on. The second
+run below passes neither, so the recorded `deepseek-v4-pro` and `max` stay;
+the third changes only the thinking mode. `sessions list --format json` reports
+the record as `model_settings` (`null` for a session without one), and
+`sessions fork` carries it into the fork.
+
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> cd "$tmp"
+> run() { env -u OPENSEEK_MODEL -u OPENSEEK_THINKING DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --session demo --api-url "http://127.0.0.1:9/chat/completions" "$@" "say hi" >/dev/null 2>&1; }
+> run --model deepseek-v4-pro --thinking max
+> cat .openseek/sessions/demo/model.json; echo
+> run
+> cat .openseek/sessions/demo/model.json; echo
+> run --thinking high
+> cat .openseek/sessions/demo/model.json; echo
+> env -u DEEPSEEK openseek.exe sessions list --format json | grep -o '"model_settings":{[^}]*}'
+> env -u DEEPSEEK openseek.exe sessions fork demo --as retry >/dev/null
+> cat .openseek/sessions/retry/model.json; echo
+> rm -rf "$tmp"
+> EOF
+{"model":"deepseek-v4-pro","thinking":"max"}
+{"model":"deepseek-v4-pro","thinking":"max"}
+{"model":"deepseek-v4-pro","thinking":"high"}
+"model_settings":{"model":"deepseek-v4-pro","thinking":"high"}
+{"model":"deepseek-v4-pro","thinking":"high"}
+```
+
 ## `--dir` Selects The Workspace Root
 
 `--dir` defaults to `.`, but it can point a run at another workspace. When the

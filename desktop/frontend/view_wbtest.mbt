@@ -119,6 +119,7 @@ test "workflow children fold under live or listed parents before inventory refre
               workspace,
               workspace_name: "work",
               updated_at_ms: Some(1.0),
+              model_settings: None,
             },
           ]
         } else {
@@ -143,6 +144,7 @@ test "workflow children fold under live or listed parents before inventory refre
           workspace,
           workspace_name: "work",
           updated_at_ms: Some(1.0),
+          model_settings: None,
         },
         {
           id: "desktop-test-sr-1",
@@ -150,6 +152,7 @@ test "workflow children fold under live or listed parents before inventory refre
           workspace,
           workspace_name: "work",
           updated_at_ms: Some(2.0),
+          model_settings: None,
         },
       ],
     })

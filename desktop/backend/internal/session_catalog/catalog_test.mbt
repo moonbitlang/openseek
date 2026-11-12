@@ -19,6 +19,7 @@ fn inventory(count : Int32) -> @protocol.SessionsReply {
                 },
               ),
               updated_at_ms: None,
+              model_settings: None,
             }
           }
         ],
@@ -123,7 +124,12 @@ test "escaped long titles stop a page before the bridge truncation limit" {
         error: "",
         sessions: [
           for i in 0..<3 => {
-            { id: "s-\{i}", title: Some(title), updated_at_ms: None, }
+            {
+              id: "s-\{i}",
+              title: Some(title),
+              updated_at_ms: None,
+              model_settings: None,
+            }
           }
         ],
       },

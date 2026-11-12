@@ -57,7 +57,17 @@ test "session groups codec preserves row tolerance inside strict envelopes" {
         "name": "Demo",
         "session_root": "/work/demo/.openseek",
         "error": "",
-        "sessions": [{ "id": "s1", "title": null, "updated_at_ms": "old" }],
+        "sessions": [
+          { "id": "s1", "title": null, "updated_at_ms": "old" },
+          {
+            "id": "s2",
+            "model_settings": { "model": "deepseek-v4-pro", "thinking": "max" },
+          },
+          {
+            "id": "s3",
+            "model_settings": { "model": "deepseek-v4-pro", "thinking": "low" },
+          },
+        ],
         "future": true,
       },
     ],
@@ -69,7 +79,15 @@ test "session groups codec preserves row tolerance inside strict envelopes" {
         "name": "Demo",
         "session_root": "/work/demo/.openseek",
         "error": "",
-        "sessions": [{ "id": "s1" }],
+        "sessions": [
+          { "id": "s1" },
+          {
+            "id": "s2",
+            "model_settings": { "model": "deepseek-v4-pro", "thinking": "max" },
+          },
+          // A record this build cannot read leaves the row on defaults.
+          { "id": "s3" },
+        ],
       },
     ],
   })

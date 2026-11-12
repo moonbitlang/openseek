@@ -69,13 +69,13 @@ test "asking is remembered for that conversation only" {
 ///|
 test "the asking list keeps the newest choices within the cap" {
   let keys : Array[String] = [
-    for index in 0..<(ConversationModelsLimit + 5) => "local/s\{index}"
+    for index in 0..<(ConversationApprovalsLimit + 5) => "local/s\{index}"
   ]
   let folded = keys.fold(init=[], (acc, key) => {
     approvals_with(acc, key, ApprovalAsk)
   })
-  assert_eq(folded.length(), ConversationModelsLimit)
-  assert_eq(folded[0], "local/s\{ConversationModelsLimit + 4}")
+  assert_eq(folded.length(), ConversationApprovalsLimit)
+  assert_eq(folded[0], "local/s\{ConversationApprovalsLimit + 4}")
   assert_eq(parse_conversation_approvals(Json(folded).stringify()), folded)
   assert_eq(parse_conversation_approvals("not json"), [])
 }

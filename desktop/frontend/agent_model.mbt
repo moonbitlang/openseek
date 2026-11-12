@@ -219,7 +219,7 @@ fn Model::openseek_reasoning_chip(
   Some(
     openseek_reasoning_control(
       conv.engine_model,
-      self.reasoning_for(conv.engine_model),
+      self.conversation_reasoning(conv),
       locale=self.locale,
       open=self.select_menu is Some(OpenSeekReasoningMenu),
       disabled=false,
