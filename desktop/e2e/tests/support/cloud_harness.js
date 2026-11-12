@@ -739,6 +739,8 @@ export class CloudHarness {
   }
 
   async create() {
+    // Resolve New only after the mode render; the old list's button stays mounted.
+    await expect(this.page.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await this.page.locator('aside').getByRole('button', { name: 'New', exact: true }).click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('#task')).toBeEnabled();
