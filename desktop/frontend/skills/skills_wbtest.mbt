@@ -13,7 +13,12 @@ fn wb_skill(enabled~ : Bool, name~ : String = "widget") -> InstalledItem {
 
 ///|
 fn wb_input(installed~ : Array[InstalledItem]) -> Input {
-  { library: Host(@interop.ChannelId::Local), installed, switchable: false, }
+  {
+    library: Host(@interop.ChannelId::Local),
+    installed,
+    switchable: false,
+    locale: English,
+  }
 }
 
 ///|

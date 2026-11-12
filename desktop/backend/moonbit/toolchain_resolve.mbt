@@ -112,15 +112,9 @@ async fn desktop_toolchain(
   path_env? : String,
   home_dir? : @pathx.Path,
 ) -> ResolvedToolchain {
-  let external = try external_toolchain(path_env?, home_dir?) catch {
-    ToolchainUnavailable => None
-    error => raise error
-  } noraise {
-    toolchain => Some(toolchain)
-  }
+  let external = find_external_toolchain(path_env?, home_dir?)
   if external is Some(toolchain) {
-    let moonx = toolchain.bin_dir.join("moonx" + ExecutableSuffix)
-    if @fsx.is_executable_file(moonx.to_path()) {
+    if @fsx.is_executable_file(toolchain.moonx().to_path()) {
       return toolchain
     }
     @xlog.debug() <?
@@ -166,6 +160,17 @@ async fn external_toolchain(
   path_env? : String,
   home_dir? : @pathx.Path,
 ) -> ResolvedToolchain {
+  guard find_external_toolchain(path_env?, home_dir?) is Some(toolchain) else {
+    raise ToolchainUnavailable
+  }
+  toolchain
+}
+
+///|
+async fn find_external_toolchain(
+  path_env? : String,
+  home_dir? : @pathx.Path,
+) -> ResolvedToolchain? {
   if path_env is Some(path_value) {
     for entry in path_value.split(@env.path_sep) {
       if entry.is_empty() {
@@ -187,7 +192,7 @@ async fn external_toolchain(
             "source": "path",
             "bin_dir": bin_dir.to_string(),
           }
-        return toolchain
+        return Some(toolchain)
       }
     }
   }
@@ -201,10 +206,16 @@ async fn external_toolchain(
           "source": "home_default",
           "bin_dir": bin_dir.to_string(),
         }
-      return toolchain
+      return Some(toolchain)
     }
   }
-  raise ToolchainUnavailable
+  None
+}
+
+///|
+/// The `moonx` beside this toolchain's `moon`; not probed.
+fn ResolvedToolchain::moonx(self : ResolvedToolchain) -> @pathx.Absolute {
+  self.bin_dir.join("moonx" + ExecutableSuffix)
 }
 
 ///|

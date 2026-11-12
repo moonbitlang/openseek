@@ -343,7 +343,9 @@ fn account_loaded(
     (
       next
       .cloud_skills_access()
-      .map_or(@cmd.none, access => fetch_cloud_skills(dispatch, access)),
+      .map_or(@cmd.none, access => {
+        fetch_cloud_skills(dispatch, access, next.locale)
+      }),
       next,
     )
   } else {

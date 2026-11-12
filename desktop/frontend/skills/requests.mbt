@@ -25,9 +25,9 @@ fn restore_list_scroll(scroll_top : Double) -> @cmd.Cmd {
 
 ///|
 /// The message for a request that did not produce a reply.
-fn request_error_text(error : Error) -> String {
+fn request_error_text(error : Error, locale : @i18n.Locale) -> String {
   match error {
-    @cloud_client.RequestError(failure) => failure.text(English)
+    @cloud_client.RequestError(failure) => failure.text(locale)
     error => @interop.bridge_error_text(error)
   }
 }
@@ -140,13 +140,19 @@ pub async fn installed_reply(
 
 ///|
 /// Fetch the registry's catalog of installable skills.
-fn fetch_catalog(emit : @cmd.Emit[Msg], library : Library) -> @cmd.Cmd {
+fn fetch_catalog(
+  emit : @cmd.Emit[Msg],
+  library : Library,
+  locale : @i18n.Locale,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let items = catalog_from_reply(catalog_reply(library)) catch {
         error => {
           scheduler.add(
-            emit(CatalogFailed(library~, message=request_error_text(error))),
+            emit(
+              CatalogFailed(library~, message=request_error_text(error, locale)),
+            ),
           )
           return
         }
@@ -161,6 +167,7 @@ fn fetch_catalog(emit : @cmd.Emit[Msg], library : Library) -> @cmd.Cmd {
 fn fetch_content(
   emit : @cmd.Emit[Msg],
   library : Library,
+  locale : @i18n.Locale,
   request : Int32,
   target : PreviewTarget,
 ) -> @cmd.Cmd {
@@ -174,7 +181,7 @@ fn fetch_content(
                 library~,
                 request~,
                 target~,
-                message=request_error_text(error),
+                message=request_error_text(error, locale),
               ),
             ),
           )
@@ -197,10 +204,11 @@ fn fetch_content(
 fn fetch_installed_content(
   emit : @cmd.Emit[Msg],
   library : Library,
+  locale : @i18n.Locale,
   request : Int32,
   item : InstalledItem,
 ) -> @cmd.Cmd {
-  fetch_content(emit, library, request, Installed(item))
+  fetch_content(emit, library, locale, request, Installed(item))
 }
 
 ///|
@@ -208,12 +216,15 @@ fn fetch_installed_content(
 fn library_action(
   emit : @cmd.Emit[Msg],
   library : Library,
+  locale : @i18n.Locale,
   action : PendingSkillAction,
   run : async () -> String?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let error = run() catch { error => Some(request_error_text(error)) }
+      let error = run() catch {
+        error => Some(request_error_text(error, locale))
+      }
       scheduler.add(emit(ActionDone(library~, action~, error~)))
     })
     |> ignore
@@ -226,10 +237,11 @@ fn library_action(
 fn install(
   emit : @cmd.Emit[Msg],
   library : Library,
+  locale : @i18n.Locale,
   item : MarketItem,
   action : PendingSkillAction,
 ) -> @cmd.Cmd {
-  library_action(emit, library, action, async fn() {
+  library_action(emit, library, locale, action, async fn() {
     match install_reply(library, item) {
       SkillInstalled(_) => None
       SkillInstallError(message) => Some(message)
@@ -243,10 +255,11 @@ fn install(
 fn uninstall(
   emit : @cmd.Emit[Msg],
   library : Library,
+  locale : @i18n.Locale,
   item : InstalledItem,
 ) -> @cmd.Cmd {
   let action = Uninstalling(source=item.source, id=item.id)
-  library_action(emit, library, action, async fn() {
+  library_action(emit, library, locale, action, async fn() {
     match uninstall_reply(library, item.id) {
       SkillUninstalled => None
       SkillUninstallError(message) => Some(message)
@@ -258,10 +271,11 @@ fn uninstall(
 fn set_enabled(
   emit : @cmd.Emit[Msg],
   library : Library,
+  locale : @i18n.Locale,
   payload : @protocol.SetSkillEnabledPayload,
   action : PendingSkillAction,
 ) -> @cmd.Cmd {
-  library_action(emit, library, action, async fn() {
+  library_action(emit, library, locale, action, async fn() {
     match set_enabled_reply(library, payload) {
       SkillEnabledSet => None
       SkillEnabledError(message) => Some(message)

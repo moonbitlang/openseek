@@ -3031,18 +3031,25 @@ async test "native engine env has one authoritative bundled moon path" {
   let glm_env = engine_process_env(
     { ..config, key_env: "GLM", model: "glm-5.3", },
     Some(runtime),
+    source~,
   )
   assert_eq(glm_env["GLM"], "k")
   // A host with tools grants each conversation's engine its own way in; a
   // host without them grants nothing, and does not pass on a grant this
   // process inherited from the agent of another host.
   let server = @mcp.Server([], version="test")
-  let granted = engine_process_env(config, Some(runtime), host_mcp=server)
+  let granted = engine_process_env(
+    config,
+    Some(runtime),
+    host_mcp=server,
+    source~,
+  )
   assert_eq(granted.get(@mcp.UrlEnv), Some(server.url()))
   let other = engine_process_env(
     { ..config, session: "s-other", },
     Some(runtime),
     host_mcp=server,
+    source~,
   )
   assert_true(granted.get(@mcp.TokenEnv) is Some(_))
   assert_true(granted.get(@mcp.TokenEnv) != other.get(@mcp.TokenEnv))
@@ -3052,7 +3059,7 @@ async test "native engine env has one authoritative bundled moon path" {
   @sys.set_env_var(@mcp.TokenEnv, "inherited")
   defer @sys.unset_env_var(@mcp.TokenEnv)
   defer @sys.unset_env_var(@mcp.UrlEnv)
-  let ungranted = engine_process_env(config, Some(runtime))
+  let ungranted = engine_process_env(config, Some(runtime), source~)
   assert_true(ungranted.get(@mcp.UrlEnv) is None)
   assert_true(ungranted.get(@mcp.TokenEnv) is None)
   @debug.assert_eq(engine_process_args(config), [

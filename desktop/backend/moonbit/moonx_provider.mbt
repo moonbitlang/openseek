@@ -27,12 +27,7 @@ pub async fn MoonxProvider::resolve(
     source=self.source,
   )
   toolchain.apply_to_env(env)
-  let name = if toolchain.moon.to_string().has_suffix(".exe") {
-    "moonx.exe"
-  } else {
-    "moonx"
-  }
-  { command: toolchain.bin_dir.join(name).to_string(), environment: env, }
+  { command: toolchain.moonx().to_string(), environment: env, }
 }
 
 ///|
