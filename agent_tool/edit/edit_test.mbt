@@ -401,7 +401,7 @@ async test "edit rejects identical replacement" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string and new_string are identical\n\n─── file context ───────────────────────────────\n```\n > 1 | content\n > 2 | \n > 3 | \n```\n\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+      "error editing \{path}: old_string and new_string are identical\n\n─── file context ───────────────────────────────\n```\n > 1 |content\n > 2 |\n > 3 |\n```\n\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
     )
     assert_true(output.is_error)
   })
@@ -460,7 +460,7 @@ async test "edit rejects missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found from line 1\n\n─── file context ───────────────────────────────\n```\n > 1 | alpha\n > 2 | \n > 3 | \n```\n",
+      "error editing \{path}: old_string not found from line 1\n\n─── file context ───────────────────────────────\n```\n > 1 |alpha\n > 2 |\n > 3 |\n```\n",
     )
     assert_true(output.is_error)
   })
@@ -482,7 +482,7 @@ async test "edit reports range for missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found in line range 2-2\n\n─── file context ───────────────────────────────\n```\n   1 | alpha\n > 2 | beta\n   3 | alpha\n   4 | \n```\n",
+      "error editing \{path}: old_string not found in line range 2-2\n\n─── file context ───────────────────────────────\n```\n   1 |alpha\n > 2 |beta\n   3 |alpha\n   4 |\n```\n",
     )
     assert_true(output.is_error)
     assert_eq(@fs.read_text(path), "alpha\nbeta\nalpha\n")

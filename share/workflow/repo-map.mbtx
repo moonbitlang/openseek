@@ -229,7 +229,7 @@ async fn repository_context() -> (String, String?) {
     }
     out.write_string("\n## " + path + "\n")
     for index, line in excerpt.split("\n").collect() {
-      out.write_string("\{index + 1} | \{line}\n")
+      out.write_string("\{index + 1} |\{line}\n")
     }
     if excerpt.length() < content.length() {
       out.write_string(

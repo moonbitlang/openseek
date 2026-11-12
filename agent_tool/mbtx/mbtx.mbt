@@ -1785,8 +1785,10 @@ fn description(
     #|
     #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g. args
     #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
-    #|  `path:start` or `path:start:end` (inclusive, 1-based). Output is bounded:
-    #|  follow truncated or skipped files with narrower reads. A failing file fails the call; the others still return.
+    #|  `path:start` or `path:start:end` (inclusive, 1-based). Each line prints as
+    #|  `N |text`: the line, indentation included, starts right after `|`, with
+    #|  no separator space. Output is bounded: follow truncated or skipped files
+    #|  with narrower reads. A failing file fails the call; the others still return.
     #|- `@builtin/rg.mbtx` searches text. `args` go to cli/rg (ripgrep ported to
     #|  MoonBit) unchanged, so they are rg flags and regex, not POSIX grep (`-E`
     #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
