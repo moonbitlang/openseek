@@ -15,10 +15,11 @@ Other embedders can start with `HostResources::from_path()` and override the
 fields they own. This explicitly selects external tools and has no visualizer
 assets. `moonbit` has three policies:
 
-- `DesktopBundle`: use the user's installation found by the `External`
-  search when its `bin` also holds `moonx`; otherwise discover the desktop
-  seed relative to the engine, and fall back to the external `moon` only when
-  no seed was found.
+- `DesktopBundle`: discover the desktop seed relative to the engine. Use the
+  user's installation found by the `External` search instead when its `bin`
+  also holds `moonx` and its `moonc -v` release (`X.Y.Z`, build hash ignored)
+  is no older than the seed's version marker; an unreadable version keeps the
+  seed. Without a seed, use the external toolchain.
 - `External`: search absolute PATH entries, then `~/.moon/bin`.
 - `Bundled`: prepare an explicitly selected seed. Use `bundled_source` to
   validate its absolute directory, version marker, and platform against the

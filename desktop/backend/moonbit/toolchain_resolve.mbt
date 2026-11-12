@@ -80,8 +80,9 @@ pub impl Show for ToolchainUnavailable with fn output(_self, logger) {
 
 ///|
 /// Locate the MoonBit toolchain the desktop hands to engines and the LSP
-/// pool. `DesktopBundle` prefers the user's own installation and falls back to
-/// the bundled seed's prepared payload (see [desktop_toolchain]). Raises
+/// pool. `DesktopBundle` prefers the user's own installation when it is no
+/// older than the bundled seed, and otherwise uses the seed's prepared payload
+/// (see [desktop_toolchain]). Raises
 /// [ToolchainUnavailable] when the machine has none; a bundled seed that
 /// fails to prepare raises a plain failure — that is the app's own artifact
 /// breaking, not machine configuration.
@@ -102,10 +103,10 @@ pub async fn resolve_toolchain(
 }
 
 ///|
-/// The user's toolchain, found the way their shell finds `moon`, wins as long
-/// as it also carries the `moonx` the host spawns for registry tools. The
-/// bundled seed fills in only when no such installation exists, so a working
-/// user install is used as-is and the seed's payload is never prepared.
+/// The user's toolchain, found the way their shell finds `moon`, wins when it
+/// can stand in for the bundled seed (see [can_replace_seed]); otherwise the
+/// seed is prepared and used. Without a seed the external toolchain is the
+/// only choice.
 async fn desktop_toolchain(
   engine_command : String,
   runtime_dir? : @pathx.Path,
@@ -113,21 +114,47 @@ async fn desktop_toolchain(
   home_dir? : @pathx.Path,
 ) -> ResolvedToolchain {
   let external = find_external_toolchain(path_env?, home_dir?)
-  if external is Some(toolchain) {
-    if @fsx.is_executable_file(toolchain.moonx().to_path()) {
-      return toolchain
-    }
+  guard bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) else {
+    guard external is Some(toolchain) else { raise ToolchainUnavailable }
+    return toolchain
+  }
+  if external is Some(toolchain) && can_replace_seed(toolchain, seed_dir) {
+    return toolchain
+  }
+  bundled_toolchain(seed_dir, runtime_dir?)
+}
+
+///|
+/// Whether the user's toolchain can stand in for the bundled seed: it carries
+/// the `moonx` the host spawns for registry tools, and its compiler release is
+/// no older than the seed's, so the bundled workflows still compile. A version
+/// that cannot be read on either side keeps the seed.
+async fn can_replace_seed(
+  toolchain : ResolvedToolchain,
+  seed_dir : @pathx.Absolute,
+) -> Bool {
+  if !@fsx.is_executable_file(toolchain.moonx().to_path()) {
     @xlog.debug() <?
       {
         "event": "desktop_moonbit_external_without_moonx",
         "bin_dir": toolchain.bin_dir.to_string(),
       }
+    return false
   }
-  if bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) {
-    return bundled_toolchain(seed_dir, runtime_dir?)
+  let seed_version = bundled_moonbit_seed_version(seed_dir)
+  if seed_version is Some(stamp) &&
+    parse_compiler_version(stamp) is Some(required) &&
+    compiler_version(toolchain.bin_dir) is Some(found) &&
+    found >= required {
+    return true
   }
-  guard external is Some(toolchain) else { raise ToolchainUnavailable }
-  toolchain
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_external_older_than_seed",
+      "bin_dir": toolchain.bin_dir.to_string(),
+      "seed_version": seed_version,
+    }
+  false
 }
 
 ///|
