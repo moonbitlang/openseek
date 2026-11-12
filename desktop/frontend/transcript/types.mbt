@@ -133,7 +133,7 @@ pub(all) struct SessionListItem {
   updated_at_ms : Double?
   // The model the session last ran on (its `model.json`); `None` when it has
   // not recorded one.
-  model_settings : @desktop_protocol.SessionModelSettings?
+  model_settings : @protocol.SessionModel?
 }
 
 ///|

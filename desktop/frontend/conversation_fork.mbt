@@ -11,9 +11,9 @@ priv struct ConversationFork {
   source : ConversationSelection
   source_title : String
   kind : ConversationForkKind
-  engine_model : @deepseek.Model
+  engine_model : @wire.Model
   // The source's reasoning, which the fork keeps like its tier.
-  reasoning : @protocol.Thinking
+  reasoning : @wire.ThinkingMode
   // The source's approval choice, which the fork keeps like its tier.
   approval : @protocol.OpenSeekApproval
   connection_generation : Int32
@@ -105,7 +105,7 @@ fn Model::finish_fork(
         // Until the next listing reports the fork's own record, opening it
         // starts from the source conversation's choice.
         model_settings: Some({
-          model: pending.engine_model.to_string(),
+          model: pending.engine_model,
           thinking: pending.reasoning,
         }),
       })
@@ -224,7 +224,7 @@ fn fork_conversation(
                 session: pending.source.session,
                 workspace: pending.source.workspace.path,
                 through,
-                model: pending.engine_model.to_string(),
+                model: pending.engine_model,
                 source_title: pending.source_title,
                 side_chat: None,
               },

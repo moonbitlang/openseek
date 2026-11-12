@@ -885,8 +885,8 @@ pub fn TreeLayout::wire(self : TreeLayout) -> String {
 #derive(Eq)
 pub(all) struct Ctx {
   locale : @i18n.Locale
-  model : String
-  thinking : @protocol.Thinking?
+  model : @wire.Model
+  thinking : @wire.ThinkingMode?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
   feedback_enabled : Bool

@@ -141,7 +141,7 @@ test "Cloud semantic search keeps workspace ownership and shares request limits"
   let state = State::empty().handle(ModeChanged(Semantic), input)
   assert_true(state.page.mode is Semantic)
   let host = Input(
-    model="model",
+    model=Deepseek(V4Flash),
     thinking=None,
     owner={ channel: Local, session: "local", },
     root=Some(@resource.of_path(Local, "/work").unwrap()),

@@ -55,7 +55,9 @@ pub async fn ssh_model_credentials(
       ("GLM", key)
     }
     Custom => {
-      let model = @env.get("OPENSEEK_MODEL").unwrap_or(
+      // An unknown `OPENSEEK_MODEL` routes the key like the default model;
+      // the remote engine reports the bad model itself.
+      let model = (env_model() catch { _ => None }).unwrap_or(
         settings.provider.default_model(),
       )
       (model_key_env(model), settings.custom_api_key)

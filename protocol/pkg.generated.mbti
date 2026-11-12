@@ -102,6 +102,12 @@ pub fn ContentPart::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ContentPart
 
 #derive(Eq, @debug.Debug)
+pub(all) enum DsVariant {
+  V4Flash
+  V4Pro
+}
+
+#derive(Eq, @debug.Debug)
 pub(all) enum Event {
   AgentSetupFailed(error~ : String)
   AgentStep(step~ : Int32)
@@ -167,6 +173,12 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_json(Self) -> @json.Json
 pub fn Event::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum GlmVariant {
+  G53
+  G53Flash
+}
 
 #derive(Eq)
 pub struct Image {
@@ -263,6 +275,12 @@ pub impl @json.FromJson for JobStopOutcome
 pub impl @json.ToJson for JobStopOutcome
 
 #derive(Eq, @debug.Debug)
+pub(all) enum KimiVariant {
+  K27Code
+  K27CodeHighSpeed
+}
+
+#derive(Eq, @debug.Debug)
 pub(all) enum McpConfigState {
   Loaded
   Failed(String)
@@ -348,6 +366,22 @@ pub fn McpTransport::not_equal(Self, Self) -> Bool
 pub fn McpTransport::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
+pub(all) enum Model {
+  Deepseek(DsVariant)
+  Kimi(KimiVariant)
+  Glm(GlmVariant)
+}
+pub fn Model::context_window(Self) -> Int32
+pub fn Model::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Model::output(Self, &Logger) -> Unit
+pub fn Model::parse(String) -> Self raise
+pub fn Model::to_json(Self) -> @json.Json
+pub fn Model::to_string(Self) -> String
+pub impl Show for Model
+pub impl @json.FromJson for Model
+pub impl @json.ToJson for Model
+
+#derive(Eq, @debug.Debug)
 pub(all) enum PredictionOutcome {
   Completed(text~ : String?, input_tokens~ : Int32, output_tokens~ : Int32)
   Skipped
@@ -416,6 +450,16 @@ pub(all) enum RunStatus {
 pub fn RunStatus::equal(Self, Self) -> Bool
 pub fn RunStatus::not_equal(Self, Self) -> Bool
 pub fn RunStatus::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct SessionModel {
+  model : Model
+  thinking : ThinkingMode
+}
+pub fn SessionModel::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionModel::to_json(Self) -> @json.Json
+pub impl @json.FromJson for SessionModel
+pub impl @json.ToJson for SessionModel
 
 #derive(Eq, @debug.Debug)
 pub(all) struct SubagentInfo {
@@ -515,6 +559,21 @@ pub fn SubagentWorkspace::to_json(Self) -> @json.Json
 pub fn SubagentWorkspace::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SubagentWorkspace
 pub impl @json.ToJson for SubagentWorkspace
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ThinkingMode {
+  No
+  High
+  Max
+}
+pub fn ThinkingMode::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ThinkingMode::output(Self, &Logger) -> Unit
+pub fn ThinkingMode::parse(String) -> Self raise
+pub fn ThinkingMode::to_json(Self) -> @json.Json
+pub fn ThinkingMode::to_string(Self) -> String
+pub impl Show for ThinkingMode
+pub impl @json.FromJson for ThinkingMode
+pub impl @json.ToJson for ThinkingMode
 
 #derive(Eq, @debug.Debug, @json.ToJson)
 pub(all) struct Usage {

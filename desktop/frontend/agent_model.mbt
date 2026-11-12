@@ -36,7 +36,7 @@ fn AgentChoice::parse(value : String) -> AgentChoice? {
 /// option value. Codex ids live in their own namespace so one can never be
 /// mistaken for an OpenSeek model, even when both services use the same name.
 priv enum ModelChoice {
-  OpenSeekModel(@deepseek.Model)
+  OpenSeekModel(@wire.Model)
   CodexModel(String)
   // The Codex group's only row while no model catalog is usable. Picking it
   // is a request to open the Codex page, where sign-in and connection state
@@ -129,9 +129,9 @@ test "agent choices round-trip their wire names" {
 /// the old selector.
 fn openseek_model_group(
   provider : ApiProvider,
-  selected : @deepseek.Model,
+  selected : @wire.Model,
 ) -> @composer.ModelGroup {
-  let listed : Array[@deepseek.Model] = match provider {
+  let listed : Array[@wire.Model] = match provider {
     Deepseek => [Deepseek(V4Pro), Deepseek(V4Flash)]
     Glm => [Glm(G53), Glm(G53Flash)]
     OpenRouter => [Deepseek(V4Pro), Deepseek(V4Flash)]
@@ -229,30 +229,30 @@ fn Model::openseek_reasoning_chip(
 
 ///|
 fn openseek_reasoning_control(
-  model : @deepseek.Model,
-  reasoning : @protocol.Thinking,
+  model : @wire.Model,
+  reasoning : @wire.ThinkingMode,
   locale~ : @i18n.Locale,
   open~ : Bool,
   disabled~ : Bool,
 ) -> @composer.ReasoningSelect {
   let options : Array[@composer.ModelOption] = [
     {
-      value: @protocol.ThinkingOff.wire(),
-      label: @protocol.ThinkingOff.label_for_model(locale~, model),
+      value: @wire.ThinkingMode::No.to_string(),
+      label: @wire.ThinkingMode::No.label_for_model(locale~, model),
     },
     {
-      value: @protocol.ThinkingHigh.wire(),
-      label: @protocol.ThinkingHigh.label(locale~),
+      value: @wire.ThinkingMode::High.to_string(),
+      label: @wire.ThinkingMode::High.label(locale~),
     },
     {
-      value: @protocol.ThinkingMax.wire(),
-      label: @protocol.ThinkingMax.label(locale~),
+      value: @wire.ThinkingMode::Max.to_string(),
+      label: @wire.ThinkingMode::Max.label(locale~),
     },
   ]
   {
     id: "openseek-reasoning-picker",
     options,
-    selected: reasoning.wire(),
+    selected: reasoning.to_string(),
     disabled,
     open,
     title: (match locale {

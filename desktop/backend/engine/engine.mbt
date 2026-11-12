@@ -28,7 +28,7 @@ priv struct ServeEngine {
   id : String
   engine_name : String
   supports_images : Bool
-  model : String
+  model : @wire.Model
   max_steps : Int32
   // Owned exclusively by this engine's writer task. No request ever touches
   // it, which is what makes a partial JSONL frame impossible and stdin's
@@ -1428,8 +1428,8 @@ async fn engine_process_env(
   // exports inherit untouched: the engine reads only its model's variable
   // for chat, and `web_search` may legitimately use an ambient `DEEPSEEK`.
   env[config.key_env] = config.api_key
-  env["OPENSEEK_MODEL"] = config.model
-  env["OPENSEEK_THINKING"] = config.thinking.wire()
+  env["OPENSEEK_MODEL"] = config.model.to_string()
+  env["OPENSEEK_THINKING"] = config.thinking.to_string()
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
   // The desktop host owns the Skills panel's library writes, so every serve
   // engine gets the same resolved global library instead of falling back to
@@ -2328,7 +2328,7 @@ fn test_serve_engine(
     spec_key: "test",
     id,
     engine_name: "openseek",
-    model: "test",
+    model: Deepseek(V4Flash),
     supports_images: true,
     max_steps: 10,
     writer,
@@ -2887,7 +2887,7 @@ test "started payload omits a missing submission id" {
     run_id: "r1",
     submission_id: None,
     engine: Some("openseek"),
-    model: Some("model"),
+    model: Some(Deepseek(V4Flash)),
     max_steps: Some(10),
     session: "s-started",
     session_root: None,
@@ -3013,8 +3013,8 @@ async test "native engine env has one authoritative bundled moon path" {
     api_key: "k",
     key_env: "DEEPSEEK",
     api_url: None,
-    model: "m",
-    thinking: ThinkingHigh,
+    model: Deepseek(V4Flash),
+    thinking: High,
     approval: ApprovalAsk,
     max_steps: 1,
     engine: engine.to_string(),
@@ -3029,7 +3029,7 @@ async test "native engine env has one authoritative bundled moon path" {
   // A GLM run's key travels in GLM, and the resolved variable — not a
   // hardcoded DEEPSEEK — is what the process env honors.
   let glm_env = engine_process_env(
-    { ..config, key_env: "GLM", model: "glm-5.3", },
+    { ..config, key_env: "GLM", model: Glm(G53), },
     Some(runtime),
     source~,
   )
@@ -3217,8 +3217,8 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,
-    model: "test",
-    thinking: ThinkingMax,
+    model: Deepseek(V4Flash),
+    thinking: Max,
     approval: ApprovalAsk,
     max_steps: 1,
     engine: dir + "/missing/openseek",
@@ -3335,8 +3335,8 @@ fn pump_test_config(session : String) -> RunConfig {
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,
-    model: "test",
-    thinking: ThinkingMax,
+    model: Deepseek(V4Flash),
+    thinking: Max,
     approval: ApprovalAsk,
     max_steps: 1,
     engine: "unused",

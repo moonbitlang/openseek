@@ -73,7 +73,7 @@ async fn run_serve(
   let (model, thinking, api_url) = @setup.session_agent_settings(
     matches, recorded,
   )
-  guard model.api_key(matches.values) is Some(api_key) else {
+  guard @deepseek.api_key(model, matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)

@@ -4,6 +4,7 @@ package "openseek_desktop/backend/engine"
 import {
   "moonbitlang/core/debug",
   "moonbitlang/openseek/viz_export",
+  "moonbitlang/openseek_protocol",
   "openseek_desktop/backend/internal/worktree",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/moonbit",
@@ -55,7 +56,7 @@ pub async fn migrate_global_store() -> Int32
 
 pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, moonbit? : @moonbit.ToolchainSource) -> EngineActor
 
-pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
+pub async fn pattern_repair_environment(EngineManager, model~ : @openseek_protocol.Model) -> PatternRepairEnvironment
 
 pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply raise EngineError
 

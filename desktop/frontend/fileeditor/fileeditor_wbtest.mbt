@@ -15,7 +15,7 @@ test "PDF-only dock retains the watcher without opening text documents" {
     }),
     request_epoch: 0,
     watch_namespace: "preview-test",
-    model: "deepseek-v4-flash",
+    model: Deepseek(V4Flash),
     thinking: None,
     placement: Some(@interop.WorkspaceRoot(root~)),
     dark_mode: false,

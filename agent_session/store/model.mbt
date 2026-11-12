@@ -4,51 +4,19 @@
 let model_file_name : String = "model.json"
 
 ///|
-/// The chat model and thinking mode one session runs on.
-#derive(Eq, Debug)
-pub(all) struct SessionModel {
-  model : @deepseek.Model
-  thinking : @deepseek.ThinkingMode
-}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionModel with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionModel with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionModel with ToJson::{to_json}
-
-///|
-/// `model.json`'s content: the same wire names `--model` and `--thinking`
-/// accept.
-pub impl ToJson for SessionModel with fn to_json(self) {
-  { "model": self.model.to_string(), "thinking": self.thinking.to_string() }
-}
+/// The chat model and thinking mode one session runs on. The protocol module
+/// owns the type and its `model.json` codec, so `sessions list` and the Desktop
+/// listing read the record with the same decoder.
+pub using @protocol {type SessionModel}
 
 ///|
 fn session_model_text(model : SessionModel) -> String {
-  ToJson::to_json(model).stringify()
+  model.to_json().stringify()
 }
 
 ///|
 fn parse_session_model(text : String) -> SessionModel raise {
-  guard @json.parse(text) is Object(fields) &&
-    fields.get("model") is Some(String(model)) &&
-    fields.get("thinking") is Some(String(thinking)) else {
-    fail("session model must be an object with string model and thinking")
-  }
-  {
-    model: @deepseek.Model::parse(model),
-    thinking: @deepseek.ThinkingMode::parse(thinking),
-  }
+  @json.from_json(@json.parse(text))
 }
 
 ///|

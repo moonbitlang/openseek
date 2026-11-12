@@ -48,7 +48,7 @@ fn cli_command() -> @argparse.Command {
       OptionArg(
         "model",
         long="model",
-        default_values=[@deepseek.Deepseek(V4Flash).to_string()],
+        default_values=[(Deepseek(V4Flash) : @deepseek.Model).to_string()],
         about="Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash.",
       ),
       OptionArg(

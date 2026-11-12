@@ -12,8 +12,8 @@ fn render_search(state : State, input : @grep_search.Input) -> String {
 #cfg(not(target="js"))
 test "Search exposes an accessible Whole Word toggle" {
   let input : @grep_search.Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner: Host({ channel: @interop.ChannelId::Local, session: "icons", }),
     cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
@@ -31,8 +31,8 @@ test "Search view groups files and marks matching UTF-16 slices" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : @grep_search.Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -92,8 +92,8 @@ test "large Search replies render incrementally without changing totals" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : @grep_search.Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),

@@ -9,7 +9,7 @@ test "cli accepts the canonical flash wire name" {
   let (model, thinking, api_url) = @options.agent_settings(parsed)
   assert_true(model is Deepseek(V4Flash))
   assert_eq(model.to_string(), "deepseek-flash")
-  assert_eq(model.api_key(parsed.values), Some("test-key"))
+  assert_eq(@deepseek.api_key(model, parsed.values), Some("test-key"))
   assert_true(thinking is High)
   assert_true(api_url is None)
 }
@@ -67,13 +67,13 @@ test "cli uses provider API keys only for their models" {
     "OPENSEEK_MODEL": "kimi-k2.7-code-highspeed",
   })
   let kimi_model : @deepseek.Model = Kimi(K27CodeHighSpeed)
-  assert_eq(kimi_model.api_key(kimi.values), Some("kimi-key"))
+  assert_eq(@deepseek.api_key(kimi_model, kimi.values), Some("kimi-key"))
   let glm = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "GLM": "glm-key",
     "OPENSEEK_MODEL": "glm-5.3-flash",
   })
   let glm_model : @deepseek.Model = Glm(G53Flash)
-  assert_eq(glm_model.api_key(glm.values), Some("glm-key"))
+  assert_eq(@deepseek.api_key(glm_model, glm.values), Some("glm-key"))
   let deepseek = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "KIMI": "kimi-key",
     "GLM": "glm-key",
@@ -81,14 +81,14 @@ test "cli uses provider API keys only for their models" {
   // Provider keys are not fallbacks for a DeepSeek model: no arm matches, so
   // the caller sees `None` and reports it.
   let deepseek_model : @deepseek.Model = Deepseek(V4Pro)
-  assert_true(deepseek_model.api_key(deepseek.values) is None)
+  assert_true(@deepseek.api_key(deepseek_model, deepseek.values) is None)
 }
 
 ///|
 test "agent runs require api key" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env=Map([]))
   let model : @deepseek.Model = Deepseek(V4Pro)
-  assert_true(model.api_key(parsed.values) is None)
+  assert_true(@deepseek.api_key(model, parsed.values) is None)
 }
 
 ///|

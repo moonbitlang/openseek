@@ -37,7 +37,7 @@ fn HostSettings::from_status(
 /// on `model`.
 fn HostSettings::prompt_text(
   self : HostSettings,
-  model : @deepseek.Model,
+  model : @wire.Model,
 ) -> String {
   @prompt.Model::new()
   .receive(self.prompt_source, self.custom_prompt)

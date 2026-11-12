@@ -109,12 +109,13 @@ fn Page::pattern_repair_request_payload(
 ) -> @protocol.PatternRepairPayload? {
   guard self.mode is Semantic &&
     self.pattern_repair_phase is PatternRepairRequested &&
-    input.root is Some(root) else {
+    input.root is Some(root) &&
+    input.model is Some(model) else {
     return None
   }
   guard self.semantic.patterns.length() > 0 else { return None }
   Some({
-    model: input.model,
+    model,
     thinking: input.thinking,
     root: root.path,
     pattern: self.semantic.patterns[0],

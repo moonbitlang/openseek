@@ -40,7 +40,7 @@ fn send_session_command(
     settings: {
       system_prompt: conv.system_prompt,
       session: conv.session_id,
-      model: Some(conv.engine_model.to_string()),
+      model: Some(conv.engine_model),
       thinking: conv.engine_model.thinking(model.conversation_reasoning(conv)),
       max_steps: parsed_max_steps(model.max_steps),
       workspace: Some(workspace.path),

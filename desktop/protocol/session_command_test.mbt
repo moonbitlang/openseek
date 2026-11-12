@@ -10,7 +10,7 @@ test "native session commands reuse launch settings and native command codecs" {
     let json : Json = {
       "session": "s",
       "workspace": "/workspace",
-      "model": "custom",
+      "model": "glm-5.3",
       "system_prompt": "Custom instructions\n中文",
       "command": command.to_json(),
       "future": true,
@@ -27,7 +27,7 @@ test "native session commands reuse launch settings and native command codecs" {
       encoded
       is {
         "session": "s",
-        "model": "custom",
+        "model": "glm-5.3",
         "workspace": "/workspace",
         "system_prompt": "Custom instructions\n中文",
         ..

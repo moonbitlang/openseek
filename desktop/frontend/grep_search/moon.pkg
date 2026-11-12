@@ -10,6 +10,7 @@ import {
   "moonbit-community/rabbita/svg",
   "moonbitlang/editor/base/common",
   "openseek_desktop/commands",
+  "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/protocol",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/cloud_client",

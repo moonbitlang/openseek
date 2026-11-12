@@ -7,12 +7,14 @@ test "pattern repair payload carries the selected model" {
     "model": "deepseek-v4-flash",
     "generation": 3,
   })
-  assert_eq(payload.model, "deepseek-v4-flash")
+  // The retired flash alias decodes to the same model and re-encodes under
+  // its canonical name.
+  assert_eq(payload.model, Deepseek(V4Flash))
   @debug.assert_eq(payload.to_json(), {
     "root": "/work/project",
     "pattern": "broken",
     "instruction": "repair syntax",
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "generation": 3,
   })
 
@@ -23,7 +25,7 @@ test "pattern repair payload carries the selected model" {
     "model": "glm-5.3",
     "generation": 4,
   })
-  assert_eq(selected.model, "glm-5.3")
+  assert_eq(selected.model, Glm(G53))
   @debug.assert_eq(selected.to_json(), {
     "root": "/work/project",
     "pattern": "broken",

@@ -153,7 +153,7 @@ async fn fork_session_in(
         "--dir",
         dir.to_string(),
         "--model",
-        payload.model,
+        payload.model.to_string(),
       ]
       if capture_session_prompt(store, id, source_prompt) is Some(path) {
         args.push("--system-prompt-file=\{path.to_string()}")
@@ -293,7 +293,7 @@ async test "fork validates its request before spawning and releases its reader l
     session: "source",
     workspace: @pathx.Path(workspace).resolve().resource_path(),
     through: 3,
-    model: "deepseek-flash",
+    model: Deepseek(V4Flash),
     source_title: "Source conversation",
     side_chat: None,
   }

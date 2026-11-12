@@ -714,7 +714,6 @@ fn RecoveredRun::from_started(
   let session = payload.session
   guard !session.is_empty() &&
     payload.model is Some(model) &&
-    parse_engine_model(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
     return None
   }
@@ -951,8 +950,8 @@ async fn request_agent_start(
 /// resolved host-side from the settings store.
 fn start_payload(
   task : String,
-  selected_model : @deepseek.Model,
-  reasoning : @protocol.Thinking,
+  selected_model : @wire.Model,
+  reasoning : @wire.ThinkingMode,
   max_steps : String,
   session : String,
   submission_id : String,
@@ -966,7 +965,7 @@ fn start_payload(
     task,
     images,
     submission_id: Some(submission_id),
-    model: Some(selected_model.to_string()),
+    model: Some(selected_model),
     thinking: selected_model.thinking(reasoning),
     approval: Some(approval),
     system_prompt,

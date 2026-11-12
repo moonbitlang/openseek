@@ -477,7 +477,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
-  let model = @deepseek.Deepseek(self.cloud.model(owner.session()))
+  let model = @wire.Model::Deepseek(self.cloud.model(owner.session()))
   let settings_enabled = self.cloud.can_choose_settings(owner.session())
   let native_users = Map([])
   for event in conversation.document.events.unwrap_or([]) {

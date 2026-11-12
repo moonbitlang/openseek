@@ -231,8 +231,8 @@ async fn request_pattern_repair_candidate(
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
-  model~ : String,
-  thinking~ : @protocol.Thinking?,
+  model~ : @openseek_protocol.Model,
+  thinking~ : @openseek_protocol.ThinkingMode?,
 ) -> PatternRepairCandidateOutcome {
   // The Agent receives only a closed validator configuration. It cannot
   // select another executable or alter the dump arguments.
@@ -267,11 +267,11 @@ async fn request_pattern_repair_candidate(
     "--session-root",
     session_root,
     "--model",
-    model,
+    model.to_string(),
   ]
   if thinking is Some(thinking) {
     args.push("--thinking")
-    args.push(thinking.wire())
+    args.push(thinking.to_string())
   }
   let process = run_pattern_repair_process(
     engine,

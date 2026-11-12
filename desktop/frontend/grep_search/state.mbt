@@ -700,8 +700,8 @@ fn Page::semantic_request_payload(
 ///|
 test "checkout reset clears results while preserving the generation fence" {
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner: Host({ channel: @interop.ChannelId::Local, session: "first", }),
     cloud_access: None,
     root: Some(@common.Uri::parse("file:///work/a")),
@@ -718,8 +718,8 @@ test "checkout reset clears results while preserving the generation fence" {
 ///|
 test "mode changes preserve each search input and shared details" {
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner: Host({ channel: @interop.ChannelId::Local, session: "mode-state", }),
     cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
@@ -750,8 +750,8 @@ test "query changes debounce and stale replies cannot replace the page" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -785,8 +785,8 @@ test "semantic progress streams partial hits and late progress is fenced" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -846,8 +846,8 @@ test "semantic progress batches append only new hits" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -903,8 +903,8 @@ test "new semantic search clears partial results and cancellation clears them" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -966,8 +966,8 @@ test "active result helpers share file grouping and highlight projection" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -1024,8 +1024,8 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -1066,8 +1066,8 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -1126,8 +1126,8 @@ test "editor highlights include every retained match for the file" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),
@@ -1200,8 +1200,8 @@ test "invalid regex replies retain their actionable Host error" {
   })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Some(Deepseek(V4Flash)),
+    thinking: Some(High),
     owner,
     cloud_access: None,
     root: Some(root),

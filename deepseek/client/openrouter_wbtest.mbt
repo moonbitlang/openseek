@@ -2,12 +2,12 @@
 test "OpenRouter encodes DeepSeek models and reasoning fields" {
   for
     (model, model_id) in [
-      (@deepseek.Deepseek(V4Pro), "deepseek/deepseek-v4-pro"),
+      ((Deepseek(V4Pro) : @deepseek.Model), "deepseek/deepseek-v4-pro"),
       (Deepseek(V4Flash), "deepseek/deepseek-v4.1-flash"),
     ] {
     for
       (thinking, effort) in [
-        (@deepseek.No, "none"),
+        ((No : @deepseek.ThinkingMode), "none"),
         (High, "high"),
         (Max, "max"),
       ] {

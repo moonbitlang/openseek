@@ -5,7 +5,6 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/openseek/agent_session",
-  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
 }
 
@@ -26,13 +25,6 @@ pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
 pub fn SessionListing::title(Self) -> String?
 
-#derive(Eq, @debug.Debug)
-pub(all) struct SessionModel {
-  model : @deepseek.Model
-  thinking : @deepseek.ThinkingMode
-}
-pub impl @json.ToJson for SessionModel
-
 #derive(@debug.Debug)
 type SessionStore
 pub fn SessionStore::SessionStore(String) -> Self
@@ -50,11 +42,11 @@ pub async fn SessionStore::latest(Self) -> @agent_session.SessionId?
 pub async fn SessionStore::list(Self) -> Array[@agent_session.SessionId]
 pub async fn SessionStore::listings(Self) -> Array[SessionListing]
 pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_session.Session
-pub async fn SessionStore::model(Self, @agent_session.SessionId) -> SessionModel?
+pub async fn SessionStore::model(Self, @agent_session.SessionId) -> @openseek_protocol.SessionModel?
 pub async fn SessionStore::prediction(Self, @agent_session.SessionId) -> @openseek_protocol.PredictionRecord?
 pub fn SessionStore::report_file(Self, @agent_session.SessionId) -> String raise
 pub fn SessionStore::root(Self) -> String
-pub async fn SessionStore::save_model(Self, @agent_session.SessionId, SessionModel) -> Unit
+pub async fn SessionStore::save_model(Self, @agent_session.SessionId, @openseek_protocol.SessionModel) -> Unit
 pub async fn SessionStore::save_prediction(Self, @agent_session.Session, @openseek_protocol.PredictionRecord) -> Unit
 pub async fn SessionStore::save_report(Self, @agent_session.SessionId, @json.Json) -> Unit
 pub async fn SessionStore::scratch_dir(Self, @agent_session.SessionId) -> String
@@ -64,5 +56,6 @@ pub async fn SessionStore::settle_claim(Self, @agent_session.SessionId) -> Unit
 pub async fn SessionStore::title(Self, @agent_session.SessionId) -> String?
 
 // Type aliases
+pub using @openseek_protocol {type SessionModel}
 
 // Traits

@@ -4,8 +4,8 @@ test "pattern repair carries model and thinking through the request codec" {
     owner: Host({ channel: @interop.ChannelId::Local, session: "repair", }),
     cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
-    model: "glm-5.3",
-    thinking: Some(ThinkingMax),
+    model: Some(Glm(G53)),
+    thinking: Some(Max),
   }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
@@ -17,7 +17,7 @@ test "pattern repair carries model and thinking through the request codec" {
   let decoded : @protocol.PatternRepairPayload = @json.from_json(
     request.to_json(),
   )
-  assert_eq(decoded.model, input.model)
+  assert_eq(Some(decoded.model), input.model)
   assert_eq(decoded.thinking, input.thinking)
   let without_thinking = { ..request, thinking: None, }
   let decoded : @protocol.PatternRepairPayload = @json.from_json(
@@ -32,7 +32,7 @@ test "repair completion is pure, ignores stale replies, and preserves outcomes" 
     owner: Host({ channel: @interop.ChannelId::Local, session: "repair", }),
     cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
-    model: "glm-5.3",
+    model: Some(Glm(G53)),
     thinking: None,
   }
   let requested = State::empty()

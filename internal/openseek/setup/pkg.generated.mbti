@@ -5,19 +5,19 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
-  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
 pub async fn capture_goal_baseline(String) -> String
 
-pub async fn configured_system_prompt(@argparse.Matches, @deepseek.Model, workspace_root? : String, session_scratch_dir? : String) -> String
+pub async fn configured_system_prompt(@argparse.Matches, @openseek_protocol.Model, workspace_root? : String, session_scratch_dir? : String) -> String
 
 pub async fn first_free_child_ordinal(@store.SessionStore, String) -> Int32
 
 pub async fn generated_session_id() -> @agent_session.SessionId
 
-pub async fn load_or_new_session(@store.SessionStore, @agent_session.SessionId, @argparse.Matches, @deepseek.Model, workspace_root? : String) -> @agent_session.Session
+pub async fn load_or_new_session(@store.SessionStore, @agent_session.SessionId, @argparse.Matches, @openseek_protocol.Model, workspace_root? : String) -> @agent_session.Session
 
 pub async fn new_scratch_lab(String) -> String
 
@@ -31,7 +31,7 @@ pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
 
 pub async fn self_executable() -> String
 
-pub fn session_agent_settings(@argparse.Matches, @store.SessionModel?) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
+pub fn session_agent_settings(@argparse.Matches, @openseek_protocol.SessionModel?) -> (@openseek_protocol.Model, @openseek_protocol.ThinkingMode, String?) raise
 
 pub fn session_root(@argparse.Matches, workspace_root? : String) -> String raise
 
@@ -41,7 +41,7 @@ pub fn workflow_launch(String) -> (String, Array[String])
 
 // Types and methods
 type SessionWriter
-pub fn SessionWriter::SessionWriter(@store.SessionStore, @agent_session.SessionId, @store.SessionModel, @store.SessionModel?) -> Self
+pub fn SessionWriter::SessionWriter(@store.SessionStore, @agent_session.SessionId, @openseek_protocol.SessionModel, @openseek_protocol.SessionModel?) -> Self
 pub async fn SessionWriter::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 
 // Type aliases

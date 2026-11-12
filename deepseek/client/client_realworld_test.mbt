@@ -69,7 +69,7 @@ async test "realworld Kimi API streaming smoke test" {
     return
   }
 
-  let model = @deepseek.Kimi(K27Code)
+  let model : @deepseek.Model = Kimi(K27Code)
   let client = @client.Client(api_key~, model~)
   let deltas : Array[String] = []
   let response = client.chat(
@@ -95,7 +95,7 @@ async test "realworld Kimi API tool-call smoke test" {
     return
   }
 
-  let model = @deepseek.Kimi(K27Code)
+  let model : @deepseek.Model = Kimi(K27Code)
   let client = @client.Client(api_key~, model~)
   let tool = @deepseek.ToolDefinition(
     "return_token",
@@ -135,7 +135,7 @@ async test "realworld Kimi API multi-turn reasoning-content smoke test" {
     return
   }
 
-  let model = @deepseek.Kimi(K27Code)
+  let model : @deepseek.Model = Kimi(K27Code)
   let client = @client.Client(api_key~, model~)
   let tool = @deepseek.ToolDefinition(
     "return_token",

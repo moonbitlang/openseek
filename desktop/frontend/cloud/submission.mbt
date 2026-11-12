@@ -27,7 +27,7 @@ fn State::submit_command(
           required_string(
             request(CloudOrigin, "/v1/sessions", Post, token~, body={
               "approval": creation.approval.to_json(),
-              "model": Json(@deepseek.Deepseek(creation.model).to_string()),
+              "model": Json(@wire.Model::Deepseek(creation.model)),
               "thinking": creation.thinking.to_json(),
             }),
             "id",

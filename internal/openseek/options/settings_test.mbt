@@ -12,7 +12,7 @@ test "cli parses env backed options and task" {
   })
   let (model, _, api_url) = @options.agent_settings(parsed)
   assert_true(model is Deepseek(V4Pro))
-  assert_eq(model.api_key(parsed.values), Some("test-key"))
+  assert_eq(@deepseek.api_key(model, parsed.values), Some("test-key"))
   guard api_url is Some(url) else { fail("expected api url") }
   assert_eq(url, "https://proxy.example/v1/chat/completions")
   assert_eq(@cli.value(parsed, "dir"), ".")
@@ -35,7 +35,7 @@ test "cli defaults model and max steps" {
   let (model, thinking, api_url) = @options.agent_settings(parsed)
   assert_true(model is Deepseek(V4Flash))
   assert_true(thinking is High)
-  assert_eq(model.api_key(parsed.values), Some("test-key"))
+  assert_eq(@deepseek.api_key(model, parsed.values), Some("test-key"))
   assert_true(api_url is None)
   assert_eq(@cli.value(parsed, "dir"), ".")
   assert_true(@options.max_steps(parsed) is None)

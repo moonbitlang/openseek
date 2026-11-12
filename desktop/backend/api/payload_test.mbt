@@ -8,7 +8,7 @@ test "start and steer payloads preserve submission ids" {
     "thinking": "high",
   })
   assert_eq(start.submission_id, Some("submission-start"))
-  assert_eq(start.thinking, Some(ThinkingHigh))
+  assert_eq(start.thinking, Some(High))
   let steer : @protocol.SteerPayload = @json.from_json({
     "text": "more detail",
     "images": [],

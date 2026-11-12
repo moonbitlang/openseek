@@ -2,11 +2,11 @@
 package "moonbitlang/openseek/prompt"
 
 import {
-  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
-pub fn system_prompt_for_model(@deepseek.Model, prompt? : Prompt) -> String
+pub fn system_prompt_for_model(@openseek_protocol.Model, prompt? : Prompt) -> String
 
 // Errors
 

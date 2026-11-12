@@ -83,7 +83,7 @@ async test "import loads through the normal session API and joins the selected w
         session: session_id,
         workspace,
         through: 4,
-        model: "deepseek-flash",
+        model: Deepseek(V4Flash),
         source_title: "Imported",
         side_chat: None,
       },

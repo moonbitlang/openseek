@@ -4,7 +4,7 @@
 /// because the resolution order was duplicated byte-for-byte across the mains,
 /// and silent drift between the copies — one main learning a new provider
 /// fallback and the other not — is the hazard the shared definition removes.
-/// It sits on `Model` because the provider a key belongs to is exactly what
+/// It takes the `Model` because the provider a key belongs to is exactly what
 /// the model tag decides.
 ///
 /// Only the resolution is shared. Returning an option leaves each main to
@@ -24,12 +24,9 @@
 /// option. Returning an option is what keeps it that short — an unset, empty,
 /// or blank option just fails to match and falls through, so no arm has to
 /// default it to `""` and re-test that afterwards.
-pub fn Model::api_key(
-  self : Model,
-  opts : Map[String, Array[String]],
-) -> String? {
+pub fn api_key(model : Model, opts : Map[String, Array[String]]) -> String? {
   // `trim` yields a borrowed view; the caller owns the key, so copy out.
-  match (self, opts) {
+  match (model, opts) {
     (_, { "api-key": [k, ..], .. }) if !k.is_blank() =>
       Some(k.trim().to_owned())
     (Deepseek(_), { "deepseek-api-key": [k, ..], .. }) if !k.is_blank() =>

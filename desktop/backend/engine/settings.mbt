@@ -399,7 +399,7 @@ pub extend PatternRepairEnvironment with Debug::{to_repr}
 /// callers receive safe configuration guidance without receiving I/O details.
 pub async fn pattern_repair_environment(
   manager : EngineManager,
-  model~ : String,
+  model~ : @wire.Model,
 ) -> PatternRepairEnvironment {
   let settings = manager.settings_snapshot() catch { _ => return Unavailable }
   let endpoint = resolved_endpoint(settings) catch {
@@ -918,7 +918,7 @@ async test "run config resolves the endpoint from the stored provider" {
     assert_true(glm.api_url is None)
     assert_eq(glm.api_key, "glm-stored")
     assert_eq(glm.key_env, "GLM")
-    assert_eq(glm.model, "glm-5.3")
+    assert_eq(glm.model, (Glm(G53) : @wire.Model))
     let _ = update_settings(manager, {
       provider: Some("custom"),
       custom_api_url: Some("https://proxy.example/chat/completions"),
@@ -1054,7 +1054,10 @@ async test "pattern repair uses provider credentials and leaves run options to a
     @sys.set_env_var("OPENSEEK_MODEL", "deepseek-v4-pro")
     @sys.set_env_var("OPENSEEK_THINKING", "no")
     @sys.set_env_var("OPENSEEK_MAX_STEPS", "4")
-    let env = pattern_repair_environment(manager, model="glm-5.3")
+    let env = pattern_repair_environment(
+      manager,
+      model=(Glm(G53) : @wire.Model),
+    )
     match env {
       Ready(env) => {
         assert_eq(env.get("GLM"), Some("repair-key"))

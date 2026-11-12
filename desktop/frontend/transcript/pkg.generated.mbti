@@ -111,7 +111,7 @@ pub(all) struct SessionListItem {
   workspace : @common.Uri
   workspace_name : String
   updated_at_ms : Double?
-  model_settings : @protocol.SessionModelSettings?
+  model_settings : @openseek_protocol.SessionModel?
 }
 pub fn SessionListItem::equal(Self, Self) -> Bool
 pub fn SessionListItem::not_equal(Self, Self) -> Bool
