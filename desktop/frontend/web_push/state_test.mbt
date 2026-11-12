@@ -12,7 +12,7 @@ fn step(state : @web_push.State, msg : @web_push.Msg) -> @web_push.State raise {
 }
 
 ///|
-test "the first probe decides what the account area shows" {
+test "the first probe decides what the account settings show" {
   let checking = @web_push.State()
   assert_true(step(checking, Probed(NoPushApi)) is Unsupported)
   assert_true(step(checking, Probed(NoRelayKey)) is Unavailable)
@@ -31,7 +31,7 @@ test "the first probe decides what the account area shows" {
   )
   assert_true(
     step(checking, Probed(Ready(key="k", permission=Granted, subscribed=true)))
-    is On(key="k", error=None),
+    is On(key="k", error=None, tested=false),
   )
 }
 
@@ -42,8 +42,8 @@ test "turning on ends on, blocked, off, or off with the failure" {
     Probed(Ready(key="k", permission=Default, subscribed=false)),
   )
   let working = step(off, TurnOn)
-  assert_true(working is Working(key="k"))
-  assert_true(step(working, TurnedOn) is On(key="k", error=None))
+  assert_true(working is Working(key="k", on=false))
+  assert_true(step(working, TurnedOn) is On(key="k", error=None, tested=false))
   assert_true(step(working, Denied) is Blocked)
   assert_true(step(working, Dismissed) is Off(key="k", error=None))
   assert_true(
@@ -53,17 +53,24 @@ test "turning on ends on, blocked, off, or off with the failure" {
 }
 
 ///|
-test "an enabled device turns off, keeping failures visible" {
+test "an enabled device turns off or sends a test, keeping failures visible" {
   let on = step(
     @web_push.State(),
     Probed(Ready(key="k", permission=Granted, subscribed=true)),
   )
   let leaving = step(on, TurnOff)
-  assert_true(leaving is Working(key="k"))
+  assert_true(leaving is Working(key="k", on=true))
   assert_true(step(leaving, TurnedOff) is Off(key="k", error=None))
   assert_true(
     step(leaving, TurnOffFailed("offline"))
-    is On(key="k", error=Some("offline")),
+    is On(key="k", error=Some("offline"), tested=false),
+  )
+  let testing = step(on, SendTest)
+  assert_true(testing is Working(key="k", on=true))
+  assert_true(step(testing, TestSent) is On(key="k", error=None, tested=true))
+  assert_true(
+    step(testing, TestFailed("HTTP 404"))
+    is On(key="k", error=Some("HTTP 404"), tested=false),
   )
 }
 
@@ -79,8 +86,11 @@ test "stale replies and hidden controls change nothing" {
   assert_eq(step(on, TurnOn), on)
   let off = step(on |> step(TurnOff), TurnedOff)
   assert_eq(step(off, TurnOff), off)
-  // A reply with nothing in flight.
+  assert_eq(step(off, SendTest), off)
+  // A reply with nothing in flight, or to the other request.
   assert_eq(step(off, TurnedOn), off)
+  let testing = step(on, SendTest)
+  assert_eq(step(testing, TurnedOn), testing)
   let blocked = step(
     @web_push.State(),
     Probed(Ready(key="k", permission=Denied, subscribed=false)),

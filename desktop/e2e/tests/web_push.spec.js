@@ -43,16 +43,26 @@ async function relayPush(page, { key = 'BKEY' } = {}) {
   await page.route('**/v2/push/key', route => key === null
     ? route.fulfill({ status: 404, body: '' })
     : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ public_key: key }) }));
-  await page.route('**/v2/push/subscription', async route => {
-    const request = route.request();
-    calls.push({
-      method: request.method(),
-      authorization: (await request.allHeaders()).authorization,
-      body: JSON.parse(request.postData() ?? 'null'),
+  for (const path of ['subscription', 'test']) {
+    await page.route(`**/v2/push/${path}`, async route => {
+      const request = route.request();
+      calls.push({
+        path,
+        method: request.method(),
+        authorization: (await request.allHeaders()).authorization,
+        body: JSON.parse(request.postData() ?? 'null'),
+      });
+      await route.fulfill({ status: path === 'test' ? 202 : 204 });
     });
-    await route.fulfill({ status: 204 });
-  });
+  }
   return calls;
+}
+
+const toggle = page => page.getByRole('switch', { name: 'Notifications', exact: true });
+
+async function openAccountSettings(page) {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
 }
 
 test('turning notifications on registers the worker and the subscription with the relay', async ({ page }) => {
@@ -61,26 +71,33 @@ test('turning notifications on registers the worker and the subscription with th
   await stubPushService(page);
   const calls = await relayPush(page);
   await page.goto('/index.html?device=device-a');
-  await expect(page.getByText('Notifications off', { exact: true })).toBeVisible();
+  await openAccountSettings(page);
+  await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByRole('button', { name: 'Send test', exact: true })).toHaveCount(0);
   // The worker is served at the root, so it controls every page route.
   await expect.poll(() => page.evaluate(async () => {
     const registration = await navigator.serviceWorker.getRegistration('/');
     return registration?.active?.scriptURL ?? null;
   })).toMatch(/\/sw\.js$/);
 
-  await page.getByRole('button', { name: 'Turn on', exact: true }).click();
-  await expect(page.getByText('Notifications on', { exact: true })).toBeVisible();
+  await toggle(page).click();
+  await expect(toggle(page)).toHaveAttribute('aria-checked', 'true');
   expect(await page.evaluate(() => window.__push.prompts)).toBe(1);
   expect(await page.evaluate(() => window.__push.options)).toEqual({ userVisibleOnly: true, applicationServerKey: 'BKEY' });
   expect(calls).toEqual([{
+    path: 'subscription',
     method: 'PUT',
     authorization: 'Bearer ts_fixture-account',
     body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture', keys: { p256dh: 'BPUB', auth: 'AUTH' }, locale: 'en' },
   }]);
 
-  await page.getByRole('button', { name: 'Turn off', exact: true }).click();
-  await expect(page.getByText('Notifications off', { exact: true })).toBeVisible();
-  expect(calls[1]).toMatchObject({ method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
+  await page.getByRole('button', { name: 'Send test', exact: true }).click();
+  await expect(page.getByText(/^Test sent\./)).toBeVisible();
+  expect(calls[1]).toMatchObject({ path: 'test', method: 'POST', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
+
+  await toggle(page).click();
+  await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
+  expect(calls[2]).toMatchObject({ path: 'subscription', method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
   expect(await page.evaluate(() => window.__push.unsubscribed)).toBe(1);
   expect(app.pageErrors).toEqual([]);
 });
@@ -91,9 +108,9 @@ test('a relay without push shows no notifications row', async ({ page }) => {
   await stubPushService(page);
   await relayPush(page, { key: null });
   await page.goto('/index.html?device=device-a');
-  await app.openSession();
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-  await expect(page.getByText(/^Notifications/)).toHaveCount(0);
+  await openAccountSettings(page);
+  await expect(page.getByRole('region', { name: 'Account', exact: true })).toBeVisible();
+  await expect(toggle(page)).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -103,8 +120,9 @@ test('a site already denied reads as blocked', async ({ page }) => {
   await stubPushService(page, { permission: 'denied' });
   await relayPush(page);
   await page.goto('/index.html?device=device-a');
+  await openAccountSettings(page);
   await expect(page.getByText('Notifications are blocked in browser settings', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Turn on', exact: true })).toHaveCount(0);
+  await expect(toggle(page)).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -114,7 +132,8 @@ test('denying the prompt blocks without subscribing', async ({ page }) => {
   await stubPushService(page, { answer: 'denied' });
   const calls = await relayPush(page);
   await page.goto('/index.html?device=device-a');
-  await page.getByRole('button', { name: 'Turn on', exact: true }).click();
+  await openAccountSettings(page);
+  await toggle(page).click();
   await expect(page.getByText('Notifications are blocked in browser settings', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__push.subscription)).toBeNull();
   expect(calls).toEqual([]);
@@ -134,7 +153,8 @@ test('a subscribed browser registers again with the relay when the page loads', 
   });
   const calls = await relayPush(page);
   await page.goto('/index.html?device=device-a');
-  await expect(page.getByText('Notifications on', { exact: true })).toBeVisible();
+  await openAccountSettings(page);
+  await expect(toggle(page)).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ method: 'PUT', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/kept' } });
   expect(app.pageErrors).toEqual([]);

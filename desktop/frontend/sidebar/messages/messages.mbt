@@ -36,12 +36,6 @@ pub(all) enum Message {
   Refresh
   SignOut
   DownloadApps
-  NotificationsOff
-  NotificationsOn
-  NotificationsBlocked
-  NotificationsNeedInstall
-  TurnOn
-  TurnOff
 }
 
 ///|
@@ -223,45 +217,5 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, DownloadApps) => "下载客户端"
     (TraditionalChinese, DownloadApps) => "下載用戶端"
     (Japanese, DownloadApps) => "アプリをダウンロード"
-    (English, NotificationsOff) => "Notifications off"
-    (Spanish, NotificationsOff) => "Notificaciones desactivadas"
-    (SimplifiedChinese, NotificationsOff) => "通知已关闭"
-    (TraditionalChinese, NotificationsOff) => "通知已關閉"
-    (Japanese, NotificationsOff) => "通知はオフです"
-    (English, NotificationsOn) => "Notifications on"
-    (Spanish, NotificationsOn) => "Notificaciones activadas"
-    (SimplifiedChinese, NotificationsOn) => "通知已开启"
-    (TraditionalChinese, NotificationsOn) => "通知已開啟"
-    (Japanese, NotificationsOn) => "通知はオンです"
-    (English, NotificationsBlocked) =>
-      "Notifications are blocked in browser settings"
-    (Spanish, NotificationsBlocked) =>
-      "Las notificaciones están bloqueadas en el navegador"
-    (SimplifiedChinese, NotificationsBlocked) =>
-      "通知已在浏览器设置中被阻止"
-    (TraditionalChinese, NotificationsBlocked) =>
-      "通知已在瀏覽器設定中被封鎖"
-    (Japanese, NotificationsBlocked) =>
-      "通知はブラウザの設定でブロックされています"
-    (English, NotificationsNeedInstall) =>
-      "Add to Home Screen to get notifications"
-    (Spanish, NotificationsNeedInstall) =>
-      "Añade a la pantalla de inicio para recibir notificaciones"
-    (SimplifiedChinese, NotificationsNeedInstall) =>
-      "添加到主屏幕后即可接收通知"
-    (TraditionalChinese, NotificationsNeedInstall) =>
-      "加入主畫面後即可接收通知"
-    (Japanese, NotificationsNeedInstall) =>
-      "ホーム画面に追加すると通知を受け取れます"
-    (English, TurnOn) => "Turn on"
-    (Spanish, TurnOn) => "Activar"
-    (SimplifiedChinese, TurnOn) => "开启"
-    (TraditionalChinese, TurnOn) => "開啟"
-    (Japanese, TurnOn) => "オンにする"
-    (English, TurnOff) => "Turn off"
-    (Spanish, TurnOff) => "Desactivar"
-    (SimplifiedChinese, TurnOff) => "关闭"
-    (TraditionalChinese, TurnOff) => "關閉"
-    (Japanese, TurnOff) => "オフにする"
   }
 }

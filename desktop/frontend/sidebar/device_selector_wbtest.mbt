@@ -10,7 +10,6 @@ fn selector_account(
     notice: None,
     page,
     online_devices,
-    notifications: None,
   }
 }
 

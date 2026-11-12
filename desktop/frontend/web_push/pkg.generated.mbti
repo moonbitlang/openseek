@@ -23,12 +23,15 @@ pub(all) enum Msg {
   Probed(Probe)
   TurnOn
   TurnOff
+  SendTest
   TurnedOn
   Denied
   Dismissed
   TurnOnFailed(String)
   TurnedOff
   TurnOffFailed(String)
+  TestSent
+  TestFailed(String)
 }
 
 pub(all) enum Permission {
@@ -49,8 +52,8 @@ pub enum State {
   Unsupported
   Unavailable
   Off(key~ : String, error~ : String?)
-  Working(key~ : String)
-  On(key~ : String, error~ : String?)
+  Working(key~ : String, on~ : Bool)
+  On(key~ : String, error~ : String?, tested~ : Bool)
   Blocked
 }
 pub fn State::State() -> Self
