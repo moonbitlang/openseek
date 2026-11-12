@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/backend/internal/session_import",
+  "openseek_desktop/backend/internal/api_balance",
   "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/x/uuid" @x_uuid,

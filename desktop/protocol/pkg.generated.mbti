@@ -12,6 +12,8 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
 pub const HostProtocolRevision : Int32 = 7
 
+pub const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
+
 pub const SideChatTokenLength : Int32 = 8
 
 pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command
@@ -104,6 +106,42 @@ pub fn AgentEventPayload::to_json(Self) -> @json.Json
 pub fn AgentEventPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for AgentEventPayload
 pub impl @json.ToJson for AgentEventPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ApiBalance {
+  available : Bool
+  amounts : Array[ApiBalanceAmount]
+}
+pub fn ApiBalance::equal(Self, Self) -> Bool
+pub fn ApiBalance::not_equal(Self, Self) -> Bool
+pub fn ApiBalance::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ApiBalanceAmount {
+  currency : String
+  amount : Double
+}
+pub fn ApiBalanceAmount::equal(Self, Self) -> Bool
+pub fn ApiBalanceAmount::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ApiBalanceAmount::not_equal(Self, Self) -> Bool
+pub fn ApiBalanceAmount::to_json(Self) -> @json.Json
+pub fn ApiBalanceAmount::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ApiBalanceAmount
+pub impl @json.ToJson for ApiBalanceAmount
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ApiBalanceReply {
+  BalanceReported(ApiBalance)
+  BalanceUnsupported
+  BalanceFailed(String)
+}
+pub fn ApiBalanceReply::equal(Self, Self) -> Bool
+pub fn ApiBalanceReply::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ApiBalanceReply::not_equal(Self, Self) -> Bool
+pub fn ApiBalanceReply::to_json(Self) -> @json.Json
+pub fn ApiBalanceReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ApiBalanceReply
+pub impl @json.ToJson for ApiBalanceReply
 
 #derive(Eq, @debug.Debug)
 pub(all) struct AppFocusedBrowserReply {

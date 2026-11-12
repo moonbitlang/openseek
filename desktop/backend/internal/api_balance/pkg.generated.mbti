@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/api_balance"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum Account {
+  Deepseek(key~ : String)
+  OpenRouter(key~ : String)
+}
+pub async fn Account::balance(Self) -> @protocol.ApiBalanceReply
+
+// Type aliases
+
+// Traits

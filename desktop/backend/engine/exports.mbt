@@ -40,13 +40,7 @@ pub async fn ssh_model_credentials(
 ) -> Map[String, String] {
   let settings = manager.settings_snapshot()
   let (name, key) = match settings.provider {
-    Deepseek => {
-      let key = match settings.deepseek_api_key {
-        Some(_) as key => key
-        None => @env.get("DEEPSEEK")
-      }
-      ("DEEPSEEK", key)
-    }
+    Deepseek => ("DEEPSEEK", settings.deepseek_key())
     Glm => {
       let key = match settings.glm_api_key {
         Some(_) as key => key

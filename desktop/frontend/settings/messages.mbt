@@ -84,6 +84,14 @@ pub(all) enum Message {
   ApiKey
   SaveApiKey
   KeyStorageDescription
+  Balance
+  CheckingBalance
+  BalanceExhausted
+  OpenRouterBalanceDescription
+  OpenRouterUncapped
+  LowBalanceNotice(String, String)
+  ExhaustedBalanceNotice(String)
+  ViewBalance
   Language
   LanguageDescription
   System
@@ -1066,5 +1074,67 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "無法訪問語言偏好設定：\{detail}"
     (Japanese, LanguageStorageFailed(detail)) =>
       "言語設定にアクセスできません：\{detail}"
+    (English, Balance) => "Balance"
+    (Spanish, Balance) => "Saldo"
+    (SimplifiedChinese, Balance) => "余额"
+    (TraditionalChinese, Balance) => "餘額"
+    (Japanese, Balance) => "残高"
+    (English, CheckingBalance) => "Checking…"
+    (Spanish, CheckingBalance) => "Consultando…"
+    (SimplifiedChinese, CheckingBalance) => "正在查询…"
+    (TraditionalChinese, CheckingBalance) => "正在查詢…"
+    (Japanese, CheckingBalance) => "確認中…"
+    (English, BalanceExhausted) => "not enough for new requests"
+    (Spanish, BalanceExhausted) => "no alcanza para nuevas solicitudes"
+    (SimplifiedChinese, BalanceExhausted) => "余额不足，新请求将失败"
+    (TraditionalChinese, BalanceExhausted) =>
+      "餘額不足，新請求將失敗"
+    (Japanese, BalanceExhausted) =>
+      "残高不足のため新しいリクエストは失敗します"
+    (English, OpenRouterBalanceDescription) =>
+      "What this key may still spend under its credit limit."
+    (Spanish, OpenRouterBalanceDescription) =>
+      "Lo que esta clave aún puede gastar dentro de su límite de crédito."
+    (SimplifiedChinese, OpenRouterBalanceDescription) =>
+      "这把密钥在其额度上限内还能使用的金额。"
+    (TraditionalChinese, OpenRouterBalanceDescription) =>
+      "這把金鑰在其額度上限內還能使用的金額。"
+    (Japanese, OpenRouterBalanceDescription) =>
+      "このキーのクレジット上限内で残っている利用可能額です。"
+    (English, OpenRouterUncapped) =>
+      "This key has no credit limit. OpenRouter shows account credits only on its website."
+    (Spanish, OpenRouterUncapped) =>
+      "Esta clave no tiene límite de crédito. OpenRouter solo muestra los créditos de la cuenta en su sitio web."
+    (SimplifiedChinese, OpenRouterUncapped) =>
+      "这把密钥未设额度上限。OpenRouter 只在其网站上显示账户余额。"
+    (TraditionalChinese, OpenRouterUncapped) =>
+      "這把金鑰未設額度上限。OpenRouter 只在其網站上顯示帳戶餘額。"
+    (Japanese, OpenRouterUncapped) =>
+      "このキーにはクレジット上限がありません。アカウントのクレジットは OpenRouter のウェブサイトでのみ確認できます。"
+    (English, LowBalanceNotice(provider, amount)) =>
+      "Your \{provider} balance is low (\{amount})."
+    (Spanish, LowBalanceNotice(provider, amount)) =>
+      "Tu saldo de \{provider} es bajo (\{amount})."
+    (SimplifiedChinese, LowBalanceNotice(provider, amount)) =>
+      "\{provider} 余额偏低（\{amount}）。"
+    (TraditionalChinese, LowBalanceNotice(provider, amount)) =>
+      "\{provider} 餘額偏低（\{amount}）。"
+    (Japanese, LowBalanceNotice(provider, amount)) =>
+      "\{provider} の残高が少なくなっています（\{amount}）。"
+    (English, ExhaustedBalanceNotice(provider)) =>
+      "Your \{provider} balance has run out — new requests will fail."
+    (Spanish, ExhaustedBalanceNotice(provider)) =>
+      "Tu saldo de \{provider} se agotó; las nuevas solicitudes fallarán."
+    (SimplifiedChinese, ExhaustedBalanceNotice(provider)) =>
+      "\{provider} 余额已用完，新请求将失败。"
+    (TraditionalChinese, ExhaustedBalanceNotice(provider)) =>
+      "\{provider} 餘額已用完，新請求將失敗。"
+    (Japanese, ExhaustedBalanceNotice(provider)) =>
+      "\{provider} の残高がなくなりました。新しいリクエストは失敗します。"
+    (English, ViewBalance) => "Details"
+    (Spanish, ViewBalance) => "Detalles"
+    (SimplifiedChinese, ViewBalance) => "查看"
+    (TraditionalChinese, ViewBalance) => "查看"
+    (Japanese, ViewBalance) => "詳細"
   }
 }

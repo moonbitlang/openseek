@@ -4291,6 +4291,7 @@ fn update_msg(
         )
       }
     }
+    RefreshApiBalance => model.refresh_api_balance(dispatch, force=true)
     RetryHostSettings =>
       (
         fetch_host_settings(
@@ -4370,7 +4371,7 @@ fn update_msg(
           ..endpoint,
           provider,
           custom_api_url: if provider is Custom &&
-            endpoint.custom_api_url == OpenRouterChatCompletionsUrl {
+            endpoint.custom_api_url == @protocol.OpenRouterChatCompletionsUrl {
             ""
           } else {
             endpoint.custom_api_url
@@ -8199,7 +8200,7 @@ fn update_device_msg(
         } else {
           next
         }
-        (next.api_setup_dialog(channel), next)
+        next.settled(dispatch, channel)
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
@@ -8210,13 +8211,14 @@ fn update_device_msg(
       // the device it was issued against.
       let mirror = dev.host_settings.write_settled().hold(settings)
       let next = model.map_host_settings(channel, _ => mirror)
-      let next = if mirror.saves > 0 {
-        next
+      if mirror.saves > 0 {
+        (next.api_setup_dialog(channel), next)
       } else {
-        next.flush_host_settings(channel)
+        next.flush_host_settings(channel).settled(dispatch, channel)
       }
-      (next.api_setup_dialog(channel), next)
     }
+    ApiBalanceLoaded(reply, request~) =>
+      (@cmd.none, model.receive_api_balance(channel, reply, request))
     HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
@@ -10658,6 +10660,16 @@ fn update_device_msg(
           )
           commands.push(panel_cmd)
           next = panel_next
+          // The run just spent from the provider balance; re-read it so the
+          // composer can warn before the next turn fails for lack of funds.
+          if channel == next.focused {
+            let (balance, refreshed) = next.refresh_api_balance(
+              dispatch,
+              force=true,
+            )
+            commands.push(balance)
+            next = refreshed
+          }
         }
         // A run that recorded nothing needs this pass as much as any other:
         // the read answers "this conversation is empty" rather than failing,
@@ -16974,7 +16986,7 @@ test "the OpenRouter custom preset restores as OpenRouter" {
     Local,
     host_settings(
       provider="custom",
-      custom_api_url=OpenRouterChatCompletionsUrl,
+      custom_api_url=@protocol.OpenRouterChatCompletionsUrl,
       has_custom_key=true,
     ),
   )

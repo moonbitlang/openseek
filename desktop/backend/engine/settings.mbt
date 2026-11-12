@@ -86,6 +86,17 @@ priv struct EngineSettings {
 }
 
 ///|
+/// The DeepSeek key a run uses: the stored one, else the `DEEPSEEK`
+/// environment variable.
+fn EngineSettings::deepseek_key(self : EngineSettings) -> String? {
+  if self.deepseek_api_key is Some(_) {
+    self.deepseek_api_key
+  } else {
+    @env.get("DEEPSEEK")
+  }
+}
+
+///|
 fn settings_file(runtime_dir : @pathx.Path) -> @pathx.Path {
   runtime_dir.join(EngineSettingsFileName)
 }
@@ -165,8 +176,7 @@ fn settings_status_payload(
     // Presence ORs in the provider's environment fallback exactly as the run
     // config resolves it (`configured_api_key`): an env-configured install
     // is runnable, and the frontend gates Send on this bit.
-    has_deepseek_key: settings.deepseek_api_key is Some(_) ||
-    @env.get("DEEPSEEK") is Some(_),
+    has_deepseek_key: settings.deepseek_key() is Some(_),
     has_glm_key: settings.glm_api_key is Some(_) || @env.get("GLM") is Some(_),
     has_custom_key: settings.custom_api_key is Some(_),
     followup_behavior: settings.followup_behavior,

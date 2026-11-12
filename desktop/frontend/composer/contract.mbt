@@ -190,6 +190,9 @@ pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
   SubrunDock(lanes~ : Array[@subrun.Lane])
   ApiSetupNotice(text~ : String)
+  // The provider balance is about to stop runs; the button opens the API
+  // settings, where the balance and the key live.
+  BalanceNotice(text~ : String, button~ : String)
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[PendingSteerInput])

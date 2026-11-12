@@ -307,9 +307,6 @@ fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
 }
 
 ///|
-const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
-
-///|
 /// Which chat-completions endpoint the engine talks to. SeekMoon runs are
 /// bring-your-own-key only: the hosted proxy is retired. `Deepseek` is the
 /// official endpoint and needs the user's own key; `OpenRouter` is a preset
@@ -1274,6 +1271,9 @@ priv struct Model {
   // saved through `settings.set`. The host settings themselves live on each
   // `DeviceState`.
   setup_api_key : String
+  // What the focused host's provider says the configured key can still
+  // spend, read through `settings.balance`.
+  api_balance : ApiBalanceState
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1751,6 +1751,8 @@ priv enum Msg {
   OpenSeekEffortPicked(String)
   Prompt(@prompt.Msg)
   RetryHostSettings
+  // Re-read the focused host's provider balance (the Settings Refresh).
+  RefreshApiBalance
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
   ProviderChanged(String)
@@ -2242,6 +2244,9 @@ priv enum DeviceMsg {
   HostSettingsApplied(HostSettings, connection_generation~ : Int32)
   // A `settings.set` this client sent failed; the message pops as a toast.
   HostSettingsSaveFailed(String, connection_generation~ : Int32)
+  // A `settings.balance` reply (or its transport failure, folded into
+  // `BalanceFailed`); only the newest request's reply is applied.
+  ApiBalanceLoaded(@protocol.ApiBalanceReply, request~ : Int32)
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
@@ -2755,6 +2760,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
+    api_balance: ApiBalanceState::empty(),
     is_desktop: desktop,
     window_focused: !desktop || @interop.page_has_focus(),
     app_version: "development",
@@ -3075,13 +3081,15 @@ fn Model::map_host_settings(
 ///|
 /// Drop the focused host's form state before the UI acts on another host
 /// or connection: the staged key and any unsaved prompt text were typed for
-/// the old one, and the setup modal closes with the snapshot it was
+/// the old one, its balance was read for the old one, and the setup modal
+/// closes with the snapshot it was
 /// rendering. The next authoritative snapshot reopens it if still warranted.
 fn Model::reset_api_setup(self : Model) -> Model {
   {
     ..self,
     api_setup_open: false,
     setup_api_key: "",
+    api_balance: self.api_balance.forget(),
     default_prompt: @prompt.Model::new(),
   }
 }
