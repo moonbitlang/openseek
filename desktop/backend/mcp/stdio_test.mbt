@@ -313,36 +313,42 @@ async test "concurrent stdio replies stay whole under pipe backpressure" {
     version="test",
   )
   with_stdio(dispatcher, "host-session", (responses, requests) => {
-    let reader = @io.Utf8Reader(responses)
-    for id in 1..<=20 {
-      send_stdio_request(
-        requests,
-        request(id, "tools/call", { "name": "large" }),
-      )
-    }
-    requests.close()
-    // Completed calls still occupy a slot while their replies await a reader.
-    for _ in 0..<16 {
-      started.get() |> ignore
-    }
-    assert_true(@async.with_timeout_opt(50, () => started.get()) is None)
-    let replies : Map[Int32, Unit] = Map([])
-    for _ in 0..<20 {
-      guard read_stdio_reply(reader)
-        is {
-          "id": Number(id, ..),
-          "result": { "content": [{ "text": String(received), .. }], .. },
-          ..
-        } else {
-        fail("each response must occupy one complete JSON line")
+    @async.with_task_group(group => {
+      let reader = @io.Utf8Reader(responses)
+      // The request pipe has no buffer: once every slot is busy the host
+      // stops reading requests, so they are written while replies drain.
+      group.spawn_bg(() => {
+        for id in 1..<=20 {
+          send_stdio_request(
+            requests,
+            request(id, "tools/call", { "name": "large" }),
+          )
+        }
+        requests.close()
+      })
+      // Completed calls still occupy a slot while their replies await a reader.
+      for _ in 0..<16 {
+        started.get() |> ignore
       }
-      assert_eq(received, text)
-      replies[id.to_int()] = ()
-    }
-    assert_eq(replies.length(), 20)
-    for id in 1..<=20 {
-      assert_true(replies.contains(id))
-    }
+      assert_true(@async.with_timeout_opt(50, () => started.get()) is None)
+      let replies : Map[Int32, Unit] = Map([])
+      for _ in 0..<20 {
+        guard read_stdio_reply(reader)
+          is {
+            "id": Number(id, ..),
+            "result": { "content": [{ "text": String(received), .. }], .. },
+            ..
+          } else {
+          fail("each response must occupy one complete JSON line")
+        }
+        assert_eq(received, text)
+        replies[id.to_int()] = ()
+      }
+      assert_eq(replies.length(), 20)
+      for id in 1..<=20 {
+        assert_true(replies.contains(id))
+      }
+    })
   })
 }
 
