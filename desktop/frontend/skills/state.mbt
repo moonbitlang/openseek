@@ -261,14 +261,17 @@ pub fn State::opening(
   let (cmd, catalog) = match self.catalog {
     Idle | Failed(_) =>
       (
-        fetch_catalog(emit, input.library),
+        fetch_catalog(emit, input.library, input.locale),
         Catalog::Loading(library=input.library),
       )
     Loading(library~) =>
       if library == input.library {
         (@cmd.none, self.catalog)
       } else {
-        (fetch_catalog(emit, input.library), Loading(library=input.library))
+        (
+          fetch_catalog(emit, input.library, input.locale),
+          Loading(library=input.library),
+        )
       }
     current => (@cmd.none, current)
   }
@@ -338,7 +341,7 @@ pub fn State::sync_library(
   guard document_changed else { return (@cmd.none, self) }
   let request = preview_request_id(self.preview) + 1
   (
-    fetch_content(emit, input.library, request, current),
+    fetch_content(emit, input.library, input.locale, request, current),
     { ..self, preview: Loading(target=current, request~), },
   )
 }
@@ -386,7 +389,7 @@ pub fn State::handle(
         None => {
           let request = preview_request_id(self.preview) + 1
           (
-            fetch_content(emit, input.library, request, target),
+            fetch_content(emit, input.library, input.locale, request, target),
             {
               ..self,
               preview: Loading(target~, request~),
@@ -414,7 +417,13 @@ pub fn State::handle(
         None => {
           let request = preview_request_id(self.preview) + 1
           (
-            fetch_installed_content(emit, input.library, request, item),
+            fetch_installed_content(
+              emit,
+              input.library,
+              input.locale,
+              request,
+              item,
+            ),
             {
               ..self,
               preview: Loading(target~, request~),
@@ -482,7 +491,7 @@ pub fn State::handle(
         Loading(library~) if library == input.library => (@cmd.none, self, None)
         _ =>
           (
-            fetch_catalog(emit, input.library),
+            fetch_catalog(emit, input.library, input.locale),
             { ..self, catalog: Loading(library=input.library), },
             None,
           )
@@ -517,7 +526,7 @@ pub fn State::handle(
         input.library,
         PendingTarget::LibraryEntry(id),
         action,
-        set_enabled(emit, input.library, payload, action),
+        set_enabled(emit, input.library, input.locale, payload, action),
       )
     }
     Install(item) | Update(item) => {
@@ -536,7 +545,7 @@ pub fn State::handle(
         input.library,
         PendingTarget::Registry(item.identity()),
         action,
-        install(emit, input.library, item, action),
+        install(emit, input.library, input.locale, item, action),
       )
     }
     Uninstall(item) => {
@@ -551,7 +560,7 @@ pub fn State::handle(
         input.library,
         PendingTarget::Registry(identity),
         Uninstalling(source=item.source, id=item.id),
-        uninstall(emit, input.library, item),
+        uninstall(emit, input.library, input.locale, item),
       )
     }
     ActionDone(library~, action~, error~) => {

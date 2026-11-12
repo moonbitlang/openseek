@@ -36,6 +36,7 @@ pub(all) struct Input {
   library : Library
   installed : Array[InstalledItem]
   switchable : Bool
+  locale : @i18n.Locale
 }
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool

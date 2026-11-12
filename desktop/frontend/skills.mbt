@@ -43,6 +43,7 @@ fn fetch_installed_skills(
 fn fetch_cloud_skills(
   dispatch : @cmd.Emit[Msg],
   access : @cloud_client.Access,
+  locale : @i18n.Locale,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -52,10 +53,11 @@ fn fetch_cloud_skills(
       } catch {
         @cloud_client.RequestError(Unauthorized) => CloudSkillsExpired(access)
         @cloud_client.RequestError(failure) =>
-          CloudSkillsLoaded(access, Err(failure.label()))
+          CloudSkillsLoaded(access, Err(failure.text(locale)))
         @skills.SkillReplyError(message) =>
           CloudSkillsLoaded(access, Err(message))
-        _ => CloudSkillsLoaded(access, Err(@cloud_client.Unreachable.label()))
+        _ =>
+          CloudSkillsLoaded(access, Err(@cloud_client.Unreachable.text(locale)))
       }
       scheduler.add(dispatch(msg))
     })
@@ -68,10 +70,11 @@ fn fetch_cloud_skills(
 fn fetch_skills_library(
   dispatch : @cmd.Emit[Msg],
   library : @skills.Library,
+  locale : @i18n.Locale,
 ) -> @cmd.Cmd {
   match library {
     Host(channel) => fetch_installed_skills(dispatch, channel)
-    Cloud(access) => fetch_cloud_skills(dispatch, access)
+    Cloud(access) => fetch_cloud_skills(dispatch, access, locale)
   }
 }
 
@@ -120,7 +123,10 @@ fn open_skills_library(
   let (_, skills, _) = model.skills.handle(emit, @skills.BackToList, input)
   let (page_cmd, skills) = skills.opening(emit, input)
   (
-    @cmd.batch([page_cmd, fetch_skills_library(dispatch, input.library)]),
+    @cmd.batch([
+      page_cmd,
+      fetch_skills_library(dispatch, input.library, input.locale),
+    ]),
     { ..model, skills, },
   )
 }
