@@ -113,10 +113,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Desktop's publish job takes the same group: both select the console, and
-    # Desktop's verification expects its own version to stay selected.
+    # Desktop's verification expects its own version to stay selected. The
+    # default queue keeps one waiting job and cancels it when another arrives,
+    # which would drop a waiting Desktop publish after its builds succeeded.
     concurrency:
       group: browser-console-publish
       cancel-in-progress: false
+      queue: max
     env:
       OPENSEEK_API_ORIGIN: https://seekmoon.moonbitlang.com
       RELEASE: ${{ needs.build.outputs.release }}

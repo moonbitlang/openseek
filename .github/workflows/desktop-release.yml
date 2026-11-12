@@ -452,10 +452,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # A console-only Browser release takes the same group, so it cannot move
-    # the console between this publish and its verification.
+    # the console between this publish and its verification. `queue: max`
+    # keeps this job waiting behind several console releases instead of
+    # letting the next one cancel it.
     concurrency:
       group: browser-console-publish
       cancel-in-progress: false
+      queue: max
     permissions:
       actions: read
       contents: write
