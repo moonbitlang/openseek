@@ -21,6 +21,8 @@ test('an empty Chat list starts a draft without creating a session', async ({ pa
   await sidebarMode(page, 'Chat').click();
   await expect.poll(() => cloud.requests.some(request => request.method === 'GET' && request.path === '/v1/sessions')).toBe(true);
   await cloud.create();
+  await expect(page.getByRole('button', { name: 'Export conversation', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
   await page.locator('#task').fill('An unsent chat draft');
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);

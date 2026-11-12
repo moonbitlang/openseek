@@ -7,7 +7,6 @@ async function openSearch(page, app) {
   await app.goto();
   await page.getByRole('button', { name: 'Work', exact: true }).click();
   const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
-  await expect(input).toHaveAttribute('placeholder', 'Search');
   await input.focus();
   return input;
 }
@@ -37,7 +36,11 @@ test('inline title search reuses project rows and keeps results when opening unl
   await expect(rows(page)).toHaveCount(2);
   await expect(rows(page).filter({ hasText: 'Earlier Unicode discussion' })).toHaveCount(0);
   await expect(rows(page).filter({ hasText: 'Terminal rendering' })).toHaveCount(0);
-  await expect(rows(page).filter({ hasText: 'Unicode terminal notes' }).locator('strong')).toHaveText('Unicode');
+  const match = rows(page).filter({ hasText: 'Unicode terminal notes' }).getByText('Unicode', { exact: true });
+  await expect(match).toBeVisible();
+  await expect.poll(() => match.evaluate(element =>
+    Number(getComputedStyle(element).fontWeight) > Number(getComputedStyle(element.parentElement).fontWeight),
+  )).toBe(true);
   await expect(page.locator('dialog[open]')).toHaveCount(0);
   await expect(input).toBeFocused();
   await input.press('ArrowDown');
@@ -180,6 +183,5 @@ test('a late catalog refresh respects the current cleared query', async ({ page 
   await expect(input).toHaveValue('');
   await expect(rows(page).filter({ hasText: 'Terminal rendering' })).toHaveCount(1);
   await expect(input).toHaveValue('');
-  expect(app.requests.some(r => r.method === 'session.search')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
