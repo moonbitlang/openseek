@@ -149,18 +149,17 @@ pub fn probe(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
     },
     () => {
       guard service_worker() is Some(container) else { return NoPushApi }
-      // Served at the root, so its default scope covers every page. The key
-      // request does not wait for it.
-      let registering = @interop.js_method_promise(
+      // Served at the root, so its default scope covers every page. Awaited
+      // before the key request: a rejection nothing awaits yet would reach
+      // the page's unhandled-rejection crash screen.
+      let registration = call(
         container,
         "register",
         @js.Value::cast_from("/sw.js"),
       )
-      let key = relay_key() catch { _ => None }
-      let registration = registering.wait() catch {
-        error => raise PushError("register failed: \{error}")
+      guard (relay_key() catch { _ => None }) is Some(key) else {
+        return NoRelayKey
       }
-      guard key is Some(key) else { return NoRelayKey }
       Ready(
         key~,
         permission=permission(),

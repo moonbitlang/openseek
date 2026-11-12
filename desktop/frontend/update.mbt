@@ -6273,8 +6273,24 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
-    NotificationLinkOpened(path) =>
-      follow_page_path(dispatch, path, model).unwrap_or((@cmd.none, model))
+    NotificationLinkOpened(path) => {
+      guard follow_page_path(dispatch, path, model) is Some((visit, next)) else {
+        return (@cmd.none, model)
+      }
+      // A notification says the conversation moved on; a copy cached from
+      // before catches up the way re-selecting it does.
+      guard next.navigation.location is Some({ target: Session(session), .. }) &&
+        next.active_session == session else {
+        return (visit, next)
+      }
+      let (reload, next) = open_session_on(
+        dispatch,
+        next.focused,
+        next,
+        session,
+      )
+      (@cmd.batch([visit, reload]), next)
+    }
     UserMessageEditRequested(slot~, sequence~, draft~) =>
       model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>
