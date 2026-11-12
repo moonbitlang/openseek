@@ -24,6 +24,7 @@ pub(all) struct Record {
 ///|
 #derive(Eq)
 pub(all) struct History {
+  settings : CommandSettings?
   etag : String?
   offset : Int32?
   prediction : @wire.PredictionRecord?
@@ -86,6 +87,9 @@ pub extend PendingAssistant with Eq::{equal, not_equal}
 ///|
 #derive(Eq)
 pub(all) struct Conversation {
+  settings : CommandSettings?
+  // Latest-page read/revalidation owning this metadata; zero for disk hydration.
+  settings_request : Int32
   records : Array[Record]
   history_cached : Bool
   history_etag : String?
@@ -158,6 +162,8 @@ pub(all) struct Conversation {
 ///|
 fn Conversation::empty() -> Conversation {
   {
+    settings: None,
+    settings_request: 0,
     records: [],
     history_cached: false,
     history_etag: None,
@@ -510,6 +516,14 @@ fn decode_history(json : Json) -> History raise RequestError {
     _ => None
   }
   {
+    // Missing during rollout, null, or malformed metadata stays unknown.
+    settings: match json {
+      { "settings": value, .. } =>
+        Some(@json.from_json(value)) catch {
+          _ => None
+        }
+      _ => None
+    },
     etag: None,
     offset: match json {
       { "page": { "offset": Number(offset, ..), .. }, .. } if offset >= 0 &&

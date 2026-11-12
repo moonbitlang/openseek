@@ -2,6 +2,7 @@
 /// The persisted part of a Cloud history page and its saved prediction.
 /// Live status is derived from current observations.
 pub(all) struct CloudHistoryCachePage {
+  settings : Json?
   session : SessionDocument
   messages : Array[Json]
   prediction : @wire.PredictionRecord?
@@ -50,7 +51,10 @@ pub impl FromJson for CloudHistoryCachePage with fn from_json(json, path) {
       }
     None => (None, None)
   }
+  // Old validators do not cover settings; retain their body but re-fetch.
+  let etag = if object.fields.contains("settings") { etag } else { None }
   {
+    settings: object.optional_json("settings"),
     session: @json.from_json(
       object.required_json("session"),
       path=path.add_key("session"),
@@ -68,6 +72,7 @@ pub impl FromJson for CloudHistoryCachePage with fn from_json(json, path) {
 ///|
 pub impl ToJson for CloudHistoryCachePage with fn to_json(self) {
   {
+    "settings": self.settings.unwrap_or(Json::null()),
     "session": self.session.to_json(),
     "messages": Json(self.messages),
     "prediction": self.prediction.map_or(Json::null(), value => value.to_json()),

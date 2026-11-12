@@ -167,6 +167,11 @@ fn Conversation::with_latest_page(
       self.acknowledge_assistants(request, history.session, history.messages)
     None => self
   }
+  let self = {
+    ..self,
+    settings: history.settings,
+    settings_request: request.unwrap_or(0),
+  }
   guard history.offset is Some(offset) else {
     return {
       ..self,

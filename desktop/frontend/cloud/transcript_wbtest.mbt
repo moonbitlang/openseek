@@ -79,6 +79,7 @@ test "Cloud renders native history through the Local projector including goals a
     request: 9,
   })
   let history : History = {
+    settings: None,
     prediction: None,
     session: document,
     etag: None,
@@ -142,6 +143,7 @@ test "Cloud requires the native session document and preserves reasoning-only re
 test "Cloud preserves submitted input and startup failure when the native log is empty" {
   let base = controls_fixture()
   let history : History = {
+    settings: None,
     prediction: None,
     session: native_document([]),
     generating: false,

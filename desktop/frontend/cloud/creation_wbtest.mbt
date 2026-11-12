@@ -268,6 +268,7 @@ test "a first command waits for a new observer after a definitive observation fa
   let loaded = metadata_update(
     reopened,
     Loaded(1, "session", reopened.conversations["session"].request, {
+      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,

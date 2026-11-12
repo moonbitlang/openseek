@@ -1,6 +1,7 @@
 ///|
 fn History::cache_page(self : History) -> @protocol.CloudHistoryCachePage {
   {
+    settings: self.settings.map(value => value.to_json()),
     session: self.session,
     messages: self.messages.map(record => {
       "task_id": record.task_id,
@@ -20,6 +21,7 @@ fn History::cache_page(self : History) -> @protocol.CloudHistoryCachePage {
 ///|
 fn cached_history(page : @protocol.CloudHistoryCachePage) -> History? {
   let fields : Map[String, Json] = {
+    "settings": page.settings.unwrap_or(Json::null()),
     "session": page.session.to_json(),
     "messages": Json(page.messages),
     "generating": Json(false),

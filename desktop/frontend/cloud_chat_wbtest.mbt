@@ -34,6 +34,7 @@ fn integrated_cloud_model() -> Model {
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(3, "cloud-a", request, {
+        settings: None,
         prediction: None,
         session: {
           version: None,
@@ -407,6 +408,7 @@ test "same-account sign-out retires old composer actions, while the new entry ca
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(epoch, "cloud-a", request, {
+        settings: None,
         prediction: None,
         session: {
           version: None,

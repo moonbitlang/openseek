@@ -23,7 +23,6 @@ pub impl ToJson for CommandSettings with fn to_json(self) {
 pub impl FromJson for CommandSettings with fn from_json(json, path) {
   let fields : Map[String, Json] = @json.from_json(json, path~)
   let model : @deepseek.DsVariant = match fields.get("model") {
-    None => V4Flash
     Some(String("deepseek-flash")) => V4Flash
     Some(String("deepseek-v4-pro")) => V4Pro
     _ =>
@@ -32,7 +31,10 @@ pub impl FromJson for CommandSettings with fn from_json(json, path) {
       )
   }
   let thinking : @protocol.OpenSeekThinking = match fields.get("thinking") {
-    None => ThinkingHigh
+    None =>
+      raise @json.JsonDecodeError(
+        (path.add_key("thinking"), "missing thinking"),
+      )
     Some(value) => @json.from_json(value, path=path.add_key("thinking"))
   }
   { model, thinking, }

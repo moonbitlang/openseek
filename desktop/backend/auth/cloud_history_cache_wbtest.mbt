@@ -6,6 +6,7 @@ async test "Cloud history survives a host restart and follows account retirement
   let store = AuthStore::load(runtime_dir=root)
   store.commit_session(first)
   let page : @protocol.CloudHistoryCachePage = {
+    settings: Some({ "model": "deepseek-v4-pro", "thinking": "max" }),
     session: {
       version: None,
       id: None,
@@ -35,7 +36,16 @@ async test "Cloud history survives a host restart and follows account retirement
   let read = { ..write, action: Read(session="chat-a"), }
   assert_true(
     reopened.cloud_history_cache(read)
-    is Page(Some({ etag: Some("etag-1"), offset: Some(3), .. })),
+    is Page(
+      Some(
+        {
+          etag: Some("etag-1"),
+          offset: Some(3),
+          settings: Some({ "model": "deepseek-v4-pro", "thinking": "max", .. }),
+          ..
+        }
+      )
+    ),
   )
   assert_true(
     reopened.cloud_history_cache({ ..write, action: List, })

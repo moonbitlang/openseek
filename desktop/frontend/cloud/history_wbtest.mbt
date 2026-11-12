@@ -18,6 +18,7 @@ fn history_test_state() -> State {
 /// One turn per page; turn `offset + 1` is labelled `t<offset + 1>`.
 fn history_test_page(offset : Int32, generating~ : Bool = false) -> History {
   {
+    settings: None,
     offset: Some(offset),
     etag: Some("etag-\{offset}"),
     prediction: None,

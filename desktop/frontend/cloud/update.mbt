@@ -1393,6 +1393,7 @@ pub fn update(
       }
       let next = state.replace(id, {
         ..conversation,
+        settings_request: request,
         history_etag: Some(etag),
         history_reading: false,
         history_cache_request: None,

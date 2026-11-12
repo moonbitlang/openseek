@@ -103,6 +103,7 @@ test "Busy cannot allow another send before authoritative history recovers" {
   let (loaded, _, _) = update(
     opened,
     Loaded(1, "session", request, {
+      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -154,6 +155,7 @@ test "Busy cannot allow another send before authoritative history recovers" {
   let (recovered, _, _) = update(
     blocked,
     Loaded(1, "session", blocked.sequence, {
+      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -215,6 +217,7 @@ test "history recovery clears a send error only when the pending submission was 
         navigation=0,
       )
       let history : History = {
+        settings: None,
         prediction: None,
         session: native_document([]),
         etag: None,
@@ -318,6 +321,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
   let full = metadata_update(
     full,
     Loaded(1, "session", full.conversations["session"].request, {
+      settings: None,
       prediction: None,
       generating: true,
       session: native_document([

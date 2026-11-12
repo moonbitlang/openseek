@@ -26,6 +26,7 @@ fn deletion_state() -> State {
   let (state, _, _) = update(
     state,
     Loaded(2, "a", request, {
+      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,
@@ -75,6 +76,7 @@ test "deletion retires history and late list or poll responses" {
   for
     message in [
       Loaded(2, "a", history_request, {
+        settings: None,
         prediction: None,
         session: native_document([]),
         etag: None,
@@ -254,6 +256,7 @@ test "completed history supersedes an earlier generating list row for deletion" 
   let (completed, _, _) = update(
     state,
     Loaded(2, "a", request, {
+      settings: None,
       prediction: None,
       session: native_document([]),
       etag: None,

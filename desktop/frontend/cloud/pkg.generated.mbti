@@ -163,6 +163,8 @@ pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct Conversation {
+  settings : CommandSettings?
+  settings_request : Int32
   records : Array[Record]
   history_cached : Bool
   history_etag : String?
@@ -260,6 +262,7 @@ pub fn Event::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct History {
+  settings : CommandSettings?
   etag : String?
   offset : Int32?
   prediction : @openseek_protocol.PredictionRecord?

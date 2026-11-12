@@ -99,6 +99,7 @@ test "Cloud rereads a turn cached while running once the next turn is latest" {
     engine_sequence: Some(1),
   }
   let running : History = {
+    settings: None,
     offset: Some(0),
     etag: Some("running"),
     generating: true,
@@ -224,6 +225,7 @@ test "Cloud hides a sealed reasoning preview only after this step committed it" 
     "payload": { "content": "Earlier", "reasoning_content": "Plan" },
   }
   let page : History = {
+    settings: None,
     offset: Some(0),
     etag: Some("page"),
     generating: true,
@@ -276,6 +278,7 @@ test "Cloud keeps an assistant preview when the latest page moves past its turn"
     engine_sequence: Some(1),
   }
   let first : History = {
+    settings: None,
     offset: Some(0),
     prediction: None,
     generating: false,
@@ -363,6 +366,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     ],
   )
   let committed : History = {
+    settings: None,
     prediction: None,
     generating: true,
     session: native_document([
@@ -649,6 +653,7 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
 ///|
 fn hello_page(items : Array[Json], markers : Array[Int32]) -> History {
   {
+    settings: None,
     offset: Some(0),
     etag: Some("hello-\{items.length()}"),
     generating: true,
@@ -730,6 +735,7 @@ test "Cloud tool loop hands identical replies to their own native records" {
     created_at: 1,
   }
   let page : History = {
+    settings: None,
     offset: Some(0),
     etag: Some("page"),
     generating: true,

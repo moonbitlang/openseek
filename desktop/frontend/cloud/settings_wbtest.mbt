@@ -1,6 +1,6 @@
 ///|
 test "Cloud command settings use Local defaults and reject malformed preferences" {
-  let defaults : CommandSettings = @json.from_json({})
+  let defaults = CommandSettings::default()
   assert_true(defaults == CommandSettings::default())
   assert_eq(ToJson::to_json(defaults), {
     "model": "deepseek-flash",
