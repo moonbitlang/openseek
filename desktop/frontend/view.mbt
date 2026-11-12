@@ -692,8 +692,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     schedules_active: self.management_dialog is Some(Schedules),
     skills_active: self.management_dialog is Some(Skills),
     settings_active: self.management_dialog is Some(Settings(_)),
-    // Only a relay serves the apps; the window and the Local Console do not.
-    downloads: !self.is_desktop && !self.is_local_console(),
+    downloads: self.relay_downloads(),
     account,
   }.filtered()
 }
@@ -2581,7 +2580,7 @@ fn view(
       locale=model.locale,
       dispatch.map(msg => FileShareDialog(msg)),
     ),
-    model.download_dialog.view(model.locale),
+    model.downloads.dialog(model.locale),
     // Authentication input is deliberately DOM-only. Keep this slot before
     // conditional overlays so resize/toasts cannot replace its input node.
     if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
@@ -3044,6 +3043,19 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         type_="button",
         on_click=dispatch(RemoteConnectClicked),
         shell_text(locale, SignInGitHub),
+      ),
+    )
+  }
+  // A first visit lands here with the phone sidebar closed, before any
+  // account exists, so the downloads are listed beside sign-in too.
+  if model.relay_downloads() {
+    children.push(
+      @html.section(
+        class="cloud-home-downloads",
+        attrs=@html.Attrs::build().aria_label(
+          @sidebar_messages.text(locale, DownloadApps),
+        ),
+        model.downloads.list(locale),
       ),
     )
   }

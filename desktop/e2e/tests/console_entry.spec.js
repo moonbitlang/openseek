@@ -72,29 +72,40 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a signed-out visitor opens the relay app downloads from the sidebar', async ({ page }) => {
+test('a signed-out visitor finds the relay app downloads beside sign-in and in the sidebar', async ({ page }) => {
   const app = await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
-  await page.route('**/desktop/releases/latest.json', route => route.fulfill({ json: {
-    version: '0.3.1',
-    url: 'https://example.com/releases/0.3.1',
-    platforms: {
-      'macos-arm64': { url: 'https://example.com/mac.tar.gz' },
-      'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
-      'windows-x64': { url: 'https://example.com/win.zip' },
-    },
-  } }));
+  let manifestRequests = 0;
+  await page.route('**/desktop/releases/latest.json', route => {
+    manifestRequests += 1;
+    return route.fulfill({ json: {
+      version: '0.3.1',
+      url: 'https://example.com/releases/0.3.1',
+      platforms: {
+        'macos-arm64': { url: 'https://example.com/mac.tar.gz' },
+        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
+        'windows-x64': { url: 'https://example.com/win.zip' },
+        browser: { url: 'https://example.com/console.tar.gz' },
+      },
+    } });
+  });
   await page.goto('/cloud');
+  const inline = page.getByRole('main').getByRole('region', { name: 'Download apps' });
+  await expect(inline.getByRole('link', { name: /macOS · Apple Silicon/ }))
+    .toHaveAttribute('href', 'https://example.com/mac.dmg');
+  await expect(inline.getByRole('link', { name: /Windows · x64/ }))
+    .toHaveAttribute('href', 'https://example.com/win.zip');
+  await expect(inline.getByRole('link', { name: 'All releases on GitHub' }))
+    .toHaveAttribute('href', 'https://example.com/releases/0.3.1');
+  await expect(inline.getByRole('link')).toHaveCount(3);
+  await assertFits(page);
+  // The sidebar's dialog shows the list the page already read.
   await page.locator('.sidebar-toggle').click();
   await page.getByRole('button', { name: 'Download apps' }).click();
   const dialog = page.getByRole('dialog', { name: 'Download apps' });
   await expect(dialog.getByRole('link', { name: /macOS · Apple Silicon/ }))
     .toHaveAttribute('href', 'https://example.com/mac.dmg');
-  await expect(dialog.getByRole('link', { name: /Windows · x64/ }))
-    .toHaveAttribute('href', 'https://example.com/win.zip');
-  await expect(dialog.getByRole('link', { name: 'All releases on GitHub' }))
-    .toHaveAttribute('href', 'https://example.com/releases/0.3.1');
-  await assertFits(page);
+  expect(manifestRequests).toBe(1);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   expect(app.pageErrors).toEqual([]);

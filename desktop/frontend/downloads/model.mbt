@@ -1,9 +1,10 @@
-// The relay console's app downloads: one native dialog that reads the
-// relay's published desktop manifest each time it opens.
+// The relay console's app downloads, read from the relay's published
+// desktop manifest. The sign-in page lists them inline; the sidebar opens
+// the same list in a dialog.
 
 ///|
-/// Each opening fetches the manifest again and advances the generation, so a
-/// reply from an earlier opening cannot replace the current one.
+/// Each fetch advances the generation, so a reply from an earlier fetch
+/// cannot replace the current one.
 #derive(Eq)
 pub struct Model {
   generation : Int32
@@ -15,9 +16,11 @@ pub extend Model with Eq::{equal, not_equal}
 
 ///|
 /// `Unavailable` covers a deployment without a manifest as well as a failed
-/// or malformed fetch: either way the dialog points at the GitHub releases.
+/// or malformed fetch: either way the list points at the GitHub releases.
 #derive(Eq, Debug)
 pub enum Release {
+  // No fetch has been started.
+  Idle
   Loading
   Ready(version~ : String, page_url~ : String, targets~ : Array[Target])
   Unavailable
@@ -60,16 +63,26 @@ const FallbackReleasesUrl : String = "https://github.com/moonbitlang/openseek/re
 
 ///|
 pub fn Model::Model() -> Model {
-  { generation: 0, release: Loading, }
+  { generation: 0, release: Idle, }
 }
 
 ///|
-pub fn Model::open(self : Model, emit : @cmd.Emit[Msg]) -> (@cmd.Cmd, Model) {
+pub fn Model::load(self : Model, emit : @cmd.Emit[Msg]) -> (@cmd.Cmd, Model) {
   let generation = self.generation + 1
-  (
-    @cmd.batch([@dialog.show(DialogId), fetch_manifest(emit, generation)]),
-    { generation, release: Loading, },
-  )
+  (fetch_manifest(emit, generation), { generation, release: Loading, })
+}
+
+///|
+/// The dialog reuses a loaded or loading manifest and retries one that never
+/// loaded or could not be read.
+pub fn Model::open(self : Model, emit : @cmd.Emit[Msg]) -> (@cmd.Cmd, Model) {
+  match self.release {
+    Ready(..) | Loading => (@dialog.show(DialogId), self)
+    Idle | Unavailable => {
+      let (fetch, model) = self.load(emit)
+      (@cmd.batch([@dialog.show(DialogId), fetch]), model)
+    }
+  }
 }
 
 ///|
@@ -167,7 +180,10 @@ fn parse_manifest(body : String) -> Release {
     push_platform(key)
   }
   for key, _ in platforms {
-    if !known_platforms.contains(key) && !key.has_suffix("-dmg") {
+    // `browser` is the relay console's own archive, not an app to install.
+    if !known_platforms.contains(key) &&
+      key != "browser" &&
+      !key.has_suffix("-dmg") {
       push_platform(key)
     }
   }

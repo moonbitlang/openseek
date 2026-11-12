@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "openseek_desktop/frontend/download_dialog"
+package "openseek_desktop/frontend/downloads"
 
 import {
   "moonbit-community/rabbita/cmd",
@@ -19,11 +19,13 @@ pub struct Model {
   release : Release
 }
 pub fn Model::Model() -> Self
+pub fn Model::dialog(Self, @i18n.Locale) -> @html.Html
 pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::list(Self, @i18n.Locale) -> @html.Html
+pub fn Model::load(Self, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
 pub fn Model::update(Self, Msg) -> Self
-pub fn Model::view(Self, @i18n.Locale) -> @html.Html
 
 pub(all) enum Msg {
   Fetched(generation~ : Int32, status~ : Int32, body~ : String)
@@ -32,6 +34,7 @@ pub(all) enum Msg {
 
 #derive(Eq, @debug.Debug)
 pub enum Release {
+  Idle
   Loading
   Ready(version~ : String, page_url~ : String, targets~ : Array[Target])
   Unavailable
