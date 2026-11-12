@@ -80,8 +80,8 @@ pub impl Show for ToolchainUnavailable with fn output(_self, logger) {
 
 ///|
 /// Locate the MoonBit toolchain the desktop hands to engines and the LSP
-/// pool: the bundled seed's prepared payload when the app ships one,
-/// otherwise the first external toolchain found. Raises
+/// pool. `DesktopBundle` prefers the user's own installation and falls back to
+/// the bundled seed's prepared payload (see [desktop_toolchain]). Raises
 /// [ToolchainUnavailable] when the machine has none; a bundled seed that
 /// fails to prepare raises a plain failure — that is the app's own artifact
 /// breaking, not machine configuration.
@@ -90,27 +90,67 @@ pub async fn resolve_toolchain(
   runtime_dir? : @pathx.Path,
   source~ : ToolchainSource = DesktopBundle,
 ) -> ResolvedToolchain {
-  let (seed_dir, payload_name) = match source {
-    DesktopBundle => (bundled_moonbit_seed_dir(engine_command), None)
-    External => (None, None)
-    Bundled(platform~, seed_dir~) => (Some(seed_dir), Some(platform))
+  let path_env = @env.get("PATH")
+  let home_dir = @home.dir()
+  match source {
+    DesktopBundle =>
+      desktop_toolchain(engine_command, runtime_dir?, path_env?, home_dir?)
+    External => external_toolchain(path_env?, home_dir?)
+    Bundled(platform~, seed_dir~) =>
+      bundled_toolchain(seed_dir, runtime_dir?, payload_name=platform)
   }
-  if seed_dir is Some(seed_dir) {
-    guard prepared_bundled_moonbit_payload(
-        seed_dir~,
-        runtime_dir?,
-        payload_name?,
-      )
-      is Some(payload) else {
-      fail("failed to prepare bundled MoonBit toolchain")
-    }
-    guard moonbit_bin_dir(payload).to_absolute() is Some(bin_dir) &&
-      toolchain_at(bin_dir) is Some(toolchain) else {
-      fail("bundled MoonBit toolchain payload is not a complete toolchain")
-    }
-    return toolchain
+}
+
+///|
+/// The user's toolchain, found the way their shell finds `moon`, wins as long
+/// as it also carries the `moonx` the host spawns for registry tools. The
+/// bundled seed fills in only when no such installation exists, so a working
+/// user install is used as-is and the seed's payload is never prepared.
+async fn desktop_toolchain(
+  engine_command : String,
+  runtime_dir? : @pathx.Path,
+  path_env? : String,
+  home_dir? : @pathx.Path,
+) -> ResolvedToolchain {
+  let external = try external_toolchain(path_env?, home_dir?) catch {
+    ToolchainUnavailable => None
+    error => raise error
+  } noraise {
+    toolchain => Some(toolchain)
   }
-  external_toolchain(path_env?=@env.get("PATH"), home_dir?=@home.dir())
+  if external is Some(toolchain) {
+    let moonx = toolchain.bin_dir.join("moonx" + ExecutableSuffix)
+    if @fsx.is_executable_file(moonx.to_path()) {
+      return toolchain
+    }
+    @xlog.debug() <?
+      {
+        "event": "desktop_moonbit_external_without_moonx",
+        "bin_dir": toolchain.bin_dir.to_string(),
+      }
+  }
+  if bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) {
+    return bundled_toolchain(seed_dir, runtime_dir?)
+  }
+  guard external is Some(toolchain) else { raise ToolchainUnavailable }
+  toolchain
+}
+
+///|
+async fn bundled_toolchain(
+  seed_dir : @pathx.Absolute,
+  runtime_dir? : @pathx.Path,
+  payload_name? : String,
+) -> ResolvedToolchain {
+  guard prepared_bundled_moonbit_payload(seed_dir~, runtime_dir?, payload_name?)
+    is Some(payload) else {
+    fail("failed to prepare bundled MoonBit toolchain")
+  }
+  guard moonbit_bin_dir(payload).to_absolute() is Some(bin_dir) &&
+    toolchain_at(bin_dir) is Some(toolchain) else {
+    fail("bundled MoonBit toolchain payload is not a complete toolchain")
+  }
+  toolchain
 }
 
 ///|

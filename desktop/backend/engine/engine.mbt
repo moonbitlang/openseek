@@ -2990,8 +2990,6 @@ async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))
   defer (@fs.rmdir(root.to_string(), recursive=true) catch { _ => () })
-  // Every packaged platform uses the same `seekmoon/` tree below Proton's
-  // resource directory, so engine process setup observes one layout.
   let input = root.join("Resources/seekmoon")
   let engine = input.join("bin/openseek")
   let seed = input.join("toolchains/moonbit/macos-arm64")
@@ -2999,6 +2997,16 @@ async test "native engine env has one authoritative bundled moon path" {
   let moon_home = runtime.join("toolchains/moonbit/macos-arm64")
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test")
+  // Selected explicitly: desktop discovery would prefer this machine's own
+  // toolchain over the seed.
+  guard @moonbit.bundled_source(
+      platform="macos-arm64",
+      host_platform="Darwin-arm64",
+      seed_dir=seed.resolve().to_string(),
+    )
+    is Some(source) else {
+    fail("test fixture seed marker is missing")
+  }
   let config : RunConfig = {
     system_prompt: None,
     content: Content([Text("t")]),
@@ -3015,7 +3023,7 @@ async test "native engine env has one authoritative bundled moon path" {
     session_root: None,
     mcp_config: None,
   }
-  let env = engine_process_env(config, Some(runtime))
+  let env = engine_process_env(config, Some(runtime), source~)
   assert_eq(env["OPENSEEK_THINKING"], "high")
   assert_eq(env["DEEPSEEK"], "k")
   // A GLM run's key travels in GLM, and the resolved variable — not a
