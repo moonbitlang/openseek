@@ -1104,6 +1104,7 @@ button.row-twisty:hover {
   color: var(--color-text-secondary);
   padding: 0 var(--space-4);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 
   & .sidebar-icon {

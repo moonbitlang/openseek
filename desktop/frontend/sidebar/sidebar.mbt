@@ -16,6 +16,9 @@ pub(all) struct Account {
   page : Page
   // The account's online devices, in roster order; the selector offers these.
   online_devices : Array[DeviceChoice]
+  // The relay's app download page; None where the page is not served by the
+  // relay (the Local Console).
+  downloads_url : String?
 }
 
 ///|
@@ -346,6 +349,26 @@ pub fn component(
           @messages.text(input.locale, SignOut),
         ),
       )
+      if account.downloads_url is Some(url) {
+        footer.push(
+          @html.a(
+            class="sidebar-button",
+            href=url,
+            target=Blank,
+            rel="noopener",
+            [
+              @html.span(
+                class="sidebar-icon",
+                @icons.icon(@icons.icon_arrow_down),
+              ),
+              @html.span(
+                class="sidebar-label",
+                @messages.text(input.locale, DownloadApps),
+              ),
+            ],
+          ),
+        )
+      }
       let choose = @messages.text(input.locale, ChooseDevice)
       footer.push(
         @rui.popover_trigger(

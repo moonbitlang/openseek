@@ -28,6 +28,7 @@ pub(all) struct Account {
   notice : String?
   page : Page
   online_devices : Array[DeviceChoice]
+  downloads_url : String?
 }
 pub fn Account::equal(Self, Self) -> Bool
 pub fn Account::not_equal(Self, Self) -> Bool

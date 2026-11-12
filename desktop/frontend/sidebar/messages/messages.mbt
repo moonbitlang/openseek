@@ -35,6 +35,7 @@ pub(all) enum Message {
   NoDevicesOnline
   Refresh
   SignOut
+  DownloadApps
 }
 
 ///|
@@ -211,5 +212,10 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, SignOut) => "退出登录"
     (TraditionalChinese, SignOut) => "退出登入"
     (Japanese, SignOut) => "ログアウト"
+    (English, DownloadApps) => "Download apps"
+    (Spanish, DownloadApps) => "Descargar las apps"
+    (SimplifiedChinese, DownloadApps) => "下载客户端"
+    (TraditionalChinese, DownloadApps) => "下載用戶端"
+    (Japanese, DownloadApps) => "アプリをダウンロード"
   }
 }
