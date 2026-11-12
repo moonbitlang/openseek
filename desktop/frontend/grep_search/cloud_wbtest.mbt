@@ -178,7 +178,18 @@ test "Cloud pattern repair carries selected engine settings without Host routing
   assert_eq(cloud_pattern_repair_body(request), {
     "pattern": "broken",
     "generation": Json(request.generation),
-    "model": "deepseek-v4-pro",
-    "thinking": "max",
+    "settings": { "model": "deepseek-v4-pro", "thinking": "max" },
   })
+  assert_eq(
+    cloud_pattern_repair_body({
+      ..request,
+      model: "deepseek-flash",
+      thinking: None,
+    }),
+    {
+      "pattern": "broken",
+      "generation": Json(request.generation),
+      "settings": { "model": "deepseek-flash" },
+    },
+  )
 }

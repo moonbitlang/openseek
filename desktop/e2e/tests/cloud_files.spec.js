@@ -750,7 +750,7 @@ test('Cloud AI pattern repair uses the selected model and reasoning', async ({ p
   await search.getByRole('textbox', { name: 'pattern', exact: true }).fill('broken');
   await search.locator('.pattern-repair-button').click();
   await expect.poll(() => repairs.length).toBe(1);
-  expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number), model: 'deepseek-v4-pro', thinking: 'max' });
+  expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number), settings: { model: 'deepseek-v4-pro', thinking: 'max' } });
   await expect(search.getByRole('textbox', { name: 'pattern', exact: true })).toHaveValue('inspect($_)');
   expect(cloud.device.pageErrors).toEqual([]);
 });
