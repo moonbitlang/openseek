@@ -1,6 +1,6 @@
 name = "moonbitlang/editor-server"
 
-version = "0.1.0"
+version = "0.1.1"
 
 license = "Apache-2.0"
 
@@ -13,6 +13,6 @@ preferred_target = "wasm"
 warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_package"
 
 import {
-  "moonbitlang/editor@0.4.6",
+  "moonbitlang/editor@0.4.7",
   "moonbitlang/async@0.22.7",
 }

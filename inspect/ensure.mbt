@@ -10,7 +10,7 @@ let inspect_server_name : String = "moonbitlang/inspect"
 ///|
 /// This module's version as `/api/info` reports it. Must equal `version` in
 /// moon.mod; a test keeps them in step.
-let inspect_version : String = "0.1.0"
+let inspect_version : String = "0.1.1"
 
 ///|
 /// FNV-1a over the UTF-8 bytes of `text`: a stable, dependency-free hash for

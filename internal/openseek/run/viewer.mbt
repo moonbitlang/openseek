@@ -1,6 +1,6 @@
 ///|
 /// The session viewer release `--inspect` starts, run through `moonx`.
-let inspect_package : String = "moonbitlang/inspect@0.1.0"
+let inspect_package : String = "moonbitlang/inspect@0.1.1"
 
 ///|
 /// How long `--inspect` waits for the viewer to report its URL. The first

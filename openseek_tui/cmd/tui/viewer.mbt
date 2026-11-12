@@ -2,7 +2,7 @@
 /// The session viewer release `/inspect` starts, run through `moonx`. It is
 /// the same `--ensure` server `openseek run --inspect` uses, so every run and
 /// TUI in a project shares one.
-const InspectPackage : String = "moonbitlang/inspect@0.1.0"
+const InspectPackage : String = "moonbitlang/inspect@0.1.1"
 
 ///|
 /// How long `/inspect` waits for the viewer's URL. The first launch downloads

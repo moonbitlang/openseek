@@ -90,7 +90,7 @@ process never changes directory: the workspace (`--dir`), a relative
 at launch, and the engine and `!` shell commands are spawned there.
 
 `/inspect` shows the session live in the browser. It starts (or reuses) the
-session viewer for `--session-root`, `moonx moonbitlang/inspect@0.1.0 --ensure
+session viewer for `--session-root`, `moonx moonbitlang/inspect@0.1.1 --ensure
 --watch`, in the background, and adds its link to the transcript on a line of
 its own. The page opens on this session and follows it as the conversation
 grows. The viewer is its own process, shared with every other TUI and
