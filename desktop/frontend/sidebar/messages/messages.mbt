@@ -42,7 +42,6 @@ pub(all) enum Message {
   NotificationsNeedInstall
   TurnOn
   TurnOff
-  SendTest
 }
 
 ///|
@@ -264,10 +263,5 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, TurnOff) => "关闭"
     (TraditionalChinese, TurnOff) => "關閉"
     (Japanese, TurnOff) => "オフにする"
-    (English, SendTest) => "Test"
-    (Spanish, SendTest) => "Probar"
-    (SimplifiedChinese, SendTest) => "测试"
-    (TraditionalChinese, SendTest) => "測試"
-    (Japanese, SendTest) => "テスト"
   }
 }

@@ -96,8 +96,8 @@ duplication is the cost; the alternative is i18n in openseek-api.
     configured, local console, proxy `--demo`, or unreachable). The row is
     hidden until the next page load.
   - `Off`: Turn on.
-  - `Working`: prompt, subscribe, unsubscribe or test in flight.
-  - `On`: Test, and Turn off.
+  - `Working`: prompt, subscribe or unsubscribe in flight.
+  - `On`: Turn off.
   - `Blocked`: permission denied; points at browser settings.
 - **Turn on** (user gesture): `Notification.requestPermission()` runs first,
   before anything waits. Then `pushManager.subscribe({userVisibleOnly: true,

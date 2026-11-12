@@ -28,15 +28,12 @@ pub(all) enum Msg {
   Probed(Probe)
   TurnOn
   TurnOff
-  SendTest
   TurnedOn
   Denied
   Dismissed
   TurnOnFailed(String)
   TurnedOff
   TurnOffFailed(String)
-  TestSent
-  TestFailed(String)
 }
 pub fn Msg::equal(Self, Self) -> Bool
 pub fn Msg::not_equal(Self, Self) -> Bool

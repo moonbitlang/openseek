@@ -110,7 +110,6 @@ pub(all) struct Actions {
   open_downloads : @cmd.Cmd
   turn_on_notifications : @cmd.Cmd
   turn_off_notifications : @cmd.Cmd
-  test_notification : @cmd.Cmd
   // Switch the page to the device with this id, or to Cloud with None.
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
@@ -549,20 +548,11 @@ fn notifications_row(
     Off(..) =>
       (NotificationsOff, [action(TurnOn, actions.turn_on_notifications, false)])
     Busy =>
-      (
-        NotificationsOn,
-        [
-          action(SendTest, actions.test_notification, true),
-          action(TurnOff, actions.turn_off_notifications, true),
-        ],
-      )
+      (NotificationsOn, [action(TurnOff, actions.turn_off_notifications, true)])
     On(..) =>
       (
         NotificationsOn,
-        [
-          action(SendTest, actions.test_notification, false),
-          action(TurnOff, actions.turn_off_notifications, false),
-        ],
+        [action(TurnOff, actions.turn_off_notifications, false)],
       )
     Blocked => (NotificationsBlocked, [])
   }

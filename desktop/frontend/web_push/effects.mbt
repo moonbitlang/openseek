@@ -218,29 +218,6 @@ fn turn_off(ctx : Ctx, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
 }
 
 ///|
-fn send_test(ctx : Ctx, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
-  @cmd.attempt(
-    (result : Result[Unit, Error]) => {
-      emit(
-        match result {
-          Ok(_) => TestSent
-          Err(error) => TestFailed(error.to_string())
-        },
-      )
-    },
-    () => {
-      guard current_subscription() is Some(subscription) else {
-        raise PushError("this device is not subscribed")
-      }
-      let (status, _) = relay("/v2/push/test", Post, token=ctx.token, body={
-        "endpoint": endpoint_of(subscription),
-      })
-      expect_success("the test notification", status)
-    },
-  )
-}
-
-///|
 /// Register the existing subscription again; nothing waits on the result.
 fn resync(ctx : Ctx) -> @cmd.Cmd {
   @cmd.attempt((_ : Result[Unit, Error]) => @cmd.none, () => {

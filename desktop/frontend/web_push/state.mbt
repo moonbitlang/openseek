@@ -15,7 +15,7 @@ pub enum State {
   // The relay has no push configured (or this host is not a relay).
   Unavailable
   Off(key~ : String, error~ : String?)
-  // A permission prompt, subscribe, unsubscribe or test is in flight.
+  // A permission prompt, subscribe or unsubscribe is in flight.
   Working(key~ : String)
   On(key~ : String, error~ : String?)
   // The user denied notifications for this site; only browser settings can
@@ -52,7 +52,6 @@ pub(all) enum Msg {
   Probed(Probe)
   TurnOn
   TurnOff
-  SendTest
   // The outcome of TurnOn: subscribed and registered, denied, the prompt
   // dismissed, or failed.
   TurnedOn
@@ -61,8 +60,6 @@ pub(all) enum Msg {
   TurnOnFailed(String)
   TurnedOff
   TurnOffFailed(String)
-  TestSent
-  TestFailed(String)
 }
 
 ///|
@@ -100,10 +97,6 @@ pub fn State::update(
     (On(key~, ..), TurnOff) => (Working(key~), turn_off(ctx, emit))
     (Working(key~), TurnedOff) => (Off(key~, error=None), @cmd.none)
     (Working(key~), TurnOffFailed(error)) =>
-      (On(key~, error=Some(error)), @cmd.none)
-    (On(key~, ..), SendTest) => (Working(key~), send_test(ctx, emit))
-    (Working(key~), TestSent) => (On(key~, error=None), @cmd.none)
-    (Working(key~), TestFailed(error)) =>
       (On(key~, error=Some(error)), @cmd.none)
     // Anything else is a stale reply or a click on a control the state does
     // not show.

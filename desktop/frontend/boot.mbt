@@ -545,7 +545,6 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     open_downloads: self.emit(OpenDownloads),
     turn_on_notifications: self.emit(WebPush(TurnOn)),
     turn_off_notifications: self.emit(WebPush(TurnOff)),
-    test_notification: self.emit(WebPush(SendTest)),
     select_device: id => self.emit(DeviceChosen(id)),
     select_mode: mode => self.emit(SidebarModeSelected(mode)),
     section,

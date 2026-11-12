@@ -43,18 +43,16 @@ async function relayPush(page, { key = 'BKEY' } = {}) {
   await page.route('**/v2/push/key', route => key === null
     ? route.fulfill({ status: 404, body: '' })
     : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ public_key: key }) }));
-  for (const path of ['subscription', 'test']) {
-    await page.route(`**/v2/push/${path}`, async route => {
-      const request = route.request();
-      calls.push({
-        path,
-        method: request.method(),
-        authorization: (await request.allHeaders()).authorization,
-        body: JSON.parse(request.postData() ?? 'null'),
-      });
-      await route.fulfill({ status: path === 'test' ? 202 : 204 });
+  await page.route('**/v2/push/subscription', async route => {
+    const request = route.request();
+    calls.push({
+      path: 'subscription',
+      method: request.method(),
+      authorization: (await request.allHeaders()).authorization,
+      body: JSON.parse(request.postData() ?? 'null'),
     });
-  }
+    await route.fulfill({ status: 204 });
+  });
   return calls;
 }
 
@@ -82,13 +80,9 @@ test('turning notifications on registers the worker and the subscription with th
     body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture', keys: { p256dh: 'BPUB', auth: 'AUTH' }, locale: 'en' },
   }]);
 
-  await page.getByRole('button', { name: 'Test', exact: true }).click();
-  await expect.poll(() => calls.length).toBe(2);
-  expect(calls[1]).toMatchObject({ path: 'test', method: 'POST', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
-
   await page.getByRole('button', { name: 'Turn off', exact: true }).click();
   await expect(page.getByText('Notifications off', { exact: true })).toBeVisible();
-  expect(calls[2]).toMatchObject({ path: 'subscription', method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
+  expect(calls[1]).toMatchObject({ path: 'subscription', method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
   expect(await page.evaluate(() => window.__push.unsubscribed)).toBe(1);
   expect(app.pageErrors).toEqual([]);
 });

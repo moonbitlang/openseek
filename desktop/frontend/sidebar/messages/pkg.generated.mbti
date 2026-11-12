@@ -51,7 +51,6 @@ pub(all) enum Message {
   NotificationsNeedInstall
   TurnOn
   TurnOff
-  SendTest
 }
 
 // Type aliases

@@ -65,12 +65,6 @@ test "an enabled device turns off or sends a test, keeping failures visible" {
     step(leaving, TurnOffFailed("offline"))
     is On(key="k", error=Some("offline")),
   )
-  let testing = step(on, SendTest)
-  assert_true(testing is Working(key="k"))
-  assert_true(step(testing, TestSent) is On(key="k", error=None))
-  assert_true(
-    step(testing, TestFailed("HTTP 404")) is On(key="k", error=Some("HTTP 404")),
-  )
 }
 
 ///|
@@ -85,7 +79,6 @@ test "stale replies and hidden controls change nothing" {
   assert_eq(step(on, TurnOn), on)
   let off = step(on |> step(TurnOff), TurnedOff)
   assert_eq(step(off, TurnOff), off)
-  assert_eq(step(off, SendTest), off)
   // A reply with nothing in flight.
   assert_eq(step(off, TurnedOn), off)
   let blocked = step(

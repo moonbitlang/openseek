@@ -45,7 +45,6 @@ pub(all) struct Actions {
   open_downloads : @cmd.Cmd
   turn_on_notifications : @cmd.Cmd
   turn_off_notifications : @cmd.Cmd
-  test_notification : @cmd.Cmd
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
