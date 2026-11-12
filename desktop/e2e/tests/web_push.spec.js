@@ -122,7 +122,8 @@ test('a site already denied reads as blocked', async ({ page }) => {
   await page.goto('/index.html?device=device-a');
   await openAccountSettings(page);
   await expect(page.getByText('Notifications are blocked in browser settings', { exact: true })).toBeVisible();
-  await expect(toggle(page)).toHaveCount(0);
+  await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
+  await expect(toggle(page)).toBeDisabled();
   expect(app.pageErrors).toEqual([]);
 });
 

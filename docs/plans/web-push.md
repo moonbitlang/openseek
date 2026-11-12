@@ -91,7 +91,7 @@ duplication is the cost; the alternative is i18n in openseek-api.
   `frontend/web_push` owns the state machine, which is its blackbox-tested
   contract:
   - `Unsupported`: no Push API. On iOS Safari this means "not installed", and
-    the row says to add the app to the Home Screen.
+    the row says to add the app to the Home Screen, beside a disabled switch.
   - `Unavailable`: `GET /v2/push/key` answers anything but 200 (relay not
     configured, local console, proxy `--demo`, or unreachable). The row is
     hidden until the next page load.
@@ -102,7 +102,8 @@ duplication is the cost; the alternative is i18n in openseek-api.
     `POST /v2/push/test` for this device. After a 202 the row says the test
     was sent and that, with the page in front, the system may file it in
     Notification Center without a banner.
-  - `Blocked`: permission denied; points at browser settings.
+  - `Blocked`: permission denied; points at browser settings, beside a
+    disabled switch.
 - **Turn on** (user gesture): `Notification.requestPermission()` runs first,
   before anything waits. Then `pushManager.subscribe({userVisibleOnly: true,
   applicationServerKey})` on the ready registration, then

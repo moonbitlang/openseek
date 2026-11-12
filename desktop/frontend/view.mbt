@@ -1022,8 +1022,10 @@ fn settings_notifications_row(
   let (controls, desc, error) : (Array[@html.Html], @settings.Message, String?) = match
     model.web_push {
     Checking | Unavailable => return None
-    Unsupported => ([], PushNotificationsNeedInstall, None)
-    Blocked => ([], PushNotificationsBlocked, None)
+    // Off and disabled where only the browser can change it, so the row
+    // reads like its neighbours.
+    Unsupported => ([switch(false, None)], PushNotificationsNeedInstall, None)
+    Blocked => ([switch(false, None)], PushNotificationsBlocked, None)
     Off(error~, ..) =>
       ([switch(false, Some(TurnOn))], PushNotificationsDescription, error)
     Working(on~, ..) =>
