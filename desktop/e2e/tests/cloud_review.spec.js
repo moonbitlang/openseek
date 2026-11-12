@@ -7,6 +7,7 @@ class CloudReviewHarness extends CloudHarness {
     this.reviewRequests = [];
     this.repository = true;
     this.reviewStatus = 200;
+    this.reviewError = '';
     this.fileRevision = 1;
     this.holdOriginal = null;
   }
@@ -25,7 +26,7 @@ class CloudReviewHarness extends CloudHarness {
       const body = request.postDataJSON();
       this.reviewRequests.push({ session, operation, body, method: request.method(), headers: await request.allHeaders() });
       if (operation === 'original-file' && this.holdOriginal) await this.holdOriginal;
-      if (this.reviewStatus !== 200) return json({}, this.reviewStatus);
+      if (this.reviewStatus !== 200) return route.fulfill({ status: this.reviewStatus, headers, contentType: 'text/plain', body: this.reviewError });
       const method = { changes: 'git.changes', 'original-file': 'git.original_file', history: 'git.history', 'commit-changes': 'git.commit_changes' }[operation];
       const reply = this.device.replyFor({ method, params: { ...body, session, workspace: '/workspace' } });
       if (operation === 'changes' || operation === 'history') reply.repository = this.repository;
@@ -154,5 +155,36 @@ test('Cloud review reuses the non-Git notice and allows retry after an unavailab
   cloud.reviewStatus = 200; cloud.repository = false;
   await page.getByRole('tab', { name: /Changes/ }).click();
   await expect(page.locator('#review-changes-body')).toContainText('Git is unavailable or this workspace is not a Git repository.');
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud review preserves Git rejection reasons and retries without treating checkout conflicts as generation', async ({ page }, testInfo) => {
+  const cloud = new CloudReviewHarness(page);
+  cloud.reviewStatus = 409;
+  cloud.reviewError = 'Git checkout kept changing while changes were read';
+  await cloud.install(); await cloud.goto(); await cloud.openReview();
+  const body = page.locator('#review-changes-body');
+  await expect(body).toContainText(cloud.reviewError);
+  await expect(body).not.toContainText('already generating');
+  await page.screenshot({ path: testInfo.outputPath('cloud-review-checkout-conflict.png') });
+  for (const [status, reason] of [
+    [400, 'custom Git clean/process filters are not supported by Cloud review'],
+    [403, 'Git metadata must remain inside the workspace'],
+    [409, ''],
+  ]) {
+    cloud.reviewStatus = status; cloud.reviewError = reason;
+    await page.getByRole('tab', { name: /Changes/ }).click();
+    await expect(body).toContainText(reason || `HTTP ${status}`);
+    await expect(body).not.toContainText('already generating');
+  }
+  cloud.reviewStatus = 200;
+  await page.getByRole('tab', { name: /Changes/ }).click();
+  await expect(changedMain(page)).toBeVisible();
+  cloud.reviewStatus = 409;
+  cloud.reviewError = 'Git checkout kept changing while changes were read';
+  const before = cloud.reviewRequests.filter(request => request.operation === 'changes').length;
+  await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
+  await expect.poll(() => cloud.reviewRequests.filter(request => request.operation === 'changes').length).toBeGreaterThan(before);
+  await expect(changedMain(page)).toBeVisible();
   expect(cloud.device.pageErrors).toEqual([]);
 });

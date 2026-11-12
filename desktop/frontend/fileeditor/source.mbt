@@ -289,13 +289,35 @@ async fn[Payload : ToJson, Reply : FromJson] read_review_source(
         fields.remove("workspace")
         fields.remove("session")
       }
-      let json = @cloud_client.request(
-        @cloud.CloudOrigin,
+      let (response, data) = @http.request(
+        @cloud.CloudOrigin +
         "/v1/sessions/\{@uri.encode_component(session)}/review/\{endpoint}",
         Post,
-        token=cloud.token,
-        body~,
-      )
+        {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer \{cloud.token}",
+        },
+        body.stringify(),
+      ) catch {
+        _ => raise @cloud_client.RequestError(@cloud_client.Unreachable)
+      }
+      match response.code {
+        200 | 201 | 204 => ()
+        401 => @cloud_client.check_status(response.code)
+        _ => {
+          // Review conflicts concern Git snapshots, not chat generation.
+          let message = data.text() catch { _ => "" }
+          guard !message.trim().is_empty() else {
+            raise @cloud_client.RequestError(@cloud_client.Http(response.code))
+          }
+          raise SourceError(
+            Diagnostic("HTTP \{response.code}: \{message.trim()}"),
+          )
+        }
+      }
+      let json = data.json() catch {
+        _ => raise @cloud_client.RequestError(@cloud_client.Malformed)
+      }
       @json.from_json(json) catch {
         _ => raise @cloud_client.RequestError(@cloud_client.Malformed)
       }
