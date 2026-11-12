@@ -73,8 +73,7 @@ export class CloudHarness {
     this.generating = new Set();
     this.archived = new Set();
     this.approvals = new Map();
-    this.inference = new Map();
-    this.taskInference = new Map();
+    this.taskSettings = new Map();
     this.histories = new Map();
     this.historyTurns = new Map();
     this.nativeNotices = new Map();
@@ -332,7 +331,7 @@ export class CloudHarness {
       }
       const envelope = request.postDataJSON();
       if (operation === 'commands' && envelope.command.command === 'prompt') {
-        return this.promptCommand(route, json, headers, session, envelope.command);
+        return this.promptCommand(route, json, headers, session, envelope.command, envelope.settings);
       }
       if (operation === 'commands' && ['goal', 'compact'].includes(envelope.command.command)) {
         if (this.controlOffline) return route.abort('failed');
@@ -394,9 +393,7 @@ export class CloudHarness {
       if (request.method() === 'POST') {
         if (this.pauseCreate) await this.pauseCreate;
         if (this.createStatus !== 201) return json({}, this.createStatus);
-        const { approval, model, thinking } = request.postDataJSON();
-        this.approvals.set(sessionC, approval);
-        this.inference.set(sessionC, { model, thinking });
+        this.approvals.set(sessionC, request.postDataJSON().approval);
         this.sessionIds = [sessionC, ...this.sessionIds.filter(id => id !== sessionC)];
         return json({ id: sessionC }, 201);
       }
@@ -404,7 +401,7 @@ export class CloudHarness {
       if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask', ...this.modelSettings(id) })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask' })) }, status);
     }
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();
@@ -416,7 +413,6 @@ export class CloudHarness {
       if (body.archived === true) this.archived.add(session);
       if (body.archived === false) this.archived.delete(session);
       if (body.approval !== undefined) this.approvals.set(session, body.approval);
-      if (body.model !== undefined || body.thinking !== undefined) this.inference.set(session, { ...this.modelSettings(session), ...body });
       return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
@@ -471,12 +467,12 @@ export class CloudHarness {
     throw new Error('Messages are read-only; use the native commands endpoint');
   }
 
-  async promptCommand(route, json, headers, session, body) {
+  async promptCommand(route, json, headers, session, body, settings = { model: 'deepseek-flash', thinking: 'high' }) {
     this.postCount++;
     const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
     if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
-    this.taskInference.set(task, this.modelSettings(session));
+    this.taskSettings.set(task, settings);
     const data = this.manualTasks ? [['task_started', {}]] : this.streamEvents || [
       ['task_started', {}],
       ['tool_call', { id: `calc-${task}`, name: 'mbtx', arguments: '{"source":"println(2)"}' }],
@@ -558,9 +554,9 @@ export class CloudHarness {
     const event = { session_id: session, task_id: task, seq: seq ?? old.seq + 1, kind, data };
     let queueAdvanced = false;
     if (kind === 'task_started') {
-      this.taskInference.set(task, this.modelSettings(session));
       const queued = old.data.queue.find(item => item.id === data.submission_id);
       if (queued) {
+        this.taskSettings.set(task, this.taskSettings.get(old.task_id));
         queueAdvanced = true;
         const history = this.histories.get(session) || { messages: [] };
         this.histories.set(session, { ...history, generating: true, messages: [...history.messages, { task_id: task, kind: 'user', data: { content: queued.content }, created_at: 1010 }] });
@@ -692,10 +688,6 @@ export class CloudHarness {
     // assert it rather than to all of them.
     await expect(this.page.locator('main .topbar-title')).toHaveText(this.titles.get(id) || 'New chat');
     await this.page.locator('#task').waitFor();
-  }
-
-  modelSettings(session) {
-    return this.inference.get(session) ?? { model: 'deepseek-flash', thinking: 'high' };
   }
 
   async create() {

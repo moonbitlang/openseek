@@ -229,7 +229,7 @@ pub fn State::creating_session(self : State) -> Bool {
 pub fn State::can_delete(self : State, id : String) -> Bool {
   self.sessions.any(session => session.id == id && !session.generating) &&
   !self.deletions.contains(id) &&
-  !self.saving_metadata(id) &&
+  !self.metadata_saves.contains(id) &&
   !self.retired.contains(id) &&
   self.conversations
   .get(id)
@@ -242,9 +242,6 @@ pub fn State::can_delete(self : State, id : String) -> Bool {
 
 ///|
 pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
-  if edit is SetInference(..) {
-    return self.can_choose_inference(id)
-  }
   guard !self.retired.contains(id) &&
     !self.deletions.contains(id) &&
     !self.metadata_saves.contains(id) &&
@@ -257,7 +254,6 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
     Archive(archived) => session.archived != archived && self.can_delete(id)
     SetApproval(mode) =>
       session.approval != mode && self.can_choose_approval(id)
-    SetInference(..) => false
   }
 }
 
@@ -313,10 +309,10 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   self.conversations.get(id) is Some(conversation) &&
   self.can_compose(id) &&
   !self.deletions.contains(id) &&
-  // The next turn's engine starts with saved settings, never values
-  // still on their way to the server.
+  // The next turn's engine starts with the saved approval mode, never one
+  // still on its way to the server.
   !(self.metadata_saves.get(id)
-  is Some({ edit: Archive(true) | SetApproval(_) | SetInference(..), .. })) &&
+  is Some({ edit: Archive(true) | SetApproval(_), .. })) &&
   !conversation.loading &&
   !conversation.sending &&
   conversation.outgoing is None &&
@@ -361,6 +357,7 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
   client_tools~ : Bool = false,
+  settings~ : (String) -> CommandSettings = _ => CommandSettings::default(),
 ) -> (State, @cmd.Cmd, String?) {
   let state = { ..state, client_tools, }
   // A boundary observed while this read was in flight may be missing from it.
@@ -382,10 +379,11 @@ pub fn update(
     }
     _ => None
   }
-  if state.update_command(msg, emit, token, navigation) is Some((next, command)) {
+  if state.update_command(msg, emit, token, navigation, settings~)
+    is Some((next, command)) {
     return (next, command, None)
   }
-  if state.update_control(msg, emit, token) is Some((next, command)) {
+  if state.update_control(msg, emit, token, settings~) is Some((next, command)) {
     return (next, command, None)
   }
   let (next, command, select) = match msg {
@@ -411,25 +409,13 @@ pub fn update(
         !state.retired.contains(session) else {
         return (state, @cmd.none, None)
       }
-      if !state.inference_ready(session) {
-        // FIXME: Retain delayed answers for retry after settings are saved,
-        // as with other failures in the existing question delivery path.
-        return (
-          state,
-          run(emit, () => {
-            QuestionInputFailed(
-              state.epoch,
-              session,
-              "Could not deliver question answer: save the model settings before sending.",
-            )
-          }),
-          None,
-        )
-      }
+      let settings = settings(session)
       (
         state,
         run(emit, () => {
-          try deliver_question_input(token, session, text, id) catch {
+          try
+            deliver_question_input(token, session, text, id, settings~)
+          catch {
             error =>
               QuestionInputFailed(
                 state.epoch,
@@ -569,8 +555,6 @@ pub fn update(
             generating: false,
             archived: false,
             approval: ApprovalAsk,
-            model: V4Flash,
-            thinking: ThinkingHigh,
           })
         }
       })
@@ -593,14 +577,7 @@ pub fn update(
       let next = {
         ..state,
         sequence: request,
-        creation: Some({
-          id,
-          request,
-          navigation,
-          approval: ApprovalAsk,
-          model: V4Flash,
-          thinking: ThinkingHigh,
-        }),
+        creation: Some({ id, request, navigation, approval: ApprovalAsk, }),
         notice: None,
       }.replace(id, {
         ..Conversation::empty(),
@@ -621,7 +598,11 @@ pub fn update(
       }
       let (next, command) = state.submit_command(
         id,
-        { request: state.sequence + 1, input: Terminal(shell), },
+        {
+          request: state.sequence + 1,
+          input: Terminal(shell),
+          settings: settings(id),
+        },
         emit,
         token,
         navigation,
@@ -646,8 +627,6 @@ pub fn update(
           generating: false,
           archived: false,
           approval: creation.approval,
-          model: creation.model,
-          thinking: creation.thinking,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -711,15 +690,15 @@ pub fn update(
       if state.creation is Some(creation) && creation.id == id {
         guard state.user_id == Some(account) &&
           token is Some(_) &&
-          state.can_choose_inference(id) else {
+          edit is SetApproval(approval) &&
+          state.can_choose_approval(id) else {
           return (state, @cmd.none, None)
         }
-        let creation = match edit {
-          SetApproval(approval) => { ..creation, approval, }
-          SetInference(model~, thinking~) => { ..creation, model, thinking, }
-          _ => return (state, @cmd.none, None)
-        }
-        return ({ ..state, creation: Some(creation), }, @cmd.none, None)
+        return (
+          { ..state, creation: Some({ ..creation, approval, }), },
+          @cmd.none,
+          None,
+        )
       }
       let edit = match edit {
         Rename(title) => Rename(title.trim().to_owned())
@@ -731,19 +710,9 @@ pub fn update(
         !(edit is Rename(title) && title.is_empty()) else {
         return (state, @cmd.none, None)
       }
-      if edit is SetInference(model~, thinking~) &&
-        state.sessions.iter().find_first(session => session.id == id)
-        is Some({ model: saved_model, thinking: saved_thinking, .. }) &&
-        model == saved_model &&
-        thinking == saved_thinking &&
-        !state.metadata_saves.contains(id) {
-        let metadata_saves = state.metadata_saves.copy()
-        metadata_saves.remove(id)
-        return ({ ..state, metadata_saves, notice: None, }, @cmd.none, None)
-      }
       let request = state.sequence + 1
       let metadata_saves = state.metadata_saves.copy()
-      metadata_saves[id] = { request, edit, navigation, error: None, }
+      metadata_saves[id] = { request, edit, navigation, }
       (
         { ..state, sequence: request, metadata_saves, notice: None, },
         run(emit, () => {
@@ -780,7 +749,6 @@ pub fn update(
                 generating: session.generating && !archived,
               }
             SetApproval(approval) => { ..session, approval, }
-            SetInference(model~, thinking~) => { ..session, model, thinking, }
           }
         }
       })
@@ -805,17 +773,7 @@ pub fn update(
         return (state.forget(id), @cmd.none, None)
       }
       let metadata_saves = state.metadata_saves.copy()
-      if save.edit is SetInference(..) {
-        metadata_saves[id] = { ..save, error: Some(error), }
-        let next = {
-          ..state,
-          metadata_saves,
-          needs_sign_in: state.needs_sign_in || error is Unauthorized,
-        }
-        return (next, @cmd.none, None)
-      } else {
-        metadata_saves.remove(id)
-      }
+      metadata_saves.remove(id)
       let (next, command) = { ..state, metadata_saves, }.failed(error)
       // A turn that began before the save reached the server holds the mode.
       if save.edit is SetApproval(_) && error is Http(409) {
@@ -1514,9 +1472,17 @@ pub fn update(
       (next, command, None)
     }
     Submit(owner, draft) =>
-      state.submit(owner, draft, [], emit, token?, navigation~)
+      state.submit(owner, draft, [], emit, token?, navigation~, settings~)
     SubmitAttachments(owner, draft, attachments) =>
-      state.submit(owner, draft, attachments, emit, token?, navigation~)
+      state.submit(
+        owner,
+        draft,
+        attachments,
+        emit,
+        token?,
+        navigation~,
+        settings~,
+      )
     StreamEvent(epoch, id, request, event) => {
       guard epoch == state.epoch &&
         event.session_id == id &&
@@ -1765,6 +1731,7 @@ fn State::submit(
   emit : @cmd.Emit[Msg],
   token? : String,
   navigation~ : Int32,
+  settings~ : (String) -> CommandSettings,
 ) -> (State, @cmd.Cmd, String?) {
   let state = self
   guard owner is @interop.Cloud(account~, session=id) &&
@@ -1798,6 +1765,7 @@ fn State::submit(
     {
       request: state.sequence + 1,
       input: Prompt(content~, draft~, attachments~),
+      settings: settings(id),
     },
     emit,
     token,

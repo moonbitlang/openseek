@@ -1,7 +1,6 @@
 ///|
 priv enum NoticeMessage {
   SaveSettings(String)
-  CloudSettingsUnconfirmed
   WorkspaceFailure(String)
   SaveWorkspace(String, String)
   ListWorktrees(String, String)
@@ -15,16 +14,6 @@ priv enum NoticeMessage {
 ///|
 fn notice_text(locale : @i18n.Locale, message : NoticeMessage) -> String {
   match (locale, message) {
-    (English, CloudSettingsUnconfirmed) =>
-      "Sending is paused until these settings are saved."
-    (SimplifiedChinese, CloudSettingsUnconfirmed) =>
-      "请重试保存配置后再发送。"
-    (TraditionalChinese, CloudSettingsUnconfirmed) =>
-      "請重試儲存設定後再傳送。"
-    (Japanese, CloudSettingsUnconfirmed) =>
-      "設定を保存できるまで送信は一時停止されます。"
-    (Spanish, CloudSettingsUnconfirmed) =>
-      "El envío está pausado hasta que se guarde esta configuración."
     (English, SaveSettings(p0)) => "Saving settings failed: \{p0}"
     (Spanish, SaveSettings(p0)) => "No se pudo guardar la configuración: \{p0}"
     (SimplifiedChinese, SaveSettings(p0)) => "保存设置失败：\{p0}"

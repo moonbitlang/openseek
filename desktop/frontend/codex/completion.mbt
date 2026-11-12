@@ -633,7 +633,6 @@ fn State::apply_composer_action(
     | @composer.ApprovalMenuToggled(..)
     | @composer.ApprovalSelected(..)
     | @composer.ApiSetupRequested(..)
-    | @composer.SettingsSaveRetried(..)
     | @composer.FollowupSubmitted(..)
     | @composer.DraftAttachmentsSubmitted(..)
     | @composer.QueuedInputEditRequested(..)

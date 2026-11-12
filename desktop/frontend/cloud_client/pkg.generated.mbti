@@ -48,7 +48,6 @@ pub(all) struct Access {
 pub fn Access::equal(Self, Self) -> Bool
 pub fn Access::not_equal(Self, Self) -> Bool
 
-#derive(Eq)
 pub(all) enum Failure {
   Unauthorized
   Busy
@@ -60,9 +59,7 @@ pub(all) enum Failure {
   SignInFailed(String)
   InvalidImage
 }
-pub fn Failure::equal(Self, Self) -> Bool
 pub fn Failure::label(Self) -> String
-pub fn Failure::not_equal(Self, Self) -> Bool
 
 pub struct SseParser {
   mut event : String

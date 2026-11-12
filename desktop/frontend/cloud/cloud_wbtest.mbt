@@ -74,8 +74,6 @@ test "Cloud list preserves nullable and long backend titles" {
 ///|
 fn live_test_session() -> Session {
   {
-    model: V4Flash,
-    thinking: ThinkingHigh,
     id: "session",
     title: None,
     updated_at: None,
@@ -418,6 +416,7 @@ test "desktop Cloud sending waits for client MCP readiness and fences old socket
   let base = { ..base, client_tools: true, }
   let original = base.conversations["session"]
   let outgoing : PendingCommand = {
+    settings: CommandSettings::default(),
     request: base.sequence + 1,
     input: Prompt(
       draft={ task: "Hello", mentions: [], images: [], },

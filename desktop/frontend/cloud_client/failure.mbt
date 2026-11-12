@@ -1,5 +1,4 @@
 ///|
-#derive(Eq)
 pub(all) enum Failure {
   Unauthorized
   Busy
@@ -11,9 +10,6 @@ pub(all) enum Failure {
   SignInFailed(String)
   InvalidImage
 }
-
-///|
-pub extend Failure with Eq::{equal, not_equal}
 
 ///|
 pub fn Failure::label(self : Failure) -> String {

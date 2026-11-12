@@ -349,6 +349,13 @@ async fn check_control_requests() -> Unit {
     assert_eq(url, CloudOrigin + "/v1/sessions/session%2F%3F/" + endpoint)
     assert_eq(method_, "POST")
     assert_eq(auth, "Bearer fixture")
+    let expected = if endpoint == "commands" && expected is Object(fields) {
+      let fields = fields.copy()
+      fields["settings"] = ToJson::to_json(CommandSettings::default())
+      Json(fields)
+    } else {
+      expected
+    }
     assert_eq(@json.parse(body), expected)
   }
 }
@@ -376,7 +383,14 @@ async fn check_native_command_requests() -> Unit {
     defer restore()
     assert_true(send_command("token", "session/?", command) is Accepted)
     assert_true(
-      send_command("token", "session/?", command, task_id="task", api_key="key")
+      send_command(
+        "token",
+        "session/?",
+        command,
+        task_id="task",
+        api_key="key",
+        settings={ model: V4Pro, thinking: ThinkingMax, },
+      )
       is Accepted,
     )
     assert_eq(requests.length(), 2)
@@ -385,11 +399,15 @@ async fn check_native_command_requests() -> Unit {
       assert_eq(request.1, "POST")
       assert_eq(request.2, "Bearer token")
     }
-    assert_eq(@json.parse(requests[0].3), { "command": command.to_json() })
+    assert_eq(@json.parse(requests[0].3), {
+      "command": command.to_json(),
+      "settings": ToJson::to_json(CommandSettings::default()),
+    })
     assert_eq(@json.parse(requests[1].3), {
       "command": command.to_json(),
       "task_id": "task",
       "api_key": "key",
+      "settings": { "model": "deepseek-v4-pro", "thinking": "max" },
     })
   }
 }
@@ -570,7 +588,6 @@ async test "Cloud control HTTP and SSE preserve operation and ownership contract
   check_control_failures()
   check_control_state_requests()
   check_approval_mode_requests()
-  check_model_settings_requests()
 }
 
 ///|
@@ -598,40 +615,4 @@ async fn check_approval_mode_requests() -> Unit {
     _ => false
   }
   assert_true(busy)
-}
-
-///|
-async fn check_model_settings_requests() -> Unit {
-  let requests = []
-  let restore = mock_control_http(204, "", (url, method_, auth, body) => {
-    requests.push((url, method_, auth, body))
-  })
-  defer restore()
-  edit_session(
-    "fixture",
-    "session/?",
-    SetInference(model=V4Pro, thinking=ThinkingMax),
-  )
-  assert_eq(requests.length(), 1)
-  assert_eq(requests[0].0, CloudOrigin + "/v1/sessions/session%2F%3F")
-  assert_eq(requests[0].1, "PATCH")
-  assert_eq(requests[0].2, "Bearer fixture")
-  assert_eq(@json.parse(requests[0].3), {
-    "model": "deepseek-v4-pro",
-    "thinking": "max",
-  })
-  let failed = mock_control_http(500, "", (_, _, _, _) => ())
-  defer failed()
-  let rejected = try {
-    edit_session(
-      "fixture",
-      "session",
-      SetInference(model=V4Flash, thinking=ThinkingOff),
-    )
-    false
-  } catch {
-    @cloud_client.RequestError(Http(500)) => true
-    _ => false
-  }
-  assert_true(rejected)
 }

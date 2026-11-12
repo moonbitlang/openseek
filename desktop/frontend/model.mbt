@@ -1312,6 +1312,7 @@ priv struct Model {
   // default an unrelated chat has moved to since. Reopening recovers from
   // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
+  cloud_preferences : Array[(String, @cloud.CommandSettings)]
   // The conversations whose permission questions the person answers (see
   // `ConversationApprovalsStorageKey`); a reviewer answers every other one.
   asking_conversations : Array[String]
@@ -1733,6 +1734,7 @@ priv enum Msg {
     glm_effort~ : String?
   )
   CloudFollowupLoaded(String?)
+  CloudPreferencesLoaded(String?)
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
   CloudAction(@cloud.Msg)
@@ -2782,6 +2784,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
     conversation_models: [],
+    cloud_preferences: [],
     asking_conversations: [],
     openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,

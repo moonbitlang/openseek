@@ -323,7 +323,6 @@ fn Entry::view(
       ConnectionBanner(..) => "connection"
       SubrunDock(..) => "subruns"
       ApiSetupNotice(..) => "api-setup"
-      SettingsSaveFailed(..) => "settings-save"
       ApprovalRequest(_) => "approval"
       CodexRequests(..) => "codex-requests"
       PendingSteerPanel(..) => "steers"

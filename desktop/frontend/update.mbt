@@ -2378,6 +2378,14 @@ fn update_msg(
         { ..model, locale, },
       )
     }
+    CloudPreferencesLoaded(value) => {
+      let entries = value.map(parse_cloud_preferences).unwrap_or([])
+      let mut preferences = entries
+      for (key, settings) in model.cloud_preferences.rev() {
+        preferences = cloud_preferences_with(preferences, key, settings)
+      }
+      (@cmd.none, { ..model, cloud_preferences: preferences, })
+    }
     CloudFollowupLoaded(value) => {
       guard !model.has_host() && value is Some(value) else {
         return (@cmd.none, model)
@@ -2696,8 +2704,7 @@ fn update_msg(
           }
           @composer.ModelMenuToggled(identity~)
           | @composer.ReasoningMenuToggled(identity~) => {
-            guard selected &&
-              model.cloud.can_choose_inference(identity.owner.session()) else {
+            guard selected && model.cloud.can_compose(identity.owner.session()) else {
               return (@cmd.none, model)
             }
             return update_msg(
@@ -2717,45 +2724,21 @@ fn update_msg(
               is Some(OpenSeekModel(Deepseek(engine_model))) else {
               return (@cmd.none, model)
             }
-            let (_, thinking) = model.cloud.inference(identity.owner.session())
-            return model.set_cloud_inference(
-              dispatch,
-              identity.owner,
-              engine_model,
-              thinking,
-            )
+            let settings = model.cloud_settings(identity.owner)
+            return model.choose_cloud_settings(identity.owner, {
+              ..settings,
+              model: engine_model,
+            })
           }
           @composer.ReasoningSelected(identity~, value~) => {
             guard @protocol.OpenSeekThinking::parse(value) is Some(thinking) else {
               return (@cmd.none, model)
             }
-            let (engine_model, _) = model.cloud.inference(
-              identity.owner.session(),
-            )
-            return model.set_cloud_inference(
-              dispatch,
-              identity.owner,
-              engine_model,
+            let settings = model.cloud_settings(identity.owner)
+            return model.choose_cloud_settings(identity.owner, {
+              ..settings,
               thinking,
-            )
-          }
-          @composer.SettingsSaveRetried(identity~) => {
-            guard model.cloud.metadata_saves.get(identity.owner.session())
-              is Some(
-                {
-                  edit: @cloud.SetInference(model=engine_model, thinking~),
-                  error: Some(_),
-                  ..
-                }
-              ) else {
-              return (@cmd.none, model)
-            }
-            return model.set_cloud_inference(
-              dispatch,
-              identity.owner,
-              engine_model,
-              thinking,
-            )
+            })
           }
           // Drafts keep the mode locally until creation. Existing sessions
           // save it on the server and lock it while a turn is running.
@@ -2813,7 +2796,6 @@ fn update_msg(
         | @composer.ApprovalMenuToggled(..)
         | @composer.ApprovalSelected(..)
         | @composer.ApiSetupRequested(..)
-        | @composer.SettingsSaveRetried(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
         | @composer.QueuedInputDeleteRequested(..)
@@ -2828,7 +2810,6 @@ fn update_msg(
             return (@cmd.none, model)
           }
           match action {
-            @composer.SettingsSaveRetried(..) => (@cmd.none, model)
             @composer.ModelMenuToggled(..) =>
               update_msg(dispatch, ToggleSelectMenu(OpenSeekModelMenu), model)
             @composer.ReasoningMenuToggled(..) =>

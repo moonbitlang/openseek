@@ -29,7 +29,7 @@ for (const { mode, label, desktop } of [
     expect(cloud.requests.filter(r => r.method === 'POST' || r.method === 'PATCH')).toEqual([]);
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect.poll(() => cloud.postCount).toBe(1);
-    expect(creations(cloud).map(r => JSON.parse(r.body))).toEqual([{ approval: mode, model: 'deepseek-flash', thinking: 'high' }]);
+    expect(creations(cloud).map(r => JSON.parse(r.body))).toEqual([{ approval: mode }]);
     const command = cloud.requests.find(r => r.method === 'POST' && r.path.endsWith('/commands'));
     expect(command.path).toBe(`/v1/sessions/${sessionC}/commands`);
     expect(cloud.requests.indexOf(command)).toBeGreaterThan(cloud.requests.indexOf(creations(cloud)[0]));
@@ -71,7 +71,7 @@ test('failed creation retains its approval and draft across navigation and retry
   cloud.createStatus = 201; cloud.pauseCreate = null;
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
-  expect(creations(cloud).map(r => JSON.parse(r.body))).toEqual([{ approval: 'review', model: 'deepseek-flash', thinking: 'high' }, { approval: 'review', model: 'deepseek-flash', thinking: 'high' }]);
+  expect(creations(cloud).map(r => JSON.parse(r.body))).toEqual([{ approval: 'review' }, { approval: 'review' }]);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(picker(page)).toHaveText('Auto-review');
   await cloud.create();

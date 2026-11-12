@@ -224,11 +224,15 @@ priv struct CommandRequest {
   command : @wire.Command
   task_id : String?
   api_key : String?
+  settings : CommandSettings
 }
 
 ///|
 impl ToJson for CommandRequest with fn to_json(self) {
-  let fields : Map[String, Json] = { "command": self.command.to_json() }
+  let fields : Map[String, Json] = {
+    "command": self.command.to_json(),
+    "settings": ToJson::to_json(self.settings),
+  }
   if self.task_id is Some(task) {
     fields["task_id"] = Json(task)
   }

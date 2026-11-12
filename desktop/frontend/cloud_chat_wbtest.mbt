@@ -6,8 +6,6 @@ fn integrated_cloud_model() -> Model {
     epoch: 3,
     sessions: [
       {
-        model: V4Flash,
-        thinking: ThinkingHigh,
         id: "cloud-a",
         title: Some("Cloud conversation"),
         updated_at: Some(100),
@@ -275,8 +273,6 @@ test "Chats use the shared section with existing ordering and create action" {
       ..model.cloud,
       sessions: [
         {
-          model: V4Flash,
-          thinking: ThinkingHigh,
           id: "cloud-a",
           title: Some("Older cloud"),
           updated_at: Some(100),
@@ -285,8 +281,6 @@ test "Chats use the shared section with existing ordering and create action" {
           approval: ApprovalAsk,
         },
         {
-          model: V4Flash,
-          thinking: ThinkingHigh,
           id: "cloud-b",
           title: Some("Newer cloud"),
           updated_at: Some(300),

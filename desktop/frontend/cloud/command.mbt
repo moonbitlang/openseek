@@ -7,6 +7,7 @@ fn State::update_command(
   emit : @cmd.Emit[Msg],
   token : String?,
   navigation : Int32,
+  settings~ : (String) -> CommandSettings,
 ) -> (State, @cmd.Cmd)? {
   let callback = match message {
     CommandFinished(epoch, session, request, command, result) =>
@@ -77,7 +78,6 @@ fn State::update_command(
     is (@engine_session.EditGoal | @engine_session.CloseGoal)
   guard local_edit ||
     (
-      self.inference_ready(session) &&
       token is Some(_) &&
       (
         self.is_draft(session) ||
@@ -115,7 +115,11 @@ fn State::update_command(
     .replace(session, conversation)
     .submit_command(
       session,
-      { request: sequence, input: Native(command), },
+      {
+        request: sequence,
+        input: Native(command),
+        settings: settings(session),
+      },
       emit,
       token,
       navigation,

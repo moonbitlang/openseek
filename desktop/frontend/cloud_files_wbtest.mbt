@@ -177,8 +177,6 @@ test "deleting an inactive Cloud session clears its documents and dock bookmarks
       sessions: [
         ..model.cloud.sessions,
         {
-          model: V4Flash,
-          thinking: ThinkingHigh,
           id: "cloud-b",
           title: None,
           updated_at: None,

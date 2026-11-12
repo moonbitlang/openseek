@@ -8,8 +8,6 @@ pub(all) struct Session {
   archived : Bool
   // The policy the next engine starts with; a running turn keeps its own.
   approval : @protocol.OpenSeekApproval
-  model : @deepseek.DsVariant
-  thinking : @protocol.OpenSeekThinking
 }
 
 ///|
@@ -225,14 +223,13 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   approval : @protocol.OpenSeekApproval
-  model : @deepseek.DsVariant
-  thinking : @protocol.OpenSeekThinking
 }
 
 ///|
 /// One unsent submission, retained on the conversation until its HTTP handoff.
 #derive(Eq)
 pub struct PendingCommand {
+  settings : CommandSettings
   request : Int32
   input : CommandInput
 }
@@ -255,10 +252,6 @@ pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
   SetApproval(@protocol.OpenSeekApproval)
-  SetInference(
-    model~ : @deepseek.DsVariant,
-    thinking~ : @protocol.OpenSeekThinking
-  )
 }
 
 ///|
@@ -267,11 +260,6 @@ impl ToJson for SessionEdit with fn to_json(self) {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
     SetApproval(mode) => { "approval": mode.to_json() }
-    SetInference(model~, thinking~) =>
-      {
-        "model": Json(@deepseek.Deepseek(model).to_string()),
-        "thinking": thinking.to_json(),
-      }
   }
 }
 
@@ -281,9 +269,6 @@ pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
-  // Failed inference choices remain visible and hold new submissions until
-  // the user retries or restores the last saved configuration.
-  error : Failure?
 }
 
 ///|
@@ -482,20 +467,6 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
       Object(fields) if !fields.contains("approval") => ApprovalAsk
       Object(fields) =>
         @json.from_json(fields["approval"]) catch {
-          _ => raise @cloud_client.RequestError(Malformed)
-        }
-      _ => raise @cloud_client.RequestError(Malformed)
-    },
-    model: match item {
-      Object(fields) if !fields.contains("model") => V4Flash
-      { "model": "deepseek-flash", .. } => V4Flash
-      { "model": "deepseek-v4-pro", .. } => V4Pro
-      _ => raise @cloud_client.RequestError(Malformed)
-    },
-    thinking: match item {
-      Object(fields) if !fields.contains("thinking") => ThinkingHigh
-      Object(fields) =>
-        @json.from_json(fields["thinking"]) catch {
           _ => raise @cloud_client.RequestError(Malformed)
         }
       _ => raise @cloud_client.RequestError(Malformed)

@@ -12,8 +12,6 @@ fn deletion_state() -> State {
         generating: false,
         archived: false,
         approval: ApprovalAsk,
-        model: V4Flash,
-        thinking: ThinkingHigh,
       },
     ],
   }

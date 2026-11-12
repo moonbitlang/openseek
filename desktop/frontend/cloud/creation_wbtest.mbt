@@ -62,6 +62,7 @@ test "all native commands share deferred session creation and observation readin
     let blank = command_draft()
     let owner = blank.draft_identity().unwrap()
     let submission : PendingCommand = {
+      settings: CommandSettings::default(),
       request: blank.sequence + 1,
       input: Native(command),
     }
@@ -245,7 +246,11 @@ test "a first command waits for a new observer after a definitive observation fa
   let request = blank.sequence + 1
   let (pending, _) = blank.submit_command(
     owner.session(),
-    { request, input: Native(@wire.Compact), },
+    {
+      request,
+      input: Native(@wire.Compact),
+      settings: CommandSettings::default(),
+    },
     _ => @cmd.none,
     "fixture",
     0,

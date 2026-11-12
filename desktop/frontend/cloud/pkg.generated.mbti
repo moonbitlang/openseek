@@ -37,7 +37,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool, settings? : (String) -> CommandSettings) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -50,6 +50,19 @@ pub enum CommandInput {
 }
 pub fn CommandInput::equal(Self, Self) -> Bool
 pub fn CommandInput::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub(all) struct CommandSettings {
+  model : @deepseek.DsVariant
+  thinking : @protocol.OpenSeekThinking
+}
+pub fn CommandSettings::default() -> Self
+pub fn CommandSettings::equal(Self, Self) -> Bool
+pub fn CommandSettings::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CommandSettings::not_equal(Self, Self) -> Bool
+pub fn CommandSettings::to_json(Self) -> @json.Json
+pub impl @json.FromJson for CommandSettings
+pub impl @json.ToJson for CommandSettings
 
 #derive(Eq)
 pub struct ControlApproval {
@@ -202,8 +215,8 @@ pub(all) struct Conversation {
 }
 pub fn Conversation::awaits_approval(Self) -> Bool
 pub fn Conversation::can_load_older_history(Self) -> Bool
-pub fn Conversation::control_context(Self, sending_enabled? : Bool) -> Array[@composer.ContextComponent]
-pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit, sending_enabled? : Bool) -> @composer.PrimaryAction
+pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
+pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
 pub fn Conversation::extends_history_backward(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
@@ -220,8 +233,6 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   approval : @protocol.OpenSeekApproval
-  model : @deepseek.DsVariant
-  thinking : @protocol.OpenSeekThinking
 }
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
@@ -273,7 +284,6 @@ pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
-  error : @cloud_client.Failure?
 }
 pub fn MetadataSave::equal(Self, Self) -> Bool
 pub fn MetadataSave::not_equal(Self, Self) -> Bool
@@ -342,6 +352,7 @@ pub fn PendingAssistant::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub struct PendingCommand {
+  settings : CommandSettings
   request : Int32
   input : CommandInput
 }
@@ -377,8 +388,6 @@ pub(all) struct Session {
   generating : Bool
   archived : Bool
   approval : @protocol.OpenSeekApproval
-  model : @deepseek.DsVariant
-  thinking : @protocol.OpenSeekThinking
 }
 pub fn Session::equal(Self, Self) -> Bool
 pub fn Session::not_equal(Self, Self) -> Bool
@@ -388,7 +397,6 @@ pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
   SetApproval(@protocol.OpenSeekApproval)
-  SetInference(model~ : @deepseek.DsVariant, thinking~ : @protocol.OpenSeekThinking)
 }
 pub fn SessionEdit::equal(Self, Self) -> Bool
 pub fn SessionEdit::not_equal(Self, Self) -> Bool
@@ -423,7 +431,6 @@ pub(all) struct State {
 }
 pub fn State::approval(Self, String) -> @protocol.OpenSeekApproval
 pub fn State::can_choose_approval(Self, String) -> Bool
-pub fn State::can_choose_inference(Self, String) -> Bool
 pub fn State::can_compose(Self, String) -> Bool
 pub fn State::can_delete(Self, String) -> Bool
 pub fn State::can_edit(Self, String, SessionEdit) -> Bool
@@ -432,13 +439,10 @@ pub fn State::creating_session(Self) -> Bool
 pub fn State::draft_identity(Self) -> @interop.ConversationIdentity?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
-pub fn State::inference(Self, String) -> (@deepseek.DsVariant, @protocol.OpenSeekThinking)
-pub fn State::inference_ready(Self, String) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
 pub fn State::mark_read(Self, String) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::replace(Self, String, Conversation) -> Self
-pub fn State::saving_metadata(Self, String) -> Bool
 pub fn State::sidebar_sessions(Self) -> Array[Session]
 
 #derive(Eq)

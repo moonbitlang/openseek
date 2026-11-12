@@ -70,7 +70,6 @@ fn ControlInput::submission_id(self : ControlInput) -> String {
 pub fn Conversation::control_primary_action(
   self : Conversation,
   default_submit : @composer.RunningSubmit,
-  sending_enabled~ : Bool = true,
 ) -> @composer.PrimaryAction {
   guard self.control is Some(control) &&
     self.watch_status == Watching &&
@@ -83,10 +82,7 @@ pub fn Conversation::control_primary_action(
   })
   if self.queue_edit is Some(_) && control.status == Idle {
     return @composer.SaveQueuedInput(
-      available=sending_enabled &&
-        control.paused &&
-        self.task is Some(_) &&
-        !pending,
+      available=control.paused && self.task is Some(_) && !pending,
     )
   }
   guard control.active_task_id is Some(_) else {
@@ -97,14 +93,14 @@ pub fn Conversation::control_primary_action(
       Some(input.task_id) == control.active_task_id && input.operation is Stop
     })
   @composer.Running(
-    steer_available=sending_enabled && !stopping && !pending,
+    steer_available=!stopping && !pending,
     can_stop=!stopping,
     submit=if self.queue_edit is Some(_) {
       @composer.SaveQueue
     } else {
       default_submit
     },
-    queue_available=sending_enabled && !stopping && !pending,
+    queue_available=!stopping && !pending,
   )
 }
 
@@ -138,7 +134,6 @@ pub fn Conversation::published_approval(
 ///|
 pub fn Conversation::control_context(
   self : Conversation,
-  sending_enabled~ : Bool = true,
 ) -> Array[@composer.ContextComponent] {
   let context : Array[@composer.ContextComponent] = []
   // First, because it is the only notice the turn waits on: a tool is
@@ -180,8 +175,7 @@ pub fn Conversation::control_context(
       content: item.content.text(),
       state: @composer.Queued(
         editing=self.queue_edit == Some(item.id),
-        steer_available=sending_enabled &&
-          control.status == Running &&
+        steer_available=control.status == Running &&
           control.active_task_id is Some(_),
         interactive=enabled &&
           !self.control_inputs.any(input => {
@@ -476,6 +470,7 @@ fn State::begin_control(
   token : String,
   draft? : @composer.Draft,
   attachments~ : Array[@protocol.AttachmentSource] = [],
+  settings~ : CommandSettings = CommandSettings::default(),
 ) -> (State, @cmd.Cmd) {
   let conversation = self.conversations[session]
   let key = match operation {
@@ -558,7 +553,7 @@ fn State::begin_control(
           session,
           input.task_id,
           input.key,
-          control(token, session, input.task_id, operation),
+          control(token, session, input.task_id, operation, settings~),
         ) catch {
           @cloud_client.RequestError(failure) =>
             ControlFailed(
@@ -622,6 +617,7 @@ fn State::update_control(
   message : Msg,
   emit : @cmd.Emit[Msg],
   token : String?,
+  settings~ : (String) -> CommandSettings = _ => CommandSettings::default(),
 ) -> (State, @cmd.Cmd)? {
   if message is ControlChecked(epoch, session, task, snapshot) {
     guard epoch == self.epoch &&
@@ -821,6 +817,7 @@ fn State::update_control(
         return Some((self, @cmd.none))
       }
       let (next, command) = self.begin_control(
+        settings=settings(session),
         session,
         task,
         Approve(id=question.id, allow~),
@@ -848,10 +845,7 @@ fn State::update_control(
       _,
       @composer.FollowupSubmitted(draft~, choice~, attachments~, ..)
     ) => {
-      guard self.inference_ready(session) &&
-        running &&
-        !locked &&
-        (!draft.is_blank() || !attachments.is_empty()) else {
+      guard running && !locked && (!draft.is_blank() || !attachments.is_empty()) else {
         return Some((self, @cmd.none))
       }
       let content = prompt_content(draft) catch {
@@ -903,12 +897,18 @@ fn State::update_control(
         return Some((self, @cmd.none))
       }
       return Some(
-        self.begin_control(session, task, QueueWithdraw(id~), emit, token),
+        self.begin_control(
+          settings=settings(session),
+          session,
+          task,
+          QueueWithdraw(id~),
+          emit,
+          token,
+        ),
       )
     }
     ControlAction(_, @composer.QueuedInputSteerRequested(id~, ..)) => {
-      guard self.inference_ready(session) &&
-        running &&
+      guard running &&
         !locked &&
         !conversation.control_inputs.any(input => {
           input.task_id == task && input.submission_id() == id
@@ -918,6 +918,7 @@ fn State::update_control(
       }
       return Some(
         self.begin_control(
+          settings=settings(session),
           session,
           task,
           QueueSteer(id~),
@@ -928,8 +929,7 @@ fn State::update_control(
       )
     }
     Submit(_, draft) | SubmitAttachments(_, draft, _) => {
-      guard self.inference_ready(session) &&
-        queue_editable &&
+      guard queue_editable &&
         !locked &&
         conversation.queue_edit is Some(edit) &&
         control.queue.any(item => item.id == edit) else {
@@ -956,6 +956,7 @@ fn State::update_control(
       }
       return Some(
         self.begin_control(
+          settings=settings(session),
           session,
           task,
           QueueEdit(id=edit, content~),
@@ -970,6 +971,7 @@ fn State::update_control(
   }
   Some(
     self.begin_control(
+      settings=settings(session),
       session,
       task,
       operation,
