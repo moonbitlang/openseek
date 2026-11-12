@@ -85,8 +85,13 @@ internal class FrontendUpdater(private val activity: Activity) {
         pending()?.let { pending ->
             val row = status(pending)
             when {
-                row == null || row.first == DownloadManager.STATUS_FAILED || pending.release != current.release ->
+                // Removed by the user or failed for good: the next due check
+                // retries, not this job, which the failure itself started.
+                row == null || row.first == DownloadManager.STATUS_FAILED -> {
                     discard(pending)
+                    return
+                }
+                pending.release != current.release -> discard(pending)
                 row.first == DownloadManager.STATUS_SUCCESSFUL -> {
                     clearPending()
                     val archive = row.second?.toUri()?.path?.let(::File)
