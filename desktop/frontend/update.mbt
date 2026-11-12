@@ -2684,17 +2684,24 @@ fn update_msg(
               model,
             )
           }
-          // Drafts keep the mode locally until creation. Existing sessions
-          // save it on the server and lock it while a turn is running.
-          @composer.ApprovalMenuToggled(identity~) => {
+          // All three options share the draft and server-save lifecycle.
+          @composer.ApprovalMenuToggled(identity~)
+          | @composer.ModelMenuToggled(identity~)
+          | @composer.ReasoningMenuToggled(identity~) => {
             guard model.screen is Chat &&
               selected &&
-              model.cloud.can_choose_approval(identity.owner.session()) else {
+              model.cloud.can_choose_settings(identity.owner.session()) else {
               return (@cmd.none, model)
             }
             return update_msg(
               dispatch,
-              ToggleSelectMenu(OpenSeekApprovalMenu),
+              ToggleSelectMenu(
+                match action {
+                  @composer.ModelMenuToggled(..) => OpenSeekModelMenu
+                  @composer.ReasoningMenuToggled(..) => OpenSeekReasoningMenu
+                  _ => OpenSeekApprovalMenu
+                },
+              ),
               model,
             )
           }
@@ -2702,15 +2709,34 @@ fn update_msg(
             guard selected else { return (@cmd.none, model) }
             return update_msg(dispatch, CloseSelectMenu, model)
           }
-          @composer.ApprovalSelected(identity~, mode~) => {
+          @composer.ApprovalSelected(identity~, ..)
+          | @composer.ModelSelected(identity~, ..)
+          | @composer.ReasoningSelected(identity~, ..) => {
             guard selected &&
               identity.owner is @interop.Cloud(account~, session~) else {
               return (@cmd.none, model)
             }
+            let edit = match action {
+              @composer.ApprovalSelected(mode~, ..) => @cloud.SetApproval(mode)
+              @composer.ModelSelected(value~, ..) => {
+                guard ModelChoice::parse(value)
+                  is Some(OpenSeekModel(Deepseek(engine_model))) else {
+                  return (@cmd.none, model)
+                }
+                @cloud.SetModel(engine_model)
+              }
+              @composer.ReasoningSelected(value~, ..) => {
+                guard @protocol.Thinking::parse(value) is Some(thinking) else {
+                  return (@cmd.none, model)
+                }
+                @cloud.SetThinking(thinking)
+              }
+              _ => return (@cmd.none, model)
+            }
             let (close, closed) = update_msg(dispatch, CloseSelectMenu, model)
             let (save, next) = update_cloud(
               dispatch,
-              @cloud.Edit(account~, session~, edit=SetApproval(mode)),
+              @cloud.Edit(account~, session~, edit~),
               closed,
             )
             return (@cmd.batch([close, save]), next)

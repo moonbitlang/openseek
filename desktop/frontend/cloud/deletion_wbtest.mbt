@@ -12,6 +12,8 @@ fn deletion_state() -> State {
         generating: false,
         archived: false,
         approval: ApprovalAsk,
+        model: @deepseek.V4Flash,
+        thinking: @protocol.ThinkingHigh,
       },
     ],
   }

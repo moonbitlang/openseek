@@ -216,39 +216,54 @@ fn Model::openseek_reasoning_chip(
   conv : Conversation,
 ) -> @composer.ReasoningSelect? {
   guard conv.engine_model.supports_reasoning() else { return None }
-  let reasoning = self.conversation_reasoning(conv)
+  Some(
+    openseek_reasoning_control(
+      conv.engine_model,
+      self.conversation_reasoning(conv),
+      locale=self.locale,
+      open=self.select_menu is Some(OpenSeekReasoningMenu),
+      disabled=false,
+    ),
+  )
+}
+
+///|
+fn openseek_reasoning_control(
+  model : @deepseek.Model,
+  reasoning : @protocol.Thinking,
+  locale~ : @i18n.Locale,
+  open~ : Bool,
+  disabled~ : Bool,
+) -> @composer.ReasoningSelect {
   let options : Array[@composer.ModelOption] = [
     {
       value: @protocol.ThinkingOff.wire(),
-      label: @protocol.ThinkingOff.label_for_model(
-        locale=self.locale,
-        conv.engine_model,
-      ),
+      label: @protocol.ThinkingOff.label_for_model(locale~, model),
     },
     {
       value: @protocol.ThinkingHigh.wire(),
-      label: @protocol.ThinkingHigh.label(locale=self.locale),
+      label: @protocol.ThinkingHigh.label(locale~),
     },
     {
       value: @protocol.ThinkingMax.wire(),
-      label: @protocol.ThinkingMax.label(locale=self.locale),
+      label: @protocol.ThinkingMax.label(locale~),
     },
   ]
-  Some({
+  {
     id: "openseek-reasoning-picker",
     options,
     selected: reasoning.wire(),
-    disabled: false,
-    open: self.select_menu is Some(OpenSeekReasoningMenu),
-    title: (match self.locale {
+    disabled,
+    open,
+    title: (match locale {
       SimplifiedChinese => "推理强度："
       TraditionalChinese => "推理強度："
       Japanese => "推論の強度："
       English => "Reasoning effort: "
       Spanish => "Esfuerzo de razonamiento: "
     }) +
-    reasoning.label_for_model(locale=self.locale, conv.engine_model),
-  })
+    reasoning.label_for_model(locale~, model),
+  }
 }
 
 ///|

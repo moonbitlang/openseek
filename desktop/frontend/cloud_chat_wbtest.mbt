@@ -12,6 +12,8 @@ fn integrated_cloud_model() -> Model {
         generating: false,
         archived: false,
         approval: ApprovalAsk,
+        model: @deepseek.V4Flash,
+        thinking: @protocol.ThinkingHigh,
       },
     ],
   }
@@ -281,6 +283,8 @@ test "Chats use the shared section with existing ordering and create action" {
           generating: false,
           archived: false,
           approval: ApprovalAsk,
+          model: @deepseek.V4Flash,
+          thinking: @protocol.ThinkingHigh,
         },
         {
           id: "cloud-b",
@@ -289,6 +293,8 @@ test "Chats use the shared section with existing ordering and create action" {
           generating: false,
           archived: false,
           approval: ApprovalAsk,
+          model: @deepseek.V4Flash,
+          thinking: @protocol.ThinkingHigh,
         },
       ],
     },

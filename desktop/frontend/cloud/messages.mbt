@@ -8,7 +8,7 @@ pub(all) enum Notice {
   AnswerRejected(String)
   QuestionAnswerFailed(@cloud_client.Failure)
   QuestionAnswerDetail(String)
-  ApprovalSaveRaced
+  SettingsSaveRaced
   DeleteWhileGenerating
   AdditionalInputNotApplied
 }
@@ -71,16 +71,16 @@ pub fn Notice::text(self : Notice, locale : @i18n.Locale) -> String {
       "質問への回答を送信できませんでした：\{detail}"
     (Spanish, QuestionAnswerDetail(detail)) =>
       "No se pudo enviar la respuesta a la pregunta: \{detail}"
-    (English, ApprovalSaveRaced) =>
-      "A turn started before the approval mode was saved. Choose it again after the turn finishes."
-    (SimplifiedChinese, ApprovalSaveRaced) =>
-      "审批模式保存前任务轮次已开始。请在该轮结束后重新选择。"
-    (TraditionalChinese, ApprovalSaveRaced) =>
-      "核准模式儲存前工作回合已開始。請在該回合結束後重新選擇。"
-    (Japanese, ApprovalSaveRaced) =>
-      "承認モードを保存する前にターンが開始されました。ターン終了後にもう一度選択してください。"
-    (Spanish, ApprovalSaveRaced) =>
-      "Se inició un turno antes de guardar el modo de aprobación. Vuelve a elegirlo cuando termine el turno."
+    (English, SettingsSaveRaced) =>
+      "The session became busy before the settings were saved. Choose them again when it is idle."
+    (SimplifiedChinese, SettingsSaveRaced) =>
+      "会话设置保存前已有任务开始。请在会话空闲后重新选择。"
+    (TraditionalChinese, SettingsSaveRaced) =>
+      "對話設定儲存前已有工作開始。請在對話閒置後重新選擇。"
+    (Japanese, SettingsSaveRaced) =>
+      "設定を保存する前にセッションで処理が開始されました。処理が終わってからもう一度選択してください。"
+    (Spanish, SettingsSaveRaced) =>
+      "La sesión pasó a estar ocupada antes de guardar la configuración. Vuelve a elegirla cuando esté inactiva."
     (English, DeleteWhileGenerating) =>
       "This conversation is generating. Try deleting it after it finishes."
     (SimplifiedChinese, DeleteWhileGenerating) =>

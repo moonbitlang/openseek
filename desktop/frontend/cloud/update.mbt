@@ -253,15 +253,18 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
     Rename(_) => !session.archived
     Archive(archived) => session.archived != archived && self.can_delete(id)
     SetApproval(mode) =>
-      session.approval != mode && self.can_choose_approval(id)
+      session.approval != mode && self.can_choose_settings(id)
+    SetModel(model) => session.model != model && self.can_choose_settings(id)
+    SetThinking(thinking) =>
+      session.thinking != thinking && self.can_choose_settings(id)
   }
 }
 
 ///|
-/// A running engine keeps the policy it started with, so the server refuses
+/// A running engine keeps the options it started with, so the server refuses
 /// a change until the turn ends. A draft keeps its choice until creation;
 /// creation and metadata saves in flight hold the picker.
-pub fn State::can_choose_approval(self : State, id : String) -> Bool {
+pub fn State::can_choose_settings(self : State, id : String) -> Bool {
   !self.retired.contains(id) &&
   !self.deletions.contains(id) &&
   !self.metadata_saves.contains(id) &&
@@ -276,7 +279,9 @@ pub fn State::can_choose_approval(self : State, id : String) -> Bool {
   .map_or(true, conversation => {
     !conversation.sending &&
     conversation.outgoing is None &&
-    !conversation.generating
+    !conversation.generating &&
+    !conversation.controls.is_compacting() &&
+    !conversation.controls.is_compact_queued()
   })
 }
 
@@ -290,6 +295,30 @@ pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval 
     Some(session) => session.approval
     None => ApprovalAsk
   }
+}
+
+///|
+pub fn State::model(self : State, id : String) -> @deepseek.DsVariant {
+  if self.creation is Some({ id: draft, model, .. }) && draft == id {
+    return model
+  }
+  self.sessions
+  .iter()
+  .find_first(session => session.id == id)
+  .map(session => session.model)
+  .unwrap_or(V4Flash)
+}
+
+///|
+pub fn State::thinking(self : State, id : String) -> @protocol.Thinking {
+  if self.creation is Some({ id: draft, thinking, .. }) && draft == id {
+    return thinking
+  }
+  self.sessions
+  .iter()
+  .find_first(session => session.id == id)
+  .map(session => session.thinking)
+  .unwrap_or(ThinkingHigh)
 }
 
 ///|
@@ -309,10 +338,11 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   self.conversations.get(id) is Some(conversation) &&
   self.can_compose(id) &&
   !self.deletions.contains(id) &&
-  // The next turn's engine starts with the saved approval mode, never one
-  // still on its way to the server.
+  // The next turn starts with saved options, never a pending edit.
   !(self.metadata_saves.get(id)
-  is Some({ edit: Archive(true) | SetApproval(_), .. })) &&
+  is Some(
+    { edit: Archive(true) | SetApproval(_) | SetModel(_) | SetThinking(_), .. }
+  )) &&
   !conversation.loading &&
   !conversation.sending &&
   conversation.outgoing is None &&
@@ -511,6 +541,12 @@ pub fn update(
         }
       }
       let sessions = sessions.filter(item => !next.retired.contains(item.id))
+      let metadata_saves = next.metadata_saves.copy()
+      for id, save in next.metadata_saves {
+        if save.confirming && request > save.request {
+          metadata_saves.remove(id)
+        }
+      }
       let history : Array[@cmd.Cmd] = []
       for session in sessions {
         if session.archived && !state.is_archived(session.id) {
@@ -528,6 +564,7 @@ pub fn update(
         {
           ..next,
           sessions,
+          metadata_saves,
           cached_sessions: [],
           cached_catalog_pending: false,
           list_status: Idle,
@@ -562,6 +599,8 @@ pub fn update(
             generating: false,
             archived: false,
             approval: ApprovalAsk,
+            model: V4Flash,
+            thinking: ThinkingHigh,
           })
         }
       })
@@ -584,7 +623,14 @@ pub fn update(
       let next = {
         ..state,
         sequence: request,
-        creation: Some({ id, request, navigation, approval: ApprovalAsk, }),
+        creation: Some({
+          id,
+          request,
+          navigation,
+          approval: ApprovalAsk,
+          model: V4Flash,
+          thinking: ThinkingHigh,
+        }),
         notice: None,
       }.replace(id, {
         ..Conversation::empty(),
@@ -630,6 +676,8 @@ pub fn update(
           generating: false,
           archived: false,
           approval: creation.approval,
+          model: creation.model,
+          thinking: creation.thinking,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -693,15 +741,16 @@ pub fn update(
       if state.creation is Some(creation) && creation.id == id {
         guard state.user_id == Some(account) &&
           token is Some(_) &&
-          edit is SetApproval(approval) &&
-          state.can_choose_approval(id) else {
+          state.can_choose_settings(id) else {
           return (state, @cmd.none, None)
         }
-        return (
-          { ..state, creation: Some({ ..creation, approval, }), },
-          @cmd.none,
-          None,
-        )
+        let creation = match edit {
+          SetApproval(approval) => { ..creation, approval, }
+          SetModel(model) => { ..creation, model, }
+          SetThinking(thinking) => { ..creation, thinking, }
+          _ => return (state, @cmd.none, None)
+        }
+        return ({ ..state, creation: Some(creation), }, @cmd.none, None)
       }
       let edit = match edit {
         Rename(title) => Rename(title.trim().to_owned())
@@ -715,7 +764,7 @@ pub fn update(
       }
       let request = state.sequence + 1
       let metadata_saves = state.metadata_saves.copy()
-      metadata_saves[id] = { request, edit, navigation, }
+      metadata_saves[id] = { request, edit, navigation, confirming: false, }
       (
         { ..state, sequence: request, metadata_saves, notice: None, },
         run(emit, () => {
@@ -752,6 +801,8 @@ pub fn update(
                 generating: session.generating && !archived,
               }
             SetApproval(approval) => { ..session, approval, }
+            SetModel(model) => { ..session, model, }
+            SetThinking(thinking) => { ..session, thinking, }
           }
         }
       })
@@ -775,12 +826,26 @@ pub fn update(
       if error is Http(404) {
         return (state.forget(id), @cmd.none, None)
       }
+      let uncertain = match error {
+        Unreachable => true
+        Http(status) => status == 408 || status >= 500
+        _ => false
+      }
+      if save.edit is (SetApproval(_) | SetModel(_) | SetThinking(_)) &&
+        uncertain {
+        let metadata_saves = state.metadata_saves.copy()
+        metadata_saves[id] = { ..save, confirming: true, }
+        let (next, _) = { ..state, metadata_saves, }.failed(error)
+        let (next, command) = next.list(token, emit)
+        return (next, command, None)
+      }
       let metadata_saves = state.metadata_saves.copy()
       metadata_saves.remove(id)
       let (next, command) = { ..state, metadata_saves, }.failed(error)
-      // A turn that began before the save reached the server holds the mode.
-      if save.edit is SetApproval(_) && error is Http(409) {
-        return ({ ..next, notice: Some(ApprovalSaveRaced), }, command, None)
+      // A turn admitted before the PATCH holds its startup options.
+      if save.edit is (SetApproval(_) | SetModel(_) | SetThinking(_)) &&
+        error is Http(409) {
+        return ({ ..next, notice: Some(SettingsSaveRaced), }, command, None)
       }
       (next, command, None)
     }

@@ -230,6 +230,7 @@ fn update_cloud(
           request: pending,
           edit: @cloud.Archive(true),
           navigation: generation,
+          ..
         }
       ) &&
       pending == request &&
@@ -289,11 +290,11 @@ fn update_cloud(
     },
     cloud,
     navigation,
-    // Creation or a turn starting in the selected Cloud conversation locks
-    // its approval mode, so the menu closes with it.
-    select_menu: if model.select_menu is Some(OpenSeekApprovalMenu) &&
+    // Creation, saving or a turn starting locks all session options.
+    select_menu: if model.select_menu
+      is Some(OpenSeekApprovalMenu | OpenSeekModelMenu | OpenSeekReasoningMenu) &&
       approval_owner is Some(owner) &&
-      !cloud.can_choose_approval(owner.session()) {
+      !cloud.can_choose_settings(owner.session()) {
       None
     } else {
       model.select_menu
@@ -476,6 +477,8 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
+  let model = @deepseek.Deepseek(self.cloud.model(owner.session()))
+  let settings_enabled = self.cloud.can_choose_settings(owner.session())
   let native_users = Map([])
   for event in conversation.document.events.unwrap_or([]) {
     if event.item is @protocol.User(user) {
@@ -595,22 +598,26 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       },
       status: [
         @composer.ModelStatus({
-          id: "model",
-          groups: [
-            {
-              label: "Cloud",
-              options: [{ value: "deepseek-flash", label: "DeepSeek Flash", }],
-            },
-          ],
-          selected: "deepseek-flash",
-          disabled: true,
-          open: false,
-          title: "DeepSeek Flash",
+          id: "openseek-model-picker",
+          groups: [{ ..openseek_model_group(Deepseek, model), label: "Cloud", }],
+          selected: ModelChoice::OpenSeekModel(model).wire(),
+          disabled: !settings_enabled,
+          open: self.select_menu is Some(OpenSeekModelMenu),
+          title: model.label(),
         }),
+        @composer.ReasoningStatus(
+          openseek_reasoning_control(
+            model,
+            self.cloud.thinking(owner.session()),
+            locale=self.locale,
+            open=self.select_menu is Some(OpenSeekReasoningMenu),
+            disabled=!settings_enabled,
+          ),
+        ),
         @composer.ApprovalStatus({
           mode: self.cloud.approval(owner.session()),
           open: self.select_menu is Some(OpenSeekApprovalMenu),
-          enabled: self.cloud.can_choose_approval(owner.session()),
+          enabled: self.cloud.can_choose_settings(owner.session()),
         }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),

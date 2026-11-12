@@ -723,3 +723,36 @@ test('preview_open reuses Local file reads and the existing HTML preview command
   await expect.poll(() => native.some(r => r.method === 'browser.preview' && r.params.path === '/workspace/index.htm' && r.params.root === '/workspace' && r.params.session === 'session-1')).toBe(true);
   expect(cloud.device.pageErrors).toEqual([]);
 });
+
+test('Cloud AI pattern repair sends no client configuration overrides', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  const repairs = [];
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  for (const [picker, option] of [['Model', 'DeepSeek Pro'], ['Reasoning effort', 'Max']]) {
+    await page.locator('.composer').getByRole('button', { name: picker, exact: true }).click();
+    await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
+    await expect(page.locator('.composer').getByRole('button', { name: picker, exact: true })).toHaveText(option);
+    await expect(page.locator('.composer').getByRole('button', { name: picker, exact: true })).toBeEnabled();
+  }
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic**`, async route => {
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    const body = route.request().postDataJSON();
+    if (new URL(route.request().url()).pathname.endsWith('/repair')) {
+      repairs.push(body);
+      return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ generation: body.generation, validation_status: 'passed', candidate_pattern: 'inspect($_)', message: '', trace: [] }) });
+    }
+    const result = { generation: body.generation, matches: [], match_count: 0, file_count: 0, limit_hit: false, cancelled: false, partial: false };
+    return route.fulfill({ headers, contentType: 'text/event-stream', body: `event: result\ndata: ${JSON.stringify(result)}\n\n` });
+  });
+  await openFiles(page, cloud);
+  await page.getByRole('tab', { name: 'Search', exact: true }).click();
+  const search = page.locator('.workspace-search');
+  await search.getByRole('button', { name: 'Code search', exact: true }).click();
+  await search.getByRole('textbox', { name: 'pattern', exact: true }).fill('broken');
+  await search.locator('.pattern-repair-button').click();
+  await expect.poll(() => repairs.length).toBe(1);
+  expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number) });
+  await expect(search.getByRole('textbox', { name: 'pattern', exact: true })).toHaveValue('inspect($_)');
+  expect(cloud.device.pageErrors).toEqual([]);
+});

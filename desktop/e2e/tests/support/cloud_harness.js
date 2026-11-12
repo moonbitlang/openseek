@@ -82,6 +82,7 @@ export class CloudHarness {
     this.generating = new Set();
     this.archived = new Set();
     this.approvals = new Map();
+    this.sessionSettings = new Map();
     this.histories = new Map();
     this.historyTurns = new Map();
     this.nativeNotices = new Map();
@@ -338,6 +339,7 @@ export class CloudHarness {
         return route.fulfill({ status: this.sessionEventStatus, headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', this.controlState(session)) });
       }
       const envelope = request.postDataJSON();
+      if (operation === 'commands' && 'settings' in envelope) return json({}, 422);
       if (operation === 'commands' && envelope.command.command === 'prompt') {
         return this.promptCommand(route, json, headers, session, envelope.command);
       }
@@ -434,6 +436,8 @@ export class CloudHarness {
         if (this.pauseCreate) await this.pauseCreate;
         if (this.createStatus !== 201) return json({}, this.createStatus);
         this.approvals.set(sessionC, request.postDataJSON().approval);
+        const { model = 'deepseek-flash', thinking = 'high' } = request.postDataJSON();
+        this.sessionSettings.set(sessionC, { model, thinking });
         this.sessionIds = [sessionC, ...this.sessionIds.filter(id => id !== sessionC)];
         return json({ id: sessionC }, 201);
       }
@@ -441,7 +445,7 @@ export class CloudHarness {
       if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask' })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask', model: 'deepseek-flash', thinking: 'high', ...this.sessionSettings.get(id) })) }, status);
     }
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();
@@ -449,10 +453,16 @@ export class CloudHarness {
       if (this.pausePatch) await this.pausePatch;
       if (this.patchOffline) return route.abort('failed');
       if (this.patchStatus !== 204) return json({}, this.patchStatus);
+      const state = this.controlState(session).data;
+      if (['model', 'thinking', 'approval'].some(key => key in body) && (this.generating.has(session) || state.compacting || state.compact_queued)) return json({}, 409);
       if (body.title !== undefined) this.titles.set(session, body.title);
       if (body.archived === true) this.archived.add(session);
       if (body.archived === false) this.archived.delete(session);
       if (body.approval !== undefined) this.approvals.set(session, body.approval);
+      const settings = { model: 'deepseek-flash', thinking: 'high', ...this.sessionSettings.get(session) };
+      if (body.model !== undefined) settings.model = body.model;
+      if (body.thinking !== undefined) settings.thinking = body.thinking;
+      this.sessionSettings.set(session, settings);
       return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
@@ -732,7 +742,7 @@ export class CloudHarness {
     await this.page.locator('aside button[aria-label="New"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
-    await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+    await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
     await expect(this.page.locator('#task')).toBeEnabled();
   }
 
