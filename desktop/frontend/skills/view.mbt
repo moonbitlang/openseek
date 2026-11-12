@@ -13,8 +13,8 @@ fn notice_views(
   for notice in state.notices {
     let message = match notice {
       LibraryLoadFailed(message) => message
-      BuiltinSyncFailed(channel~, error~) => {
-        guard channel == input.channel else { continue }
+      BuiltinSyncFailed(library~, error~) => {
+        guard library == input.library else { continue }
         let identity = (error.registry.module_name, error.registry.package_path)
         if target is Some(target) {
           let belongs = match target {
@@ -31,7 +31,7 @@ fn notice_views(
         "\{source}: \{error.message}"
       }
       SkillActionFailed(operation~, message~) => {
-        guard operation.channel == input.channel else { continue }
+        guard operation.library == input.library else { continue }
         guard target is Some(target) else {
           "\{operation.action.source()}: \{message}"
         }
@@ -70,7 +70,7 @@ fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
 fn installed_row(
   locale~ : @i18n.Locale = English,
   state : State,
-  channel : @interop.ChannelId,
+  library : Library,
   skill : InstalledItem,
   emit : @cmd.Emit[Msg],
   menu : @html.Html,
@@ -104,7 +104,7 @@ fn installed_row(
     ),
   ]
   header.push(
-    installed_actions(locale, state, channel, skill, emit, "skill-action", menu),
+    installed_actions(locale, state, library, skill, emit, "skill-action", menu),
   )
   @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
     @html.div(class="skill-header", header),
@@ -117,12 +117,12 @@ fn installed_row(
 fn market_row(
   locale~ : @i18n.Locale = English,
   state : State,
-  channel : @interop.ChannelId,
+  library : Library,
   item : MarketItem,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let source = source_label(item)
-  let pending = state.pending_action(channel, item.identity())
+  let pending = state.pending_action(library, item.identity())
   let info : Array[@html.Html] = [@html.span(class="skill-meta", source)]
   if !item.description.is_blank() {
     info.push(@html.span(class="skill-desc", item.description))
@@ -320,7 +320,7 @@ fn detail_action(
   }
   match target {
     Market(item) => {
-      let pending = state.pending_action(input.channel, item.identity())
+      let pending = state.pending_action(input.library, item.identity())
       @html.button(
         class="button primary skill-action",
         disabled=pending is Some(_),
@@ -336,7 +336,7 @@ fn detail_action(
       installed_actions(
         locale,
         state,
-        input.channel,
+        input.library,
         item,
         emit,
         "skill-detail-action",
@@ -389,13 +389,14 @@ fn list_page(
   menus : Map[String, @html.Html],
 ) -> @html.Html {
   let catalog_loading = match state.catalog {
-    Loading(channel~) => channel == input.channel
+    Loading(library~) => library == input.library
     _ => false
   }
   let sections : Array[@html.Html] = [
     @html.div(class="page-header", [
       @html.div(class="skills-heading", [
         @html.div(class="page-eyebrow", ui(locale, Library)),
+        library_switch(locale, input, emit),
         @html.button(
           class="button skills-refresh",
           disabled=catalog_loading,
@@ -432,10 +433,10 @@ fn list_page(
     guard matches(state.query, [skill.name, skill.description, skill.source]) else {
       continue
     }
-    installed_rows["\{input.channel.uri_authority()}:\{skill.id}"] = installed_row(
+    installed_rows["\{input.library.key()}:\{skill.id}"] = installed_row(
       locale~,
       state,
-      input.channel,
+      input.library,
       skill,
       emit,
       menus.get(skill.id).unwrap(),
@@ -479,7 +480,7 @@ fn list_page(
         ]) else {
           continue
         }
-        market_rows.push(market_row(locale~, state, input.channel, item, emit))
+        market_rows.push(market_row(locale~, state, input.library, item, emit))
       }
       if market_rows.is_empty() {
         market_rows.push(
@@ -511,10 +512,44 @@ fn list_page(
 }
 
 ///|
+/// The choice between the focused device's library and the account's Cloud
+/// library, shown only when both exist: a segmented switch like the
+/// sidebar's Chat/Work switch.
+fn library_switch(
+  locale : @i18n.Locale,
+  input : Input,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
+  guard input.switchable else { return @html.nothing }
+  let current = input.library.kind()
+  let options = [(DeviceLibrary, ThisDevice), (CloudLibrary, CloudLibraryLabel)].map(option => {
+      let (kind, label) = option
+      let selected = kind == current
+      @html.button(
+        class=if selected {
+          "skills-library-option active"
+        } else {
+          "skills-library-option"
+        },
+        type_="button",
+        attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
+        on_click=emit(SelectLibrary(kind)),
+        ui(locale, label),
+      )
+    },
+  )
+  @html.div(
+    class="skills-library-switch",
+    attrs=@html.Attrs::build().role("group").aria_label(ui(locale, Library)),
+    options,
+  )
+}
+
+///|
 fn installed_actions(
   locale : @i18n.Locale,
   state : State,
-  channel : @interop.ChannelId,
+  library : Library,
   item : InstalledItem,
   emit : @cmd.Emit[Msg],
   button_class : String,
@@ -524,20 +559,25 @@ fn installed_actions(
   let label = ui(locale, if enabled { Enabled } else { Disabled })
   let identity = item.identity()
   let pending = identity.bind(registry => {
-    state.pending_action(channel, registry)
+    state.pending_action(library, registry)
   })
-  let enablement_locked = state.pending_enabled(channel, item.id) ||
+  let enablement_locked = state.pending_enabled(library, item.id) ||
     pending.map_or(false, action => action.blocks_enablement())
-  let buttons : Array[@html.Html] = [
-    @ui.switch_control(
-      enabled~,
-      label="\{item.name}: \{label}",
-      title=label,
-      disabled=enablement_locked,
-      on_click=emit(ToggleEnabled(item.id)),
-    ),
-  ]
+  let locked = item.builtin && library.locks_builtins()
+  let buttons : Array[@html.Html] = []
+  if !locked {
+    buttons.push(
+      @ui.switch_control(
+        enabled~,
+        label="\{item.name}: \{label}",
+        title=label,
+        disabled=enablement_locked,
+        on_click=emit(ToggleEnabled(item.id)),
+      ),
+    )
+  }
   if identity is Some(_) &&
+    !locked &&
     (
       !item.builtin ||
       state.update_candidate(item) is Some(_) ||
@@ -566,7 +606,7 @@ fn installed_actions(
       @cmd.none
     }),
     [
-      installed_status(locale, state, channel, item),
+      installed_status(locale, state, library, item),
       @html.div(class="skill-actions skill-installed-actions", buttons),
     ],
   )
@@ -585,18 +625,21 @@ fn builtin_badge(locale : @i18n.Locale, item : InstalledItem) -> @html.Html {
 fn installed_status(
   locale : @i18n.Locale,
   state : State,
-  channel : @interop.ChannelId,
+  library : Library,
   item : InstalledItem,
 ) -> @html.Html {
   guard item.identity() is Some(identity) else { return @html.nothing }
-  if state.pending_action(channel, identity) is Some(action) {
+  if state.pending_action(library, identity) is Some(action) {
     return @html.span(
       class="skill-operation",
       attrs=@html.Attrs::build().role("status"),
       ui(locale, action.label()),
     )
   }
-  guard state.update_candidate(item) is Some(_) else { return @html.nothing }
+  guard !(item.builtin && library.locks_builtins()) &&
+    state.update_candidate(item) is Some(_) else {
+    return @html.nothing
+  }
   @html.span(class="skill-update-badge", [
     icon(@icons.icon_arrow_up),
     @html.span(ui(locale, UpdateAvailable)),

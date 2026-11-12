@@ -156,7 +156,7 @@ pub(all) struct Conversation {
   // The permission question this client answered, kept answered until the
   // control snapshot settles it or publishes another.
   approval_answered : String?
-  notice : String?
+  notice : Notice?
 }
 
 ///|
@@ -312,7 +312,7 @@ pub(all) struct State {
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
   creation : Creation?
-  notice : String?
+  notice : Notice?
 }
 
 ///|
@@ -350,7 +350,7 @@ pub(all) enum Msg {
     id~ : String
   )
   QuestionInputDelivered(Int32, String)
-  QuestionInputFailed(Int32, String, String)
+  QuestionInputFailed(Int32, String, Notice)
   AccountChanged(String?)
   Refresh
   Create

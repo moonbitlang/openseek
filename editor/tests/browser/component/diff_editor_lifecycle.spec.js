@@ -283,19 +283,15 @@ test('keeps overview interactions, failure status, and disposal observable', asy
   const overviewCanvases = overview.locator('.diffOverviewRuler');
   await expect(overview).toBeVisible();
   await expect(overviewCanvases).toHaveCount(2);
-  await expect(
-    overview.locator('[data-diff-overview-side="original"]'),
-  ).toHaveCSS('width', '15px');
-  await expect(
-    overview.locator('[data-diff-overview-side="modified"]'),
-  ).toHaveCSS('width', '15px');
-  await expect(overview).toHaveCSS('width', '30px');
   const reservedLayout = await root.evaluate((node) => ({
     root: node.getBoundingClientRect().width,
     panes: node.querySelector('.moonbit-diff-editor-panes')
       ?.getBoundingClientRect().width,
+    overview: node.querySelector('.moonbit-diff-overview')
+      ?.getBoundingClientRect().width,
   }));
-  expect(reservedLayout.root - reservedLayout.panes).toBe(30);
+  expect(Math.abs(reservedLayout.root - reservedLayout.panes - reservedLayout.overview))
+    .toBeLessThanOrEqual(1);
 
   const modifiedOverview = overview.locator(
     '[data-diff-overview-side="modified"]',

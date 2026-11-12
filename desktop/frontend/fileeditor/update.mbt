@@ -2697,10 +2697,7 @@ fn update_inner(
       }
     OfficeCitationLocated(navigation, found) =>
       if navigation.is_current(state, ctx) && !found {
-        (
-          @cmd.none,
-          { ..state, error: Some(ui(ctx.locale, OfficeCitationUnavailable)), },
-        )
+        (@cmd.none, { ..state, error: Some(OfficeCitationUnavailable), })
       } else {
         (@cmd.none, state)
       }
@@ -4172,25 +4169,14 @@ fn update_inner(
           Raster(url~, sig~) => TabImage(url~, sig~)
           Office(data_base64~, media_type~, sig~) =>
             if media_type == "application/pdf" {
-              match
-                decode_pdf_document(
-                  locale=ctx.locale,
-                  data_base64,
-                  state.pdf_generation + 1,
-                ) {
+              match decode_pdf_document(data_base64, state.pdf_generation + 1) {
                 Ok(document) => TabPdf(document~, sig~)
-                Err(message) => TabReadFailed(message)
+                Err(failure) => TabReadFailed(failure)
               }
             } else {
-              match
-                render_office_document(
-                  locale=ctx.locale,
-                  name,
-                  path,
-                  data_base64,
-                ) {
+              match render_office_document(name, path, data_base64) {
                 Ok(document) => TabState::TabOffice(document~, sig~)
-                Err(message) => TabState::TabReadFailed(message)
+                Err(failure) => TabState::TabReadFailed(failure)
               }
             }
           Binary => TabBinary
@@ -4681,7 +4667,7 @@ fn update_inner(
                 }
                 let failed = {
                   ..doc,
-                  state: TabReadFailed(message),
+                  state: TabReadFailed(Diagnostic(message)),
                   review,
                   stale: false,
                 }
@@ -5299,7 +5285,7 @@ test "language request failures remain a pure no-op below the root toast owner" 
   let state = owned_state()
   let msg = LanguageRequestFailed(
     owner=test_ctx().owner.host().unwrap(),
-    message="definition failed",
+    message=Diagnostic("definition failed"),
   )
   let (_, first) = update(emit, msg, state, test_ctx())
   let (_, second) = update(emit, msg, state, test_ctx())
@@ -5790,14 +5776,14 @@ test "review failures settle precisely and missing rename sources stay unavailab
       path=file,
       file_link_generation=None,
       review_generation=Some(1),
-      message="file disappeared",
+      message=Diagnostic("file disappeared"),
     ),
     failed,
     ctx,
   )
   assert_true(
     read_failed.docs.get(file)
-    is Some({ state: TabReadFailed("file disappeared"), .. }),
+    is Some({ state: TabReadFailed(Diagnostic("file disappeared")), .. }),
   )
   assert_true(read_failed.error is None)
 }
@@ -6191,7 +6177,7 @@ test "FileLoaded settles content into its document, active or not" {
       channel=test_ctx().owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(1),
-      message="stale watcher",
+      message=Diagnostic("stale watcher"),
     ),
     epoch_state,
     ctx,
@@ -7639,7 +7625,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
       path=file,
       file_link_generation=None,
       review_generation=None,
-      message="late symlink read",
+      message=Diagnostic("late symlink read"),
     ),
     fenced,
     ctx,
@@ -9163,7 +9149,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
     changes_generation: 1,
-    error: Some("file read failed"),
+    error: Some(Diagnostic("file read failed")),
   }
   let (_, failed) = update(
     emit,
@@ -9176,7 +9162,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
     test_ctx(),
   )
   assert_true(failed.changes is ChangeListFailed("git failed"))
-  assert_true(failed.error == Some("file read failed"))
+  assert_true(failed.error == Some(Diagnostic("file read failed")))
   // A watcher event does not hammer an already-failed request. A settled run
   // or an explicit Changes click remains the retry boundary.
   let (_, still_failed) = update(
@@ -9265,7 +9251,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   let failed_docs : Map[@common.Uri, Doc] = Map([])
   failed_docs[test_file(failed_path.0)] = {
     name: "failed.mbt",
-    state: TabReadFailed("temporary failure"),
+    state: TabReadFailed(Diagnostic("temporary failure")),
     review: Some({
       generation: 4,
       working_generation: 4,
@@ -9391,7 +9377,13 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   // notice would otherwise have appeared.
   assert_true(
     next.docs.get(test_file("a.mbt"))
-    is Some({ state: TabReadFailed("permission denied"), stale: false, .. }),
+    is Some(
+      {
+        state: TabReadFailed(Diagnostic("permission denied")),
+        stale: false,
+        ..
+      }
+    ),
   )
   // A read in flight settles the document itself.
   assert_true(
@@ -9401,7 +9393,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   // a failed read of a present path, not a confirmed deletion.
   assert_true(
     next.docs.get(test_file("c.mbt"))
-    is Some({ state: TabReadFailed("permission denied"), .. }),
+    is Some({ state: TabReadFailed(Diagnostic("permission denied")), .. }),
   )
   // A selected deletion row keeps its HEAD preview: the object at the path
   // belongs to a separate untracked row.
@@ -9417,7 +9409,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
     next.docs.get(test_file(reviewed_path.0))
     is Some(
       {
-        state: TabReadFailed("permission denied"),
+        state: TabReadFailed(Diagnostic("permission denied")),
         review: Some(
           {
             generation: 7,
@@ -9637,7 +9629,7 @@ test "a vanished review retries a failed ordinary read" {
   let docs : Map[@common.Uri, Doc] = Map([])
   docs[file] = {
     name: "committed.mbt",
-    state: TabReadFailed("temporary failure"),
+    state: TabReadFailed(Diagnostic("temporary failure")),
     review: Some({
       generation: 7,
       working_generation: 7,
@@ -9852,7 +9844,7 @@ test "sync reconciles the watcher with the panel and its open files" {
   // Open panel: watch the active session.
   let (watched, _) = sync(
     emit,
-    { ..owned_state(), watch_error: Some("old watcher failure"), },
+    { ..owned_state(), watch_error: Some(Diagnostic("old watcher failure")), },
     test_ctx(),
   )
   assert_true(
@@ -9892,7 +9884,7 @@ test "sync reconciles the watcher with the panel and its open files" {
       channel=test_ctx().owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(attached_generation),
-      message="replaced watcher stopped",
+      message=Diagnostic("replaced watcher stopped"),
     ),
     replaced,
     selected_ctx,
@@ -9940,12 +9932,12 @@ test "watcher failures are visible only in their owning conversation" {
       channel=owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(0),
-      message="File watching stopped",
+      message=Diagnostic("File watching stopped"),
     ),
     owned_state(),
     test_ctx(),
   )
-  assert_true(failed.watch_error is Some("File watching stopped"))
+  assert_true(failed.watch_error is Some(Diagnostic("File watching stopped")))
   let other : @interop.ConversationKey = {
     channel: @interop.ChannelId::Remote("other"),
     session: owner.session(),
@@ -9957,12 +9949,14 @@ test "watcher failures are visible only in their owning conversation" {
       channel=other.channel,
       root=other_ctx.test_resource("/work"),
       generation=other_ctx.watch_identity(0),
-      message="stale failure",
+      message=Diagnostic("stale failure"),
     ),
     failed,
     test_ctx(),
   )
-  assert_true(unchanged.watch_error is Some("File watching stopped"))
+  assert_true(
+    unchanged.watch_error is Some(Diagnostic("File watching stopped")),
+  )
 }
 
 ///|
@@ -9993,7 +9987,7 @@ test "a recursive watcher failure stops retries and refreshes its index" {
       channel=ctx.owner.host().unwrap().channel,
       root=ctx.test_root(),
       generation=ctx.watch_identity(generation),
-      message="File watching stopped",
+      message=Diagnostic("File watching stopped"),
     ),
     watched,
     ctx,
@@ -10002,12 +9996,12 @@ test "a recursive watcher failure stops retries and refreshes its index" {
   assert_true(
     failed.index is IndexReady(refreshing=true, refresh_again=false, ..),
   )
-  assert_true(failed.watch_error is Some("File watching stopped"))
+  assert_true(failed.watch_error is Some(Diagnostic("File watching stopped")))
   let (stopped, _) = sync(emit, failed, ctx)
   // An unchanged desired configuration cannot create a request/failure loop.
   assert_true(stopped.watching is Some({ recursive: true, .. }))
   assert_eq(stopped.watch_generation, generation)
-  assert_true(stopped.watch_error is Some("File watching stopped"))
+  assert_true(stopped.watch_error is Some(Diagnostic("File watching stopped")))
   // A real policy change starts one fresh concrete watcher generation.
   let retry_ctx = {
     ..ctx,
@@ -10043,11 +10037,13 @@ test "a settled run retries one failed watcher activation" {
       recursive: true,
     }),
     watch_generation: generation,
-    watch_error: Some("watch root did not exist"),
+    watch_error: Some(Diagnostic("watch root did not exist")),
   }
   let (_, settled) = update(emit, RunSettled(owner=ctx.owner), watched, ctx)
   assert_true(settled.watching is None)
-  assert_true(settled.watch_error is Some("watch root did not exist"))
+  assert_true(
+    settled.watch_error is Some(Diagnostic("watch root did not exist")),
+  )
   let (retried, _) = sync(emit, settled, ctx)
   assert_true(retried.watching is Some({ recursive: true, .. }))
   assert_eq(retried.watch_generation, generation + 1)
@@ -10100,7 +10096,7 @@ test "same-root conversation switch fences every old watcher push" {
     channel=next_owner.channel,
     root=next_ctx.test_root(),
     generation=test_ctx().watch_identity(old_generation),
-    message="File watching stopped",
+    message=Diagnostic("File watching stopped"),
   )
   let (_, after_old_failure) = update(
     emit, stale_failure, after_old_change, next_ctx,
@@ -10119,7 +10115,7 @@ test "same-root conversation switch fences every old watcher push" {
       channel=next_owner.channel,
       root=next_ctx.test_root(),
       generation=previous_page_ctx.watch_identity(switched.watch_generation),
-      message="previous page watcher stopped",
+      message=Diagnostic("previous page watcher stopped"),
     ),
     after_old_failure,
     next_ctx,
@@ -10129,13 +10125,13 @@ test "same-root conversation switch fences every old watcher push" {
     channel=next_owner.channel,
     root=next_ctx.test_root(),
     generation=next_ctx.watch_identity(switched.watch_generation),
-    message="current watcher stopped",
+    message=Diagnostic("current watcher stopped"),
   )
   let (_, first) = update(
     emit, current_failure, after_previous_page_failure, next_ctx,
   )
   let (_, second) = update(emit, current_failure, ready, next_ctx)
-  assert_eq(first.watch_error, Some("current watcher stopped"))
+  assert_true(first.watch_error is Some(Diagnostic("current watcher stopped")))
   assert_true(first.watch_error == second.watch_error)
 }
 

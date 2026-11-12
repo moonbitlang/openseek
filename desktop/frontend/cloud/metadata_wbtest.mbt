@@ -554,12 +554,7 @@ test "approval mode saves only between turns and holds sending until saved" {
   assert_true(refused.approval("a") is ApprovalReview)
   assert_true(refused.can_choose_approval("a"))
   assert_true(refused.can_send("a"))
-  assert_eq(
-    refused.notice,
-    Some(
-      "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
-    ),
-  )
+  assert_true(refused.notice is Some(ApprovalSaveRaced))
   // A draft can choose its first engine policy before the server creates it.
   let drafting = metadata_update(initial, Create)
   guard drafting.creation is Some(creation) else { fail("expected a draft") }

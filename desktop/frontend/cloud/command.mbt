@@ -25,10 +25,7 @@ fn State::update_command(
     let (delivery, notice) = match result {
       Ok(Accepted) => (@engine_session.Accepted, None)
       Ok(Rejected(reason)) =>
-        (
-          @engine_session.Rejected,
-          Some("Cloud rejected the operation: " + reason),
-        )
+        (@engine_session.Rejected, Some(OperationRejected(reason)))
       Err(failure) =>
         (
           if failure is (ServiceNotConfigured | Unauthorized | Http(400 | 404)) {
@@ -36,7 +33,7 @@ fn State::update_command(
           } else {
             @engine_session.Unknown
           },
-          Some(failure.label()),
+          Some(Notice::Failure(failure)),
         )
     }
     let next = self.replace(session, {

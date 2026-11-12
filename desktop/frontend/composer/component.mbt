@@ -93,7 +93,7 @@ priv struct Entry {
   changes_collapsed : Array[String]
   followup_menu_open : Bool
   image_reads : Int32
-  image_error : String?
+  image_error : AttachmentFailure?
   attachment_requests : Array[AttachmentRequest]
   attachment_sequence : Int32
   images_enabled : Bool
@@ -505,11 +505,16 @@ priv enum Msg {
     Identity,
     @common.Uri?,
     Int32,
-    Result[@protocol.PrepareAttachmentReply, String]
+    Result[@protocol.PrepareAttachmentReply, AttachmentFailure]
   )
   AttachmentConfirmed(Identity, @common.Uri?, Int32)
   AttachmentCancelled(Identity, @common.Uri?, Int32)
-  AttachmentImported(Identity, @common.Uri?, Int32, Result[String, String])
+  AttachmentImported(
+    Identity,
+    @common.Uri?,
+    Int32,
+    Result[String, AttachmentFailure]
+  )
   MentionJumped(Int32)
   GoalCancelled
   SubmitRequested
@@ -831,7 +836,8 @@ fn Model::update(
               [@protocol.AttachmentPath(path)],
               emit,
             )
-          Err(message) => ({ ..target, image_error: Some(message), }, @cmd.none)
+          Err(message) =>
+            ({ ..target, image_error: Some(Image(message)), }, @cmd.none)
         }
         return self.commit_entry_change(target, next, command, action_emit)
       }
@@ -857,7 +863,7 @@ fn Model::update(
           {
             ..target,
             image_reads: target.image_reads - 1,
-            image_error: Some(message),
+            image_error: Some(Image(message)),
           }
         }
         @image_input.DocumentsReady(..) | @image_input.NativePicked(_) => target
@@ -891,9 +897,7 @@ fn Model::update(
           } else {
             {
               ..target.without_attachment(id),
-              image_error: Some(
-                "This model does not support images. Choose PDF, DOCX, XLSX or PPTX documents.",
-              ),
+              image_error: Some(ImagesUnsupported),
             }
           }
         Err(message) => target.attachment_failed(id, message)

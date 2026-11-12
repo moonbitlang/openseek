@@ -250,7 +250,7 @@ test "unsupported image model refuses PDF screenshots and explains declined feed
   assert_true(first.composer_input().draft == pending.composer_input().draft)
   assert_eq(first.notifications.length(), 1)
   assert_eq(
-    first.notifications[0].message,
+    first.notifications[0].message.text(pending.locale),
     @fileeditor.capture_submission_declined_message(pending.locale),
   )
   let stale = { ..draft.preview, generation: draft.preview.generation - 1, }

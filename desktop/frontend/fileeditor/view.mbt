@@ -574,7 +574,10 @@ fn viewer_notice(
                   dynamic_text(locale, DLoadingBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewContent(_), .. }) => ""
                 Some({ baseline: ReviewMissing, .. }) =>
-                  "\{doc.name} was deleted and has no review baseline to preview."
+                  dynamic_text(
+                    locale,
+                    DDeletedWithoutBaseline(doc.name.to_string()),
+                  )
                 Some({ baseline: ReviewBinary, .. }) =>
                   dynamic_text(locale, DBinaryBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewOversized, .. }) =>
@@ -584,17 +587,19 @@ fn viewer_notice(
                     locale,
                     DBaselineFailed(doc.name.to_string(), message.to_string()),
                   )
-                None => "\{doc.name} was deleted on disk."
+                None =>
+                  dynamic_text(locale, DDeletedOnDisk(doc.name.to_string()))
               }
-            TabBinary => "\{doc.name} is a binary file and cannot be previewed."
-            TabOversized => "\{doc.name} is too large to preview."
+            TabBinary => dynamic_text(locale, DBinaryFile(doc.name.to_string()))
+            TabOversized =>
+              dynamic_text(locale, DLargeFile(doc.name.to_string()))
             TabReadFailed(message) =>
               if doc.review is Some({ baseline: ReviewContent(_), .. }) {
                 ""
               } else {
                 dynamic_text(
                   locale,
-                  DReadFailed(doc.name.to_string(), message.to_string()),
+                  DReadFailed(doc.name.to_string(), message.text(locale)),
                 )
               }
             TabUnavailable(message) => message
@@ -665,9 +670,9 @@ fn history_diff_notice(
         DHistoryDiffFailed(basename(diff.path).to_string(), message.to_string()),
       )
     (HistoryBlobBinary, _) | (_, HistoryBlobBinary) =>
-      "\{basename(diff.path)} is binary at this revision and cannot be previewed."
+      dynamic_text(locale, DBinaryHistoryFile(basename(diff.path).to_string()))
     (HistoryBlobOversized, _) | (_, HistoryBlobOversized) =>
-      "\{basename(diff.path)} is too large at this revision to preview."
+      dynamic_text(locale, DLargeHistoryFile(basename(diff.path).to_string()))
     (HistoryBlobMissing, HistoryBlobMissing) => ui(locale, NoCommitContent)
     _ => ""
   }
@@ -688,10 +693,10 @@ fn tree_pane(
   } else {
     let errors = []
     if state.error is Some(message) {
-      errors.push(message)
+      errors.push(message.text(locale))
     }
     for _, message in state.directory_errors {
-      errors.push(message)
+      errors.push(message.text(locale))
     }
     errors.sort()
     if errors.is_empty() {
@@ -3310,7 +3315,7 @@ fn breadcrumb_picker(
           class="breadcrumb-picker-empty breadcrumb-picker-failed",
           match state.directory_errors.get(directory) {
             Some(message) =>
-              dynamic_text(locale, DFolderFailed(message.to_string()))
+              dynamic_text(locale, DFolderFailed(message.text(locale)))
             None => ui(locale, CannotLoadFolder)
           },
         ),

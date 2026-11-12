@@ -9,6 +9,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/diff_provider/moondiff",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/github",
   "openseek_desktop/frontend/github_review",
@@ -160,7 +161,7 @@ pub fn CloudFiles::not_equal(Self, Self) -> Bool
 pub(all) struct Ctx {
   locale : @i18n.Locale
   model : String
-  thinking : @protocol.OpenSeekThinking?
+  thinking : @protocol.Thinking?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
   feedback_enabled : Bool
@@ -240,6 +241,32 @@ pub(all) enum ExplorerMode {
 }
 pub fn ExplorerMode::equal(Self, Self) -> Bool
 pub fn ExplorerMode::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub(all) enum Failure {
+  CloudFileOwnershipLost
+  CloudDirectoryOwnershipLost
+  HostFileOwnerChanged
+  HostDirectoryOwnerChanged
+  SavedButNotRevealed(String)
+  BrowserDownloadFailed
+  Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
+  FileWatchingFailed(@interop.BridgeProblem)
+  DefinitionFailed(@interop.BridgeProblem)
+  ReferencesFailed(@interop.BridgeProblem)
+  CaptureUnavailable
+  CaptureSubmissionDeclined
+  Diagnostic(String)
+  OfficeCitationUnavailable
+  ExcelCopyTooLarge
+  OfficeSelectionFailed
+  OfficePreviewFailed
+  PdfPreviewFailed
+}
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+pub fn Failure::text(Self, @i18n.Locale) -> String
 
 #derive(Eq)
 pub(all) enum FileChange {
@@ -352,7 +379,7 @@ pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
 pub(all) enum Msg {
   DownloadFile(desktop~ : Bool, path~ : @common.Uri)
   FileDownloadReady(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32, generation~ : Int32, path~ : @common.Uri, bytes~ : Bytes)
-  FileDownloaded(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32, generation~ : Int32, path~ : @common.Uri, result~ : Result[Unit, String])
+  FileDownloaded(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32, generation~ : Int32, path~ : @common.Uri, result~ : Result[Unit, Failure])
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
   OfficeCitationLaidOut(OfficeCitationNavigation)
   ReviewContextRevealFinished(source~ : @mention_context.ReviewSource, found~ : Bool)
@@ -412,7 +439,7 @@ pub(all) enum Msg {
   DirToggle(@pathx.Relative)
   EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, entries~ : Array[FileEntry])
-  DirFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, message~ : String)
+  DirFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, message~ : Failure)
   FilesIndexed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, files~ : Array[@pathx.Relative], truncated~ : Bool)
   FileIndexFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32)
   ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int32, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
@@ -463,8 +490,8 @@ pub(all) enum Msg {
   HistoryBlobFailed(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, message~ : String)
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
   FileLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, name~ : String, file~ : FileContent, file_link_generation~ : Int32?, review_generation~ : Int32?, range~ : @common.Range?, annotation~ : String?)
-  FileFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, file_link_generation~ : Int32?, review_generation~ : Int32?, message~ : String)
-  FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : String)
+  FileFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, file_link_generation~ : Int32?, review_generation~ : Int32?, message~ : Failure)
+  FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : Failure)
   FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationIdentity)
   WorkspaceInvalidated(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32)
@@ -473,7 +500,7 @@ pub(all) enum Msg {
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, stats~ : Array[FileStat], recheck_diagnostics~ : Bool)
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
-  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
+  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : Failure)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
   ApplyAllFeedback
   ApplyEditorFeedback(ModelUri)
@@ -818,14 +845,14 @@ pub(all) struct State {
   explorer_was_visible : Bool
   watching : WatchedPaths?
   watch_generation : Int32
-  watch_error : String?
+  watch_error : Failure?
   tree_focus : @pathx.Relative?
   tree_reveal : TreeReveal
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   removed_directory_reads : Map[@pathx.Relative, RemovedDirectoryRead]
   children : Map[@pathx.Relative, Array[FileEntry]]
-  directory_errors : Map[@pathx.Relative, String]
+  directory_errors : Map[@pathx.Relative, Failure]
   docs : Map[@common.Uri, Doc]
   download : @common.Uri?
   download_generation : Int32
@@ -835,7 +862,7 @@ pub(all) struct State {
   package_graph_generation : Int32
   highlighted : @pathx.Relative?
   index : FileIndex
-  error : String?
+  error : Failure?
 }
 pub fn State::accepts_office_callback(Self, Ctx, @interop.ConversationIdentity, Int32, @common.Uri, String) -> Bool
 pub fn State::accepts_office_region(Self, Ctx, OfficeRegionRequest) -> Bool
@@ -866,7 +893,7 @@ pub(all) enum TabState {
   TabImage(url~ : String, sig~ : String)
   TabBinary
   TabOversized
-  TabReadFailed(String)
+  TabReadFailed(Failure)
   TabUnavailable(String)
   TabDeleted
 }

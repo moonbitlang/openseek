@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/cloud_client"
 import {
   "moonbitlang/async/http",
   "moonbitlang/core/json",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
 }
 
@@ -32,6 +33,20 @@ pub async fn read_file_index(String, String) -> Array[String]
 
 pub async fn request(String, String, @http.RequestMethod, token? : String, body? : @json.Json) -> @json.Json
 
+pub async fn skills_catalog(String) -> @protocol.SkillsCatalogReply
+
+pub async fn skills_content(String, @protocol.InstallSkillPayload) -> @protocol.SkillContentReply
+
+pub async fn skills_install(String, @protocol.InstallSkillPayload) -> @protocol.InstallSkillReply
+
+pub async fn skills_installed(String) -> @protocol.InstalledSkillsReply
+
+pub async fn skills_installed_content(String, String) -> @protocol.SkillContentReply
+
+pub async fn skills_set_enabled(String, @protocol.SetSkillEnabledPayload) -> @protocol.SetSkillEnabledReply
+
+pub async fn skills_uninstall(String, String) -> @protocol.UninstallSkillReply
+
 pub async fn watch_files(String, String, (@http.Client) -> Unit, () -> Bool, () -> Unit) -> Unit
 
 // Errors
@@ -48,6 +63,7 @@ pub(all) struct Access {
 pub fn Access::equal(Self, Self) -> Bool
 pub fn Access::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum Failure {
   Unauthorized
   Busy
@@ -57,9 +73,12 @@ pub(all) enum Failure {
   ExportUnavailable
   ServiceNotConfigured
   SignInFailed(String)
+  RemoteMessage(String)
   InvalidImage
 }
-pub fn Failure::label(Self) -> String
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+pub fn Failure::text(Self, @i18n.Locale) -> String
 
 pub struct SseParser {
   mut event : String

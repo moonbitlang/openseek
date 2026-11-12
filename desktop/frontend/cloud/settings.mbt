@@ -3,7 +3,7 @@
 #derive(Eq)
 pub(all) struct CommandSettings {
   model : @deepseek.DsVariant
-  thinking : @protocol.OpenSeekThinking
+  thinking : @protocol.Thinking
 }
 
 ///|
@@ -30,7 +30,7 @@ pub impl FromJson for CommandSettings with fn from_json(json, path) {
         (path.add_key("model"), "expected a Cloud model"),
       )
   }
-  let thinking : @protocol.OpenSeekThinking = match fields.get("thinking") {
+  let thinking : @protocol.Thinking = match fields.get("thinking") {
     None =>
       raise @json.JsonDecodeError(
         (path.add_key("thinking"), "missing thinking"),

@@ -19,9 +19,12 @@ The engine discovers skills at startup and appends a `## Skills` section to
 the system prompt listing each skill's name, description, and path, with the
 instruction to read the file through `mbtx` and `@builtin/read.mbtx` before doing matching work. The body stays
 out of the prompt until the model decides it is relevant, so a large skill
-library costs a few listing lines per request, not its full text. Missing
-frontmatter falls back to the file stem and an empty description; a missing
-directory is simply an empty library.
+library costs a few listing lines per request, not its full text. Frontmatter
+is YAML, read the way the skill registry validates it when a skill is
+published, so quoted values, comments and block-scalar descriptions list as
+their YAML values. Missing, unclosed or malformed frontmatter falls back to the
+file stem and an empty description; a missing directory is simply an empty
+library.
 
 Two libraries feed the listing: the user-level (global) one under
 `$HOME/.openseek/skills` (`%USERPROFILE%/.openseek/skills` on Windows;

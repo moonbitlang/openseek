@@ -19,7 +19,6 @@ priv struct AttachmentRequest {
 
 ///|
 fn pick_attachments(
-  locale : @i18n.Locale,
   input : Input,
   emit : @cmd.Emit[@image_input.Event],
 ) -> @cmd.Cmd {
@@ -31,7 +30,6 @@ fn pick_attachments(
       @interop.openseek_api() is Some(_) => host
     _ =>
       return @image_input.pick(
-        locale~,
         allow_images=input.presentation.images_enabled,
         emit,
       )
@@ -46,7 +44,9 @@ fn pick_attachments(
         error => {
           scheduler.add(
             emit(
-              @image_input.NativePicked(Err(@interop.bridge_error_text(error))),
+              @image_input.NativePicked(
+                Err(@image_input.Bridge(@interop.bridge_problem(error))),
+              ),
             ),
           )
           return
@@ -75,8 +75,8 @@ fn prepare_attachment(
             request.source,
           ),
         ) catch {
-          @cloud_client.RequestError(failure) => Err(failure.label())
-          _ => Err(@cloud_client.Failure::Unreachable.label())
+          @cloud_client.RequestError(failure) => Err(Cloud(failure))
+          _ => Err(Cloud(@cloud_client.Failure::Unreachable))
         }
         scheduler.add(
           emit(AttachmentPrepared(identity, request.root, request.id, result)),
@@ -98,7 +98,7 @@ fn prepare_attachment(
                 identity,
                 request.root,
                 request.id,
-                Err(@interop.bridge_error_text(error)),
+                Err(Bridge(@interop.bridge_problem(error))),
               ),
             ),
           )
@@ -126,8 +126,8 @@ fn import_attachment(
         let result = Ok(
           @cloud_client.import_attachment(access.token, session, request.source).path,
         ) catch {
-          @cloud_client.RequestError(failure) => Err(failure.label())
-          _ => Err(@cloud_client.Failure::Unreachable.label())
+          @cloud_client.RequestError(failure) => Err(Cloud(failure))
+          _ => Err(Cloud(@cloud_client.Failure::Unreachable))
         }
         scheduler.add(
           emit(AttachmentImported(identity, request.root, request.id, result)),
@@ -149,7 +149,7 @@ fn import_attachment(
                 identity,
                 request.root,
                 request.id,
-                Err(@interop.bridge_error_text(error)),
+                Err(Bridge(@interop.bridge_problem(error))),
               ),
             ),
           )
@@ -176,13 +176,7 @@ fn Entry::prepare_attachments(
     return (self, @cmd.none)
   }
   guard self.root is Some(_) || self.owner is @interop.Cloud(..) else {
-    return (
-      {
-        ..self,
-        image_error: Some("Choose a workspace before attaching documents"),
-      },
-      @cmd.none,
-    )
+    return ({ ..self, image_error: Some(WorkspaceRequired), }, @cmd.none)
   }
   let requests = self.attachment_requests.copy()
   let commands : Array[@cmd.Cmd] = []
@@ -226,7 +220,7 @@ fn Entry::without_attachment(self : Entry, id : Int32) -> Entry {
 fn Entry::attachment_failed(
   self : Entry,
   id : Int32,
-  message : String,
+  message : AttachmentFailure,
 ) -> Entry {
   let next = if self.owner is @interop.Cloud(..) &&
     self.attachment_requests.iter().find_first(request => request.id == id)

@@ -250,7 +250,7 @@ fn Conversation::acknowledge_control(
 fn Conversation::reject_control(
   self : Conversation,
   id : String,
-  notice : String?,
+  notice : Notice?,
 ) -> Conversation {
   guard self.control_inputs.iter().find_first(input => input.key == id)
     is Some(input) else {
@@ -372,10 +372,7 @@ fn Conversation::steer_receipt(
   }
   let next = self.acknowledge_control(input.key)
   if dropped {
-    next.reject_control(
-      input.key,
-      Some("The additional input was not applied."),
-    )
+    next.reject_control(input.key, Some(AdditionalInputNotApplied))
   } else {
     {
       ..next,
@@ -418,10 +415,7 @@ fn Conversation::control_snapshot(
         Dropped =>
           next = next
             .acknowledge_control(input.key)
-            .reject_control(
-              input.key,
-              Some("The additional input was not applied."),
-            )
+            .reject_control(input.key, Some(AdditionalInputNotApplied))
         Pending | Unknown => next = next.acknowledge_control(input.key)
       }
     } else if input.operation is (QueueAdd(..) | QueueEdit(..)) &&
@@ -723,15 +717,12 @@ fn State::update_control(
         }
       }
       ControlFinished(_, _, _, _, Rejected(reason)) =>
-        conversation.reject_control(
-          id,
-          Some("Cloud rejected the operation: " + reason + "."),
-        )
+        conversation.reject_control(id, Some(ControlRejected(reason)))
       ControlPreparationFailed(_, _, _, _, failure) =>
-        conversation.reject_control(id, Some(failure.label()))
+        conversation.reject_control(id, Some(Notice::Failure(failure)))
       ControlFailed(_, _, _, _, failure) if failure
         is (Unauthorized | Http(400 | 404)) =>
-        conversation.reject_control(id, Some(failure.label()))
+        conversation.reject_control(id, Some(Notice::Failure(failure)))
       ControlFailed(_, _, _, _, failure) =>
         {
           ..conversation,
@@ -742,7 +733,7 @@ fn State::update_control(
               input
             }
           }),
-          notice: Some(failure.label()),
+          notice: Some(Notice::Failure(failure)),
         }
       _ => conversation
     }
@@ -854,7 +845,7 @@ fn State::update_control(
             (
               self.replace(session, {
                 ..conversation,
-                notice: Some(failure.label()),
+                notice: Some(Notice::Failure(failure)),
               }),
               @cmd.none,
             ),
@@ -948,7 +939,7 @@ fn State::update_control(
             (
               self.replace(session, {
                 ..conversation,
-                notice: Some(failure.label()),
+                notice: Some(Notice::Failure(failure)),
               }),
               @cmd.none,
             ),
@@ -1005,13 +996,13 @@ fn State::approval_delivered(
       {
         ..settled,
         approval_answered: settled.approval_answered.filter(id => id != question),
-        notice: Some("Cloud did not accept the answer: \{reason}."),
+        notice: Some(AnswerRejected(reason)),
       }
     ControlFailed(_, _, _, _, failure) =>
       {
         ..settled,
         approval_answered: settled.approval_answered.filter(id => id != question),
-        notice: Some(failure.label()),
+        notice: Some(Notice::Failure(failure)),
       }
     _ => conversation
   }

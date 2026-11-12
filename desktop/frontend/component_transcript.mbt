@@ -71,7 +71,7 @@ fn Model::chat_column(self : Model) -> ChatColumn {
   if self.cloud_identity() is Some(owner) {
     guard self.cloud_conversation() is Some(conversation) else {
       return if self.cloud.notice is Some(message) {
-        LoadFailed(message~, retry=true)
+        LoadFailed(message=message.text(self.locale), retry=true)
       } else {
         Loading
       }
@@ -83,7 +83,7 @@ fn Model::chat_column(self : Model) -> ChatColumn {
     if !conversation.history_cached &&
       conversation.history_required &&
       conversation.notice is Some(message) {
-      return LoadFailed(message~, retry=true)
+      return LoadFailed(message=message.text(self.locale), retry=true)
     }
     return CloudTranscript(slot=CloudTranscriptSlot(owner))
   }
@@ -232,7 +232,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   if self.cloud_draft_identity() is Some(owner) {
     let items = self.cloud.conversations
       .get(owner.session())
-      .map_or([], conversation => conversation.items())
+      .map_or([], conversation => conversation.items(self.locale))
     return @transcript_component.Input(
       locale=self.locale,
       dark_mode=self.theme.is_dark(self.system_dark),
@@ -255,7 +255,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   if self.screen is Chat &&
     self.cloud_identity() is Some(owner) &&
     self.cloud_conversation() is Some(conversation) {
-    let items = conversation.items()
+    let items = conversation.items(self.locale)
     let (streaming_reasoning, reasoning_complete) = conversation.visible_reasoning(
       items,
     )

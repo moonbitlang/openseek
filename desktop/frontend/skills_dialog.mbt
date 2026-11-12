@@ -1,7 +1,7 @@
 ///|
 fn Model::skills_detail_dialog_open(self : Model) -> Bool {
   self.management_dialog is Some(Skills) &&
-  self.skills.detail_open(self.focused) &&
+  self.skills.detail_open(self.skills_input().library) &&
   !self.host_incompatible()
 }
 

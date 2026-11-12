@@ -1,4 +1,5 @@
 import {
+  "moonbit-community/yaml",
   "moonbitlang/core/async/fs",
 }
 

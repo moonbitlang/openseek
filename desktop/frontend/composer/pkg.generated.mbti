@@ -13,6 +13,7 @@ import {
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/image_input",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
@@ -99,6 +100,17 @@ pub(all) struct ApprovalSelect {
   open : Bool
   enabled : Bool
 }
+
+#derive(Eq)
+pub(all) enum AttachmentFailure {
+  Cloud(@cloud_client.Failure)
+  Bridge(@interop.BridgeProblem)
+  Image(@image_input.Failure)
+  WorkspaceRequired
+  ImagesUnsupported
+}
+pub fn AttachmentFailure::equal(Self, Self) -> Bool
+pub fn AttachmentFailure::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct CodexRequestInput {

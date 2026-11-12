@@ -238,10 +238,7 @@ test "SSH preparation progress can be cancelled and does not revive an offline h
     "event": { "stage": "installing" },
   })
   let (_, preparing) = update_ssh(dispatch, event, connecting)
-  assert_eq(
-    preparing.ssh_ui.connecting.get(profile.id),
-    Some("Running openseek setup…"),
-  )
+  assert_true(preparing.ssh_ui.connecting.get(profile.id) is Some(Installing))
   let (_, cancelled) = update_ssh(dispatch, Disconnect(profile.id), preparing)
   let (_, stale) = update_ssh(dispatch, event, cancelled)
   assert_false(stale.ssh_ui.connecting.contains(profile.id))

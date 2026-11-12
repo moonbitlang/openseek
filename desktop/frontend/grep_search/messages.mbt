@@ -1,4 +1,4 @@
-// Feature-owned UI messages; both locales are exhaustive.
+// Feature-owned UI messages; all locales are exhaustive.
 
 ///|
 priv enum UiMessage {
@@ -12,6 +12,14 @@ priv enum UiMessage {
   RegularExpression
   RepairingPattern
   FixPattern
+  PatternRepairInputRequiredLabel
+  PatternRepairUnavailableLabel
+  PatternRepairTimedOutLabel
+  PatternRepairValidationFailedLabel
+  PatternRepairFailedLabel
+  PatternRepairCandidateLabel
+  PatternRepairTraceLabel
+  ShowPatternRepairDetails
   ThinkingLabel
   InvalidRegex
   InvalidGlob
@@ -95,6 +103,74 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, FixPattern) => "修复模式"
     (TraditionalChinese, FixPattern) => "修復模式"
     (Japanese, FixPattern) => "パターンを修正"
+    (English, PatternRepairInputRequiredLabel) =>
+      "Enter a pattern before repairing it."
+    (Spanish, PatternRepairInputRequiredLabel) =>
+      "Introduce un patrón antes de repararlo."
+    (SimplifiedChinese, PatternRepairInputRequiredLabel) =>
+      "请先输入模式，再进行修复。"
+    (TraditionalChinese, PatternRepairInputRequiredLabel) =>
+      "請先輸入模式，再進行修復。"
+    (Japanese, PatternRepairInputRequiredLabel) =>
+      "修正するパターンを先に入力してください。"
+    (English, PatternRepairUnavailableLabel) =>
+      "Pattern repair is unavailable. Check Settings and retry."
+    (Spanish, PatternRepairUnavailableLabel) =>
+      "La reparación de patrones no está disponible. Revisa la configuración e inténtalo de nuevo."
+    (SimplifiedChinese, PatternRepairUnavailableLabel) =>
+      "模式修复不可用。请检查设置后重试。"
+    (TraditionalChinese, PatternRepairUnavailableLabel) =>
+      "模式修復無法使用。請檢查設定後重試。"
+    (Japanese, PatternRepairUnavailableLabel) =>
+      "パターン修正を利用できません。設定を確認して再試行してください。"
+    (English, PatternRepairTimedOutLabel) =>
+      "Pattern Repair Agent timed out after 120 seconds. Try again."
+    (Spanish, PatternRepairTimedOutLabel) =>
+      "El agente de reparación de patrones agotó el tiempo de espera de 120 segundos. Inténtalo de nuevo."
+    (SimplifiedChinese, PatternRepairTimedOutLabel) =>
+      "模式修复代理在 120 秒后超时。请重试。"
+    (TraditionalChinese, PatternRepairTimedOutLabel) =>
+      "模式修復代理在 120 秒後逾時。請重試。"
+    (Japanese, PatternRepairTimedOutLabel) =>
+      "パターン修正エージェントが 120 秒でタイムアウトしました。もう一度お試しください。"
+    (English, PatternRepairValidationFailedLabel) =>
+      "Pattern repair failed. The current pattern was not changed."
+    (Spanish, PatternRepairValidationFailedLabel) =>
+      "La reparación del patrón falló. El patrón actual no se ha modificado."
+    (SimplifiedChinese, PatternRepairValidationFailedLabel) =>
+      "模式修复失败。当前模式未更改。"
+    (TraditionalChinese, PatternRepairValidationFailedLabel) =>
+      "模式修復失敗。目前的模式未變更。"
+    (Japanese, PatternRepairValidationFailedLabel) =>
+      "パターンの修正に失敗しました。現在のパターンは変更されていません。"
+    (English, PatternRepairFailedLabel) =>
+      "Pattern repair failed. Update the pattern or retry."
+    (Spanish, PatternRepairFailedLabel) =>
+      "La reparación del patrón falló. Modifica el patrón o inténtalo de nuevo."
+    (SimplifiedChinese, PatternRepairFailedLabel) =>
+      "模式修复失败。请修改模式或重试。"
+    (TraditionalChinese, PatternRepairFailedLabel) =>
+      "模式修復失敗。請修改模式或重試。"
+    (Japanese, PatternRepairFailedLabel) =>
+      "パターンの修正に失敗しました。パターンを変更するか、再試行してください。"
+    (English, PatternRepairCandidateLabel) => "Candidate pattern (not applied)"
+    (Spanish, PatternRepairCandidateLabel) => "Patrón propuesto (sin aplicar)"
+    (SimplifiedChinese, PatternRepairCandidateLabel) =>
+      "候选模式（未应用）"
+    (TraditionalChinese, PatternRepairCandidateLabel) =>
+      "候選模式（未套用）"
+    (Japanese, PatternRepairCandidateLabel) =>
+      "候補パターン（未適用）"
+    (English, PatternRepairTraceLabel) => "Repair trace"
+    (Spanish, PatternRepairTraceLabel) => "Registro de reparación"
+    (SimplifiedChinese, PatternRepairTraceLabel) => "修复轨迹"
+    (TraditionalChinese, PatternRepairTraceLabel) => "修復軌跡"
+    (Japanese, PatternRepairTraceLabel) => "修正のトレース"
+    (English, ShowPatternRepairDetails) => "Show repair details"
+    (Spanish, ShowPatternRepairDetails) => "Mostrar detalles de reparación"
+    (SimplifiedChinese, ShowPatternRepairDetails) => "显示修复详情"
+    (TraditionalChinese, ShowPatternRepairDetails) => "顯示修復詳情"
+    (Japanese, ShowPatternRepairDetails) => "修正の詳細を表示"
     (English, ThinkingLabel) => "Thinking"
     (Spanish, ThinkingLabel) => "Pensando"
     (SimplifiedChinese, ThinkingLabel) => "思考中"

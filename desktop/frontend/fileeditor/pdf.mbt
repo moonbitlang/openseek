@@ -30,12 +30,11 @@ pub extend PdfDocument with Eq::{equal, not_equal}
 
 ///|
 fn decode_pdf_document(
-  locale~ : @i18n.Locale = English,
   data_base64 : String,
   generation : Int32,
-) -> Result[PdfDocument, String] {
+) -> Result[PdfDocument, Failure] {
   let bytes = @base64.decode(data_base64) catch {
-    _ => return Err(ui(locale, PdfPreviewFailed))
+    _ => return Err(PdfPreviewFailed)
   }
   Ok({
     bytes,
@@ -292,10 +291,7 @@ fn apply_pdf_event(
       }
     }
     { "status": String("selection-error"), "message": String(_), .. } =>
-      return (
-        @cmd.none,
-        { ..state, error: Some(ui(locale, OfficeSelectionFailed)), },
-      )
+      return (@cmd.none, { ..state, error: Some(OfficeSelectionFailed), })
     // Progress does not erase a password prompt or a ready document. Unknown
     // statuses and malformed events deliberately leave the tab unchanged.
     _ => return (@cmd.none, state)

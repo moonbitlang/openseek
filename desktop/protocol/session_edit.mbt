@@ -11,7 +11,7 @@ pub(all) struct SessionEditPayload {
   task : String
   images : Array[String]
   attachment_paths : Array[String]
-  thinking : OpenSeekThinking?
+  thinking : Thinking?
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?

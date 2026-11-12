@@ -33,6 +33,8 @@ priv enum UiMessage {
   Registry
   Refreshing
   Refresh
+  ThisDevice
+  CloudLibraryLabel
 }
 
 ///|
@@ -153,6 +155,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "代理程式在任務匹配時讀取的操作指南。技能對新建對話生效。"
     (Japanese, Description) =>
       "タスクに応じてエージェントが参照する手順です。スキルは新しいチャットに適用されます。"
+    (English, ThisDevice) => "This device"
+    (Spanish, ThisDevice) => "Este dispositivo"
+    (SimplifiedChinese, ThisDevice) => "此设备"
+    (TraditionalChinese, ThisDevice) => "此裝置"
+    (Japanese, ThisDevice) => "このデバイス"
+    (English, CloudLibraryLabel) => "Cloud"
+    (Spanish, CloudLibraryLabel) => "Nube"
+    (SimplifiedChinese, CloudLibraryLabel) => "云端"
+    (TraditionalChinese, CloudLibraryLabel) => "雲端"
+    (Japanese, CloudLibraryLabel) => "クラウド"
     (English, Search) => "Search skills…"
     (Spanish, Search) => "Buscar habilidades…"
     (SimplifiedChinese, Search) => "搜索技能…"

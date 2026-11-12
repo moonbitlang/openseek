@@ -16,11 +16,11 @@ test "an MCP server that failed while the engine started is reported" {
     ),
     test_model(),
   )
-  guard reported.notifications.last() is Some(toast) else {
+  guard reported.notifications.last() is Some({ message: Raw(message), .. }) else {
     fail("the failure should be reported")
   }
-  assert_true(toast.message.contains("playwright"))
-  assert_true(toast.message.has_suffix("npx: command not found"))
+  assert_true(message.contains("playwright"))
+  assert_true(message.has_suffix("npx: command not found"))
 }
 
 ///|
@@ -41,10 +41,10 @@ test "an MCP failure stamped with a run this page has not opened yet still lands
     ),
     test_model(),
   )
-  guard reported.notifications.last() is Some(toast) else {
+  guard reported.notifications.last() is Some({ message: Raw(message), .. }) else {
     fail("the failure should be reported")
   }
-  assert_true(toast.message.contains("/home/.openseek/mcp.json"))
+  assert_true(message.contains("/home/.openseek/mcp.json"))
 }
 
 ///|
@@ -61,11 +61,11 @@ test "a server cut off by the MCP tool limit is reported" {
     ),
     test_model(),
   )
-  guard reported.notifications.last() is Some(toast) else {
+  guard reported.notifications.last() is Some({ message: Raw(message), .. }) else {
     fail("the dropped tools should be reported")
   }
-  assert_true(toast.message.contains("playwright"))
-  assert_true(toast.message.contains("100"))
+  assert_true(message.contains("playwright"))
+  assert_true(message.contains("100"))
 }
 
 ///|

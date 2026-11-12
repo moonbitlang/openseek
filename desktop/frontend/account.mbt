@@ -9,7 +9,7 @@ fn fetch_account(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.AccountSession?, String] = try {
+      let result : Result[@protocol.AccountSession?, @account_failure.Failure] = try {
         if desktop {
           Ok(
             @interop.bridge_request(
@@ -20,14 +20,16 @@ fn fetch_account(
           )
         } else {
           match load_browser_account() {
-            Err(message) => Err(message)
+            Err(failure) => Err(failure)
             Ok(Some(account)) => Ok(Some(account))
             Ok(None) if local_console => Ok(None)
             Ok(None) => {
               let base = match resolve_browser_url("/v2/auth/me") {
                 Ok((url, _)) => url
                 Err(message) => {
-                  scheduler.add(dispatch(AccountLoaded(epoch, Err(message))))
+                  scheduler.add(
+                    dispatch(AccountLoaded(epoch, Err(Diagnostic(message)))),
+                  )
                   return
                 }
               }
@@ -39,7 +41,7 @@ fn fetch_account(
                     Ok((url, _)) => url
                     Err(message) => {
                       scheduler.add(
-                        dispatch(AccountLoaded(epoch, Err(message))),
+                        dispatch(AccountLoaded(epoch, Err(Diagnostic(message)))),
                       )
                       return
                     }
@@ -48,10 +50,10 @@ fn fetch_account(
                   match response.code {
                     200 => Ok(Some(@json.from_json(body.json())))
                     401 => Ok(None)
-                    _ => Err("the sign-in check answered HTTP \{response.code}")
+                    _ => Err(SignInCheckHttp(response.code))
                   }
                 }
-                _ => Err("the sign-in check answered HTTP \{me.code}")
+                _ => Err(SignInCheckHttp(me.code))
               }
             }
           }
@@ -60,9 +62,9 @@ fn fetch_account(
         error =>
           Err(
             if desktop {
-              @interop.bridge_error_text(error)
+              Bridge(@interop.bridge_problem(error))
             } else {
-              "the relay is unreachable: \{@interop.bridge_error_text(error)}"
+              RelayUnreachable(@interop.bridge_error_text(error))
             },
           )
       }
@@ -133,14 +135,14 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
       settled,
     )
     assert_false(cancelled.remote_connecting)
-    assert_eq(cancelled.account_error, None)
+    assert_true(cancelled.account_error is None)
     let (_, retried) = begin_account_login(test_dispatch(), cancelled)
     assert_eq(retried.account_epoch, epoch + 1)
     let stale_replies = [
       connect_reply,
       cancel_reply,
       AccountLoginTimedOut(epoch),
-      AccountCancelFailed(epoch, "old cancellation failed"),
+      AccountCancelFailed(epoch, Diagnostic("old cancellation failed")),
       AccountLoaded(
         epoch,
         Ok(
@@ -156,42 +158,29 @@ test "account sign-in cancellation waits for both replies and ignores stale atte
       assert_true(late.remote_connecting)
       assert_true(late.account_login is Some(Waiting))
       assert_true(late.account is None)
-      assert_eq(late.account_error, None)
+      assert_true(late.account_error is None)
     }
   }
 }
 
 ///|
-test "account sign-in timeout is localized and restores the retry action" {
-  let locales : Array[@i18n.Locale] = [
-    English,
-    Spanish,
-    SimplifiedChinese,
-    TraditionalChinese,
-    Japanese,
-  ]
-  for locale in locales {
-    let (_, pending) = begin_account_login(test_dispatch(), {
-      ..test_model(),
-      is_desktop: true,
-      account: None,
-      locale,
-    })
-    let (_, expired) = update(
-      test_dispatch(),
-      AccountLoginTimedOut(pending.account_epoch),
-      pending,
-    )
-    assert_false(expired.remote_connecting)
-    assert_true(expired.account_login is None)
-    assert_eq(
-      expired.account_error,
-      Some(@settings.text(locale, SignInTimedOut)),
-    )
-    let (_, retried) = begin_account_login(test_dispatch(), expired)
-    assert_true(retried.remote_connecting)
-    assert_eq(retried.account_error, None)
-  }
+test "account sign-in timeout retains its cause and restores the retry action" {
+  let (_, pending) = begin_account_login(test_dispatch(), {
+    ..test_model(),
+    is_desktop: true,
+    account: None,
+  })
+  let (_, expired) = update(
+    test_dispatch(),
+    AccountLoginTimedOut(pending.account_epoch),
+    pending,
+  )
+  assert_false(expired.remote_connecting)
+  assert_true(expired.account_login is None)
+  assert_true(expired.account_error is Some(SignInTimedOut))
+  let (_, retried) = begin_account_login(test_dispatch(), expired)
+  assert_true(retried.remote_connecting)
+  assert_true(retried.account_error is None)
 }
 
 ///|
@@ -204,15 +193,18 @@ test "a failed account cancellation keeps the waiting sign-in cancellable" {
   let (_, cancelling) = update(test_dispatch(), RemoteCancelClicked, pending)
   let (_, failed) = update(
     test_dispatch(),
-    AccountCancelFailed(pending.account_epoch, "bridge disconnected"),
+    AccountCancelFailed(
+      pending.account_epoch,
+      Diagnostic("bridge disconnected"),
+    ),
     cancelling,
   )
   assert_true(failed.remote_connecting)
   assert_true(failed.account_login is Some(Waiting))
-  assert_eq(failed.account_error, Some("bridge disconnected"))
+  assert_true(failed.account_error is Some(Diagnostic("bridge disconnected")))
   let (_, retried) = update(test_dispatch(), RemoteCancelClicked, failed)
   assert_true(retried.account_login is Some(Cancelling(..)))
-  assert_eq(retried.account_error, None)
+  assert_true(retried.account_error is None)
 }
 
 ///|
@@ -220,7 +212,7 @@ fn account_loaded(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   epoch : Int32,
-  result : Result[@protocol.AccountSession?, String],
+  result : Result[@protocol.AccountSession?, @account_failure.Failure],
 ) -> (@cmd.Cmd, Model) {
   guard epoch == model.account_epoch else { return (@cmd.none, model) }
   if model.account_login is Some(Cancelling(cancel_pending~, ..)) {
@@ -244,12 +236,12 @@ fn account_loaded(
   }
   let account = match result {
     Ok(account) => account
-    Err(message) => {
+    Err(failure) => {
       let (command, export_dialog) = model.export_dialog.account_changed(
-        Err(message),
+        Err(failure),
       )
       let (file_command, file_share_dialog) = model.file_share_dialog.account_changed(
-        Err(message),
+        Err(failure),
       )
       return (
         @cmd.batch([command, file_command]),
@@ -260,7 +252,7 @@ fn account_loaded(
           remote_connecting: false,
           account_login: None,
           account_checked: true,
-          account_error: Some(message),
+          account_error: Some(failure),
         },
       )
     }
@@ -344,9 +336,22 @@ fn account_loaded(
   } else {
     @cmd.none
   }
+  // The Cloud skills mirror belongs to one account: drop the old one and read
+  // the new one, which the Cloud composer's `$` completion lists.
+  let (skills_command, next) = if changed {
+    let next = { ..next, cloud_skills: [], }
+    (
+      next
+      .cloud_skills_access()
+      .map_or(@cmd.none, access => fetch_cloud_skills(dispatch, access)),
+      next,
+    )
+  } else {
+    (@cmd.none, next)
+  }
   let command = @cmd.batch([
     export_command, file_command, retire_command, command, persistence, console_command,
-    remote_status,
+    remote_status, skills_command,
   ])
   (command, next)
 }
@@ -384,11 +389,13 @@ fn sign_out_account(
 }
 
 ///|
-fn load_browser_account() -> Result[@protocol.AccountSession?, String] {
+fn load_browser_account() -> Result[
+  @protocol.AccountSession?,
+  @account_failure.Failure,
+] {
   match @base_browser.local_storage_get("seekmoon.account.v1") {
-    Err(Unavailable) => Err("Account storage is unavailable.")
-    Err(AccessFailed(detail)) =>
-      Err("Could not read account storage: " + detail)
+    Err(Unavailable) => Err(StorageUnavailable)
+    Err(AccessFailed(detail)) => Err(StorageReadFailed(detail))
     Ok(None) => Ok(None)
     Ok(Some(text)) =>
       Ok(

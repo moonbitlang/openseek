@@ -78,14 +78,14 @@ pub fn Model::view(
             ui(locale, SignInLabel),
           ),
         ])
-      SignInFailed(message) =>
+      SignInFailed(failure) =>
         @html.div([
           @html.p(
             class="export-error",
             if file {
-              message
+              failure.text(locale)
             } else {
-              dynamic_text(locale, DSignInFailure(message.to_string()))
+              dynamic_text(locale, DSignInFailure(failure.text(locale)))
             },
           ),
           @html.button(
@@ -94,7 +94,7 @@ pub fn Model::view(
             ui(locale, RetrySignIn),
           ),
         ])
-      Failed(message) => @html.div(class="export-error", message)
+      Failed(failure) => @html.div(class="export-error", failure.text(locale))
       Saved(path~, opened~) =>
         @html.div(
           if opened {

@@ -232,7 +232,7 @@ async fn request_pattern_repair_candidate(
   pattern : String,
   instruction : String,
   model~ : String,
-  thinking~ : @protocol.OpenSeekThinking?,
+  thinking~ : @protocol.Thinking?,
 ) -> PatternRepairCandidateOutcome {
   // The Agent receives only a closed validator configuration. It cannot
   // select another executable or alter the dump arguments.

@@ -191,7 +191,7 @@ test "saved review jumps distinguish a missing change from an inventory failure"
   assert_true(missing.pending_review_context is None)
   assert_eq(missing.notifications.length(), 1)
   assert_eq(
-    missing.notifications[0].message,
+    missing.notifications[0].message.text(English),
     "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
   )
   // A failed refresh can leave an older cached list visible. That list is
@@ -222,7 +222,7 @@ test "saved review jumps distinguish a missing change from an inventory failure"
     assert_true(@dock.active_file(failed.dock_state()) is None)
     assert_eq(failed.notifications.length(), 1)
     assert_eq(
-      failed.notifications[0].message,
+      failed.notifications[0].message.text(English),
       "Unable to load the current review: Git is unavailable",
     )
   }

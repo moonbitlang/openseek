@@ -287,7 +287,7 @@ test "Cloud steer receipts settle input without duplicating the durable user mes
     applied,
     Loaded(1, "session", applied.conversations["session"].request, history),
   )
-  assert_eq(loaded.conversations["session"].items().length(), 1)
+  assert_eq(loaded.conversations["session"].items(English).length(), 1)
 }
 
 ///|
@@ -345,7 +345,7 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
   assert_true(loaded.conversations["session"].watch_status is Watching)
   assert_true(loaded.conversations["session"].generating)
   assert_true(loaded.sessions[0].generating)
-  assert_true(loaded.conversations["session"].items().is_empty())
+  assert_true(loaded.conversations["session"].items(English).is_empty())
   let late = watch_event(loaded, stream, "task", 99, "task_finished", {})
   assert_true(late.conversations["session"].generating)
   assert_eq(late.conversations["session"].task, Some("next"))

@@ -7,7 +7,7 @@
 fn JsonObject::optional_thinking(
   self : JsonObject,
   name : String,
-) -> OpenSeekThinking? raise @json.JsonDecodeError {
+) -> Thinking? raise @json.JsonDecodeError {
   match self.fields.get(name) {
     Some(Null) | None => None
     Some(value) => Some(@json.from_json(value, path=self.path.add_key(name)))
@@ -167,18 +167,18 @@ pub impl ToJson for SessionCommandSettings with fn to_json(self) {
 }
 
 ///|
-pub impl FromJson for OpenSeekThinking with fn from_json(json, path) {
+pub impl FromJson for Thinking with fn from_json(json, path) {
   guard json is String(value) else {
     raise JsonDecodeError((path, "expected no, high, or max"))
   }
-  guard OpenSeekThinking::parse(value) is Some(thinking) else {
+  guard Thinking::parse(value) is Some(thinking) else {
     raise JsonDecodeError((path, "expected no, high, or max"))
   }
   thinking
 }
 
 ///|
-pub impl ToJson for OpenSeekThinking with fn to_json(self) {
+pub impl ToJson for Thinking with fn to_json(self) {
   Json(self.wire())
 }
 

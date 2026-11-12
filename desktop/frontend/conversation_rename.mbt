@@ -98,6 +98,16 @@ fn focus_conversation_title(id : @conversation.Id) -> @cmd.Cmd {
 }
 
 ///|
+#derive(Eq)
+priv enum ConversationRenameFailure {
+  UnavailableChannel
+  UnavailableWorkspace
+  UnsupportedConversation
+  Bridge(@interop.BridgeProblem)
+  Cloud(@cloud_client.Failure)
+}
+
+///|
 /// Apply one edit from the row's title field. Like the Finder's name field,
 /// Enter and moving focus away both commit, and a blank or unchanged name
 /// keeps the current title without a save. While a save is in flight the
@@ -154,7 +164,7 @@ fn Model::edit_conversation_rename(
         )
       }
       (
-        rename_conversation(locale=self.locale, dispatch, saving),
+        rename_conversation(dispatch, saving),
         { ..self, conversation_rename: Some(saving), },
       )
     }
@@ -179,8 +189,24 @@ fn Model::finish_conversation_rename(
 }
 
 ///|
+fn Model::fail_conversation_rename(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  id : @conversation.Id,
+  notice : NoticeMessage,
+) -> (@cmd.Cmd, Model) {
+  match self.conversation_rename {
+    Some(rename) if rename.id == id => {
+      let (focus, model) = self.finish_conversation_rename(rename)
+      let (toast, model) = model.notify_notice(dispatch, notice)
+      (@cmd.batch([focus, toast]), model)
+    }
+    _ => (@cmd.none, self)
+  }
+}
+
+///|
 fn rename_conversation(
-  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   rename : ConversationRename,
 ) -> @cmd.Cmd {
@@ -190,16 +216,7 @@ fn rename_conversation(
         is Some(channel) else {
         scheduler.add(
           dispatch(
-            ConversationRenameFailed(
-              id=rename.id,
-              message=match locale {
-                SimplifiedChinese => "对话连接不可用"
-                TraditionalChinese => "對話連線不可用"
-                Japanese => "チャットの接続が利用できません"
-                English => "Conversation channel is unavailable"
-                Spanish => "El canal de la conversación no está disponible"
-              },
-            ),
+            ConversationRenameFailed(id=rename.id, message=UnavailableChannel),
           ),
         )
         return
@@ -212,15 +229,7 @@ fn rename_conversation(
               dispatch(
                 ConversationRenameFailed(
                   id=rename.id,
-                  message=match locale {
-                    SimplifiedChinese => "对话工作区不可用"
-                    TraditionalChinese => "對話工作區不可用"
-                    Japanese =>
-                      "チャットのワークスペースが利用できません"
-                    English => "Conversation workspace is unavailable"
-                    Spanish =>
-                      "El espacio de trabajo de la conversación no está disponible"
-                  },
+                  message=UnavailableWorkspace,
                 ),
               ),
             )
@@ -236,7 +245,7 @@ fn rename_conversation(
                 dispatch(
                   ConversationRenameFailed(
                     id=rename.id,
-                    message=@interop.bridge_error_text(error),
+                    message=Bridge(@interop.bridge_problem(error)),
                   ),
                 ),
               )
@@ -255,7 +264,7 @@ fn rename_conversation(
                 dispatch(
                   ConversationRenameFailed(
                     id=rename.id,
-                    message=@interop.bridge_error_text(error),
+                    message=Bridge(@interop.bridge_problem(error)),
                   ),
                 ),
               )
@@ -268,15 +277,7 @@ fn rename_conversation(
             dispatch(
               ConversationRenameFailed(
                 id=rename.id,
-                message=match locale {
-                  SimplifiedChinese => "无法重命名此对话"
-                  TraditionalChinese => "無法重新命名此對話"
-                  Japanese =>
-                    "このチャットの名前を変更できません"
-                  English => "This conversation cannot be renamed"
-                  Spanish =>
-                    "No se puede cambiar el nombre de esta conversación"
-                },
+                message=UnsupportedConversation,
               ),
             ),
           )

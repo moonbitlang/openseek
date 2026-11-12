@@ -32,82 +32,38 @@ fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
 }
 
 ///|
-/// OpenSeek's reasoning choices. These stay distinct from Codex catalog
-/// values: the two agents share the control and request lifecycle, while
-/// each agent sends only values its own service defines.
-#derive(Eq)
-priv enum OpenSeekReasoning {
-  ReasoningOff
-  ReasoningHigh
-  ReasoningMax
-}
-
-///|
-fn OpenSeekReasoning::wire(self : OpenSeekReasoning) -> String {
-  match self {
-    ReasoningOff => "no"
-    ReasoningHigh => "high"
-    ReasoningMax => "max"
-  }
-}
-
-///|
-/// Convert the UI choice into the closed OpenSeek command value. Storage keeps
-/// the UI enum's string representation, while requests cross the Desktop JSON
-/// boundary with the protocol-owned type.
-fn OpenSeekReasoning::protocol(
-  self : OpenSeekReasoning,
-) -> @protocol.OpenSeekThinking {
-  match self {
-    ReasoningOff => ThinkingOff
-    ReasoningHigh => ThinkingHigh
-    ReasoningMax => ThinkingMax
-  }
-}
-
-///|
-fn OpenSeekReasoning::parse(value : String) -> OpenSeekReasoning? {
-  match value.trim() {
-    "no" => Some(ReasoningOff)
-    "high" => Some(ReasoningHigh)
-    "max" => Some(ReasoningMax)
-    _ => None
-  }
-}
-
-///|
-fn OpenSeekReasoning::label(
-  self : OpenSeekReasoning,
+fn @protocol.Thinking::label(
+  self : @protocol.Thinking,
   locale~ : @i18n.Locale = English,
 ) -> String {
   match (locale, self) {
-    (SimplifiedChinese, ReasoningOff) => "关闭"
-    (TraditionalChinese, ReasoningOff) => "關閉"
-    (Japanese, ReasoningOff) => "オフ"
-    (SimplifiedChinese, ReasoningHigh) => "高"
-    (TraditionalChinese, ReasoningHigh) => "高"
-    (Japanese, ReasoningHigh) => "高"
-    (SimplifiedChinese, ReasoningMax) => "最高"
-    (TraditionalChinese, ReasoningMax) => "最高"
-    (Japanese, ReasoningMax) => "最大"
-    (English, ReasoningOff) => "Off"
-    (Spanish, ReasoningOff) => "Desactivado"
-    (English, ReasoningHigh) => "High"
-    (Spanish, ReasoningHigh) => "Alto"
-    (English, ReasoningMax) => "Max"
-    (Spanish, ReasoningMax) => "Máximo"
+    (SimplifiedChinese, ThinkingOff) => "关闭"
+    (TraditionalChinese, ThinkingOff) => "關閉"
+    (Japanese, ThinkingOff) => "オフ"
+    (SimplifiedChinese, ThinkingHigh) => "高"
+    (TraditionalChinese, ThinkingHigh) => "高"
+    (Japanese, ThinkingHigh) => "高"
+    (SimplifiedChinese, ThinkingMax) => "最高"
+    (TraditionalChinese, ThinkingMax) => "最高"
+    (Japanese, ThinkingMax) => "最大"
+    (English, ThinkingOff) => "Off"
+    (Spanish, ThinkingOff) => "Desactivado"
+    (English, ThinkingHigh) => "High"
+    (Spanish, ThinkingHigh) => "Alto"
+    (English, ThinkingMax) => "Max"
+    (Spanish, ThinkingMax) => "Máximo"
   }
 }
 
 ///|
 /// GLM cannot turn thinking off: the shared lowest wire choice becomes its
 /// `low` effort, so the chip must not promise an unavailable Off state.
-fn OpenSeekReasoning::label_for_model(
-  self : OpenSeekReasoning,
+fn @protocol.Thinking::label_for_model(
+  self : @protocol.Thinking,
   model : @deepseek.Model,
   locale~ : @i18n.Locale = English,
 ) -> String {
-  if model is Glm(_) && self is ReasoningOff {
+  if model is Glm(_) && self is ThinkingOff {
     match locale {
       SimplifiedChinese => "低"
       TraditionalChinese => "低"
@@ -125,10 +81,10 @@ fn OpenSeekReasoning::label_for_model(
 /// Kimi keeps the field absent, matching the hidden selector.
 fn @deepseek.Model::thinking(
   self : @deepseek.Model,
-  reasoning : OpenSeekReasoning,
-) -> @protocol.OpenSeekThinking? {
+  reasoning : @protocol.Thinking,
+) -> @protocol.Thinking? {
   if self.supports_reasoning() {
-    Some(reasoning.protocol())
+    Some(reasoning)
   } else {
     None
   }
@@ -1320,8 +1276,8 @@ priv struct Model {
   // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
   // OpenSeek operation. GLM keeps a separate preference below because its
   // forced-thinking low mode is the useful default for ordinary tasks.
-  openseek_reasoning : OpenSeekReasoning
-  glm_reasoning : OpenSeekReasoning
+  openseek_reasoning : @protocol.Thinking
+  glm_reasoning : @protocol.Thinking
   max_steps : String
   // Device-less Cloud's follow-up behavior, kept in the browser (see
   // `CloudFollowupBehaviorStorageKey`); a page with a host uses its settings.
@@ -1503,6 +1459,12 @@ priv struct Model {
   // because the composer's `$` completion reads the same list, which is why
   // it refreshes on connect instead of when the Skills page opens.
   installed_skills : Array[@skills.InstalledItem]
+  // The signed-in account's Cloud skills library, mirrored for the same two
+  // readers: the Skills page and the Cloud composer's `$` completion.
+  cloud_skills : Array[@skills.InstalledItem]
+  // Which library a signed-in Desktop's Skills page shows. A page without a
+  // host always shows Cloud's.
+  skills_library : @skills.LibraryKind
   // Advances only when navigation changes which composer is visible. Local
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
@@ -1587,7 +1549,7 @@ priv struct Model {
   account_checked : Bool
   // The last Cloud account failure in any environment: a failed read,
   // sign-in, cancellation, sign-out or disconnect, or an expired session.
-  account_error : String?
+  account_error : @account_failure.Failure?
   // The last failure of the Remote access switch, shown in Connections.
   remote_access_error : String?
 }
@@ -1819,9 +1781,18 @@ priv enum Msg {
   CheckForUpdates
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
   // sign-in state moved.
-  AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
+  AccountLoaded(
+    Int32,
+    Result[@protocol.AccountSession?, @account_failure.Failure]
+  )
   AccountPreferencesChanged(Bool)
   AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
+  // A Cloud skills library read, fenced by the access it was issued with.
+  CloudSkillsLoaded(
+    @cloud_client.Access,
+    Result[Array[@skills.InstalledItem], String]
+  )
+  CloudSkillsExpired(@cloud_client.Access)
   DeviceAccountExpired(@interop.ChannelId, Int32, String)
   RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
@@ -1836,7 +1807,7 @@ priv enum Msg {
   RemoteCancelClicked
   AccountLoginCancelled(Int32)
   AccountLoginTimedOut(Int32)
-  AccountCancelFailed(Int32, String)
+  AccountCancelFailed(Int32, @account_failure.Failure)
   AccountCancelFinished(Int32)
   // The account's Sign out button.
   RemoteDisconnectClicked
@@ -2005,7 +1976,7 @@ priv enum Msg {
   CloudFilePreviewCreated(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,
-    result~ : Result[String, String]
+    result~ : Result[String, @fileeditor.Failure]
   )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
@@ -2085,7 +2056,10 @@ priv enum Msg {
     edit~ : @conversation.RenameEdit
   )
   ConversationRenameSucceeded(@conversation.Id)
-  ConversationRenameFailed(id~ : @conversation.Id, message~ : String)
+  ConversationRenameFailed(
+    id~ : @conversation.Id,
+    message~ : ConversationRenameFailure
+  )
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)
@@ -2788,8 +2762,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     cloud_preferences: [],
     cloud_settings_edits: Map([]),
     asking_conversations: [],
-    openseek_reasoning: ReasoningHigh,
-    glm_reasoning: ReasoningOff,
+    openseek_reasoning: ThinkingHigh,
+    glm_reasoning: ThinkingOff,
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
@@ -2864,6 +2838,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
+    cloud_skills: [],
+    skills_library: DeviceLibrary,
     composer_context_generation: 0,
     select_menu: None,
     project_menu_query: "",
@@ -3017,10 +2993,29 @@ fn Model::bridge_state(self : Model) -> BridgeState {
 }
 
 ///|
-/// What the Skills page draws against: the device it acts on, and that
-/// device's library as the root mirrors it.
+/// The signed-in account's Cloud access, as Cloud requests carry it.
+fn Model::cloud_skills_access(self : Model) -> @cloud_client.Access? {
+  self.account.map(account => { token: account.token, epoch: self.cloud.epoch, })
+}
+
+///|
+/// What the Skills page draws against: the library it acts on, and that
+/// library as the root mirrors it. A page with a host shows the focused
+/// device's library unless a signed-in user chose Cloud's; a page without a
+/// host shows Cloud's.
 fn Model::skills_input(self : Model) -> @skills.Input {
-  { channel: self.focused, installed: self.installed_skills, }
+  let has_host = self.has_host()
+  let switchable = has_host && self.account is Some(_)
+  match self.cloud_skills_access() {
+    Some(access) if !has_host || self.skills_library is CloudLibrary =>
+      { library: Cloud(access), installed: self.cloud_skills, switchable, }
+    _ =>
+      {
+        library: Host(self.focused),
+        installed: self.installed_skills,
+        switchable,
+      }
+  }
 }
 
 ///|
@@ -3246,12 +3241,12 @@ fn Model::align_new_chats_with_provider(
 }
 
 ///|
-/// The reasoning preference for one model family. GLM's `ReasoningOff` wire
+/// The reasoning preference for one model family. GLM's `ThinkingOff` wire
 /// value is translated by the engine to its lowest supported effort (`low`).
 fn Model::reasoning_for(
   self : Model,
   engine_model : @deepseek.Model,
-) -> OpenSeekReasoning {
+) -> @protocol.Thinking {
   match engine_model {
     Glm(_) => self.glm_reasoning
     Deepseek(_) | Kimi(_) => self.openseek_reasoning

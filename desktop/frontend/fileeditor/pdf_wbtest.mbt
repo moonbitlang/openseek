@@ -345,30 +345,24 @@ test "PDF failures use the current locale without exposing runtime details" {
       event=event.stringify(),
     ),
   )
-  assert_eq(
-    unavailable.error,
-    Some("无法添加所选内容。请重新选择。"),
-  )
+  assert_true(unavailable.error is Some(OfficeSelectionFailed))
   assert_true(
-    decode_pdf_document(locale=ctx.locale, "***invalid base64***", 9)
-    is Err("无法预览此 PDF。请重新打开文件。"),
+    decode_pdf_document("***invalid base64***", 9) is Err(PdfPreviewFailed),
   )
   assert_true(
     render_office_document(
-      locale=ctx.locale,
       "report.docx",
       test_file("report.docx"),
       "***invalid base64***",
     )
-    is Err("无法预览此文档。请重新打开文件。"),
+    is Err(OfficePreviewFailed),
   )
   assert_true(
     render_office_document(
-      locale=ctx.locale,
       "report.docx",
       test_file("report.docx"),
       @base64.encode(b"invalid Office package"),
     )
-    is Err("无法预览此文档。请重新打开文件。"),
+    is Err(OfficePreviewFailed),
   )
 }

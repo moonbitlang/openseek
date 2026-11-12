@@ -207,7 +207,7 @@ fn child_report(
     }
     for
       expected in [
-        "1 | orientation fixture", "[Excerpt truncated; read the file for the remainder.]",
+        "1 |orientation fixture", "[Excerpt truncated; read the file for the remainder.]",
         "sample/:", "real_implementation.mbt", "pkg.generated.mbti", "moon.pkg",
         "cmd/main/:", "main.mbt",
       ] {

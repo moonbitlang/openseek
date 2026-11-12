@@ -365,7 +365,7 @@ fn Entry::view(
           class="composer-attach",
           type_="button",
           title=ui(locale, AttachHint),
-          on_click=pick_attachments(locale, input, image_emit),
+          on_click=pick_attachments(input, image_emit),
           attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
           @icons.icon(@icons.icon_add),
         ),
@@ -407,7 +407,7 @@ fn Entry::view(
     context["image-error"] = @html.div(
       class="composer-context-row composer-image-notice error",
       attrs=@html.Attrs::build().role("alert"),
-      message,
+      message.text(locale),
     )
   }
   for (id, confirmation) in self.attachment_confirmations(locale, emit) {

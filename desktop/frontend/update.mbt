@@ -2377,10 +2377,7 @@ fn update_msg(
     }
     LanguageStorageFailed(message) =>
       // Report the failure without discarding the working in-memory choice.
-      model.notify_error(
-        dispatch,
-        @settings.text(model.locale, LanguageStorageFailed(message)),
-      )
+      model.notify_notice(dispatch, LanguageStorageFailure(message))
     SystemLanguagesChanged(languages) => {
       let locale = model.language.resolve(languages)
       (
@@ -2438,10 +2435,10 @@ fn update_msg(
         .bind(AgentChoice::parse)
         .unwrap_or(model.default_agent)
       let openseek_reasoning = openseek_effort
-        .bind(OpenSeekReasoning::parse)
+        .bind(@protocol.Thinking::parse)
         .unwrap_or(model.openseek_reasoning)
       let glm_reasoning = glm_effort
-        .bind(OpenSeekReasoning::parse)
+        .bind(@protocol.Thinking::parse)
         .unwrap_or(model.glm_reasoning)
       // The stored Codex pick seeds Codex's own selection state. When the
       // catalog arrives, `with_models` keeps this id if it is still listed
@@ -2741,7 +2738,7 @@ fn update_msg(
             })
           }
           @composer.ReasoningSelected(identity~, value~) => {
-            guard @protocol.OpenSeekThinking::parse(value) is Some(thinking) else {
+            guard @protocol.Thinking::parse(value) is Some(thinking) else {
               return (@cmd.none, model)
             }
             let settings = model.cloud_settings(identity.owner)
@@ -3332,8 +3329,9 @@ fn update_msg(
         model.file_panel,
         file_ctx(model),
       )
-      let (notice, next) = { ..model, file_panel: panel, }.notify_error(
-        dispatch, "These saved changes no longer match the current review or are hidden by its filters. The saved context is unchanged.",
+      let (notice, next) = { ..model, file_panel: panel, }.notify_notice(
+        dispatch,
+        ReviewSelectionMismatch,
       )
       (@cmd.batch([command, notice]), next)
     }
@@ -3646,10 +3644,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       let (command, panel) = model.file_panel.start_office_region(
         ctx,
@@ -3670,10 +3665,7 @@ fn update_msg(
       }
       guard result is Some(result) else { return (@cmd.none, model) }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       match result {
         Err(message) => model.notify_error(dispatch, message)
@@ -3700,10 +3692,7 @@ fn update_msg(
         Some(preview) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
-        dispatch,
-        @fileeditor.capture_submission_declined_message(model.locale),
-      )
+      model.notify_file_error(dispatch, @fileeditor.CaptureSubmissionDeclined)
     }
     FileEditor(@fileeditor.PdfCaptureRequested) => {
       // Text drafts and captured images own their source until submitted or
@@ -3714,10 +3703,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       (
         @fileeditor.capture_pdf_region(
@@ -3747,10 +3733,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {
-        return model.notify_error(
-          dispatch,
-          @fileeditor.capture_unavailable_message(model.locale),
-        )
+        return model.notify_file_error(dispatch, @fileeditor.CaptureUnavailable)
       }
       let capture = match result {
         Ok(capture) => capture
@@ -3784,10 +3767,7 @@ fn update_msg(
         Some(preview) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
-        dispatch,
-        @fileeditor.capture_submission_declined_message(model.locale),
-      )
+      model.notify_file_error(dispatch, @fileeditor.CaptureSubmissionDeclined)
     }
     FileEditor(@fileeditor.OfficeSelectionConfirmed(preview)) =>
       confirm_office_selection(
@@ -3910,10 +3890,10 @@ fn update_msg(
         file_ctx(model).owner == @interop.Host(owner) else {
         return (@cmd.none, model)
       }
-      if model.notifications.any(toast => toast.message == message) {
+      if model.notifications.any(toast => toast.message == FileFailure(message)) {
         (@cmd.none, model)
       } else {
-        model.notify_error(dispatch, message)
+        model.notify_file_error(dispatch, message)
       }
     }
     // Keep watcher lifecycle state in the file-editor package, but present an
@@ -3939,8 +3919,8 @@ fn update_msg(
       if panel.watch_error is Some(err) &&
         err == message &&
         model.file_panel.watch_error != Some(message) &&
-        !model.notifications.any(toast => toast.message == message) {
-        let (toast, next) = next.notify_error(dispatch, message)
+        !model.notifications.any(toast => toast.message == FileFailure(message)) {
+        let (toast, next) = next.notify_file_error(dispatch, message)
         (@cmd.batch([cmd, toast]), next)
       } else {
         (cmd, next)
@@ -4206,7 +4186,7 @@ fn update_msg(
       )
     }
     OpenSeekEffortPicked(value) => {
-      guard OpenSeekReasoning::parse(value) is Some(reasoning) else {
+      guard @protocol.Thinking::parse(value) is Some(reasoning) else {
         return (@cmd.none, model)
       }
       guard model.active_conversation() is Some(conv) else {
@@ -4401,6 +4381,14 @@ fn update_msg(
       change_account_preferences(dispatch, model, enabled)
     AccountPreferencesLoaded(request, result) =>
       account_preferences_loaded(dispatch, model, request, result)
+    CloudSkillsLoaded(access, result) =>
+      cloud_skills_loaded(dispatch, model, access, result)
+    CloudSkillsExpired(access) =>
+      if model.cloud_skills_access() == Some(access) {
+        expire_account(dispatch, model)
+      } else {
+        (@cmd.none, model)
+      }
     DeviceAccountExpired(channel, epoch, token) => {
       guard model.account.map(account => account.token) == Some(token) &&
         model.device_state(channel) is Some(device) &&
@@ -4458,14 +4446,9 @@ fn update_msg(
     }
     AccountLoginTimedOut(epoch) => {
       guard model.account_login is Some(_) else { return (@cmd.none, model) }
-      account_loaded(
-        dispatch,
-        model,
-        epoch,
-        Err(@settings.text(model.locale, SignInTimedOut)),
-      )
+      account_loaded(dispatch, model, epoch, Err(SignInTimedOut))
     }
-    AccountCancelFailed(epoch, message) => {
+    AccountCancelFailed(epoch, failure) => {
       guard epoch == model.account_epoch &&
         model.account_login is Some(Cancelling(connect_pending~, ..)) else {
         return (@cmd.none, model)
@@ -4475,12 +4458,12 @@ fn update_msg(
           dispatch,
           { ..model, account_login: None, },
           epoch,
-          Err(message),
+          Err(failure),
         )
       }
       (
         @cmd.none,
-        { ..model, account_login: Some(Waiting), account_error: Some(message), },
+        { ..model, account_login: Some(Waiting), account_error: Some(failure), },
       )
     }
     AccountCancelFinished(epoch) => {
@@ -5008,24 +4991,11 @@ fn update_msg(
     }
     OpenSchedules => open_schedules(dispatch, model)
     SchedulePage(msg) => update_schedules(dispatch, msg, model)
-    OpenSkills => {
-      // The page decides whether its catalog still needs fetching; the
-      // installed list is the root's mirror, cheap, and refreshed on every
-      // open.
-      let (_, skills, _) = model.skills.handle(
-        dispatch.map(msg => Skills(msg)),
-        @skills.BackToList,
-        model.skills_input(),
-      )
-      let (page_cmd, skills) = skills.opening(
-        dispatch.map(msg => Skills(msg)),
-        model.skills_input(),
-      )
-      (
-        @cmd.batch([page_cmd, fetch_installed_skills(dispatch, model.focused)]),
-        { ..model, management_dialog: Some(Skills), skills, },
-      )
-    }
+    OpenSkills =>
+      open_skills_library(dispatch, {
+        ..model,
+        management_dialog: Some(Skills),
+      })
     Skills(msg) => {
       let (page_cmd, skills, outcome) = model.skills.handle(
         dispatch.map(next => Skills(next)),
@@ -5033,13 +5003,23 @@ fn update_msg(
         model.skills_input(),
       )
       let model = { ..model, skills, }
-      // A settled skill operation changed the library the root owns;
-      // what the page shows must come from disk, not from a client-side
-      // guess.
-      guard outcome is Some(@skills.LibraryChanged(channel~)) else {
-        return (page_cmd, model)
+      match outcome {
+        // A settled skill operation changed a library the root owns; what
+        // the page shows must come from its source, not a client-side guess.
+        Some(LibraryChanged(library~)) =>
+          (
+            @cmd.batch([page_cmd, fetch_skills_library(dispatch, library)]),
+            model,
+          )
+        Some(LibrarySelected(kind)) => {
+          let (open_cmd, model) = open_skills_library(dispatch, {
+            ..model,
+            skills_library: kind,
+          })
+          (@cmd.batch([page_cmd, open_cmd]), model)
+        }
+        None => (page_cmd, model)
       }
-      (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
     Send | SendFollowup(_) | SendInBackground | SendArtifactFollowup => {
       // Re-pinning is for the reader of this conversation's transcript.
@@ -6140,26 +6120,7 @@ fn update_msg(
         _ => (@cmd.none, model)
       }
     ConversationRenameFailed(id~, message~) =>
-      match model.conversation_rename {
-        Some(rename) if rename.id == id => {
-          // The title is unchanged, and the row may be folded away by now:
-          // the reason goes to the toast rail, which is always on screen.
-          let (focus, model) = model.finish_conversation_rename(rename)
-          let (toast, model) = model.notify_error(
-            dispatch,
-            (match model.locale {
-              SimplifiedChinese => "重命名失败："
-              TraditionalChinese => "重新命名失敗："
-              Japanese => "名前を変更できませんでした："
-              English => "Rename failed: "
-              Spanish => "No se pudo cambiar el nombre: "
-            }) +
-            message,
-          )
-          (@cmd.batch([focus, toast]), model)
-        }
-        _ => (@cmd.none, model)
-      }
+      model.fail_conversation_rename(dispatch, id, RenameFailure(message))
     NotificationClicked(run_id~) => {
       // Cloud payloads reuse the existing account-scoped conversation key.
       // A notification from a signed-out account cannot open another account.
@@ -6662,7 +6623,7 @@ fn update_msg(
         file_ctx(model),
       )
       if msg is @fileeditor.FileDownloaded(result=Err(message), ..) {
-        let (notice, next) = { ..model, file_panel: panel, }.notify_error(
+        let (notice, next) = { ..model, file_panel: panel, }.notify_file_error(
           dispatch, message,
         )
         return (@cmd.batch([cmd, notice]), next)
@@ -7329,7 +7290,7 @@ fn update_msg(
             shell,
             message,
           )
-        None => cloud_shell_not_started(dispatch, model, shell, message)
+        None => cloud_shell_not_started(dispatch, model, shell, Raw(message))
       }
     RunShellCommand(channel~, session~, id~, command~, attempt~) =>
       run_shell_command(dispatch, model, channel, session, id, command, attempt)
@@ -7380,7 +7341,7 @@ fn update_msg(
       }
       match result {
         Ok(url) => open_user_link(dispatch, model, url, cloud_preview=true)
-        Err(message) => model.notify_error(dispatch, message)
+        Err(failure) => model.notify_file_error(dispatch, failure)
       }
     }
     DownloadFile(path) => {
@@ -7763,16 +7724,19 @@ fn update_device_msg(
   match msg {
     InstalledSkillsLoaded(items, builtin_errors~) => {
       guard channel == model.focused else { return (@cmd.none, model) }
+      let model = { ..model, installed_skills: items, }
+      // The mirror serves the device composer even while the page shows the
+      // Cloud library; only a page showing this host syncs to it.
+      guard model.skills_input().library == Host(channel) else {
+        return (@cmd.none, model)
+      }
       let (cmd, skills) = model.skills
-        .with_builtin_errors(channel, builtin_errors)
-        .sync_library(dispatch.map(msg => Skills(msg)), {
-          channel,
-          installed: items,
-        })
-      (cmd, { ..model, installed_skills: items, skills, })
+        .with_builtin_errors(Host(channel), builtin_errors)
+        .sync_library(dispatch.map(msg => Skills(msg)), model.skills_input())
+      (cmd, { ..model, skills, })
     }
     InstalledSkillsFailed(message) =>
-      if channel == model.focused {
+      if model.skills_input().library == Host(channel) {
         (
           @cmd.none,
           { ..model, skills: model.skills.with_library_error(message), },
@@ -8162,9 +8126,9 @@ fn update_device_msg(
       let settled = mirror.saves == 0
       let next = model.map_host_settings(channel, _ => mirror)
       let next = if settled { next.flush_host_settings(channel) } else { next }
-      let (notice, notified) = next.notify_error(
+      let (notice, notified) = next.notify_notice(
         dispatch,
-        notice_text(model.locale, SaveSettings(message.to_string())),
+        SaveSettings(message.to_string()),
       )
       let commands = [notice, next.api_setup_dialog(channel)]
       if settled {
@@ -8594,10 +8558,7 @@ fn update_device_msg(
       // still waiting for its commit. Only mutation failures settle an add.
       model
       .replace_device({ ..dev, project_catalog: Some(Err(message)), })
-      .notify_error(
-        dispatch,
-        notice_text(model.locale, WorkspaceFailure(message)),
-      )
+      .notify_notice(dispatch, WorkspaceFailure(message))
     }
     ProjectsChanged(paths, chat_root~) => {
       // The post-commit broadcast is newer than every list request issued so
@@ -8672,10 +8633,7 @@ fn update_device_msg(
       } else {
         model
       }
-      model.notify_error(
-        dispatch,
-        notice_text(model.locale, WorkspaceFailure(message.to_string())),
-      )
+      model.notify_notice(dispatch, WorkspaceFailure(message.to_string()))
     }
     WorkspaceSettingsLoaded(
       workspace~,
@@ -8763,17 +8721,18 @@ fn update_device_msg(
           // Preserve the failure notification and authoritative re-read;
           // only the matching pending write may change dialog feedback.
           let reread_generation = dev.workspace_settings_request_generation + 1
-          let message = notice_text(
-            model.locale,
-            SaveWorkspace(workspace.path.to_string(), message.to_string()),
+          let notice = SaveWorkspace(
+            workspace.path.to_string(),
+            message.to_string(),
           )
+          let message = notice_text(model.locale, notice)
           let model = model.finish_workspace_settings_save(
             channel,
             workspace,
             request_generation,
             Some(message),
           )
-          let (toast, next) = model.notify_error(dispatch, message)
+          let (toast, next) = model.notify_notice(dispatch, notice)
           (
             @cmd.batch([
               toast,
@@ -8844,12 +8803,9 @@ fn update_device_msg(
         request_generation > dev.worktree_generation(workspace) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
+      model.notify_notice(
         dispatch,
-        notice_text(
-          model.locale,
-          ListWorktrees(workspace.path.to_string(), message.to_string()),
-        ),
+        ListWorktrees(workspace.path.to_string(), message.to_string()),
       )
     }
     WorktreesChanged(rows, workspace~) => {
@@ -9124,9 +9080,9 @@ fn update_device_msg(
       )
       let model = model.replace_device({ ..dev, projects_request_generation, })
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
-      let (toast, model) = model.notify_error(
+      let (toast, model) = model.notify_notice(
         dispatch,
-        notice_text(model.locale, ArchiveFailure(message.to_string())),
+        ArchiveFailure(message.to_string()),
       )
       (@cmd.batch([refresh, archived, toast]), model)
     }
@@ -9139,9 +9095,9 @@ fn update_device_msg(
       // live row as well as an archived one.
       let (sessions, model) = request_sessions_refresh(dispatch, channel, model)
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
-      let (toast, model) = model.notify_error(
+      let (toast, model) = model.notify_notice(
         dispatch,
-        notice_text(model.locale, DeleteFailure(message.to_string())),
+        DeleteFailure(message.to_string()),
       )
       (@cmd.batch([sessions, archived, toast]), model)
     }
@@ -9151,10 +9107,7 @@ fn update_device_msg(
         request_generation == dev.sessions_request_generation else {
         return (@cmd.none, model)
       }
-      model.notify_error(
-        dispatch,
-        notice_text(model.locale, ListSessions(message.to_string())),
-      )
+      model.notify_notice(dispatch, ListSessions(message.to_string()))
     }
     // Another client archived, restored, or deleted a conversation. Both
     // sidebar lists are stale, but this identity-bearing fact takes effect
@@ -11164,7 +11117,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
     Deepseek(V4Pro),
-    ReasoningMax,
+    ThinkingMax,
     "1000",
     conv.session_id,
     "test-submission",
@@ -12852,7 +12805,7 @@ test "sessions failure pops a toast without touching the transcript" {
   )
   inspect(next.notifications.length(), content="1")
   inspect(
-    next.notifications[0].message,
+    next.notifications[0].message.text(English),
     content="Session list unavailable: engine exploded",
   )
   inspect(next.active().messages.length(), content="1")
@@ -13961,7 +13914,7 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   assert_true(next.loading_conversation is None)
   inspect(next.notifications.length(), content="1")
   inspect(
-    next.notifications[0].message,
+    next.notifications[0].message.text(English),
     content="Transcript refresh failed repeatedly. New commits are buffered; reopen the conversation or wait for the next update to retry. (failed to load session desktop-a: no such file)",
   )
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-a")
@@ -13970,7 +13923,9 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   }
   assert_true(failed.sync is ReloadFailed(..))
   assert_true(
-    next.notifications[0].message.has_prefix(TranscriptRefreshFailedNotice),
+    next.notifications[0].message
+    .text(English)
+    .has_prefix(TranscriptRefreshFailedNotice),
   )
   // The conversation on screen keeps its transcript and status untouched.
   inspect(next.active().messages.length(), content="0")
@@ -13986,7 +13941,10 @@ test "a host action failure pops a toast" {
     test_model(),
   )
   inspect(next.notifications.length(), content="1")
-  inspect(next.notifications[0].message, content="open path failed: no opener")
+  inspect(
+    next.notifications[0].message.text(English),
+    content="open path failed: no opener",
+  )
 }
 
 ///|
@@ -14013,7 +13971,10 @@ test "a file-link host failure is visible only for the latest navigation" {
     newer,
   )
   inspect(current.notifications.length(), content="1")
-  inspect(current.notifications[0].message, content="current path failed")
+  inspect(
+    current.notifications[0].message.text(English),
+    content="current path failed",
+  )
 }
 
 ///|
@@ -14052,7 +14013,10 @@ test "a Codex file-link failure is fenced by the selected Codex task" {
   let (_, first) = update(dispatch, message, model)
   let (_, second) = update(dispatch, message, model)
   inspect(first.notifications.length(), content="1")
-  inspect(first.notifications[0].message, content="Codex path failed")
+  inspect(
+    first.notifications[0].message.text(English),
+    content="Codex path failed",
+  )
   assert_true(first.notifications == second.notifications)
   assert_eq(first.notification_seq, second.notification_seq)
 }
@@ -14117,7 +14081,9 @@ test "a process-exit error reports its host diagnostics as a toast" {
   // The record will never carry this text, so the transcript is the wrong
   // place for it: no durable event can ever say where it belongs.
   inspect(next.notifications.length(), content="1")
-  assert_true(next.notifications[0].message.contains("fatal stderr"))
+  assert_true(
+    next.notifications[0].message.text(English).contains("fatal stderr"),
+  )
 }
 
 ///|
@@ -14676,7 +14642,10 @@ test "a start failure cannot close a run opened by a winning push" {
   )
   inspect(failed.active().task, content="my competing prompt")
   inspect(failed.notifications.length(), content="1")
-  inspect(failed.notifications[0].message, content="start was rejected")
+  inspect(
+    failed.notifications[0].message.text(English),
+    content="start was rejected",
+  )
   guard failed.active().sync is Reloading(generation=1, ..) else {
     fail("the raced start failure did not catch up the transcript")
   }
@@ -15557,7 +15526,7 @@ test "a failed Stop becomes retryable instead of staying Stopping" {
   assert_true(next.active().run is Open(run_id="r7", stage=AtStep(None)))
   assert_true(
     next.notifications.any(item => {
-      item.message.contains("cancel transport failed")
+      item.message.text(English).contains("cancel transport failed")
     }),
   )
 }
@@ -15750,7 +15719,9 @@ test "steer_dropped settles the pending steer with a visible notice" {
   inspect(next.active().pending_steers.length(), content="0")
   inspect(next.active().task, content="go left")
   inspect(next.notifications.length(), content="1")
-  assert_true(next.notifications[0].message.contains("back in the composer"))
+  assert_true(
+    next.notifications[0].message.text(English).contains("back in the composer"),
+  )
 }
 
 ///|
@@ -16217,8 +16188,8 @@ test "loaded UI preferences parse their wire names" {
   assert_eq(restored.app_font_size, Some(AppFontSize(15)))
   assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
-  assert_true(restored.openseek_reasoning is ReasoningHigh)
-  assert_true(restored.glm_reasoning is ReasoningMax)
+  assert_true(restored.openseek_reasoning is ThinkingHigh)
+  assert_true(restored.glm_reasoning is ThinkingMax)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is Deepseek(V4Pro))
   // Its stored approval choice comes back too; a malformed row is skipped.
@@ -16253,8 +16224,8 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
   assert_true(unknown.default_model is Deepseek(V4Flash))
-  assert_true(unknown.openseek_reasoning is ReasoningHigh)
-  assert_true(unknown.glm_reasoning is ReasoningOff)
+  assert_true(unknown.openseek_reasoning is ThinkingHigh)
+  assert_true(unknown.glm_reasoning is ThinkingOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
   // A store that will not parse remembers nothing rather than wedging.
   assert_eq(unknown.conversation_models.length(), 0)
@@ -17161,8 +17132,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
   // from the High preference DeepSeek keeps.
-  assert_true(glm.reasoning_for(glm.active().engine_model) is ReasoningOff)
-  assert_true(glm.openseek_reasoning is ReasoningHigh)
+  assert_true(glm.reasoning_for(glm.active().engine_model) is ThinkingOff)
+  assert_true(glm.openseek_reasoning is ThinkingHigh)
   // A host snapshot on a later launch performs the same alignment even
   // though the page-local model preference loads before host settings do.
   let (_, restored) = update_dev(
@@ -18290,15 +18261,15 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_eq(control.title, "Reasoning effort: Low")
   // Max is not DeepSeek's default, so the two sides stay distinguishable.
   let (_, glm_max) = update(dispatch, OpenSeekEffortPicked("max"), glm)
-  assert_true(glm_max.glm_reasoning is ReasoningMax)
-  assert_true(glm_max.openseek_reasoning is ReasoningHigh)
+  assert_true(glm_max.glm_reasoning is ThinkingMax)
+  assert_true(glm_max.openseek_reasoning is ThinkingHigh)
   let deepseek = glm_max.replace_conversation({
     ..glm_max.active(),
     engine_model: Deepseek(V4Pro),
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
-  assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
-  assert_true(deepseek_off.glm_reasoning is ReasoningMax)
+  assert_true(deepseek_off.openseek_reasoning is ThinkingOff)
+  assert_true(deepseek_off.glm_reasoning is ThinkingMax)
 }
 
 ///|
@@ -19910,7 +19881,7 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
   )
   inspect(failed.notifications.length(), content="1")
   inspect(
-    failed.notifications[0].message,
+    failed.notifications[0].message.text(English),
     content="Archive failed: zip missing",
   )
   let id = failed.notifications[0].id
@@ -19925,7 +19896,7 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
   let (_, expired) = update(dispatch, NotificationExpired(id), again)
   inspect(expired.notifications.length(), content="1")
   inspect(
-    expired.notifications[0].message,
+    expired.notifications[0].message.text(English),
     content="Archive failed: still missing",
   )
 }
@@ -20233,7 +20204,8 @@ test "installed skills replies are scoped to their source device" {
   assert_eq(applied.installed_skills.length(), 1)
   assert_eq(applied.installed_skills[0].id, "new")
   assert_true(
-    applied.skills == ignored.skills.with_builtin_errors(Remote("d_b"), errors),
+    applied.skills ==
+    ignored.skills.with_builtin_errors(Host(Remote("d_b")), errors),
   )
   let (_, missing) = update(
     dispatch,
@@ -20251,7 +20223,8 @@ test "installed skills replies are scoped to their source device" {
     missing,
   )
   assert_true(
-    recovered.skills == missing.skills.with_builtin_errors(Remote("d_b"), []),
+    recovered.skills ==
+    missing.skills.with_builtin_errors(Host(Remote("d_b")), []),
   )
   assert_true(recovered.skills != missing.skills)
 }
@@ -20739,7 +20712,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
         path=main_file,
         file_link_generation=Some(3),
         review_generation=None,
-        message="newer ordinary read failed",
+        message=@fileeditor.Diagnostic("newer ordinary read failed"),
       ),
     ),
     ordinary_pending,
@@ -20747,7 +20720,12 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(
     ordinary_failed.file_panel.docs.get(main_file)
     is Some(
-      { state: @fileeditor.TabReadFailed("newer ordinary read failed"), .. }
+      {
+        state: @fileeditor.TabReadFailed(
+          @fileeditor.Diagnostic("newer ordinary read failed")
+        ),
+        ..
+      }
     ),
   )
   let (_, old_after_failure) = update(
@@ -20803,7 +20781,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
         path=main_file,
         file_link_generation=Some(1),
         review_generation=None,
-        message="old read failed",
+        message=@fileeditor.Diagnostic("old read failed"),
       ),
     ),
     first,
@@ -20811,7 +20789,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(old_file_failure.file_panel.error is None)
   assert_true(
     old_file_failure.file_panel.docs.get(main_file)
-    is Some({ state: @fileeditor.TabReadFailed("old read failed"), .. }),
+    is Some(
+      {
+        state: @fileeditor.TabReadFailed(
+          @fileeditor.Diagnostic("old read failed")
+        ),
+        ..
+      }
+    ),
   )
   // The current failure is authoritative even if the stale success filled the
   // cache first, so the superseded snapshot cannot survive the failed read.
@@ -20824,7 +20809,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
         path=main_file,
         file_link_generation=Some(2),
         review_generation=None,
-        message="current read failed",
+        message=@fileeditor.Diagnostic("current read failed"),
       ),
     ),
     old_file_reply,
@@ -20832,7 +20817,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(current_file_failure.file_panel.error is None)
   assert_true(
     current_file_failure.file_panel.docs.get(main_file)
-    is Some({ state: @fileeditor.TabReadFailed("current read failed"), .. }),
+    is Some(
+      {
+        state: @fileeditor.TabReadFailed(
+          @fileeditor.Diagnostic("current read failed")
+        ),
+        ..
+      }
+    ),
   )
   let (_, current_file_reply) = update(
     dispatch,
@@ -21825,7 +21817,7 @@ test "rejected compact delivery clears the queued notice and reports the error" 
   )
   assert_true(next.active().controls.compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
-  inspect(next.notifications[0].message, content="no engine")
+  inspect(next.notifications[0].message.text(English), content="no engine")
 }
 
 ///|
@@ -21884,7 +21876,7 @@ test "an unavailable startup update reports why without offering Update" {
     )
     assert_eq(result.notifications.length(), 1)
     inspect(
-      result.notifications[0].message,
+      result.notifications[0].message.text(English),
       content="Move SeekMoon.app to Applications.",
     )
     assert_eq(result.notification_seq, 1)
@@ -21962,7 +21954,9 @@ test "a broken package entry is loud even when the app asked" {
     test_model(),
   )
   assert_eq(model.notifications.length(), 1)
-  assert_true(model.notifications[0].message.contains("url is not https"))
+  assert_true(
+    model.notifications[0].message.text(English).contains("url is not https"),
+  )
   assert_true(model.update_ux is UpdateCheckFailed(..))
 }
 
@@ -22085,7 +22079,9 @@ test "a failed download says why and restores the offer" {
     downloading,
   )
   assert_eq(failed.notifications.length(), 1)
-  assert_true(failed.notifications[0].message.contains("digest mismatch"))
+  assert_true(
+    failed.notifications[0].message.text(English).contains("digest mismatch"),
+  )
   assert_true(
     failed.update_ux is UpdateAvailable(version="0.2.0", installable=true),
   )
@@ -22103,7 +22099,9 @@ test "a failed apply says why and withdraws the offer" {
   let (_, replayed) = update(dispatch, msg, restarting)
   for failed in [first, replayed] {
     assert_eq(failed.notifications.length(), 1)
-    assert_true(failed.notifications[0].message.contains("read-only"))
+    assert_true(
+      failed.notifications[0].message.text(English).contains("read-only"),
+    )
     assert_eq(failed.notification_seq, 1)
     assert_true(
       failed.update_ux is UpdateAvailable(version="0.2.0", installable=false),
@@ -23103,11 +23101,11 @@ test "remote access walks connect states and dedups clicks" {
   ignore(second_cmd)
   let (_, failed) = update(
     dispatch,
-    AccountLoaded(connecting.account_epoch, Err("nope")),
+    AccountLoaded(connecting.account_epoch, Err(Diagnostic("nope"))),
     connecting,
   )
   assert_false(failed.remote_connecting)
-  assert_true(failed.account_error is Some("nope"))
+  assert_true(failed.account_error is Some(Diagnostic("nope")))
   let signed_in : RemoteAccess = { ..signed_out, connected: true, }
   let (_, done) = update(dispatch, RemoteStatusLoaded(signed_in), connecting)
   assert_true(done.remote_connecting)
@@ -23425,7 +23423,9 @@ test "language request failures toast once and remain conversation fenced" {
   let msg = FileEditor(
     @fileeditor.LanguageRequestFailed(
       owner=owner.host().unwrap(),
-      message="Go to definition failed: workspace index is unavailable",
+      message=@fileeditor.DefinitionFailed(
+        @interop.External("workspace index is unavailable"),
+      ),
     ),
   )
   let (_, first) = update(dispatch, msg, model)
@@ -23434,7 +23434,7 @@ test "language request failures toast once and remain conversation fenced" {
   assert_eq(first.notification_seq, same_input.notification_seq)
   assert_eq(first.notifications.length(), 1)
   assert_eq(
-    first.notifications[0].message,
+    first.notifications[0].message.text(English),
     "Go to definition failed: workspace index is unavailable",
   )
   let (_, repeated) = update(dispatch, msg, first)
@@ -23444,7 +23444,7 @@ test "language request failures toast once and remain conversation fenced" {
     FileEditor(
       @fileeditor.LanguageRequestFailed(
         owner={ channel: Local, session: "another-conversation", },
-        message="late failure",
+        message=@fileeditor.Diagnostic("late failure"),
       ),
     ),
     repeated,
@@ -23494,7 +23494,9 @@ test "file watcher failures toast once and retain lifecycle state" {
     file_ctx(model),
   )
   let model = { ..model, file_panel: ready, }
-  let message = "File watching stopped: too many open files"
+  let message : @fileeditor.Failure = Diagnostic(
+    "File watching stopped: too many open files",
+  )
   let failure = FileEditor(
     @fileeditor.FileWatchFailed(
       channel=owner.host().unwrap().channel,
@@ -23504,13 +23506,16 @@ test "file watcher failures toast once and retain lifecycle state" {
     ),
   )
   let (_, failed) = update(dispatch, failure, model)
-  assert_eq(failed.file_panel.watch_error, Some(message))
+  assert_true(failed.file_panel.watch_error == Some(message))
   assert_eq(failed.notifications.length(), 1)
-  assert_eq(failed.notifications[0].message, message)
+  assert_eq(
+    failed.notifications[0].message.text(English),
+    message.text(English),
+  )
   // The same current-generation notification neither mutates watcher state
   // again nor stacks another toast while the first one is still visible.
   let (_, repeated) = update(dispatch, failure, failed)
-  assert_eq(repeated.file_panel.watch_error, Some(message))
+  assert_true(repeated.file_panel.watch_error == Some(message))
   assert_eq(repeated.notifications.length(), 1)
   // The file-editor package rejects a failure from another concrete watcher;
   // the root therefore has no accepted failure to announce.
@@ -23521,12 +23526,12 @@ test "file watcher failures toast once and retain lifecycle state" {
         channel=owner.host().unwrap().channel,
         root~,
         generation="\{file_ctx(model).watch_namespace}:\{generation - 1}",
-        message="stale watcher failure",
+        message=@fileeditor.Diagnostic("stale watcher failure"),
       ),
     ),
     repeated,
   )
-  assert_eq(stale.file_panel.watch_error, Some(message))
+  assert_true(stale.file_panel.watch_error == Some(message))
   assert_eq(stale.notifications.length(), 1)
 }
 
@@ -24561,8 +24566,8 @@ test "file context inherits the conversation model and its reasoning family" {
   let model = {
     ..test_model(),
     default_model: Deepseek(V4Pro),
-    openseek_reasoning: ReasoningMax,
-    glm_reasoning: ReasoningOff,
+    openseek_reasoning: ThinkingMax,
+    glm_reasoning: ThinkingOff,
   }
   let conv = test_conversation()
   for engine_model in [@deepseek.Model::Deepseek(V4Flash), Glm(G53)] {
@@ -24613,9 +24618,7 @@ fn open_review_context(
     .bind(placement => placement.checkout_root())
     .map(root => root.path) ==
     Some(selection.source.workspace) else {
-    return model.notify_error(
-      dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
-    )
+    return model.notify_notice(dispatch, ReviewSelectionUnavailable)
   }
   if model.file_panel.changes
     is @fileeditor.ChangeListReady(refreshing=false, ..) {
@@ -24667,10 +24670,7 @@ fn finish_review_context_load(
   }
   let model = { ..model, pending_review_context: None, }
   if error is Some(message) {
-    return model.notify_error(
-      dispatch,
-      "Unable to load the current review: \{message}",
-    )
+    return model.notify_notice(dispatch, ReviewLoadFailed(message))
   }
   open_loaded_review_context(dispatch, model, pending.selection)
 }
@@ -24688,9 +24688,7 @@ fn open_loaded_review_context(
       change.original_path.map(path => path.0) == selection.source.original_file
     })
     is Some(index) else {
-    return model.notify_error(
-      dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
-    )
+    return model.notify_notice(dispatch, ReviewSelectionUnavailable)
   }
   let (command, opened) = update_msg(
     dispatch,

@@ -6,16 +6,17 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
 }
 
 // Values
 pub fn dragged(@dom.DragEvent) -> @cmd.Cmd
 
-pub fn dropped(locale? : @i18n.Locale, allow_images? : Bool, @dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn dropped(allow_images? : Bool, @dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
 
-pub fn pasted(locale? : @i18n.Locale, allow_images? : Bool, @dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn pasted(allow_images? : Bool, @dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
 
-pub fn pick(locale? : @i18n.Locale, allow_images? : Bool, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn pick(allow_images? : Bool, @cmd.Emit[Event]) -> @cmd.Cmd
 
 // Errors
 
@@ -34,9 +35,23 @@ pub(all) enum Event {
   Reading
   Ready(Array[(String, String)])
   DocumentsReady(images~ : Array[(String, String)], documents~ : Array[Document])
-  NativePicked(Result[String?, String])
-  Failed(String)
+  NativePicked(Result[String?, Failure])
+  Failed(Failure)
 }
+
+#derive(Eq)
+pub(all) enum Failure {
+  ReadAttachmentsFailed(String)
+  InvalidDocumentSize(String)
+  ImagesUnsupported
+  ImageTooLarge(String)
+  EmptyImage(String)
+  UnsupportedFormat(String)
+  Bridge(@interop.BridgeProblem)
+}
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+pub fn Failure::text(Self, @i18n.Locale) -> String
 
 // Type aliases
 

@@ -426,9 +426,14 @@ fn update_cloud(
     before.conversations.get(creation.id)
     is Some({ outgoing: Some({ input: @cloud.Terminal(shell), .. }), .. }) {
     if shell is Some(shell) {
-      return cloud_shell_not_started(dispatch, next, shell.id, failure.label())
+      return cloud_shell_not_started(
+        dispatch,
+        next,
+        shell.id,
+        CloudFailure(failure),
+      )
     }
-    let (report, next) = next.notify_error(dispatch, failure.label())
+    let (report, next) = next.notify_cloud_error(dispatch, failure)
     return (@cmd.batch([command, ..file_commands, report]), next)
   }
   // Earlier turns arrive from the network or from cached pages rejoining the
@@ -484,7 +489,7 @@ fn update_cloud(
       @cloud.EditFailed(_, _, _, error) =>
         update_msg(
           dispatch,
-          ConversationRenameFailed(id=rename.id, message=error.label()),
+          ConversationRenameFailed(id=rename.id, message=Cloud(error)),
           { ..next, cloud: { ..next.cloud, notice: None, }, },
         )
       _ => next.finish_conversation_rename(rename)
@@ -532,11 +537,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     self.cloud.creating_session()
   let settings = self.cloud_settings(owner)
   let model = @deepseek.Deepseek(settings.model)
-  let reasoning = match settings.thinking {
-    ThinkingOff => ReasoningOff
-    ThinkingHigh => ReasoningHigh
-    ThinkingMax => ReasoningMax
-  }
+  let reasoning = settings.thinking
   let native_users = Map([])
   for event in conversation.document.events.unwrap_or([]) {
     if event.item is @protocol.User(user) {
@@ -623,7 +624,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
     active_file: self.active_workspace_file(),
-    installed_skills: [],
+    installed_skills: self.cloud_skills,
     submission_sequence: conversation.submission_sequence,
     file_index: if self.file_panel.owner == Some(owner) {
       self.composer_file_index()

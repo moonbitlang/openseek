@@ -230,18 +230,24 @@ fn Model::openseek_reasoning_chip(
 ///|
 fn openseek_reasoning_control(
   model : @deepseek.Model,
-  reasoning : OpenSeekReasoning,
+  reasoning : @protocol.Thinking,
   locale~ : @i18n.Locale,
   open~ : Bool,
   disabled~ : Bool,
 ) -> @composer.ReasoningSelect {
   let options : Array[@composer.ModelOption] = [
     {
-      value: ReasoningOff.wire(),
-      label: ReasoningOff.label_for_model(locale~, model),
+      value: @protocol.ThinkingOff.wire(),
+      label: @protocol.ThinkingOff.label_for_model(locale~, model),
     },
-    { value: ReasoningHigh.wire(), label: ReasoningHigh.label(locale~), },
-    { value: ReasoningMax.wire(), label: ReasoningMax.label(locale~), },
+    {
+      value: @protocol.ThinkingHigh.wire(),
+      label: @protocol.ThinkingHigh.label(locale~),
+    },
+    {
+      value: @protocol.ThinkingMax.wire(),
+      label: @protocol.ThinkingMax.label(locale~),
+    },
   ]
   {
     id: "openseek-reasoning-picker",

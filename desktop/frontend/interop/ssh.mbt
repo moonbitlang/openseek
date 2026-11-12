@@ -39,7 +39,7 @@ async fn ssh_request(
     current_ssh_epoch(channel) is Some(epoch) &&
     openseek_api() is Some(api) &&
     js_prop(api, "ssh.request") is Some(_) else {
-    raise BridgeUnsent("SSH connection is unavailable")
+    raise BridgeSshUnavailable
   }
   let request : @protocol.SshRequest = {
     host_id: channel.device_id(),
@@ -56,12 +56,21 @@ async fn ssh_request(
       @js.Value::from_json(request.to_json()),
     ),
   ) catch {
-    error => raise BridgeError(bridge_error_text(error))
+    error =>
+      match error {
+        BridgeUnavailable
+        | BridgeMalformedReply(_)
+        | BridgeSshUnavailable
+        | BridgeSshReplyRetired
+        | BridgeConnectionDown
+        | BridgeConnectionClosed
+        | BridgeConnectionLost
+        | BridgeRequestFailed => raise error
+        _ => raise BridgeError(bridge_error_text(error))
+      }
   }
   guard current_ssh_epoch(channel) == Some(epoch) else {
-    raise BridgeError(
-      "SSH reply belongs to a retired connection; refresh to reconcile",
-    )
+    raise BridgeSshReplyRetired
   }
   let outcome : @protocol.SshReply = decode_reply("ssh.request", reply)
   match outcome {

@@ -1,6 +1,7 @@
-// The page's host transport: browsing the mooncakes.io registry and changing
-// the engine's global skills library. These are plain request/reply calls
-// on the engine-host bridge, and each settles as one `Msg`.
+// The page's transport: browsing the mooncakes.io registry and changing a
+// skills library. A host library is reached through the engine-host bridge,
+// the Cloud library over the account's Cloud API; both answer with the same
+// skill replies, and each request settles as one `Msg`.
 
 ///|
 /// Best effort: a rejected clipboard write (no permission, no API) is not
@@ -23,31 +24,134 @@ fn restore_list_scroll(scroll_top : Double) -> @cmd.Cmd {
 }
 
 ///|
+/// The message for a request that did not produce a reply.
+fn request_error_text(error : Error) -> String {
+  match error {
+    @cloud_client.RequestError(failure) => failure.text(English)
+    error => @interop.bridge_error_text(error)
+  }
+}
+
+///|
+fn install_payload(item : MarketItem) -> @protocol.InstallSkillPayload {
+  {
+    module_name: item.module_name,
+    version: item.version,
+    package_path: if item.package_path.is_empty() {
+      None
+    } else {
+      Some(item.package_path)
+    },
+  }
+}
+
+///|
+async fn catalog_reply(library : Library) -> @protocol.SkillsCatalogReply {
+  match library {
+    Host(channel) =>
+      @interop.bridge_request(
+        channel,
+        @commands.skills_catalog,
+        @protocol.EmptyPayload::NoPayload,
+      )
+    Cloud(access) => @cloud_client.skills_catalog(access.token)
+  }
+}
+
+///|
+async fn content_reply(
+  library : Library,
+  target : PreviewTarget,
+) -> @protocol.SkillContentReply {
+  match (library, target) {
+    (Host(channel), Market(item)) =>
+      @interop.bridge_request(
+        channel,
+        @commands.skills_content,
+        install_payload(item),
+      )
+    (Host(channel), Installed(item)) =>
+      @interop.bridge_request(channel, @commands.skills_installed_content, {
+        id: item.id,
+      })
+    (Cloud(access), Market(item)) =>
+      @cloud_client.skills_content(access.token, install_payload(item))
+    (Cloud(access), Installed(item)) =>
+      @cloud_client.skills_installed_content(access.token, item.id)
+  }
+}
+
+///|
+async fn install_reply(
+  library : Library,
+  item : MarketItem,
+) -> @protocol.InstallSkillReply {
+  match library {
+    Host(channel) =>
+      @interop.bridge_request(
+        channel,
+        @commands.skills_install,
+        install_payload(item),
+      )
+    Cloud(access) =>
+      @cloud_client.skills_install(access.token, install_payload(item))
+  }
+}
+
+///|
+async fn uninstall_reply(
+  library : Library,
+  id : String,
+) -> @protocol.UninstallSkillReply {
+  match library {
+    Host(channel) =>
+      @interop.bridge_request(channel, @commands.skills_uninstall, { id, })
+    Cloud(access) => @cloud_client.skills_uninstall(access.token, id)
+  }
+}
+
+///|
+async fn set_enabled_reply(
+  library : Library,
+  payload : @protocol.SetSkillEnabledPayload,
+) -> @protocol.SetSkillEnabledReply {
+  match library {
+    Host(channel) =>
+      @interop.bridge_request(channel, @commands.skills_set_enabled, payload)
+    Cloud(access) => @cloud_client.skills_set_enabled(access.token, payload)
+  }
+}
+
+///|
+/// The installed library's contents, for the root's mirror.
+pub async fn installed_reply(
+  library : Library,
+) -> @protocol.InstalledSkillsReply {
+  match library {
+    Host(channel) =>
+      @interop.bridge_request(
+        channel,
+        @commands.skills_installed,
+        @protocol.EmptyPayload::NoPayload,
+      )
+    Cloud(access) => @cloud_client.skills_installed(access.token)
+  }
+}
+
+///|
 /// Fetch the registry's catalog of installable skills.
-fn fetch_catalog(
-  emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-) -> @cmd.Cmd {
+fn fetch_catalog(emit : @cmd.Emit[Msg], library : Library) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let items = try {
-        let reply = @interop.bridge_request(
-          channel,
-          @commands.skills_catalog,
-          @protocol.EmptyPayload::NoPayload,
-        )
-        catalog_from_reply(reply)
-      } catch {
+      let items = catalog_from_reply(catalog_reply(library)) catch {
         error => {
           scheduler.add(
-            emit(
-              CatalogFailed(channel~, message=@interop.bridge_error_text(error)),
-            ),
+            emit(CatalogFailed(library~, message=request_error_text(error))),
           )
           return
         }
       }
-      scheduler.add(emit(CatalogLoaded(channel~, items~)))
+      scheduler.add(emit(CatalogLoaded(library~, items~)))
     })
     |> ignore
   })
@@ -56,94 +160,64 @@ fn fetch_catalog(
 ///|
 fn fetch_content(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  library : Library,
   request : Int32,
   target : PreviewTarget,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      match target {
-        Market(item) => {
-          let reply = @interop.bridge_request(
-            channel,
-            @commands.skills_content,
-            {
-              module_name: item.module_name,
-              version: item.version,
-              package_path: if item.package_path.is_empty() {
-                None
-              } else {
-                Some(item.package_path)
-              },
-            },
-          ) catch {
-            error => {
-              scheduler.add(
-                emit(
-                  PreviewFailed(
-                    channel~,
-                    request~,
-                    target~,
-                    message=@interop.bridge_error_text(error),
-                  ),
-                ),
-              )
-              return
-            }
-          }
-          scheduler.add(emit(preview_reply(channel, request, target, reply)))
-        }
-        Installed(item) => {
-          let reply = @interop.bridge_request(
-            channel,
-            @commands.skills_installed_content,
-            { id: item.id, },
-          ) catch {
-            error => {
-              scheduler.add(
-                emit(
-                  PreviewFailed(
-                    channel~,
-                    request~,
-                    target~,
-                    message=@interop.bridge_error_text(error),
-                  ),
-                ),
-              )
-              return
-            }
-          }
-          scheduler.add(emit(preview_reply(channel, request, target, reply)))
+      let reply = content_reply(library, target) catch {
+        error => {
+          scheduler.add(
+            emit(
+              PreviewFailed(
+                library~,
+                request~,
+                target~,
+                message=request_error_text(error),
+              ),
+            ),
+          )
+          return
         }
       }
+      let msg = match reply {
+        SkillContent(content) =>
+          PreviewLoaded(library~, request~, target~, content~)
+        SkillContentError(message) =>
+          PreviewFailed(library~, request~, target~, message~)
+      }
+      scheduler.add(emit(msg))
     })
     |> ignore
   })
 }
 
 ///|
-fn preview_reply(
-  channel : @interop.ChannelId,
-  request : Int32,
-  target : PreviewTarget,
-  reply : @protocol.SkillContentReply,
-) -> Msg {
-  match reply {
-    SkillContent(content) =>
-      PreviewLoaded(channel~, request~, target~, content~)
-    SkillContentError(message) =>
-      PreviewFailed(channel~, request~, target~, message~)
-  }
-}
-
-///|
 fn fetch_installed_content(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  library : Library,
   request : Int32,
   item : InstalledItem,
 ) -> @cmd.Cmd {
-  fetch_content(emit, channel, request, Installed(item))
+  fetch_content(emit, library, request, Installed(item))
+}
+
+///|
+/// Run one library-changing action and settle it as `ActionDone`.
+fn library_action(
+  emit : @cmd.Emit[Msg],
+  library : Library,
+  action : PendingSkillAction,
+  run : async () -> String?,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let error = run() catch { error => Some(request_error_text(error)) }
+      scheduler.add(emit(ActionDone(library~, action~, error~)))
+    })
+    |> ignore
+  })
 }
 
 ///|
@@ -151,41 +225,15 @@ fn fetch_installed_content(
 /// The caller supplies the operation label retained until the reply settles.
 fn install(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  library : Library,
   item : MarketItem,
   action : PendingSkillAction,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.skills_install, {
-        module_name: item.module_name,
-        version: item.version,
-        package_path: if item.package_path.is_empty() {
-          None
-        } else {
-          Some(item.package_path)
-        },
-      }) catch {
-        error => {
-          scheduler.add(
-            emit(
-              ActionDone(
-                channel~,
-                action~,
-                error=Some(@interop.bridge_error_text(error)),
-              ),
-            ),
-          )
-          return
-        }
-      }
-      let error = match reply {
-        SkillInstalled(_) => None
-        SkillInstallError(message) => Some(message)
-      }
-      scheduler.add(emit(ActionDone(channel~, action~, error~)))
-    })
-    |> ignore
+  library_action(emit, library, action, async fn() {
+    match install_reply(library, item) {
+      SkillInstalled(_) => None
+      SkillInstallError(message) => Some(message)
+    }
   })
 }
 
@@ -194,69 +242,29 @@ fn install(
 /// operation retains its source after the library entry disappears.
 fn uninstall(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  library : Library,
   item : InstalledItem,
 ) -> @cmd.Cmd {
   let action = Uninstalling(source=item.source, id=item.id)
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.skills_uninstall, {
-        id: item.id,
-      }) catch {
-        error => {
-          scheduler.add(
-            emit(
-              ActionDone(
-                channel~,
-                action~,
-                error=Some(@interop.bridge_error_text(error)),
-              ),
-            ),
-          )
-          return
-        }
-      }
-      let error = match reply {
-        SkillUninstalled => None
-        SkillUninstallError(message) => Some(message)
-      }
-      scheduler.add(emit(ActionDone(channel~, action~, error~)))
-    })
-    |> ignore
+  library_action(emit, library, action, async fn() {
+    match uninstall_reply(library, item.id) {
+      SkillUninstalled => None
+      SkillUninstallError(message) => Some(message)
+    }
   })
 }
 
 ///|
 fn set_enabled(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  library : Library,
   payload : @protocol.SetSkillEnabledPayload,
   action : PendingSkillAction,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        channel, @commands.skills_set_enabled, payload,
-      ) catch {
-        error => {
-          scheduler.add(
-            emit(
-              ActionDone(
-                channel~,
-                action~,
-                error=Some(@interop.bridge_error_text(error)),
-              ),
-            ),
-          )
-          return
-        }
-      }
-      let error = match reply {
-        SkillEnabledSet => None
-        SkillEnabledError(message) => Some(message)
-      }
-      scheduler.add(emit(ActionDone(channel~, action~, error~)))
-    })
-    |> ignore
+  library_action(emit, library, action, async fn() {
+    match set_enabled_reply(library, payload) {
+      SkillEnabledSet => None
+      SkillEnabledError(message) => Some(message)
+    }
   })
 }

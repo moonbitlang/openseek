@@ -46,7 +46,7 @@ test "Cloud status covers draft creation, loading, failure and archived read-onl
     ..conv,
     loading: false,
     history_required: true,
-    notice: Some("unreachable"),
+    notice: Some(Failure(Unreachable)),
   })
   assert_true(failed.cloud_display_status() is Some(Errored))
   let archived = {

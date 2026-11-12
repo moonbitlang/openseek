@@ -63,7 +63,7 @@ test "positioned Content failures settle retained reviews and fence both generat
         path=file,
         file_link_generation=Some(file_generation),
         review_generation=Some(working_generation),
-        message="permission denied",
+        message=Diagnostic("permission denied"),
       ),
       pending,
       ctx,
@@ -73,7 +73,7 @@ test "positioned Content failures settle retained reviews and fence both generat
         result.docs.get(file)
         is Some(
           {
-            state: TabReadFailed("permission denied"),
+            state: TabReadFailed(Diagnostic("permission denied")),
             review: Some(retained),
             ..
           }

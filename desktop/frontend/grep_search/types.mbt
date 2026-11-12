@@ -13,13 +13,13 @@ const InitialVisibleSearchLines : Int32 = 500
 const VisibleSearchLineStep : Int32 = 500
 
 ///|
-#derive(Eq, Debug)
+#derive(Eq)
 enum Phase {
   Idle
   Debouncing
   Loading
   Ready
-  Failed(code~ : String, message~ : String)
+  Failed(code~ : String, message~ : RequestFailure)
 }
 
 ///|
@@ -171,7 +171,7 @@ pub fn State::selected_semantic_reference(
 #derive(Eq)
 pub(all) struct Input {
   model : String
-  thinking : @protocol.OpenSeekThinking?
+  thinking : @protocol.Thinking?
   owner : @interop.ConversationIdentity
   root : @common.Uri?
   cloud_access : @cloud_client.Access?
@@ -180,7 +180,7 @@ pub(all) struct Input {
 ///|
 pub fn Input::Input(
   model~ : String,
-  thinking~ : @protocol.OpenSeekThinking?,
+  thinking~ : @protocol.Thinking?,
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
 ) -> Input {
@@ -193,7 +193,7 @@ pub fn Input::cloud(
   access~ : @cloud_client.Access,
   root~ : @common.Uri,
   model~ : String = "deepseek-flash",
-  thinking~ : @protocol.OpenSeekThinking? = Some(ThinkingHigh),
+  thinking~ : @protocol.Thinking? = Some(ThinkingHigh),
 ) -> Input {
   { owner, root: Some(root), model, thinking, cloud_access: Some(access), }
 }
@@ -263,7 +263,7 @@ pub(all) enum Msg {
     root~ : String,
     generation~ : Int32,
     code~ : String,
-    message~ : String
+    message~ : RequestFailure
   )
 }
 
@@ -290,9 +290,6 @@ pub extend SemanticResultFilter with Debug::{to_repr}
 
 ///|
 pub extend Page with Eq::{equal, not_equal}
-
-///|
-pub extend Phase with Debug::{to_repr}
 
 ///|
 pub extend Phase with Eq::{equal, not_equal}

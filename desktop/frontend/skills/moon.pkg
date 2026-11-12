@@ -11,6 +11,7 @@ import {
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",
   "openseek_desktop/frontend/ui",

@@ -17,6 +17,7 @@ priv enum UiMessage {
   ToolFailed
   ToolSucceeded
   ToolDetails
+  SubagentTranscript
   OriginalJson
   ArgumentsLabel
   OutputLabel
@@ -79,6 +80,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, SubagentTranscript) => "subagent transcript"
+    (Spanish, SubagentTranscript) => "transcripción del subagente"
+    (SimplifiedChinese, SubagentTranscript) => "子智能体记录"
+    (TraditionalChinese, SubagentTranscript) => "子代理程式記錄"
+    (Japanese, SubagentTranscript) => "サブエージェントの履歴"
     (English, LoadingOlderHistory) => "Loading more…"
     (Spanish, LoadingOlderHistory) => "Cargando más mensajes…"
     (SimplifiedChinese, LoadingOlderHistory) => "正在加载更早的消息…"

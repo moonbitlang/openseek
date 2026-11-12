@@ -1033,7 +1033,7 @@ test "image read events remain pure and settle their original cached draft" {
   let failed = ImageRead(
     input.identity,
     input.root,
-    @image_input.Failed("read failed"),
+    @image_input.Failed(@image_input.ReadAttachmentsFailed("read failed")),
   )
   let (failure, _) = reading.update(
     input,
@@ -1048,7 +1048,10 @@ test "image read events remain pure and settle their original cached draft" {
     Action::test_emit(),
   )
   assert_true(failure == failure_again)
-  assert_eq(failure.active(input).image_error, Some("read failed"))
+  assert_true(
+    failure.active(input).image_error
+    is Some(Image(@image_input.ReadAttachmentsFailed("read failed"))),
+  )
   assert_eq(failure.active(input).image_reads, 0)
   assert_eq(failure.active(input).draft.task, "keep text")
   let retired = { ..other, entry_changes: [Retire(input.identity.owner)], }

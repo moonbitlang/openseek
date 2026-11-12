@@ -12,17 +12,17 @@ test "history updates are pure and stale completions cannot reopen a dialog" {
   )
   let (_, pending, _) = typed.update(emit, ImportLink)
   let (_, repeated, _) = typed.update(emit, ImportLink)
-  assert_eq(pending, repeated)
+  assert_true(pending == repeated)
   let (_, duplicate, _) = pending.update(emit, ImportLink)
-  assert_eq(duplicate, pending)
+  assert_true(duplicate == pending)
   let (_, closed, _) = pending.update(emit, Close)
-  let (_, stale, _) = closed.update(emit, Imported(2, Success("import-1")))
-  assert_eq(stale, closed)
+  let (_, stale, _) = closed.update(emit, Imported(2, Ok("import-1")))
+  assert_true(stale == closed)
   let (_, next) = closed.open(
     Host({ ..host_target(), channel: Remote("other-device"), }),
   )
-  let (_, stale, _) = next.update(emit, Imported(2, Success("import-1")))
-  assert_eq(stale, next)
+  let (_, stale, _) = next.update(emit, Imported(2, Ok("import-1")))
+  assert_true(stale == next)
 }
 
 ///|
@@ -36,12 +36,12 @@ test "cancelled file selection returns to ready and errors permit retry" {
   assert_true(choosing_again != canceled)
   let (_, failed, _) = choosing_again.update(
     emit,
-    Picked(3, Err("Cannot read file")),
+    Picked(3, Err(@session_import.Diagnostic("Cannot read file"))),
   )
   let (_, retry, _) = failed.update(emit, PickFile)
   assert_true(retry != failed)
   let (_, duplicate, _) = failed.update(emit, PickFile)
-  assert_eq(retry, duplicate)
+  assert_true(retry == duplicate)
 }
 
 ///|
@@ -56,16 +56,22 @@ test "a Cloud import reports its account and new session, and failures stay retr
   let (_, pending, _) = typed.update(emit, ImportLink)
   let (_, failed, imported) = pending.update(
     emit,
-    Imported(2, Failed("Only Cloud exports can be imported here.")),
+    Imported(
+      2,
+      Err(
+        @session_import.Cloud(
+          @cloud_client.RemoteMessage(
+            "Only Cloud exports can be imported here.",
+          ),
+        ),
+      ),
+    ),
   )
   assert_eq(imported, None)
   assert_true(failed.is_open())
   let (_, retrying, _) = failed.update(emit, ImportLink)
   assert_true(retrying != failed)
-  let (_, done, imported) = retrying.update(
-    emit,
-    Imported(3, Success("cloud-1")),
-  )
+  let (_, done, imported) = retrying.update(emit, Imported(3, Ok("cloud-1")))
   assert_false(done.is_open())
   assert_eq(imported, Some((target, "cloud-1")))
 }

@@ -11,6 +11,7 @@ import {
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/engine_session",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/protocol",
@@ -25,7 +26,7 @@ pub async fn export_snapshot(String, String) -> @protocol.SessionSnapshot
 
 pub async fn file_unchanged(String, String, String, String) -> Bool
 
-pub async fn import_session(String, @protocol.SessionImportSource) -> @protocol.SessionImportReply
+pub async fn import_session(String, @protocol.SessionImportSource) -> Result[String, @cloud_client.Failure]
 
 pub async fn read_directory(String, String, String) -> @protocol.ReadDirReply
 
@@ -54,7 +55,7 @@ pub fn CommandInput::not_equal(Self, Self) -> Bool
 #derive(Eq)
 pub(all) struct CommandSettings {
   model : @deepseek.DsVariant
-  thinking : @protocol.OpenSeekThinking
+  thinking : @protocol.Thinking
 }
 pub fn CommandSettings::default() -> Self
 pub fn CommandSettings::equal(Self, Self) -> Bool
@@ -213,7 +214,7 @@ pub(all) struct Conversation {
   retrying : @composer.RunStage?
   controls : @engine_session.State
   approval_answered : String?
-  notice : String?
+  notice : Notice?
 }
 pub fn Conversation::awaits_approval(Self) -> Bool
 pub fn Conversation::can_load_older_history(Self) -> Bool
@@ -221,7 +222,7 @@ pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
 pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
 pub fn Conversation::extends_history_backward(Self, Self) -> Bool
-pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
+pub fn Conversation::items(Self, @i18n.Locale) -> Array[@transcript.TranscriptItem]
 pub fn Conversation::not_equal(Self, Self) -> Bool
 pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
 pub fn Conversation::published_approval(Self, Self) -> ControlApproval?
@@ -295,7 +296,7 @@ pub(all) enum Msg {
   ClientToolsReady(Int32, String, Bool)
   QuestionInput(account~ : String, session~ : String, text~ : String, id~ : String)
   QuestionInputDelivered(Int32, String)
-  QuestionInputFailed(Int32, String, String)
+  QuestionInputFailed(Int32, String, Notice)
   AccountChanged(String?)
   Refresh
   Create
@@ -343,6 +344,23 @@ pub(all) enum Msg {
   MessagePrepared(Int32, String, Int32, @composer.Draft, @openseek_protocol.Content)
   Poll(Int32, String, Int32)
 }
+
+#derive(Eq)
+pub(all) enum Notice {
+  Failure(@cloud_client.Failure)
+  EngineDetail(String)
+  OperationRejected(String)
+  ControlRejected(String)
+  AnswerRejected(String)
+  QuestionAnswerFailed(@cloud_client.Failure)
+  QuestionAnswerDetail(String)
+  ApprovalSaveRaced
+  DeleteWhileGenerating
+  AdditionalInputNotApplied
+}
+pub fn Notice::equal(Self, Self) -> Bool
+pub fn Notice::not_equal(Self, Self) -> Bool
+pub fn Notice::text(Self, @i18n.Locale) -> String
 
 #derive(Eq)
 pub struct PendingAssistant {
@@ -430,7 +448,7 @@ pub(all) struct State {
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
   creation : Creation?
-  notice : String?
+  notice : Notice?
 }
 pub fn State::approval(Self, String) -> @protocol.OpenSeekApproval
 pub fn State::can_choose_approval(Self, String) -> Bool

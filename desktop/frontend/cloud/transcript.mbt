@@ -63,6 +63,7 @@ fn append_native(
 ///|
 pub fn Conversation::items(
   self : Conversation,
+  locale : @i18n.Locale,
 ) -> Array[@transcript.TranscriptItem] {
   let native = self.document.events.unwrap_or([])
   let items : Array[@transcript.TranscriptItem] = []
@@ -128,7 +129,11 @@ pub fn Conversation::items(
   }
   if (self.history_cached || !self.history_required) &&
     self.notice is Some(message) {
-    items.push({ kind: Failure(message), ts: None, sequence: None, })
+    items.push({
+      kind: Failure(message.text(locale)),
+      ts: None,
+      sequence: None,
+    })
   }
   items
 }
