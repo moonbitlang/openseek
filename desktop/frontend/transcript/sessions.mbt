@@ -625,7 +625,15 @@ fn SessionTerminalProjection::append_to(
   // terminal is authoritative: those calls are no longer running, both when
   // receiving this event live and when replaying the record after a restart.
   interrupt_pending_calls(items, failure)
-  items.push({ kind: Failure(failure), ts, sequence, })
+  items.push({
+    kind: if self.0 is @desktop_protocol.Interrupted(_) {
+      Stopped(failure)
+    } else {
+      Failure(failure)
+    },
+    ts,
+    sequence,
+  })
   false
 }
 
@@ -639,7 +647,11 @@ fn interrupt_pending_calls(
     index -= 1
     let item = items[index]
     match item.kind {
-      Answer(_) | TurnEnd | Failure(_) | Assistant(finished=true, ..) => break
+      Answer(_)
+      | TurnEnd
+      | Failure(_)
+      | Stopped(_)
+      | Assistant(finished=true, ..) => break
       Assistant(reasoning~, prose~, calls~, replay~, finished~, end_sequence~) => {
         if !calls.any(call => call.outcome is Pending(..)) {
           continue

@@ -130,6 +130,25 @@ test "an abort bubble is the answer a turn got" {
 }
 
 ///|
+test "minimal overview marks only task failures and retains stopped replies" {
+  let items = [
+    item(User(content=Content([Text("stop this turn")])), sequence=1),
+    item(response(calls=[shell_call(true)]), sequence=2),
+    item(Stopped("cancelled"), sequence=3),
+    item(User(content=Content([Text("a failed turn")])), sequence=4),
+    item(Failure("model unavailable"), sequence=5),
+  ]
+  let rows = @transcript_overview.entries(items, minimal=true, display=text => {
+    return text
+  })
+  assert_false(rows[0].failed)
+  assert_eq(rows[0].reply, Some("cancelled"))
+  assert_true(rows[1].failed)
+  let detailed = @transcript_overview.entries(items, display=text => text)
+  assert_true(detailed[0].failed)
+}
+
+///|
 test "a terminal-carried final is the answer a turn got" {
   let rows = @transcript_overview.entries(
     [

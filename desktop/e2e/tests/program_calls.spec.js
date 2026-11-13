@@ -40,8 +40,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
         await expect(calls.nth(1)).toContainText('before');
         await expect(calls.nth(1)).toContainText('after');
         await expect(calls.nth(1).locator('.tool-status, .minimal-tool-status')).toHaveCount(0);
-        await expect(calls.nth(0).getByRole('img', { name: 'Tool failed' })).toBeVisible();
-        await expect(calls.nth(2).getByRole('img', { name: 'Tool failed' })).toBeVisible();
+        await expect(group.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
         await expect(group.locator('details.tool-params, details.tool-result')).toHaveCount(0);
       } else {
       const outer = page.locator('#transcript details.tool-call').first();

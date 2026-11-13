@@ -74,9 +74,8 @@ pub(all) struct Entry {
   // it went wrong; the rail is the only view of the whole conversation, so it
   // is the only place that question can be answered without scrolling.
   //
-  // The turn's own failures, not the run's health: a turn that recovered still
-  // marks, because "the agent hit an error here and worked around it" is the
-  // same place a reader wants to land.
+  // Detailed mode includes failed attempts; minimal mode marks only a failed
+  // terminal, so a recovered tool call or user stop does not signal an error.
   failed : Bool
 }
 
@@ -85,6 +84,7 @@ pub(all) struct Entry {
 pub fn entries(
   items : Array[@transcript.TranscriptItem],
   display~ : (String) -> String,
+  minimal~ : Bool = false,
 ) -> Array[Entry] {
   let result : Array[Entry] = []
   for index, item in items {
@@ -104,14 +104,16 @@ pub fn entries(
         break
       }
       match item.kind {
-        Assistant(calls~, ..) =>
+        Failure(_) if minimal => failed = true
+        Assistant(calls~, ..) if !minimal =>
           if calls.any(call => call.outcome is Done(is_error=true, ..)) {
             failed = true
           }
-        Notice(is_error=true, ..) => failed = true
+        Notice(is_error=true, ..) if !minimal => failed = true
         _ => ()
       }
-      if reply is None && item.kind is (Assistant(..) | Answer(_) | Failure(_)) {
+      if reply is None &&
+        item.kind is (Assistant(..) | Answer(_) | Failure(_) | Stopped(_)) {
         reply = item.text()
       }
     }
