@@ -3657,6 +3657,38 @@ pub impl @json.FromJson for SessionCommitPayload
 pub impl @json.ToJson for SessionCommitPayload
 
 #derive(Eq, @debug.Debug)
+pub(all) struct SessionCreateFromMessagePayload {
+  session : String
+  workspace : String
+  sequence : Int32
+  block : Int32
+  prompt : String
+  model : String
+  thinking : Thinking
+  approval : OpenSeekApproval
+}
+pub fn SessionCreateFromMessagePayload::equal(Self, Self) -> Bool
+pub fn SessionCreateFromMessagePayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCreateFromMessagePayload::not_equal(Self, Self) -> Bool
+pub fn SessionCreateFromMessagePayload::to_json(Self) -> @json.Json
+pub fn SessionCreateFromMessagePayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionCreateFromMessagePayload
+pub impl @json.ToJson for SessionCreateFromMessagePayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct SessionCreateFromMessageReply {
+  session : String
+  archived : Bool
+}
+pub fn SessionCreateFromMessageReply::equal(Self, Self) -> Bool
+pub fn SessionCreateFromMessageReply::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCreateFromMessageReply::not_equal(Self, Self) -> Bool
+pub fn SessionCreateFromMessageReply::to_json(Self) -> @json.Json
+pub fn SessionCreateFromMessageReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionCreateFromMessageReply
+pub impl @json.ToJson for SessionCreateFromMessageReply
+
+#derive(Eq, @debug.Debug)
 pub(all) struct SessionDeleteCheckPayload {
   session : String
   workspace : String
@@ -4053,6 +4085,46 @@ pub fn SessionSnapshot::not_equal(Self, Self) -> Bool
 pub fn SessionSnapshot::to_json(Self) -> @json.Json
 pub impl @json.FromJson for SessionSnapshot
 pub impl @json.ToJson for SessionSnapshot
+
+#derive(Eq, @debug.Debug)
+pub(all) struct SessionSuggestion {
+  sequence : Int32
+  block : Int32
+  session : String
+  archived : Bool
+}
+pub fn SessionSuggestion::equal(Self, Self) -> Bool
+pub fn SessionSuggestion::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSuggestion::not_equal(Self, Self) -> Bool
+pub fn SessionSuggestion::to_json(Self) -> @json.Json
+pub fn SessionSuggestion::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionSuggestion
+pub impl @json.ToJson for SessionSuggestion
+
+#derive(Eq, @debug.Debug)
+pub(all) struct SessionSuggestionsPayload {
+  session : String
+  workspace : String
+}
+pub fn SessionSuggestionsPayload::equal(Self, Self) -> Bool
+pub fn SessionSuggestionsPayload::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSuggestionsPayload::not_equal(Self, Self) -> Bool
+pub fn SessionSuggestionsPayload::to_json(Self) -> @json.Json
+pub fn SessionSuggestionsPayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionSuggestionsPayload
+pub impl @json.ToJson for SessionSuggestionsPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct SessionSuggestionsReply {
+  suggestions : Array[SessionSuggestion]
+}
+pub fn SessionSuggestionsReply::equal(Self, Self) -> Bool
+pub fn SessionSuggestionsReply::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSuggestionsReply::not_equal(Self, Self) -> Bool
+pub fn SessionSuggestionsReply::to_json(Self) -> @json.Json
+pub fn SessionSuggestionsReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionSuggestionsReply
+pub impl @json.ToJson for SessionSuggestionsReply
 
 #derive(Eq, @debug.Debug)
 pub struct SessionSummary {

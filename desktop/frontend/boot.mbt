@@ -823,7 +823,12 @@ fn main {
         {
           open: emit.map(path => TranscriptLinkOpened(slot~, path~)),
           jump: emit.map(target => TranscriptLocationOpened(slot~, target)),
-          open_session: emit.map(session => OpenSessionHere(session)),
+          open_session: emit.map(session => {
+            TranscriptSessionOpened(slot~, session~)
+          }),
+          start_session: emit.map(request => {
+            SessionSuggestion(Start(slot~, request))
+          }),
           fork: emit.map(through => ForkRequested(slot~, through~)),
           edit_user: emit.map(request => {
             let (sequence, draft) = request

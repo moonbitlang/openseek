@@ -80,6 +80,8 @@ struct Input {
   active_session : String
   archived : Bool
   can_fork : Bool
+  can_create_session : Bool
+  suggestion_states : Array[(Int32, Int32, SessionSuggestionState)]
   // Disable every conversation while a request is pending; only its source
   // answer receives the spinner's terminal sequence below.
   fork_busy : Bool
@@ -131,6 +133,8 @@ pub fn Input::Input(
   active_session~ : String,
   archived~ : Bool = false,
   can_fork~ : Bool = false,
+  can_create_session~ : Bool = false,
+  suggestion_states~ : Array[(Int32, Int32, SessionSuggestionState)] = [],
   fork_busy~ : Bool = false,
   edit_busy~ : Bool = false,
   forking? : Int32,
@@ -160,6 +164,8 @@ pub fn Input::Input(
     active_session,
     archived,
     can_fork,
+    can_create_session,
+    suggestion_states,
     fork_busy,
     edit_busy,
     forking,
@@ -194,6 +200,7 @@ pub(all) struct Actions {
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
+  start_session : @cmd.Emit[SessionSuggestionRequest]
   fork : @cmd.Emit[Int32]
   edit_user : @cmd.Emit[(Int32, @composer.Draft)]
   /// Start a fresh draft in another registered project.
@@ -417,8 +424,15 @@ pub fn component(
   let rows = blocks.map2(editors, (blocks, editors) => {
     blocks.map(pair => (pair.0, pair.1, editors.for_block(pair.1)))
   })
-  let rows = rows.map2(input.map(input => input.artifact_owner()), (rows, owner) => {
-    rows.map(row => (row.0, row.1, row.2, owner))
+  let row_context = input.map(input => {
+    (
+      input.artifact_owner(),
+      input.source is OpenSeek && input.can_create_session && !input.archived,
+      input.suggestion_states,
+    )
+  })
+  let rows = rows.map2(row_context, (rows, context) => {
+    rows.map(row => (row.0, row.1, row.2, context))
   })
   let rendered = rows.assoc_by(
     (key, row) => {
@@ -429,7 +443,20 @@ pub fn component(
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
       changes.map2(row, (changes, row) => {
-        let (locale, block, editor, owner) = row
+        let (locale, block, editor, context) = row
+        let (owner, can_create_session, suggestion_states) = context
+        let session_view = if can_create_session {
+          Some((sequence, block, prompt) => {
+            session_suggestion_view(
+              locale,
+              { sequence, block, prompt, },
+              suggestion_states,
+              actions,
+            )
+          })
+        } else {
+          None
+        }
         renders.val += 1
         let html = @html.memo_by(
           block,
@@ -437,6 +464,7 @@ pub fn component(
             block.render(
               locale~,
               actions,
+              session_view?,
               artifact_view=reference => {
                 artifact_file_view(reference, locale, actions.open, owner)
               },

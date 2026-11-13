@@ -26,6 +26,7 @@ pub fn markdown_nodes(
   open_file? : (String) -> @cmd.Cmd,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
+  session_view? : (Int32, String) -> @html.Html,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
@@ -35,6 +36,8 @@ pub fn markdown_nodes(
       open_file,
       artifact_view,
       defer_artifacts,
+      session_view,
+      session_index: 0,
       citations: [],
       footnotes: Footnotes::new(),
       in_sources: false,
@@ -62,6 +65,8 @@ priv struct MarkdownRender {
   open_file : ((String) -> @cmd.Cmd)?
   artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
   defer_artifacts : Bool
+  session_view : ((Int32, String) -> @html.Html)?
+  mut session_index : Int32
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
@@ -111,6 +116,13 @@ fn MarkdownRender::push_block(
           self.open_file,
           artifact_view?=self.artifact_view,
           defer_artifacts=self.defer_artifacts,
+          session_view?=self.session_view.map(render => {
+            prompt => {
+              let index = self.session_index
+              self.session_index += 1
+              render(index, prompt)
+            }
+          }),
         ),
       )
     // Raw HTML is shown as text, not injected; see the module comment.
@@ -155,6 +167,7 @@ fn code_block(
   open_file : ((String) -> @cmd.Cmd)?,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
+  session_view? : (String) -> @html.Html,
 ) -> @html.Html {
   let source = lines_text(block.code)
   let language = code_block_language(block)
@@ -162,6 +175,15 @@ fn code_block(
   let info = block.info_string
     .map(info => info.v.trim().to_owned())
     .unwrap_or(language)
+  // Session suggestions remain ordinary code unless the caller supplies the
+  // capability for a completed assistant answer. Parsing only creates Html;
+  // the card's user action owns session creation.
+  if closed &&
+    info == "openseek-session create" &&
+    !source.is_blank() &&
+    session_view is Some(render) {
+    return render(source)
+  }
   if language == @workspace_file_ref.FenceLanguage {
     if defer_artifacts && info == @workspace_file_ref.ArtifactFenceLanguage {
       return @html.nothing

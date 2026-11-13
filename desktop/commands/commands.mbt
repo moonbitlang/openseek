@@ -982,6 +982,18 @@ pub let session_edit : Command[
 ] = Command("session.edit")
 
 ///|
+pub let session_create_from_message : Command[
+  @protocol.SessionCreateFromMessagePayload,
+  @protocol.SessionCreateFromMessageReply,
+] = Command("session.create_from_message")
+
+///|
+pub let session_suggestions : Command[
+  @protocol.SessionSuggestionsPayload,
+  @protocol.SessionSuggestionsReply,
+] = Command("session.suggestions")
+
+///|
 pub let session_search : Command[
   @protocol.SessionSearchPayload,
   @protocol.SessionSearchReply,
