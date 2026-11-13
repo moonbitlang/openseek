@@ -2,17 +2,26 @@
 using @engine_session {type CompactionPhase, type GoalCommand, type GoalRequest}
 
 ///|
-/// Read model names at storage and protocol boundaries. Unsupported names use
-/// the caller's existing absent-value handling.
-fn parse_engine_model(value : StringView) -> @deepseek.Model? {
-  Some(@deepseek.Model::parse(value.trim().to_owned())) catch {
+/// Read a model name from page storage or a model-picker id. Unsupported names
+/// use the caller's existing absent-value handling.
+fn parse_engine_model(value : StringView) -> @wire.Model? {
+  Some(@wire.Model::parse(value.trim().to_owned())) catch {
+    _ => None
+  }
+}
+
+///|
+/// Read a thinking mode from page storage or a reasoning-picker value.
+/// Unsupported values use the caller's existing absent-value handling.
+fn parse_thinking(value : String) -> @wire.ThinkingMode? {
+  Some(@wire.ThinkingMode::parse(value)) catch {
     _ => None
   }
 }
 
 ///|
 /// The product-facing model name shown on the composer chip.
-fn @deepseek.Model::label(self : @deepseek.Model) -> String {
+fn @wire.Model::label(self : @wire.Model) -> String {
   match self {
     Deepseek(V4Pro) => "DeepSeek Pro"
     Deepseek(V4Flash) => "DeepSeek Flash"
@@ -24,7 +33,7 @@ fn @deepseek.Model::label(self : @deepseek.Model) -> String {
 
 ///|
 /// Whether this Desktop model exposes the no/high/max reasoning selector.
-fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
+fn @wire.Model::supports_reasoning(self : @wire.Model) -> Bool {
   match self {
     Deepseek(_) | Glm(_) => true
     Kimi(_) => false
@@ -32,38 +41,38 @@ fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
 }
 
 ///|
-fn @protocol.Thinking::label(
-  self : @protocol.Thinking,
+fn @wire.ThinkingMode::label(
+  self : @wire.ThinkingMode,
   locale~ : @i18n.Locale = English,
 ) -> String {
   match (locale, self) {
-    (SimplifiedChinese, ThinkingOff) => "关闭"
-    (TraditionalChinese, ThinkingOff) => "關閉"
-    (Japanese, ThinkingOff) => "オフ"
-    (SimplifiedChinese, ThinkingHigh) => "高"
-    (TraditionalChinese, ThinkingHigh) => "高"
-    (Japanese, ThinkingHigh) => "高"
-    (SimplifiedChinese, ThinkingMax) => "最高"
-    (TraditionalChinese, ThinkingMax) => "最高"
-    (Japanese, ThinkingMax) => "最大"
-    (English, ThinkingOff) => "Off"
-    (Spanish, ThinkingOff) => "Desactivado"
-    (English, ThinkingHigh) => "High"
-    (Spanish, ThinkingHigh) => "Alto"
-    (English, ThinkingMax) => "Max"
-    (Spanish, ThinkingMax) => "Máximo"
+    (SimplifiedChinese, No) => "关闭"
+    (TraditionalChinese, No) => "關閉"
+    (Japanese, No) => "オフ"
+    (SimplifiedChinese, High) => "高"
+    (TraditionalChinese, High) => "高"
+    (Japanese, High) => "高"
+    (SimplifiedChinese, Max) => "最高"
+    (TraditionalChinese, Max) => "最高"
+    (Japanese, Max) => "最大"
+    (English, No) => "Off"
+    (Spanish, No) => "Desactivado"
+    (English, High) => "High"
+    (Spanish, High) => "Alto"
+    (English, Max) => "Max"
+    (Spanish, Max) => "Máximo"
   }
 }
 
 ///|
 /// GLM cannot turn thinking off: the shared lowest wire choice becomes its
 /// `low` effort, so the chip must not promise an unavailable Off state.
-fn @protocol.Thinking::label_for_model(
-  self : @protocol.Thinking,
-  model : @deepseek.Model,
+fn @wire.ThinkingMode::label_for_model(
+  self : @wire.ThinkingMode,
+  model : @wire.Model,
   locale~ : @i18n.Locale = English,
 ) -> String {
-  if model is Glm(_) && self is ThinkingOff {
+  if model is Glm(_) && self is No {
     match locale {
       SimplifiedChinese => "低"
       TraditionalChinese => "低"
@@ -79,10 +88,10 @@ fn @protocol.Thinking::label_for_model(
 ///|
 /// Encode a reasoning setting only for models that advertise it in this UI.
 /// Kimi keeps the field absent, matching the hidden selector.
-fn @deepseek.Model::thinking(
-  self : @deepseek.Model,
-  reasoning : @protocol.Thinking,
-) -> @protocol.Thinking? {
+fn @wire.Model::thinking(
+  self : @wire.Model,
+  reasoning : @wire.ThinkingMode,
+) -> @wire.ThinkingMode? {
   if self.supports_reasoning() {
     Some(reasoning)
   } else {
@@ -122,8 +131,8 @@ test "engine models round-trip their wire names" {
     content="glm-5.3-flash",
   )
   assert_true(parse_engine_model("glm-5.3") is Some(Glm(G53)))
-  assert_true(@deepseek.Model::Glm(G53Flash).supports_reasoning())
-  assert_true(@deepseek.Model::Deepseek(V4Flash).supports_reasoning())
+  assert_true(@wire.Model::Glm(G53Flash).supports_reasoning())
+  assert_true(@wire.Model::Deepseek(V4Flash).supports_reasoning())
   assert_true(parse_engine_model(" custom-model ") is None)
   assert_true(parse_engine_model("  ") is None)
 }
@@ -379,7 +388,7 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 ///|
 /// The model a fresh conversation starts from when the selected provider and
 /// the page's last model choice belong to different known model families.
-fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
+fn ApiProvider::default_model(self : ApiProvider) -> @wire.Model {
   match self {
     Deepseek | OpenRouter | Custom => Deepseek(V4Flash)
     Glm => Glm(G53)
@@ -389,8 +398,8 @@ fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
 ///|
 /// Whether a model belongs to the selected provider. Custom endpoints accept
 /// every model; Kimi retains its existing endpoint selection.
-fn @deepseek.Model::matches_provider(
-  self : @deepseek.Model,
+fn @wire.Model::matches_provider(
+  self : @wire.Model,
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
@@ -454,7 +463,7 @@ priv enum RunEnd {
 priv struct RecoveredRun {
   run_id : String
   session : String
-  model : @deepseek.Model
+  model : @wire.Model
   max_steps : Int32
   session_root : @common.Uri?
   submission_id : String?
@@ -647,14 +656,14 @@ priv struct Conversation {
   // meets through a live run, from that run's tier. Nothing but the chip changes it
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
-  engine_model : @deepseek.Model
+  engine_model : @wire.Model
   // The reasoning this conversation runs on. `None` follows the page's
   // preference for the model's family (`Model::reasoning_for`): a new chat,
   // or a stored session that recorded no model. It is pinned when the
   // conversation is opened from its session's record, when its first turn
   // is submitted, and when the chip picks one for a started conversation —
   // a later pick in some new chat must not change this one.
-  reasoning : @protocol.Thinking?
+  reasoning : @wire.ThinkingMode?
   // Complete base prompt captured for this draft; stored chats keep their prompt.
   // None while a new draft awaits its host's first settings snapshot.
   system_prompt : String?
@@ -1251,7 +1260,7 @@ priv struct Model {
   // The tier a new conversation is born with: whatever was last picked in
   // the composer, persisted page-locally. The model a turn actually runs
   // with is the conversation's own `engine_model`, never this.
-  default_model : @deepseek.Model
+  default_model : @wire.Model
   // The agent a new conversation is born with: whichever provider group the
   // unified model chip was last picked from, persisted page-locally. An
   // existing conversation never reads this — its agent is fixed at creation.
@@ -1264,8 +1273,8 @@ priv struct Model {
   // keeps a separate preference below because its forced-thinking low mode
   // is the useful default for ordinary tasks. A started conversation runs on
   // its own `Conversation::reasoning` once it has one.
-  openseek_reasoning : @protocol.Thinking
-  glm_reasoning : @protocol.Thinking
+  openseek_reasoning : @wire.ThinkingMode
+  glm_reasoning : @wire.ThinkingMode
   max_steps : String
   // Device-less Cloud's follow-up behavior, kept in the browser (see
   // `CloudFollowupBehaviorStorageKey`); a page with a host uses its settings.
@@ -2527,7 +2536,7 @@ priv enum DeviceMsg {
   Started(
     run_id~ : String,
     session~ : String,
-    model~ : @deepseek.Model,
+    model~ : @wire.Model,
     max_steps~ : Int32,
     session_root~ : @common.Uri?,
     submission_id~ : String?
@@ -2635,8 +2644,8 @@ fn empty_conversation(
   channel : @interop.ChannelId,
   session_id : String,
   project : @common.Uri,
-  model~ : @deepseek.Model = Deepseek(V4Pro),
-  reasoning? : @protocol.Thinking,
+  model~ : @wire.Model = Deepseek(V4Pro),
+  reasoning? : @wire.ThinkingMode,
   system_prompt? : String,
 ) -> Conversation {
   {
@@ -2757,8 +2766,8 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
     asking_conversations: [],
-    openseek_reasoning: ThinkingHigh,
-    glm_reasoning: ThinkingOff,
+    openseek_reasoning: High,
+    glm_reasoning: No,
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
@@ -3203,7 +3212,7 @@ fn Model::edit_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
 fn Model::draft_system_prompt(
   self : Model,
   channel : @interop.ChannelId,
-  model : @deepseek.Model,
+  model : @wire.Model,
 ) -> String? {
   self
   .device_state(channel)
@@ -3263,17 +3272,17 @@ fn Model::align_new_chats_with_provider(
 fn Model::conversation_reasoning(
   self : Model,
   conv : Conversation,
-) -> @protocol.Thinking {
+) -> @wire.ThinkingMode {
   conv.reasoning.unwrap_or_else(() => self.reasoning_for(conv.engine_model))
 }
 
 ///|
-/// The reasoning preference for one model family. GLM's `ThinkingOff` wire
+/// The reasoning preference for one model family. GLM's `No` wire
 /// value is translated by the engine to its lowest supported effort (`low`).
 fn Model::reasoning_for(
   self : Model,
-  engine_model : @deepseek.Model,
-) -> @protocol.Thinking {
+  engine_model : @wire.Model,
+) -> @wire.ThinkingMode {
   match engine_model {
     Glm(_) => self.glm_reasoning
     Deepseek(_) | Kimi(_) => self.openseek_reasoning
@@ -3687,14 +3696,6 @@ fn Model::can_reload_transcript(self : Model, conv : Conversation) -> Bool {
 }
 
 ///|
-/// The model a stored session last ran on, as its record (`model.json`)
-/// reached this page through the sidebar listing.
-priv struct RecordedModel {
-  engine_model : @deepseek.Model
-  reasoning : @protocol.Thinking
-}
-
-///|
 /// What the record of `session` in `project`'s store recorded it runs on:
 /// the live store's listing for a `LiveRecord`, the archived store's for an
 /// `ArchivedRecord`. Both qualifiers matter because one id can be listed in
@@ -3709,7 +3710,7 @@ fn Model::recorded_model(
   session : String,
   project : @common.Uri,
   record : ConversationRecord,
-) -> RecordedModel? {
+) -> @wire.SessionModel? {
   guard self.device_state(channel) is Some(dev) &&
     (match record {
       LiveRecord => dev.sessions
@@ -3717,11 +3718,10 @@ fn Model::recorded_model(
     })
     .iter()
     .find_first(item => item.id == session && item.workspace == project)
-    is Some({ model_settings: Some(settings), .. }) &&
-    parse_engine_model(settings.model) is Some(engine_model) else {
+    is Some({ model_settings: Some(recorded), .. }) else {
     return None
   }
-  Some({ engine_model, reasoning: settings.thinking, })
+  Some(recorded)
 }
 
 ///|
@@ -3741,9 +3741,9 @@ fn Model::stored_conversation(
       session,
       project,
       model=recorded
-        .map(recorded => recorded.engine_model)
+        .map(recorded => recorded.model)
         .unwrap_or(self.default_model),
-      reasoning?=recorded.map(recorded => recorded.reasoning),
+      reasoning?=recorded.map(recorded => recorded.thinking),
     ),
     record,
   }

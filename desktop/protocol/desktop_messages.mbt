@@ -9,38 +9,6 @@
 // slash-separated relative strings.
 
 ///|
-/// OpenSeek's closed reasoning setting. Keeping the wire values typed in the
-/// protocol package makes every Desktop command reject schema drift before an
-/// engine's current phase can affect how the request is handled.
-#derive(Debug, Eq)
-pub(all) enum Thinking {
-  ThinkingOff
-  ThinkingHigh
-  ThinkingMax
-}
-
-///|
-pub fn Thinking::wire(self : Thinking) -> String {
-  match self {
-    ThinkingOff => "no"
-    ThinkingHigh => "high"
-    ThinkingMax => "max"
-  }
-}
-
-///|
-/// Parse the same wire spelling from non-JSON configuration such as the
-/// inherited OPENSEEK_THINKING environment variable.
-pub fn Thinking::parse(value : String) -> Thinking? {
-  match value {
-    "no" => Some(ThinkingOff)
-    "high" => Some(ThinkingHigh)
-    "max" => Some(ThinkingMax)
-    _ => None
-  }
-}
-
-///|
 /// Who answers an OpenSeek engine's permission questions (sandbox escalation,
 /// deletion, writes outside the allowed scope). The host passes it to the
 /// engine as `--approval`; an absent request field means `ApprovalAsk`, the
@@ -84,10 +52,10 @@ pub(all) struct StartPayload {
   // Optional client-minted lifecycle identity echoed with `agent.started`.
   // Blank ids and ids longer than 128 UTF-8 bytes are ignored.
   submission_id : String?
-  model : String?
+  model : @wire.Model?
   // Optional keeps older clients compatible; a present value is decoded into
   // the closed protocol type before the command reaches the host operation.
-  thinking : Thinking?
+  thinking : @wire.ThinkingMode?
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?
@@ -174,8 +142,8 @@ pub(all) struct SessionCommandSettings {
   // Native commands address a durable conversation; run-bound commands also carry a run ID.
   session : String
   // A resumed conversation may need a new engine process with these settings.
-  model : String?
-  thinking : Thinking?
+  model : @wire.Model?
+  thinking : @wire.ThinkingMode?
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?
@@ -629,8 +597,8 @@ pub(all) struct CancelSearchSemanticPayload {
 /// second user prompt.
 #derive(Debug, Eq)
 pub(all) struct PatternRepairPayload {
-  model : String
-  thinking : Thinking?
+  model : @wire.Model
+  thinking : @wire.ThinkingMode?
   root : String
   pattern : String
   instruction : String
@@ -1260,7 +1228,7 @@ pub(all) struct StartedPayload {
   run_id : String
   submission_id : String?
   engine : String?
-  model : String?
+  model : @wire.Model?
   max_steps : Int32?
   session : String
   session_root : String?
@@ -2232,18 +2200,6 @@ pub extend OpenSeekApproval with Eq::{equal, not_equal}
 
 ///|
 pub extend OpenSeekApproval with ToJson::{to_json}
-
-///|
-pub extend Thinking with Debug::{to_repr}
-
-///|
-pub extend Thinking with FromJson::{from_json}
-
-///|
-pub extend Thinking with Eq::{equal, not_equal}
-
-///|
-pub extend Thinking with ToJson::{to_json}
 
 ///|
 pub extend OpenPathPayload with Debug::{to_repr}

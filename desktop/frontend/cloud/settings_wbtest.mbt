@@ -9,17 +9,17 @@ test "session inference codecs cover all choices and reject malformed values" {
   guard base is Object(fields) else { fail("object fixture") }
   let defaults = decode_sessions({ "sessions": [base] })[0]
   assert_true(defaults.model is V4Flash)
-  assert_true(defaults.thinking is ThinkingHigh)
+  assert_true(defaults.thinking is High)
   for
     (name, model) in [
-      ("deepseek-flash", @deepseek.V4Flash),
-      ("deepseek-v4-pro", @deepseek.V4Pro),
+      ("deepseek-flash", @wire.V4Flash),
+      ("deepseek-v4-pro", @wire.V4Pro),
     ] {
     for
       (wire, thinking) in [
-        ("no", @protocol.ThinkingOff),
-        ("high", @protocol.ThinkingHigh),
-        ("max", @protocol.ThinkingMax),
+        ("no", @wire.ThinkingMode::No),
+        ("high", @wire.ThinkingMode::High),
+        ("max", @wire.ThinkingMode::Max),
       ] {
       let item = fields.copy()
       item["model"] = Json(name)
@@ -57,7 +57,7 @@ test "session inference codecs cover all choices and reject malformed values" {
 ///|
 test "inference saves update only the selected option after confirmation" {
   let initial = deletion_state()
-  for edit in [SetModel(V4Pro), SetThinking(ThinkingMax)] {
+  for edit in [SetModel(V4Pro), SetThinking(Max)] {
     let pending = metadata_update(
       initial,
       Edit(account="fixture", session="a", edit~),
@@ -65,7 +65,7 @@ test "inference saves update only the selected option after confirmation" {
     assert_false(pending.can_send("a"))
     assert_false(pending.can_choose_settings("a"))
     assert_true(pending.model("a") is V4Flash)
-    assert_true(pending.thinking("a") is ThinkingHigh)
+    assert_true(pending.thinking("a") is High)
     let request = pending.metadata_saves["a"].request
     let saved = metadata_update(pending, Edited(2, "a", request))
     assert_true(saved.can_send("a"))
@@ -73,11 +73,11 @@ test "inference saves update only the selected option after confirmation" {
     match edit {
       SetModel(_) => {
         assert_true(saved.model("a") is V4Pro)
-        assert_true(saved.thinking("a") is ThinkingHigh)
+        assert_true(saved.thinking("a") is High)
       }
       SetThinking(_) => {
         assert_true(saved.model("a") is V4Flash)
-        assert_true(saved.thinking("a") is ThinkingMax)
+        assert_true(saved.thinking("a") is Max)
       }
       _ => fail("inference edit")
     }
@@ -109,12 +109,7 @@ test "busy or compacting sessions refuse all engine option edits" {
         ),
       }),
     ] {
-    for
-      edit in [
-        SetApproval(ApprovalReview),
-        SetModel(V4Pro),
-        SetThinking(ThinkingOff),
-      ] {
+    for edit in [SetApproval(ApprovalReview), SetModel(V4Pro), SetThinking(No)] {
       assert_false(running.can_choose_settings("a"))
       assert_true(
         metadata_update(running, Edit(account="fixture", session="a", edit~)) ==
@@ -133,11 +128,7 @@ test "created sessions inherit both draft inference choices" {
       blank,
       Edit(account="account", session=owner.session(), edit=SetModel(V4Pro)),
     ),
-    Edit(
-      account="account",
-      session=owner.session(),
-      edit=SetThinking(ThinkingOff),
-    ),
+    Edit(account="account", session=owner.session(), edit=SetThinking(No)),
   )
   let pending = metadata_update(
     chosen,
@@ -148,7 +139,7 @@ test "created sessions inherit both draft inference choices" {
     Created(1, pending.creation.unwrap().request, "new"),
   )
   assert_true(created.model("new") is V4Pro)
-  assert_true(created.thinking("new") is ThinkingOff)
+  assert_true(created.thinking("new") is No)
 }
 
 ///|
@@ -156,7 +147,7 @@ test "uncertain option saves stay fenced until a fresh catalog succeeds" {
   for
     (edit, failure) in [
       (SetModel(V4Pro), @cloud_client.Unreachable),
-      (SetThinking(ThinkingMax), @cloud_client.Http(408)),
+      (SetThinking(Max), @cloud_client.Http(408)),
       (SetApproval(ApprovalReview), @cloud_client.Http(502)),
     ] {
     let initial = deletion_state()

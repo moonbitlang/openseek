@@ -141,7 +141,7 @@ test "Cloud semantic search keeps workspace ownership and shares request limits"
   let state = State::empty().handle(ModeChanged(Semantic), input)
   assert_true(state.page.mode is Semantic)
   let host = Input(
-    model="model",
+    model=Deepseek(V4Flash),
     thinking=None,
     owner={ channel: Local, session: "local", },
     root=Some(@resource.of_path(Local, "/work").unwrap()),
@@ -161,4 +161,17 @@ test "Cloud semantic search keeps workspace ownership and shares request limits"
   assert_eq(body.get("root"), None)
   assert_eq(body.get("session_key"), None)
   assert_eq(body.get("patterns"), Some(Json(["inspect($_)"])))
+}
+
+///|
+test "Cloud pattern repair runs without a client model" {
+  let input = cloud_input()
+  let state = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "broken"), input)
+    .handle(FixPattern, input)
+  assert_true(input.pattern_repair_route() is Some(CloudRepair(_, _)))
+  assert_true(
+    state.page.pattern_repair_target(input) is Some({ pattern: "broken", .. }),
+  )
 }

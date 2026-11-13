@@ -82,6 +82,27 @@ fn JsonObject::optional_json(self : JsonObject, name : String) -> Json? {
 }
 
 ///|
+/// Decode the required field `name` with its type's own codec, reporting a
+/// malformed value at the field's path.
+fn[T : @json.FromJson] JsonObject::required_value(
+  self : JsonObject,
+  name : String,
+) -> T raise @json.JsonDecodeError {
+  @json.from_json(self.required_json(name), path=self.path.add_key(name))
+}
+
+///|
+/// Decode the optional field `name` with its type's own codec; missing and
+/// `null` are absence, a malformed value fails at the field's path.
+fn[T : @json.FromJson] JsonObject::optional_value(
+  self : JsonObject,
+  name : String,
+) -> T? raise @json.JsonDecodeError {
+  guard self.optional_json(name) is Some(value) else { return None }
+  Some(@json.from_json(value, path=self.path.add_key(name)))
+}
+
+///|
 fn JsonObject::required_string(
   self : JsonObject,
   name : String,

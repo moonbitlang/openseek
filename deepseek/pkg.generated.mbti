@@ -4,12 +4,15 @@ package "moonbitlang/openseek/deepseek"
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
-pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> @json.Json raise ChatMessageError
+pub fn api_key(@openseek_protocol.Model, Map[String, Array[String]]) -> String?
 
-pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> @json.Json raise ChatMessageError
+pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : @openseek_protocol.ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : @openseek_protocol.Model, Array[ChatMessage]) -> @json.Json raise ChatMessageError
+
+pub fn openrouter_encode_chat_request(model~ : @openseek_protocol.DsVariant, thinking~ : @openseek_protocol.ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> @json.Json raise ChatMessageError
 
 // Errors
 #derive(@debug.Debug)
@@ -61,37 +64,6 @@ pub fn ContentPart::not_equal(Self, Self) -> Bool
 pub fn ContentPart::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
-pub(all) enum DsVariant {
-  V4Flash
-  V4Pro
-}
-
-#derive(Eq, @debug.Debug)
-pub(all) enum GlmVariant {
-  G53
-  G53Flash
-}
-
-#derive(Eq, @debug.Debug)
-pub(all) enum KimiVariant {
-  K27Code
-  K27CodeHighSpeed
-}
-
-#derive(Eq, @debug.Debug)
-pub(all) enum Model {
-  Deepseek(DsVariant)
-  Kimi(KimiVariant)
-  Glm(GlmVariant)
-}
-pub fn Model::api_key(Self, Map[String, Array[String]]) -> String?
-pub fn Model::context_window(Self) -> Int32
-pub fn Model::output(Self, &Logger) -> Unit
-pub fn Model::parse(String) -> Self raise
-pub fn Model::to_string(Self) -> String
-pub impl Show for Model
-
-#derive(Eq, @debug.Debug)
 pub(all) enum ResponseFormat {
   JsonObject
 }
@@ -103,17 +75,6 @@ pub(all) enum Role {
   Assistant
   Tool(String)
 }
-
-#derive(Eq, @debug.Debug)
-pub(all) enum ThinkingMode {
-  No
-  High
-  Max
-}
-pub fn ThinkingMode::output(Self, &Logger) -> Unit
-pub fn ThinkingMode::parse(String) -> Self raise
-pub fn ThinkingMode::to_string(Self) -> String
-pub impl Show for ThinkingMode
 
 #derive(@debug.Debug)
 pub struct ToolCall {
@@ -143,5 +104,14 @@ pub struct Usage {
 pub impl @json.FromJson for Usage
 
 // Type aliases
+pub using @openseek_protocol {type DsVariant}
+
+pub using @openseek_protocol {type GlmVariant}
+
+pub using @openseek_protocol {type KimiVariant}
+
+pub using @openseek_protocol {type Model}
+
+pub using @openseek_protocol {type ThinkingMode}
 
 // Traits

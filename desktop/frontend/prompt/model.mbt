@@ -50,7 +50,7 @@ pub fn Model::receive(self : Model, source : String, text : String) -> Model {
 }
 
 ///|
-pub fn Model::text(self : Model, model : @deepseek.Model) -> String {
+pub fn Model::text(self : Model, model : @openseek_protocol.Model) -> String {
   @content.system_prompt_for_model(
     model,
     prompt=match self.source {

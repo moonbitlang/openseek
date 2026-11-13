@@ -170,8 +170,10 @@ pub fn State::selected_semantic_reference(
 ///|
 #derive(Eq)
 pub(all) struct Input {
-  model : String
-  thinking : @protocol.Thinking?
+  /// The model a pattern repair runs on; `None` for a Cloud conversation,
+  /// which has no host to run one.
+  model : @wire.Model?
+  thinking : @wire.ThinkingMode?
   owner : @interop.ConversationIdentity
   root : @common.Uri?
   cloud_access : @cloud_client.Access?
@@ -179,12 +181,18 @@ pub(all) struct Input {
 
 ///|
 pub fn Input::Input(
-  model~ : String,
-  thinking~ : @protocol.Thinking?,
+  model~ : @wire.Model,
+  thinking~ : @wire.ThinkingMode?,
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
 ) -> Input {
-  { owner: Host(owner), root, model, thinking, cloud_access: None, }
+  {
+    owner: Host(owner),
+    root,
+    model: Some(model),
+    thinking,
+    cloud_access: None,
+  }
 }
 
 ///|
@@ -196,7 +204,7 @@ pub fn Input::cloud(
   {
     owner,
     root: Some(root),
-    model: "",
+    model: None,
     thinking: None,
     cloud_access: Some(access),
   }

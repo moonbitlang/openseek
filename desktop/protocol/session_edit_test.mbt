@@ -4,7 +4,7 @@ test "single edit payload preserves the message and optional fork boundary" {
     session: "source",
     workspace: "/work",
     through: None,
-    model: "deepseek-flash",
+    model: Deepseek(V4Flash),
     source_title: "Original",
     source_sequence: 8,
     task: "Revised",

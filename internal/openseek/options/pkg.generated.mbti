@@ -3,11 +3,11 @@ package "moonbitlang/openseek/internal/openseek/options"
 
 import {
   "moonbitlang/core/argparse",
-  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
-pub fn agent_settings(@argparse.Matches) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
+pub fn agent_settings(@argparse.Matches) -> (@openseek_protocol.Model, @openseek_protocol.ThinkingMode, String?) raise
 
 pub fn deepseek_api_key(@argparse.Matches) -> String?
 

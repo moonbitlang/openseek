@@ -4,7 +4,7 @@ package "openseek_desktop/frontend/prompt"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
-  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/i18n",
 }
 
@@ -20,7 +20,7 @@ pub struct Model {
 pub fn Model::draft_text(Self) -> String?
 pub fn Model::new() -> Self
 pub fn Model::receive(Self, String, String) -> Self
-pub fn Model::text(Self, @deepseek.Model) -> String
+pub fn Model::text(Self, @openseek_protocol.Model) -> String
 pub fn Model::update(Self, Msg) -> (@cmd.Cmd, Self)
 pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg], ready~ : Bool, saving~ : Bool, open~ : Bool, toggle~ : @cmd.Cmd, dismiss~ : @cmd.Cmd) -> Array[@html.Html]
 

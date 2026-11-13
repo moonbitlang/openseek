@@ -13,7 +13,8 @@ test "agent start preserves all engine settings" {
     "workspace": "/work/project",
     "future_field": true,
   })
-  assert_eq(payload.thinking, Some(ThinkingMax))
+  assert_eq(payload.thinking, Some(Max))
+  assert_eq(payload.model, Some(Deepseek(V4Pro)))
   assert_eq(payload.approval, Some(ApprovalReview))
   assert_eq(payload.system_prompt, Some("  Custom instructions\n中文\n"))
   @debug.assert_eq(payload.to_json(), {
@@ -95,19 +96,6 @@ test "queue payloads expose only valid operation-specific data" {
   }
   assert_true(missing_text is None)
   assert_true(missing_run is None)
-}
-
-///|
-test "OpenSeek thinking values round-trip through their closed codec" {
-  let off : @protocol.Thinking = @json.from_json(Json("no"))
-  let high : @protocol.Thinking = @json.from_json(Json("high"))
-  let max : @protocol.Thinking = @json.from_json(Json("max"))
-  assert_eq(off, ThinkingOff)
-  assert_eq(high, ThinkingHigh)
-  assert_eq(max, ThinkingMax)
-  @debug.assert_eq(off.to_json(), Json("no"))
-  @debug.assert_eq(high.to_json(), Json("high"))
-  @debug.assert_eq(max.to_json(), Json("max"))
 }
 
 ///|

@@ -13,7 +13,9 @@ The HTTP client lives in `moonbitlang/openseek/deepseek/client`.
 - `Model`: provider-tagged chat models, e.g. `Deepseek(V4Pro)`,
   `Deepseek(V4Flash)` (the canonical `deepseek-flash` wire name), `Kimi(K27Code)`,
   and `Glm(G53)`, with `Show` for wire strings and `Debug` for inspection.
-- `Model::api_key(matches)`: resolves the key a command main should send for
+  Re-exported from `moonbitlang/openseek_protocol`, which owns it (with
+  `ThinkingMode`) so the Desktop host and frontend share the same type.
+- `api_key(model, matches)`: resolves the key a command main should send for
   this model — an explicit `--api-key` first, then the provider-specific
   option (`--deepseek-api-key` / `--kimi-api-key` / `--glm-api-key`, which the
   command tables back with `DEEPSEEK` / `KIMI` / `GLM`), and `None` when

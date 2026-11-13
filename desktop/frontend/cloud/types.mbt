@@ -8,8 +8,8 @@ pub(all) struct Session {
   archived : Bool
   // The policy the next engine starts with; a running turn keeps its own.
   approval : @protocol.OpenSeekApproval
-  model : @deepseek.DsVariant
-  thinking : @protocol.Thinking
+  model : @wire.DsVariant
+  thinking : @wire.ThinkingMode
 }
 
 ///|
@@ -225,8 +225,8 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   approval : @protocol.OpenSeekApproval
-  model : @deepseek.DsVariant
-  thinking : @protocol.Thinking
+  model : @wire.DsVariant
+  thinking : @wire.ThinkingMode
 }
 
 ///|
@@ -255,8 +255,8 @@ pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
   SetApproval(@protocol.OpenSeekApproval)
-  SetModel(@deepseek.DsVariant)
-  SetThinking(@protocol.Thinking)
+  SetModel(@wire.DsVariant)
+  SetThinking(@wire.ThinkingMode)
 }
 
 ///|
@@ -265,7 +265,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
     SetApproval(mode) => { "approval": mode.to_json() }
-    SetModel(model) => { "model": Json(@deepseek.Deepseek(model).to_string()) }
+    SetModel(model) => { "model": Json(@wire.Model::Deepseek(model)) }
     SetThinking(thinking) => { "thinking": thinking.to_json() }
   }
 }
@@ -487,7 +487,7 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
       _ => raise @cloud_client.RequestError(Malformed)
     },
     thinking: match item {
-      Object(fields) if !fields.contains("thinking") => ThinkingHigh
+      Object(fields) if !fields.contains("thinking") => High
       Object(fields) =>
         @json.from_json(fields["thinking"]) catch {
           _ => raise @cloud_client.RequestError(Malformed)

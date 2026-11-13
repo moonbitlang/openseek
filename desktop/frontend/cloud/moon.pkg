@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/engine_session",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/cloud_client",

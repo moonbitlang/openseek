@@ -9,6 +9,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/diff_provider/moondiff",
+  "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/github",
@@ -160,8 +161,8 @@ pub fn CloudFiles::not_equal(Self, Self) -> Bool
 #derive(Eq)
 pub(all) struct Ctx {
   locale : @i18n.Locale
-  model : String
-  thinking : @protocol.Thinking?
+  model : @openseek_protocol.Model
+  thinking : @openseek_protocol.ThinkingMode?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
   feedback_enabled : Bool

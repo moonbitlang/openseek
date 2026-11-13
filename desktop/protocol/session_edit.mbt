@@ -5,13 +5,13 @@ pub(all) struct SessionEditPayload {
   session : String
   workspace : String
   through : Int32?
-  model : String
+  model : @wire.Model
   source_title : String
   source_sequence : Int32
   task : String
   images : Array[String]
   attachment_paths : Array[String]
-  thinking : Thinking?
+  thinking : @wire.ThinkingMode?
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?
@@ -26,7 +26,7 @@ pub impl FromJson for SessionEditPayload with fn from_json(json, path) {
     through: object
     .optional_json("through")
     .map(value => @json.from_json(value, path=path.add_key("through"))),
-    model: object.required_string("model"),
+    model: object.required_value("model"),
     source_title: object.required_string("source_title"),
     source_sequence: object.required_int("source_sequence"),
     task: object.required_string("task"),

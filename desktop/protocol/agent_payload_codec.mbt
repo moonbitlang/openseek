@@ -4,17 +4,6 @@
 // at their exact path instead of silently changing the engine configuration.
 
 ///|
-fn JsonObject::optional_thinking(
-  self : JsonObject,
-  name : String,
-) -> Thinking? raise @json.JsonDecodeError {
-  match self.fields.get(name) {
-    Some(Null) | None => None
-    Some(value) => Some(@json.from_json(value, path=self.path.add_key(name)))
-  }
-}
-
-///|
 fn JsonObject::optional_approval(
   self : JsonObject,
   name : String,
@@ -33,8 +22,8 @@ pub impl FromJson for StartPayload with fn from_json(json, path) {
     task: object.required_string("task"),
     images: object.required_string_array("images"),
     submission_id: object.optional_string("submission_id"),
-    model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
+    model: object.optional_value("model"),
+    thinking: object.optional_value("thinking"),
     approval: object.optional_approval("approval"),
     max_steps: object.optional_int("max_steps"),
     session: object.required_string("session"),
@@ -59,7 +48,7 @@ pub impl ToJson for StartPayload with fn to_json(self) {
     fields["model"] = Json(model)
   }
   if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
+    fields["thinking"] = Json(thinking)
   }
   if self.approval is Some(approval) {
     fields["approval"] = approval.to_json()
@@ -134,8 +123,8 @@ pub impl FromJson for SessionCommandSettings with fn from_json(json, path) {
   {
     system_prompt: object.optional_string("system_prompt"),
     session: object.required_string("session"),
-    model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
+    model: object.optional_value("model"),
+    thinking: object.optional_value("thinking"),
     approval: object.optional_approval("approval"),
     max_steps: object.optional_int("max_steps"),
     workspace: object.optional_string("workspace"),
@@ -152,7 +141,7 @@ pub impl ToJson for SessionCommandSettings with fn to_json(self) {
     fields["model"] = Json(model)
   }
   if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
+    fields["thinking"] = Json(thinking)
   }
   if self.approval is Some(approval) {
     fields["approval"] = approval.to_json()
@@ -164,22 +153,6 @@ pub impl ToJson for SessionCommandSettings with fn to_json(self) {
     fields["workspace"] = Json(workspace)
   }
   Json(fields)
-}
-
-///|
-pub impl FromJson for Thinking with fn from_json(json, path) {
-  guard json is String(value) else {
-    raise JsonDecodeError((path, "expected no, high, or max"))
-  }
-  guard Thinking::parse(value) is Some(thinking) else {
-    raise JsonDecodeError((path, "expected no, high, or max"))
-  }
-  thinking
-}
-
-///|
-pub impl ToJson for Thinking with fn to_json(self) {
-  Json(self.wire())
 }
 
 ///|

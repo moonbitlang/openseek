@@ -298,7 +298,7 @@ pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval 
 }
 
 ///|
-pub fn State::model(self : State, id : String) -> @deepseek.DsVariant {
+pub fn State::model(self : State, id : String) -> @wire.DsVariant {
   if self.creation is Some({ id: draft, model, .. }) && draft == id {
     return model
   }
@@ -310,7 +310,7 @@ pub fn State::model(self : State, id : String) -> @deepseek.DsVariant {
 }
 
 ///|
-pub fn State::thinking(self : State, id : String) -> @protocol.Thinking {
+pub fn State::thinking(self : State, id : String) -> @wire.ThinkingMode {
   if self.creation is Some({ id: draft, thinking, .. }) && draft == id {
     return thinking
   }
@@ -318,7 +318,7 @@ pub fn State::thinking(self : State, id : String) -> @protocol.Thinking {
   .iter()
   .find_first(session => session.id == id)
   .map(session => session.thinking)
-  .unwrap_or(ThinkingHigh)
+  .unwrap_or(High)
 }
 
 ///|
@@ -600,7 +600,7 @@ pub fn update(
             archived: false,
             approval: ApprovalAsk,
             model: V4Flash,
-            thinking: ThinkingHigh,
+            thinking: High,
           })
         }
       })
@@ -629,7 +629,7 @@ pub fn update(
           navigation,
           approval: ApprovalAsk,
           model: V4Flash,
-          thinking: ThinkingHigh,
+          thinking: High,
         }),
         notice: None,
       }.replace(id, {

@@ -82,7 +82,9 @@ async fn session_group(
         // Like the title fallback: a damaged model record must not hide the
         // row; the conversation then opens on the default model.
         model_settings: if models {
-          (store.model(id) catch { _ => None }).map(session_model_settings)
+          store.model(id) catch {
+            _ => None
+          }
         } else {
           None
         },
@@ -163,18 +165,4 @@ async fn cached_listing_prompt(
 /// A file time as `(seconds, nanoseconds)`, which compares and orders.
 fn file_stamp(time : @fs.Timestamp) -> (Int64, Int32) {
   (time.sec(), time.nsec())
-}
-
-///|
-fn session_model_settings(
-  model : @store.SessionModel,
-) -> @protocol.SessionModelSettings {
-  {
-    model: model.model.to_string(),
-    thinking: match model.thinking {
-      No => ThinkingOff
-      High => ThinkingHigh
-      Max => ThinkingMax
-    },
-  }
 }

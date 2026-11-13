@@ -4,7 +4,7 @@ pub(all) struct SessionForkPayload {
   session : String
   workspace : String
   through : Int32
-  model : String
+  model : @wire.Model
   source_title : String
   // Fork as a side chat of `session` (see `side_chat_id`) rather than as a
   // conversation of its own. Absent on the wire means an ordinary fork.
@@ -25,7 +25,7 @@ pub impl FromJson for SessionForkPayload with fn from_json(json, path) {
     session: object.required_string("session"),
     workspace: object.required_string("workspace"),
     through: object.required_int("through"),
-    model: object.required_string("model"),
+    model: object.required_value("model"),
     source_title: object.required_string("source_title"),
     side_chat: object.optional_bool("side_chat"),
   }

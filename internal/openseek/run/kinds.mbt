@@ -168,7 +168,7 @@ async fn Kind::run(
   let { matches, model, thinking, api_url, workspace_root, .. } = launch
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   fn api_key() raise {
-    guard model.api_key(matches.values) is Some(api_key) else {
+    guard @deepseek.api_key(model, matches.values) is Some(api_key) else {
       fail("an API key is required for \{model}: pass --api-key")
     }
     api_key

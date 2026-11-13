@@ -2811,8 +2811,8 @@ pub impl @json.ToJson for OpenSeekApproval
 
 #derive(Eq, @debug.Debug)
 pub(all) struct PatternRepairPayload {
-  model : String
-  thinking : Thinking?
+  model : @openseek_protocol.Model
+  thinking : @openseek_protocol.ThinkingMode?
   root : String
   pattern : String
   instruction : String
@@ -3625,8 +3625,8 @@ pub impl @json.ToJson for SessionCommandReply
 pub(all) struct SessionCommandSettings {
   system_prompt : String?
   session : String
-  model : String?
-  thinking : Thinking?
+  model : @openseek_protocol.Model?
+  thinking : @openseek_protocol.ThinkingMode?
   approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
@@ -3727,13 +3727,13 @@ pub(all) struct SessionEditPayload {
   session : String
   workspace : String
   through : Int32?
-  model : String
+  model : @openseek_protocol.Model
   source_title : String
   source_sequence : Int32
   task : String
   images : Array[String]
   attachment_paths : Array[String]
-  thinking : Thinking?
+  thinking : @openseek_protocol.ThinkingMode?
   approval : OpenSeekApproval?
   max_steps : Int32?
 }
@@ -3792,7 +3792,7 @@ pub(all) struct SessionForkPayload {
   session : String
   workspace : String
   through : Int32
-  model : String
+  model : @openseek_protocol.Model
   source_title : String
   side_chat : Bool?
 }
@@ -3893,7 +3893,7 @@ pub(all) struct SessionListEntry {
   id : String
   title : String?
   updated_at_ms : Double?
-  model_settings : SessionModelSettings?
+  model_settings : @openseek_protocol.SessionModel?
 }
 pub fn SessionListEntry::equal(Self, Self) -> Bool
 pub fn SessionListEntry::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3902,19 +3902,6 @@ pub fn SessionListEntry::to_json(Self) -> @json.Json
 pub fn SessionListEntry::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionListEntry
 pub impl @json.ToJson for SessionListEntry
-
-#derive(Eq, @debug.Debug)
-pub(all) struct SessionModelSettings {
-  model : String
-  thinking : Thinking
-}
-pub fn SessionModelSettings::equal(Self, Self) -> Bool
-pub fn SessionModelSettings::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn SessionModelSettings::not_equal(Self, Self) -> Bool
-pub fn SessionModelSettings::to_json(Self) -> @json.Json
-pub fn SessionModelSettings::to_repr(Self) -> @debug.Repr
-pub impl @json.FromJson for SessionModelSettings
-pub impl @json.ToJson for SessionModelSettings
 
 #derive(Eq, @debug.Debug)
 pub(all) struct SessionPayload {
@@ -4425,8 +4412,8 @@ pub(all) struct StartPayload {
   images : Array[String]
   task : String
   submission_id : String?
-  model : String?
-  thinking : Thinking?
+  model : @openseek_protocol.Model?
+  thinking : @openseek_protocol.ThinkingMode?
   approval : OpenSeekApproval?
   max_steps : Int32?
   session : String
@@ -4459,7 +4446,7 @@ pub(all) struct StartedPayload {
   run_id : String
   submission_id : String?
   engine : String?
-  model : String?
+  model : @openseek_protocol.Model?
   max_steps : Int32?
   session : String
   session_root : String?
@@ -4726,22 +4713,6 @@ pub fn TextSearchRange::to_json(Self) -> @json.Json
 pub fn TextSearchRange::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for TextSearchRange
 pub impl @json.ToJson for TextSearchRange
-
-#derive(Eq, @debug.Debug)
-pub(all) enum Thinking {
-  ThinkingOff
-  ThinkingHigh
-  ThinkingMax
-}
-pub fn Thinking::equal(Self, Self) -> Bool
-pub fn Thinking::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn Thinking::not_equal(Self, Self) -> Bool
-pub fn Thinking::parse(String) -> Self?
-pub fn Thinking::to_json(Self) -> @json.Json
-pub fn Thinking::to_repr(Self) -> @debug.Repr
-pub fn Thinking::wire(Self) -> String
-pub impl @json.FromJson for Thinking
-pub impl @json.ToJson for Thinking
 
 #derive(Eq, @debug.Debug)
 pub(all) struct UiLanguagePreference {

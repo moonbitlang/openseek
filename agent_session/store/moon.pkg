@@ -3,7 +3,6 @@ import {
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/log" @session_log,
-  "moonbitlang/openseek/deepseek",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/os_error",
   "moonbitlang/core/encoding/hex",
@@ -16,6 +15,7 @@ import {
 
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client",
   "moonbitlang/core/async/http",
   "moonbitlang/core/async/socket",

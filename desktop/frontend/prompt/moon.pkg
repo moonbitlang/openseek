@@ -1,5 +1,5 @@
 import {
-  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
   "moonbitlang/openseek/prompt" @content,
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",

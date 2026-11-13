@@ -3,7 +3,7 @@ priv struct EditSource {
   session : String
   workspace : String
   through : Int32?
-  model : String
+  model : @wire.Model
   source_title : String
 }
 

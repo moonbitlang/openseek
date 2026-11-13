@@ -2,9 +2,6 @@
 // is spawned with.
 
 ///|
-const DefaultModel = "deepseek-flash"
-
-///|
 const DefaultMaxSteps = 1000
 
 ///|
@@ -24,8 +21,8 @@ priv struct RunConfig {
   // Custom chat-completions endpoint; None means the engine's built-in
   // default for the model's provider.
   api_url : String?
-  model : String
-  thinking : @protocol.Thinking
+  model : @wire.Model
+  thinking : @wire.ThinkingMode
   // Complete base system prompt used only when creating a new session.
   system_prompt : String?
   // Who answers the engine's permission questions: its `--approval`.
@@ -44,18 +41,18 @@ priv struct RunConfig {
 /// A typed request value outranks the inherited process setting. Older clients
 /// omit the field and retain the CLI-compatible environment/default behavior.
 fn RunConfig::configured_thinking(
-  value : @protocol.Thinking?,
-) -> @protocol.Thinking raise EngineError {
+  value : @wire.ThinkingMode?,
+) -> @wire.ThinkingMode raise EngineError {
   if value is Some(thinking) {
     return thinking
   }
   if @env.get("OPENSEEK_THINKING") is Some(value) {
-    guard @protocol.Thinking::parse(value) is Some(thinking) else {
-      raise EngineError("OPENSEEK_THINKING must be one of no, high, or max")
+    return @wire.ThinkingMode::parse(value) catch {
+      _ =>
+        raise EngineError("OPENSEEK_THINKING must be one of no, high, or max")
     }
-    return thinking
   }
-  ThinkingHigh
+  High
 }
 
 ///|
@@ -81,37 +78,47 @@ fn configured_api_key(
 /// The model runs fall back to when neither the request nor `OPENSEEK_MODEL`
 /// names one: each official provider's flagship, and DeepSeek's for a custom
 /// endpoint (any wire name works there, but the engine still needs one).
-fn ApiProvider::default_model(self : ApiProvider) -> String {
+fn ApiProvider::default_model(self : ApiProvider) -> @wire.Model {
   match self {
-    Glm => "glm-5.3"
-    Deepseek | Custom => DefaultModel
+    Glm => Glm(G53)
+    Deepseek | Custom => Deepseek(V4Flash)
   }
 }
 
 ///|
-/// The environment variable the engine resolves for one model wire name.
-fn model_key_env(model : String) -> String {
-  if model.has_prefix("glm-") {
-    "GLM"
-  } else if model.has_prefix("kimi-") {
-    "KIMI"
-  } else {
-    "DEEPSEEK"
+/// The model `OPENSEEK_MODEL` names; `None` when it is unset. The engine
+/// takes its model from the same variable (DEEPSEEK_MODEL is deliberately
+/// ignored — see `serve_engine_env`), so the host's fallback must read it too,
+/// and a value the engine would refuse is refused here.
+fn env_model() -> @wire.Model? raise EngineError {
+  guard @env.get("OPENSEEK_MODEL") is Some(name) else { return None }
+  Some(
+    @wire.Model::parse(name) catch {
+      _ => raise EngineError("OPENSEEK_MODEL names an unknown model: \{name}")
+    },
+  )
+}
+
+///|
+/// The environment variable the engine resolves for one model's provider.
+fn model_key_env(model : @wire.Model) -> String {
+  match model {
+    Deepseek(_) => "DEEPSEEK"
+    Kimi(_) => "KIMI"
+    Glm(_) => "GLM"
   }
 }
 
 ///|
 /// The environment variable that carries the run's API key to the engine.
 /// The engine resolves its chat key from a provider-specific variable chosen
-/// by the model (`Model::api_key`): `DEEPSEEK`, `KIMI`, or `GLM`. Official
+/// by the model (`@deepseek.api_key`): `DEEPSEEK`, `KIMI`, or `GLM`. Official
 /// providers reject a model from another provider before a child process can
 /// inherit that model's ambient credential. A custom endpoint's key instead
-/// follows the model's variable, or the engine would never find it; the
-/// desktop stores the model as an opaque string, so that routing mirrors the
-/// engine's wire-name prefixes.
+/// follows the model's variable, or the engine would never find it.
 fn key_env_for(
   provider : ApiProvider,
-  model : String,
+  model : @wire.Model,
 ) -> String raise EngineError {
   let model_key = model_key_env(model)
   match provider {
@@ -223,8 +230,8 @@ async fn session_command_config(
 async fn serve_config(
   task : String,
   manager : EngineManager,
-  model? : String,
-  thinking? : @protocol.Thinking,
+  model? : @wire.Model,
+  thinking? : @wire.ThinkingMode,
   system_prompt? : String,
   approval? : @protocol.OpenSeekApproval,
   max_steps? : Int32,
@@ -264,11 +271,7 @@ async fn serve_config(
   }
   let model = match model {
     Some(model) => model
-    // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
-    // deliberately ignored — see `serve_engine_env`), so the host's
-    // fallback must read the same variable.
-    None =>
-      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
+    None => env_model().unwrap_or(settings.provider.default_model())
   }
   {
     content: Content([Text(task)]),
@@ -306,8 +309,8 @@ fn engine_fingerprint(config : RunConfig) -> String {
     // under a different variable is a different endpoint configuration.
     config.key_env,
     config.api_url.unwrap_or(""),
-    config.model,
-    config.thinking.wire(),
+    config.model.to_string(),
+    config.thinking.to_string(),
     // `--approval` is fixed for the process's lifetime.
     config.approval.wire(),
     config.max_steps.to_string(),
@@ -328,8 +331,8 @@ test "a different endpoint cannot reuse a live engine process" {
     api_key: "k",
     key_env: "DEEPSEEK",
     api_url: None,
-    model: "deepseek-v4-pro",
-    thinking: ThinkingMax,
+    model: Deepseek(V4Pro),
+    thinking: Max,
     approval: ApprovalAsk,
     max_steps: 1000,
     engine: "openseek",
@@ -344,8 +347,7 @@ test "a different endpoint cannot reuse a live engine process" {
   }
   assert_true(engine_fingerprint(base) != engine_fingerprint(custom))
   assert_true(
-    engine_fingerprint(base) !=
-    engine_fingerprint({ ..base, thinking: ThinkingHigh, }),
+    engine_fingerprint(base) != engine_fingerprint({ ..base, thinking: High, }),
   )
   // `--approval` is fixed when the process starts, so switching a
   // conversation to the reviewer takes a new one.
@@ -631,6 +633,6 @@ fn prompt_content(
 
 ///|
 fn RunConfig::supports_images(self : RunConfig) -> Bool {
-  self.model is ("deepseek-flash" | "deepseek-v4-flash") &&
+  self.model is Deepseek(V4Flash) &&
   self.api_url != Some("https://openrouter.ai/api/v1/chat/completions")
 }

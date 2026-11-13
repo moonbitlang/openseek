@@ -116,10 +116,17 @@ async fn Schedules::run_cli(
       }
     })
   }
+  // A schedule stores its model as the text the form took; the run is where
+  // that text has to name a model the engine serves.
+  let model = spec.model.map(name => {
+    @wire.Model::parse(name) catch {
+      _ => raise EngineError("The schedule names an unknown model: \{name}")
+    }
+  })
   let config = serve_config(
     spec.task,
     self.manager,
-    model?=spec.model,
+    model?,
     max_steps=1000,
     session=run.session,
     workspace=run.workspace,

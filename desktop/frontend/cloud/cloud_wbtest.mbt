@@ -80,8 +80,8 @@ fn live_test_session() -> Session {
     generating: false,
     archived: false,
     approval: ApprovalAsk,
-    model: @deepseek.V4Flash,
-    thinking: @protocol.ThinkingHigh,
+    model: @wire.V4Flash,
+    thinking: @wire.ThinkingMode::High,
   }
 }
 

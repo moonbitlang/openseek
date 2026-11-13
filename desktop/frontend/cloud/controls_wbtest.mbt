@@ -12,8 +12,8 @@ fn controls_fixture() -> State {
         generating: true,
         archived: false,
         approval: ApprovalAsk,
-        model: @deepseek.V4Flash,
-        thinking: @protocol.ThinkingHigh,
+        model: @wire.V4Flash,
+        thinking: @wire.ThinkingMode::High,
       },
     ],
     conversations: {

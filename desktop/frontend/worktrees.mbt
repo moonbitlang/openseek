@@ -1901,7 +1901,7 @@ test "a start payload keeps launch choices without naming a worktree" {
   let payload = start_payload(
     "go",
     Deepseek(V4Pro),
-    ThinkingMax,
+    Max,
     "1000",
     "desktop-wt",
     "sub-1",
@@ -1915,13 +1915,13 @@ test "a start payload keeps launch choices without naming a worktree" {
     payload.to_json() is Object(fields) && fields.get("worktree") is None,
   )
   assert_eq(payload.workspace, Some("/proj"))
-  assert_eq(payload.thinking, Some(ThinkingMax))
+  assert_eq(payload.thinking, Some(Max))
   assert_eq(payload.approval, Some(ApprovalReview))
   assert_eq(payload.system_prompt, Some("Custom instructions\n中文"))
   let kimi_model = start_payload(
     "go",
     Kimi(K27Code),
-    ThinkingMax,
+    Max,
     "1000",
     "desktop-kimi",
     "sub-2",

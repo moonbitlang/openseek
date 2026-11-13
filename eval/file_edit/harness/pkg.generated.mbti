@@ -2,7 +2,7 @@
 package "moonbitlang/openseek/eval/file_edit/harness"
 
 import {
-  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -13,7 +13,7 @@ pub async fn run_suite(Config) -> EvalReport
 // Types and methods
 pub struct Config {
   api_key : String
-  model : @deepseek.Model
+  model : @openseek_protocol.Model
   runs : Int32
   concurrency : Int32
   min_successes : Int32
@@ -23,7 +23,7 @@ pub struct Config {
   system_prompt_addendum_file : String
   // private fields
 }
-pub fn Config::Config(api_key~ : String, model~ : @deepseek.Model, runs~ : Int32, concurrency~ : Int32, min_successes~ : Int32, max_steps~ : Int32, out_dir~ : String, repo_root~ : String, prompt_label~ : String, system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> Self
+pub fn Config::Config(api_key~ : String, model~ : @openseek_protocol.Model, runs~ : Int32, concurrency~ : Int32, min_successes~ : Int32, max_steps~ : Int32, out_dir~ : String, repo_root~ : String, prompt_label~ : String, system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> Self
 
 type EvalReport
 pub fn EvalReport::failure_message(Self) -> String

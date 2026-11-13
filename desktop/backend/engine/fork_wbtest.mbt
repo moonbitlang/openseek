@@ -14,7 +14,7 @@ async test "failed source prompt reads leave edits and forks uncreated" {
               session: "s-src",
               workspace: repo.resource_path(),
               through,
-              model: "edit-model",
+              model: Deepseek(V4Pro),
               source_title: "Original",
             },
             on_created=id => created.push(id),
@@ -76,7 +76,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
       session: "source",
       workspace: @pathx.Path(workspace).resolve().resource_path(),
       through: 3,
-      model: "deepseek-flash",
+      model: Deepseek(V4Flash),
       source_title: "Original title",
       side_chat: None,
     },
@@ -105,9 +105,9 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 /// it — the directory, the model, the cut — as the fork's system prompt, the
 /// notice text to `<root>/notice-<fork>` when there is one, each
 /// `--mcp-config=<path>` as a line of `<root>/mcp-<fork>`, and prints the
-/// fork's id. The model `fails-before` makes it fail without writing anything, and
-/// `fails-after` once the record is written; `noisy` succeeds but prints more
-/// than the id; `hangs-after` writes the record, leaves `<root>/committed` to
+/// fork's id. The model `kimi-k2.7-code` makes it fail without writing anything, and
+/// `kimi-k2.7-code-highspeed` once the record is written; `glm-5.3-flash` succeeds but prints more
+/// than the id; `glm-5.3` writes the record, leaves `<root>/committed` to
 /// say so, and then never finishes. Any other
 /// command lists no sessions, which is all archiving asks of it.
 fn worktree_fork_engine_script() -> String {
@@ -149,7 +149,7 @@ fn worktree_fork_engine_script() -> String {
     $|  esac
     $|  shift 2
     $|done
-    $|if [ "$model" = fails-before ]; then
+    $|if [ "$model" = kimi-k2.7-code ]; then
     $|  printf 'error: refused\{newline}' >&2
     $|  exit 1
     $|fi
@@ -163,14 +163,14 @@ fn worktree_fork_engine_script() -> String {
     $|  printf '%s' "$notice" > "$root/notice-$fork"
     $|fi
     $|tail -n +2 "$root/sessions/$source/openseek_session-$source.jsonl" >> "$record"
-    $|if [ "$model" = fails-after ]; then
+    $|if [ "$model" = kimi-k2.7-code-highspeed ]; then
     $|  printf 'error: lost after the record\{newline}' >&2
     $|  exit 1
     $|fi
-    $|if [ "$model" = noisy ]; then
+    $|if [ "$model" = glm-5.3-flash ]; then
     $|  printf 'note: something else on stdout\{newline}'
     $|fi
-    $|if [ "$model" = hangs-after ]; then
+    $|if [ "$model" = glm-5.3 ]; then
     $|  printf '%s' "$fork" > "$root/committed"
     $|  exec sleep 30
     $|fi
@@ -249,7 +249,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
         session: "s-src",
         workspace: repo.resource_path(),
         through: 2,
-        model: "fork-model",
+        model: Deepseek(V4Pro),
         source_title: "Original",
         side_chat: None,
       },
@@ -285,7 +285,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
     // host told it what the source had uncommitted there.
     assert_eq(
       store.load(SessionId(reply.session)).system_prompt(),
-      "dir=\{fork_checkout.to_string()} model=fork-model through=2",
+      "dir=\{fork_checkout.to_string()} model=deepseek-v4-pro through=2",
     )
     assert_eq(
       @fsx.read_text(
@@ -316,7 +316,7 @@ async test "a later-message edit takes over its source's checkout" {
         session: "s-src",
         workspace: repo.resource_path(),
         through: Some(2),
-        model: "edit-model",
+        model: Deepseek(V4Pro),
         source_title: "Original",
       },
       on_created=_ => (),
@@ -331,7 +331,7 @@ async test "a later-message edit takes over its source's checkout" {
     )
     assert_eq(
       store.load(SessionId(reply.session)).system_prompt(),
-      "dir=\{checkout.to_string()} model=edit-model through=2",
+      "dir=\{checkout.to_string()} model=deepseek-v4-pro through=2",
     )
     // An edit works where its source did; the host has nothing to add.
     assert_false(
@@ -356,7 +356,7 @@ async test "a fork is committed exactly when its record was written" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let created : Array[String] = []
-    async fn fork_with(model : String) -> @protocol.SessionForkReply? {
+    async fn fork_with(model : @wire.Model) -> @protocol.SessionForkReply? {
       let payload : @protocol.SessionForkPayload = {
         session: "s-src",
         workspace: repo.resource_path(),
@@ -379,7 +379,7 @@ async test "a fork is committed exactly when its record was written" {
     }
 
     // The engine refused before writing anything: no fork, no worktree.
-    assert_true(fork_with("fails-before") is None)
+    assert_true(fork_with(Kimi(K27Code)) is None)
     guard @worktree.list(repo).worktrees is [row] else {
       fail("a refused fork must leave only the source's worktree")
     }
@@ -390,7 +390,7 @@ async test "a fork is committed exactly when its record was written" {
     // The engine wrote the record and then failed. The fork exists, so the
     // request reports it like any other: clients learn of it, it keeps its
     // title, and it works in the worktree made for it.
-    guard fork_with("fails-after") is Some(reply) else {
+    guard fork_with(Kimi(K27CodeHighSpeed)) is Some(reply) else {
       fail("a fork whose record exists must be reported as made")
     }
     assert_eq(created, [reply.session])
@@ -403,7 +403,7 @@ async test "a fork is committed exactly when its record was written" {
     assert_true(reported.present)
     assert_true(@worktree.run_dir(repo, reply.session) != checkout)
     // Likewise when the engine succeeded but printed more than the id.
-    guard fork_with("noisy") is Some(noisy) else {
+    guard fork_with(Glm(G53Flash)) is Some(noisy) else {
       fail("what the engine printed must not undo a fork it wrote")
     }
     assert_true(store.exists(SessionId(noisy.session)))
@@ -427,7 +427,7 @@ async test "a fork cancelled after its record was written keeps its worktree and
               session: "s-src",
               workspace: repo.resource_path(),
               through: 2,
-              model: "hangs-after",
+              model: (Glm(G53) : @wire.Model),
               source_title: "Original",
               side_chat: None,
             },
@@ -484,7 +484,7 @@ async test "a side chat is a numbered member of its conversation's family" {
           session,
           workspace: repo.resource_path(),
           through: 2,
-          model: "fork-model",
+          model: Deepseek(V4Pro),
           source_title: "Original",
           side_chat: Some(true),
         },
@@ -603,7 +603,7 @@ async test "a side chat opened by another host mid-archive is never left behind"
             session: "s-src",
             workspace: repo.resource_path(),
             through: 2,
-            model: "fork-model",
+            model: Deepseek(V4Pro),
             source_title: "Original",
             side_chat: Some(true),
           },

@@ -1425,7 +1425,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
       None
     },
     locale: model.locale,
-    model: engine_model.to_string(),
+    model: engine_model,
     thinking: engine_model.thinking(reasoning),
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
@@ -2459,10 +2459,10 @@ fn update_msg(
         .bind(AgentChoice::parse)
         .unwrap_or(model.default_agent)
       let openseek_reasoning = openseek_effort
-        .bind(@protocol.Thinking::parse)
+        .bind(parse_thinking)
         .unwrap_or(model.openseek_reasoning)
       let glm_reasoning = glm_effort
-        .bind(@protocol.Thinking::parse)
+        .bind(parse_thinking)
         .unwrap_or(model.glm_reasoning)
       // The stored Codex pick seeds Codex's own selection state. When the
       // catalog arrives, `with_models` keeps this id if it is still listed
@@ -2791,7 +2791,7 @@ fn update_msg(
                 @cloud.SetModel(engine_model)
               }
               @composer.ReasoningSelected(value~, ..) => {
-                guard @protocol.Thinking::parse(value) is Some(thinking) else {
+                guard parse_thinking(value) is Some(thinking) else {
                   return (@cmd.none, model)
                 }
                 @cloud.SetThinking(thinking)
@@ -4264,7 +4264,7 @@ fn update_msg(
       )
     }
     OpenSeekEffortPicked(value) => {
-      guard @protocol.Thinking::parse(value) is Some(reasoning) else {
+      guard parse_thinking(value) is Some(reasoning) else {
         return (@cmd.none, model)
       }
       guard model.active_conversation() is Some(conv) else {
@@ -9803,7 +9803,7 @@ fn update_device_msg(
             model=selected_model,
             reasoning?=model
               .recorded_model(channel, session, project, LiveRecord)
-              .map(recorded => recorded.reasoning),
+              .map(recorded => recorded.thinking),
           )
         }
       }
@@ -11230,7 +11230,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
     Deepseek(V4Pro),
-    ThinkingMax,
+    Max,
     "1000",
     conv.session_id,
     "test-submission",
@@ -14433,7 +14433,7 @@ test "started decoder preserves optional placement and submission id" {
       run_id: "r7",
       submission_id: Some("submission-7"),
       engine: None,
-      model: Some("deepseek-v4-pro"),
+      model: Some(Deepseek(V4Pro)),
       max_steps: Some(1000),
       session: "desktop-test",
       session_root: Some("/work/core/.openseek"),
@@ -14453,7 +14453,7 @@ test "host path decoders reject relative placement and diagnostic paths" {
     run_id: "r7",
     submission_id: None,
     engine: None,
-    model: Some("deepseek-v4-pro"),
+    model: Some(Deepseek(V4Pro)),
     max_steps: Some(1000),
     session: "desktop-test",
     session_root: Some("relative/session-root"),
@@ -16308,8 +16308,8 @@ test "loaded UI preferences parse their wire names" {
   assert_eq(restored.app_font_size, Some(AppFontSize(15)))
   assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
-  assert_true(restored.openseek_reasoning is ThinkingHigh)
-  assert_true(restored.glm_reasoning is ThinkingMax)
+  assert_true(restored.openseek_reasoning is High)
+  assert_true(restored.glm_reasoning is Max)
   // Its stored approval choice comes back too; a malformed row is skipped.
   assert_true(
     restored.approval_for(@interop.ChannelId::Local, "desktop-test")
@@ -16341,8 +16341,8 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
   assert_true(unknown.default_model is Deepseek(V4Flash))
-  assert_true(unknown.openseek_reasoning is ThinkingHigh)
-  assert_true(unknown.glm_reasoning is ThinkingOff)
+  assert_true(unknown.openseek_reasoning is High)
+  assert_true(unknown.glm_reasoning is No)
   assert_true(unknown.default_agent is OpenSeekAgent)
 }
 
@@ -16450,7 +16450,7 @@ test "a start never overrides the tier picked for the next turn" {
 fn with_listed_session(
   model : Model,
   session : String,
-  model_settings : @protocol.SessionModelSettings?,
+  model_settings : @wire.SessionModel?,
 ) -> Model raise {
   model.with_dev(dev => {
     ..dev,
@@ -16465,7 +16465,7 @@ test "reopening a stored session recovers the model it recorded" {
   let model = with_listed_session(
     test_model(),
     "stored-chat",
-    Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
+    Some({ model: Deepseek(V4Pro), thinking: Max, }),
   )
   let reopened = model.activate(
     @interop.ChannelId::Local,
@@ -16473,7 +16473,7 @@ test "reopening a stored session recovers the model it recorded" {
     @interop.ChannelId::Local.test_project(),
   )
   assert_true(reopened.active().engine_model is Deepseek(V4Pro))
-  assert_true(reopened.conversation_reasoning(reopened.active()) is ThinkingMax)
+  assert_true(reopened.conversation_reasoning(reopened.active()) is Max)
   // A session without a record opens on the page's defaults.
   let unrecorded = with_listed_session(test_model(), "old-chat", None).activate(
     @interop.ChannelId::Local,
@@ -16481,9 +16481,7 @@ test "reopening a stored session recovers the model it recorded" {
     @interop.ChannelId::Local.test_project(),
   )
   assert_true(unrecorded.active().engine_model is Deepseek(V4Flash))
-  assert_true(
-    unrecorded.conversation_reasoning(unrecorded.active()) is ThinkingHigh,
-  )
+  assert_true(unrecorded.conversation_reasoning(unrecorded.active()) is High)
 }
 
 ///|
@@ -16498,7 +16496,7 @@ test "a recorded model belongs to its own store's record" {
   let model = with_listed_session(
     test_model(),
     "dup",
-    Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
+    Some({ model: Deepseek(V4Pro), thinking: Max, }),
   )
   let model = model.with_dev(dev => {
     ..dev,
@@ -16506,7 +16504,7 @@ test "a recorded model belongs to its own store's record" {
       {
         ..archived_item("dup"),
         workspace: other,
-        model_settings: Some({ model: "deepseek-flash", thinking: ThinkingOff, }),
+        model_settings: Some({ model: Deepseek(V4Flash), thinking: No, }),
       },
     ],
   })
@@ -16516,19 +16514,14 @@ test "a recorded model belongs to its own store's record" {
     project,
     LiveRecord,
   )
-  assert_true(
-    live is Some({ engine_model: Deepseek(V4Pro), reasoning: ThinkingMax, }),
-  )
+  assert_true(live is Some({ model: Deepseek(V4Pro), thinking: Max, }))
   let archived = model.recorded_model(
     @interop.ChannelId::Local,
     "dup",
     other,
     ArchivedRecord,
   )
-  assert_true(
-    archived
-    is Some({ engine_model: Deepseek(V4Flash), reasoning: ThinkingOff, }),
-  )
+  assert_true(archived is Some({ model: Deepseek(V4Flash), thinking: No, }))
   assert_true(
     model.recorded_model(@interop.ChannelId::Local, "dup", other, LiveRecord)
     is None,
@@ -16541,7 +16534,7 @@ test "picks in a started conversation leave new chats' defaults alone" {
   let stored = with_listed_session(
     test_model(),
     "stored-chat",
-    Some({ model: "deepseek-v4-pro", thinking: ThinkingMax, }),
+    Some({ model: Deepseek(V4Pro), thinking: Max, }),
   ).activate(
     @interop.ChannelId::Local,
     "stored-chat",
@@ -16558,9 +16551,9 @@ test "picks in a started conversation leave new chats' defaults alone" {
   )
   let (_, off) = update(dispatch, OpenSeekEffortPicked("no"), flash)
   assert_true(off.active().engine_model is Deepseek(V4Flash))
-  assert_true(off.conversation_reasoning(off.active()) is ThinkingOff)
+  assert_true(off.conversation_reasoning(off.active()) is No)
   assert_true(off.default_model is Deepseek(V4Flash))
-  assert_true(off.openseek_reasoning is ThinkingHigh)
+  assert_true(off.openseek_reasoning is High)
   // The same picks while composing a new chat do move the defaults.
   let fresh = off.activate(
     @interop.ChannelId::Local,
@@ -16578,7 +16571,7 @@ test "picks in a started conversation leave new chats' defaults alone" {
   )
   let (_, max) = update(dispatch, OpenSeekEffortPicked("max"), pro)
   assert_true(max.default_model is Deepseek(V4Pro))
-  assert_true(max.openseek_reasoning is ThinkingMax)
+  assert_true(max.openseek_reasoning is Max)
 }
 
 ///|
@@ -17198,8 +17191,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
   // from the High preference DeepSeek keeps.
-  assert_true(glm.reasoning_for(glm.active().engine_model) is ThinkingOff)
-  assert_true(glm.openseek_reasoning is ThinkingHigh)
+  assert_true(glm.reasoning_for(glm.active().engine_model) is No)
+  assert_true(glm.openseek_reasoning is High)
   // A host snapshot on a later launch performs the same alignment even
   // though the page-local model preference loads before host settings do.
   let (_, restored) = update_dev(
@@ -18326,15 +18319,15 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_eq(control.title, "Reasoning effort: Low")
   // Max is not DeepSeek's default, so the two sides stay distinguishable.
   let (_, glm_max) = update(dispatch, OpenSeekEffortPicked("max"), glm)
-  assert_true(glm_max.glm_reasoning is ThinkingMax)
-  assert_true(glm_max.openseek_reasoning is ThinkingHigh)
+  assert_true(glm_max.glm_reasoning is Max)
+  assert_true(glm_max.openseek_reasoning is High)
   let deepseek = glm_max.replace_conversation({
     ..glm_max.active(),
     engine_model: Deepseek(V4Pro),
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
-  assert_true(deepseek_off.openseek_reasoning is ThinkingOff)
-  assert_true(deepseek_off.glm_reasoning is ThinkingMax)
+  assert_true(deepseek_off.openseek_reasoning is No)
+  assert_true(deepseek_off.glm_reasoning is Max)
 }
 
 ///|
@@ -24636,19 +24629,19 @@ test "file context inherits the conversation model and its reasoning family" {
   let model = {
     ..test_model(),
     default_model: Deepseek(V4Pro),
-    openseek_reasoning: ThinkingMax,
-    glm_reasoning: ThinkingOff,
+    openseek_reasoning: Max,
+    glm_reasoning: No,
   }
   let conv = test_conversation()
-  for engine_model in [@deepseek.Model::Deepseek(V4Flash), Glm(G53)] {
+  for engine_model in [@wire.Model::Deepseek(V4Flash), Glm(G53)] {
     let ctx = file_ctx(model.replace_conversation({ ..conv, engine_model, }))
-    assert_eq(ctx.model, engine_model.to_string())
+    assert_eq(ctx.model, engine_model)
     assert_eq(
       ctx.thinking,
       if engine_model is Glm(G53) {
-        Some(@protocol.ThinkingOff)
+        Some(@wire.ThinkingMode::No)
       } else {
-        Some(@protocol.ThinkingMax)
+        Some(@wire.ThinkingMode::Max)
       },
     )
   }

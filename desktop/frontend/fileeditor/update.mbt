@@ -4976,8 +4976,8 @@ fn test_ctx() -> Ctx {
     feedback_enabled: true,
     request_epoch: 0,
     watch_namespace: "test-page",
-    model: "deepseek-v4-flash",
-    thinking: Some(ThinkingHigh),
+    model: Deepseek(V4Flash),
+    thinking: Some(High),
     placement: @resource.of_path(@interop.ChannelId::Local, "/work").map(root => {
       @interop.WorkspaceRoot(root~)
     }),

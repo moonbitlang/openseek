@@ -44,8 +44,8 @@ pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
   let generation = required_generation(object, path)
   {
     root: object.required_string("root"),
-    model: object.required_string("model"),
-    thinking: object.optional_thinking("thinking"),
+    model: object.required_value("model"),
+    thinking: object.optional_value("thinking"),
     pattern: object.required_string("pattern"),
     instruction: object.required_string("instruction"),
     generation,
@@ -65,7 +65,7 @@ pub impl ToJson for PatternRepairPayload with fn to_json(self) {
     "generation": Json(self.generation),
   }
   if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
+    fields["thinking"] = Json(thinking)
   }
   Json::object(fields)
 }

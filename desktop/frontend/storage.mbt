@@ -100,7 +100,7 @@ fn save_fps_overlay(enabled : Bool) -> @cmd.Cmd {
 
 ///|
 /// Persist the tier new conversations start from.
-fn save_default_model(model : @deepseek.Model) -> @cmd.Cmd {
+fn save_default_model(model : @wire.Model) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.to_string()))
 }
 
@@ -124,16 +124,18 @@ fn save_codex_reasoning_effort(effort : String) -> @cmd.Cmd {
 
 ///|
 /// Persist OpenSeek's typed reasoning choice for its next engine operation.
-fn @protocol.Thinking::save(self : @protocol.Thinking) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => save_setting(OpenSeekReasoningStorageKey, self.wire()))
+fn @wire.ThinkingMode::save(self : @wire.ThinkingMode) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    save_setting(OpenSeekReasoningStorageKey, self.to_string())
+  })
 }
 
 ///|
 /// Persist GLM's reasoning choice independently from DeepSeek's. In
 /// particular, a stored DeepSeek Max must not turn a fresh GLM chat into a
 /// long forced-thinking run.
-fn @protocol.Thinking::save_for_glm(self : @protocol.Thinking) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => save_setting(GlmReasoningStorageKey, self.wire()))
+fn @wire.ThinkingMode::save_for_glm(self : @wire.ThinkingMode) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(GlmReasoningStorageKey, self.to_string()))
 }
 
 ///|
