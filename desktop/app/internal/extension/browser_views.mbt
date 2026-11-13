@@ -600,20 +600,26 @@ test "browser page urls support web and local files" {
 }
 
 ///|
-/// Keep popup handling identical for the application page and browser tabs.
-pub fn external_link_policy() -> @proton.WebContentsPolicy {
+/// Browser tabs navigate freely; their popups, like the application page's,
+/// go to the system opener when a person asked for them.
+fn external_link_policy() -> @proton.WebContentsPolicy {
   WebContentsPolicy(new_window_handler=async fn(_, request) noraise {
     if request.user_gesture {
-      ignore(open_external({ url: request.url, })) catch {
-        error =>
-          @xlog.error() <?
-            {
-              "event": "external_link_open_failed",
-              "url": request.url,
-              "error": @debug.render(Repr(error)),
-            }
-      }
+      open_page_link(request.url)
     }
     Deny
   })
+}
+
+///|
+async fn open_page_link(url : String) -> Unit noraise {
+  ignore(open_external({ url, })) catch {
+    error =>
+      @xlog.error() <?
+        {
+          "event": "external_link_open_failed",
+          "url": url,
+          "error": @debug.render(Repr(error)),
+        }
+  }
 }

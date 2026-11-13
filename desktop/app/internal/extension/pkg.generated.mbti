@@ -18,8 +18,6 @@ pub fn browser_tools(BrowserViews) -> Array[@mcp.Tool]
 
 pub fn browser_view_id(String) -> Int32?
 
-pub fn external_link_policy() -> @proton.WebContentsPolicy
-
 pub fn localized_menu(String) -> @proton.MenuBar
 
 pub async fn open_external(@protocol.ExternalLinkPayload, allow_file? : Bool) -> @protocol.OpenExternalReply
@@ -48,6 +46,11 @@ pub async fn DesktopBridgeActor::notify_window_chrome_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::run(Self) -> Unit
 pub async fn DesktopBridgeActor::window_closed(Self) -> Unit
 pub async fn DesktopBridgeActor::window_ready(Self, @proton.WindowEventEmitter) -> Unit
+
+type ExternalLinkOpener
+pub fn ExternalLinkOpener::ExternalLinkOpener() -> Self
+pub fn ExternalLinkOpener::app_page_policy(Self) -> @proton.WebContentsPolicy
+pub async fn ExternalLinkOpener::run(Self) -> Unit
 
 // Type aliases
 
