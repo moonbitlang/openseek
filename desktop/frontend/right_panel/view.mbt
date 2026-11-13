@@ -67,7 +67,7 @@ fn panel_view(
   let launcher : @dock.LauncherActions = {
     host_tools,
     // Browser tabs need this window's native views; a remote console has none.
-    browser: if input.is_desktop && host_tools {
+    browser: if input.is_desktop {
       Some(@cmd.batch([actions.browser_tab, actions.close_menu]))
     } else {
       None
