@@ -72,7 +72,7 @@ fn LauncherActions::rows(
   popup~ : Bool = false,
 ) -> Array[@html.Html] {
   let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
-  if self.browser is Some(open_browser) && self.host_tools {
+  if self.browser is Some(open_browser) {
     entries.push(
       (
         ui(locale, BrowseLabel),

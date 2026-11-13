@@ -96,6 +96,38 @@ test('client MCP authenticates before discovery, opens a visible Cloud pane, and
   await page.screenshot({ path: 'test-results/cloud-client-mcp-browser.png' });
 });
 
+test('Desktop Cloud Browse keeps native views with their conversation and hides covered pages', async ({ page }, testInfo) => {
+  const app = new CloudHarness(page, { desktop: true });
+  const native = [];
+  const reply = app.device.replyFor.bind(app.device);
+  app.device.replyFor = request => {
+    if (request.method.startsWith('browser.')) { native.push(request); return {}; }
+    return reply(request);
+  };
+  await app.install(); await app.goto(); await app.open();
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Browse / }).click();
+  const address = page.locator('.browser-address');
+  await address.fill('https://example.test/manual'); await address.press('Enter');
+  await expect.poll(() => native.find(r => r.method === 'browser.open')?.params.url).toBe('https://example.test/manual');
+  const id = native.find(r => r.method === 'browser.open').params.id;
+  const visible = () => native.filter(r => r.method === 'browser.set_visible' && r.params.id === id).at(-1)?.params.visible;
+  await expect.poll(() => native.some(r => r.method === 'browser.set_bounds' && r.params.id === id && r.params.width > 0 && r.params.height > 0)).toBe(true);
+  await expect.poll(visible).toBe(true);
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  await expect.poll(visible).toBe(false);
+  await page.keyboard.press('Escape'); await expect.poll(visible).toBe(true);
+  await app.open(sessionB); await expect.poll(visible).toBe(false);
+  await app.open(sessionA);
+  await expect(address).toHaveValue('https://example.test/manual');
+  await expect.poll(visible).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('cloud-manual-browser.png') });
+  await page.locator('.editor-tab.active .tab-close').click();
+  await expect.poll(() => native.some(r => r.method === 'browser.close' && r.params.id === id)).toBe(true);
+  expect(app.requests.some(r => r.method === 'POST' && r.path.endsWith('/previews'))).toBe(false);
+  expect(app.device.pageErrors).toEqual([]);
+});
+
 test('Cloud questions use the existing card and route immediate and delayed answers to their original session', async ({ page }) => {
   const app = new CloudHarness(page, { desktop: true });
   const tools = clientTools(app);

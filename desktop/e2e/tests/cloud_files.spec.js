@@ -82,7 +82,7 @@ async function openFiles(page, cloud) {
   await cloud.open();
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const launcher = page.locator('.dock-launcher');
-  await expect(launcher.getByRole('button')).toHaveText([/Search/, /Files/, /Review/]);
+  await expect(launcher.getByRole('button')).toHaveText([...(cloud.desktop ? [/Browse/] : []), /Search/, /Files/, /Review/]);
   await launcher.getByRole('button', { name: /^Files / }).click();
   await expect(tree(page).getByRole('treeitem').first()).toBeVisible();
 }

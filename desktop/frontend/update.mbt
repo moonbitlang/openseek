@@ -1603,7 +1603,7 @@ fn desired_browser_view(model : Model) -> Int32? {
     page.url is Some(_) else {
     return None
   }
-  // Explicit Cloud previews and client-tool opens share native placement.
+  // Explicit Cloud browser tabs, previews, and client-tool opens share placement.
   // Ordinary links keep their existing behavior.
   guard !model.cloud_selected() ||
     (page.cloud_preview && model.file_panel_visible()) else {
@@ -7125,6 +7125,7 @@ fn update_msg(
         dispatch,
         model,
         model.dock_owner().host(),
+        cloud_preview=model.cloud_selected(),
       )
       (@cmd.batch([cmd, focus_browser_address()]), model)
     }
