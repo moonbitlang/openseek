@@ -12,7 +12,7 @@ import {
   "moonbitlang/async@0.22.7",
   "moonbitlang/moonback@0.8.9",
   "tonyfettes/xlog@0.4.2",
-  "moonbitlang/openseek@0.7.5",
+  "moonbitlang/openseek@0.7.6",
   "openseek_desktop@0.1.5",
   "Yoorkin/multipart@0.1.3",
 }
