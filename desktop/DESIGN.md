@@ -136,17 +136,9 @@ Before accepting a new or changed surface, check all of the following:
 
 ## Select controls
 
-Apply the [Rabbita UI conventions](../AGENTS.md#rabbita-ui): use `@rui.select`
-for single-choice select menus. Adapt labels, grouping, trigger presentation,
-and styling through its public composition and customization APIs. A shared
-Desktop wrapper may provide those adaptations while delegating interaction to
-`rui`.
+Follow the [Rabbita UI conventions](../AGENTS.md#rabbita-ui).
 
-`frontend/select_control` is an existing custom implementation, not the
-required component for new selectors. Migrate selectors to `rui` when reworking
-their implementation. If `rui` cannot express a required interaction, identify
-the concrete capability gap and address it at the shared component boundary;
-do not make a parallel Desktop interaction implementation the default.
+TODO: Remove `frontend/select_control` and migrate its callers to `@rui.select`.
 
 ### Component and state boundary
 
