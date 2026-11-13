@@ -3020,19 +3020,21 @@ pub fn State::transcript_items(
       }
       if turn.error is Some(message) {
         items.push({
-          kind: @transcript.Failure(message),
+          kind: if turn.status == "interrupted" {
+            @transcript.Stopped(message)
+          } else {
+            @transcript.Failure(message)
+          },
           ts: None,
           sequence: None,
         })
       } else if turn.status == "interrupted" || turn.status == "failed" {
         items.push({
-          kind: @transcript.Failure(
-            if turn.status == "interrupted" {
-              "Stopped"
-            } else {
-              "Failed"
-            },
-          ),
+          kind: if turn.status == "interrupted" {
+            @transcript.Stopped("Stopped")
+          } else {
+            @transcript.Failure("Failed")
+          },
           ts: None,
           sequence: None,
         })

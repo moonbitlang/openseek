@@ -98,6 +98,7 @@ pub(all) enum ItemKind {
   Answer(String)
   TurnEnd
   Failure(String)
+  Stopped(String)
   Notice(label~ : String, brief~ : String?, is_error~ : Bool, body~ : String?)
   Summary(String)
 }

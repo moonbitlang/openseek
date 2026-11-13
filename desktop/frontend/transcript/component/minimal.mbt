@@ -194,10 +194,9 @@ priv enum MinimalActivity {
 }
 
 ///|
-/// Count pending and failed calls represented by a group, including waits.
-/// Notices are not tool rows, and successful calls need no minimal status.
+/// Count pending calls represented by a group, including waits.
+/// Completed calls and notices need no minimal status.
 priv struct MinimalToolStatus {
-  failed : Int32
   pending : Int32
 }
 
@@ -205,40 +204,29 @@ priv struct MinimalToolStatus {
 fn MinimalToolStatus::from_activities(
   entries : Array[MinimalActivity],
 ) -> MinimalToolStatus {
-  let mut failed = 0
   let mut pending = 0
   for entry in entries {
     if entry is Call(call) {
       match call.status {
         Pending => pending += 1
-        Failed => failed += 1
-        Succeeded | Snapshot => ()
+        Failed | Succeeded | Snapshot => ()
       }
     }
   }
-  { failed, pending, }
+  { pending, }
 }
 
 ///|
-/// A failed call must not hide another call still running. Keep both indicators
-/// until the group settles, and use the same icons as the detailed tool rows.
-/// A failure is carried by that icon alone: a summary never counts failed
-/// calls. Successful groups stay quiet in minimal mode, without an empty slot.
+/// Only running work needs a status in minimal mode. A failed attempt is part
+/// of the process; the turn's terminal outcome owns any error presentation.
 fn MinimalToolStatus::view(
   locale~ : @i18n.Locale = English,
   self : MinimalToolStatus,
 ) -> @html.Html {
-  if self.pending == 0 && self.failed == 0 {
+  if self.pending == 0 {
     return @html.nothing
   }
-  let children : Array[@html.Html] = []
-  if self.pending > 0 {
-    children.push(ToolStatus::Pending.view(locale~))
-  }
-  if self.failed > 0 {
-    children.push(ToolStatus::Failed.view(locale~))
-  }
-  @html.span(class="minimal-tool-status", children)
+  @html.span(class="minimal-tool-status", ToolStatus::Pending.view(locale~))
 }
 
 ///|
@@ -479,6 +467,13 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
           content: Note(text~, error=true),
         })
       }
+      Stopped(_) => {
+        builder.finish(locale~, answered=false)
+        builder.push_block({
+          identity: "stopped\u{0}\{identity}",
+          content: Note(text=ui(locale, ShellStopped), error=false),
+        })
+      }
       Notice(label~, brief~, is_error~, body~) => {
         let text = tool_display_label(
           locale~,
@@ -680,22 +675,15 @@ fn MinimalActivity::render(
         },
         if single {
           MinimalToolStatus::from_activities([self]).view(locale~)
-        } else if call.status is (Succeeded | Snapshot) {
-          // Expanded calls follow the same quiet-success rule as summaries.
-          @html.nothing
-        } else {
+        } else if call.status is Pending {
           call.status.view(locale~)
+        } else {
+          @html.nothing
         },
       ]
       @html.div(
         class=if single {
-          if call.status is Failed {
-            "minimal-call minimal-single-call failed"
-          } else {
-            "minimal-call minimal-single-call"
-          }
-        } else if call.status is Failed {
-          "minimal-call failed"
+          "minimal-call minimal-single-call"
         } else {
           "minimal-call"
         },

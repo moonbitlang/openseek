@@ -1151,7 +1151,7 @@ fn transcript_item_view(
         show_actions=true,
         fork?,
       )
-    Failure(text) =>
+    Failure(text) | Stopped(text) =>
       assistant_message_view(
         artifact_view?,
         locale~,

@@ -44,6 +44,9 @@ pub(all) enum ItemKind {
   // but renders as plain red text, never markdown: an error's own `*` and
   // `#` are not formatting.
   Failure(String)
+  // A user-interrupted turn. Detailed mode retains the failure-row appearance;
+  // minimal mode presents the stop without implying a task error.
+  Stopped(String)
   // A durable runtime notice with a display presence: a goal marker, or an
   // engine notice injected between turns. `label` names the family (`goal`,
   // `runtime notice`), `brief` is the one-line caption a notice folds to,
@@ -106,7 +109,7 @@ pub(all) struct TranscriptItem {
 pub fn TranscriptItem::text(self : TranscriptItem) -> String? {
   match self.kind {
     User(content~) => Some(content.text())
-    Answer(text) | Failure(text) | Summary(text) => Some(text)
+    Answer(text) | Failure(text) | Stopped(text) | Summary(text) => Some(text)
     Assistant(prose~, ..) => prose
     Notice(body~, ..) => body
     TurnEnd => None

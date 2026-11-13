@@ -278,7 +278,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
 }
 
 ///|
-test "tool group summaries show the first three captions and track failure status" {
+test "tool group summaries preview all outcomes and track only pending status" {
   let pending : MinimalCall = {
     call_id: "pending",
     tool_name: "read",
@@ -294,15 +294,14 @@ test "tool group summaries show the first three captions and track failure statu
   let snapshot_counts = MinimalToolStatus::from_activities([
     Call({ ..pending, status: snapshot, }),
   ])
-  assert_eq((snapshot_counts.failed, snapshot_counts.pending), (0, 0))
+  assert_eq(snapshot_counts.pending, 0)
   let failed = { ..pending, status: Failed, }
   let group = MinimalContent::Activity([Call(failed), Call(pending)])
   assert_eq(group.summary(), "Read project files · Read project files")
   let status = MinimalToolStatus::from_activities(group.activities())
-  assert_eq((status.failed, status.pending), (1, 1))
+  assert_eq(status.pending, 1)
   assert_eq(group.summary(), "Read project files · Read project files")
-  // Count operations in order, including repeated captions. Failures beyond
-  // the three visible operations must still be tracked, though never displayed.
+  // Count operations in order, including repeated captions and failed calls.
   for count in 0..<=4 {
     let calls : Array[MinimalActivity] = []
     for index in 0..<count {
@@ -318,11 +317,6 @@ test "tool group summaries show the first three captions and track failure statu
         }),
       )
     }
-    let status = MinimalToolStatus::from_activities(calls)
-    assert_eq(
-      (status.failed, status.pending),
-      (if count == 4 { 1 } else { 0 }, 0),
-    )
     assert_eq(
       MinimalContent::Activity(calls).summary(),
       match count {
@@ -345,7 +339,7 @@ test "background notices do not count as failed tools or replace pending descrip
   )
   assert_eq(MinimalContent::Activity([notice]).summary(), "View activity")
   let status = MinimalToolStatus::from_activities([notice])
-  assert_eq((status.failed, status.pending), (0, 0))
+  assert_eq(status.pending, 0)
   let call : MinimalCall = {
     call_id: "wait",
     tool_name: "job_wait",

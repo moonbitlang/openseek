@@ -400,15 +400,15 @@ test "transcript mapping deduplicates the finished answer" {
 }
 
 ///|
-test "transcript mapping renders non-finished terminals as error bubbles" {
+test "transcript mapping distinguishes user interruptions from failures" {
   let events =
     #|{"sequence":1,"item":{"kind":"terminal","payload":{"kind":"interrupted","message":""}}},
     #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"aborted","message":"the agent gave up"}}},
     #|{"sequence":3,"item":{"kind":"terminal","payload":{"kind":"failed","message":"engine error"}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="3")
-  guard items[0].kind is @transcript.Failure(_) else {
-    fail("expected error bubble")
+  guard items[0].kind is @transcript.Stopped(_) else {
+    fail("expected stopped turn")
   }
   assert_eq(items[0].text(), Some("cancelled"))
   assert_eq(items[1].text(), Some("aborted: the agent gave up"))

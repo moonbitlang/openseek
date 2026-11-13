@@ -10,7 +10,7 @@ import {
 }
 
 // Values
-pub fn entries(Array[@transcript.TranscriptItem], display~ : (String) -> String) -> Array[Entry]
+pub fn entries(Array[@transcript.TranscriptItem], display~ : (String) -> String, minimal? : Bool) -> Array[Entry]
 
 pub fn rail(locale? : @i18n.Locale, Array[Entry], State, @cmd.Emit[Msg], clock~ : (Double) -> String) -> @html.Html
 

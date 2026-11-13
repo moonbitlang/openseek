@@ -94,7 +94,7 @@ test('minimal images open by default and preserve manual collapse across updates
     tool_call_id: 'missing', tool_name: 'read_image', brief: 'Cannot read missing.png', is_error: true,
     content: 'OUTPUT_SENTINEL',
   });
-  await expect(rows.nth(1).locator('.tool-status.failed')).toBeVisible();
+  await expect(rows.nth(1).locator('.tool-status.failed')).toHaveCount(0);
   await expect(rows.nth(1).locator('details')).toHaveCount(0);
   await expect(preview).not.toHaveAttribute('open', '');
   app.append('tool_result', {
@@ -199,7 +199,7 @@ test('minimal transcript groups live tools and leaves answered turns with their 
   const aggregate = tools.locator(':scope > summary > .minimal-tool-status');
   await expect(aggregate.locator('.minimal-failure-count')).toHaveCount(0);
   await expect(aggregate).not.toContainText(/tool calls? failed/);
-  await expect(aggregate.getByRole('img', { name: 'Tool failed' })).toBeVisible();
+  await expect(aggregate.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
   const spinner = aggregate.locator('.tool-status-spinner');
   await expect(spinner).toBeVisible();
   expect(await spinner.evaluate(node => node.getAnimations().some(animation =>
@@ -222,9 +222,7 @@ test('minimal transcript groups live tools and leaves answered turns with their 
     brief: 'mbtx (exit=0)',
   });
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Check project details');
-  await expect(aggregate.locator('.tool-status-spinner')).toHaveCount(0);
-  await expect(aggregate.locator('.minimal-failure-count')).toHaveCount(0);
-  await expect(aggregate).not.toContainText(/tool calls? failed/);
+  await expect(aggregate).toHaveCount(0);
   await expect(tools.locator('summary > .minimal-summary-text')).toHaveText('Read the project manifest · Cannot read the second file · Check project details');
   await expect(tools).toHaveAttribute('open', '');
   expect(await originalTools.evaluate(node => node.isConnected)).toBe(true);
@@ -335,7 +333,7 @@ test('minimal edit previews render unified lines and preserve call state', async
   }
   await expect(calls.last().locator('.minimal-call-caption')).toHaveText('Batch rejected');
   await expect(calls.locator('.editor-diff-preview').first()).toBeVisible();
-  await expect(calls.nth(1).locator('.tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+  await expect(calls.nth(1).locator('.tool-status.failed')).toHaveCount(0);
   await expect(calls.locator('.editor-diff-preview')).toHaveCount(3);
   await expect(stream).not.toContainText('PARAMETER_SENTINEL');
   await expect(stream).not.toContainText('OUTPUT_SENTINEL');
@@ -453,7 +451,7 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Wait for any of these jobs to complete: "Run the pr tests", bg-unknown');
   app.append('tool_result', { tool_call_id: 'wait-many', tool_name: 'job_wait', content: 'unknown job', brief: 'Unknown job bg-unknown', is_error: true });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', 'Unknown job bg-unknown']);
-  await expect(tools.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+  await expect(tools.locator('.minimal-call .tool-status.failed')).toHaveCount(0);
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Unknown job bg-unknown');
 
   // A wait-only group disappears without leaving an empty activity disclosure.

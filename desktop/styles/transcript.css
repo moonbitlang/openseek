@@ -2011,8 +2011,6 @@
 .minimal-image-body > .user-images + .user-images {
   margin-top: 8px;
 }
-.minimal-call.failed,
-.minimal-call.failed .minimal-activity-summary,
 .minimal-note.transcript-error-message {
   color: var(--color-danger);
 }

@@ -209,7 +209,7 @@ test "Codex preserves interrupted failed and answerless boundaries" {
   let items = state.transcript_items()
   assert_eq(items.length(), 6)
   assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
-  assert_true(items[1].kind is @transcript.Failure("Stopped"))
+  assert_true(items[1].kind is @transcript.Stopped("Stopped"))
   assert_true(items[2].kind is @transcript.Failure("Unavailable"))
   assert_true(items[3].kind is @transcript.Assistant(finished=false, ..))
   assert_true(items[4].kind is @transcript.TurnEnd)

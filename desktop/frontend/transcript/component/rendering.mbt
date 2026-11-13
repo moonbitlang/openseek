@@ -636,7 +636,7 @@ fn section_children(
     TranscriptSectionKey::overview().wire(),
     @transcript_overview.rail(
       locale~,
-      @transcript_overview.entries(visible_items, display=text => {
+      @transcript_overview.entries(visible_items, minimal=input.minimal, display=text => {
         if @command_context.parse(text) is Some(shell) {
           return "$ \{shell.command}"
         }
