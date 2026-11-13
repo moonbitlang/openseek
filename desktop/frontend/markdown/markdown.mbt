@@ -36,11 +36,15 @@ pub fn markdown_nodes(
       artifact_view,
       defer_artifacts,
       citations: [],
+      footnotes: Footnotes::new(),
       in_sources: false,
     }
     let nodes = render.block_nodes(doc.block)
     if !render.citations.is_empty() {
       nodes.push(render.sources_node())
+    }
+    if !render.footnotes.notes.is_empty() {
+      nodes.push(render.footnotes_node())
     }
     @js.Value::cast_from(nodes)
   }) catch {
@@ -61,6 +65,7 @@ priv struct MarkdownRender {
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
+  footnotes : Footnotes
   in_sources : Bool
 }
 
@@ -81,7 +86,7 @@ fn MarkdownRender::push_block(
   block : @cmark.Block,
 ) -> Unit {
   match block {
-    BlankLine(_) | LinkRefDefinition(_) => ()
+    BlankLine(_) | LinkRefDefinition(_) | ExtFootnoteDefinition(_) => ()
     Blocks(node) =>
       for child in node.v.iter() {
         self.push_block(out, child)
@@ -90,7 +95,15 @@ fn MarkdownRender::push_block(
     Heading(node) => out.push(self.heading(node.v))
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
-    CodeBlock(node) | ExtMathBlock(node) =>
+    ExtMathBlock(node) =>
+      out.push(
+        @html.div(
+          class="math math-display",
+          attrs=@html.Attrs::build().data_set("math-display", "true"),
+          "\\[\n" + lines_text(node.v.code) + "\n\\]",
+        ),
+      )
+    CodeBlock(node) =>
       out.push(
         code_block(
           locale=self.locale,
@@ -106,20 +119,6 @@ fn MarkdownRender::push_block(
     List(node) => out.push(self.list(node.v))
     ThematicBreak(_) => out.push(@html.hr())
     ExtTable(node) => out.push(self.table(node.v))
-    ExtFootnoteDefinition(node) => {
-      // Numbered definitions are collected when their references are rendered,
-      // then shown once at the end, in first-citation order.
-      if citation_number(node.v.label.key) is Some(_) {
-        return
-      }
-      let children : Array[@html.Html] = [
-        @html.span(class="footnote-label", node.v.label.key),
-      ]
-      for child in self.block_nodes(node.v.block) {
-        children.push(child)
-      }
-      out.push(@html.div(class="footnote", children))
-    }
   }
 }
 
@@ -129,13 +128,18 @@ fn MarkdownRender::heading(
   heading : @cmark.BlockHeading,
 ) -> @html.Html {
   let children = self.inline_nodes(heading.inline)
+  let id = heading.id.map(id => {
+    match id {
+      Auto(id) | Id(id) => id
+    }
+  })
   match heading.level {
-    1 => @html.h1(children)
-    2 => @html.h2(children)
-    3 => @html.h3(children)
-    4 => @html.h4(children)
-    5 => @html.h5(children)
-    _ => @html.h6(children)
+    1 => @html.h1(id?, children)
+    2 => @html.h2(id?, children)
+    3 => @html.h3(id?, children)
+    4 => @html.h4(id?, children)
+    5 => @html.h5(id?, children)
+    _ => @html.h6(id?, children)
   }
 }
 
@@ -177,10 +181,17 @@ fn code_block(
       None => ()
     }
   }
-  @html.div(class="chat-code-block", [
-    @html.div(class="chat-code-toolbar", [code_copy_button(locale~, source)]),
-    code_block_body(block, source, language),
-  ])
+  @html.div(
+    class="chat-code-block",
+    attrs=match block.info_string {
+      Some(info) => @html.Attrs::build().data_set("code-info", info.v)
+      None => @html.Attrs::build()
+    },
+    [
+      @html.div(class="chat-code-toolbar", [code_copy_button(locale~, source)]),
+      code_block_body(block, source, language),
+    ],
+  )
 }
 
 ///|
@@ -400,17 +411,29 @@ fn MarkdownRender::list(
   let items : Array[@html.Html] = []
   for item_node in list.items.iter() {
     let item = item_node.v
-    let children : Array[@html.Html] = []
-    if item.ext_task_marker is Some(marker) {
-      let symbol = match @cmark.ListTaskStatus::from_marker(marker.v) {
-        Checked => "☑"
-        Cancelled => "☒"
-        Unchecked | Other(_) => "☐"
+    let content = self.list_item_nodes(item.block, tight=list.tight)
+    let children = match item.ext_task_marker {
+      None => content
+      Some(marker) => {
+        let status = @cmark.ListTaskStatus::from_marker(marker.v)
+        let children = [
+          @html.input(
+            input_type=Checkbox,
+            class="task-marker",
+            checked=status is (Checked | Other(_)),
+            attrs=@html.Attrs::build()
+              .disabled(true)
+              .data_set("task-marker", marker.v.to_string()),
+          ),
+          @html.text(" "),
+        ]
+        if status is Cancelled {
+          children.push(@html.del(content))
+        } else {
+          children.append(content)
+        }
+        children
       }
-      children.push(@html.span(class="task-marker", symbol + " "))
-    }
-    for child in self.block_nodes(item.block) {
-      children.push(child)
     }
     items.push(@html.li(children))
   }
@@ -422,34 +445,99 @@ fn MarkdownRender::list(
 }
 
 ///|
+fn MarkdownRender::list_item_nodes(
+  self : MarkdownRender,
+  block : @cmark.Block,
+  tight~ : Bool,
+) -> Array[@html.Html] {
+  match (block, tight) {
+    (Paragraph(node), true) => self.inline_nodes(node.v.inline)
+    (Blocks(node), true) => {
+      let children : Array[@html.Html] = []
+      for block in node.v {
+        children.append(self.list_item_nodes(block, tight~))
+      }
+      children
+    }
+    _ => self.block_nodes(block)
+  }
+}
+
+///|
 fn MarkdownRender::table(
   self : MarkdownRender,
   table : @cmark.Table,
 ) -> @html.Html {
-  let head : Array[@html.Html] = []
-  let body : Array[@html.Html] = []
-  for (row_node, _) in table.rows.iter() {
-    match row_node.v {
-      Header(cells) => {
-        let cell_nodes : Array[@html.Html] = []
-        for cell in cells.iter() {
-          cell_nodes.push(@html.th(self.inline_nodes(cell.0)))
+  let rows = table.rows.to_array()
+  let groups : Array[@html.Html] = []
+  let mut group : Array[@html.Html] = []
+  let mut header_group = false
+  let mut alignment : Array[@cmark.Node[@cmark.TableSep]] = []
+  for index, (row, _) in rows {
+    match row.v {
+      Sep(separators) => alignment = separators.to_array()
+      Header(cells) | Data(cells) => {
+        let header = row.v is Header(_)
+        // A separator follows its header but governs that header as well as
+        // subsequent data rows. Later separators may start a new alignment.
+        if header &&
+          rows.get(index + 1) is Some(({ v: Sep(separators), .. }, _)) {
+          alignment = separators.to_array()
         }
-        head.push(@html.tr(cell_nodes))
-      }
-      Data(cells) => {
-        let cell_nodes : Array[@html.Html] = []
-        for cell in cells.iter() {
-          cell_nodes.push(@html.td(self.inline_nodes(cell.0)))
+        if header != header_group && !group.is_empty() {
+          groups.push(
+            if header_group {
+              @html.thead(group)
+            } else {
+              @html.tbody(group)
+            },
+          )
+          group = []
         }
-        body.push(@html.tr(cell_nodes))
+        header_group = header
+        let cell_nodes : Array[@html.Html] = []
+        let cells = cells.to_array()
+        for column in 0..<table.col_count {
+          let children = match cells.get(column) {
+            Some((inline, _)) => self.inline_nodes(inline)
+            None => []
+          }
+          let align = match alignment.get(column) {
+            Some({ v: TableSep((Some(Left), _)), .. }) => Some("left")
+            Some({ v: TableSep((Some(Center), _)), .. }) => Some("center")
+            Some({ v: TableSep((Some(Right), _)), .. }) => Some("right")
+            _ => None
+          }
+          let attrs = match align {
+            Some(align) => @html.Attrs::build().style("text-align", align)
+            None => @html.Attrs::build()
+          }
+          cell_nodes.push(
+            if header {
+              @html.th(class?=align, scope=Col, attrs~, children)
+            } else {
+              @html.td(class?=align, attrs~, children)
+            },
+          )
+        }
+        group.push(@html.tr(cell_nodes))
       }
-      Sep(_) => ()
     }
   }
-  @html.div(class="chat-table-scroll", [
-    @html.table([@html.thead(head), @html.tbody(body)]),
-  ])
+  if !group.is_empty() {
+    groups.push(
+      if header_group {
+        @html.thead(group)
+      } else {
+        @html.tbody(group)
+      },
+    )
+  }
+  @html.div(
+    class="chat-table-scroll",
+    attrs=@html.Attrs::build().role("region"),
+    [@html.table(groups)],
+  )
 }
 
 ///|
@@ -497,7 +585,23 @@ fn MarkdownRender::push_inline(
       out.push(@html.strong(self.inline_nodes(node.v.inline, linkify_urls~)))
     ExtStrikethrough(node) =>
       out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
-    ExtMathSpan(node) => out.push(@html.code(class="inline-code", node.v.tex()))
+    ExtMathSpan(node) => {
+      let (opening, closing) = if node.v.display {
+        ("\\[", "\\]")
+      } else {
+        ("\\(", "\\)")
+      }
+      out.push(
+        @html.span(
+          class=if node.v.display { "math math-display" } else { "math" },
+          attrs=@html.Attrs::build().data_set(
+            "math-display",
+            node.v.display.to_string(),
+          ),
+          opening + tights_text(node.v.tex_layout) + closing,
+        ),
+      )
+    }
     Autolink(node) => {
       let url = node.v.link.v
       // Email autolinks resolve to a safe `mailto:`; a URI autolink like
@@ -514,9 +618,14 @@ fn MarkdownRender::push_inline(
     }
     Link(node) => {
       if self.citation(node.v) is Some(citation) {
-        out.push(self.citation_node(citation))
+        out.push(self.citation_node(citation, node.v))
         return
       }
+      if self.footnote_reference(node.v) is Some(note) {
+        out.push(note)
+        return
+      }
+      let title = self.link_title(node.v)
       // The label is already inside an anchor. Leaving bare-URL detection on
       // here would turn `[https://label](https://target)` into nested anchors.
       let children = self.inline_nodes(node.v.text, linkify_urls=false)
@@ -526,11 +635,13 @@ fn MarkdownRender::push_inline(
       // unsafe-scheme filter. It never becomes a browser anchor.
       if self.open_file is Some(open) &&
         self.file_destination(node.v) is Some(path) {
-        out.push(file_link_node(locale=self.locale, open, path, children))
+        out.push(
+          file_link_node(locale=self.locale, open, path, title?, children),
+        )
       } else {
         match self.link_destination(node.v) {
-          Some(url) => out.push(link_node(url, children))
-          None => out.push(@html.span(children))
+          Some(url) => out.push(link_node(url, title?, children))
+          None => out.push(@html.span(title?, children))
         }
       }
     }
@@ -538,6 +649,7 @@ fn MarkdownRender::push_inline(
     // from destinations that pass the same safety filter as links.
     Image(node) => {
       let alt = plain_text(node.v.text)
+      let title = self.link_title(node.v)
       if self.local_image_destination(node.v) is Some(path) {
         // Local paths must not resolve against the page's `proton://app/`
         // origin. Leave `src` empty and let the transcript's viewport observer
@@ -546,7 +658,7 @@ fn MarkdownRender::push_inline(
           @html.img(
             class="transcript-image pending",
             alt~,
-            title=path,
+            title=title.unwrap_or(path),
             loading="lazy",
             decoding="async",
             attrs=@html.Attrs::build().data_set("transcript-image", path),
@@ -554,8 +666,9 @@ fn MarkdownRender::push_inline(
         )
       } else {
         match self.link_destination(node.v) {
-          Some(url) => out.push(@html.img(src=url, alt~, loading="lazy"))
-          None => out.push(@html.text(alt))
+          Some(url) =>
+            out.push(@html.img(src=url, alt~, title?, loading="lazy"))
+          None => out.push(@html.span(title?, alt))
         }
       }
     }
@@ -762,17 +875,21 @@ fn MarkdownRender::raw_link_destination(
   self : MarkdownRender,
   link : @cmark.InlineLink,
 ) -> String? {
-  let definition = match link.reference {
-    Inline(node) => Some(node.v)
-    Ref(_, _, _) =>
-      match link.reference_definition(self.defs) {
-        Some(LinkDef(node)) => Some(node.v)
-        _ => None
-      }
+  match link.reference_definition(self.defs) {
+    Some(LinkDef(node)) => Some(node.v.dest.map(dest => dest.v).unwrap_or(""))
+    _ => None
   }
-  match definition {
-    Some(definition) => definition.dest.map(dest => dest.v)
-    None => None
+}
+
+///|
+fn MarkdownRender::link_title(
+  self : MarkdownRender,
+  link : @cmark.InlineLink,
+) -> String? {
+  match link.reference_definition(self.defs) {
+    Some(LinkDef(node)) =>
+      node.v.title.map(title => title.iter().map(line => line.node.v).join("\n"))
+    _ => None
   }
 }
 
@@ -877,8 +994,12 @@ fn LocalImagePath::has_raster_extension(self : LocalImagePath) -> Bool {
 }
 
 ///|
-fn link_node(href : String, children : Array[@html.Html]) -> @html.Html {
-  @html.a(href~, target=Blank, rel="noopener noreferrer", children)
+fn link_node(
+  href : String,
+  title? : String,
+  children : Array[@html.Html],
+) -> @html.Html {
+  @html.a(href~, title?, target=Blank, rel="noopener noreferrer", children)
 }
 
 ///|
@@ -890,18 +1011,21 @@ fn file_link_node(
   locale~ : @i18n.Locale = English,
   open : (String) -> @cmd.Cmd,
   path : String,
+  title? : String,
   children : Array[@html.Html],
 ) -> @html.Html {
   @html.button(
     class="file-link",
     type_="button",
-    title=match locale {
-      SimplifiedChinese => "打开 \{path}"
-      TraditionalChinese => "開啟 \{path}"
-      Japanese => "\{path} を開く"
-      English => "Open \{path}"
-      Spanish => "Abrir \{path}"
-    },
+    title=title.unwrap_or_else(() => {
+      match locale {
+        SimplifiedChinese => "打开 \{path}"
+        TraditionalChinese => "開啟 \{path}"
+        Japanese => "\{path} を開く"
+        English => "Open \{path}"
+        Spanish => "Abrir \{path}"
+      }
+    }),
     attrs=@html.Attrs::build()
       .data_set("context-file", path)
       .data_set("context-workspace-file", FileReference(path).path()),
@@ -1142,22 +1266,16 @@ fn is_known_extension(ext : String) -> Bool {
 
 ///|
 fn plain_text(inline : @cmark.Inline) -> String {
-  let buf = StringBuilder()
-  for line in inline.to_plain_text(break_on_soft=false) {
-    for segment in line {
-      buf.write_string(segment)
-    }
-  }
-  buf.to_string()
+  inline
+  .to_plain_text(break_on_soft=false)
+  .iter()
+  .map(line => line.iter().join(""))
+  .join("\n")
 }
 
 ///|
 fn tights_text(tights : @cmark.Seq[@cmark.Tight]) -> String {
-  let buf = StringBuilder()
-  for tight in tights.iter() {
-    buf.write_string(tight.to_string())
-  }
-  buf.to_string()
+  tights.iter().map(tight => tight.to_string()).join("\n")
 }
 
 // Regression test for the streaming freeze: cmark can panic on some

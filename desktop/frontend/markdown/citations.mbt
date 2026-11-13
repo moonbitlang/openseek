@@ -112,6 +112,7 @@ fn MarkdownRender::citation_label(
 fn MarkdownRender::citation_node(
   self : MarkdownRender,
   citation : Citation,
+  link : @cmark.InlineLink,
 ) -> @html.Html {
   let label = self.citation_label(citation.number)
   let title = if citation.summary.is_empty() {
@@ -119,8 +120,13 @@ fn MarkdownRender::citation_node(
   } else {
     "\{label}: \{citation.summary}"
   }
+  let full = link.reference is Ref(Full, _, _)
   let attrs = @html.Attrs::build().aria_label(title)
-  let children = [@html.text(citation.number)]
+  let children = if full {
+    self.inline_nodes(link.text, linkify_urls=false)
+  } else {
+    [@html.text(citation.number)]
+  }
   let node = if citation.link is Some(link) &&
     self.open_file is Some(open) &&
     self.file_destination(link) is Some(path) {
@@ -150,6 +156,9 @@ fn MarkdownRender::citation_node(
     // A textual footnote or an incomplete streamed source has no made-up
     // destination. Its contents remain readable in the Sources list.
     @html.span(class="citation-link citation-note", title~, attrs~, children)
+  }
+  if full {
+    return node
   }
   @html.sup(
     class="citation",
@@ -184,8 +193,11 @@ fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
     }
     rows.push(
       @html.li(
+        id=self.source_note_id(citation.number),
         class="citation-source",
-        attrs=@html.Attrs::build().data_set("source", citation.number),
+        attrs=@html.Attrs::build()
+          .role("doc-footnote")
+          .data_set("source", citation.number),
         [
           self.source_glyph(citation),
           @html.div(class="citation-source-content", [
