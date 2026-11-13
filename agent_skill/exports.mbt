@@ -20,3 +20,11 @@ pub fn Skill::name(self : Skill) -> String {
 pub fn Skill::path(self : Skill) -> String {
   self.path
 }
+
+///|
+/// Path of the `mcp.json` a `<name>/SKILL.md` skill keeps beside it, in the
+/// shape `--mcp-config` reads, naming the MCP servers the skill brings; `None`
+/// when it brings none.
+pub fn Skill::mcp_config_path(self : Skill) -> String? {
+  self.mcp_config_path
+}

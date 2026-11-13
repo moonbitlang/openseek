@@ -5,6 +5,7 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_skill",
   "moonbitlang/openseek/deepseek",
 }
 
@@ -34,6 +35,8 @@ pub async fn self_executable() -> String
 pub fn session_agent_settings(@argparse.Matches, @store.SessionModel?) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
 
 pub fn session_root(@argparse.Matches, workspace_root? : String) -> String raise
+
+pub async fn skill_library(@argparse.Matches, workspace_root~ : String) -> Array[@agent_skill.Skill]
 
 pub fn workflow_launch(String) -> (String, Array[String])
 

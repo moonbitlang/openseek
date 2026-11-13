@@ -1,6 +1,7 @@
 ///|
 /// One headless turn with its own runtime, task group, and tool registry —
-/// including any configured MCP servers' tools, exactly as `serve` wires them.
+/// including any configured MCP servers, which connect when a script reaches
+/// them, exactly as `serve` wires them.
 /// The MCP connections live on the turn's task group and are torn down when the
 /// turn's `with_task_group` ends. How the turn ended is in what `append_item`
 /// recorded: a failed or cancelled turn seals its terminal and then raises.
@@ -49,14 +50,19 @@ async fn run_task_turn(
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
+    // A delegated run starts no MCP servers its parent did not grant, and so
+    // none its skills bring.
     let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
+      skills=if delegate {
+        @setup.skill_library(matches, workspace_root~)
+      } else {
+        []
+      },
+      policy_dir="\{session_scratch_dir}/mcp-policies",
       workspace_root~,
     )
-    // A one-shot run has a single turn, so it waits for every server rather
-    // than start without tools that are about to arrive.
-    mcp.wait()
     let extra_tools = @execution.build_extra_tools(
       model~,
       api_key~,

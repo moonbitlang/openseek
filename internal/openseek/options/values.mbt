@@ -126,3 +126,12 @@ pub fn mcp_config_paths(matches : @argparse.Matches) -> Array[String] {
   .unwrap_or([])
   .filter(path => !path.is_empty())
 }
+
+///|
+/// The `--skills-dir` paths, in order; empty values name no directory.
+pub fn skills_dirs(matches : @argparse.Matches) -> Array[String] {
+  matches.values
+  .get("skills-dir")
+  .unwrap_or([])
+  .filter(path => !path.is_empty())
+}

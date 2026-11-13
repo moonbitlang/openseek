@@ -4,114 +4,113 @@ pub const McpClientVersion : String = "0.2.2"
 
 ///|
 /// What this engine holds of MCP: each configuration file and what came of
-/// reading it, and for each server of the merged configuration what
-/// connecting came to, which settles in the background. Built once at startup
+/// reading it, and each server of the merged configuration with what
+/// connecting it came to once a script has reached it. Built once at startup
 /// and kept for the engine's life, because the connections are — it is what an
 /// `mcp_status` event reports.
 struct McpRegistry {
   configs : Array[@protocol.McpConfigStatus]
-  /// Each server of the merged configuration, in order, being connected.
+  /// Each server of the merged configuration, in order.
   servers : Array[@mcptools.Server]
-  /// The task that reports `McpToolsRegistered` once every server has
-  /// settled; `None` when no configuration file loaded, which reports nothing.
-  registered : @async.Task[Unit]?
 }
 
 ///|
 /// Read every configuration file in `config_paths`, in order — a later file's
-/// server replaces an earlier one of the same name — and start connecting the
-/// merged servers in the background on `scope`'s group, without waiting for
-/// any: a server that takes long to connect (or never does, like a headers
-/// helper waiting on the user) does not hold up the engine. `on_change` runs
-/// each time `status` may have changed since — a server settled, or a
-/// connected server's connection closed — and must not block. Once every
-/// server has settled, `McpToolsRegistered` is reported. Nothing here fails
-/// the engine: a file that cannot be used and a server that cannot be reached
-/// are recorded in the registry and reported as the events they always were.
+/// server replaces an earlier one of the same name. The servers each of
+/// `skills` brings in its `mcp.json` join them, ahead of the files, so a
+/// file's server replaces a skill's of the same name. A skill's configuration
+/// expands only `${OPENSEEK_SKILL_DIR}`, its own directory — no variable of
+/// the engine's environment, which a skill nobody vetted could carry off;
+/// its stdio servers run through `moonx` inside a
+/// moonrun policy written under `policy_dir` (see `confine_skill_servers`). No
+/// server connects here: each connects in the background on `scope`'s group
+/// when a script first reaches it. `on_change` runs each time `status` may
+/// have changed since — a server started connecting or settled, or a connected
+/// server's connection closed — and must not block. Nothing here fails the
+/// engine: a file that cannot be used and a server that cannot be reached are
+/// recorded in the registry and reported as the events they always were.
 pub async fn start_mcp(
   scope : @agent_runtime.AgentTaskScope,
   config_paths : Array[String],
+  skills~ : Array[@agent_skill.Skill] = [],
+  policy_dir~ : String,
   workspace_root~ : String,
   on_change? : () -> Unit,
 ) -> McpRegistry {
   let configs : Array[@protocol.McpConfigStatus] = []
-  let loaded : Array[Array[@mcpconfig.McpServer]] = []
-  for path in config_paths {
+  async fn load(
+    path : String,
+    env : Map[String, String],
+    confine : async (Array[@mcpconfig.McpServer]) -> Array[@mcpconfig.McpServer],
+  ) -> Array[@mcpconfig.McpServer]? {
     let text = @fs.read_text(path) catch {
       error => {
         let error = "\{error}"
         @emit.emit(McpConfigUnreadable(path~, error~))
         configs.push({ path, state: Failed(error), })
-        continue
+        return None
       }
     }
-    let servers = @mcpconfig.decode(@json.parse(text), env=@env.get_env_vars()) catch {
+    let servers = confine(@mcpconfig.decode(@json.parse(text), env~)) catch {
       error => {
         let error = "\{error}"
         @emit.emit(McpConfigInvalid(path~, error~))
         configs.push({ path, state: Failed(error), })
-        continue
+        return None
       }
     }
     configs.push({ path, state: Loaded, })
-    loaded.push(servers)
+    Some(servers)
   }
-  // Preserve the single-file failure contract: no registration event when
-  // every input failed to load. A valid empty config still registers normally.
-  guard !loaded.is_empty() else {
-    return { configs, servers: [], registered: None, }
+
+  let host_env = @env.get_env_vars()
+  let skill_servers : Array[@mcpconfig.McpServer] = []
+  let moonx = if skills.any(skill => skill.mcp_config_path() is Some(_)) {
+    @which.find(SkillServerProgram, path=host_env.get("PATH").unwrap_or(""))
+  } else {
+    None
   }
-  let servers = @mcptools.start(
-    scope,
-    @mcpconfig.merge(loaded),
-    client_name="openseek",
-    client_version=McpClientVersion,
-    workspace_root~,
-  )
-  if on_change is Some(on_change) {
-    for server in servers {
-      scope
-      .group()
-      .spawn_bg(no_wait=true, () => {
-        let entry = server.connecting.wait()
-        // The close handler goes on first, so a connection that closes from
-        // here on reports itself, and one already closed shows as lost.
-        if entry.connection is Live(client) {
-          client.set_close_handler(on_change)
-        }
-        on_change()
+  let mut policies = 0
+  for skill in skills {
+    guard skill.mcp_config_path() is Some(path) else { continue }
+    let dir = match path.rev_split_once("/") {
+      Some((dir, _)) => dir.to_owned()
+      None => "."
+    }
+    let confined = load(path, Map([(SkillDirEnv, dir)]), servers => {
+      confine_skill_servers(servers, skill_dir=dir, workspace_root~, moonx~, policy=() => {
+        policies += 1
+        "\{policy_dir}/\{policies}.json"
       })
+    })
+    if confined is Some(servers) {
+      skill_servers.append(servers)
     }
   }
-  let registered = scope
-    .group()
-    .spawn(no_wait=true, () => {
-      let names : Array[String] = []
-      for server in servers {
-        for tool in server.connecting.wait().tools {
-          names.push("\{server.config.name()}/\{tool.name}")
-        }
-      }
-      @emit.emit(
-        McpToolsRegistered(
-          servers=servers.length(),
-          tools=names.length(),
-          names~,
-        ),
-      )
-    })
-  { configs, servers, registered: Some(registered), }
+  let loaded : Array[Array[@mcpconfig.McpServer]] = []
+  for path in config_paths {
+    if load(path, host_env, servers => servers) is Some(servers) {
+      loaded.push(servers)
+    }
+  }
+  let servers = @mcpconfig.merge([skill_servers, ..loaded]).map(server => {
+    @mcptools.Server::new(
+      scope,
+      server,
+      client_name="openseek",
+      client_version=McpClientVersion,
+      workspace_root~,
+      on_change?,
+    )
+  })
+  { configs, servers, }
 }
 
 ///|
-/// Wait until every server has settled and `McpToolsRegistered` has been
-/// reported — for a one-shot run, whose turn should see every tool there will
-/// be.
-pub async fn McpRegistry::wait(self : McpRegistry) -> Unit {
-  if self.registered is Some(registered) {
-    registered.wait()
-  }
-}
+/// The variable naming the directory of the skill whose `mcp.json` is being
+/// read: its configuration may reference it as `${OPENSEEK_SKILL_DIR}`, and
+/// its stdio servers find it in their environment.
+pub const SkillDirEnv : String = "OPENSEEK_SKILL_DIR"
 
 ///|
 /// Serve these servers to scripts through an MCP host on `scope`'s group,
@@ -145,6 +144,7 @@ pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
     }
 
     let state : @protocol.McpServerState = match configured.try_wait() {
+      None if !configured.started() => Idle
       None => Connecting
       Some({ connection: Live(client), .. } as entry) if client.is_closed() =>
         Lost(tools(entry))

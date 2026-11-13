@@ -84,33 +84,30 @@ async fn run_serve(
       Some(@setup.SessionWriter(store, id, { model, thinking, }, recorded))
     None => None
   }
-  let ephemeral_scratch = if session_id is None {
-    Some(@fs.tmpdir(prefix="openseek-session-"))
-  } else {
-    None
+  // Scratch files live in the durable session's directory, or, without one,
+  // in a temporary directory this process removes as it exits.
+  let (store, session_scratch_dir) = match durable {
+    Some((store, id)) => (Some(store), store.scratch_dir(id))
+    None => (None, @fs.tmpdir(prefix="openseek-session-"))
   }
-  defer (if ephemeral_scratch is Some(dir) {
-    @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+  defer (if store is None {
+    @async.protect_from_cancel(() => {
+      @fs.rmdir(session_scratch_dir, recursive=true)
+    })
   })
-  let (store, initial_session) = match durable {
+  let initial_session = match durable {
     Some((store, id)) =>
-      (
-        Some(store),
-        @setup.load_or_new_session(store, id, matches, model, workspace_root~),
-      )
+      @setup.load_or_new_session(store, id, matches, model, workspace_root~)
     // No durable session requested: the conversation still spans every
     // prompt of this process's lifetime, it just leaves nothing behind.
     None =>
-      (
-        None,
-        Session(
-          SessionId("serve"),
-          system_prompt=@setup.configured_system_prompt(
-            matches,
-            model,
-            workspace_root~,
-            session_scratch_dir?=ephemeral_scratch,
-          ),
+      Session(
+        SessionId("serve"),
+        system_prompt=@setup.configured_system_prompt(
+          matches,
+          model,
+          workspace_root~,
+          session_scratch_dir~,
         ),
       )
   }
@@ -177,6 +174,8 @@ async fn run_serve(
     let mcp = @execution.start_mcp(
       scope,
       @options.mcp_config_paths(matches),
+      skills=@setup.skill_library(matches, workspace_root~),
+      policy_dir="\{session_scratch_dir}/mcp-policies",
       workspace_root~,
       on_change=() => ignore(steps.try_put(McpChanged) catch { _ => false }),
     )
@@ -238,23 +237,19 @@ async fn run_serve(
         )
       _ => None
     }
-    let session_scratch_dir = match store {
-      Some(store) => Some(store.scratch_dir(initial_session.id()))
-      None => ephemeral_scratch
-    }
     let tools = @agent.build_tools(
       runtime,
       scope,
       subagents?,
       job_log_dir?,
-      session_scratch_dir?,
+      session_scratch_dir~,
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
       extra_tools~,
       mcp_service?=mcp.serve(
         scope,
-        image_directory?=session_scratch_dir.map(dir => "\{dir}/mcp-images"),
+        image_directory="\{session_scratch_dir}/mcp-images",
       ),
     )
     group.spawn_bg(no_wait=true) <| () => {

@@ -7,16 +7,15 @@ pub async fn configured_system_prompt(
   workspace_root~ : String = ".",
   session_scratch_dir? : String,
 ) -> String {
-  let (base_path, addendum_path, global_skills_dir) = match matches {
+  let (base_path, addendum_path) = match matches {
     {
       values: {
         "system-prompt-file": [base_path, ..],
         "system-prompt-addendum-file": [addendum_path, ..],
-        "global-skills-dir": [global_skills_dir, ..],
         ..
       },
       ..
-    } => (base_path, addendum_path, global_skills_dir)
+    } => (base_path, addendum_path)
     _ => fail("missing parsed system-prompt defaults")
   }
   let prompt = StringBuilder()
@@ -89,69 +88,13 @@ pub async fn configured_system_prompt(
   // section: like the cwd they vary per project (and change when skills are
   // edited), so they must sit after all globally shared text to keep it
   // prefix-cache hittable.
-  let skills_section = skills_prompt_section_for_cwd(
-    global_dir=global_skills_dir,
-    workspace_root~,
+  let skills_section = @agent_skill.skills_prompt_section(
+    skill_library(matches, workspace_root~),
   )
   if skills_section is Some(section) {
     prompt <+ "\n\n\{section}"
   }
-  // Like skills, the configured servers vary per installation, so they also
-  // sit in the tail. The section is the model's cue that a service is
-  // reachable at all: without it the model has to guess that a script may
-  // find something, and in practice it rarely looks.
-  let mcp_section = mcp_prompt_section(@options.mcp_config_paths(matches))
-  if mcp_section is Some(section) {
-    prompt <+ "\n\n\{section}"
-  }
   prompt.to_string()
-}
-
-///|
-/// Name the servers of the merged MCP configuration in `config_paths`. A
-/// server that later fails to connect is reported as unavailable by
-/// `@mcp.search`. `None` when no server is configured.
-async fn mcp_prompt_section(config_paths : Array[String]) -> String? {
-  let names = mcp_server_names(config_paths).map(name => "`\{name}`")
-  guard !names.is_empty() else { return None }
-  Some(
-    (
-      $|## MCP servers
-      $|
-      $|Configured MCP servers: \{names.join(", ")}.
-      $|
-      $|They connect external services. Their tools are not in your function
-      $|list: an mbtx script reaches them through the SDK's `mcp` package (see
-      $|"MCP servers with moonbitlang/openseek_tools/mcp"). When a request
-      $|involves one of these services, or before concluding that something
-      $|cannot be done, search that server's tools with
-      $|`@mcp.search(server="<name>")` and call one with
-      $|`@mcp.call(server, tool, arguments)`, before reaching for `web_search`
-      $|or a command-line client.
-    ),
-  )
-}
-
-///|
-/// The server names `config_paths` declare under `mcpServers`, in file order;
-/// a name declared again by a later file keeps its first position, as merging
-/// keeps a replaced server's. Only the names are read, not the entries: the
-/// prompt is built before the engine connects, sometimes by a process that
-/// never connects (`sessions fork`) and lacks the variables an entry's
-/// references need. A file that cannot be read or parsed names no server
-/// here; the engine reports it when it connects.
-async fn mcp_server_names(config_paths : Array[String]) -> Array[String] {
-  let names : Array[String] = []
-  for path in config_paths {
-    let json = @json.parse(@fs.read_text(path)) catch { _ => continue }
-    guard json is { "mcpServers": Object(servers), .. } else { continue }
-    for name, _ in servers {
-      if !names.contains(name) {
-        names.push(name)
-      }
-    }
-  }
-  names
 }
 
 ///|
@@ -190,35 +133,44 @@ fn default_global_skills_dir() -> String? {
 }
 
 ///|
-/// The skills advertised to the model: the user-level library (`global_dir`,
-/// defaulting to `$HOME/.openseek/skills` or `%USERPROFILE%/.openseek/skills`
-/// when empty) merged with the
-/// workspace library under `.openseek/skills`, listing `<name>.md` files and
-/// `<name>/SKILL.md` layouts. Workspace skills shadow same-named global ones
-/// so a project can specialize a shared playbook. Empty or absent
-/// directories advertise nothing — and eval harnesses point `global_dir` at
-/// a path inside the trial workspace so the developer's own library never
-/// leaks into trials.
-async fn skills_prompt_section_for_cwd(
-  global_dir~ : String,
+/// The skills this agent has: those of each `--skills-dir`, then the
+/// user-level library (`--global-skills-dir`, defaulting to
+/// `$HOME/.openseek/skills` or `%USERPROFILE%/.openseek/skills` when empty),
+/// then the workspace library under `.openseek/skills`, listing `<name>.md`
+/// files and `<name>/SKILL.md` layouts. A later library shadows a same-named
+/// skill of an earlier one, so a project can specialize a shared playbook.
+/// Empty or absent directories hold nothing — and eval harnesses point the
+/// user-level library at a path inside the trial workspace so the developer's
+/// own library never leaks into trials. The system prompt advertises these,
+/// and the MCP servers a skill brings come from them.
+pub async fn skill_library(
+  matches : @argparse.Matches,
   workspace_root~ : String,
-) -> String? {
-  let resolved_global_dir = if global_dir != "" {
-    Some(@workspace_path.resolve(workspace_root, global_dir))
-  } else {
-    default_global_skills_dir()
+) -> Array[@agent_skill.Skill] {
+  let global_dir = match matches.values.get("global-skills-dir") {
+    Some([dir, ..]) if dir != "" =>
+      Some(@workspace_path.resolve(workspace_root, dir))
+    _ => default_global_skills_dir()
   }
-  let global_skills = if resolved_global_dir is Some(resolved_global_dir) {
-    @agent_skill.discover_skills(resolved_global_dir)
-  } else {
-    []
-  }
-  @agent_skill.skills_prompt_section(
-    @agent_skill.merge_skills(
-      global_skills,
+  let mut skills : Array[@agent_skill.Skill] = []
+  for dir in @options.skills_dirs(matches) {
+    skills = @agent_skill.merge_skills(
+      skills,
       overrides=@agent_skill.discover_skills(
-        @workspace_path.resolve(workspace_root, ".openseek/skills"),
+        @workspace_path.resolve(workspace_root, dir),
       ),
+    )
+  }
+  if global_dir is Some(dir) {
+    skills = @agent_skill.merge_skills(
+      skills,
+      overrides=@agent_skill.discover_skills(dir),
+    )
+  }
+  @agent_skill.merge_skills(
+    skills,
+    overrides=@agent_skill.discover_skills(
+      @workspace_path.resolve(workspace_root, ".openseek/skills"),
     ),
   )
 }

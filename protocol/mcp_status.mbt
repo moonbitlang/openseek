@@ -59,6 +59,8 @@ pub extend McpTransport with Debug::{to_repr}
 /// What the engine holds of one configured server.
 #derive(Eq, Debug)
 pub(all) enum McpServerState {
+  /// It connects when a script first reaches it, and none has yet.
+  Idle
   /// Still being connected: it has come to nothing yet.
   Connecting
   /// Connected, with the tools it registered (never empty).
@@ -111,6 +113,7 @@ pub impl ToJson for McpServerStatus with fn to_json(self) {
     "target": Json(self.target),
   }
   match self.state {
+    Idle => fields["state"] = "idle"
     Connecting => fields["state"] = "connecting"
     Connected(tools) => {
       fields["state"] = "connected"
@@ -164,6 +167,7 @@ pub impl FromJson for McpServerStatus with fn from_json(json, path) {
   }
 
   let state : McpServerState = match state {
+    "idle" => Idle
     "connecting" => Connecting
     "connected" => Connected(held_tools())
     "lost" => Lost(held_tools())

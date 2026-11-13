@@ -3113,7 +3113,14 @@ async test "native engine env has one authoritative bundled moon path" {
     env=granted,
     host_mcp=true,
   )
+  let skills_dir = runtime.join("host-skills").resolve().to_string()
   assert_true(automatic.contains("--mcp-config=\{host_path}"))
+  assert_true(automatic.contains("--skills-dir=\{skills_dir}"))
+  // The skill telling the agent about the host's tools sits beside it.
+  assert_eq(
+    @fsx.read_text(Path("\{skills_dir}/\{@mcp.SkillName}/SKILL.md")),
+    @mcp.skill_markdown(),
+  )
   let host_text = @fsx.read_text(Path(host_path))
   assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_URL}"))
   assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_TOKEN}"))
@@ -3121,6 +3128,7 @@ async test "native engine env has one authoritative bundled moon path" {
   assert_false(host_text.contains(granted[@mcp.TokenEnv]))
   let fallback = { "OPENSEEK_MCP_CONFIG": "/fallback/mcp.json" }
   assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=true), [
+    "--skills-dir=\{skills_dir}",
     "--mcp-config=\{host_path}",
     "--mcp-config=/fallback/mcp.json",
   ])
@@ -3131,7 +3139,11 @@ async test "native engine env has one authoritative bundled moon path" {
       fallback,
       host_mcp=true,
     ),
-    ["--mcp-config=\{host_path}", "--mcp-config=\{mcp_path.to_string()}"],
+    [
+      "--skills-dir=\{skills_dir}",
+      "--mcp-config=\{host_path}",
+      "--mcp-config=\{mcp_path.to_string()}",
+    ],
   )
   assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=false), [])
   let moon_bin = moon_home.join("bin").to_string()

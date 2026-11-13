@@ -368,7 +368,12 @@ test "an inherited MCP configuration counts as one the engine will load" {
 ///|
 /// Put the host defaults before the user's configuration. Once an explicit
 /// host path is passed, argparse no longer reads OPENSEEK_MCP_CONFIG, so carry
-/// that fallback explicitly when the user's usual file is absent.
+/// that fallback explicitly when the user's usual file is absent. The host's
+/// server comes with the skill that tells the agent about it, written as
+/// `host-skills/seekmoon/SKILL.md` and handed over as a skills directory; the
+/// server itself stays in the host's configuration rather than the skill's
+/// `mcp.json`, because it expands the conversation's grant, and a skill's
+/// `mcp.json` expands no host variable.
 async fn engine_mcp_args(
   config : McpConfig?,
   runtime_dir : @pathx.Path?,
@@ -389,14 +394,20 @@ async fn engine_mcp_args(
       }
     }
     let path = directory.join("host-mcp.json").resolve()
+    let skills = directory.join("host-skills").resolve()
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
     let text =
       #|{"mcpServers":{"seekmoon":{"url":"${OPENSEEK_DESKTOP_TOOLS_URL}","headers":{"Authorization":"Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"}}}}
-    if @fsx.read_text_if_exists(path.to_path()) != Some(text) {
-      @fsx.ensure_dir(path.to_path().dirname())
-      @fsx.write_text_atomic(path.to_path(), text)
+    let skill = skills.join("\{@mcp.SkillName}/SKILL.md").to_path()
+    for file in [(path.to_path(), text), (skill, @mcp.skill_markdown())] {
+      let (path, text) = file
+      if @fsx.read_text_if_exists(path) != Some(text) {
+        @fsx.ensure_dir(path.dirname())
+        @fsx.write_text_atomic(path, text)
+      }
     }
+    args.push("--skills-dir=\{skills.to_string()}")
     args.push("--mcp-config=\{path.to_string()}")
   }
   if config is Some(mcp) {

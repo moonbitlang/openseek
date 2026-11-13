@@ -32,6 +32,8 @@ continues to negotiate `2025-11-25` and earlier supported revisions.
   stateless `server/discover`.
 - `server.mbt` — the listener, the grants, and one task per request.
 - `stdio.mbt` — newline-delimited JSON-RPC over streams supplied by the host.
+- `skill.mbt` — the `SKILL.md` of the `seekmoon` skill that tells an engine's
+  agent about the server.
 
 ## Host-owned streams
 
@@ -83,7 +85,7 @@ The adapter writes only JSON-RPC responses to its supplied output stream.
 
 ## Configuration
 
-Engines started by a host configured with tools connect automatically, for both
+Engines started by a host configured with tools reach it, for both
 conversations and scheduled runs. The engine launcher writes `host-mcp.json`
 in the runtime directory (or the global store directory when no runtime directory
 was supplied) and passes it as the first `--mcp-config` argument. It contains:
@@ -103,8 +105,14 @@ was supplied) and passes it as the first `--mcp-config` argument. It contains:
 
 OpenSeek expands the HTTP URL and header values from the engine's environment
 when it loads the configuration. Missing variables are errors, so a process
-that was not granted access cannot connect through this entry. The tools
-reach the model as `mcp__seekmoon__<tool>` automatically.
+that was not granted access cannot connect through this entry. The server
+stays out of the skill's own `mcp.json` because a skill's configuration
+expands no variable of the engine's environment.
+
+Beside it the launcher writes the `seekmoon` skill under `host-skills/seekmoon/`
+and passes `host-skills` as a `--skills-dir` argument. The skill's `SKILL.md`
+is `skill_markdown()`; the agent learns of the tools from it, and the engine
+connects the server when a script first searches or calls it.
 
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
 file is absent, follows the host defaults as another `--mcp-config` argument.

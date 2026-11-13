@@ -251,15 +251,17 @@ only entries the app itself installed can be updated or uninstalled.
 
 The agent can use tools from [MCP](https://modelcontextprotocol.io) servers
 listed in `~/.openseek/mcp.json`, the `{"mcpServers": {...}}` shape described
-in the repository README. The user file is created and edited by hand. The host
-also automatically supplies its own tools through a generated `host-mcp.json`
-in its runtime directory. The user file follows this default configuration,
-so a same-named server in the user file replaces the default entry. When no
-user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment still
-applies after the host defaults.
+in the repository README. The user file is created and edited by hand. When no
+user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment applies.
+The host also supplies its own tools: a generated `host-mcp.json` in its
+runtime directory reaches the host through the conversation's grant, and a
+`seekmoon` skill under `host-skills/seekmoon/`, handed to each engine as a
+skills directory, tells the agent what they do. The user file follows the
+host configuration, so a same-named server in the user file replaces the
+default entry.
 
-An engine connects its servers once, when it starts — one set of server
-processes per conversation. The host therefore reads the file before each
+An engine connects each server at most once, when a script first reaches it —
+one set of server processes per conversation. The host therefore reads the file before each
 prompt and keeps a digest of its content among the things that pin an engine
 to its configuration, like the model and the endpoint: an edit starts a new
 engine, and with it every server, on that conversation's next prompt, with no
