@@ -150,18 +150,9 @@ do not make a parallel Desktop interaction implementation the default.
 
 ### Component and state boundary
 
-`@rui.select` returns `@rabbita.Val[@html.Html]` and owns its interactive
-subtree. Keep that component instance stable across unrelated parent updates.
-
-The application supplies option data, stable wire values, a unique component
-`id`, and initial configuration. It owns the persisted business value and the
-effects of a selection, receiving changes through `on_value_change`. Labels
-remain separate from wire values.
-
-`rui` owns the live selection, open state, active option, typeahead, focus,
-keyboard handling, dismissal, and accessibility behavior. `default_value` and
-`default_open` provide initial configuration. `on_open_change` reports changes
-to the application.
+Keep the component instance stable across unrelated parent updates. The
+application owns business values and their effects; internal interaction state
+stays with the component. Labels remain separate from wire values.
 
 ### Review requirements
 
@@ -171,8 +162,7 @@ For a new or reworked select, verify that:
   that preserves its state ownership;
 - an unrelated application update while the menu is open preserves its open
   state, active option, and focus;
-- selecting an option delivers the intended business value through the public
-  callback; and
+- selecting an option updates the intended business value; and
 - presentation changes preserve keyboard navigation, dismissal, accessibility,
   and readability in the affected themes and viewports.
 
