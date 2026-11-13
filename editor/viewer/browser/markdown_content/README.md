@@ -9,7 +9,10 @@ The shared rules cover headings, paragraphs, lists, quotes, inline/fenced code,
 tables, links, images, tasks, and footnotes. Table alignment consumes cmark's
 `left` / `center` / `right` cell classes. A `[role="region"]` with a direct table
 child owns horizontal overflow and outer spacing, including inside lists and
-quotes; the table keeps its intrinsic width with a minimum of the region width.
+quotes. Tables prefer the region width and use automatic, content-dependent
+column sizing rather than equal-width columns. Long text and URLs wrap; cells
+retain a minimum width of `8ch`, so dense tables can still
+overflow and scroll instead of squeezing every column into unreadable slivers.
 
 Hosts retain root typography, reading/figure measures, document/stream viewports,
 folding, overlays, code-copy controls, diagrams, file actions, and Sources cards.
@@ -19,8 +22,8 @@ They supply `--markdown-*` tokens on the content root for palette and density:
   `list-item-margin`, and `rule-margin` control spacing.
 - `heading-size` / `heading-line-height` optionally flatten the default document
   hierarchy for compact surfaces.
-- `quote-*`, `code-*`, `inline-code-*`, `border`, `cell-padding`, `link-color`,
-  and `note-*` adapt presentation to the host. Every name has the
+- `quote-*`, `code-*`, `inline-code-*`, `border`, `cell-padding`, `cell-min-width`,
+  `link-color`, and `note-*` adapt presentation to the host. Every name has the
   `--markdown-` prefix; stylesheet fallbacks use Viewer `--vscode-*` and editor
   font tokens, never OpenSeek tokens.
 

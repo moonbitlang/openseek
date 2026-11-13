@@ -124,14 +124,20 @@
 }
 
 .moonbit-viewer-markdown-content :where([role="region"]) > table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  table-layout: auto;
   border: 1px solid var(--markdown-border, var(--vscode-widget-border, rgb(128 128 128 / 30%)));
   border-radius: 4px;
   border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;
   font-size: inherit;
+}
+
+/* Keep dense tables readable without using unwrapped descriptions as the
+ * preferred table width. */
+.moonbit-viewer-markdown-content :where([role="region"] > table) :is(th, td) {
+  min-width: var(--markdown-cell-min-width, 8ch);
 }
 
 .moonbit-viewer-markdown-content :is(th, td) {
