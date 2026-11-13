@@ -263,11 +263,6 @@
 .add-device-steps > li::before { content: counter(add-device-step) "."; }
 .add-device-steps > li > p { margin: 0; }
 .add-device-steps > li > :not(p) { grid-column: 1 / -1; }
-.add-device-note {
-  margin: var(--space-6) 0 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
 
 .notifications {
   position: fixed;

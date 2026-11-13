@@ -102,9 +102,9 @@ pub fn Model::add_device_dialog(
           ]),
           @html.li(@html.p(text(locale, SignInStep))),
           @html.li(@html.p(text(locale, RemoteControlStep))),
+          @html.li(@html.p(text(locale, ListedWhileRunning))),
         ],
       ),
-      @html.p(class="add-device-note", text(locale, ListedWhileRunning)),
     ],
   )
 }

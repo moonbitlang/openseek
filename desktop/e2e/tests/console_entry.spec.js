@@ -130,7 +130,7 @@ test('the device selector opens upward even when its menu would fit below', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the device menu explains how to add a computer, starting from its installer', async ({ page }) => {
+test('the device menu explains how to add a computer, starting from its installer', async ({ page }, testInfo) => {
   const app = await installConsole(page);
   await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [] } }));
   let manifestRequests = 0;
@@ -156,7 +156,11 @@ test('the device menu explains how to add a computer, starting from its installe
   // The Android app wraps this console, so it can never become a device.
   await expect(dialog.getByRole('link', { name: /Android/ })).toHaveCount(0);
   await expect(dialog).toContainText('Turn on Remote control under Settings → Connections → Remote access.');
+  const steps = dialog.locator('ol > li');
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(3)).toHaveText('The computer then appears in the device menu whenever SeekMoon is running on it.');
   await assertFits(page);
+  await page.screenshot({ path: testInfo.outputPath('add-device-four-steps.png') });
   // The dialog reuses the list the page already read.
   expect(manifestRequests).toBe(1);
   await page.keyboard.press('Escape');
