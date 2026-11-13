@@ -71,20 +71,6 @@ Full entries from the repository root: `just desktop-test-browser`,
 `just desktop-app-check`, `just desktop-app-test`, and
 `just desktop-build-scripts-check`, when justified or explicitly required.
 
-## UI Pull Requests
-
-Follow the [root pull request guidance](../AGENTS.md#pull-requests).
-
-- When voluntarily sharing UI screenshots or recordings, upload them as PR
-  attachments. Keep local captures outside the repository or in an ignored
-  directory.
-- Prefer demo data when capturing screenshots or recordings. Before uploading,
-  remove or redact personal information, real conversations, private project
-  names and paths, credentials, and other sensitive content, including content
-  in sidebars, terminals, and notifications.
-- Inspect the final images or recording before uploading to confirm that
-  sensitive content is removed and the UI change remains clear.
-
 ## Child Processes
 
 - For a one-shot command that collects stdout and stderr and expects EOF on

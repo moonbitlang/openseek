@@ -50,11 +50,6 @@ You can browse and install extra skills here:
   state. Pass application data and handle events through the component's public
   API.
 
-## Pull Requests
-
-- Screenshots are not required for PRs, including UI changes. Describe the
-  affected behavior and validation results in the PR description.
-
 ## Tooling
 
 - `moon fmt` is used to format your code properly.
