@@ -7,6 +7,8 @@ fn answer_citations(source : String) -> Array[Citation] {
     open_file: None,
     artifact_view: None,
     defer_artifacts: false,
+    session_view: None,
+    session_index: 0,
     citations: [],
     in_sources: false,
   }

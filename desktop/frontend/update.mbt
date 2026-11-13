@@ -1757,6 +1757,7 @@ fn update(
     | OpenSession(_, _)
     | OpenArchivedSession(_, ..)
     | OpenSessionHere(_)
+    | TranscriptSessionOpened(..)
     | NewChat
     | NewChatIn(_, _)
     | CloudAction(@cloud.Create)
@@ -2191,6 +2192,9 @@ fn update(
     }),
   )
   let (annotation_cmd, model) = reconcile_browser_annotation(dispatch, model)
+  let (suggestions_cmd, model) = reconcile_session_suggestions(
+    dispatch, msg, previous, model,
+  )
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
@@ -2214,6 +2218,7 @@ fn update(
       browser_cmd,
       preview_cmd,
       annotation_cmd,
+      suggestions_cmd,
       if msg is Dock(TabClosed(_)) {
         focus_dock_after_render()
       } else {
@@ -6334,6 +6339,17 @@ fn update_msg(
       model.request_fork(dispatch, slot, through)
     ForkCompleted(pending, result, fresh_session~) =>
       model.finish_fork(dispatch, pending, result, fresh_session~)
+    SessionSuggestion(message) =>
+      update_session_suggestion(dispatch, message, model)
+    TranscriptSessionOpened(slot~, session~) => {
+      guard model.transcript_slot().map(current => current.key()) == Some(slot) else {
+        return (@cmd.none, model)
+      }
+      if model.open_suggested_session(dispatch, slot, session) is Some(result) {
+        return result
+      }
+      update_msg(dispatch, OpenSessionHere(session), model)
+    }
     // A transcript link naming a session on the device already focused. It
     // delegates rather than duplicating: the sub-run child this opens is an
     // ordinary durable session, and `OpenSession` is how one is opened.

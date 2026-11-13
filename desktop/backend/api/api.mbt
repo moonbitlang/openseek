@@ -628,6 +628,29 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_suggestions, payload => {
+      @engine.session_suggestions(state.manager, payload)
+    }),
+    Endpoint(@commands.session_create_from_message, payload => {
+      let reply = @engine.create_session_from_message(
+        state.manager,
+        payload,
+        start=start => state.start_suggested_session(start),
+        on_created=created => {
+          publish_session_changed(state, "created", created, payload.workspace)
+        },
+        on_worktree_changed=(workspace, worktrees) => {
+          publish_worktree_changed(state, workspace, worktrees)
+        },
+      )
+      publish_session_changed(
+        state,
+        "suggestion_started",
+        payload.session,
+        payload.workspace,
+      )
+      reply
+    }),
     Endpoint(@commands.session_artifacts_list, payload => {
       @engine.session_artifacts_list(state.manager, payload.session)
     }),

@@ -551,11 +551,13 @@ fn Block::render(
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  session_view? : (Int32, Int32, String) -> @html.Html,
 ) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
     Empty(empty) => empty.render(locale~, actions)
-    Minimal(content) => content.render(locale~, actions, artifact_view?)
+    Minimal(content) =>
+      content.render(locale~, actions, artifact_view?, session_view?)
     Item(
       item~,
       anchor~,
@@ -568,6 +570,11 @@ fn Block::render(
     ) =>
       transcript_item_view(
         artifact_view?,
+        session_view?=session_view.bind(render => {
+          item.sequence.map(sequence => {
+            (block, prompt) => render(sequence, block, prompt)
+          })
+        }),
         locale~,
         item,
         on_open,

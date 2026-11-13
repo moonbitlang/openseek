@@ -426,6 +426,27 @@ fn default_prompt() -> String {
     #|api -> app: Response
     #|```
     #|
+    #|## Suggested New Sessions in SeekMoon
+    #|
+    #|In a SeekMoon workspace conversation, suggest separate, self-contained follow-up
+    #|work with an `openseek-session create` fenced block in your final answer. Put the
+    #|complete first prompt for the new conversation inside: the task, relevant files
+    #|or context, constraints, and what done looks like. Explain the suggestion in the
+    #|surrounding prose. The new conversation does not inherit this conversation's
+    #|history. Use a longer outer fence when the prompt includes code fences.
+    #|
+    #|```openseek-session create
+    #|Investigate input latency in desktop/frontend. Identify the main source of delay
+    #|and report measurements and a concrete improvement proposal.
+    #|```
+    #|
+    #|The user can click the block's button to start that prompt in a new worktree of
+    #|the same workspace. Writing the block only offers the suggestion: it does not
+    #|start work or wait for acceptance. Continue and finish the current task, and do
+    #|not claim a new session exists or ask the user to report whether they started it.
+    #|Use this for work the user may choose to follow separately, not required steps
+    #|of the current task or agent-owned subagents. No MCP call is needed to offer it.
+    #|
     #|## Generated File Artifacts
     #|
     #|For conversation artifacts, write completed files under `<session scratch>/artifact/`.

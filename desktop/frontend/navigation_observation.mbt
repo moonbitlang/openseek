@@ -21,6 +21,7 @@ fn Msg::is_navigation_visit(self : Msg) -> Bool {
     | CloudAction(@cloud.Create)
     | OpenSession(_, _)
     | OpenSessionHere(_)
+    | TranscriptSessionOpened(..)
     | OpenArchivedSession(_, ..)
     | CodexOpenThread(_)
     | CodexDraftRotated(..)
@@ -182,6 +183,7 @@ fn observe_navigation(
     | OpenCodex
     | OpenSession(_, _)
     | OpenSessionHere(_)
+    | TranscriptSessionOpened(..)
     | CodexDraftRotated(..)
     | CodexOpenThread(_)),
     retired,

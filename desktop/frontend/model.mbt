@@ -1394,6 +1394,7 @@ priv struct Model {
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
   conversation_fork : ConversationFork?
+  session_suggestions : SessionSuggestions
   fork_focus : ConversationSelection?
   // Immediate sidebar intent. The loaded `active_session` remains separate so
   // an older async snapshot cannot steal highlight or expose stale content.
@@ -1937,6 +1938,8 @@ priv enum Msg {
     Result[@protocol.SessionForkReply, String],
     fresh_session~ : String
   )
+  SessionSuggestion(SessionSuggestionMsg)
+  TranscriptSessionOpened(slot~ : String, session~ : String)
   // Open a row from the archived index. Its workspace is part of the row's
   // durable placement and selects the archived twin without restoring it.
   OpenArchivedSession(
@@ -2813,6 +2816,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     deletes_in_flight: [],
     conversation_rename: None,
     conversation_fork: None,
+    session_suggestions: SessionSuggestions::empty(),
     fork_focus: None,
     selected_conversation: None,
     conversation_load_failure: None,

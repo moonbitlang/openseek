@@ -23,6 +23,8 @@ pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.Work
 
 pub fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply raise EngineError
 
+pub async fn create_session_from_message(EngineManager, @protocol.SessionCreateFromMessagePayload, start~ : async (@protocol.StartPayload) -> Unit, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionCreateFromMessageReply
+
 pub async fn delete_archived_session(EngineManager, String, String, (String, String) -> Unit, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionsReply
 
 pub async fn delete_session(EngineManager, String, String, (String, String) -> Unit, worktree? : String, force? : Bool, edit_replacement? : EditReplacement, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
@@ -72,6 +74,8 @@ pub async fn session_artifacts_list(EngineManager, String) -> @protocol.SessionA
 pub async fn session_artifacts_update(EngineManager, String, (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts, () -> Unit) -> @protocol.SessionArtifacts
 
 pub async fn session_command(EventSink, EngineManager, @protocol.SessionCommandPayload) -> @protocol.SessionCommandReply
+
+pub async fn session_suggestions(EngineManager, @protocol.SessionSuggestionsPayload) -> @protocol.SessionSuggestionsReply
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
