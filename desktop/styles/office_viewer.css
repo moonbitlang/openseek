@@ -130,7 +130,7 @@
   position: relative;
   min-height: 100%;
   color: var(--color-text-primary);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-canvas);
 }
 
 /* PDF.js owns page, canvas, text, and annotation geometry. Its scroll container
