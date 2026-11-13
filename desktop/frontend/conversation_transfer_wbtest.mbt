@@ -158,3 +158,79 @@ test "a finished Cloud import refreshes the list and opens the new chat" {
   assert_false(stale.session_import_dialog.is_open())
   assert_true(stale.cloud_identity() == switched.cloud_identity())
 }
+
+///|
+test "account changes retire pending host shares before late replies can expire the new account" {
+  let emit = test_dispatch()
+  let first = account_error_test_account("account-a")
+  let second = account_error_test_account("account-b")
+  let initial = { ..test_model(), is_desktop: true, account: Some(first), }
+  let (_, opened) = update(
+    emit,
+    OpenExport(Local, {
+      session: "session",
+      workspace: "/workspace",
+      title: "Conversation",
+      archived: false,
+    }),
+    initial,
+  )
+  let (_, pending) = update(emit, ExportDialog(Share), opened)
+  // Opening and sharing each advance the dialog generation.
+  let expired = @export_dialog.Published(
+    generation=2,
+    Ok(@protocol.SignInRequired),
+  )
+  assert_true(pending.export_dialog.account_expired(expired))
+  // A current rejection must still expire its own account.
+  let (_, rejected) = update(emit, ExportDialog(expired), pending)
+  assert_true(rejected.account is None)
+  for dismissed in [false, true] {
+    let previous = if dismissed {
+      update(emit, ExportDialog(Close), pending).1
+    } else {
+      pending
+    }
+    let (_, signed_out) = update(
+      emit,
+      AccountLoaded(previous.account_epoch, Ok(None)),
+      previous,
+    )
+    let (_, switched) = update(
+      emit,
+      AccountLoaded(signed_out.account_epoch, Ok(Some(second))),
+      signed_out,
+    )
+    assert_true(switched.account == Some(second))
+    assert_false(switched.export_dialog.is_open())
+    let (_, reopened) = update(
+      emit,
+      OpenExport(Local, {
+        session: "other-session",
+        workspace: "/workspace",
+        title: "Other conversation",
+        archived: false,
+      }),
+      switched,
+    )
+    let (_, new_pending) = update(emit, ExportDialog(Share), reopened)
+    for current in [switched, new_pending] {
+      for
+        reply in [
+          expired,
+          @export_dialog.Published(
+            generation=2,
+            Ok(@protocol.Shared(url="https://shares.test/old")),
+          ),
+        ] {
+        let (_, late) = update(emit, ExportDialog(reply), current)
+        let (_, repeated) = update(emit, ExportDialog(reply), current)
+        assert_true(late.account == Some(second))
+        assert_eq(late.account_epoch, current.account_epoch)
+        assert_eq(late.remote_connecting, current.remote_connecting)
+        assert_true(late.export_dialog == current.export_dialog)
+        assert_true(late.export_dialog == repeated.export_dialog)
+      }
+    }
+  }
+}

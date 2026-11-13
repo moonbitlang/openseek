@@ -19,3 +19,11 @@ import {
 }
 
 supported_targets = "js"
+
+import {
+  "moonbitlang/core/async",
+} for "wbtest"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

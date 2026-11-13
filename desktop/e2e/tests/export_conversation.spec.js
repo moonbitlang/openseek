@@ -241,31 +241,6 @@ test('browser Work sharing captures the selected host but publishes as the brows
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a host share pending during account change never uses the new account or expires it', async ({ page }) => {
-  const app = new ExportHarness(page);
-  let finish;
-  app.pendingShare = new Promise(resolve => finish = resolve);
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect.poll(() => app.count('session.share')).toBe(1);
-  await dialog.getByRole('button', { name: 'Close export dialog' }).click();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Account', exact: true }).click();
-  const account = page.getByRole('region', { name: 'Account', exact: true });
-  await account.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(account.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
-  app.userId = '456';
-  await account.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(account).toContainText('@user-456');
-  app.shareReply = { status: 'sign_in_required' };
-  finish();
-  await expect.poll(() => app.hostShares.length).toBe(1);
-  expect(app.hostShares[0].authorization).toEqual({ kind: 'local_account', user_id: '123' });
-  await expect(account).toContainText('@user-456');
-  expect(app.count('auth.disconnect')).toBe(1);
-  expect(app.pageErrors).toEqual([]);
-});
 
 for (const status of [401, 403]) {
   test(`remote grant HTTP ${status} ${status === 401 ? 'expires only the account' : 'keeps the account retryable'}`, async ({ page }) => {
