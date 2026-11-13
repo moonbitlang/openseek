@@ -1,8 +1,8 @@
 // The app's entry: the frontend package is the executable, moon emits it as
 // `frontend.js`, and one bundle with one document serves both the proton
 // window and the console page openseek-api hosts. The proton window carries
-// the `__MoonBit__` bridge; the Android APK and Local Console mark their
-// documents with metadata. `main` reads that environment before rendering.
+// the `__MoonBit__` bridge; Android adds an app token to its User-Agent, and
+// the Local Console marks its document. `main` reads these before rendering.
 
 ///|
 priv suberror AppShortcutSubscription {
@@ -562,12 +562,18 @@ fn main {
     .query_selector("meta[name='seekmoon-local-console']")
     .to_option()
     is Some(_)
-  // Android marks the document it serves, including downloaded releases and
-  // reloads on /cloud and /device routes. A phone browser has no marker.
-  let android = @dom.document()
-    .query_selector("meta[name='seekmoon-android-app']")
-    .to_option()
-    is Some(_)
+  // The shell sets its app token before loading any page, so this works for
+  // both bundled and downloaded frontends, including after a reload.
+  let android = if @interop.js_prop(
+      @js.Value::cast_from(@dom.window().navigator()),
+      "userAgent",
+    )
+    is Some(value) &&
+    (@js.Cast::into(value) : String?) is Some(user_agent) {
+    user_agent.contains(" SeekMoonAndroid/")
+  } else {
+    false
+  }
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.

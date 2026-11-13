@@ -1299,7 +1299,7 @@ priv struct Model {
   // update would yank the app out from under whoever is at the machine.
   is_desktop : Bool
   // The APK still uses the relay console, but already has the app installed.
-  // Read from the document served by its shell once at startup.
+  // Read from the shell's User-Agent token once at startup.
   is_android_app : Bool
   // Whether the native window is currently focused. Conversation navigation
   // has its own `focused` channel; both facts, together with `screen`, decide

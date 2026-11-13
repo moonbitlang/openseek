@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
             allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             mediaPlaybackRequiresUserGesture = true
+            // Identify the app before any bundled or downloaded page runs.
+            userAgentString += " SeekMoonAndroid/${BuildConfig.VERSION_NAME}"
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
@@ -109,15 +111,10 @@ class MainActivity : ComponentActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
                 if (request.isForMainFrame && request.method == "GET" &&
-                    ConsoleOrigin.contains(url.toString()) &&
-                    (url.path == "${ConsoleOrigin.ASSET_PATH}index.html" || ConsoleOrigin.servesDocument(url.path))) {
+                    ConsoleOrigin.contains(url.toString()) && ConsoleOrigin.servesDocument(url.path)) {
                     val document = release?.let { File(it, "index.html").inputStream() }
                         ?: this@MainActivity.assets.open("index.html")
-                    // Mark every document served inside the app, including a
-                    // downloaded Browser release and reloads after navigation.
-                    val html = document.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                        .replace("<head>", "<head>\n    <meta name=\"seekmoon-android-app\" content=\"true\" />")
-                    return WebResourceResponse("text/html", "utf-8", html.byteInputStream(Charsets.UTF_8))
+                    return WebResourceResponse("text/html", "utf-8", document)
                 }
                 return assets.shouldInterceptRequest(url)
             }
