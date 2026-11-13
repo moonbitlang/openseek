@@ -99,7 +99,7 @@ test('account sign-in remains independent of the remote access toggle and signs 
 
   auth.finishConnect();
   const signOut = section.getByRole('button', { name: 'Sign out', exact: true });
-  await expect(section.getByText('@octocat', { exact: true })).toBeVisible();
+  await expect(section.getByText('octocat', { exact: true })).toBeVisible();
   await expect(signOut).toBeEnabled();
   await page.getByRole('tab', { name: 'Connections', exact: true }).click();
   const toggle = remoteAccess.getByRole('switch', { name: 'Remote control', exact: true });

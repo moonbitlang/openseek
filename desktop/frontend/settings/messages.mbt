@@ -16,6 +16,14 @@ pub(all) enum Message {
   Account
   SignOut
   SignOutDescription
+  Devices
+  DeviceOffline
+  RemoveDevice
+  RemovingDevice
+  RemoveDeviceWarning
+  DeviceIncompatible
+  NoDevices
+  LoadingDevices
   SignIn
   SignInChatGPT
   CodexAccountDescription
@@ -376,6 +384,46 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "退出登入將移除此桌面應用中 Codex 使用的 ChatGPT 憑據。"
     (Japanese, SignOutDescription) =>
       "ログアウトすると、このデスクトップの Codex が使用する ChatGPT の認証情報が削除されます。"
+    (English, RemoveDevice) => "Remove"
+    (Spanish, RemoveDevice) => "Eliminar"
+    (SimplifiedChinese, RemoveDevice) => "移除"
+    (TraditionalChinese, RemoveDevice) => "移除"
+    (Japanese, RemoveDevice) => "削除"
+    (English, RemovingDevice) => "Removing…"
+    (Spanish, RemovingDevice) => "Eliminando…"
+    (SimplifiedChinese, RemovingDevice) => "正在移除…"
+    (TraditionalChinese, RemovingDevice) => "正在移除…"
+    (Japanese, RemovingDevice) => "削除中…"
+    (English, RemoveDeviceWarning) => "Removing this device will immediately disconnect its remote connection."
+    (Spanish, RemoveDeviceWarning) => "Al eliminar este dispositivo, se desconectará inmediatamente su conexión remota."
+    (SimplifiedChinese, RemoveDeviceWarning) => "移除后将立即断开此设备的远程连接。"
+    (TraditionalChinese, RemoveDeviceWarning) => "移除後將立即中斷此裝置的遠端連線。"
+    (Japanese, RemoveDeviceWarning) => "削除すると、このデバイスのリモート接続が直ちに切断されます。"
+    (English, Devices) => "Device"
+    (Spanish, Devices) => "Dispositivo"
+    (SimplifiedChinese, Devices) => "设备"
+    (TraditionalChinese, Devices) => "裝置"
+    (Japanese, Devices) => "デバイス"
+    (English, DeviceOffline) => "Offline"
+    (Spanish, DeviceOffline) => "Sin conexión"
+    (SimplifiedChinese, DeviceOffline) => "离线"
+    (TraditionalChinese, DeviceOffline) => "離線"
+    (Japanese, DeviceOffline) => "オフライン"
+    (English, DeviceIncompatible) => "Incompatible version"
+    (Spanish, DeviceIncompatible) => "Versión incompatible"
+    (SimplifiedChinese, DeviceIncompatible) => "版本不兼容"
+    (TraditionalChinese, DeviceIncompatible) => "版本不相容"
+    (Japanese, DeviceIncompatible) => "互換性のないバージョン"
+    (English, NoDevices) => "No devices"
+    (Spanish, NoDevices) => "No hay dispositivos"
+    (SimplifiedChinese, NoDevices) => "暂无设备"
+    (TraditionalChinese, NoDevices) => "暫無裝置"
+    (Japanese, NoDevices) => "デバイスなし"
+    (English, LoadingDevices) => "Loading…"
+    (Spanish, LoadingDevices) => "Cargando…"
+    (SimplifiedChinese, LoadingDevices) => "正在加载…"
+    (TraditionalChinese, LoadingDevices) => "正在載入…"
+    (Japanese, LoadingDevices) => "読み込み中…"
     (English, SignIn) => "Sign in"
     (Spanish, SignIn) => "Iniciar sesión"
     (SimplifiedChinese, SignIn) => "登录"

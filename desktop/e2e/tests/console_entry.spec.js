@@ -30,46 +30,68 @@ test('a signed-out device page offers login and preserves the page return path',
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the sidebar selector lists Cloud and online devices and switches between them', async ({ page }) => {
+test('device management lists connection states and refreshes the roster', async ({ page }) => {
   const app = await installConsole(page);
-  await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [
+  await page.routeWebSocket('**/v2/devices/device-b/ws?*', socket => {
+    socket.onMessage(async raw => {
+      const request = JSON.parse(raw.toString());
+      if (request.id !== undefined) socket.send(JSON.stringify({
+        jsonrpc: '2.0', id: request.id, result: await app.replyFor(request),
+      }));
+    });
+    socket.send(JSON.stringify({
+      jsonrpc: '2.0', method: 'agent.connected', params: { protocol: app.hostProtocol },
+    }));
+  });
+  let devices = [
     { id: 'device-a', name: 'Test Mac', online: true },
     { id: 'offline', name: 'Office computer', online: false },
     { id: 'device-b', name: 'Studio', online: true },
-  ] } }));
-  // A Cloud page works on no device, so the selector names Cloud, but it
-  // connects the online devices for the Work list.
+  ];
+  await page.route('**/v2/devices', route => route.fulfill({ json: { devices } }));
+  const removed = [];
+  let failRemoval = true;
+  await page.route('**/v2/devices/*', async route => {
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    const id = route.request().url().split('/').pop();
+    if (failRemoval) return route.fulfill({ status: 500 });
+    removed.push(id);
+    devices = devices.filter(device => device.id !== id);
+    return route.fulfill({ status: 204 });
+  });
+  async function openDevices() {
+    await page.locator('.sidebar-toggle').click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: 'Device', exact: true }).click();
+  }
+  const panel = page.getByRole('tabpanel', { name: 'Device', exact: true });
+  const row = name => panel.locator('.form-row').filter({ has: page.getByText(name, { exact: true }) });
   await page.goto('/cloud');
-  await page.locator('.sidebar-toggle').click();
-  const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
-  await expect(selector).toContainText('Cloud');
-  await expect.poll(() => app.socket !== null).toBe(true);
-  await selector.click();
-  await expect(page.getByRole('menuitem', { name: 'Cloud', exact: true })).toBeDisabled();
-  await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeEnabled();
-  await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeEnabled();
-  await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
-  await page.getByRole('menuitem', { name: 'Test Mac', exact: true }).click();
-  await expect(page).toHaveURL(/\/device\/device-a\/chat(\/new)?$/);
-  await expect.poll(() => app.socket !== null).toBe(true);
-  // On a device page it names that device and checks it in the menu.
-  await page.locator('.sidebar-toggle').click();
-  await expect(selector).toContainText('Test Mac');
-  await expect.poll(async () => Math.abs((await page.locator('aside').boundingBox()).x)).toBeLessThan(1);
-  await selector.click();
-  await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeDisabled();
-  await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
-  await assertFits(page);
-  await page.getByRole('menuitem', { name: 'Studio', exact: true }).click();
-  await expect(page).toHaveURL(/\/device\/device-b\/chat(\/new)?$/);
-  // A device page returns to Cloud through the same menu.
-  await page.locator('.sidebar-toggle').click();
-  await selector.click();
-  await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeDisabled();
-  await page.getByRole('menuitem', { name: 'Cloud', exact: true }).click();
+  await openDevices();
+  await expect(row('Test Mac').getByRole('status')).toHaveText('Connected');
+  await expect(row('Studio').getByRole('status')).toHaveText('Connected');
+  await expect(row('Office computer').getByRole('status')).toHaveText('Offline');
   await expect(page).toHaveURL(/\/cloud$/);
-  await page.locator('.sidebar-toggle').click();
-  await expect(selector).toContainText('Cloud');
+  await assertFits(page);
+  await row('Office computer').getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('500');
+  await expect(row('Office computer')).toBeVisible();
+  failRemoval = false;
+  await row('Office computer').getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(row('Office computer')).toHaveCount(0);
+  expect(removed).toEqual(['offline']);
+  await row('Studio').getByRole('button', { name: 'Remove', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Remove', exact: true });
+  await expect(confirmation).toContainText('immediately disconnect');
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(removed).toEqual(['offline']);
+  await row('Studio').getByRole('button', { name: 'Remove', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(row('Studio')).toHaveCount(0);
+  expect(removed).toEqual(['offline', 'device-b']);
+  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(row('Office computer')).toHaveCount(0);
+  await expect(row('Test Mac').getByRole('status')).toHaveText('Connected');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -112,25 +134,7 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the device selector opens upward even when its menu would fit below', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const app = await installConsole(page);
-  await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [
-    { id: 'device-a', name: 'Test Mac', online: true },
-  ] } }));
-  await page.goto('/device/device-a/chat');
-  const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
-  await expect(selector).toContainText('Test Mac');
-  await selector.click();
-  const menu = page.getByRole('menu');
-  await expect(menu).toHaveAttribute('data-positioned', 'true');
-  const menuBox = await menu.boundingBox();
-  const selectorBox = await selector.boundingBox();
-  expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(selectorBox.y);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('the device menu explains how to add a computer, starting from its installer', async ({ page }, testInfo) => {
+test('Device settings explain how to add a computer, starting from its installer', async ({ page }, testInfo) => {
   const app = await installConsole(page);
   await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [] } }));
   let manifestRequests = 0;
@@ -147,9 +151,9 @@ test('the device menu explains how to add a computer, starting from its installe
   });
   await page.goto('/cloud');
   await page.locator('.sidebar-toggle').click();
-  await page.getByRole('button', { name: 'Choose a device', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: 'No devices online' })).toBeDisabled();
-  await page.getByRole('menuitem', { name: 'Add a device', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Device', exact: true }).click();
+  await page.getByRole('button', { name: 'Add a device', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add a device' });
   await expect(dialog.getByRole('link', { name: /macOS · Apple Silicon/ }))
     .toHaveAttribute('href', 'https://example.com/mac.dmg');
@@ -158,7 +162,7 @@ test('the device menu explains how to add a computer, starting from its installe
   await expect(dialog).toContainText('Turn on Remote control under Settings → Connections → Remote access.');
   const steps = dialog.locator('ol > li');
   await expect(steps).toHaveCount(4);
-  await expect(steps.nth(3)).toHaveText('The computer then appears in the device menu whenever SeekMoon is running on it.');
+  await expect(steps.nth(3)).toHaveText('The computer then appears online under Settings → Device whenever SeekMoon is running on it.');
   await assertFits(page);
   await page.screenshot({ path: testInfo.outputPath('add-device-four-steps.png') });
   // The dialog reuses the list the page already read.

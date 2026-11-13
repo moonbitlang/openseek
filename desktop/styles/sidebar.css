@@ -123,24 +123,6 @@
   line-height: calc(20 / 12);
 }
 
-.sidebar-button.device-selector {
-  grid-template-columns: 20px minmax(0, 1fr) 16px;
-
-  & .sidebar-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.console-account {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
 .console-avatar {
   flex: none;
   width: 16px;
@@ -148,7 +130,6 @@
   border-radius: 50%;
 }
 .console-login {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -169,11 +150,6 @@
 .console-account-action:disabled {
   opacity: 0.5;
   cursor: default;
-}
-.console-notice {
-  padding: var(--space-1) var(--space-4) var(--space-3);
-  color: var(--color-warning);
-  font-size: var(--font-size-xs);
 }
 
 .conversation-row {

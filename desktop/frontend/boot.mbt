@@ -540,11 +540,8 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     open_schedules: self.emit(OpenSchedules),
     open_skills: self.emit(OpenSkills),
     open_settings: self.emit(OpenSetup),
-    refresh_account: self.emit(Console(RefreshClicked)),
-    sign_out: self.emit(Console(SignOutClicked)),
+    open_account: self.emit(SettingsSectionSelected(Account)),
     open_downloads: self.emit(OpenDownloads),
-    open_add_device: self.emit(OpenAddDevice),
-    select_device: id => self.emit(DeviceChosen(id)),
     select_mode: mode => self.emit(SidebarModeSelected(mode)),
     section,
   }

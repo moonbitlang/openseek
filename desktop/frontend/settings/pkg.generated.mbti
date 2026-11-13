@@ -25,6 +25,14 @@ pub(all) enum Message {
   Account
   SignOut
   SignOutDescription
+  Devices
+  DeviceOffline
+  RemoveDevice
+  RemovingDevice
+  RemoveDeviceWarning
+  DeviceIncompatible
+  NoDevices
+  LoadingDevices
   SignIn
   SignInChatGPT
   CodexAccountDescription

@@ -658,36 +658,6 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     RestartingForUpdate(..) => Some(shell_text(self.locale, RestartingLabel))
     _ => None
   }
-  // Local host access is not a Cloud account. The Local Console displays
-  // its independent Cloud account, while a relay browser owns its own sign-in.
-  let account_identity = if self.is_local_console() {
-    self.account.map(account => (account.user.login, account.user.avatar_url))
-  } else {
-    match self.console.auth {
-      AuthSignedIn(login~, avatar~) if !self.is_desktop => Some((login, avatar))
-      _ => None
-    }
-  }
-  let account : @sidebar.Account? = account_identity.map(identity => {
-    login: identity.0,
-    avatar: identity.1,
-    busy: self.console.busy,
-    notice: self.account_error.map(failure => failure.text(self.locale)),
-    page: if self.console.page_device is Some(id) {
-      DevicePage(
-        id~,
-        name=self.console.roster
-          .iter()
-          .find_first(meta => meta.id == id)
-          .map(meta => meta.name),
-      )
-    } else {
-      CloudPage
-    },
-    online_devices: self.console.roster
-    .filter(meta => meta.online)
-    .map(meta => meta.device_choice()),
-  })
   @sidebar.Input::{
     search: self.session_search,
     notices,
@@ -704,7 +674,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     skills_active: self.management_dialog is Some(Skills),
     settings_active: self.management_dialog is Some(Settings(_)),
     downloads: self.is_relay_console(),
-    account,
+    account: self.sidebar_account(),
   }.filtered()
 }
 
@@ -888,7 +858,7 @@ fn settings_account_rows(
       } else {
         @html.img(src=account.user.avatar_url, alt="", class="console-avatar")
       },
-      @html.span("@" + account.user.login),
+      @html.span(account.user.login),
       @html.button(
         class="button secondary",
         attrs=@html.Attrs::build().disabled(
@@ -2644,6 +2614,7 @@ fn view(
     management_dialog_view(
       dispatch, model, skills_list_html, archived_chats_html,
     ),
+    remove_device_dialog(dispatch, model),
     delete_modal(
       locale=model.locale,
       dispatch,
@@ -3148,4 +3119,19 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="cloud-home management-page", [
     @html.div(class="empty", children),
   ])
+}
+
+///|
+fn Model::sidebar_account(self : Model) -> @sidebar.Account? {
+  // Local host access is not a Cloud account. The Local Console displays
+  // its independent Cloud account, while a relay browser owns its own sign-in.
+  let account_identity = if self.is_desktop || self.is_local_console() {
+    self.account.map(account => (account.user.login, account.user.avatar_url))
+  } else {
+    match self.console.auth {
+      AuthSignedIn(login~, avatar~) if !self.is_desktop => Some((login, avatar))
+      _ => None
+    }
+  }
+  account_identity.map(identity => { login: identity.0, avatar: identity.1, })
 }

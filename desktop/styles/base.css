@@ -541,3 +541,8 @@ html.native-titlebar-overlay .app
 .content.panel-expanded .editor-tabsbar {
   padding-inline-start: var(--main-titlebar-leading-inset);
 }
+
+/* Account glyph from the bundled Codicon font. */
+.codicon-account::before {
+  content: "\eb99";
+}

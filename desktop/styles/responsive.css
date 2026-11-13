@@ -149,9 +149,6 @@
   .portal-card > button {
     min-height: 48px;
   }
-  .console-account {
-    flex-wrap: wrap;
-  }
   .console-account-action {
     min-height: 44px;
   }

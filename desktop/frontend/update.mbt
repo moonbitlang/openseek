@@ -1786,6 +1786,16 @@ fn update(
       }
     _ => model
   }
+  let model = if previous.account.map(a => a.token) !=
+    model.account.map(a => a.token) ||
+    (
+      model.console.device_removal is Confirming(_) &&
+      model.management_dialog is None
+    ) {
+    { ..model, console: { ..model.console, device_removal: Idle, }, }
+  } else {
+    model
+  }
   let model = model.restore_message_approvals()
   let model = if model.artifact_followup is Some(followup) &&
     model.transcript_slot().map(slot => slot.key()) != Some(followup.slot) {
@@ -1819,6 +1829,12 @@ fn update(
       @cmd.none
     },
     dialog_cmd,
+    if previous.console.device_removal is Confirming(_) &&
+      !(model.console.device_removal is Confirming(_)) {
+      @dialog.close("remove-device-dialog")
+    } else {
+      @cmd.none
+    },
     if previous.delete_confirm is Open(_) && !(model.delete_confirm is Open(_)) {
       @dialog.close("delete-chat-dialog")
     } else {
@@ -4976,17 +4992,6 @@ fn update_msg(
             ChatMode
           },
         },
-      )
-    DeviceChosen(device) =>
-      (
-        @nav.load(
-          if device is Some(id) {
-            @routes.device_entry_path(id)
-          } else {
-            "/cloud"
-          },
-        ),
-        model,
       )
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any

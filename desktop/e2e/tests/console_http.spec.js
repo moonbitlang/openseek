@@ -65,6 +65,7 @@ test('same-origin cookies and empty logout POST survive HTTP transport replaceme
     };
     await route.fulfill({ status: 204 });
   });
+  await page.locator('.console-account').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   expect(logout.method).toBe('POST');
@@ -84,6 +85,7 @@ test('logout failure retains the session and decodes the response text', async (
   }));
   await page.goto('/index.html?device=device-a');
   await app.openSession();
+  await page.locator('.console-account').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByText('Retry �', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
