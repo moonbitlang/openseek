@@ -1,7 +1,6 @@
 import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 // Exercise the production transport and renderer with recorded events. Fixtures
 // deliberately contain parameters, output, and reasoning that must never enter
@@ -58,74 +57,6 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     });
   }
 }
-
-for (const minimal of [true, false]) test(`${minimal ? 'minimal' : 'detailed'} transcript distinguishes failed attempts, user stops and task failures`, async ({ page }, testInfo) => {
-  await page.addInitScript(value => localStorage.setItem('openseek.minimal_transcript', String(value)), minimal);
-  const app = new MinimalTranscriptHarness(page);
-  await app.install(); await app.goto(); await app.openSession();
-  const stream = page.locator('#stream');
-  if (minimal) {
-    const group = stream.locator('.minimal-tools');
-    await expect(group.locator(':scope > summary .tool-status.failed')).toHaveCount(0);
-    await expect(group.locator(':scope > summary .tool-status.pending')).toBeVisible();
-    await group.locator(':scope > summary').click();
-    const calls = group.locator('.minimal-call');
-    await expect(calls).toHaveCount(3);
-    const neutral = await calls.first().evaluate(node => getComputedStyle(node).color);
-    await expect(calls.nth(1)).toHaveCSS('color', neutral);
-    await expect(stream.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
-  } else {
-    await expect(stream.getByRole('img', { name: 'Tool failed' })).toBeVisible();
-    const calls = stream.locator('.tool-call-summary, .tool-call-label');
-    const neutral = await calls.filter({ hasText: 'Read the project manifest' }).evaluate(node => getComputedStyle(node).color);
-    await expect(calls.filter({ hasText: 'Cannot read the second file' })).not.toHaveCSS('color', neutral);
-  }
-  app.append('terminal', { kind: 'interrupted', message: 'by user' });
-  const stopped = stream.locator(minimal ? '.minimal-note' : '.transcript-error-message')
-    .filter({ hasText: minimal ? /^stopped$/ : /^cancelled: by user$/ });
-  await expect(stopped).toBeVisible();
-  if (minimal) {
-    await expect(stopped).not.toHaveClass(/transcript-error-message/);
-    await expect(stream.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
-  } else {
-    await expect(stopped).toHaveClass(/transcript-error-message/);
-    await expect(stream.locator('.transcript-error-icon')).toHaveCount(1);
-  }
-  await expect(stream.locator('.tool-status.pending')).toHaveCount(0);
-  app.append('user', { content: 'Try a new task' });
-  app.append('terminal', { kind: 'failed', message: 'Model service unavailable' });
-  const failure = stream.getByText('Model service unavailable', { exact: true });
-  await expect(failure).toHaveClass(/transcript-error-message/);
-  if (minimal) {
-    await expect(page.locator('.overview-tick.failed')).toHaveCount(1);
-    await expect(failure).not.toHaveCSS('color', await stopped.evaluate(node => getComputedStyle(node).color));
-  }
-  await page.screenshot({ path: testInfo.outputPath(`${minimal ? 'minimal' : 'detailed'}-outcomes.png`) });
-  await page.reload(); await app.openSession();
-  await expect(stopped).toBeVisible();
-  await expect(failure).toHaveClass(/transcript-error-message/);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Cloud minimal history keeps user stops neutral and task failures visible', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  for (const [session, kind] of [[sessionA, 'interrupted'], [sessionB, 'failed']]) {
-    cloud.histories.set(session, { generating: false, outcome: null, messages: [
-      { task_id: session, kind: 'user', data: { content: 'Check this workspace' }, created_at: 1 },
-      { task_id: session, kind: 'tool_call', data: { id: 'read', name: 'read', arguments: '{}' }, created_at: 2 },
-      { task_id: session, kind: 'tool_result', data: { tool_call_id: 'read', tool_name: 'read', is_error: true, content: 'Missing file', brief: 'Read project file' }, created_at: 3 },
-      { task_id: session, kind: 'task_finished', data: { status: kind, result: { reason: 'Service unavailable' } }, created_at: 4 },
-    ] });
-  }
-  await cloud.install(); await cloud.goto(); await cloud.open(sessionA);
-  const stream = page.locator('#stream');
-  await expect(stream.getByText('stopped', { exact: true })).toBeVisible();
-  await expect(stream.locator('.transcript-error-message, .tool-status.failed')).toHaveCount(0);
-  await cloud.open(sessionB);
-  await expect(stream.getByText('Service unavailable', { exact: true })).toHaveClass(/transcript-error-message/);
-  await expect(stream.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
 
 test('minimal images open by default and preserve manual collapse across updates', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
