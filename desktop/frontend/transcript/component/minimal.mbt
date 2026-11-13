@@ -764,7 +764,7 @@ fn MinimalContent::render(
       @html.details(class="minimal-context-summary", [
         self.summary_view(locale~),
         @html.div(
-          class="minimal-process-body msg-content markdown",
+          class="minimal-process-body msg-content markdown moonbit-viewer-markdown-content",
           @markdown.markdown_nodes(locale~, text, open_file=path => {
             (actions.open)(path)
           }),

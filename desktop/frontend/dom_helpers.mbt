@@ -77,8 +77,9 @@ fn AppFontSize::current() -> AppFontSize {
 }
 
 ///|
-/// Keep measured text widgets aligned with CSS even when there is no saved
-/// preference: their pre-mount caches cannot inherit the stylesheet default.
+/// Apply root CSS and measured-renderer updates together: CSS changes alone do
+/// not update code/diff Viewer font metrics. Run even without a saved preference
+/// so pre-mount pixel caches receive the stylesheet default.
 fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard @dom.document().get_document_element() is Some(root) else { return }
@@ -86,8 +87,14 @@ fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
       Some(size) => root.set_attribute("data-font-size", size.wire())
       None => root.remove_attribute("data-font-size")
     }
-    // The registered <length> resolves rem/calc to pixels, just as it does
-    // when a new terminal mounts. Read after applying the root setting.
+    scheduler.add(
+      @fileeditor.apply_font_size(
+        AppFontSize::current().base_pixels().to_double(),
+      ),
+    )
+    // The terminal intentionally uses the compact scale, not the code/diff
+    // Viewer's body scale. The registered <length> resolves rem/calc to pixels
+    // after applying the root setting, as it does on mount.
     let size = @dom.window()
       .get_computed_style(root)
       .get_property_value("--font-size-sm")
@@ -95,7 +102,6 @@ fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
       .to_owned()
     guard size.strip_suffix("px") is Some(value) else { return }
     let pixels = @string.parse_double(value) catch { _ => return }
-    scheduler.add(@fileeditor.apply_font_size(pixels))
     scheduler.add(@terminal.apply_font_size(pixels))
   })
 }

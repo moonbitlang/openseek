@@ -272,9 +272,6 @@ fn Theme::wire(self : Theme) -> String {
 }
 
 ///|
-/// The base text size selected in Settings. The CSS token scale derives the
-/// surrounding app sizes from this choice; the editor and terminal receive
-/// the adjacent smaller pixel value because their glyphs look larger.
 #derive(Eq, Debug)
 priv struct AppFontSize(Int32)
 

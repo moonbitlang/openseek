@@ -111,7 +111,9 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
   let viewport = document.create_element("div")
   viewport.set_attribute("class", "moonbit-viewer-markdown-document-viewport")
   let article = document.create_element("article")
-  article.set_attribute("class", "moonbit-viewer-markdown-document-article")
+  article.set_attribute(
+    "class", "moonbit-viewer-markdown-document-article moonbit-viewer-markdown-content",
+  )
   let overlay_mount = document.create_element("div")
   overlay_mount.set_attribute(
     "class", "moonbit-viewer-markdown-document-overlays",

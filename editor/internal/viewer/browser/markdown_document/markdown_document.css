@@ -39,7 +39,6 @@
    * standalone Viewer baseline when an embedder provides no typography token. */
   font-size: var(--ui-font-size, 14px);
   line-height: 1.6;
-  overflow-wrap: anywhere;
 }
 
 /* The collapsed TOC is deliberately overlaid so it never shifts scroll or
@@ -73,6 +72,7 @@
   > :is(
     pre,
     table,
+    [role="region"]:has(> table),
     img,
     .moonbit-viewer-markdown-source-block,
     .moonbit-viewer-markdown-code-block,
@@ -81,15 +81,11 @@
   max-width: var(--markdown-figure-measure);
 }
 
-.moonbit-viewer-markdown-document-article table {
-  width: 100%;
-}
-
 /* Use one predictable vertical cadence instead of the browser's element-by-
  * element defaults: sections get a clear pause, headings stay attached to
  * their content, and ordinary blocks retain a comfortable reading beat. */
 .moonbit-viewer-markdown-document-article
-  > :where(
+  > :is(
     p,
     ul,
     ol,
@@ -98,6 +94,7 @@
     pre,
     hr,
     table,
+    [role="region"]:has(> table),
     details,
     .moonbit-viewer-markdown-source-block,
     .moonbit-viewer-markdown-code-block,
@@ -127,41 +124,11 @@
   margin-block: 32px 12px;
 }
 
-.moonbit-viewer-markdown-document-article > :first-child {
-  margin-top: 0;
-}
-
 .moonbit-viewer-markdown-document-article
   > :not([data-markdown-section-hidden]):not(
     :has(~ :not([data-markdown-section-hidden]))
   ) {
   margin-bottom: 0;
-}
-
-/* Keep the quote inset inside the same outer measure, but well short of the
- * browser's default: a callout that gives up 80px of a 640px measure reads as
- * a second, narrower column rather than as emphasis. Nested code and diagrams
- * still fill the quote rather than receiving a second prose constraint. */
-.moonbit-viewer-markdown-document-article blockquote {
-  box-sizing: border-box;
-  padding: 12px;
-  border-left: 3px solid var(--vscode-focusBorder, currentColor);
-  border-radius: 6px;
-  background: color-mix(
-    in srgb,
-    currentColor 6%,
-    var(--vscode-editor-background, #ffffff)
-  );
-}
-
-.moonbit-viewer-markdown-document[data-theme="dark"]
-  .moonbit-viewer-markdown-document-article
-  blockquote {
-  background: color-mix(
-    in srgb,
-    currentColor 6%,
-    var(--vscode-editor-background, #1e1e1e)
-  );
 }
 
 .moonbit-viewer-markdown-document-article > blockquote {
@@ -170,58 +137,10 @@
   padding-inline: 20px;
 }
 
-.moonbit-viewer-markdown-document-article blockquote blockquote {
-  margin-inline: 0;
-}
-
-.moonbit-viewer-markdown-document-article blockquote > :first-child {
-  margin-top: 0;
-}
-
-.moonbit-viewer-markdown-document-article blockquote > :last-child {
-  margin-bottom: 0;
-}
-
-/* Keep the document hierarchy readable without letting headings dominate the
- * workbench. These sizes are intentionally independent of browser defaults so
- * the same Markdown has a stable visual scale in every embedder. */
-.moonbit-viewer-markdown-document-article h1 {
-  font-size: 1.75em;
-  line-height: 1.2;
-}
-
-.moonbit-viewer-markdown-document-article h2 {
-  font-size: 1.375em;
-  line-height: 1.25;
-}
-
-.moonbit-viewer-markdown-document-article h3 {
-  font-size: 1.125em;
-  line-height: 1.3;
-}
-
-.moonbit-viewer-markdown-document-article :is(h4, h5, h6) {
-  font-size: 1em;
-  line-height: 1.35;
-}
-
 /* Folding controls live in the article's existing left padding so heading
  * text stays aligned with the prose regardless of the button's DOM order. */
 .moonbit-viewer-markdown-document-article :is(h1, h2, h3, h4, h5, h6) {
   position: relative;
-}
-
-.moonbit-viewer-markdown-document-article pre {
-  overflow: auto;
-  padding: 12px 16px;
-  border-radius: 6px;
-  background: color-mix(in srgb, currentColor 7%, transparent);
-}
-
-.moonbit-viewer-markdown-document-article code {
-  font-family: var(--editor-font-family, monospace);
-  font-size: var(--editor-font-size, 13px);
-  line-height: var(--editor-line-height, 20px);
 }
 
 .moonbit-viewer-markdown-code-block {
@@ -302,20 +221,19 @@
   opacity: 0.35;
 }
 
-.moonbit-viewer-markdown-fold-toggle::before {
+.moonbit-viewer-markdown-fold-toggle::before,
+.moonbit-viewer-markdown-toc-toggle::before {
   content: "";
-  width: 0;
-  height: 0;
-  border-left: 0.32em solid transparent;
-  border-right: 0.32em solid transparent;
-  border-top: 0.42em solid currentColor;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.14598 5.85423L7.64598 10.3542C7.84098 10.5492 8.15798 10.5492 8.35298 10.3542L12.853 5.85423C13.048 5.65923 13.048 5.34223 12.853 5.14723C12.658 4.95223 12.341 4.95223 12.146 5.14723L7.99998 9.29323L3.85398 5.14723C3.65898 4.95223 3.34198 4.95223 3.14698 5.14723C2.95198 5.34223 2.95098 5.65923 3.14598 5.85423Z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-.moonbit-viewer-markdown-fold-toggle[data-collapsed="true"]::before {
-  border-top: 0.32em solid transparent;
-  border-bottom: 0.32em solid transparent;
-  border-left: 0.42em solid currentColor;
-  border-right: none;
+.moonbit-viewer-markdown-fold-toggle[data-collapsed="true"]::before,
+.moonbit-viewer-markdown-toc-toggle::before {
+  transform: rotate(-90deg);
 }
 
 :is(h1, h2, h3, h4, h5, h6):hover > .moonbit-viewer-markdown-fold-toggle,
@@ -354,7 +272,7 @@
     var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
   border-radius: 7px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
-  font-size: 0.85em;
+  font-size: var(--ui-font-size, 14px);
 }
 
 .moonbit-viewer-markdown-document[data-theme="dark"]
@@ -390,21 +308,9 @@
   opacity: 0.75;
 }
 
-.moonbit-viewer-markdown-toc-toggle::before {
-  content: "";
-  width: 0;
-  height: 0;
-  border-top: 0.3em solid transparent;
-  border-bottom: 0.3em solid transparent;
-  border-left: 0.4em solid currentColor;
-}
-
 .moonbit-viewer-markdown-toc[data-toc-expanded="true"]
   .moonbit-viewer-markdown-toc-toggle::before {
-  border-left: 0.3em solid transparent;
-  border-right: 0.3em solid transparent;
-  border-top: 0.4em solid currentColor;
-  border-bottom: none;
+  transform: rotate(0deg);
 }
 
 .moonbit-viewer-markdown-toc-list {

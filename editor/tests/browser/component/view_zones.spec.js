@@ -85,13 +85,23 @@ test('ViewZones preserve caller DOM across real browser mounting', async ({
       const primaryNode = fixture.querySelector('.vz-primary');
       const secondaryNode = fixture.querySelector('.vz-secondary');
       const primaryMarginNode = fixture.querySelector('.vz-primary-margin');
+      const contentChildren = Array.from(linesContent.children);
+      const marginChildren = Array.from(margin.children);
       return {
         contentRole: contentContainer.getAttribute('role'),
         marginRole: marginContainer.getAttribute('role'),
         marginAria: marginContainer.getAttribute('aria-hidden'),
-        marginChildren: Array.from(margin.children).map((node) => node.className),
-        contentChildren: Array.from(linesContent.children).map(
-          (node) => node.className,
+        marginOwnsZones: marginContainer.parentElement === margin,
+        marginZoneIndex: marginChildren.indexOf(marginContainer),
+        marginOverlayIndex: marginChildren.indexOf(
+          fixture.querySelector('.margin-view-overlays'),
+        ),
+        contentOverlayIndex: contentChildren.indexOf(
+          fixture.querySelector('.view-overlays'),
+        ),
+        contentZoneIndex: contentChildren.indexOf(contentContainer),
+        contentLineIndex: contentChildren.indexOf(
+          fixture.querySelector('.view-lines'),
         ),
         primaryTop: Number.parseFloat(primaryNode.style.top),
         secondaryTop: Number.parseFloat(secondaryNode.style.top),
@@ -104,16 +114,17 @@ test('ViewZones preserve caller DOM across real browser mounting', async ({
       contentRole: 'presentation',
       marginRole: 'presentation',
       marginAria: 'true',
-      marginChildren: ['margin-view-zones', 'margin-view-overlays'],
+      marginOwnsZones: true,
       primaryHeight: 32,
       marginHeight: 32,
     });
     expect(attachment.marginTop).toBe(attachment.primaryTop);
-    expect(attachment.contentChildren.indexOf('view-overlays')).toBeLessThan(
-      attachment.contentChildren.indexOf('view-zones'),
+    expect(attachment.marginZoneIndex).toBeLessThan(attachment.marginOverlayIndex);
+    expect(attachment.contentOverlayIndex).toBeLessThan(
+      attachment.contentZoneIndex,
     );
-    expect(attachment.contentChildren.indexOf('view-zones')).toBeLessThan(
-      attachment.contentChildren.indexOf('view-lines'),
+    expect(attachment.contentZoneIndex).toBeLessThan(
+      attachment.contentLineIndex,
     );
     expect(attachment.secondaryTop).toBeLessThan(attachment.primaryTop);
   } finally {

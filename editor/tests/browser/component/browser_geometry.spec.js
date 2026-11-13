@@ -321,26 +321,29 @@ test('content widgets use their real iframe owner window for overflow modes and 
       await normal.evaluate((node) => ({
         ownerIsCurrentWindow: node.ownerDocument.defaultView === window,
         ownerIsTopWindow: node.ownerDocument.defaultView === window.top,
-        parentClass: node.parentElement.className,
+        parentIsContentContainer:
+          node.parentElement === document.querySelector('.contentWidgets'),
         maxWidth: node.style.maxWidth,
       })),
     ).toEqual({
       ownerIsCurrentWindow: true,
       ownerIsTopWindow: false,
-      parentClass: 'contentWidgets',
+      parentIsContentContainer: true,
       maxWidth: '430px',
     });
     expect(
       await overflow.evaluate((node) => ({
         ownerIsCurrentWindow: node.ownerDocument.defaultView === window,
         ownerIsTopWindow: node.ownerDocument.defaultView === window.top,
-        parentClass: node.parentElement.className,
+        parentIsOverflowContainer:
+          node.parentElement ===
+          document.querySelector('.overflowingContentWidgets'),
         maxWidth: node.style.maxWidth,
       })),
     ).toEqual({
       ownerIsCurrentWindow: true,
       ownerIsTopWindow: false,
-      parentClass: 'overflowingContentWidgets',
+      parentIsOverflowContainer: true,
       maxWidth: `${environment.ownerWidth}px`,
     });
   } finally {

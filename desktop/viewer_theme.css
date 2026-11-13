@@ -45,8 +45,8 @@
   --vscode-menu-separatorBackground: var(--color-border);
   --vscode-menu-border: var(--color-border);
 
-  /* The code surface. file_panel.css paints the surrounding editor panel
-     with --color-bg-surface; sharing it keeps the seam invisible. */
+  /* Right-panel-only changes belong in .viewer-host (styles/file_panel.css);
+     this default also affects inline snippets and overlays. */
   --vscode-editor-background: var(--color-bg-surface);
   --vscode-editorLineNumber-foreground: var(--color-text-muted);
   --vscode-editorLineNumber-activeForeground: var(--color-text-secondary);

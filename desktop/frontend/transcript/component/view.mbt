@@ -87,7 +87,7 @@ fn assistant_view(
       )
     } else {
       @html.div(
-        class="msg-content markdown activity-thinking",
+        class="msg-content markdown moonbit-viewer-markdown-content activity-thinking",
         @markdown.markdown_nodes(locale~, text, open_file=on_open),
       )
     }
@@ -1206,7 +1206,7 @@ fn assistant_message_view(
     ])
   } else {
     @html.div(
-      class="msg-content markdown",
+      class="msg-content markdown moonbit-viewer-markdown-content",
       @markdown.markdown_nodes(
         locale~,
         content,
@@ -1281,7 +1281,7 @@ fn summary_card_view(
         @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
       ]),
       @html.div(
-        class="msg-content markdown summary-card-body",
+        class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",
         @markdown.markdown_nodes(locale~, content, open_file=on_open),
       ),
     ]),

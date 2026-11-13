@@ -60,7 +60,10 @@ const DiagnosticsOwner = "moon-lsp"
 const DefaultEditorFontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
 
 ///|
-const DefaultEditorFontSize : Double = 13.0
+/// Startup fallback before `apply_app_font_size` supplies the actual CSS size.
+/// Keep in sync with the root default `--font-size-base` in
+/// `desktop/styles/tokens.css`, not the Viewer's independent library defaults.
+const DefaultEditorFontSize : Double = 15.0
 
 ///|
 /// The viewer's imperative state — the attached widget, its services, and the

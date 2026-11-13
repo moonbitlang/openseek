@@ -66,7 +66,7 @@ button.panel-toggle:not(:disabled):hover {
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid var(--color-seam);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
   /* Own stacking context so the opaque editor always paints above the
      conversation column, never the other way around. */
   position: relative;
@@ -95,7 +95,7 @@ button.panel-toggle:not(:disabled):hover {
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
   border-bottom: 1px solid var(--color-seam);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
 }
 
 .editor-tabs {
@@ -118,7 +118,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   max-width: min(200px, 100%);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -264,7 +264,7 @@ button.panel-toggle:not(:disabled):hover {
   text-align: center;
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
 }
 .viewer-notice.has-action {
   flex-direction: column;
@@ -296,7 +296,7 @@ button.panel-toggle:not(:disabled):hover {
   min-height: 0;
   overflow: hidden;
   border-top: calc(1px * var(--tree-open-progress)) solid var(--color-seam);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
   visibility: var(--tree-visibility);
   transition:
     --tree-open-progress var(--drawer-duration) var(--drawer-easing),
@@ -422,7 +422,7 @@ html:is(
   align-items: center;
   justify-content: center;
   padding: var(--space-7);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
 }
@@ -618,7 +618,7 @@ html:is(
   /* Native views always paint above HTML. Keep their measured rectangle to
      the right of the editor's resize handle so the handle remains clickable. */
   margin-left: var(--resize-handle-width);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-canvas);
 }
 
 /* ---------- workspace Search ---------- */
@@ -635,7 +635,7 @@ html:is(
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
 }
 .search-query-row {
   display: flex;
@@ -952,7 +952,7 @@ html:is(
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
 }
@@ -1017,7 +1017,7 @@ html:is(
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   font-family: var(--font-family-mono);
   line-height: 1.5;
   text-align: left;
@@ -1317,10 +1317,10 @@ html:is(
   min-height: 2.25rem;
   padding: var(--space-2) var(--space-4);
   border: 0;
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   text-align: left;
 }
 
@@ -1509,7 +1509,7 @@ html.is-resizing-review * {
 }
 
 .git-commit-row {
-  --git-graph-node-background: var(--color-bg-surface);
+  --git-graph-node-background: var(--color-bg-canvas);
   display: flex;
   align-items: center;
   width: 100%;
@@ -1907,7 +1907,7 @@ button.git-history-file.selected {
 
 .file-panel-empty {
   padding: var(--space-5);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-text-secondary);
 }
 
@@ -1921,7 +1921,7 @@ button.git-history-file.selected {
   min-height: 1.75rem;
   padding: 0 var(--space-2) 0 var(--tree-indent);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-text-primary);
   cursor: pointer;
   white-space: nowrap;
@@ -2099,7 +2099,7 @@ button.git-history-file.selected {
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: visible;
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
 }
 
 /* A review keeps path/navigation and comparison settings on separate rows.
@@ -2351,7 +2351,7 @@ button.git-history-file.selected {
   color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
 }
@@ -2617,6 +2617,7 @@ button.git-history-file.selected {
 }
 
 .viewer-host {
+  --vscode-editor-background: var(--color-bg-canvas);
   /* The embedded viewer positions its layers absolutely; without a
      positioning context here they escape and paint over the chat. It
      fills the viewer pane below the breadcrumb. */
@@ -3057,7 +3058,7 @@ button.git-history-file.selected {
 .editor.mode-github .browser-chrome { display: none; }
 .editor.mode-github .github-panel { display: flex; }
 .github-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: row; overflow: hidden; color: var(--color-text-primary); }
-.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-seam); background: var(--color-bg-surface); overflow: hidden; }
+.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-seam); background: var(--color-bg-canvas); overflow: hidden; }
 .github-detail-host { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; container: github-detail / inline-size; }
 .github-detail {
   --gh-bg: light-dark(#ffffff, #0d1117);
@@ -3068,7 +3069,7 @@ button.git-history-file.selected {
   --gh-green: light-dark(#1a7f37, #3fb950);
   --gh-red: light-dark(#cf222e, #f85149);
   display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0;
-  overflow: hidden; background: var(--gh-bg); color: var(--gh-fg); font-size: var(--font-size-md);
+  overflow: hidden; background: var(--color-bg-canvas); color: var(--gh-fg); font-size: var(--font-size-md);
 }
 .github-detail-placeholder { align-items: center; justify-content: center; gap: var(--space-5); padding: var(--space-7); color: var(--gh-muted); text-align: center; }
 .github-detail-placeholder p { max-width: 280px; line-height: 1.6; }
@@ -3089,7 +3090,7 @@ button.git-history-file.selected {
 .github-pr-state.open { background: #1f883d; }
 .github-pr-state.closed { background: #cf222e; }
 .github-pr-state.merged { background: #8250df; }
-.github-detail-actions { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-7); padding: var(--space-5) 0 var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-bg); }
+.github-detail-actions { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-7); padding: var(--space-5) 0 var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--color-bg-canvas); }
 .github-action-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: 2.5rem; padding: var(--space-2) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: var(--gh-subtle); color: var(--gh-fg); font: inherit; font-weight: 500; font-size: var(--font-size-sm); cursor: pointer; }
 .github-action-button:hover:not(:disabled) { background: light-dark(#eff2f5, #212830); border-color: var(--gh-muted); }
 .github-action-button:disabled { opacity: .6; cursor: default; }

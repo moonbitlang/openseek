@@ -4,7 +4,7 @@ version = "0.1.0"
 
 import {
   "moonbitlang/x@0.5.5",
-  "moonbit-community/cmark@0.4.11",
+  "moonbit-community/cmark@0.4.14",
   "moonbit-community/casefold@0.1.6",
 }
 

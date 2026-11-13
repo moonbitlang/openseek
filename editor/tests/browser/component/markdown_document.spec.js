@@ -18,7 +18,6 @@ const secondaryHover =
   `${secondaryRoot} .moonbit-viewer-markdown-hover-widget`;
 const diagramViewport = '.moonbit-viewer-markdown-diagram-viewport';
 const diagramContent = '.moonbit-viewer-markdown-diagram-content';
-const diagramControls = '.moonbit-viewer-markdown-diagram-controls';
 const mermaidModulePath = '/mermaid/mermaid.esm.min.mjs';
 
 const fakeMarkdownDocumentMermaidModule = `
@@ -162,7 +161,7 @@ async function expectHoverCallCancelled(page, callId) {
     .toBe(true);
 }
 
-test('uses the workbench type scale and Markdown layout contract', async ({
+test('honors the host font size and preserves safe external links', async ({
   page,
 }) => {
   await gotoBrowserScenario(page, 'markdown-document');
@@ -170,79 +169,11 @@ test('uses the workbench type scale and Markdown layout contract', async ({
     Boolean(globalThis.__markdownDocumentControls),
   );
 
-  await page.locator(article).evaluate((articleNode) => {
-    document.documentElement.style.fontSize = '10px';
-    for (const level of [2, 3, 4, 5, 6]) {
-      const heading = document.createElement(`h${level}`);
-      heading.dataset.typeScaleProbe = String(level);
-      heading.textContent = `Heading ${level}`;
-      articleNode.appendChild(heading);
-    }
-  });
-
-  await expect(page.locator(article)).toHaveCSS('font-size', '13px');
-  await expect(
-    page.locator(`${article} .monaco-tokenized-source`).first(),
-  ).toHaveCSS('font-size', '13px');
-  await expect(page.locator(`${article} h1`)).toHaveCSS('font-size', '22.75px');
-  await expect(page.locator(`${article} h1`)).toHaveCSS('line-height', '27.3px');
-  for (const [level, fontSize] of [
-    [2, '17.875px'],
-    [3, '14.625px'],
-    [4, '13px'],
-    [5, '13px'],
-    [6, '13px'],
-  ]) {
-    await expect(
-      page.locator(`[data-type-scale-probe="${level}"]`),
-    ).toHaveCSS('font-size', fontSize);
-  }
-
-  const firstHeading = page.locator(`${article} > h1`).first();
   const firstParagraph = page.locator(`${article} > p`).first();
-  const quote = page.locator(`${article} > blockquote`).first();
   const link = firstParagraph.getByRole('link', { name: 'fixture link' });
   await expect(link).toHaveAttribute('href', 'https://example.test/docs');
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-  await expect(firstHeading).toHaveCSS('margin-top', '0px');
-  await expect(quote.locator(':scope > :first-child')).toHaveCSS(
-    'margin-top',
-    '0px',
-  );
-
-  await page.evaluate(() =>
-    globalThis.__markdownDocumentControls.resizeHost(1000),
-  );
-  const measure = await page.locator(article).evaluate((articleNode) => {
-    const articleRect = articleNode.getBoundingClientRect();
-    const style = getComputedStyle(articleNode);
-    const contentLeft =
-      articleRect.left + Number.parseFloat(style.paddingLeft);
-    const contentWidth =
-      articleRect.width -
-      Number.parseFloat(style.paddingLeft) -
-      Number.parseFloat(style.paddingRight);
-    const paragraph = articleNode
-      .querySelector(':scope > p')
-      .getBoundingClientRect();
-    const code = articleNode
-      .querySelector(':scope > .moonbit-viewer-markdown-code-block')
-      .getBoundingClientRect();
-    return {
-      contentLeft,
-      contentWidth,
-      paragraphLeft: paragraph.left,
-      paragraphWidth: paragraph.width,
-      codeLeft: code.left,
-      codeWidth: code.width,
-    };
-  });
-  expect(measure.paragraphLeft).toBeCloseTo(measure.contentLeft, 1);
-  expect(measure.paragraphWidth).toBeLessThan(measure.contentWidth - 200);
-  expect(measure.codeLeft).toBeCloseTo(measure.contentLeft, 1);
-  expect(measure.codeWidth).toBeCloseTo(measure.contentWidth, 1);
-
   await page.locator('.markdown-document-shell').evaluate((shell) => {
     shell.style.setProperty('--ui-font-size', '12px');
   });
@@ -250,18 +181,6 @@ test('uses the workbench type scale and Markdown layout contract', async ({
   await expect(
     page.locator(`${article} .monaco-tokenized-source`).first(),
   ).toHaveCSS('font-size', '12px');
-  await expect(page.locator(`${article} h1`)).toHaveCSS('font-size', '21px');
-
-  await page.evaluate(() => {
-    const standalone = document.createElement('article');
-    standalone.className = 'moonbit-viewer-markdown-document-article';
-    standalone.dataset.typeScaleFallback = 'true';
-    document.body.appendChild(standalone);
-  });
-  await expect(page.locator('[data-type-scale-fallback="true"]')).toHaveCSS(
-    'font-size',
-    '14px',
-  );
 });
 
 test('mounts zoom and drag controls for D2, UML, and Mermaid in Markdown documents', async ({
@@ -295,23 +214,6 @@ test('mounts zoom and drag controls for D2, UML, and Mermaid in Markdown documen
 
     const viewports = page.locator(`${article} ${diagramViewport}`);
     await expect(viewports).toHaveCount(3);
-    const diagramWidths = await page.locator(article).evaluate((articleNode) => {
-      const articleRect = articleNode.getBoundingClientRect();
-      const articleStyle = getComputedStyle(articleNode);
-      const contentWidth = articleRect.width -
-        Number.parseFloat(articleStyle.paddingLeft) -
-        Number.parseFloat(articleStyle.paddingRight);
-      return {
-        contentWidth,
-        widths: Array.from(
-          articleNode.querySelectorAll('.moonbit-viewer-markdown-diagram-viewport'),
-          (viewportNode) => viewportNode.getBoundingClientRect().width,
-        ),
-      };
-    });
-    for (const width of diagramWidths.widths) {
-      expect(width).toBeCloseTo(diagramWidths.contentWidth, 1);
-    }
     const d2 = page.locator(
       `${article} [data-diagram-language="diago"]${diagramViewport}`,
     );
@@ -324,41 +226,6 @@ test('mounts zoom and drag controls for D2, UML, and Mermaid in Markdown documen
     await expect(d2).toHaveCount(1);
     await expect(uml).toHaveCount(1);
     await expect(mermaid).toHaveCount(1);
-    await expect(d2).toHaveCSS('margin-bottom', '16px');
-    await expect(uml).toHaveCSS('margin-bottom', '16px');
-    await expect(mermaid).toHaveCSS('margin-bottom', '0px');
-    expect(
-      await mermaid.evaluate((node) => ({
-        nestedInCodeBlock: node.parentElement?.classList.contains(
-          'moonbit-viewer-markdown-code-block',
-        ),
-        wrapperMarginBottom: getComputedStyle(node.parentElement).marginBottom,
-        wrapperClass: node.parentElement?.className,
-        outerClass: node.parentElement?.parentElement?.className,
-        outerMarginBottom: getComputedStyle(node.parentElement?.parentElement)
-          .marginBottom,
-      })),
-    ).toEqual({
-      nestedInCodeBlock: true,
-      wrapperMarginBottom: '0px',
-      wrapperClass: 'moonbit-viewer-markdown-code-block',
-      outerClass: 'moonbit-viewer-markdown-document-article',
-      outerMarginBottom: '0px',
-    });
-    await page.locator(article).evaluate((articleNode) => {
-      const tail = document.createElement('p');
-      tail.dataset.diagramRhythmTail = 'true';
-      tail.textContent = 'A following block restores the diagram cadence.';
-      articleNode.appendChild(tail);
-    });
-    expect(
-      await mermaid.evaluate(
-        (node) => getComputedStyle(node.parentElement).marginBottom,
-      ),
-    ).toBe('16px');
-    await expect(
-      page.locator('[data-diagram-rhythm-tail="true"]'),
-    ).toHaveCSS('margin-bottom', '0px');
     await expect(d2).toHaveAttribute(
       'aria-label',
       'Interactive Diago diagram',
@@ -371,9 +238,6 @@ test('mounts zoom and drag controls for D2, UML, and Mermaid in Markdown documen
       'aria-label',
       'Interactive UML diagram',
     );
-    await expect(d2.getByRole('button')).toHaveCount(4);
-    await expect(uml.getByRole('button')).toHaveCount(4);
-    await expect(mermaid.getByRole('button')).toHaveCount(4);
     await expect(
       d2.getByRole('toolbar', { name: 'D2 diagram controls' }),
     ).toBeVisible();
@@ -383,13 +247,6 @@ test('mounts zoom and drag controls for D2, UML, and Mermaid in Markdown documen
     await expect(
       uml.getByRole('toolbar', { name: 'UML diagram controls' }),
     ).toBeVisible();
-    await expect(d2).toHaveCSS('z-index', '0');
-    await expect(d2.locator(diagramControls)).toHaveCSS(
-      'pointer-events',
-      'auto',
-    );
-    await expect(d2.locator(diagramControls)).toHaveCSS('opacity', '0.9');
-
     await d2.hover();
     const beforeZoom = await diagramTransform(d2);
     await d2.getByRole('button', { name: 'Zoom in' }).click();

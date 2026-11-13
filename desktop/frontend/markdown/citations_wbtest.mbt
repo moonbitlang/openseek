@@ -8,6 +8,7 @@ fn answer_citations(source : String) -> Array[Citation] {
     artifact_view: None,
     defer_artifacts: false,
     citations: [],
+    footnotes: Footnotes::new(),
     in_sources: false,
   }
   ignore(render.block_nodes(doc.block))
