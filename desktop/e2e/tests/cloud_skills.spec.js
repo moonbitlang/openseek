@@ -26,8 +26,8 @@ test('browser Cloud manages the account skill library and completes its skills',
   await showSidebar(page);
   await page.getByRole('button', { name: 'Skills', exact: true }).click();
 
-  // A page without a host has only the Cloud library: no switch.
-  await expect(library(page).getByRole('group', { name: 'Library', exact: true })).toHaveCount(0);
+  // The selector identifies Cloud even when no device page is open.
+  await expect(library(page).getByRole('combobox', { name: 'Library', exact: true })).toContainText('Cloud');
   // Cloud's built-ins are always on: no switch or menu.
   await expect(row(page, 'typst')).toBeVisible();
   await expect(row(page, 'typst').getByRole('switch')).toHaveCount(0);
@@ -62,7 +62,7 @@ test('browser Cloud manages the account skill library and completes its skills',
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('a signed-in Desktop switches between the device library and Cloud', async ({ page }) => {
+test('a signed-in browser selects the named device library and Cloud', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.device.installedSkills = [{
     id: 'local-notes', name: 'local-notes', description: 'Device notes.', source: '',
@@ -74,20 +74,20 @@ test('a signed-in Desktop switches between the device library and Cloud', async 
   await showSidebar(page);
   await page.getByRole('button', { name: 'Skills', exact: true }).click();
 
-  const libraries = library(page).getByRole('group', { name: 'Library', exact: true });
-  const device = libraries.getByRole('button', { name: 'This device', exact: true });
-  const cloudTab = libraries.getByRole('button', { name: 'Cloud', exact: true });
-  await expect(device).toHaveAttribute('aria-pressed', 'true');
+  const libraries = library(page).getByRole('combobox', { name: 'Library', exact: true });
+  await expect(libraries).toContainText('Test Mac');
   await expect(row(page, 'local-notes')).toBeVisible();
   await expect(row(page, 'typst')).toHaveCount(0);
 
-  await cloudTab.click();
-  await expect(cloudTab).toHaveAttribute('aria-pressed', 'true');
+  await libraries.click();
+  await page.getByRole('option', { name: 'Cloud', exact: true }).click();
+  await expect(libraries).toContainText('Cloud');
   await expect(row(page, 'typst')).toBeVisible();
   await expect(row(page, 'local-notes')).toHaveCount(0);
   expect(cloud.requests.some(request => request.method === 'GET' && request.path === '/v1/me/skills')).toBe(true);
 
-  await device.click();
+  await libraries.click();
+  await page.getByRole('option', { name: /^Test Mac(?: ·.*)?$/ }).click();
   await expect(row(page, 'local-notes')).toBeVisible();
   await expect(row(page, 'typst')).toHaveCount(0);
   expect(cloud.device.pageErrors).toEqual([]);

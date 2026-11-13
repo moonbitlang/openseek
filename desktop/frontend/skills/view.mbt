@@ -172,6 +172,9 @@ fn detail_page(
   emit : @cmd.Emit[Msg],
   menu : @html.Html,
 ) -> @html.Html {
+  guard input.available() else {
+    return @html.div(class="skills-empty", ui(locale, LibraryUnavailable))
+  }
   match state.preview {
     Closed => @html.nothing
     Loading(target~, ..) =>
@@ -360,7 +363,9 @@ fn detail_action_target(
       }
       // Keep the same detail page usable after uninstall, when its version
       // still exists in the catalog. Never send an id from a removed snapshot.
-      guard state.catalog is Ready(items) else { return None }
+      guard state.catalog is Ready(library~, items~) && library == input.library else {
+        return None
+      }
       for market in items {
         guard source_label(market) == item.source else { continue }
         return Some(Market(market))
@@ -387,6 +392,7 @@ fn list_page(
   input : Input,
   emit : @cmd.Emit[Msg],
   menus : Map[String, @html.Html],
+  selector : @html.Html,
 ) -> @html.Html {
   let catalog_loading = match state.catalog {
     Loading(library~) => library == input.library
@@ -396,10 +402,10 @@ fn list_page(
     @html.div(class="page-header", [
       @html.div(class="skills-heading", [
         @html.div(class="page-eyebrow", ui(locale, Library)),
-        library_switch(locale, input, emit),
+        selector,
         @html.button(
           class="button skills-refresh",
-          disabled=catalog_loading,
+          disabled=catalog_loading || !input.available(),
           on_click=emit(RefreshCatalog),
           if catalog_loading {
             ui(locale, Refreshing)
@@ -420,11 +426,19 @@ fn list_page(
           value=state.query,
           placeholder=ui(locale, Search),
           on_input=emit.map(value => QueryChanged(value)),
-          attrs=@html.Attrs::build().data_set("focus-target", ""),
+          attrs=@html.Attrs::build()
+            .data_set("focus-target", "")
+            .disabled(!input.available()),
         ),
       ],
     ),
   ]
+  if !input.available() {
+    sections.push(
+      @html.div(class="skills-empty", ui(locale, LibraryUnavailable)),
+    )
+    return @ui.dialog_page(class="skills-page", sections)
+  }
   for notice in notice_views(state, input, None) {
     sections.push(notice)
   }
@@ -460,13 +474,9 @@ fn list_page(
   )
   let market_rows : Array[@html.Html] = []
   match state.catalog {
-    Idle | Loading(_) =>
-      market_rows.push(
-        @html.div(class="skills-empty", ui(locale, LoadingCatalog)),
-      )
-    Failed(message) =>
+    Failed(library~, message~) if library == input.library =>
       market_rows.push(@html.div(class="skills-empty danger", message))
-    Ready(items) => {
+    Ready(library~, items~) if library == input.library => {
       let installed = input.installed_registry_skills()
       let available = items.filter(item => {
         !installed.contains((item.module_name, item.package_path))
@@ -495,6 +505,10 @@ fn list_page(
         )
       }
     }
+    _ =>
+      market_rows.push(
+        @html.div(class="skills-empty", ui(locale, LoadingCatalog)),
+      )
   }
   sections.push(
     @ui.form_section(icon_package, ui(locale, Registry), market_rows),
@@ -512,36 +526,57 @@ fn list_page(
 }
 
 ///|
-/// The choice between the focused device's library and the account's Cloud
-/// library, shown only when both exist: a segmented switch like the
-/// sidebar's Chat/Work switch.
-fn library_switch(
+/// Always name the selected library. Each device keeps its own identity,
+/// including while unavailable, so the selection never implies another host.
+fn library_select(
   locale : @i18n.Locale,
   input : Input,
   emit : @cmd.Emit[Msg],
-) -> @html.Html {
-  guard input.switchable else { return @html.nothing }
-  let current = input.library.kind()
-  let options = [(DeviceLibrary, ThisDevice), (CloudLibrary, CloudLibraryLabel)].map(option => {
-      let (kind, label) = option
-      let selected = kind == current
-      @html.button(
-        class=if selected {
-          "skills-library-option active"
-        } else {
-          "skills-library-option"
-        },
-        type_="button",
-        attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
-        on_click=emit(SelectLibrary(kind)),
-        ui(locale, label),
-      )
+) -> @rabbita.Val[@html.Html] {
+  let options = input.choices.map(choice => {
+    @rui.select_option(
+      value=choice.library.key(),
+      label=choice.label(locale),
+      disabled=!choice.available,
+    )
+  })
+  let label = ui(locale, Library)
+  let selected_label = input.choices
+    .iter()
+    .find_first(choice => choice.library == input.library)
+    .map_or(label, choice => choice.label(locale))
+  @rui.select(
+    id="skills-library",
+    class="skills-library-select",
+    options~,
+    default_value=input.library.key(),
+    placeholder=selected_label,
+    on_value_change=@cmd.Emit(value => {
+      if input.choices
+        .iter()
+        .find_first(choice => choice.library.key() == value)
+        is Some(choice) {
+        emit(SelectLibrary(choice.library))
+      } else {
+        @cmd.none
+      }
+    }),
+    render=scope => {
+      @html.fragment([
+        @rui.select_trigger(scope~, aria_label=label),
+        @rui.select_content(
+          scope~,
+          input.choices.map(choice => {
+            @rui.select_item(
+              scope~,
+              value=choice.library.key(),
+              disabled=!choice.available,
+              choice.label(locale),
+            )
+          }),
+        ),
+      ])
     },
-  )
-  @html.div(
-    class="skills-library-switch",
-    attrs=@html.Attrs::build().role("group").aria_label(ui(locale, Library)),
-    options,
   )
 }
 
@@ -580,7 +615,7 @@ fn installed_actions(
     !locked &&
     (
       !item.builtin ||
-      state.update_candidate(item) is Some(_) ||
+      state.update_candidate(library, item) is Some(_) ||
       pending is Some(_)
     ) {
     buttons.push(
@@ -637,7 +672,7 @@ fn installed_status(
     )
   }
   guard !(item.builtin && library.locks_builtins()) &&
-    state.update_candidate(item) is Some(_) else {
+    state.update_candidate(library, item) is Some(_) else {
     return @html.nothing
   }
   @html.span(class="skill-update-badge", [

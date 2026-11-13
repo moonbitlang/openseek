@@ -16,7 +16,9 @@ fn wb_input(installed~ : Array[InstalledItem]) -> Input {
   {
     library: Host(@interop.ChannelId::Local),
     installed,
-    switchable: false,
+    choices: [
+      { library: Host(@interop.ChannelId::Local), name: None, available: true, },
+    ],
     locale: English,
   }
 }

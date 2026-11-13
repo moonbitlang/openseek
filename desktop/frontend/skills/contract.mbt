@@ -1,10 +1,10 @@
 // The boundary between the application root and the Skills page. The page
-// owns everything only it can see — the registry catalog, the search filter,
-// in-flight actions, the failure notice — while the installed library stays a
-// root-owned mirror, because the composer's `$` completion reads the same list.
+// owns its library selection, installed contents, registry catalog, search
+// filter, in-flight actions, and notices. The root supplies source availability
+// and keeps the composer's installed library separate from page selection.
 
 ///|
-/// The skills library the page acts on: the focused device's engine library,
+/// The skills library the page acts on: a selected device's engine library,
 /// or the signed-in account's Cloud library. Every request the page issues
 /// carries it, and every reply is fenced against it, so a result that outlived
 /// a switch — to another device, another account, or between the two — is
@@ -19,24 +19,27 @@ pub(all) enum Library {
 pub extend Library with Eq::{equal, not_equal}
 
 ///|
-/// The two libraries a signed-in Desktop can show, independent of which
-/// device or account backs them.
+/// One library the page can select, including a device that is unavailable.
 #derive(Eq)
-pub(all) enum LibraryKind {
-  DeviceLibrary
-  CloudLibrary
+pub(all) struct LibraryChoice {
+  library : Library
+  name : String?
+  available : Bool
 }
 
 ///|
-pub extend LibraryKind with Eq::{equal, not_equal}
+pub extend LibraryChoice with Eq::{equal, not_equal}
 
 ///|
-pub fn Library::kind(self : Library) -> LibraryKind {
-  match self {
-    Host(_) => DeviceLibrary
-    Cloud(_) => CloudLibrary
-  }
+/// The page's selected library and its most recent installed contents.
+#derive(Eq)
+pub struct LibrarySelection {
+  library : Library
+  installed : Array[InstalledItem]
 }
+
+///|
+pub extend LibrarySelection with Eq::{equal, not_equal}
 
 ///|
 /// A stable key for DOM identity and the preview cache. A Cloud library is
@@ -56,15 +59,20 @@ fn Library::locks_builtins(self : Library) -> Bool {
 }
 
 ///|
-/// The root-owned facts the page draws against. `switchable` says whether the
-/// page offers the choice between the device's library and Cloud's.
+/// The root-owned facts the page draws against. Each choice names a specific
+/// device's library or the account's Cloud library.
 /// `locale` renders request failures the page reports.
 #derive(Eq)
 pub(all) struct Input {
   library : Library
   installed : Array[InstalledItem]
-  switchable : Bool
+  choices : Array[LibraryChoice]
   locale : @i18n.Locale
+}
+
+///|
+pub fn Input::available(self : Input) -> Bool {
+  self.choices.any(choice => choice.library == self.library && choice.available)
 }
 
 ///|
@@ -81,15 +89,13 @@ fn Input::installed_registry_skills(self : Input) -> Set[(String, String)] {
 }
 
 ///|
-/// What the page asks the root to do. The library is not the page's to
-/// refresh: it belongs to the root's mirror, so a successful install, update,
-/// or uninstall reports the change and lets the root re-read it from its
-/// source. Which library to show is also the root's, so a choice in the
-/// switch is reported rather than applied.
+/// The page asks the root to read from a library after selecting it or
+/// completing an install, update, or uninstall. Selection stays in page state;
+/// these outcomes route the read through the application's source adapters.
 #derive(Eq)
 pub enum Outcome {
   LibraryChanged(library~ : Library)
-  LibrarySelected(LibraryKind)
+  LibrarySelected(Library)
 }
 
 ///|

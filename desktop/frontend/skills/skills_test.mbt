@@ -37,7 +37,13 @@ fn input(installed~ : Array[@skills.InstalledItem] = []) -> @skills.Input {
   {
     library: @skills.Host(@interop.ChannelId::Local),
     installed,
-    switchable: false,
+    choices: [
+      {
+        library: @skills.Host(@interop.ChannelId::Local),
+        name: None,
+        available: true,
+      },
+    ],
     locale: English,
   }
 }
@@ -83,7 +89,9 @@ test "catalog completions cannot cross a device focus switch" {
   let remote_input : @skills.Input = {
     library: other_device(),
     installed: [],
-    switchable: false,
+    choices: [
+      { library: other_device(), name: Some("Other device"), available: true, },
+    ],
     locale: English,
   }
   let (_, remote_loading) = local_loading.opening(emit(), remote_input)
@@ -201,7 +209,9 @@ test "a result from another device settles without a local outcome" {
   let (_, busy, _) = ready.handle(emit(), @skills.Install(market_item()), {
     library: other_device(),
     installed: [],
-    switchable: false,
+    choices: [
+      { library: other_device(), name: Some("Other device"), available: true, },
+    ],
     locale: English,
   })
   let (_, settled, outcome) = busy.handle(
@@ -506,7 +516,14 @@ test "Cloud built-ins offer no enablement or update" {
   let cloud : @skills.Input = {
     library: cloud_library(),
     installed: [builtin_widget()],
-    switchable: false,
+    choices: [
+      { library: cloud_library(), name: None, available: true, },
+      {
+        library: @skills.Host(@interop.ChannelId::Local),
+        name: None,
+        available: true,
+      },
+    ],
     locale: English,
   }
   let (_, ready, _) = @skills.State::empty().handle(
@@ -539,10 +556,14 @@ test "Cloud replies cannot cross an account change" {
   let first : @skills.Input = {
     library: cloud_library(epoch=1),
     installed: [],
-    switchable: false,
+    choices: [{ library: cloud_library(epoch=1), name: None, available: true, }],
     locale: English,
   }
-  let second = { ..first, library: cloud_library(epoch=2), }
+  let second = {
+    ..first,
+    library: cloud_library(epoch=2),
+    choices: [{ library: cloud_library(epoch=2), name: None, available: true, }],
+  }
   let (_, opened) = @skills.State::empty().opening(emit(), first)
   let (_, stale, _) = opened.handle(
     emit(),
@@ -554,23 +575,31 @@ test "Cloud replies cannot cross an account change" {
 
 ///|
 test "the library switch reports a choice only when it changes the library" {
-  let switchable = { ..input(), switchable: true, }
+  let switchable = {
+    ..input(),
+    choices: [
+      ..input().choices,
+      { library: cloud_library(), name: None, available: true, },
+    ],
+  }
   let state = @skills.State::empty()
   let (_, _, chosen) = state.handle(
     emit(),
-    @skills.SelectLibrary(CloudLibrary),
+    @skills.SelectLibrary(cloud_library()),
     switchable,
   )
-  assert_true(chosen is Some(LibrarySelected(CloudLibrary)))
+  assert_true(
+    chosen is Some(LibrarySelected(library)) && library == cloud_library(),
+  )
   let (_, _, same) = state.handle(
     emit(),
-    @skills.SelectLibrary(DeviceLibrary),
+    @skills.SelectLibrary(@skills.Host(@interop.ChannelId::Local)),
     switchable,
   )
   assert_true(same is None)
   let (_, _, fixed) = state.handle(
     emit(),
-    @skills.SelectLibrary(CloudLibrary),
+    @skills.SelectLibrary(cloud_library()),
     input(),
   )
   assert_true(fixed is None)
