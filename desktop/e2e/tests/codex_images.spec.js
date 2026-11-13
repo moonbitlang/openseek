@@ -111,7 +111,7 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
   expect(app.pageErrors).toEqual([]);
 });
 
-test('failed sends preserve attachments and invalid selections preserve the prior draft', async ({ page }) => {
+test('failed sends preserve attachments and invalid selections preserve the prior draft', async ({ page }, testInfo) => {
   const app = new CodexImagesHarness(page);
   app.rpcErrors.set('codex.turn.start', 'Image send failed');
   await app.openCodex();
@@ -120,11 +120,16 @@ test('failed sends preserve attachments and invalid selections preserve the prio
   expect(await app.transfer('drop', { name: 'note.txt', type: 'text/plain' })).toBe(true);
   await expect(page.getByRole('alert')).toContainText('Choose PNG, JPEG, WebP or GIF');
   await expect(page.locator('.composer-image')).toHaveCount(1);
-  await app.select({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024 + 1) });
-  await expect(page.getByRole('alert')).toContainText('5 MiB');
+  await app.select({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(20 * 1024 * 1024 + 1) });
+  await expect(page.getByRole('alert')).toContainText('20 MiB');
+  await page.screenshot({ path: testInfo.outputPath('image-limit-20mib.png') });
+  await app.select({ name: 'above-old-limit.png', mimeType: 'image/png', buffer: Buffer.concat([
+    image.buffer, Buffer.alloc(6 * 1024 * 1024 - image.buffer.length),
+  ]) });
+  await expect(page.locator('.composer-image')).toHaveCount(2);
   await page.locator('#send').click();
   await expect(page.getByText('Image send failed', { exact: false }).first()).toBeVisible();
-  await expect(page.locator('.composer-image')).toHaveCount(1);
+  await expect(page.locator('.composer-image')).toHaveCount(2);
   await expect(page.locator('#send')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });

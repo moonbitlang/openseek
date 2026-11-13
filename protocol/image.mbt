@@ -21,7 +21,7 @@ pub(all) suberror ImageError {
 ///|
 impl Show for ImageError with fn output(self, logger) {
   match self {
-    TooLarge => logger.write_string("image exceeds the 5 MiB limit")
+    TooLarge => logger.write_string("image exceeds the 20 MiB limit")
     InvalidBase64 =>
       logger.write_string("image data must be canonical padded base64")
     UnsupportedFormat =>
@@ -36,7 +36,7 @@ impl Show for ImageError with fn output(self, logger) {
 ///|
 /// Limit applies to decoded bytes; base64 input is bounded before allocating.
 pub fn Image::from_bytes(bytes : Bytes) -> Image raise ImageError {
-  if bytes.length() > 5 * 1024 * 1024 {
+  if bytes.length() > 20 * 1024 * 1024 {
     raise TooLarge
   }
   let media_type = match bytes {
@@ -56,7 +56,7 @@ pub fn Image::from_base64(
   media_type~ : StringView,
   data : StringView,
 ) -> Image raise ImageError {
-  if data.length() > (5 * 1024 * 1024 + 2) / 3 * 4 {
+  if data.length() > (20 * 1024 * 1024 + 2) / 3 * 4 {
     raise TooLarge
   }
   let bytes = @base64.decode(data) catch { _ => raise InvalidBase64 }

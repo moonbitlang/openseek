@@ -68,10 +68,19 @@ test "durable content rejects malformed parts without dropping them" {
 
 ///|
 test "images validate size before decoding and reject noncanonical base64" {
+  let bytes = b"\x89PNG\r\n\x1a\n" + Bytes::make(20 * 1024 * 1024 - 8, b'\x00')
+  let image = @openseek_protocol.Image::from_bytes(bytes)
+  assert_eq(image.bytes.length(), 20 * 1024 * 1024)
+  try @openseek_protocol.Image::from_bytes(bytes + b"\x00") catch {
+    TooLarge => ()
+    error => raise error
+  } noraise {
+    _ => fail("oversized decoded image accepted")
+  }
   try
     @openseek_protocol.Image::from_base64(
       media_type="image/png",
-      "A".repeat(6990509),
+      "A".repeat(27_962_029),
     )
   catch {
     TooLarge => ()

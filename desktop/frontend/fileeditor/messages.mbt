@@ -429,7 +429,7 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Spanish, PdfCaptureFailed) =>
       "No se pudo capturar la región. Espera a que termine de renderizarse el PDF e inténtalo de nuevo."
     (English, PdfCaptureTooLarge) =>
-      "Screenshot is too large. Select a smaller region (maximum 5 MiB)."
+      "Screenshot is too large. Select a smaller region (maximum 20 MiB)."
     (English, PdfCaptureUnsupportedAnnotation) =>
       "This form or annotation cannot be captured. Select another region."
     (SimplifiedChinese, PdfCaptureUnsupportedAnnotation) =>
@@ -441,13 +441,13 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Spanish, PdfCaptureUnsupportedAnnotation) =>
       "No se puede capturar este formulario o anotación. Selecciona otra región."
     (SimplifiedChinese, PdfCaptureTooLarge) =>
-      "截图过大，请缩小选区（最大 5 MiB）。"
+      "截图过大，请缩小选区（最大 20 MiB）。"
     (TraditionalChinese, PdfCaptureTooLarge) =>
-      "截圖過大，請縮小選區（最大 5 MiB）。"
+      "截圖過大，請縮小選區（最大 20 MiB）。"
     (Japanese, PdfCaptureTooLarge) =>
-      "画像が大きすぎます。範囲を小さくしてください（最大 5 MiB）。"
+      "画像が大きすぎます。範囲を小さくしてください（最大 20 MiB）。"
     (Spanish, PdfCaptureTooLarge) =>
-      "La captura es demasiado grande. Selecciona una región más pequeña (máximo 5 MiB)."
+      "La captura es demasiado grande. Selecciona una región más pequeña (máximo 20 MiB)."
     (English, PdfCaptureUnavailable) =>
       "To attach a screenshot, open a conversation with an image-capable model."
     (SimplifiedChinese, PdfCaptureUnavailable) =>

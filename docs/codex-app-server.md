@@ -120,7 +120,7 @@ picker and omits `effort` instead of guessing supported values.
 ## Image input
 
 The Codex composer accepts selected, pasted, and dropped PNG, JPEG, WebP,
-and GIF images, up to four per message and 5 MiB per image. The attachment
+and GIF images, up to four per message and 20 MiB per image. The attachment
 tray previews each image and allows removal before sending. Image-only
 messages and images added while a turn is running are supported.
 
