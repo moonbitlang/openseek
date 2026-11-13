@@ -330,6 +330,7 @@ button.archived-chat-open:hover .archived-chat-title {
 /* ---------- skills page ---------- */
 .skills-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-5);
 }
@@ -746,39 +747,10 @@ button.archived-chat-open:hover .archived-chat-title {
   color: var(--color-text-primary);
 }
 
-.skills-library-switch {
-  display: flex;
-  gap: var(--space-1);
-  padding: 2px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
-}
-
-.skills-library-option {
-  padding: var(--space-1) var(--space-3);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.skills-library-option:hover {
-  color: var(--color-text-primary);
-}
-
-.skills-library-option.active {
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  box-shadow: 0 0 0 1px var(--color-seam);
-}
-
-.skills-library-option:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+.skills-library-select {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+  min-width: 0;
 }
 
 .skills-refresh {

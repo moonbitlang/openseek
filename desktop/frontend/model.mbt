@@ -1242,7 +1242,7 @@ priv struct Model {
   // a reconnect timer queued by its retired connection.
   websocket_epoch : Int32
   // The device channel selected by in-app navigation — this is not DOM or
-  // window focus. Settings/Skills, the composer, and the active conversation
+  // window focus. Settings, the composer, and the active conversation
   // all target it. The desktop window is born with `Local`; a browser console
   // stays on an inert `Local` default until the roster verifies and connects
   // the device required by its `?device=` query.
@@ -1452,9 +1452,6 @@ priv struct Model {
   // The signed-in account's Cloud skills library, mirrored for the same two
   // readers: the Skills page and the Cloud composer's `$` completion.
   cloud_skills : Array[@skills.InstalledItem]
-  // Which library a signed-in Desktop's Skills page shows. A page without a
-  // host always shows Cloud's.
-  skills_library : @skills.LibraryKind
   // Advances only when navigation changes which composer is visible. Local
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
@@ -2833,7 +2830,6 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     skills: @skills.State::empty(),
     installed_skills: [],
     cloud_skills: [],
-    skills_library: DeviceLibrary,
     composer_context_generation: 0,
     select_menu: None,
     project_menu_query: "",
@@ -3009,28 +3005,40 @@ fn Model::cloud_skills_access(self : Model) -> @cloud_client.Access? {
 }
 
 ///|
-/// What the Skills page draws against: the library it acts on, and that
-/// library as the root mirrors it. A page with a host shows the focused
-/// device's library unless a signed-in user chose Cloud's; a page without a
-/// host shows Cloud's.
+/// The management page's target is independent of conversation navigation.
+/// Navigation supplies only its initial choice. Removed devices and previous
+/// accounts are excluded by the current list of authorized libraries.
 fn Model::skills_input(self : Model) -> @skills.Input {
-  let has_host = self.has_host()
-  let switchable = has_host && self.account is Some(_)
-  match self.cloud_skills_access() {
-    Some(access) if !has_host || self.skills_library is CloudLibrary =>
-      {
-        library: Cloud(access),
-        installed: self.cloud_skills,
-        switchable,
-        locale: self.locale,
-      }
-    _ =>
-      {
-        library: Host(self.focused),
-        installed: self.installed_skills,
-        switchable,
-        locale: self.locale,
-      }
+  let choices = self.skills_library_choices()
+  if self.skills.selection() is Some(selected) &&
+    choices.any(choice => choice.library == selected.library) {
+    return {
+      library: selected.library,
+      installed: selected.installed,
+      choices,
+      locale: self.locale,
+    }
+  }
+  let library = if self.cloud_skills_access() is Some(access) &&
+    (!self.has_host() || self.selected_conversation is Some(CloudSelection(..))) {
+    @skills.Cloud(access)
+  } else {
+    @skills.Host(self.focused)
+  }
+  let library = if choices.any(choice => choice.library == library) {
+    library
+  } else {
+    choices.get(0).map(choice => choice.library).unwrap_or(library)
+  }
+  {
+    library,
+    installed: match library {
+      Cloud(_) => self.cloud_skills
+      Host(channel) if channel == self.focused => self.installed_skills
+      Host(_) => []
+    },
+    choices,
+    locale: self.locale,
   }
 }
 

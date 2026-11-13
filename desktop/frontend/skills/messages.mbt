@@ -33,8 +33,24 @@ priv enum UiMessage {
   Registry
   Refreshing
   Refresh
+  LibraryUnavailable
   ThisDevice
   CloudLibraryLabel
+  OfflineDevice(String)
+}
+
+///|
+fn LibraryChoice::label(self : LibraryChoice, locale : @i18n.Locale) -> String {
+  let label = if self.library is Cloud(_) {
+    ui(locale, CloudLibraryLabel)
+  } else {
+    self.name.unwrap_or(ui(locale, ThisDevice))
+  }
+  if self.available {
+    label
+  } else {
+    ui(locale, OfflineDevice(label))
+  }
 }
 
 ///|
@@ -165,6 +181,21 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, CloudLibraryLabel) => "云端"
     (TraditionalChinese, CloudLibraryLabel) => "雲端"
     (Japanese, CloudLibraryLabel) => "クラウド"
+    (English, OfflineDevice(name)) => "\{name} (Offline)"
+    (Spanish, OfflineDevice(name)) => "\{name} (Sin conexión)"
+    (SimplifiedChinese, OfflineDevice(name)) => "\{name}（离线）"
+    (TraditionalChinese, OfflineDevice(name)) => "\{name}（離線）"
+    (Japanese, OfflineDevice(name)) => "\{name}（オフライン）"
+    (English, LibraryUnavailable) =>
+      "This device is unavailable. Reconnect it to manage its skills."
+    (Spanish, LibraryUnavailable) =>
+      "Este dispositivo no está disponible. Vuelve a conectarlo para administrar sus habilidades."
+    (SimplifiedChinese, LibraryUnavailable) =>
+      "此设备当前不可用。请重新连接设备以管理其技能。"
+    (TraditionalChinese, LibraryUnavailable) =>
+      "此裝置目前無法使用。請重新連線裝置以管理其技能。"
+    (Japanese, LibraryUnavailable) =>
+      "このデバイスは利用できません。スキルを管理するには再接続してください。"
     (English, Search) => "Search skills…"
     (Spanish, Search) => "Buscar habilidades…"
     (SimplifiedChinese, Search) => "搜索技能…"

@@ -1811,6 +1811,28 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  // Device availability and account/roster changes can alter the Skills
+  // input without a picker action. Refresh that page when its target becomes
+  // usable, or when its old target is no longer one of the account's libraries.
+  let (skills_cmd, model) = if previous.management_dialog is Some(Skills) &&
+    model.management_dialog is Some(Skills) &&
+    !(msg is Skills(@skills.SelectLibrary(_))) {
+    let before = previous.skills_input()
+    let after = model.skills_input()
+    if before.library != after.library {
+      open_skills_library(dispatch, model)
+    } else if !before.available() && after.available() {
+      let (command, skills) = model.skills.opening(
+        dispatch.map(msg => Skills(msg)),
+        after,
+      )
+      (command, { ..model, skills, })
+    } else {
+      (@cmd.none, model)
+    }
+  } else {
+    (@cmd.none, model)
+  }
   let detail_was_open = previous.skills_detail_dialog_open()
   let detail_open = model.skills_detail_dialog_open()
   let dialog_cmd = if (previous.management_dialog is Some(_)) ==
@@ -1823,6 +1845,7 @@ fn update(
   }
   let cmd = @cmd.batch([
     cmd,
+    skills_cmd,
     if detail_was_open && !detail_open {
       @dialog.close("skill-detail-dialog")
     } else {
@@ -5125,15 +5148,18 @@ fn update_msg(
           (
             @cmd.batch([
               page_cmd,
-              fetch_skills_library(dispatch, library, model.locale),
+              if model
+                .skills_library_choices()
+                .any(choice => choice.library == library && choice.available) {
+                fetch_skills_library(dispatch, library, model.locale)
+              } else {
+                @cmd.none
+              },
             ]),
             model,
           )
-        Some(LibrarySelected(kind)) => {
-          let (open_cmd, model) = open_skills_library(dispatch, {
-            ..model,
-            skills_library: kind,
-          })
+        Some(LibrarySelected(_)) => {
+          let (open_cmd, model) = open_skills_library(dispatch, model)
           (@cmd.batch([page_cmd, open_cmd]), model)
         }
         None => (page_cmd, model)
@@ -7862,13 +7888,17 @@ fn update_device_msg(
   }
   match msg {
     InstalledSkillsLoaded(items, builtin_errors~) => {
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let model = { ..model, installed_skills: items, }
-      // The mirror serves the device composer even while the page shows the
-      // Cloud library; only a page showing this host syncs to it.
-      guard model.skills_input().library == Host(channel) else {
-        return (@cmd.none, model)
+      let shown = model.skills_input().library == Host(channel)
+      let model = {
+        ..model,
+        installed_skills: if channel == model.focused {
+          items
+        } else {
+          model.installed_skills
+        },
+        skills: model.skills.with_installed(Host(channel), items),
       }
+      guard shown else { return (@cmd.none, model) }
       let (cmd, skills) = model.skills
         .with_builtin_errors(Host(channel), builtin_errors)
         .sync_library(dispatch.map(msg => Skills(msg)), model.skills_input())
@@ -7936,11 +7966,14 @@ fn update_device_msg(
       refresh_visible_subrun_child(dispatch, channel, session, model)
     }
     SkillsChanged =>
-      if channel == model.focused {
+      if channel == model.focused ||
+        (
+          model.skills.selection() is Some({ library: Host(selected), .. }) &&
+          channel == selected
+        ) {
         (fetch_installed_skills(dispatch, channel), model)
       } else {
-        // `installed_skills` is the focused host's mirror. A background
-        // device is refreshed when focus moves to it.
+        // Other devices are read when their library or conversation is opened.
         (@cmd.none, model)
       }
     BridgeReady => {
@@ -7977,11 +8010,16 @@ fn update_device_msg(
       if channel == Local && model.is_desktop {
         commands.push(ssh_load(dispatch))
       }
-      // The focused-scoped half: installed skills (they feed the composer's
-      // `$` completion, so they load on connect rather than when the Skills
-      // page opens) follow the device the UI acts on.
-      if channel == model.focused {
+      // Both the composer and the independently selected Skills library
+      // refresh their own device after its connection is restored.
+      if channel == model.focused ||
+        (
+          model.skills.selection() is Some({ library: Host(selected), .. }) &&
+          channel == selected
+        ) {
         commands.push(fetch_installed_skills(dispatch, channel))
+      }
+      if channel == model.focused {
         // Codex conversations are always visible in the global sidebar, so
         // populate that focused-host catalog on bridge readiness rather than
         // waiting for a separate Codex page to be opened.
@@ -20235,6 +20273,11 @@ test "installed skills replies are scoped to their source device" {
       home.devices[0],
       { ..empty_device_state(Remote("d_b")), bridge: Connected, },
     ],
+    console: {
+      ..home.console,
+      roster: home.console.roster +
+      [{ id: "d_b", name: "Device B", hostname: None, online: true, }],
+    },
     focused: Remote("d_b"),
     installed_skills: [],
   }

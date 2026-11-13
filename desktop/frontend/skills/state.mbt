@@ -3,15 +3,15 @@
 
 ///|
 /// The mooncakes.io skill catalog as the page sees it. One enum, so
-/// "loading", "loaded empty" and "failed" cannot be conflated. Loading keeps
-/// the source device so opening the page on another device starts its own
-/// request instead of inheriting an in-flight request it cannot settle.
+/// "loading", "loaded empty" and "failed" cannot be conflated. Each state
+/// keeps its source library so another device or account never inherits its
+/// catalog or an in-flight request it cannot settle.
 #derive(Eq)
 priv enum Catalog {
   Idle
   Loading(library~ : Library)
-  Ready(Array[MarketItem])
-  Failed(String)
+  Ready(library~ : Library, items~ : Array[MarketItem])
+  Failed(library~ : Library, message~ : String)
 }
 
 ///|
@@ -21,6 +21,7 @@ priv enum Catalog {
 /// notices retain the scope of each failure.
 #derive(Eq)
 struct State {
+  selection : LibrarySelection?
   catalog : Catalog
   query : String
   busy : Array[PendingOperation]
@@ -159,9 +160,15 @@ fn State::start_action(
 }
 
 ///|
-fn State::update_candidate(self : State, item : InstalledItem) -> MarketItem? {
+fn State::update_candidate(
+  self : State,
+  library : Library,
+  item : InstalledItem,
+) -> MarketItem? {
   guard item.registry is Some(registry) else { return None }
-  guard self.catalog is Ready(items) else { return None }
+  guard self.catalog is Ready(library=owner, items~) && owner == library else {
+    return None
+  }
   for candidate in items {
     guard candidate.identity() == (registry.module_name, registry.package_path) &&
       source_label(candidate) != item.source else {
@@ -202,6 +209,7 @@ pub fn State::detail_open(self : State, library : Library) -> Bool {
 /// Initial state: no catalog, no filter, nothing in flight.
 pub fn State::empty() -> State {
   {
+    selection: None,
     catalog: Idle,
     query: "",
     busy: [],
@@ -211,6 +219,24 @@ pub fn State::empty() -> State {
     preview_library: None,
     list_scroll_top: 0.0,
   }
+}
+
+///|
+pub fn State::selection(self : State) -> LibrarySelection? {
+  self.selection
+}
+
+///|
+/// Refresh the chosen library without making a background read select it.
+pub fn State::with_installed(
+  self : State,
+  library : Library,
+  items : Array[InstalledItem],
+) -> State {
+  guard self.selection is Some(selection) && selection.library == library else {
+    return self
+  }
+  { ..self, selection: Some({ library, installed: items, }), }
 }
 
 ///|
@@ -244,43 +270,41 @@ pub(all) enum Msg {
   )
   BackToList
   SkillsScrolled(Double)
-  // The library switch: the root decides what the page shows next.
-  SelectLibrary(LibraryKind)
+  // Select a library in page state, then ask the root to read its contents.
+  SelectLibrary(Library)
 }
 
 ///|
 /// Open the page. The catalog is fetched once per app run (and again after a
-/// failure, a manual refresh, or a device switch during loading). Only the
+/// failure, a manual refresh, or a library choice). Only the
 /// library loading error is cleared: operation errors belong to their skills.
-/// The installed library is refreshed by the root, which owns it.
+/// Opening pins the supplied default library to page state, even while offline.
+/// The root routes installed-library reads back through `with_installed`.
 pub fn State::opening(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
 ) -> (@cmd.Cmd, State) {
-  let (cmd, catalog) = match self.catalog {
-    Idle | Failed(_) =>
+  let state = {
+    ..self,
+    selection: Some({ library: input.library, installed: input.installed, }),
+  }
+  guard input.available() else { return (@cmd.none, state) }
+  let (cmd, catalog) = match state.catalog {
+    Loading(library~) | Ready(library~, ..) if library == input.library =>
+      (@cmd.none, state.catalog)
+    _ =>
       (
         fetch_catalog(emit, input.library, input.locale),
         Catalog::Loading(library=input.library),
       )
-    Loading(library~) =>
-      if library == input.library {
-        (@cmd.none, self.catalog)
-      } else {
-        (
-          fetch_catalog(emit, input.library, input.locale),
-          Loading(library=input.library),
-        )
-      }
-    current => (@cmd.none, current)
   }
-  let notices = self.notices.filter(notice => !(notice is LibraryLoadFailed(_)))
-  (cmd, { ..self, catalog, notices, })
+  let notices = state.notices.filter(notice => !(notice is LibraryLoadFailed(_)))
+  (cmd, { ..state, catalog, notices, })
 }
 
 ///|
-/// Show a failure the page did not cause. The root-owned library refresh is
+/// Show a failure the page did not cause. The root-routed library refresh is
 /// the only such source: the page has no other way to learn that the list
 /// under "Installed" could not be read.
 pub fn State::with_library_error(self : State, message : String) -> State {
@@ -305,7 +329,7 @@ pub fn State::with_builtin_errors(
 }
 
 ///|
-/// The root calls this after refreshing its installed mirror, including
+/// The root calls this after refreshing the selected installed contents, including
 /// changes announced by another client. Reload an open document when its
 /// installation changes; versioned cache keys keep old instructions separate.
 pub fn State::sync_library(
@@ -313,6 +337,7 @@ pub fn State::sync_library(
   emit : @cmd.Emit[Msg],
   input : Input,
 ) -> (@cmd.Cmd, State) {
+  guard input.available() else { return (@cmd.none, self) }
   guard self.preview_library == Some(input.library) else {
     return (@cmd.none, { ..self, preview: Closed, preview_library: None, })
   }
@@ -370,6 +395,20 @@ pub fn State::handle(
   msg : Msg,
   input : Input,
 ) -> (@cmd.Cmd, State, Outcome?) {
+  // An unavailable device has no active management surface. Let replies to
+  // earlier requests settle, but do not start reads or mutations for it.
+  if !input.available() {
+    match msg {
+      RefreshCatalog
+      | Install(_)
+      | Uninstall(_)
+      | Update(_)
+      | ToggleEnabled(_)
+      | PreviewMarket(_)
+      | PreviewInstalled(_) => return (@cmd.none, self, None)
+      _ => ()
+    }
+  }
   match msg {
     QueryChanged(value) => (@cmd.none, { ..self, query: value, }, None)
     PreviewMarket(item) => {
@@ -478,12 +517,25 @@ pub fn State::handle(
       )
     SkillsScrolled(scroll_top) =>
       (@cmd.none, { ..self, list_scroll_top: scroll_top, }, None)
-    SelectLibrary(kind) =>
-      if input.switchable && kind != input.library.kind() {
-        (@cmd.none, self, Some(LibrarySelected(kind)))
-      } else {
-        (@cmd.none, self, None)
+    SelectLibrary(library) => {
+      guard library != input.library &&
+        input.choices.any(choice => {
+          choice.library == library && choice.available
+        }) else {
+        return (@cmd.none, self, None)
       }
+      (
+        @cmd.none,
+        {
+          ..self,
+          selection: Some({ library, installed: [], }),
+          catalog: Idle,
+          preview: Closed,
+          preview_library: None,
+        },
+        Some(LibrarySelected(library)),
+      )
+    }
     RefreshCatalog =>
       match self.catalog {
         // The rendered button is disabled while loading, and this guard also
@@ -501,11 +553,11 @@ pub fn State::handle(
       // that outlived a focus switch must not overwrite the focused device's
       // catalog or its newer in-flight request.
       guard library == input.library else { return (@cmd.none, self, None) }
-      (@cmd.none, { ..self, catalog: Ready(items), }, None)
+      (@cmd.none, { ..self, catalog: Ready(library~, items~), }, None)
     }
     CatalogFailed(library~, message~) => {
       guard library == input.library else { return (@cmd.none, self, None) }
-      (@cmd.none, { ..self, catalog: Failed(message), }, None)
+      (@cmd.none, { ..self, catalog: Failed(library~, message~), }, None)
     }
     ToggleEnabled(id) => {
       guard input.installed.iter().find_first(item => item.id == id)

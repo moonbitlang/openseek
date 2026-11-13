@@ -19,7 +19,8 @@ fn management_dialog_view(
   fn pane(kind : ManagementDialog, content : @html.Html) -> @html.Html {
     @html.div(
       class="management-dialog-pane",
-      hidden=model.host_incompatible() || model.management_dialog != Some(kind),
+      hidden=(!(kind is Skills) && model.host_incompatible()) ||
+        model.management_dialog != Some(kind),
       content,
     )
   }
@@ -55,7 +56,9 @@ fn management_dialog_view(
           ),
           pane(Skills, skills_html),
           pane(Schedules, schedules_page(dispatch, model)),
-          if model.management_dialog is Some(_) && model.host_incompatible() {
+          if model.management_dialog is Some(kind) &&
+            !(kind is Skills) &&
+            model.host_incompatible() {
             console_gate_view(
               locale=model.locale,
               dispatch,

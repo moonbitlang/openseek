@@ -22,7 +22,7 @@ fn installed_menu_input(
     update: if item.builtin && input.library.locks_builtins() {
       None
     } else {
-      state.update_candidate(item)
+      state.update_candidate(input.library, item)
     },
     pending: item
     .identity()

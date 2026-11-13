@@ -1,7 +1,27 @@
 // The skills calls the root makes for itself. Browsing the registry and
 // changing a library belong to the Skills page (`frontend/skills`); the
-// libraries' *contents* are mirrors the whole app reads — the focused host's
-// and the signed-in account's Cloud library — so re-reading them stays here.
+// composer's libraries and the management page's selected library are separate
+// readers. Each reply updates only the readers that own its target.
+
+///|
+fn Model::skills_library_choices(self : Model) -> Array[@skills.LibraryChoice] {
+  let choices : Array[@skills.LibraryChoice] = []
+  if self.cloud_skills_access() is Some(access) {
+    choices.push({ library: Cloud(access), name: None, available: true, })
+  }
+  if self.devices.any(device => device.channel is Local) {
+    let available = self.device_state(Local) is Some({ bridge: Connected, .. })
+    choices.push({ library: Host(Local), name: None, available, })
+  }
+  for device in self.console.roster {
+    let channel = @interop.ChannelId::of_device(device.id)
+    guard channel is Remote(_) else { continue }
+    let available = self.device_state(channel)
+      is Some({ bridge: Connected, .. })
+    choices.push({ library: Host(channel), name: Some(device.name), available, })
+  }
+  choices
+}
 
 ///|
 /// Refresh the local skills library's contents.
@@ -94,7 +114,11 @@ fn cloud_skills_loaded(
   let shown = input.library == Cloud(access)
   match result {
     Ok(items) => {
-      let model = { ..model, cloud_skills: items, }
+      let model = {
+        ..model,
+        cloud_skills: items,
+        skills: model.skills.with_installed(Cloud(access), items),
+      }
       guard shown else { return (@cmd.none, model) }
       let (cmd, skills) = model.skills
         .with_builtin_errors(Cloud(access), [])
@@ -125,7 +149,11 @@ fn open_skills_library(
   (
     @cmd.batch([
       page_cmd,
-      fetch_skills_library(dispatch, input.library, input.locale),
+      if input.available() {
+        fetch_skills_library(dispatch, input.library, input.locale)
+      } else {
+        @cmd.none
+      },
     ]),
     { ..model, skills, },
   )

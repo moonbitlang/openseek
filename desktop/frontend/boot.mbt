@@ -1091,6 +1091,7 @@ fn main {
       state.map(model => model.skills_input()),
       state.map(model => model.skills),
       state.map(model => model.locale),
+      state.map(model => model.management_dialog is Some(Skills)),
       emit.map(msg => Skills(msg)),
     )
     let workspace_settings_input = state.map(model => {

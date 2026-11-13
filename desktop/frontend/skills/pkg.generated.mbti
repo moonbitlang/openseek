@@ -15,7 +15,7 @@ import {
 // Values
 pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem] raise SkillReplyError
 
-pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[(@html.Html, @html.Html)]
+pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @rabbita.Val[Bool], @cmd.Emit[Msg]) -> @rabbita.Val[(@html.Html, @html.Html)]
 
 pub fn detail_title(@i18n.Locale) -> String
 
@@ -35,9 +35,10 @@ pub(all) suberror SkillReplyError {
 pub(all) struct Input {
   library : Library
   installed : Array[InstalledItem]
-  switchable : Bool
+  choices : Array[LibraryChoice]
   locale : @i18n.Locale
 }
+pub fn Input::available(Self) -> Bool
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
@@ -61,16 +62,24 @@ pub(all) enum Library {
   Cloud(@cloud_client.Access)
 }
 pub fn Library::equal(Self, Self) -> Bool
-pub fn Library::kind(Self) -> LibraryKind
 pub fn Library::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
-pub(all) enum LibraryKind {
-  DeviceLibrary
-  CloudLibrary
+pub(all) struct LibraryChoice {
+  library : Library
+  name : String?
+  available : Bool
 }
-pub fn LibraryKind::equal(Self, Self) -> Bool
-pub fn LibraryKind::not_equal(Self, Self) -> Bool
+pub fn LibraryChoice::equal(Self, Self) -> Bool
+pub fn LibraryChoice::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub struct LibrarySelection {
+  library : Library
+  installed : Array[InstalledItem]
+}
+pub fn LibrarySelection::equal(Self, Self) -> Bool
+pub fn LibrarySelection::not_equal(Self, Self) -> Bool
 
 #derive(Eq, @debug.Debug)
 pub(all) struct MarketItem {
@@ -102,13 +111,13 @@ pub(all) enum Msg {
   PreviewFailed(library~ : Library, request~ : Int32, target~ : PreviewTarget, message~ : String)
   BackToList
   SkillsScrolled(Double)
-  SelectLibrary(LibraryKind)
+  SelectLibrary(Library)
 }
 
 #derive(Eq)
 pub enum Outcome {
   LibraryChanged(library~ : Library)
-  LibrarySelected(LibraryKind)
+  LibrarySelected(Library)
 }
 pub fn Outcome::equal(Self, Self) -> Bool
 pub fn Outcome::not_equal(Self, Self) -> Bool
@@ -142,8 +151,10 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::opening(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
+pub fn State::selection(Self) -> LibrarySelection?
 pub fn State::sync_library(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
 pub fn State::with_builtin_errors(Self, Library, Array[@protocol.BuiltinSkillError]) -> Self
+pub fn State::with_installed(Self, Library, Array[InstalledItem]) -> Self
 pub fn State::with_library_error(Self, String) -> Self
 
 // Type aliases
