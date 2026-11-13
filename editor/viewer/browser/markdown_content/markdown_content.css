@@ -134,12 +134,6 @@
   font-size: inherit;
 }
 
-/* Keep dense tables readable without using unwrapped descriptions as the
- * preferred table width. */
-.moonbit-viewer-markdown-content :where([role="region"] > table) :is(th, td) {
-  min-width: var(--markdown-cell-min-width, 8ch);
-}
-
 .moonbit-viewer-markdown-content :is(th, td) {
   /* Host-rendered inline code must share the cell's emergency wrapping policy. */
   --markdown-inline-code-wrap: break-word;
