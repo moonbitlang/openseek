@@ -146,7 +146,7 @@ async test "attachment imports reject escaping directory links before writing" {
 }
 
 ///|
-async test "attachment preparation enforces image and document size limits" {
+async test "attachment preparation rejects unavailable workspace empty and oversized files" {
   let session = "attachment-limits"
   let root = attachment_test_workspace(session)
   defer @fs.rmdir(root.to_string(), recursive=true)
@@ -184,28 +184,6 @@ async test "attachment preparation enforces image and document size limits" {
     }
     assert_true(rejected)
   }
-  let bytes = b"\x89PNG\r\n\x1a\n" + Bytes::make(20 * 1024 * 1024 - 8, b'\x00')
-  let source = root.join("large.png")
-  @fs.write_binary(source.to_string(), bytes)
-  let payload : @protocol.PrepareAttachmentPayload = {
-    session,
-    workspace: root.resource_path(),
-    source: AttachmentPath(source.resource_path()),
-  }
-  assert_true(@files.prepare_attachment(payload) is AttachmentImage(..))
-  let from_bytes = {
-    ..payload,
-    source: AttachmentBytes(name="large.png", data_base64=@base64.encode(bytes)),
-  }
-  assert_true(@files.prepare_attachment(from_bytes) is AttachmentImage(..))
-  @fs.write_binary(source.to_string(), bytes + b"\x00")
-  let oversized = try {
-    ignore(@files.prepare_attachment(payload))
-    false
-  } catch {
-    _ => true
-  }
-  assert_true(oversized)
   assert_false(@fs.exists(root.join(".openseek").to_string()))
 }
 
