@@ -111,8 +111,8 @@ pub fn output_size(rect : Rect, densities : Array[Double]) -> Output? {
 
 ///|
 pub fn png_within_limit(url : String) -> Bool {
-  // Canvas exports padded base64; retain the conservative 20 MiB estimate.
-  (url.length() - 22).to_double() * 3 / 4 <= 20 * 1024 * 1024
+  // Canvas exports padded base64; retain the conservative size estimate.
+  (url.length() - 22).to_double() * 3 / 4 <= @protocol.MaxImageBytes.to_double()
 }
 
 ///|

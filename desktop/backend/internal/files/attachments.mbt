@@ -92,8 +92,10 @@ pub async fn prepare_attachment(
   let file = load_attachment(payload.source)
   if !is_document_attachment(file.name) &&
     @filekind.classify(file.bytes) is Image(media_type~) {
-    guard file.bytes.length() <= 20 * 1024 * 1024 else {
-      raise InvalidRequest("each image must be 20 MiB or smaller")
+    guard file.bytes.length() <= @protocol.MaxImageBytes else {
+      raise InvalidRequest(
+        "each image must be \{@protocol.MaxImageBytes / 1024 / 1024} MiB or smaller",
+      )
     }
     return AttachmentImage(
       name=file.name,

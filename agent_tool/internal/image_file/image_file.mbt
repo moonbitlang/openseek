@@ -10,7 +10,7 @@ pub async fn read(path : String) -> @protocol.Image {
   guard file.kind() is Regular else {
     fail("image path is not a regular file: \{path}")
   }
-  let cap = 20 * 1024 * 1024
+  let cap = @protocol.MaxImageBytes
   if file.size() > cap.to_int64() {
     raise @protocol.ImageError::TooLarge
   }

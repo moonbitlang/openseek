@@ -12,6 +12,8 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
 pub const HostProtocolRevision : Int32 = 7
 
+pub const MaxImageBytes : Int32 = 20971520
+
 pub const SideChatTokenLength : Int32 = 8
 
 pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command

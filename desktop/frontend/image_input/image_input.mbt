@@ -233,7 +233,7 @@ async fn Selection::load(
     if !allow_images {
       return Failed(ImagesUnsupported)
     }
-    if blob.get_size() > 20 * 1024 * 1024 {
+    if blob.get_size() > @protocol.MaxImageBytes {
       return Failed(ImageTooLarge(file.name()))
     }
     if blob.get_size() == 0 {

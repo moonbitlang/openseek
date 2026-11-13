@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub const MaxImageBytes : Int32 = 20971520
+
 pub const RunRequestVersion : Int32 = 1
 
 pub const RunResultVersion : Int32 = 1
