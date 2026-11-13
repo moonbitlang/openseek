@@ -1,9 +1,8 @@
 // The app's entry: the frontend package is the executable, moon emits it as
 // `frontend.js`, and one bundle with one document serves both the proton
-// window and the console page openseek-api hosts. Which of the two a page
-// is comes from the environment the host built for it: the proton window
-// carries the `__MoonBit__` bridge, installed before any page script runs,
-// and a browser page carries nothing. `main` reads that once.
+// window and the console page openseek-api hosts. The proton window carries
+// the `__MoonBit__` bridge; Android adds an app token to its User-Agent, and
+// the Local Console marks its document. `main` reads these before rendering.
 
 ///|
 priv suberror AppShortcutSubscription {
@@ -563,6 +562,18 @@ fn main {
     .query_selector("meta[name='seekmoon-local-console']")
     .to_option()
     is Some(_)
+  // The shell sets its app token before loading any page, so this works for
+  // both bundled and downloaded frontends, including after a reload.
+  let android = if @interop.js_prop(
+      @js.Value::cast_from(@dom.window().navigator()),
+      "userAgent",
+    )
+    is Some(value) &&
+    (@js.Cast::into(value) : String?) is Some(user_agent) {
+    user_agent.contains(" SeekMoonAndroid/")
+  } else {
+    false
+  }
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
@@ -578,7 +589,9 @@ fn main {
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
-      init=emit => (initial_model(desktop~, local_console~), emit(Init)),
+      init=emit => {
+        (initial_model(desktop~, local_console~, android~), emit(Init))
+      },
       update=(model, msg, emit) => {
         let (cmd, next) = match msg {
           ComposerReply(reply) => ((composer_reply.val)(reply), model)

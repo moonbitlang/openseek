@@ -1295,6 +1295,9 @@ priv struct Model {
   // close path — from a browser tab, `window.close()` exits nothing, and the
   // update would yank the app out from under whoever is at the machine.
   is_desktop : Bool
+  // The APK still uses the relay console, but already has the app installed.
+  // Read from the shell's User-Agent token once at startup.
+  is_android_app : Bool
   // Whether the native window is currently focused. Conversation navigation
   // has its own `focused` channel; both facts, together with `screen`, decide
   // whether a completed turn was actually visible to the reader.
@@ -2677,7 +2680,11 @@ fn empty_conversation(
 /// `desktop` is whether this page runs inside the proton window rather than
 /// as a browser console: one bundle serves both, and `main` reads the
 /// difference once from the bridge the host installs before any page script.
-fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
+fn initial_model(
+  desktop~ : Bool,
+  local_console~ : Bool = false,
+  android~ : Bool = false,
+) -> Model {
   // Read once here (main runs before the first render); afterwards the
   // resize subscription keeps the flag current through `ViewportResized`.
   // No window (a headless test runtime) reads as the wide layout.
@@ -2756,6 +2763,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
     is_desktop: desktop,
+    is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),
     app_version: "development",
     console_url: None,
@@ -2878,6 +2886,11 @@ fn Model::is_local_console(self : Model) -> Bool {
 /// or the Local Console.
 fn Model::is_relay_console(self : Model) -> Bool {
   !self.is_desktop && self.console.page_device != Some("host")
+}
+
+///|
+fn Model::show_app_downloads(self : Model) -> Bool {
+  self.is_relay_console() && !self.is_android_app
 }
 
 ///|

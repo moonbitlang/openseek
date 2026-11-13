@@ -180,6 +180,12 @@ whether login, Back or file selection is available. CSR route parsing and histor
 belong to the frontend. After #2045 lands, verify deep-link refresh and asset
 resolution with that frontend before claiming end-to-end CSR support.
 
+The Android shell appends `SeekMoonAndroid/<version>` to the WebView's default
+User-Agent before loading any page. The frontend reads this app token at startup
+to hide “Download apps” in the sidebar and the signed-out Cloud home. The token
+applies to the APK bundle and downloaded Browser releases, including reloads
+and device switches; browsers keep their download links. HTML is served unchanged.
+
 There is no native JavaScript command bridge. Cleartext, mixed content and file
 URL access are disabled; backup is disabled and inspection is debug-only.
 

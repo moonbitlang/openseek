@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
             allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             mediaPlaybackRequiresUserGesture = true
+            // Identify the app before any bundled or downloaded page runs.
+            userAgentString += " SeekMoonAndroid/${BuildConfig.VERSION_NAME}"
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
