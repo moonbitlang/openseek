@@ -477,8 +477,6 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
-  let model = @deepseek.Deepseek(self.cloud.model(owner.session()))
-  let settings_enabled = self.cloud.can_choose_settings(owner.session())
   let native_users = Map([])
   for event in conversation.document.events.unwrap_or([]) {
     if event.item is @protocol.User(user) {
@@ -596,30 +594,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }
         context
       },
-      status: [
-        @composer.ModelStatus({
-          id: "openseek-model-picker",
-          groups: [{ ..openseek_model_group(Deepseek, model), label: "Cloud", }],
-          selected: ModelChoice::OpenSeekModel(model).wire(),
-          disabled: !settings_enabled,
-          open: self.select_menu is Some(OpenSeekModelMenu),
-          title: model.label(),
-        }),
-        @composer.ReasoningStatus(
-          openseek_reasoning_control(
-            model,
-            self.cloud.thinking(owner.session()),
-            locale=self.locale,
-            open=self.select_menu is Some(OpenSeekReasoningMenu),
-            disabled=!settings_enabled,
-          ),
-        ),
-        @composer.ApprovalStatus({
-          mode: self.cloud.approval(owner.session()),
-          open: self.select_menu is Some(OpenSeekApprovalMenu),
-          enabled: self.cloud.can_choose_settings(owner.session()),
-        }),
-      ],
+      status: [],
       placeholder: shell_text(self.locale, AskPlaceholder),
       disabled: pending || !self.cloud.can_compose(owner.session()),
       primary_action: if conversation.generating ||

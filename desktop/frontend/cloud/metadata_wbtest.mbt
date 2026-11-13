@@ -550,9 +550,9 @@ test "approval mode saves only between turns and holds sending until saved" {
   assert_true(refused.can_choose_settings("a"))
   assert_true(refused.can_send("a"))
   assert_true(refused.notice is Some(SettingsSaveRaced))
-  // A draft can choose its first engine policy before the server creates it.
+  // New Cloud drafts use automatic review before the server creates them.
   let drafting = metadata_update(initial, Create)
   guard drafting.creation is Some(creation) else { fail("expected a draft") }
   assert_true(drafting.can_choose_settings(creation.id))
-  assert_true(drafting.approval(creation.id) is ApprovalAsk)
+  assert_true(drafting.approval(creation.id) is ApprovalReview)
 }

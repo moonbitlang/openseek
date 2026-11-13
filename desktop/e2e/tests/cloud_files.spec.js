@@ -728,12 +728,6 @@ test('Cloud AI pattern repair sends no client configuration overrides', async ({
   const cloud = new CloudFilesHarness(page);
   const repairs = [];
   await cloud.install(); await cloud.goto(); await cloud.open();
-  for (const [picker, option] of [['Model', 'DeepSeek Pro'], ['Reasoning effort', 'Max']]) {
-    await page.locator('.composer').getByRole('button', { name: picker, exact: true }).click();
-    await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
-    await expect(page.locator('.composer').getByRole('button', { name: picker, exact: true })).toHaveText(option);
-    await expect(page.locator('.composer').getByRole('button', { name: picker, exact: true })).toBeEnabled();
-  }
   await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic**`, async route => {
     const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
