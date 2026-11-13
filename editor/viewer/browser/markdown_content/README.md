@@ -10,13 +10,15 @@ tables, links, images, tasks, and footnotes. Table alignment consumes cmark's
 `left` / `center` / `right` cell classes. A `[role="region"]` with a direct table
 child owns horizontal overflow and outer spacing, including inside lists and
 quotes. Tables prefer the region width and use automatic, content-dependent
-column sizing rather than equal-width columns. Cell text wraps only at normal
-line-breaking opportunities, without arbitrary breaks inside words or identifiers.
-Cells retain a minimum width of `8ch`; dense tables or content that cannot wrap
-can overflow and scroll instead of being forced into the region width. Cells set
-`--markdown-inline-code-wrap: normal`, which both shared and host-specific inline
-code rules consume so code follows the same wrapping policy. Outside tables,
-inline code retains its `anywhere` fallback.
+column sizing rather than equal-width columns. Cell text uses `word-break: normal`
+and `overflow-wrap: break-word`: normal line-breaking opportunities take priority,
+with emergency breaks for otherwise unbreakable text. Unlike `anywhere`, these
+emergency breaks do not reduce min-content sizing, so automatic table layout can
+still widen columns and scroll rather than split a long token. Cells retain a
+minimum width of `8ch`; tables are not forced to fit the region at all costs.
+Cells set `--markdown-inline-code-wrap: break-word`, which both shared and
+host-specific inline code rules consume so code follows the same wrapping policy.
+Outside tables, inline code retains its `anywhere` fallback.
 
 Hosts retain root typography, reading/figure measures, document/stream viewports,
 folding, overlays, code-copy controls, diagrams, file actions, and Sources cards.

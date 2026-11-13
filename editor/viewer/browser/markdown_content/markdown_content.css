@@ -141,12 +141,13 @@
 }
 
 .moonbit-viewer-markdown-content :is(th, td) {
-  /* Host-rendered inline code must preserve the same word boundaries as cells. */
-  --markdown-inline-code-wrap: normal;
+  /* Host-rendered inline code must share the cell's emergency wrapping policy. */
+  --markdown-inline-code-wrap: break-word;
   max-width: 32rem;
   padding: var(--markdown-cell-padding, 6px 12px);
   white-space: normal;
-  overflow-wrap: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
   text-align: start;
 }
 
