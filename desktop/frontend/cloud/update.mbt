@@ -627,7 +627,7 @@ pub fn update(
           id,
           request,
           navigation,
-          approval: ApprovalAsk,
+          approval: ApprovalReview,
           model: V4Flash,
           thinking: ThinkingHigh,
         }),
