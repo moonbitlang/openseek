@@ -28,6 +28,10 @@ pub let agent_start : Command[@protocol.StartPayload, @protocol.StartReply]
 
 pub let agent_steer : Command[@protocol.SteerPayload, @protocol.SteerReply]
 
+pub let app_background_rendering_get : Command[@protocol.EmptyPayload, @protocol.BackgroundRenderingSettings]
+
+pub let app_background_rendering_set : Command[@protocol.BackgroundRenderingSetPayload, @protocol.BackgroundRenderingSettings]
+
 pub let app_close_window : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let app_focused_browser : Command[@protocol.EmptyPayload, @protocol.AppFocusedBrowserReply]

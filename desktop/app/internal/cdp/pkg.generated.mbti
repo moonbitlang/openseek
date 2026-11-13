@@ -88,8 +88,10 @@ pub async fn Connection::next_event(Self) -> Event
 pub async fn Connection::release_object(Self, RemoteObjectId) -> Unit
 pub async fn Connection::resolve_node(Self, BackendNodeId) -> RemoteObject
 pub async fn Connection::scroll_into_view(Self, BackendNodeId) -> Unit
+pub async fn Connection::set_focus_emulation_enabled(Self, Bool) -> Unit
 pub async fn Connection::set_inspect_mode(Self, InspectMode) -> Unit
 pub async fn Connection::viewport_size(Self) -> (Double, Double)
+pub async fn Connection::wait_for_disconnect(Self) -> Unit
 
 pub(all) enum ContrastAlgorithm {
   Aa

@@ -428,6 +428,21 @@ bottom-right notification area. Anything less than the fully verified path —
 other platforms, dev binaries, or ad-hoc signatures — degrades to a toast that
 opens the release page in the browser.
 
+## Experimental background rendering (macOS)
+
+Settings → System → Experimental includes **Background rendering workaround**.
+It defaults to off, remembers the local preference, and applies changes after
+restarting SeekMoon. **Restart required** appears while the saved preference
+differs from the one used at launch.
+
+The workaround keeps a main-page Chromium focus-emulation session open to
+support native capture while the window is covered or on another Space. It
+does not activate the native window. Focus emulation also changes the page's
+reported focus and visibility, so unread tracking may behave as if the page
+has focus. Power impact and minimized or explicitly hidden windows are not
+qualified. Failures leave the app usable and are reported through the existing
+error notification and local diagnostic log.
+
 ## Prerequisites
 
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.

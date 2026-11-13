@@ -17,6 +17,9 @@ fn load_saved_settings(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     scheduler.add(load_language(is_desktop~, dispatch))
+    if is_desktop {
+      scheduler.add(load_background_rendering(dispatch))
+    }
     scheduler.add(
       dispatch(
         SettingsLoaded(

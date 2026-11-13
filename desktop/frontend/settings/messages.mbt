@@ -3,6 +3,10 @@
 ///|
 /// Settings-page messages, kept independent of the application model.
 pub(all) enum Message {
+  Experimental
+  BackgroundRendering
+  BackgroundRenderingDescription
+  RestartRequired
   DevicePageDescription(String, String)
   RegisterServer(String)
   UpdateTo(String)
@@ -165,6 +169,33 @@ pub(all) enum Message {
 /// ```
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, Experimental) => "Experimental"
+    (Spanish, Experimental) => "Experimental"
+    (SimplifiedChinese, Experimental) => "实验性功能"
+    (TraditionalChinese, Experimental) => "實驗性功能"
+    (Japanese, Experimental) => "実験的機能"
+    (English, BackgroundRendering) => "Background rendering workaround"
+    (Spanish, BackgroundRendering) =>
+      "Solución provisional de renderizado en segundo plano"
+    (SimplifiedChinese, BackgroundRendering) => "后台渲染临时解决方案"
+    (TraditionalChinese, BackgroundRendering) => "背景算繪暫行方案"
+    (Japanese, BackgroundRendering) =>
+      "バックグラウンド描画の回避策"
+    (English, BackgroundRenderingDescription) =>
+      "Keep the macOS renderer active while the window is occluded."
+    (Spanish, BackgroundRenderingDescription) =>
+      "Mantener activo el renderizador de macOS mientras la ventana está oculta por otras ventanas."
+    (SimplifiedChinese, BackgroundRenderingDescription) =>
+      "窗口被遮挡时保持 macOS 渲染器运行。"
+    (TraditionalChinese, BackgroundRenderingDescription) =>
+      "視窗被遮擋時保持 macOS 算繪器運作。"
+    (Japanese, BackgroundRenderingDescription) =>
+      "ウインドウが隠れている間も macOS レンダラーを動作させます。"
+    (English, RestartRequired) => "Restart required"
+    (Spanish, RestartRequired) => "Es necesario reiniciar"
+    (SimplifiedChinese, RestartRequired) => "需要重启"
+    (TraditionalChinese, RestartRequired) => "需要重新啟動"
+    (Japanese, RestartRequired) => "再起動が必要です"
     (English, General) => "General"
     (Spanish, General) => "General"
     (SimplifiedChinese, General) => "通用"

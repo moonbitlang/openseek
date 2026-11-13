@@ -724,6 +724,7 @@ fn main {
           )
         }
         if model.is_desktop {
+          subs.push(background_rendering_subscription(emit))
           if model.fps_overlay_enabled {
             subs.push(fps_overlay_subscription())
           }

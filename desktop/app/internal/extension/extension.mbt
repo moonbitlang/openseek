@@ -226,6 +226,11 @@ let window_chrome_changed : @proton_contract.Event[@protocol.EmptyPayload] = @co
 )
 
 ///|
+let background_rendering_changed : @proton_contract.Event[
+  @protocol.EmptyPayload,
+] = @commands.extension_contract.event("app.background_rendering_changed")
+
+///|
 /// The page connection and Proton's window lifecycle hook start independently.
 /// Bound the short startup backlog rather than letting either side grow an
 /// unbounded in-memory queue while it waits for the other.
@@ -258,6 +263,7 @@ priv enum PageNotification {
   Hub(@protocol.Notification)
   BrowserEvent(@protocol.BrowserEventPayload)
   WindowChromeChanged
+  BackgroundRenderingChanged
   SystemAppearanceChanged
 }
 
@@ -328,6 +334,8 @@ async fn PageEventTarget::emit(
       self.events.emit(semantic_search_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
     WindowChromeChanged => self.events.emit(window_chrome_changed, NoPayload)
+    BackgroundRenderingChanged =>
+      self.events.emit(background_rendering_changed, NoPayload)
     SystemAppearanceChanged =>
       self.events.emit(system_appearance_changed, NoPayload)
   }
@@ -397,6 +405,13 @@ pub async fn DesktopBridgeActor::notify_window_chrome_changed(
   self : DesktopBridgeActor,
 ) -> Unit {
   self.inbox.put(Control(WindowChromeChanged))
+}
+
+///|
+pub async fn DesktopBridgeActor::notify_background_rendering_changed(
+  self : DesktopBridgeActor,
+) -> Unit {
+  self.inbox.put(Deliver(BackgroundRenderingChanged))
 }
 
 ///|
@@ -503,6 +518,16 @@ pub fn openseek_capability(
   for endpoint in browser_endpoints(views) {
     window_only.push(endpoint)
   }
+  window_only.push(
+    WindowEndpoint(@commands.app_background_rendering_get, (_, _) => {
+      views.background_rendering.settings()
+    }),
+  )
+  window_only.push(
+    WindowEndpoint(@commands.app_background_rendering_set, (_, payload) => {
+      views.background_rendering.save(payload.enabled)
+    }),
+  )
   @proton_extension.capability(
     @proton_extension.typed(@commands.extension_contract, registrar => {
       for endpoint in endpoints {

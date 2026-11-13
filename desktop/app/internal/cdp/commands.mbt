@@ -13,6 +13,27 @@ pub async fn Connection::bring_to_front(self : Connection) -> Unit {
 }
 
 ///|
+pub async fn Connection::set_focus_emulation_enabled(
+  self : Connection,
+  enabled : Bool,
+) -> Unit {
+  empty_result(
+    self.request("Emulation.setFocusEmulationEnabled", { "enabled": enabled }),
+  )
+}
+
+///|
+/// Wait for a normal peer disconnect while the session owner holds the socket.
+pub async fn Connection::wait_for_disconnect(self : Connection) -> Unit {
+  for ;; {
+    ignore(self.next_event()) catch {
+      @websocket.ConnectionClosed(Normal | GoingAway, _) => return
+      error => raise error
+    }
+  }
+}
+
+///|
 pub async fn Connection::enable_dom(self : Connection) -> Unit {
   empty_result(self.request("DOM.enable", {}))
 }

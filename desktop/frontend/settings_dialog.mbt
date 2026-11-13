@@ -135,6 +135,7 @@ fn settings_page(
         [
           settings_updates_group(dispatch, model),
           settings_diagnostics_group(dispatch, model),
+          ..settings_experimental_groups(dispatch, model),
         ]
     }
     panels.push(

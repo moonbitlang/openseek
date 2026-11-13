@@ -54,20 +54,24 @@ pub async fn[T] BrowserViews::with_cdp(
   id : Int32,
   f : async (@cdp.Connection) -> T,
 ) -> T {
-  let view = self.view(id)
+  with_marked_contents_cdp(self.debug_port, self.view(id).web_contents(), f)
+}
+
+///|
+async fn[T] with_marked_contents_cdp(
+  port : Int32,
+  contents : @proton.WebContentsHandle,
+  f : async (@cdp.Connection) -> T,
+) -> T {
   let marker = @uuid.mint()
   let key_json = Json("__seekmoon_cdp_" + marker).stringify()
-  view
-  .web_contents()
-  .eval(
+  contents.eval(
     "Object.defineProperty(globalThis, \{key_json}, {value:true, configurable:true});",
   )
-  defer (view.web_contents().eval("delete globalThis[\{key_json}]") catch {
-      _ => ()
-    })
-  with_cdp_targets(self.debug_port, key_json, connection => {
+  defer (contents.eval("delete globalThis[\{key_json}]") catch { _ => () })
+  with_cdp_targets(port, key_json, connection => {
     // Once matched, the marker has no further purpose during the operation.
-    view.web_contents().eval("delete globalThis[\{key_json}]")
+    contents.eval("delete globalThis[\{key_json}]")
     f(connection)
   })
 }

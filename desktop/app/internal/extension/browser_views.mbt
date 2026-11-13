@@ -13,6 +13,7 @@ struct BrowserViews {
   previews : @static_preview.Server
   mut window : @proton.WindowHandle?
   debug_port : Int32
+  background_rendering : BackgroundRendering
   mut pick : BrowserPick?
   // The conversation each page's tab belongs to, as the page says whenever
   // it opens or navigates one. The dock's strips are the page's state, and
@@ -51,12 +52,14 @@ struct BrowserViews {
 /// through window_ready when Proton creates it.
 pub async fn BrowserViews::BrowserViews(
   previews~ : @static_preview.Server = Server(),
+  runtime_dir? : String,
 ) -> BrowserViews {
   let debug_port = prepare_debugging()
   {
     previews,
     window: None,
     debug_port,
+    background_rendering: load_background_rendering(runtime_dir),
     pick: None,
     owners: Map([]),
     notify: None,

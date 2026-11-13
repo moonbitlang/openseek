@@ -1319,6 +1319,9 @@ priv struct Model {
   // The Settings selection. Its effective palette drives the app root,
   // embedded viewer, and terminal together.
   theme : Theme
+  background_rendering : @protocol.BackgroundRenderingSettings?
+  background_rendering_error : String?
+  background_rendering_saving : Bool
   language : @i18n.Preference
   locale : @i18n.Locale
   // No preference leaves the shared app/editor/terminal type scale to CSS.
@@ -1863,6 +1866,11 @@ priv enum Msg {
   SidebarModeLoaded(@sidebar.Mode)
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
+  BackgroundRenderingLoaded(@protocol.BackgroundRenderingSettings)
+  BackgroundRenderingLoadFailed(String)
+  BackgroundRenderingChanged(Bool)
+  BackgroundRenderingSaved(@protocol.BackgroundRenderingSettings)
+  BackgroundRenderingSaveFailed(String)
   LanguageLoaded(@i18n.Preference?, Array[String])
   LanguageChanged(String, Array[String])
   SystemLanguagesChanged(Array[String])
@@ -2778,6 +2786,9 @@ fn initial_model(
     },
     system_dark: host_prefers_dark(desktop),
     theme: System,
+    background_rendering: None,
+    background_rendering_error: None,
+    background_rendering_saving: false,
     language: System,
     locale: English,
     app_font_size: None,
