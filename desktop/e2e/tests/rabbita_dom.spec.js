@@ -305,7 +305,7 @@ test('transcript overview previews failed turns and jumps among mounted messages
       item: {
         kind: 'assistant',
         payload: {
-          content: 'First answer recovered after the tool failed.',
+          content: 'First answer before the task failed.',
           tool_calls: [{ id: 'failed-after-answer', name: 'shell', arguments: '{}' }],
         },
       },
@@ -325,7 +325,12 @@ test('transcript overview previews failed turns and jumps among mounted messages
       },
     },
   ];
-  let sequence = 4;
+  events.push({
+    sequence: 4,
+    ts: 1_781_144_354_123,
+    item: { kind: 'terminal', payload: { kind: 'failed', message: 'Task could not complete' } },
+  });
+  let sequence = 5;
   for (let turn = 2; turn <= 100; turn += 1) {
     events.push({
       sequence,
