@@ -55,7 +55,9 @@ async test "a picture taken while the tab went elsewhere is refused" {
 ///|
 async test "a picture too large for the model to see is refused" {
   let large : Json = {
-    "result": { "data": Json("A".repeat((MaxImageBytes + 3) / 3 * 4)) },
+    "result": {
+      "data": Json("A".repeat((@protocol.MaxImageBytes + 3) / 3 * 4)),
+    },
   }
   let refused = refusal_of(() => {
     ignore(
@@ -75,12 +77,12 @@ test "an image's size is what its base64 decodes to" {
   assert_eq(decoded_length("AA=="), 1)
   // One byte past the limit and the limit itself take as many characters;
   // only the padding tells them apart.
-  let groups = "A".repeat((MaxImageBytes - 2) / 3 * 4)
+  let groups = "A".repeat((@protocol.MaxImageBytes - 2) / 3 * 4)
   let at_limit = groups + "AAA="
-  assert_eq(decoded_length(at_limit), MaxImageBytes)
+  assert_eq(decoded_length(at_limit), @protocol.MaxImageBytes)
   let past_limit = groups + "AAAA"
   assert_eq(past_limit.length(), at_limit.length())
-  assert_eq(decoded_length(past_limit), MaxImageBytes + 1)
+  assert_eq(decoded_length(past_limit), @protocol.MaxImageBytes + 1)
 }
 
 ///|

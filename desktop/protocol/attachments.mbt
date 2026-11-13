@@ -1,4 +1,7 @@
 ///|
+pub using @wire {MaxImageBytes}
+
+///|
 /// Browser uploads carry bytes; native selections carry a host-local path.
 #derive(Debug, Eq)
 pub(all) enum AttachmentSource {

@@ -15,6 +15,7 @@ pub extend Failure with Eq::{equal, not_equal}
 
 ///|
 pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
+  let max_image_mib = @protocol.MaxImageBytes / 1024 / 1024
   match (locale, self) {
     (_, Bridge(problem)) => problem.text(locale)
     (English, ReadAttachmentsFailed(detail)) =>
@@ -48,15 +49,15 @@ pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
     (Spanish, ImagesUnsupported) =>
       "Este modelo no admite imágenes. Elige documentos PDF, DOCX, XLSX o PPTX."
     (English, ImageTooLarge(name)) =>
-      "Each image must be 20 MiB or smaller: \{name}"
+      "Each image must be \{max_image_mib} MiB or smaller: \{name}"
     (SimplifiedChinese, ImageTooLarge(name)) =>
-      "每张图片不得超过 20 MiB：\{name}"
+      "每张图片不得超过 \{max_image_mib} MiB：\{name}"
     (TraditionalChinese, ImageTooLarge(name)) =>
-      "每張圖片不得超過 20 MiB：\{name}"
+      "每張圖片不得超過 \{max_image_mib} MiB：\{name}"
     (Japanese, ImageTooLarge(name)) =>
-      "画像は 1 枚あたり 20 MiB 以下にしてください：\{name}"
+      "画像は 1 枚あたり \{max_image_mib} MiB 以下にしてください：\{name}"
     (Spanish, ImageTooLarge(name)) =>
-      "Cada imagen debe ocupar 20 MiB o menos: \{name}"
+      "Cada imagen debe ocupar \{max_image_mib} MiB o menos: \{name}"
     (English, EmptyImage(name)) => "Image is empty: \{name}"
     (SimplifiedChinese, EmptyImage(name)) => "图片为空：\{name}"
     (TraditionalChinese, EmptyImage(name)) => "圖片為空：\{name}"

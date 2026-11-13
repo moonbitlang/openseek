@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/protocol",
   "openseek_desktop/frontend/pdf_capture",
   "moonbitlang/core/math",
   "moonbit-community/rabbita/cmd",

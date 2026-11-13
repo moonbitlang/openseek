@@ -3,11 +3,6 @@
 // picture is of the part of the page on screen, as the tab last drew it.
 
 ///|
-/// The most an image may hold for the engine to show it to the model:
-/// `@protocol.Image` takes 20 MiB at most.
-const MaxImageBytes : Int32 = 20 * 1024 * 1024
-
-///|
 /// The JPEG quality pictures are taken at: small enough for a busy page,
 /// and text stays legible.
 const ScreenshotQuality : Int32 = 80
@@ -50,7 +45,7 @@ async fn picture(
   }
   // The engine would answer with a note in the picture's place, and the
   // call would seem to have worked.
-  guard decoded_length(data) <= MaxImageBytes else {
+  guard decoded_length(data) <= @protocol.MaxImageBytes else {
     raise @mcp.ToolError(
       "The picture of tab \{id} is too large for the model to see; read the page with browser_snapshot instead.",
     )
