@@ -40,16 +40,6 @@ You can browse and install extra skills here:
   result according to the owning API's contract. Changing what absence means
   is a behavior change and follows the task scope.
 
-## Rabbita UI
-
-- Prefer reusing existing `rui` components when building Rabbita UI. When a
-  matching component covers the required interaction, use it and its public
-  customization APIs for product-specific presentation.
-- Keep each `rui` component's internal interaction state owned by the component.
-  External application state updates must not overwrite or reset that internal
-  state. Pass application data and handle events through the component's public
-  API.
-
 ## Tooling
 
 - `moon fmt` is used to format your code properly.

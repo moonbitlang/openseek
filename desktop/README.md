@@ -39,6 +39,16 @@ The native `backend` and JS `frontend` modules both depend on the root
 `desktop` module. They do not depend on each other; backend packaging builds
 the frontend workspace member separately and consumes its generated bundle.
 
+## Rabbita UI
+
+- Prefer reusing existing `rui` components when building Rabbita UI. When a
+  matching component covers the required interaction, use it and its public
+  customization APIs for product-specific presentation.
+- Keep each `rui` component's internal interaction state owned by the component.
+  External application state updates must not overwrite or reset that internal
+  state. Pass application data and handle events through the component's public
+  API.
+
 ## Importing conversations
 
 The **⋯** button at the left of the top-right controls opens an **Export and import** menu. **Export** opens

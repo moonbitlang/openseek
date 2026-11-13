@@ -136,7 +136,7 @@ Before accepting a new or changed surface, check all of the following:
 
 ## Select controls
 
-Follow the [Rabbita UI conventions](../AGENTS.md#rabbita-ui).
+Follow the [Rabbita UI conventions](README.md#rabbita-ui).
 
 TODO: Remove `frontend/select_control` and migrate its callers to `@rui.select`.
 
