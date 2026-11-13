@@ -98,6 +98,38 @@ $ moonx "$CHECK_TEST"
 Total tests: 1, passed: 1, failed: 0.
 ```
 
+## Pass arguments to Moon
+
+`check.mbtx`, `test.mbtx`, and `check-test.mbtx` pass their arguments on to
+Moon. `--filter` selects tests by name:
+
+```mooncram
+$ moonx "$TEST" --filter answer
+Total tests: 1, passed: 1, failed: 0.
+```
+
+An argument Moon does not accept fails the workflow rather than being ignored.
+`--upto 7` belongs to some other test runner, which `@builtin/cmd.mbtx`
+would run instead:
+
+```mooncram
+$ moonx "$TEST" --upto 7 > upto.out 2> upto.err
+[1]
+```
+
+```mooncram
+$ tail -n 1 upto.err
+Failure(* FAILED: moon test failed (exit=*)) (glob)
+```
+
+`check-test.mbtx` gives the same arguments to both commands, so they must be
+flags both accept, such as `--target`:
+
+```mooncram
+$ moonx "$CHECK_TEST" --target wasm
+Total tests: 1, passed: 1, failed: 0.
+```
+
 ## Generate interfaces and format source
 
 [`info-fmt.mbtx`](../../share/workflow/info-fmt.mbtx) runs `moon info`, then

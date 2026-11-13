@@ -56,6 +56,8 @@ fn default_prompt() -> String {
     #|scripts are read-only: never supply `source` with `@builtin/`. Only
     #|`@builtin/` is supported today; other namespaces are reserved. Use
     #|`./path/check.mbtx` for a literal workspace path.
+    #|To run a single command, use `mbtx(description="...", filename="@builtin/cmd.mbtx", args=["git", "status"])`:
+    #|`args` is the argv, unsplit, and the program must be on the spawn list.
     #|
     #|### Reading files: `@builtin/read.mbtx`
     #|
