@@ -96,8 +96,12 @@ test "output uses highest density and enforces both allocation limits" {
 ///|
 test "PNG limit retains the conservative base64 boundary" {
   let prefix = "data:image/png;base64,"
-  assert_true(@selection.png_within_limit(prefix + String::make(6990506, 'A')))
-  assert_true(!@selection.png_within_limit(prefix + String::make(6990507, 'A')))
+  assert_true(
+    @selection.png_within_limit(prefix + String::make(27_962_026, 'A')),
+  )
+  assert_true(
+    !@selection.png_within_limit(prefix + String::make(27_962_027, 'A')),
+  )
 }
 
 ///|

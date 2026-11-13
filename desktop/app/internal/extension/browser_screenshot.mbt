@@ -4,8 +4,8 @@
 
 ///|
 /// The most an image may hold for the engine to show it to the model:
-/// `@protocol.Image` takes five megabytes at most.
-const MaxImageBytes : Int32 = 5 * 1024 * 1024
+/// `@protocol.Image` takes 20 MiB at most.
+const MaxImageBytes : Int32 = 20 * 1024 * 1024
 
 ///|
 /// The JPEG quality pictures are taken at: small enough for a busy page,

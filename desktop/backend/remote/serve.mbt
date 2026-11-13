@@ -113,9 +113,9 @@ const OutboundQueueCapacity = 64
 const InflightRequestCapacity = 32
 
 ///|
-/// Four 5 MiB images expand to about 27 MiB in base64. Leave room for the
+/// Four 20 MiB images expand to about 107 MiB in base64. Leave room for the
 /// prompt and JSON envelope, while keeping a hard bound on incoming data.
-const InboundFrameMaxBytes : Int32 = 32 * 1024 * 1024
+const InboundFrameMaxBytes : Int32 = 128 * 1024 * 1024
 
 ///|
 /// Enforce one outbound bound for notifications and responses. A producer
@@ -217,7 +217,7 @@ async fn WsClientActor::serve(
         Oversized => {
           conn.send_close(
             code=MessageTooBig,
-            reason="JSON-RPC request exceeds 32 MiB",
+            reason="JSON-RPC request exceeds 128 MiB",
           )
           return
         }

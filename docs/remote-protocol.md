@@ -98,8 +98,8 @@ JSON text, shaped as **JSON-RPC 2.0**:
 Request `id`s are client-assigned and client-scoped (a monotonic counter is
 fine). Responses may arrive out of order relative to other requests — the
 `id` is the correlation. Batch requests are not supported. A request frame
-larger than 32 MiB is closed with WebSocket code 1009. This accommodates four
-5 MiB Codex image attachments after base64 encoding plus the prompt and JSON
+larger than 128 MiB is closed with WebSocket code 1009. This accommodates four
+20 MiB Codex image attachments after base64 encoding plus the prompt and JSON
 envelope. The reader grows incrementally and stops at the first excess byte;
 small requests do not allocate the full image allowance.
 

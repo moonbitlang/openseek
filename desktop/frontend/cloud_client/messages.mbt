@@ -71,14 +71,14 @@ pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
       "Las credenciales del modelo de Cloud no están configuradas. Contacta con el administrador del servicio."
     (_, SignInFailed(detail)) | (_, RemoteMessage(detail)) => detail
     (English, InvalidImage) =>
-      "Choose a valid PNG, JPEG, GIF or WebP image up to 5 MiB."
+      "Choose a valid PNG, JPEG, GIF or WebP image up to 20 MiB."
     (SimplifiedChinese, InvalidImage) =>
-      "请选择不超过 5 MiB 的有效 PNG、JPEG、GIF 或 WebP 图片。"
+      "请选择不超过 20 MiB 的有效 PNG、JPEG、GIF 或 WebP 图片。"
     (TraditionalChinese, InvalidImage) =>
-      "請選擇不超過 5 MiB 的有效 PNG、JPEG、GIF 或 WebP 圖片。"
+      "請選擇不超過 20 MiB 的有效 PNG、JPEG、GIF 或 WebP 圖片。"
     (Japanese, InvalidImage) =>
-      "5 MiB 以下の有効な PNG、JPEG、GIF、WebP 画像を選択してください。"
+      "20 MiB 以下の有効な PNG、JPEG、GIF、WebP 画像を選択してください。"
     (Spanish, InvalidImage) =>
-      "Elige una imagen PNG, JPEG, GIF o WebP válida de hasta 5 MiB."
+      "Elige una imagen PNG, JPEG, GIF o WebP válida de hasta 20 MiB."
   }
 }

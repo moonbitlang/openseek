@@ -17,8 +17,8 @@ pub impl @jsonrpc.Transport for TcpTransport with fn recv(self) {
   }
   let body = Buffer()
   while message.read() is Some(bytes) {
-    guard body.length() + bytes.length() <= 32 * 1024 * 1024 else {
-      raise SshError("SSH RPC frame exceeds 32 MiB")
+    guard body.length() + bytes.length() <= 128 * 1024 * 1024 else {
+      raise SshError("SSH RPC frame exceeds 128 MiB")
     }
     body.write_bytes(bytes)
   }

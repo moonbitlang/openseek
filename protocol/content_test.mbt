@@ -71,7 +71,7 @@ test "images validate size before decoding and reject noncanonical base64" {
   try
     @openseek_protocol.Image::from_base64(
       media_type="image/png",
-      "A".repeat(6990509),
+      "A".repeat(27_962_029),
     )
   catch {
     TooLarge => ()

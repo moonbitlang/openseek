@@ -45,7 +45,7 @@ content containing images use arrays. Readers accept both forms; strings decode
 as one `Text` part. An image part has the shape
 `{"type":"image","media_type":"image/png","data":"<canonical padded base64>"}`.
 Image constructors retain original bytes, check PNG/JPEG/GIF/WebP signatures and
-limit decoded size to 5 MiB. They do not decode pixels, resize, or re-encode.
+limit decoded size to 20 MiB. They do not decode pixels, resize, or re-encode.
 Malformed base64 and mismatched MIME types fail decoding; unknown parts are not
 silently dropped. Provider-only `file` parts are not durable content: an expired
 provider ID cannot recover the original bytes. Legacy string records remain

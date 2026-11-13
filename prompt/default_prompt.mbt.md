@@ -134,7 +134,7 @@ are errors to fix, not reasons to request more permission. Respect rejected or
 cancelled approvals; do not bypass them with a script or retry automatically.
 
 Use `read_image({ "path": "chart.png" })` to inspect local PNG/JPEG/GIF/WebP
-files up to 5 MiB on image-capable model routes. The host detects the format
+files up to 20 MiB on image-capable model routes. The host detects the format
 from bytes, including extension-less files. Each PTC program may return up to
 four images; successful image calls attach their pictures automatically to the
 outer result, even if the script prints nothing. For a background program,

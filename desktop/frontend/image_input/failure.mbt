@@ -48,15 +48,15 @@ pub fn Failure::text(self : Failure, locale : @i18n.Locale) -> String {
     (Spanish, ImagesUnsupported) =>
       "Este modelo no admite imágenes. Elige documentos PDF, DOCX, XLSX o PPTX."
     (English, ImageTooLarge(name)) =>
-      "Each image must be 5 MiB or smaller: \{name}"
+      "Each image must be 20 MiB or smaller: \{name}"
     (SimplifiedChinese, ImageTooLarge(name)) =>
-      "每张图片不得超过 5 MiB：\{name}"
+      "每张图片不得超过 20 MiB：\{name}"
     (TraditionalChinese, ImageTooLarge(name)) =>
-      "每張圖片不得超過 5 MiB：\{name}"
+      "每張圖片不得超過 20 MiB：\{name}"
     (Japanese, ImageTooLarge(name)) =>
-      "画像は 1 枚あたり 5 MiB 以下にしてください：\{name}"
+      "画像は 1 枚あたり 20 MiB 以下にしてください：\{name}"
     (Spanish, ImageTooLarge(name)) =>
-      "Cada imagen debe ocupar 5 MiB o menos: \{name}"
+      "Cada imagen debe ocupar 20 MiB o menos: \{name}"
     (English, EmptyImage(name)) => "Image is empty: \{name}"
     (SimplifiedChinese, EmptyImage(name)) => "图片为空：\{name}"
     (TraditionalChinese, EmptyImage(name)) => "圖片為空：\{name}"

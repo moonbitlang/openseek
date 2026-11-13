@@ -40,7 +40,7 @@ async test "read_image reports missing paths directories invalid bytes and overs
   @fs.write_text("\{root}/invalid.png", "not an image")
   @fs.write_binary(
     "\{root}/large.png",
-    Bytes::make(5 * 1024 * 1024 + 1, b'\x00'),
+    Bytes::make(20 * 1024 * 1024 + 1, b'\x00'),
   )
   let tools = @agent_tool.Tools([@read_image.definition(workspace_root=root)])
   tools.set_image_input_supported(true)

@@ -11,6 +11,6 @@ pub const MaxEditorFileBytes = 1048576
 /// document viewer. Keep their limit separate from the
 /// text editor limit so a normal document is not rejected merely because its
 /// embedded media makes the package larger than one megabyte.
-// Keep the decoded package below the 32 MiB remote JSON frame limit after
+// Keep the decoded package below the 128 MiB remote JSON frame limit after
 // base64 expansion and JSON overhead.
 pub const MaxOfficeFileBytes : Int32 = 20 * 1024 * 1024
