@@ -73,19 +73,17 @@ Full entries from the repository root: `just desktop-test-browser`,
 
 ## UI Pull Requests
 
-- For PRs with visible Desktop UI changes, include screenshots in the PR
-  description showing the affected UI from the changed build. Include
-  before-and-after comparisons when useful, and a short recording when the
-  change is best demonstrated through interaction.
-- Upload UI screenshots and recordings as PR attachments. Keep local captures
-  outside the repository or in an ignored directory.
+Follow the [root pull request guidance](../AGENTS.md#pull-requests).
+
+- When voluntarily sharing UI screenshots or recordings, upload them as PR
+  attachments. Keep local captures outside the repository or in an ignored
+  directory.
 - Prefer demo data when capturing screenshots or recordings. Before uploading,
   remove or redact personal information, real conversations, private project
   names and paths, credentials, and other sensitive content, including content
   in sidebars, terminals, and notifications.
 - Inspect the final images or recording before uploading to confirm that
-  sensitive content is removed and the UI change remains clear. If visual
-  evidence cannot be captured, explain the limitation in the PR description.
+  sensitive content is removed and the UI change remains clear.
 
 ## Child Processes
 
