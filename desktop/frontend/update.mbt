@@ -5091,6 +5091,12 @@ fn update_msg(
       let (cmd, downloads) = model.downloads.open(fetch_downloads(dispatch))
       (cmd, { ..model, downloads, })
     }
+    OpenAddDevice => {
+      let (cmd, downloads) = model.downloads.open_add_device(
+        fetch_downloads(dispatch),
+      )
+      (cmd, { ..model, downloads, })
+    }
     Downloads(msg) =>
       (@cmd.none, { ..model, downloads: @downloads.Model::update(msg), })
     OpenSchedules => open_schedules(dispatch, model)

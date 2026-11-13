@@ -130,6 +130,40 @@ test('the device selector opens upward even when its menu would fit below', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
+test('the device menu explains how to add a computer, starting from its installer', async ({ page }) => {
+  const app = await installConsole(page);
+  await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [] } }));
+  let manifestRequests = 0;
+  await page.route('**/desktop/releases/latest.json', route => {
+    manifestRequests += 1;
+    return route.fulfill({ json: {
+      version: '0.3.1',
+      url: 'https://example.com/releases/0.3.1',
+      platforms: {
+        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
+        android: { url: 'https://example.com/seekmoon.apk' },
+      },
+    } });
+  });
+  await page.goto('/cloud');
+  await page.locator('.sidebar-toggle').click();
+  await page.getByRole('button', { name: 'Choose a device', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'No devices online' })).toBeDisabled();
+  await page.getByRole('menuitem', { name: 'Add a device', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a device' });
+  await expect(dialog.getByRole('link', { name: /macOS · Apple Silicon/ }))
+    .toHaveAttribute('href', 'https://example.com/mac.dmg');
+  // The Android app wraps this console, so it can never become a device.
+  await expect(dialog.getByRole('link', { name: /Android/ })).toHaveCount(0);
+  await expect(dialog).toContainText('Turn on Remote control under Settings → Connections → Remote access.');
+  await assertFits(page);
+  // The dialog reuses the list the page already read.
+  expect(manifestRequests).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('a device page whose roster failed can retry', async ({ page }) => {
   const app = await installConsole(page);
   let failed = true;

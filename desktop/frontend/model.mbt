@@ -1981,6 +1981,7 @@ priv enum Msg {
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
   OpenDownloads
+  OpenAddDevice
   Downloads(@downloads.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the

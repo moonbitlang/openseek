@@ -45,6 +45,7 @@ pub(all) enum Message {
   Refresh
   SignOut
   DownloadApps
+  AddDevice
 }
 
 // Type aliases
