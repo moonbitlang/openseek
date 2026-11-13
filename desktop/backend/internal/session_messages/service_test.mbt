@@ -1,7 +1,7 @@
 ///|
 async test "timely approval waits for delivery beyond the approval timeout" {
   let service = @session_messages.Service()
-  let (message, fresh) = service.request(
+  let (message, fresh) = service.request_send(
     "sender", "target", "Pause builds", "one",
   )
   assert_true(fresh)
@@ -21,6 +21,7 @@ async test "timely approval waits for delivery beyond the approval timeout" {
     @async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
         service.run(
+          start=(_, _) => fail("no start was requested"),
           (target, text, id) => {
             assert_eq(target, "target")
             assert_eq(id, message.id)
@@ -54,7 +55,9 @@ async test "delivery timeout or caller cancellation transfers one final receipt 
   for caller_timeout in [false, true] {
     for delivery_fails in [false, true] {
       let service = @session_messages.Service()
-      let (message, _) = service.request("sender", "target", "Hello", "slow")
+      let (message, _) = service.request_send(
+        "sender", "target", "Hello", "slow",
+      )
       let started : @async.Queue[Unit] = Queue(kind=Blocking(1))
       let finish : @async.Queue[Unit] = Queue(kind=Blocking(1))
       let notices : @async.Queue[String] = Queue(kind=Blocking(1))
@@ -64,6 +67,7 @@ async test "delivery timeout or caller cancellation transfers one final receipt 
         @async.with_task_group(group => {
           group.spawn_bg(no_wait=true, () => {
             service.run(
+              start=(_, _) => fail("no start was requested"),
               (target, text, _) => {
                 deliveries.push(target)
                 if target == "target" {
@@ -98,7 +102,7 @@ async test "delivery timeout or caller cancellation transfers one final receipt 
             message.status()
             is { "status": "delivering", "feedback": "pending", .. },
           )
-          let (duplicate, fresh) = service.request(
+          let (duplicate, fresh) = service.request_send(
             "sender", "target", "Hello", "slow",
           )
           assert_false(fresh)
@@ -132,7 +136,7 @@ async test "delivery timeout or caller cancellation transfers one final receipt 
 async test "completion near the delivery deadline has exactly one feedback owner" {
   for delay in [0, 1, 2] {
     let service = @session_messages.Service()
-    let (message, _) = service.request("sender", "target", "Hello", "race")
+    let (message, _) = service.request_send("sender", "target", "Hello", "race")
     let deliveries : Array[String] = []
     let notices : @async.Queue[Unit] = Queue(kind=Blocking(1))
     let errors : Array[String] = []
@@ -140,6 +144,7 @@ async test "completion near the delivery deadline has exactly one feedback owner
       @async.with_task_group(group => {
         group.spawn_bg(no_wait=true, () => {
           service.run(
+            start=(_, _) => fail("no start was requested"),
             (target, _, _) => {
               deliveries.push(target)
               if target == "target" {
@@ -175,7 +180,7 @@ async test "completion near the delivery deadline has exactly one feedback owner
 ///|
 async test "timeout retains approval and actively delivers the final result to the sender" {
   let service = @session_messages.Service()
-  let (message, _) = service.request(
+  let (message, _) = service.request_send(
     "sender", "target", "Read-only work", "two",
   )
   let deliveries : @async.Queue[(String, String, String)] = Queue(
@@ -185,10 +190,11 @@ async test "timeout retains approval and actively delivers the final result to t
   @async.with_timeout(1000, () => {
     @async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
-        service.run((target, text, id) => deliveries.put((target, text, id)), (
-          _,
-          error,
-        ) => errors.push(error))
+        service.run(
+          start=(_, _) => fail("no start was requested"),
+          (target, text, id) => deliveries.put((target, text, id)),
+          (_, error) => errors.push(error),
+        )
       })
       assert_true(
         service.wait(message, wait_ms=1)
@@ -225,7 +231,9 @@ async test "timeout retains approval and actively delivers the final result to t
 async test "rejection and withdrawal never deliver the proposed message" {
   for approve in [false, true] {
     let service = @session_messages.Service()
-    let (message, _) = service.request("sender", "target", "Do work", "denied")
+    let (message, _) = service.request_send(
+      "sender", "target", "Do work", "denied",
+    )
     if approve {
       service.cancel("sender", message.id)
     } else {
@@ -244,7 +252,7 @@ async test "rejection and withdrawal never deliver the proposed message" {
 ///|
 async test "delivery failure is reported once and duplicate requests retain the failure" {
   let service = @session_messages.Service()
-  let (message, _) = service.request("sender", "target", "Hello", "fail")
+  let (message, _) = service.request_send("sender", "target", "Hello", "fail")
   let notices : @async.Queue[String] = Queue(kind=Blocking(1))
   let deliveries : Array[String] = []
   let errors : Array[String] = []
@@ -252,6 +260,7 @@ async test "delivery failure is reported once and duplicate requests retain the 
     @async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
         service.run(
+          start=(_, _) => fail("no start was requested"),
           (target, text, _) => {
             deliveries.push(target)
             if target == "target" {
@@ -272,7 +281,7 @@ async test "delivery failure is reported once and duplicate requests retain the 
       )
       assert_true(notice.contains("the engine dropped the input"))
       assert_true(message.status() is { "status": "failed", .. })
-      let (duplicate, fresh) = service.request(
+      let (duplicate, fresh) = service.request_send(
         "sender", "target", "Hello", "fail",
       )
       assert_false(fresh)
@@ -288,12 +297,14 @@ async test "delivery failure is reported once and duplicate requests retain the 
 ///|
 test "identical retries recover one request and cannot change its approval subject" {
   let service = @session_messages.Service()
-  let (first, _) = service.request("sender", "target", "Exact text", "key")
-  let (retry, fresh) = service.request("sender", "target", "Exact text", "key")
+  let (first, _) = service.request_send("sender", "target", "Exact text", "key")
+  let (retry, fresh) = service.request_send(
+    "sender", "target", "Exact text", "key",
+  )
   assert_false(fresh)
   assert_eq(retry.id, first.id)
   for (target, text) in [("other", "Exact text"), ("target", "Changed text")] {
-    try service.request("sender", target, text, "key") catch {
+    try service.request_send("sender", target, text, "key") catch {
       _ => ()
     } noraise {
       _ => fail("a retry changed the approved subject")
@@ -320,7 +331,9 @@ test "identical retries recover one request and cannot change its approval subje
 ///|
 async test "a cancelled tool waiter leaves approval and later feedback alive" {
   let service = @session_messages.Service()
-  let (message, _) = service.request("sender", "target", "Hello", "cancel-wait")
+  let (message, _) = service.request_send(
+    "sender", "target", "Hello", "cancel-wait",
+  )
   @async.with_task_group(group => {
     let waiter = group.spawn(no_wait=true, () => service.wait(message))
     @async.sleep(1)
@@ -337,8 +350,8 @@ async test "a cancelled tool waiter leaves approval and later feedback alive" {
 ///|
 test "mutual synchronous sends fail the closing edge instead of deadlocking" {
   let service = @session_messages.Service()
-  let (first, _) = service.request("a", "b", "Hello B", "a-to-b")
-  let (second, _) = service.request("b", "a", "Hello A", "b-to-a")
+  let (first, _) = service.request_send("a", "b", "Hello B", "a-to-b")
+  let (second, _) = service.request_send("b", "a", "Hello A", "b-to-a")
   assert_true(service.decide(first.id, true))
   assert_true(service.decide(second.id, true))
   assert_true(first.status() is { "status": "delivering", .. })
@@ -346,4 +359,149 @@ test "mutual synchronous sends fail the closing edge instead of deadlocking" {
     second.status() is { "status": "failed", "error": String(_), .. },
     msg=second.status().stringify(),
   )
+}
+
+///|
+async test "a started proposal runs once and tells its sender" {
+  let service = @session_messages.Service()
+  let (entry, fresh) = service.request_start(
+    "sender",
+    workspace="/repo",
+    title="Focus helper",
+    brief="Extract the focus helper.",
+    request_id="start-1",
+  )
+  assert_true(fresh)
+  // The proposal names the conversation it starts by a shared token.
+  guard entry.id is [.. "msg-", .. token] else { fail("unexpected id") }
+  assert_eq(entry.target, "desktop-\{token}")
+  // The proposal is the tool result: nothing waits on the user's decision.
+  assert_true(entry.status() is { "status": "proposed", .. })
+  assert_true(entry.status() is Object(fields) && !fields.contains("feedback"))
+  let deliveries : @async.Queue[(String, String, String)] = Queue(
+    kind=Blocking(4),
+  )
+  let starts : @async.Queue[String] = Queue(kind=Blocking(4))
+  let errors : Array[String] = []
+  @async.with_timeout(1000, () => {
+    @async.with_task_group(group => {
+      group.spawn_bg(no_wait=true, () => {
+        service.run(
+          (target, text, id) => deliveries.put((target, text, id)),
+          (_, error) => errors.push(error),
+          start=(started, _) => starts.put(started.target),
+        )
+      })
+      // The sender's turn ending leaves the proposal open.
+      service.detach("sender")
+      assert_true(service.decide(entry.id, true))
+      assert_eq(starts.get(), entry.target)
+      // The sender learns the conversation it can now read and send to.
+      let (recipient, text, id) = deliveries.get()
+      assert_eq(recipient, "sender")
+      assert_eq(id, "\{entry.id}-result")
+      assert_true(
+        @message_context.parse(text)
+        is Some(DeliveryResult(target~, status="started", error=None, ..)) &&
+        target == entry.target,
+      )
+      assert_true(entry.status() is { "status": "started", .. })
+      @async.sleep(5)
+      assert_true(deliveries.try_get() is None)
+    })
+  })
+  assert_true(starts.try_get() is None)
+  assert_true(errors.is_empty())
+}
+
+///|
+async test "a dismissed, withdrawn or failed proposal tells its sender nothing" {
+  for outcome in ["dismissed", "cancelled", "failed"] {
+    let service = @session_messages.Service()
+    let (entry, _) = service.request_start(
+      "sender",
+      workspace="/repo",
+      title="T",
+      brief="B",
+      request_id="start-3",
+    )
+    let delivered : Array[String] = []
+    let errors : Array[String] = []
+    @async.with_timeout(1000, () => {
+      @async.with_task_group(group => {
+        group.spawn_bg(no_wait=true, () => {
+          service.run(
+            (_, text, _) => delivered.push(text),
+            (_, error) => errors.push(error),
+            start=(_, _) => fail("not a git repository"),
+          )
+        })
+        match outcome {
+          "dismissed" => assert_true(service.decide(entry.id, false))
+          "cancelled" => service.cancel("sender", entry.id)
+          _ => assert_true(service.decide(entry.id, true))
+        }
+        @async.sleep(5)
+        assert_true(
+          entry.status() is { "status": String(status), .. } &&
+          status == outcome,
+        )
+        // A decided proposal cannot be decided again.
+        assert_false(service.decide(entry.id, true))
+      })
+    })
+    assert_true(delivered.is_empty())
+    // Only a failure is shown where the person who started it is looking.
+    assert_eq(errors.length(), if outcome == "failed" { 1 } else { 0 })
+  }
+}
+
+///|
+test "start retries recover the same proposal and cannot change the brief" {
+  let service = @session_messages.Service()
+  let settings : @session_messages.StartSettings = {
+    system_prompt: None,
+    model: "deepseek-v4",
+    thinking: ThinkingHigh,
+    approval: ApprovalAsk,
+  }
+  let (first, _) = service.request_start(
+    "sender",
+    workspace="/repo",
+    title="T",
+    brief="B",
+    request_id="key",
+    settings~,
+  )
+  // A retry after the sender changed its settings is the same proposal, with
+  // the settings it was first proposed with.
+  let (retry, fresh) = service.request_start(
+    "sender",
+    workspace="/repo",
+    title="T",
+    brief="B",
+    request_id="key",
+    settings={ ..settings, thinking: ThinkingMax, },
+  )
+  assert_false(fresh)
+  assert_eq(retry.id, first.id)
+  assert_eq(retry.target, first.target)
+  assert_true(
+    retry.subject
+    is Start({ settings: Some({ thinking: ThinkingHigh, .. }), .. }),
+  )
+  try
+    service.request_start(
+      "sender",
+      workspace="/repo",
+      title="T",
+      brief="Changed",
+      request_id="key",
+      settings~,
+    )
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("a retry changed the approved brief")
+  }
 }

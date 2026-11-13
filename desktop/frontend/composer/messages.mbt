@@ -51,6 +51,8 @@ priv enum UiMessage {
   ConfigureEndpoint
   SetupLabel
   SteerLabel
+  DismissProposal
+  StartProposal
   QueuedLabel
   QueuedResume
   EditingLabel
@@ -412,6 +414,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, SetupLabel) => "设置"
     (TraditionalChinese, SetupLabel) => "設定"
     (Japanese, SetupLabel) => "設定"
+    (English, DismissProposal) => "Dismiss"
+    (Spanish, DismissProposal) => "Descartar"
+    (SimplifiedChinese, DismissProposal) => "不用了"
+    (TraditionalChinese, DismissProposal) => "不用了"
+    (Japanese, DismissProposal) => "見送る"
+    (English, StartProposal) => "Start"
+    (Spanish, StartProposal) => "Iniciar"
+    (SimplifiedChinese, StartProposal) => "开始"
+    (TraditionalChinese, StartProposal) => "開始"
+    (Japanese, StartProposal) => "開始"
     (English, SteerLabel) => "Steer"
     (Spanish, SteerLabel) => "Orientar"
     (SimplifiedChinese, SteerLabel) => "引导"

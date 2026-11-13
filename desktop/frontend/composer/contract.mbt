@@ -144,6 +144,18 @@ pub(all) struct ApprovalNotice {
 }
 
 ///|
+/// A conversation an agent proposed, waiting on the person's start or
+/// dismissal. It never blocks the turn: the agent already went on.
+#derive(Eq)
+pub(all) struct SessionProposal {
+  id : String
+  title : String
+  brief : String
+  // Started by the person and being carried out by the host.
+  starting : Bool
+}
+
+///|
 #derive(Eq)
 pub(all) struct PendingSteerInput {
   id : String
@@ -191,6 +203,7 @@ pub(all) enum ContextComponent {
   SubrunDock(lanes~ : Array[@subrun.Lane])
   ApiSetupNotice(text~ : String)
   ApprovalRequest(ApprovalNotice)
+  SessionProposals(proposals~ : Array[SessionProposal])
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[PendingSteerInput])
   // `!` commands submitted from this composer that are still running on the
@@ -395,6 +408,7 @@ pub(all) enum Action {
   ModelSelected(identity~ : Identity, value~ : String, draft~ : Draft)
   ReasoningSelected(identity~ : Identity, value~ : String)
   ApprovalAnswered(identity~ : Identity, allow~ : Bool)
+  ProposalAnswered(identity~ : Identity, id~ : String, allow~ : Bool)
   CodexRequestToggled(identity~ : Identity, request_key~ : String)
   CodexRequestAnswerChanged(
     identity~ : Identity,
@@ -462,6 +476,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | ModelSelected(identity~, ..)
     | ReasoningSelected(identity~, ..)
     | ApprovalAnswered(identity~, ..)
+    | ProposalAnswered(identity~, ..)
     | CodexRequestToggled(identity~, ..)
     | CodexRequestAnswerChanged(identity~, ..)
     | CodexQuestionChanged(identity~, ..)
@@ -487,6 +502,9 @@ pub fn Action::identity(self : Action) -> Identity {
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend ApprovalNotice with Eq::{equal, not_equal}
+
+///|
+pub extend SessionProposal with Eq::{equal, not_equal}
 
 ///|
 pub extend PendingSteerInput with Eq::{equal, not_equal}

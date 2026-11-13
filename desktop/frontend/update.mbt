@@ -2859,6 +2859,7 @@ fn update_msg(
         | @composer.ModelSelected(..)
         | @composer.ReasoningSelected(..)
         | @composer.ApprovalAnswered(..)
+        | @composer.ProposalAnswered(..)
         | @composer.CodexRequestToggled(..)
         | @composer.CodexRequestAnswerChanged(..)
         | @composer.CodexQuestionChanged(..)
@@ -2901,6 +2902,8 @@ fn update_msg(
               update_msg(dispatch, OpenSeekEffortPicked(value), model)
             @composer.ApprovalAnswered(allow~, ..) =>
               update_msg(dispatch, ApprovalAnswered(allow~), model)
+            @composer.ProposalAnswered(id~, allow~, ..) =>
+              update_msg(dispatch, ProposalAnswered(id~, allow~), model)
             @composer.GitDetailsToggled(..) =>
               update_msg(dispatch, ToggleGitDetails, model)
             @composer.WorktreeModeToggled(..) =>
@@ -5523,6 +5526,8 @@ fn update_msg(
         }),
       )
     }
+    ProposalAnswered(id~, allow~) =>
+      (model.answer_proposal(dispatch, id, allow), model)
     ApprovalAnswerFailed(channel~, session~, id~) => {
       guard model.find_conversation(channel, session) is Some(conv) &&
         conv.pending_approval is Some(pending) &&
@@ -10179,6 +10184,7 @@ fn update_device_msg(
         })
         if !already_known &&
           !pending.answered &&
+          !pending.is_proposal() &&
           model.find_conversation(channel, recovered.session) is Some(_) {
           if approval_system_notification(
               channel,
@@ -24872,6 +24878,7 @@ fn Model::with_approval_snapshot(
         .iter()
         .find_first(item => {
           item.session == conv.session_id &&
+          !item.approval.is_proposal() &&
           (
             item.approval.run_id is None ||
             (

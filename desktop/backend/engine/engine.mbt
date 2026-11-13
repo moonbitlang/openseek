@@ -29,6 +29,10 @@ priv struct ServeEngine {
   engine_name : String
   supports_images : Bool
   model : String
+  // The thinking level and approval mode this process was spawned with. A
+  // conversation this one starts inherits them along with `model`.
+  thinking : @protocol.OpenSeekThinking
+  approval : @protocol.OpenSeekApproval
   max_steps : Int32
   // Owned exclusively by this engine's writer task. No request ever touches
   // it, which is what makes a partial JSONL frame impossible and stdin's
@@ -1617,6 +1621,8 @@ async fn start_serve_engine(
     id: engine_id,
     engine_name: config.engine,
     model: config.model,
+    thinking: config.thinking,
+    approval: config.approval,
     supports_images: config.supports_images(),
     max_steps: config.max_steps,
     writer,
@@ -2329,6 +2335,8 @@ fn test_serve_engine(
     id,
     engine_name: "openseek",
     model: "test",
+    thinking: ThinkingHigh,
+    approval: ApprovalAsk,
     supports_images: true,
     max_steps: 10,
     writer,
