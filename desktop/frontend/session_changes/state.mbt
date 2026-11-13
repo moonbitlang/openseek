@@ -36,7 +36,7 @@ pub(all) enum Msg {
   Removed(
     @interop.ConversationKey,
     @protocol.SessionArtifact,
-    Result[@protocol.SessionArtifacts, String]
+    Result[@protocol.SessionArtifacts, String],
   )
   /// GitHub answered the lookup of the pull request at `url`, asked in
   /// generation `generation`. `Ok(None)` means the address is not a pull
@@ -44,7 +44,7 @@ pub(all) enum Msg {
   Summarized(
     url~ : String,
     generation~ : Int32,
-    Result[@protocol.GitPullRequest?, String]
+    Result[@protocol.GitPullRequest?, String],
   )
 }
 

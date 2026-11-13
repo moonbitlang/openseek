@@ -224,6 +224,11 @@ async fn ShellExecution::monitor(
         match
           (reader.read_into(buffer) catch {
             error => {
+              let error : Error = if error is TransportError(cause, ..) {
+                cause
+              } else {
+                error
+              }
               let message = "failed to read process output: \{error}"
               self.sink.failure = Some(message)
               fail(message)

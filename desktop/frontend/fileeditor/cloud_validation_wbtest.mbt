@@ -22,7 +22,7 @@ test "Cloud version checks preserve cached content and reject retired authentica
   assert_true(
     checked.docs.get(path)
     is Some(
-      { state: TabLoaded(content="cached", sig="W/\"etag\""), stale: false, .. }
+      { state: TabLoaded(content="cached", sig="W/\"etag\""), stale: false, .. },
     ),
   )
   for

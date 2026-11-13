@@ -18,7 +18,7 @@ pub(all) enum HoverAnchor {
     priority~ : Int32,
     range~ : @base_common.Range,
     initial_mouse_pos_x~ : Double?,
-    initial_mouse_pos_y~ : Double?
+    initial_mouse_pos_y~ : Double?,
   )
   HoverForeignElementAnchor(
     priority~ : Int32,
@@ -27,7 +27,7 @@ pub(all) enum HoverAnchor {
     range~ : @base_common.Range,
     initial_mouse_pos_x~ : Double?,
     initial_mouse_pos_y~ : Double?,
-    supports_marker_hover~ : Bool
+    supports_marker_hover~ : Bool,
   )
 }
 

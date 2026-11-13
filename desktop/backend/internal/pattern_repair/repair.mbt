@@ -178,7 +178,7 @@ async fn pattern_repair_result(
         "candidate_pattern": String(pattern),
         "message": String(message),
         ..
-      }
+      },
     ) => Some(Ok((pattern, message)))
     Completed(output~) =>
       Some(Err(pattern_repair_diagnostic(output.stringify())))

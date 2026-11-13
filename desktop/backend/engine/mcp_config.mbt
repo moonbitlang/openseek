@@ -506,7 +506,7 @@ async test "MCP status is the live engine's latest report" {
             session: "s-live",
             event: McpStatus(status={ servers: [server], .. }),
             ..
-          }
+          },
         ) {
         reported.push(server.state)
       }

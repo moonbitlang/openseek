@@ -245,7 +245,7 @@ pub enum CommandInput {
   Prompt(
     content~ : @wire.Content,
     draft~ : @composer.Draft,
-    attachments~ : Array[@protocol.AttachmentSource]
+    attachments~ : Array[@protocol.AttachmentSource],
   )
 }
 
@@ -350,7 +350,7 @@ pub(all) enum Msg {
     account~ : String,
     session~ : String,
     text~ : String,
-    id~ : String
+    id~ : String,
   )
   QuestionInputDelivered(Int32, String)
   QuestionInputFailed(Int32, String, Notice)
@@ -370,7 +370,7 @@ pub(all) enum Msg {
   SubmitAttachments(
     @interop.ConversationIdentity,
     @composer.Draft,
-    Array[@protocol.AttachmentSource]
+    Array[@protocol.AttachmentSource],
   )
   Listed(Int32, Int32, Array[Session])
   CachedCatalog(Int32, Array[@protocol.CloudHistoryCacheEntry])
@@ -398,7 +398,7 @@ pub(all) enum Msg {
     String,
     String,
     @protocol.AttachmentSource,
-    String
+    String,
   )
   ControlPrepared(Int32, String, String, String, @composer.Draft, @wire.Content)
   ControlChecked(Int32, String, String, ControlSnapshot)

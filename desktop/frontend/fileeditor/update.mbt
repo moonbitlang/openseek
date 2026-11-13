@@ -3212,7 +3212,7 @@ fn update_inner(
       surface_generation~,
       hunk~,
       file_changes~,
-      position~
+      position~,
     ) =>
       (
         @cmd.none,
@@ -3233,7 +3233,7 @@ fn update_inner(
       surface_generation~,
       hunk~,
       file_changes~,
-      position~
+      position~,
     ) => {
       guard state.current_review_generation(change, ctx) ==
         Some(review_generation) &&
@@ -4155,7 +4155,7 @@ fn update_inner(
       file_link_generation~,
       review_generation~,
       range~,
-      annotation~
+      annotation~,
     ) => {
       let stale_file_link = match file_link_generation {
         Some(generation) => state.file_link_generation != generation
@@ -4833,7 +4833,7 @@ fn update_inner(
       path~,
       file_link_generation~,
       review_generation~,
-      message~
+      message~,
     ) => {
       let stale_file_link = match file_link_generation {
         Some(generation) => state.file_link_generation != generation
@@ -5111,7 +5111,7 @@ test "file index requests retry failures and fence stale replies" {
       files=[Relative("src/main.mbt")],
       truncated=true,
       refreshing=false,
-      refresh_again=false
+      refresh_again=false,
     ),
   )
   let (_, refresh_failed) = update(
@@ -5392,7 +5392,7 @@ test "changed-file review fences paired replies and Content opens retain compari
         state: TabLoading,
         review: Some({ generation: 1, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
   // Re-selecting the exact active row is idempotent: it keeps the in-flight
@@ -5440,7 +5440,7 @@ test "changed-file review fences paired replies and Content opens retain compari
         state: TabLoading,
         review: Some({ generation: 2, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
   let (_, old_working) = update(
@@ -5466,7 +5466,7 @@ test "changed-file review fences paired replies and Content opens retain compari
         state: TabLoading,
         review: Some({ generation: 2, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
   let (_, ignored) = update(
@@ -5484,7 +5484,7 @@ test "changed-file review fences paired replies and Content opens retain compari
   assert_true(
     ignored.docs.get(file)
     is Some(
-      { review: Some({ generation: 2, baseline: ReviewLoading, .. }), .. }
+      { review: Some({ generation: 2, baseline: ReviewLoading, .. }), .. },
     ),
   )
   let (_, reviewed) = update(
@@ -5505,7 +5505,7 @@ test "changed-file review fences paired replies and Content opens retain compari
       {
         review: Some({ generation: 2, baseline: ReviewContent("old two"), .. }),
         ..
-      }
+      },
     ),
   )
   let docs = reviewed.docs.copy()
@@ -5542,10 +5542,10 @@ test "changed-file review fences paired replies and Content opens retain compari
             view_mode: ReviewSource,
             baseline: ReviewContent("old two"),
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
   let (_, ordinary) = open_document(
@@ -5567,10 +5567,10 @@ test "changed-file review fences paired replies and Content opens retain compari
             view_mode: ReviewSource,
             baseline: ReviewContent("old two"),
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
   let (_, review_after_ordinary) = update(
@@ -5630,10 +5630,10 @@ test "reselecting a settled review keeps its cached comparison generation" {
             working_generation: 7,
             baseline: ReviewContent("HEAD source"),
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
 }
@@ -5713,11 +5713,11 @@ test "changed-file review preserves a stale cached working document until reload
             view_mode: ReviewSource,
             baseline: ReviewContent("HEAD source"),
             ..
-          }
+          },
         ),
         stale: true,
         ..
-      }
+      },
     ),
   )
 }
@@ -5750,13 +5750,13 @@ test "review failures settle precisely and missing rename sources stay unavailab
           {
             generation: 1,
             baseline: ReviewFailed(
-              "the original path is outside this workspace"
+              "the original path is outside this workspace",
             ),
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
 
@@ -5790,10 +5790,10 @@ test "review failures settle precisely and missing rename sources stay unavailab
     is Some(
       {
         review: Some(
-          { generation: 1, baseline: ReviewFailed("Git baseline failed"), .. }
+          { generation: 1, baseline: ReviewFailed("Git baseline failed"), .. },
         ),
         ..
-      }
+      },
     ),
   )
   let (_, read_failed) = update(
@@ -5846,7 +5846,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
         state: TabDeleted,
         review: Some({ generation: 1, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
   let (_, preview) = update(
@@ -5867,10 +5867,10 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
       {
         state: TabDeleted,
         review: Some(
-          { generation: 1, baseline: ReviewContent("removed source"), .. }
+          { generation: 1, baseline: ReviewContent("removed source"), .. },
         ),
         ..
-      }
+      },
     ),
   )
   guard preview.docs.get(test_file(deleted_path.0)) is Some(deleted_preview) else {
@@ -5967,7 +5967,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
         state: TabLoaded(content="new", ..),
         review: Some({ generation: 1, baseline: ReviewMissing, .. }),
         ..
-      }
+      },
     ),
   )
   guard loaded.docs.get(test_file(live_path.0)) is Some(added_preview) else {
@@ -6312,7 +6312,7 @@ test "a closed panel still re-roots when the conversation switches" {
         files: [Relative("a.mbt")],
         directories: [],
         recursive: false,
-      }
+      },
     ),
   )
 }
@@ -6411,7 +6411,7 @@ test "a placement change retains absolute document identities and fences old rep
         files: [],
         directories: [@pathx.Relative("")],
         recursive: false,
-      }
+      },
     ),
   )
   let (_, after_old_reply) = update(
@@ -6886,7 +6886,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
         state: TabLoading,
         review: Some({ generation: 5, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
 }
@@ -7035,7 +7035,7 @@ test "ordinary Changes polls do not supersede healthy in-flight reviews" {
         state: TabLoading,
         review: Some({ generation: 3, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
 }
@@ -7190,7 +7190,7 @@ test "a ready file index watches non-ignored descendants while hidden" {
         files: [],
         directories: [],
         recursive: true,
-      }
+      },
     ),
   )
 }
@@ -7445,7 +7445,7 @@ test "changed-file replies are owner-and-generation-fenced" {
       repository=true,
       files=[{ path: Relative("src/main.mbt"), .. }],
       refreshing=false,
-      refresh_again=false
+      refresh_again=false,
     ),
   )
   let (_, stale) = update(
@@ -7677,7 +7677,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
         review: None,
         stale: false,
         ..
-      }
+      },
     ),
   )
 }
@@ -7774,7 +7774,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
         review: None,
         stale: false,
         ..
-      }
+      },
     ),
   )
 }
@@ -7817,7 +7817,7 @@ test "a newer review reload fences an older working-tree reply" {
         review: Some({ generation: 3, working_generation: 4, .. }),
         stale: true,
         ..
-      }
+      },
     ),
   )
   let (_, newest) = update(
@@ -7844,7 +7844,7 @@ test "a newer review reload fences an older working-tree reply" {
         review: Some({ generation: 3, working_generation: 4, .. }),
         stale: false,
         ..
-      }
+      },
     ),
   )
   let (_, stale) = update(
@@ -7885,7 +7885,7 @@ test "a newer review reload fences an older working-tree reply" {
         state: TabDeleted,
         review: Some({ generation: 3, working_generation: 5, .. }),
         ..
-      }
+      },
     ),
   )
   let (_, resurrected) = update(
@@ -7953,7 +7953,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
       {
         review: Some({ generation: 3, baseline: ReviewContent("old HEAD"), .. }),
         ..
-      }
+      },
     ),
   )
   assert_true(following_up.changes_head == Some("old-head"))
@@ -7988,10 +7988,10 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
       {
         state: TabLoading,
         review: Some(
-          { generation: 4, working_generation: 4, baseline: ReviewLoading, .. }
+          { generation: 4, working_generation: 4, baseline: ReviewLoading, .. },
         ),
         ..
-      }
+      },
     ),
   )
   let (_, refreshed) = update(
@@ -8012,10 +8012,10 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
       {
         state: TabLoading,
         review: Some(
-          { working_generation: 4, baseline: ReviewContent("new HEAD"), .. }
+          { working_generation: 4, baseline: ReviewContent("new HEAD"), .. },
         ),
         ..
-      }
+      },
     ),
   )
 }
@@ -8065,7 +8065,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
         state: TabLoading,
         review: Some({ generation: 4, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
   let (_, ignored_old_working) = update(
@@ -8104,7 +8104,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
         state: TabLoading,
         review: Some({ generation: 4, baseline: ReviewContent("new HEAD"), .. }),
         ..
-      }
+      },
     ),
   )
   let (_, paired) = update(
@@ -8130,7 +8130,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
         state: TabLoaded(content="current working", ..),
         review: Some({ generation: 4, baseline: ReviewContent("new HEAD"), .. }),
         ..
-      }
+      },
     ),
   )
 }
@@ -8185,10 +8185,10 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
             working_generation: 3,
             baseline: ReviewContent("old HEAD"),
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
   assert_true(settled.background_review_requests.get(file) == Some(4))
@@ -8235,10 +8235,10 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
       {
         state: TabLoaded(..),
         review: Some(
-          { working_generation: 3, baseline: ReviewContent("new HEAD"), .. }
+          { working_generation: 3, baseline: ReviewContent("new HEAD"), .. },
         ),
         ..
-      }
+      },
     ),
   )
 }
@@ -8290,7 +8290,7 @@ test "unborn repository polls do not churn untracked reviews" {
   assert_true(
     settled.docs.get(file)
     is Some(
-      { review: Some({ generation: 3, baseline: ReviewMissing, .. }), .. }
+      { review: Some({ generation: 3, baseline: ReviewMissing, .. }), .. },
     ),
   )
 }
@@ -8352,7 +8352,7 @@ test "legacy HEAD omission refreshes a missing baseline once tracking is proven"
         state: TabLoaded(..),
         review: Some({ generation: 4, baseline: ReviewMissing, selected, .. }),
         ..
-      }
+      },
     ) &&
     selected == untracked,
   )
@@ -8413,7 +8413,7 @@ test "Changes reconciliation preserves the selected duplicate-path row" {
         state: TabLoading,
         review: Some({ generation: 2, baseline: ReviewLoading, selected, .. }),
         ..
-      }
+      },
     ) &&
     selected == untracked,
   )
@@ -8481,7 +8481,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
         review: Some({ generation: 4, baseline: ReviewLoading, .. }),
         stale: false,
         ..
-      }
+      },
     ),
   )
 
@@ -8519,7 +8519,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
         state: TabLoading,
         review: Some({ generation: 4, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
 }
@@ -8583,7 +8583,7 @@ test "a changed rename source refreshes its review without moving HEAD" {
   assert_true(
     settled.docs.get(file)
     is Some(
-      { review: Some({ generation: 4, baseline: ReviewLoading, .. }), .. }
+      { review: Some({ generation: 4, baseline: ReviewLoading, .. }), .. },
     ),
   )
 }
@@ -8897,7 +8897,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
       repository=true,
       files=[],
       refreshing=true,
-      refresh_again=false
+      refresh_again=false,
     ),
   )
   let (_, latched) = update(
@@ -8916,7 +8916,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
       repository=true,
       files=[],
       refreshing=true,
-      refresh_again=true
+      refresh_again=true,
     ),
   )
   // The first reply consumes the latch by starting one follow-up request; the
@@ -8940,7 +8940,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
       repository=true,
       files=[],
       refreshing=true,
-      refresh_again=false
+      refresh_again=false,
     ),
   )
   let (_, settled) = update(
@@ -8961,7 +8961,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
       repository=true,
       files=[],
       refreshing=false,
-      refresh_again=false
+      refresh_again=false,
     ),
   )
 }
@@ -9384,7 +9384,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
         state: TabReadFailed(Diagnostic("permission denied")),
         stale: false,
         ..
-      }
+      },
     ),
   )
   // A read in flight settles the document itself.
@@ -9402,7 +9402,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   assert_true(
     next.docs.get(test_file(gone_path.0))
     is Some(
-      { state: TabDeleted, review: Some({ working_generation: 3, .. }), .. }
+      { state: TabDeleted, review: Some({ working_generation: 3, .. }), .. },
     ),
   )
   // A reviewed working file fences the tagged read that may still be in
@@ -9418,11 +9418,11 @@ test "a stat the host could not complete reads as a failed read, never a deletio
             working_generation: 8,
             baseline: ReviewContent("HEAD source"),
             ..
-          }
+          },
         ),
         stale: false,
         ..
-      }
+      },
     ),
   )
   assert_eq(next.review_generation, 8)
@@ -9461,11 +9461,11 @@ test "StatsLoaded preserves a settled HEAD preview when its active file disappea
       {
         state: TabDeleted,
         review: Some(
-          { generation: 7, baseline: ReviewContent("HEAD source"), .. }
+          { generation: 7, baseline: ReviewContent("HEAD source"), .. },
         ),
         stale: false,
         ..
-      }
+      },
     ),
   )
 }
@@ -9550,11 +9550,11 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
             baseline: ReviewContent("HEAD source"),
             selected,
             ..
-          }
+          },
         ),
         stale: false,
         ..
-      }
+      },
     ) &&
     selected == deleted,
   )
@@ -9618,7 +9618,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
         review: None,
         stale: false,
         ..
-      }
+      },
     ),
   )
 }
@@ -9703,7 +9703,7 @@ test "a vanished review retries a failed ordinary read" {
         review: None,
         stale: false,
         ..
-      }
+      },
     ),
   )
 }
@@ -9858,7 +9858,7 @@ test "sync reconciles the watcher with the panel and its open files" {
         files: [],
         directories: [Relative("")],
         recursive: false,
-      }
+      },
     ),
   )
   // Issuing a new watch attempt retires the previous failure.
@@ -9876,7 +9876,7 @@ test "sync reconciles the watcher with the panel and its open files" {
         files: [Relative("a.mbt")],
         directories: [Relative(""), Relative("src")],
         ..
-      }
+      },
     ),
   )
   assert_eq(replaced.watch_generation, attached_generation + 1)
@@ -9902,7 +9902,7 @@ test "sync reconciles the watcher with the panel and its open files" {
   assert_true(
     picking.watching
     is Some(
-      { directories: [Relative(""), Relative("deepseek"), Relative("src")], .. }
+      { directories: [Relative(""), Relative("deepseek"), Relative("src")], .. },
     ),
   )
   assert_eq(picking.watch_generation, attached_generation + 2)

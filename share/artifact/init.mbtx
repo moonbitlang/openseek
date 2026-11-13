@@ -24,7 +24,7 @@ async fn main {
   }
   let scratch = @fs.realpath(scratch)
   let work = scratch + "/component-work"
-  @fs.mkdir(work, recursive=true, allow_exist=true)
+  @fs.mkdir(work, recursive=true, allow_existing=true)
   guard @fs.kind(work, follow_symlink=false) is Directory else {
     fail("component working directory must be a regular directory")
   }

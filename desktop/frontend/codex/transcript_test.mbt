@@ -54,7 +54,7 @@ test "Codex adapts app-server items to the shared transcript model" {
       @mention_context.Symbol(
         name="model.mbt",
         file="desktop/frontend/codex/model.mbt",
-        line=0
+        line=0,
       ),
     ],
   )

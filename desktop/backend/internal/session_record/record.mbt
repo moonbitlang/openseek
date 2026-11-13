@@ -284,9 +284,16 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
   while self.offset < size {
     let remaining = size - self.offset
     let take = @cmp.minimum(remaining, record_chunk_bytes)
-    let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
-      error => raise Unreadable("cannot read the session record: \{error}")
-    }
+    let chunk = file.at(self.offset).read_exactly(take.to_int()) catch {
+        error => {
+          let error : Error = if error is TransportError(cause, ..) {
+            cause
+          } else {
+            error
+          }
+          raise Unreadable("cannot read the session record: \{error}")
+        }
+      }
     self.offset += take
     self.anchor = anchor_of(chunk)
     let mut line_start = 0
@@ -463,9 +470,9 @@ pub async fn anchored_at(
   if start < 0 {
     return false
   }
-  let seen = file.read_exactly_at(anchor.length(), position=start) catch {
-    _ => return false
-  }
+  let seen = file.at(start).read_exactly(anchor.length()) catch {
+      _ => return false
+    }
   seen == anchor
 }
 

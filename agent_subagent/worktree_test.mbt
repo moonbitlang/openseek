@@ -85,7 +85,7 @@ async test "a worker's change is handed over as a commit on its branch" {
     assert_true(info.outcome is Some(Captured))
     guard info.workspace
       is Worktree(
-        { name: "fix-lib", state: Committed(commit~), path, branch, base, .. }
+        { name: "fix-lib", state: Committed(commit~), path, branch, base, .. },
       ) else {
       fail("expected a committed worktree")
     }

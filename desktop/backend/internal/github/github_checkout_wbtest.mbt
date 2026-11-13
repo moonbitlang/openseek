@@ -211,7 +211,7 @@ test "checkout errors explain recovery and retain Git diagnostics" {
     github_checkout_failure(fetch_then_error)
     is CheckoutFailure(
       "fatal: Not possible to fast-forward, aborting.",
-      Some(details)
+      Some(details),
     ) &&
     details == fetch_then_error,
   )

@@ -21,9 +21,10 @@ Call `contain` right after spawning, in the same task group:
 ```mbt check
 ///|
 /// A command that exits with status 3 on this platform.
-let exit_3 : (String, Array[String]) = match @async.platform {
-  Windows => ("cmd.exe", ["/c", "exit", "3"])
-  Linux | MacOS => ("sh", ["-c", "exit 3"])
+let exit_3 : (String, Array[String]) = if @async.platform is Windows {
+  ("cmd.exe", ["/c", "exit", "3"])
+} else {
+  ("sh", ["-c", "exit 3"])
 }
 
 ///|

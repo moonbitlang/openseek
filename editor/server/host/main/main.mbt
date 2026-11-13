@@ -76,7 +76,7 @@ fn parse_args(args : ArrayView[String]) -> DevServerConfig {
 
 ///|
 fn parse_port(value : String, fallback : Int32) -> Int32 {
-  @string.parse_int(value, base=10) catch {
+  @string.parse_int(value, radix=10) catch {
     _ => fallback
   }
 }

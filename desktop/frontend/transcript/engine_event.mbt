@@ -22,7 +22,7 @@ pub(all) enum EngineEvent {
     tool_name~ : String,
     is_error~ : Bool,
     content~ : String,
-    brief~ : String?
+    brief~ : String?,
   )
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   // A sub-run's lifecycle brackets. Between them the conversation shows a
@@ -35,7 +35,7 @@ pub(all) enum EngineEvent {
     status~ : String,
     steps~ : Int32,
     tokens~ : Int32,
-    unaccounted~ : String?
+    unaccounted~ : String?,
   )
   // A workflow's lifecycle brackets. A workflow is a run inside an `mbtx`
   // snippet that delegates to child agents of its own; the engine has to
@@ -50,7 +50,7 @@ pub(all) enum EngineEvent {
     journal~ : String,
     events~ : String,
     first_child~ : Int32,
-    child_count~ : Int32
+    child_count~ : Int32,
   )
   WorkflowClosed(id~ : String)
   AgentFinished(String)
@@ -85,7 +85,7 @@ pub(all) enum EngineEvent {
     id~ : String,
     tool_name~ : String,
     detail~ : String,
-    body~ : String?
+    body~ : String?,
   )
   // The question settled: by this client's answer, by another client's, or by
   // the engine's own deadline. The prompt is retired either way, so the view
@@ -190,7 +190,7 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
       steps~,
       prompt_tokens~,
       completion_tokens~,
-      unaccounted~
+      unaccounted~,
     ) =>
       Some(
         SubrunClosed(

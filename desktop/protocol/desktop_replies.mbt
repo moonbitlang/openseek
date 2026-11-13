@@ -2265,7 +2265,7 @@ pub(all) enum CheckUpdateReply {
   Available(
     version~ : String,
     installable~ : Bool,
-    unavailable_reason~ : String?
+    unavailable_reason~ : String?,
   )
   Unreachable(reason~ : String)
   Malformed(reason~ : String)

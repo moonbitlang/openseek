@@ -9,7 +9,8 @@ test('IndexedDB public module contracts', async ({ page }) => {
   const files = Object.entries(metadata.tests).filter(([, cases]) => cases.length);
   const count = files.reduce((total, [, cases]) => total + cases.length, 0);
   expect(count).toBeGreaterThan(0);
-  const args = { file_and_index: files.map(([file, cases]) => [file, cases.map(({ index }) => ({ start: index, end: index + 1 }))]) };
+  // The JS test driver reads `file:start-end,start-end/file:...` from argv[2].
+  const args = files.map(([file, cases]) => `${file}:${cases.map(({ index }) => `${index}-${index + 1}`).join(',')}`).join('/');
   const results = [];
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -23,7 +24,7 @@ test('IndexedDB public module contracts', async ({ page }) => {
   await page.goto('/indexeddb-contracts');
   await page.evaluate(args => {
     globalThis.exports = {};
-    globalThis.process = { argv: ['browser', 'indexeddb', JSON.stringify(args)], exit(code) { throw new Error(`Test driver exited: ${code}`); } };
+    globalThis.process = { argv: ['browser', 'indexeddb', args], exit(code) { throw new Error(`Test driver exited: ${code}`); } };
   }, args);
   await page.addScriptTag({ content: await readFile(new URL('indexeddb.blackbox_test.js', build), 'utf8') });
   await expect.poll(() => results.length).toBe(count);

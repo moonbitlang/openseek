@@ -5,7 +5,7 @@ async fn executable(path : String, text : String) -> Unit {
 
 ///|
 async fn fixture_toolchain(destination : String) -> Unit {
-  @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
+  @fs.mkdir(destination + "/bin", recursive=true, allow_existing=true)
   for name in ["moon", "moonc", "moonrun", "moonx"] {
     executable(destination + "/bin/" + name, "existing-sdk")
   }
@@ -13,12 +13,12 @@ async fn fixture_toolchain(destination : String) -> Unit {
 
 ///|
 async fn fixture_bundle(destination : String) -> Unit {
-  @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
+  @fs.mkdir(destination + "/bin", recursive=true, allow_existing=true)
   for directory in ["doc/moonbit/language", "doc/moonbit/toolchain", "workflow"] {
     @fs.mkdir(
       destination + "/share/" + directory,
       recursive=true,
-      allow_exist=true,
+      allow_existing=true,
     )
   }
   for
@@ -28,7 +28,7 @@ async fn fixture_bundle(destination : String) -> Unit {
     ] {
     @fs.write_text(destination + "/share/" + file, "resource")
   }
-  @fs.mkdir(destination + "/share/licenses", allow_exist=true)
+  @fs.mkdir(destination + "/share/licenses", allow_existing=true)
   @fs.write_text(destination + "/share/licenses/LICENSE", "fixture license")
 }
 

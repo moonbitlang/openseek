@@ -148,7 +148,7 @@ pub fn Event::to_json(self : Event) -> Json {
       steps~,
       prompt_tokens~,
       completion_tokens~,
-      unaccounted=Some(unaccounted)
+      unaccounted=Some(unaccounted),
     ) =>
       {
         "event": "subrun_finished",
@@ -165,7 +165,7 @@ pub fn Event::to_json(self : Event) -> Json {
       steps~,
       prompt_tokens~,
       completion_tokens~,
-      unaccounted=None
+      unaccounted=None,
     ) =>
       {
         "event": "subrun_finished",

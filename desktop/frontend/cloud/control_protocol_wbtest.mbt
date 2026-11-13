@@ -215,7 +215,7 @@ test "Cloud control snapshots carry the active task's permission question" {
       }),
     )
     is Snapshot(
-      { data: { approval: Some({ body: Some("hello"), .. }), .. }, .. }
+      { data: { approval: Some({ body: Some("hello"), .. }), .. }, .. },
     ),
   )
   for

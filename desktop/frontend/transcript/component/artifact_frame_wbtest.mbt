@@ -47,7 +47,7 @@ test "frame follow-ups decode the question and optional dialog title" {
       "{\"type\":\"openseek-artifact-followup\",\"version\":2,\"token\":\"t\",\"prompt\":\" Explain this result. \",\"title\":\"\"}",
     )
     is Some(
-      ArtifactFollowup(token="t", prompt="Explain this result.", title="")
+      ArtifactFollowup(token="t", prompt="Explain this result.", title=""),
     ),
   )
   assert_true(

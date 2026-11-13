@@ -60,7 +60,7 @@ fn app_shortcut_sub_loader(
             is AppShortcutSubscription(
               next,
               files=new_files,
-              symbols=new_symbols
+              symbols=new_symbols,
             ) else {
             return
           }

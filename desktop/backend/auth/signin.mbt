@@ -44,7 +44,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
     error => raise AuthError("could not open the sign-in listener: \{error}")
   }
   defer server.close()
-  let port = server.addr.port()
+  let port = server.addr.port.to_int()
 
   // Start explicit account selection, independently of the browser cookie.
   let url = start_url(server_url~, oauth_state~, challenge~, port~)
@@ -306,7 +306,7 @@ async fn exchange_code(
   guard response.code == 200 else {
     raise AuthError("the sign-in exchange answered HTTP \{response.code}")
   }
-  let json = @json.parse(data) catch {
+  let json = @json.parse(data.text()) catch {
     _ => raise AuthError("the sign-in exchange answered malformed JSON")
   }
   let account : @protocol.AccountSession = @json.from_json(json) catch {

@@ -76,7 +76,7 @@ test "positioned Content failures settle retained reviews and fence both generat
             state: TabReadFailed(Diagnostic("permission denied")),
             review: Some(retained),
             ..
-          }
+          },
         ) &&
         retained == review,
       )

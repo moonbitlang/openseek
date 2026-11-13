@@ -101,17 +101,17 @@ priv enum TextSearchRequest {
     command~ : @moonbit.MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchTextPayload,
-    reply~ : @async.Queue[@protocol.SearchTextReply]
+    reply~ : @async.Queue[@protocol.SearchTextReply],
   )
   Cancel(
     session_key~ : String,
     generation~ : Int32,
-    reply~ : @async.Queue[Unit]
+    reply~ : @async.Queue[Unit],
   )
   Finished(
     session_key~ : String,
     generation~ : Int32,
-    outcome~ : TextSearchOutcome
+    outcome~ : TextSearchOutcome,
   )
 }
 

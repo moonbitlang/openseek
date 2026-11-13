@@ -30,6 +30,7 @@ async fn modern_post(
     request(1, method_, params).stringify(),
     headers=all,
   )
+  let body = body.text()
   assert_eq(response.headers.get("Mcp-Session-Id"), None)
   (response.code, @json.parse(body))
 }

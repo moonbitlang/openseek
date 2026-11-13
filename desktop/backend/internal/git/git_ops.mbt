@@ -345,7 +345,7 @@ async fn git_diffstat_from(
             }
           }
         ],
-        max_concurrent=32,
+        max_concurrency=32,
       )
     })
     is Some(counts) else {
@@ -1080,7 +1080,7 @@ pub async fn changes(
         }
       }
     ],
-    max_concurrent=32,
+    max_concurrency=32,
   )
   { repository: true, head, baseline, changes, }
 }

@@ -8,7 +8,7 @@ async test "direct dispatch uses the host identity and tool groups" {
   assert_true(
     initialized
     is Some(
-      { "result": { "serverInfo": { "version": "direct-test", .. }, .. }, .. }
+      { "result": { "serverInfo": { "version": "direct-test", .. }, .. }, .. },
     ),
   )
   let listed = dispatcher.dispatch(
@@ -19,7 +19,7 @@ async test "direct dispatch uses the host identity and tool groups" {
   assert_true(
     listed
     is Some(
-      { "result": { "tools": [{ "name": "browser_get_text", .. }], .. }, .. }
+      { "result": { "tools": [{ "name": "browser_get_text", .. }], .. }, .. },
     ),
   )
   let called = dispatcher.dispatch(
@@ -42,7 +42,7 @@ async test "direct dispatch uses the host identity and tool groups" {
           ..
         },
         ..
-      }
+      },
     ),
   )
   let excluded = dispatcher.dispatch(

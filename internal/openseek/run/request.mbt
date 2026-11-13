@@ -151,7 +151,7 @@ fn resolved_max_steps(
 /// so a crashed holder releases it with its process.
 async fn acquire_general_child_lease(workspace_root : String) -> @fs.File {
   let dir = "\{workspace_root}/.openseek"
-  @fs.mkdir(dir, recursive=true, allow_exist=true)
+  @fs.mkdir(dir, recursive=true, allow_existing=true)
   let file = @fs.open(
     "\{dir}/general-child.lock",
     mode=ReadWrite,

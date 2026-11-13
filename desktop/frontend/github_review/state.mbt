@@ -75,7 +75,7 @@ pub(all) enum Msg {
   Loaded(
     Int32,
     Result[@protocol.GithubReviewReply, String],
-    Result[Array[GithubDraft], Failure]
+    Result[Array[GithubDraft], Failure],
   )
   FileLoaded(Int32, String, Result[@protocol.GithubReviewFileReply, String])
   Compose(GithubDraftTarget)
@@ -92,7 +92,7 @@ pub(all) enum Msg {
     @protocol.GithubReviewAction,
     GithubDraft?,
     Result[@protocol.GithubReviewMutationReply, String],
-    Result[Unit, Failure]
+    Result[Unit, Failure],
   )
   StorageSaved(String, Result[Unit, Failure])
 }

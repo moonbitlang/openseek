@@ -1364,7 +1364,7 @@ test "Codex workspace bindings decode only authoritative thread replies" {
       {
         session: "codex-thread-1",
         workspace: Some("/work/project/.worktrees/wt-1"),
-      }
+      },
     ),
   )
   let missing = CodexWorkspaceBinding::decode_reply({

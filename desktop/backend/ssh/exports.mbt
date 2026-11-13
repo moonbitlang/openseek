@@ -382,7 +382,7 @@ pub async fn Connection::run(
       let address = reservation.addr
       reservation.close()
       let forward = arguments(self.profile.command)
-      forward.insert(0, "127.0.0.1:\{address.port()}:127.0.0.1:\{port}")
+      forward.insert(0, "127.0.0.1:\{address.port}:127.0.0.1:\{port}")
       forward.insert(0, "-L")
       forward.insert(0, "-N")
       forward.insert(0, "-oExitOnForwardFailure=yes")
@@ -412,7 +412,7 @@ pub async fn Connection::run(
               raise SshError("SSH forwarding exited \{code}")
             }
             let client = @http.ClientConnection(
-              "http://127.0.0.1:\{address.port()}",
+              "http://127.0.0.1:\{address.port}",
             ) catch {
               _ => {
                 if self.waiter is None {

@@ -139,7 +139,7 @@ priv enum UpdateCheck {
   CheckFound(
     version~ : String,
     installable~ : Bool,
-    unavailable_reason~ : String?
+    unavailable_reason~ : String?,
   )
   CheckUnreachable(reason~ : String)
   CheckMalformed(reason~ : String)

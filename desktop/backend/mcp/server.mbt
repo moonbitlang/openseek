@@ -78,7 +78,7 @@ pub async fn Server::Server(tools : Array[Tool], version~ : String) -> Server {
 ///|
 /// Where clients POST.
 pub fn Server::url(self : Server) -> String {
-  "http://127.0.0.1:\{self.listener.addr.port()}\{EndpointPath}"
+  "http://127.0.0.1:\{self.listener.addr.port}\{EndpointPath}"
 }
 
 ///|
@@ -215,7 +215,7 @@ priv enum Received {
     session~ : String,
     body~ : Bytes,
     groups~ : Array[String],
-    headers~ : @http.Headers
+    headers~ : @http.Headers,
   )
   Refused(Int32, String)
 }

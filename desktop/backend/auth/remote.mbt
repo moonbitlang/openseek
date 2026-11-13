@@ -109,7 +109,7 @@ async fn register_device(session : AuthSession) -> DeviceRegistration {
   guard response.code is (200 | 201) else {
     raise AuthError("device registration answered HTTP \{response.code}")
   }
-  guard @json.parse(body)
+  guard @json.parse(body.text())
     is {
       "device_token": String(token),
       "device": { "id": String(id), "name": String(name), .. },

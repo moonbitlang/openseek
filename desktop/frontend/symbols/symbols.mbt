@@ -72,7 +72,7 @@ priv suberror SearchingSub {
     String,
     @common.Uri,
     (Array[Symbol]) -> @cmd.Cmd,
-    @cmd.Cmd
+    @cmd.Cmd,
   )
 }
 

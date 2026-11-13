@@ -75,7 +75,7 @@ pub impl ToJson for BuiltinSkillError with fn to_json(self) {
 pub(all) enum InstalledSkillsReply {
   InstalledSkills(
     Array[InstalledSkill],
-    builtin_errors~ : Array[BuiltinSkillError]
+    builtin_errors~ : Array[BuiltinSkillError],
   )
   InstalledSkillsError(String)
 }

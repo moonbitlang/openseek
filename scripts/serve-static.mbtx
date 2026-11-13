@@ -38,7 +38,7 @@ fn decode_path(path : StringView) -> String raise {
     if source[i] == b'%' {
       guard i + 2 < source.length() else { fail("Incomplete URL escape") }
       let hex = @utf8.decode(source[i + 1:i + 3])
-      bytes.push(@string.parse_int(hex, base=16).to_byte())
+      bytes.push(@string.parse_int(hex, radix=16).to_byte())
       continue i + 3
     }
     bytes.push(source[i])

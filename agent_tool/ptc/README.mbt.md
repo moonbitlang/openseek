@@ -18,7 +18,7 @@ For example, pass this as `source` to mbtx:
 
 ```mbtx
 ---
-import { "moonbitlang/openseek_tools@0.4.1" @tools, "moonbitlang/core/async" }
+import { "moonbitlang/openseek_tools@0.4.2" @tools, "moonbitlang/core/async" }
 ---
 
 async fn main {
@@ -34,7 +34,7 @@ async fn main {
 The SDK is an ordinary version-pinned package import. The host passes only the
 run-scoped connection capability; it does not insert imports, globals, helper
 functions, or types into the source. Saved source and compiler line numbers are
-unchanged. SDK `moonbitlang/openseek_tools@0.4.1` uses `moonbitlang/core/async`.
+unchanged. SDK `moonbitlang/openseek_tools@0.4.2` uses `moonbitlang/core/async`.
 Before publication, validate this import with a temporary registry containing
 the locally packaged SDK.
 
@@ -60,7 +60,7 @@ them in favor of `call`, so new scripts should use `call` directly.
 
 ```mbtx
 ---
-import { "moonbitlang/openseek_tools@0.4.1" @tools, "moonbitlang/core/async" }
+import { "moonbitlang/openseek_tools@0.4.2" @tools, "moonbitlang/core/async" }
 ---
 
 async fn main {

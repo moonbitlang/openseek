@@ -148,7 +148,7 @@ test "a Cloud approval question asks for attention until it is answered" {
           target_label: None,
           answered: false,
           ..
-        }
+        },
       ),
       ..,
     ],

@@ -80,7 +80,9 @@ async fn request(
   arguments : Json,
 ) -> Json {
   let (url, token) = capability(env)
-  let client = @http.post(url, headers={ "Authorization": "Bearer \{token}" })
+  let client = @http.post_stream(url, headers={
+    "Authorization": "Bearer \{token}",
+  })
   defer client.close()
   client.text.write(
     ({ "version": 1, "name": name, "arguments": arguments } : Json).stringify(),
@@ -289,6 +291,7 @@ async test "PTC rejects malformed requests and enforces execution and result bud
       let (_, body) = @http.post_text(url, invalid, headers={
         "Authorization": "Bearer \{token}",
       })
+      let body = body.text()
       assert_true(@json.parse(body) is { "is_error": true, .. })
     }
     assert_eq(executions.val, 0)
@@ -335,10 +338,10 @@ async test "PTC preserves completed calls when the program fails" {
               { "status": "done", "result": { "content": "applied", .. }, .. },
             ],
             ..
-          }
+          },
         ),
         ..
-      }
+      },
     ),
   )
 }
@@ -427,7 +430,7 @@ async test "PTC program exit joins an unawaited request and revokes its endpoint
           {
             data: Some({ "ptc_calls": [{ "status": "interrupted", .. }], .. }),
             ..
-          }
+          },
         ),
       )
       guard handoff.val is Some(env) else { fail("no handoff") }

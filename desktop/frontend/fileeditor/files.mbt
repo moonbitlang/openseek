@@ -504,14 +504,14 @@ test "a cross-host file read settles through its generation-fenced failure" {
     is Some(
       FileFailed(
         owner=@interop.Host(
-          { channel: @interop.ChannelId::Remote("other"), .. }
+          { channel: @interop.ChannelId::Remote("other"), .. },
         ),
         epoch=0,
         path~,
         file_link_generation=None,
         review_generation=Some(7),
-        message=HostFileOwnerChanged
-      )
+        message=HostFileOwnerChanged,
+      ),
     ) &&
     path == test_file("src/main.mbt"),
   )
@@ -583,7 +583,7 @@ test "typed file replies map to viewer content" {
     is Office(
       data_base64="UEsDBA==",
       media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      sig="1:2"
+      sig="1:2",
     ),
   )
 }

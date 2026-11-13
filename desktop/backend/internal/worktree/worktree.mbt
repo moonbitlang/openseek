@@ -745,7 +745,7 @@ pub enum ForkCheckout {
   NewWorktree(
     dir~ : @pathx.Absolute,
     uncommitted~ : Array[String],
-    omitted~ : Int32
+    omitted~ : Int32,
   )
 }
 

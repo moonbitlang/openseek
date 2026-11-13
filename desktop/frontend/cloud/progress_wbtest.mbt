@@ -484,7 +484,7 @@ test "Cloud stage and usage use validated per-response values rather than cumula
         stage: Retrying(attempt=1, max_attempts=3, reason="network"),
         tokens: 120,
         ..
-      }
+      },
     ),
   )
   let response = retry.progress_test_event(6, "usage", {

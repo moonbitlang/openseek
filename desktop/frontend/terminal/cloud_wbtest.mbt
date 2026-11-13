@@ -90,7 +90,7 @@ test "failed Cloud authentication restores an unstarted bang command" {
     is [
       CommandNotStarted(
         shell="submission",
-        message="Shell access is not enabled for this account"
+        message="Shell access is not enabled for this account",
       ),
     ],
   )

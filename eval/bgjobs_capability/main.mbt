@@ -226,7 +226,7 @@ async fn Engine::wait_for(
           "event": String(
             "turn_failed"
             | "agent_aborted"
-            | "max_steps_exhausted"
+            | "max_steps_exhausted",
           ),
           ..
         } {

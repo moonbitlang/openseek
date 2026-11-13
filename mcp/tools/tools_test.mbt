@@ -306,6 +306,7 @@ async fn post_host(host : @mcphost.Service, request : Json) -> Json {
   let (response, body) = @http.post_text(url, request.stringify(), headers={
     "Authorization": "Bearer \{token}",
   })
+  let body = body.text()
   assert_eq(response.code, 200)
   @json.parse(body)
 }
@@ -399,7 +400,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
       @config.Http(
         headers_helper=None,
         name="remote",
-        url="http://127.0.0.1:\{server.addr.port()}/mcp",
+        url="http://127.0.0.1:\{server.addr.port}/mcp",
         headers=Map([]),
       ),
     ]
@@ -667,7 +668,7 @@ async test "a call or search before a server settles gets the real result, and a
           max_connections=8,
         )
       }
-      let base = "http://127.0.0.1:\{server.addr.port()}"
+      let base = "http://127.0.0.1:\{server.addr.port}"
       let servers = @tools.start(
         AgentTaskScope(group),
         [
@@ -804,7 +805,7 @@ async test "a script that stops mid-call cancels the call on its server" {
         [
           Http(
             name="slow",
-            url="http://127.0.0.1:\{server.addr.port()}/mcp",
+            url="http://127.0.0.1:\{server.addr.port}/mcp",
             headers=Map([]),
             headers_helper=None,
           ),

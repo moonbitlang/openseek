@@ -1106,7 +1106,7 @@ test "the schema advertises every decoded argument" {
   assert_true(
     properties.get("args")
     is Some(
-      { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
+      { "type": "array", "items": { "type": "string", .. }, "default": [], .. },
     ),
   )
   assert_true(properties.get("target") is None)

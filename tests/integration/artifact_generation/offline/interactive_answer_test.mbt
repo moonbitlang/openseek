@@ -143,7 +143,7 @@ async test "interactive answer generation repairs script and component diagnosti
           max_connections=responses.length() * 3,
         )
       }
-      let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+      let url = "http://127.0.0.1:\{server.addr.port}/chat/completions"
       let session = @async.with_timeout(120000, () => {
         @agent.run_turn_in_scope(
           runtime~,

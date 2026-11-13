@@ -9,7 +9,7 @@ async fn accept_request(
   for ;; {
     let (conn, _) = server.accept()
     let request = conn.read_request() catch {
-      @io.ReaderClosed => {
+      @io.UnexpectedEof => {
         conn.close()
         continue
       }

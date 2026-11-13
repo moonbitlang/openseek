@@ -119,7 +119,7 @@ fn ContentWidgetHandle::with_render_callbacks(
 priv enum WidgetRenderData {
   InViewport(
     coordinate~ : ContentWidgetRenderedCoordinate,
-    position~ : ContentWidgetPositionPreference
+    position~ : ContentWidgetPositionPreference,
   )
   OffViewport(preserve_focus~ : Bool)
 }

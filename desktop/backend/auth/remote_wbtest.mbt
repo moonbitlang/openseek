@@ -2,7 +2,7 @@
 async test "remote registration uses the account, and disabling preserves it" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  let origin = "http://127.0.0.1:\{server.addr.port}"
   let store = AuthStore::empty()
   store.session = Some({
     ..sample_session(avatar=""),
@@ -55,7 +55,7 @@ async test "cancelled registration reads its device credential and revokes it" {
   @async.with_timeout(5000, () => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let origin = "http://127.0.0.1:\{server.addr.port()}"
+    let origin = "http://127.0.0.1:\{server.addr.port}"
     let store = AuthStore::empty()
     store.session = Some({
       ..sample_session(avatar=""),
@@ -101,7 +101,7 @@ async test "disable and sign-out retire the device committed while waiting for p
       defer server.close()
       let session = {
         ..sample_session(avatar=""),
-        server_url: "http://127.0.0.1:\{server.addr.port()}",
+        server_url: "http://127.0.0.1:\{server.addr.port}",
         device: None,
       }
       let store = AuthStore::empty()

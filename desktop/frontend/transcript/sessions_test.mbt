@@ -290,7 +290,7 @@ test "transcript mapping replays a finished conversation" {
       calls=[],
       replay=false,
       finished=true,
-      end_sequence=_
+      end_sequence=_,
     ) else {
     fail("expected the terminal-confirmed answer with its reasoning")
   }
@@ -355,7 +355,7 @@ test "tool results fill calls by id without changing call order" {
     is @transcript.Done(
       content=Content([Text("module contents")]),
       is_error=false,
-      brief=Some("read moon.mod")
+      brief=Some("read moon.mod"),
     ),
   )
   inspect(shell.call_id, content="c2")
@@ -366,7 +366,7 @@ test "tool results fill calls by id without changing call order" {
     is @transcript.Done(
       content=Content([Text("tests passed")]),
       is_error=false,
-      brief=Some("ran moon test")
+      brief=Some("ran moon test"),
     ),
   )
 }
@@ -431,7 +431,7 @@ test "reopened interrupted question does not retain a pending tool" {
     is @transcript.Done(
       content=Content([Text("cancelled: cancelled")]),
       is_error=true,
-      brief=None
+      brief=None,
     ),
   )
 }
@@ -577,7 +577,7 @@ test "transcript mapping marks where a fork's own conversation begins" {
       label="fork",
       brief=Some("Forked from another conversation"),
       is_error=false,
-      body=None
+      body=None,
     ) else {
     fail("expected the fork marker")
   }

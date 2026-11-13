@@ -11,7 +11,7 @@ priv suberror PatternRepairRequestSub {
     @protocol.PatternRepairPayload,
     @cloud_client.Access?,
     Int32,
-    @cmd.Emit[Msg]
+    @cmd.Emit[Msg],
   )
 }
 
@@ -26,7 +26,7 @@ fn pattern_repair_request_loader(
       request,
       access,
       delay_ms,
-      emit
+      emit,
     ) else {
     return None
   }
