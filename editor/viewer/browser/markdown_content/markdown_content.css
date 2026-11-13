@@ -102,7 +102,7 @@
   background: var(--markdown-inline-code-background, color-mix(in srgb, currentColor 7%, transparent));
   color: var(--markdown-inline-code-color, inherit);
   box-decoration-break: clone;
-  overflow-wrap: anywhere;
+  overflow-wrap: var(--markdown-inline-code-wrap, anywhere);
 }
 
 .moonbit-viewer-markdown-content pre code {
@@ -141,10 +141,12 @@
 }
 
 .moonbit-viewer-markdown-content :is(th, td) {
+  /* Host-rendered inline code must preserve the same word boundaries as cells. */
+  --markdown-inline-code-wrap: normal;
   max-width: 32rem;
   padding: var(--markdown-cell-padding, 6px 12px);
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   text-align: start;
 }
 
