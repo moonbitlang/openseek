@@ -272,7 +272,7 @@
     var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
   border-radius: 7px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
-  font-size: 0.85em;
+  font-size: var(--ui-font-size, 14px);
 }
 
 .moonbit-viewer-markdown-document[data-theme="dark"]
