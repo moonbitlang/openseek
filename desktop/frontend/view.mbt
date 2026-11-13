@@ -2666,6 +2666,7 @@ fn view(
       dispatch.map(msg => FileShareDialog(msg)),
     ),
     model.downloads.dialog(model.locale),
+    model.downloads.add_device_dialog(model.locale),
     // Authentication input is deliberately DOM-only. Keep this slot before
     // conditional overlays so resize/toasts cannot replace its input node.
     if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {

@@ -42,6 +42,7 @@ pub(all) struct Actions {
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
   open_downloads : @cmd.Cmd
+  open_add_device : @cmd.Cmd
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions

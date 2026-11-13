@@ -244,6 +244,25 @@
   gap: var(--space-2);
   color: var(--color-accent);
 }
+/* Numbers hang beside each step's text, while an installer list under a
+   step spans the dialog's width so platform labels keep to one line. */
+.add-device-steps {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: add-device-step;
+}
+.add-device-steps > li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3);
+  counter-increment: add-device-step;
+}
+.add-device-steps > li::before { content: counter(add-device-step) "."; }
+.add-device-steps > li > p { margin: 0; }
+.add-device-steps > li > :not(p) { grid-column: 1 / -1; }
 
 .notifications {
   position: fixed;

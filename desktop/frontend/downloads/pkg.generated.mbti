@@ -22,12 +22,14 @@ pub enum Model {
   Unavailable
 }
 pub fn Model::Model() -> Self
+pub fn Model::add_device_dialog(Self, @i18n.Locale) -> @html.Html
 pub fn Model::dialog(Self, @i18n.Locale) -> @html.Html
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::list(Self, @i18n.Locale) -> @html.Html
 pub fn Model::load(@cmd.Cmd) -> (@cmd.Cmd, Self)
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, @cmd.Cmd) -> (@cmd.Cmd, Self)
+pub fn Model::open_add_device(Self, @cmd.Cmd) -> (@cmd.Cmd, Self)
 pub fn Model::update(Msg) -> Self
 
 pub(all) enum Msg {

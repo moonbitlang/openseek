@@ -92,6 +92,7 @@ pub(all) struct Actions {
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
   open_downloads : @cmd.Cmd
+  open_add_device : @cmd.Cmd
   // Switch the page to the device with this id, or to Cloud with None.
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
@@ -105,17 +106,32 @@ fn Input::menu_definition(
   actions : Actions,
 ) -> @action_menu.Definition? {
   if target == DeviceSelectorTarget && self.account is Some(account) {
-    return Some(account.device_menu(actions.select_device, locale=self.locale))
+    // Adding a device starts from its installer, which only a relay that
+    // publishes the apps can offer.
+    let add_device = if self.downloads {
+      Some(actions.open_add_device)
+    } else {
+      None
+    }
+    return Some(
+      account.device_menu(
+        actions.select_device,
+        add_device~,
+        locale=self.locale,
+      ),
+    )
   }
   None
 }
 
 ///|
 /// The selector's menu: Cloud, then online devices only, the page's own place
-/// checked and inert. With no device online, one inert row says so.
+/// checked and inert. With no device online, one inert row says so. Given
+/// `add_device`, a last row opens the steps that add one.
 fn Account::device_menu(
   self : Account,
   select_device : (String?) -> @cmd.Cmd,
+  add_device~ : @cmd.Cmd?,
   locale~ : @i18n.Locale,
 ) -> @action_menu.Definition {
   fn choice(label : String, current : Bool, command : @cmd.Cmd) {
@@ -151,6 +167,20 @@ fn Account::device_menu(
         enabled: false,
         destructive: false,
         command: @cmd.none,
+      }),
+    )
+  }
+  if add_device is Some(command) {
+    let label = @messages.text(locale, AddDevice)
+    entries.push(Separator)
+    entries.push(
+      Action({
+        label,
+        title: label,
+        icon: None,
+        enabled: true,
+        destructive: false,
+        command,
       }),
     )
   }

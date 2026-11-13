@@ -1,6 +1,7 @@
 // The relay console's app downloads, read from the relay's published
 // desktop manifest. The sign-in page lists them inline; the sidebar opens
-// the same list in a dialog.
+// the same list in a dialog, and the device menu opens the steps that add a
+// computer as a device, starting from its installer.
 
 ///|
 /// `Unavailable` covers a deployment without a manifest as well as a failed
@@ -35,6 +36,13 @@ pub extend Os with Eq::{equal, not_equal}
 pub extend Os with Debug::{to_repr}
 
 ///|
+/// Whether an app installed here can be added as a device. The Android app
+/// wraps this console, so it reaches devices but never becomes one.
+fn Os::hosts_device(self : Os) -> Bool {
+  !(self is Android)
+}
+
+///|
 /// One downloadable artifact, labeled for display.
 #derive(Eq)
 pub struct Target {
@@ -61,6 +69,9 @@ pub const ManifestPath : String = "/desktop/releases/latest.json"
 const DialogId : String = "download-dialog"
 
 ///|
+const AddDeviceDialogId : String = "add-device-dialog"
+
+///|
 const FallbackReleasesUrl : String = "https://github.com/moonbitlang/openseek/releases/latest"
 
 ///|
@@ -74,12 +85,29 @@ pub fn Model::load(fetch : @cmd.Cmd) -> (@cmd.Cmd, Model) {
 }
 
 ///|
-/// The dialog reuses a loaded or loading manifest and retries one that never
-/// loaded or could not be read, so at most one fetch is ever in flight.
 pub fn Model::open(self : Model, fetch : @cmd.Cmd) -> (@cmd.Cmd, Model) {
+  self.open_dialog(DialogId, fetch)
+}
+
+///|
+pub fn Model::open_add_device(
+  self : Model,
+  fetch : @cmd.Cmd,
+) -> (@cmd.Cmd, Model) {
+  self.open_dialog(AddDeviceDialogId, fetch)
+}
+
+///|
+/// Either dialog reuses a loaded or loading manifest and retries one that
+/// never loaded or could not be read, so at most one fetch is ever in flight.
+fn Model::open_dialog(
+  self : Model,
+  id : String,
+  fetch : @cmd.Cmd,
+) -> (@cmd.Cmd, Model) {
   match self {
-    Ready(..) | Loading => (@dialog.show(DialogId), self)
-    Idle | Unavailable => (@cmd.batch([@dialog.show(DialogId), fetch]), Loading)
+    Ready(..) | Loading => (@dialog.show(id), self)
+    Idle | Unavailable => (@cmd.batch([@dialog.show(id), fetch]), Loading)
   }
 }
 
