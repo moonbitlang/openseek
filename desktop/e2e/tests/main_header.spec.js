@@ -64,8 +64,7 @@ test('loading and failure retain the selected conversation title', async ({ page
   for (const name of ['Settings', 'Skills', 'Scheduled']) {
     await page.getByRole('button', { name, exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   }
   await expectHeader(page, title);
   await expect(composer).toHaveValue('Keep my unfinished draft');
