@@ -36,6 +36,7 @@ test('a ticket response arriving after browser logout cannot open a socket', asy
   await page.route('**/v2/auth/logout', route => route.fulfill({ status: 204 }));
   await page.goto('/index.html?device=device-a');
   await expect.poll(() => app.ticketRequests.length).toBe(1);
+  await page.locator('.console-account').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   finish();
@@ -72,6 +73,7 @@ test('browser logout 401 retires both its cached account and device state', asyn
   await page.route('**/v2/auth/logout', route => route.fulfill({ status: 401 }));
   await page.goto('/index.html?device=device-a');
   await app.openSession();
+  await page.locator('.console-account').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();

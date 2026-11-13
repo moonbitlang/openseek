@@ -152,3 +152,24 @@
     height: 44px;
   }
 }
+
+.form-section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+
+.form-section-actions > .button {
+  --button-hover-background: var(--color-bg-subtle);
+  white-space: nowrap;
+}
+
+.form-row-status {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.form-row-status.success {
+  color: var(--color-success);
+}

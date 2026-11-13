@@ -205,3 +205,38 @@ fn fetch_downloads(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     )
   })
 }
+
+///|
+fn revoke_console_device(
+  dispatch : @cmd.Emit[Msg],
+  id : String,
+  token : String,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    console_request(
+      "/v2/devices/" + @uri.encode_component(id),
+      Delete,
+      token~,
+      (status, body) => {
+        scheduler.add(
+          dispatch(
+            Console(
+              match status {
+                204 | 404 => DeviceRemoved(id~, token~)
+                401 => DeviceRemoveUnauthorized(token~)
+                _ => DeviceRemoveFailed(sign_out_error(status, body), token~)
+              },
+            ),
+          ),
+        )
+      },
+      detail => {
+        scheduler.add(
+          dispatch(
+            Console(DeviceRemoveFailed(RelayUnreachable(detail), token~)),
+          ),
+        )
+      },
+    )
+  })
+}

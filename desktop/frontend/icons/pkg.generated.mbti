@@ -10,6 +10,8 @@ pub fn codicon(String) -> @html.Html
 
 pub fn icon(() -> @html.Html) -> @html.Html
 
+pub fn icon_account() -> @html.Html
+
 pub fn icon_add() -> @html.Html
 
 pub fn icon_android() -> @html.Html

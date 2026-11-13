@@ -43,9 +43,12 @@ priv struct DeviceMeta {
 }
 
 ///|
-/// How the sidebar's device selector names a roster entry.
-fn DeviceMeta::device_choice(self : DeviceMeta) -> @sidebar.DeviceChoice {
-  { id: self.id, name: self.name, }
+#derive(Eq)
+priv enum DeviceRemoval {
+  Idle
+  Confirming(DeviceMeta)
+  Removing(String)
+  Failed(@account_failure.Failure)
 }
 
 ///|
@@ -57,6 +60,7 @@ priv struct ConsoleState {
   // The account's devices in the relay's order: the page connects the
   // online ones and names each in the Work list.
   roster : Array[DeviceMeta]
+  device_removal : DeviceRemoval
   roster_sync : RosterSync
   // The newest device-roster request. Replies carry this generation so a
   // slower pre-mutation snapshot cannot overwrite a newer roster.
@@ -96,6 +100,7 @@ fn empty_console_state(
     roster: [],
     roster_sync: RosterLoading,
     roster_request_generation: 0,
+    device_removal: Idle,
     page_device,
     login_return_to,
     preselect_project,
@@ -127,6 +132,7 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
     ],
     roster_sync: RosterReady,
     roster_request_generation: 0,
+    device_removal: Idle,
     page_device: Some(@interop.LocalDeviceId),
     login_return_to,
     preselect_project: None,
@@ -199,6 +205,12 @@ priv enum ConsoleMsg {
   RosterFailed(message~ : @account_failure.Failure, generation~ : Int32)
   // The gate card's retry / the account row's refresh — re-runs the load.
   RefreshClicked
+  RemoveDevice(String)
+  CancelRemoveDevice
+  ConfirmRemoveDevice
+  DeviceRemoved(id~ : String, token~ : String)
+  DeviceRemoveFailed(@account_failure.Failure, token~ : String)
+  DeviceRemoveUnauthorized(token~ : String)
   SignOutClicked
   SignOutFailed(@account_failure.Failure, token~ : String?)
   SignOutDone(token~ : String?)
@@ -276,6 +288,87 @@ fn update_console_msg(
           console: { ..model.console, roster_sync: RosterFailed(message), },
         },
       )
+    }
+    RemoveDevice(id) => {
+      guard model.is_relay_console() &&
+        !(model.console.device_removal is Removing(_)) &&
+        model.account is Some(_) &&
+        model.console.roster.iter().find_first(meta => meta.id == id)
+        is Some(meta) else {
+        return (@cmd.none, model)
+      }
+      if meta.online ||
+        model.device_state(@interop.ChannelId::of_device(id))
+        is Some({ bridge: Connected, .. }) {
+        (
+          @dialog.show("remove-device-dialog"),
+          {
+            ..model,
+            console: { ..model.console, device_removal: Confirming(meta), },
+          },
+        )
+      } else {
+        remove_console_device(dispatch, model, id)
+      }
+    }
+    CancelRemoveDevice =>
+      (
+        @dialog.close("remove-device-dialog"),
+        { ..model, console: { ..model.console, device_removal: Idle, }, },
+      )
+    ConfirmRemoveDevice => {
+      guard model.console.device_removal is Confirming(meta) else {
+        return (@cmd.none, model)
+      }
+      let (cmd, model) = remove_console_device(dispatch, model, meta.id)
+      (@cmd.batch([@dialog.close("remove-device-dialog"), cmd]), model)
+    }
+    DeviceRemoved(id~, token~) => {
+      guard model.account.map(account => account.token) == Some(token) else {
+        return (@cmd.none, model)
+      }
+      let model = {
+        ..model,
+        console: {
+          ..model.console,
+          device_removal: Idle,
+          roster_request_generation: model.console.roster_request_generation + 1,
+        },
+      }
+      let (cmd, model) = apply_roster(
+        dispatch,
+        model,
+        model.console.roster.filter(meta => meta.id != id),
+      )
+      (
+        @cmd.batch([
+          cmd,
+          fetch_console_roster(
+            dispatch,
+            model.console.roster_request_generation,
+            token~,
+          ),
+        ]),
+        model,
+      )
+    }
+    DeviceRemoveFailed(failure, token~) => {
+      guard model.account.map(account => account.token) == Some(token) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          console: { ..model.console, device_removal: Failed(failure), },
+        },
+      )
+    }
+    DeviceRemoveUnauthorized(token~) => {
+      guard model.account.map(account => account.token) == Some(token) else {
+        return (@cmd.none, model)
+      }
+      expire_account(dispatch, model)
     }
     RefreshClicked => {
       let local_console = model.is_local_console()
@@ -463,7 +556,7 @@ fn console_test_roster() -> Array[DeviceMeta] {
 }
 
 ///|
-test "the sidebar's device selector names the page device and lists only online ones" {
+test "the account row stays the same when navigating between devices and Cloud" {
   let roster = [
     ..console_test_roster(),
     { id: "d_air", name: "Air", hostname: None, online: true, },
@@ -480,26 +573,12 @@ test "the sidebar's device selector names the page device and lists only online 
   guard model.sidebar_component_input().account is Some(account) else {
     fail("a signed-in browser page shows its account")
   }
-  assert_eq(account.page, DevicePage(id="d_on", name=Some("Mac")))
-  assert_eq(account.online_devices, [
-    { id: "d_on", name: "Mac", },
-    { id: "d_air", name: "Air", },
-  ])
+  assert_eq(account.login, "octocat")
   let cloud = { ..model, console: { ..model.console, page_device: None, }, }
   guard cloud.sidebar_component_input().account is Some(account) else {
     fail("a Cloud page shows its account")
   }
-  assert_eq(account.page, CloudPage)
-  // Choosing a device or Cloud leaves this page's model alone; the load
-  // replaces it.
-  let (_, chosen) = update_msg(
-    test_dispatch(),
-    DeviceChosen(Some("d_air")),
-    model,
-  )
-  assert_true(chosen == model)
-  let (_, chosen) = update_msg(test_dispatch(), DeviceChosen(None), model)
-  assert_true(chosen == model)
+  assert_eq(account.login, "octocat")
 }
 
 ///|
@@ -1067,4 +1146,17 @@ test "a late browser logout result cannot clear a newer account" {
   )
   assert_true(unchanged.console.access_error is None)
   assert_true(unchanged.account_error is None)
+}
+
+///|
+fn remove_console_device(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  id : String,
+) -> (@cmd.Cmd, Model) {
+  guard model.account is Some(account) else { return (@cmd.none, model) }
+  (
+    revoke_console_device(dispatch, id, account.token),
+    { ..model, console: { ..model.console, device_removal: Removing(id), }, },
+  )
 }

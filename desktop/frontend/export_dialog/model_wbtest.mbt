@@ -419,3 +419,26 @@ test "file sharing uses the existing explicit sign-in and confirmation flow" {
   assert_true(signed_in.content is Some({ operation: Ready, .. }))
   assert_false(signed_in.file_pending())
 }
+
+///|
+async test "local share authorization uses the account captured by the operation" {
+  let first : @protocol.AccountSession = {
+    token: "token-a",
+    user: { user_id: "account-a", login: "same-label", avatar_url: "", },
+  }
+  let second : @protocol.AccountSession = {
+    token: "token-b",
+    user: { user_id: "account-b", login: "same-label", avatar_url: "", },
+  }
+  let captured = first
+  // Authorization is derived from the operation's account, not a display name
+  // or a subsequently selected account.
+  assert_true(
+    share_authorization(Local, "old-operation", captured, desktop=true)
+    is LocalAccount(user_id="account-a"),
+  )
+  assert_true(
+    share_authorization(Local, "new-operation", second, desktop=true)
+    is LocalAccount(user_id="account-b"),
+  )
+}

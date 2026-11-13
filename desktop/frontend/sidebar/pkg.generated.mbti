@@ -24,10 +24,6 @@ pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 pub(all) struct Account {
   login : String
   avatar : String
-  busy : Bool
-  notice : String?
-  page : Page
-  online_devices : Array[DeviceChoice]
 }
 pub fn Account::equal(Self, Self) -> Bool
 pub fn Account::not_equal(Self, Self) -> Bool
@@ -39,23 +35,11 @@ pub(all) struct Actions {
   open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
-  refresh_account : @cmd.Cmd
-  sign_out : @cmd.Cmd
+  open_account : @cmd.Cmd
   open_downloads : @cmd.Cmd
-  open_add_device : @cmd.Cmd
-  select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
 }
-
-#derive(Eq, @debug.Debug)
-pub(all) struct DeviceChoice {
-  id : String
-  name : String
-}
-pub fn DeviceChoice::equal(Self, Self) -> Bool
-pub fn DeviceChoice::not_equal(Self, Self) -> Bool
-pub fn DeviceChoice::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 pub(all) struct Input {
@@ -90,15 +74,6 @@ pub(all) enum Mode {
 pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::not_equal(Self, Self) -> Bool
 pub fn Mode::to_repr(Self) -> @debug.Repr
-
-#derive(Eq, @debug.Debug)
-pub(all) enum Page {
-  CloudPage
-  DevicePage(id~ : String, name~ : String?)
-}
-pub fn Page::equal(Self, Self) -> Bool
-pub fn Page::not_equal(Self, Self) -> Bool
-pub fn Page::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

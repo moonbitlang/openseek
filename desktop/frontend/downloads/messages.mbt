@@ -75,14 +75,14 @@ fn text(locale : @i18n.Locale, message : Message) -> String {
     (Japanese, RemoteControlStep) =>
       "「設定 → 接続 → リモートアクセス」でリモート操作を有効にします。"
     (English, ListedWhileRunning) =>
-      "The computer then appears in the device menu whenever SeekMoon is running on it."
+      "The computer then appears online under Settings → Device whenever SeekMoon is running on it."
     (Spanish, ListedWhileRunning) =>
-      "Después, el equipo aparecerá en el menú de dispositivos mientras SeekMoon esté abierto en él."
+      "Después, el equipo aparecerá en línea en Ajustes → Dispositivo mientras SeekMoon esté abierto en él."
     (SimplifiedChinese, ListedWhileRunning) =>
-      "之后，只要这台电脑上的 SeekMoon 正在运行，它就会出现在设备菜单中。"
+      "之后，只要这台电脑上的 SeekMoon 正在运行，它就会在设置 → 设备中显示为在线。"
     (TraditionalChinese, ListedWhileRunning) =>
-      "之後，只要這台電腦上的 SeekMoon 正在執行，它就會出現在裝置選單中。"
+      "之後，只要這台電腦上的 SeekMoon 正在執行，它就會在設定 → 裝置中顯示為在線。"
     (Japanese, ListedWhileRunning) =>
-      "以降、そのコンピューターで SeekMoon が起動している間はデバイスメニューに表示されます。"
+      "以降、そのコンピューターで SeekMoon が起動している間は設定 → デバイスにオンラインとして表示されます。"
   }
 }

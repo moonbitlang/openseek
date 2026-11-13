@@ -921,6 +921,7 @@ priv enum SettingsSection {
   General
   Engine
   Account
+  Devices
   Connections
   ArchivedChats
   SystemSettings
@@ -1863,9 +1864,6 @@ priv enum Msg {
   // startup.
   SidebarModeSelected(@sidebar.Mode)
   SidebarModeLoaded(@sidebar.Mode)
-  // The sidebar's device selector chose a device by id, or Cloud with None.
-  // A page owns its device for its lifetime, so the choice loads that page.
-  DeviceChosen(String?)
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
   LanguageLoaded(@i18n.Preference?, Array[String])

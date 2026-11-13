@@ -1,35 +1,9 @@
 ///|
-/// One device the account can switch the page to.
-#derive(Debug, Eq)
-pub(all) struct DeviceChoice {
-  id : String
-  name : String
-}
-
-///|
 #derive(Debug, Eq)
 pub(all) struct Account {
   login : String
   avatar : String
-  busy : Bool
-  notice : String?
-  page : Page
-  // The account's online devices, in roster order; the selector offers these.
-  online_devices : Array[DeviceChoice]
 }
-
-///|
-/// Where the page works.
-#derive(Debug, Eq)
-pub(all) enum Page {
-  CloudPage
-  // `name` is None while the roster does not list the device.
-  DevicePage(id~ : String, name~ : String?)
-}
-
-///|
-/// The action-menu target of the footer's device selector.
-const DeviceSelectorTarget : String = "sidebar:device-selector"
 
 ///|
 /// The id of the grab strip the sidebar renders on its right edge. The
@@ -89,102 +63,10 @@ pub(all) struct Actions {
   open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
-  refresh_account : @cmd.Cmd
-  sign_out : @cmd.Cmd
+  open_account : @cmd.Cmd
   open_downloads : @cmd.Cmd
-  open_add_device : @cmd.Cmd
-  // Switch the page to the device with this id, or to Cloud with None.
-  select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
-}
-
-///|
-fn Input::menu_definition(
-  self : Input,
-  target : String,
-  actions : Actions,
-) -> @action_menu.Definition? {
-  if target == DeviceSelectorTarget && self.account is Some(account) {
-    // Adding a device starts from its installer, which only a relay that
-    // publishes the apps can offer.
-    let add_device = if self.downloads {
-      Some(actions.open_add_device)
-    } else {
-      None
-    }
-    return Some(
-      account.device_menu(
-        actions.select_device,
-        add_device~,
-        locale=self.locale,
-      ),
-    )
-  }
-  None
-}
-
-///|
-/// The selector's menu: Cloud, then online devices only, the page's own place
-/// checked and inert. With no device online, one inert row says so. Given
-/// `add_device`, a last row opens the steps that add one.
-fn Account::device_menu(
-  self : Account,
-  select_device : (String?) -> @cmd.Cmd,
-  add_device~ : @cmd.Cmd?,
-  locale~ : @i18n.Locale,
-) -> @action_menu.Definition {
-  fn choice(label : String, current : Bool, command : @cmd.Cmd) {
-    @action_menu.Entry::Action({
-      label,
-      title: label,
-      icon: if current {
-        Some(@icons.icon(@icons.icon_check))
-      } else {
-        None
-      },
-      enabled: !current,
-      destructive: false,
-      command,
-    })
-  }
-  let cloud = @messages.text(locale, Cloud)
-  let entries = [
-    choice(cloud, self.page is CloudPage, select_device(None)),
-    Separator,
-  ]
-  for device in self.online_devices {
-    let current = self.page is DevicePage(id~, ..) && id == device.id
-    entries.push(choice(device.name, current, select_device(Some(device.id))))
-  }
-  if self.online_devices.is_empty() {
-    let label = @messages.text(locale, NoDevicesOnline)
-    entries.push(
-      Action({
-        label,
-        title: label,
-        icon: None,
-        enabled: false,
-        destructive: false,
-        command: @cmd.none,
-      }),
-    )
-  }
-  if add_device is Some(command) {
-    let label = @messages.text(locale, AddDevice)
-    entries.push(Separator)
-    entries.push(
-      Action({
-        label,
-        title: label,
-        icon: None,
-        enabled: true,
-        destructive: false,
-        command,
-      }),
-    )
-  }
-  { label: @messages.text(locale, ChooseDevice), entries, }
 }
 
 ///|
@@ -308,15 +190,7 @@ pub fn component(
 ) -> @rabbita.Val[@html.Html] {
   let chat_list = actions.list_component(input, ChatMode)
   let work_list = actions.list_component(input, WorkMode)
-  let overlay = @action_menu.component(input, (input, target) => {
-    input.menu_definition(target, actions)
-  })
-  input.map4(chat_list, work_list, overlay, (
-    input,
-    chat_list,
-    work_list,
-    overlay,
-  ) => {
+  input.map3(chat_list, work_list, (input, chat_list, work_list) => {
     let rows : Map[String, @html.Html] = Map([])
     for index, notice in input.notices {
       rows["notice:\{index}"] = @html.div(
@@ -410,70 +284,30 @@ pub fn component(
         ]),
       )
     }
-    if input.account is Some(account) {
-      let account_row : Array[@html.Html] = []
-      if !account.avatar.is_empty() {
-        account_row.push(
-          @html.img(
-            class="console-avatar",
-            src=account.avatar,
-            alt=account.login,
+    footer.push(
+      @html.button(
+        class="sidebar-button console-account",
+        on_click=actions.open_account,
+        [
+          @html.span(
+            class="sidebar-icon",
+            if input.account is Some(account) && !account.avatar.is_empty() {
+              @html.img(class="console-avatar", src=account.avatar, alt="")
+            } else {
+              @icons.icon(@icons.icon_account)
+            },
           ),
-        )
-      }
-      account_row.push(@html.span(class="console-login", "@\{account.login}"))
-      account_row.push(
-        @html.button(
-          class="console-account-action",
-          disabled=account.busy,
-          title=@messages.text(input.locale, RefreshDevices),
-          on_click=actions.refresh_account,
-          @messages.text(input.locale, Refresh),
-        ),
-      )
-      account_row.push(
-        @html.button(
-          class="console-account-action",
-          disabled=account.busy,
-          on_click=actions.sign_out,
-          @messages.text(input.locale, SignOut),
-        ),
-      )
-      let choose = @messages.text(input.locale, ChooseDevice)
-      footer.push(
-        @rui.popover_trigger(
-          id=DeviceSelectorTarget + ":actions-trigger",
-          target_id=DeviceSelectorTarget + ":actions-content",
-          class="sidebar-button device-selector",
-          title=choose,
-          // The footer sits at the bottom edge, so the menu opens upward.
-          attrs=@action_menu.button_attrs(
-            DeviceSelectorTarget,
-            align_right=false,
-            open_upward=true,
-          ).aria_label(choose),
-          [
-            @html.span(class="sidebar-icon", @icons.icon(@icons.icon_vm)),
-            @html.span(
-              class="sidebar-label",
-              match account.page {
-                CloudPage => @messages.text(input.locale, Cloud)
-                DevicePage(name=Some(name), ..) => name
-                DevicePage(name=None, ..) => choose
-              },
-            ),
-            @html.span(
-              class="sidebar-icon device-selector-chevron",
-              @icons.icon(@icons.icon_chevron_down),
-            ),
-          ],
-        ),
-      )
-      footer.push(@html.div(class="console-account", account_row))
-      if account.notice is Some(notice) {
-        footer.push(@html.div(class="console-notice", notice))
-      }
-    }
+          @html.span(
+            class="sidebar-label console-login",
+            if input.account is Some(account) {
+              account.login
+            } else {
+              @settings.text(input.locale, SignIn)
+            },
+          ),
+        ],
+      ),
+    )
     @html.aside([
       // The leading edge stays clear for the shell-owned fixed toggle and
       // native controls; the mode switch sits at the trailing edge.
@@ -513,9 +347,6 @@ pub fn component(
         work_list.content,
       ]),
       @html.div(class="sidebar-footer", footer),
-      // The action-menu component owns open/replace/position/dismiss state;
-      // the Sidebar contributes only stable targets and current definitions.
-      overlay,
       // Grab strip for drag-to-resize; wired imperatively by the shell's
       // sidebar_resize. Absolutely positioned, so it is not a grid item and
       // never disturbs the aside's rows.
@@ -546,15 +377,3 @@ pub extend Mode with Eq::{equal, not_equal}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
-
-///|
-pub extend DeviceChoice with Debug::{to_repr}
-
-///|
-pub extend DeviceChoice with Eq::{equal, not_equal}
-
-///|
-pub extend Page with Debug::{to_repr}
-
-///|
-pub extend Page with Eq::{equal, not_equal}

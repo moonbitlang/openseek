@@ -2,7 +2,7 @@ import { test, expect } from './support/test.js';
 import { CloudHarness } from './support/cloud_harness.js';
 
 for (const entry of ['sidebar', 'Settings']) {
-  test(`desktop sign-in from ${entry} stays cancellable and permits a fresh attempt`, async ({ page }, testInfo) => {
+  test(`desktop sign-in from ${entry} stays cancellable and permits a fresh attempt`, async ({ page }) => {
     const cloud = new CloudHarness(page, { desktop: true, cached: false });
     cloud.authorization = Promise.withResolvers();
     const cancellation = Promise.withResolvers();
@@ -15,7 +15,8 @@ for (const entry of ['sidebar', 'Settings']) {
     };
     const account = page.getByRole('region', { name: 'Account', exact: true });
     if (entry === 'Settings') await openAccount();
-    const scope = entry === 'Settings' ? account : page.locator('aside .cloud-sign-in');
+    else await page.locator('.console-account').click();
+    const scope = account;
     const start = () => scope.getByRole('button', { name: 'Sign in', exact: true }).click();
 
     await start();
@@ -23,15 +24,6 @@ for (const entry of ['sidebar', 'Settings']) {
     const cancel = scope.getByRole('button', { name: 'Cancel', exact: true });
     await expect(cancel).toBeEnabled();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
-    if (entry === 'sidebar') {
-      await expect(page.locator('.cloud-home')).toHaveCount(0);
-      await expect(page.locator('main h1')).toHaveText('New chat');
-      await expect(page.locator('#task')).toBeEnabled();
-      await expect(page.locator('main')).not.toContainText('Finish signing in in your browser…');
-      const path = testInfo.outputPath('sidebar-cancellable-sign-in.png');
-      await page.screenshot({ path });
-      await testInfo.attach('Sidebar sign-in stays cancellable while the local project remains visible', { path, contentType: 'image/png' });
-    }
     await cancel.click();
     await expect(scope).toContainText('Cancelling');
     await expect(cancel).toBeDisabled();
@@ -45,7 +37,6 @@ for (const entry of ['sidebar', 'Settings']) {
     await expect(scope).toContainText('Finish signing in in your browser…');
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(2);
     cloud.authorization.resolve();
-    if (entry !== 'Settings') await openAccount();
     await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);

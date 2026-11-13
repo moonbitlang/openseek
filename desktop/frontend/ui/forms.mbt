@@ -48,6 +48,7 @@ pub fn form_section(
   icon_image : () -> @html.Html,
   title : String,
   rows : Array[@html.Html],
+  actions~ : Array[@html.Html] = [],
 ) -> @html.Html {
   @html.section(
     class="form-section",
@@ -56,6 +57,11 @@ pub fn form_section(
       @html.div(class="form-section-header", [
         @icons.icon(icon_image),
         @html.h2(title),
+        if actions.is_empty() {
+          @html.nothing
+        } else {
+          @html.div(class="form-section-actions", actions)
+        },
       ]),
       @html.div(class="form-section-body card-surface", rows),
     ],

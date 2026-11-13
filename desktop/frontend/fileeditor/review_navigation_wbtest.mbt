@@ -437,3 +437,70 @@ test "history filtering shares matching but owns its inventory and counts" {
   assert_eq(change_extension_options(working), [(Some(".mbt"), 1)])
   assert_true(filtered_changes(working) == [workspace])
 }
+
+///|
+test "marking the remaining hunks completes navigation and unmarking reopens only that hunk" {
+  let (initial, ctx, first) = review_progress_state()
+  let other = test_modified_change(@pathx.Relative("src/other.mbt"))
+  let hunks = [
+    review_test_hunk(1, 2, 1, 2),
+    review_test_hunk(10, 12, 10, 12),
+    review_test_hunk(20, 21, 20, 21),
+  ]
+  let coverage = hunks[0].union(hunks[1]).union(hunks[2])
+  let state = {
+    ..initial,
+    changes: ChangeListReady(
+      repository=true,
+      files=[first, other],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }.set_review_file_progress(other, Some(ReviewFileComplete))
+  let mut marked = state
+  for index in [1, 2, 0] {
+    let active = activate_review_hunk(
+      marked,
+      ctx,
+      first,
+      hunks[index],
+      coverage,
+      index,
+      3,
+    )
+    let (_, next) = update(test_emit(), ToggleActiveReviewHunk, active, ctx)
+    let (_, repeated) = update(test_emit(), ToggleActiveReviewHunk, active, ctx)
+    assert_true(
+      next.review_hunk_state(first, hunks[index]) ==
+      repeated.review_hunk_state(first, hunks[index]),
+    )
+    marked = next
+    if index == 2 {
+      // Entering backward skips the marked tail; wrapping forward also lands
+      // on the only outstanding hunk. The other file is already complete.
+      assert_eq(
+        review_hunk_navigation_index(marked, Some(first), hunks, None, true),
+        Some(0),
+      )
+      assert_eq(
+        review_hunk_navigation_index(marked, Some(first), hunks, None, false),
+        Some(0),
+      )
+      assert_true(review_navigation_neighbor(marked, ctx, false) is None)
+    }
+  }
+  assert_true(marked.changed_file_review_state(first) is ReviewComplete)
+  assert_false(review_diff_navigation_enabled(marked, ctx))
+  let (_, reopened) = update(test_emit(), ToggleActiveReviewHunk, marked, ctx)
+  assert_true(reopened.changed_file_review_state(first) is ReviewInProgress)
+  assert_true(review_diff_navigation_enabled(reopened, ctx))
+  for previous in [false, true] {
+    assert_eq(
+      review_hunk_navigation_index(reopened, Some(first), hunks, None, previous),
+      Some(0),
+    )
+    assert_true(review_navigation_neighbor(reopened, ctx, previous) is None)
+  }
+  assert_true(reopened.review_hunk_state(first, hunks[1]) is ReviewHunkViewed)
+  assert_true(reopened.review_hunk_state(first, hunks[2]) is ReviewHunkViewed)
+}
