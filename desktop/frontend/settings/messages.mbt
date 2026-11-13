@@ -37,6 +37,12 @@ pub(all) enum Message {
   LocalConsoleDescription
   HelpImproveSeekMoon
   ContentImprovementDescription
+  PushNotifications
+  PushNotificationsDescription
+  PushNotificationsBlocked
+  PushNotificationsNeedInstall
+  SendTestNotification
+  TestNotificationSent
   PreferencesReadFailed(String)
   PreferencesSaveFailed(String)
   CheckingSignIn
@@ -196,6 +202,56 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "允許我們使用你的雲端聊天內容（包括既有歷史）評估和改進工具，包括訓練與最佳化模型。關閉不會影響聊天功能或歷史記錄。"
     (Japanese, ContentImprovementDescription) =>
       "既存の履歴を含むクラウドチャットの内容を、モデルの訓練や最適化を含むツールの評価と改善に使用することを許可します。オフにしてもチャット機能や履歴には影響しません。"
+    (English, PushNotifications) => "Notifications"
+    (Spanish, PushNotifications) => "Notificaciones"
+    (SimplifiedChinese, PushNotifications) => "通知"
+    (TraditionalChinese, PushNotifications) => "通知"
+    (Japanese, PushNotifications) => "通知"
+    (English, PushNotificationsDescription) =>
+      "Notify this browser when a task finishes or needs your permission."
+    (Spanish, PushNotificationsDescription) =>
+      "Avisa en este navegador cuando una tarea termine o necesite tu permiso."
+    (SimplifiedChinese, PushNotificationsDescription) =>
+      "任务完成或需要你授权时，在此浏览器上通知你。"
+    (TraditionalChinese, PushNotificationsDescription) =>
+      "任務完成或需要你授權時，在此瀏覽器上通知你。"
+    (Japanese, PushNotificationsDescription) =>
+      "タスクが完了したときや許可が必要なときに、このブラウザに通知します。"
+    (English, PushNotificationsBlocked) =>
+      "Notifications are blocked in browser settings"
+    (Spanish, PushNotificationsBlocked) =>
+      "Las notificaciones están bloqueadas en el navegador"
+    (SimplifiedChinese, PushNotificationsBlocked) =>
+      "通知已在浏览器设置中被阻止"
+    (TraditionalChinese, PushNotificationsBlocked) =>
+      "通知已在瀏覽器設定中被封鎖"
+    (Japanese, PushNotificationsBlocked) =>
+      "通知はブラウザの設定でブロックされています"
+    (English, PushNotificationsNeedInstall) =>
+      "Add to Home Screen to get notifications"
+    (Spanish, PushNotificationsNeedInstall) =>
+      "Añade a la pantalla de inicio para recibir notificaciones"
+    (SimplifiedChinese, PushNotificationsNeedInstall) =>
+      "添加到主屏幕后即可接收通知"
+    (TraditionalChinese, PushNotificationsNeedInstall) =>
+      "加入主畫面後即可接收通知"
+    (Japanese, PushNotificationsNeedInstall) =>
+      "ホーム画面に追加すると通知を受け取れます"
+    (English, SendTestNotification) => "Send test"
+    (Spanish, SendTestNotification) => "Enviar prueba"
+    (SimplifiedChinese, SendTestNotification) => "发送测试"
+    (TraditionalChinese, SendTestNotification) => "傳送測試"
+    (Japanese, SendTestNotification) => "テスト送信"
+    (English, TestNotificationSent) =>
+      "Test sent. While this page is in front, the system may put it straight into Notification Center without a banner."
+    (Spanish, TestNotificationSent) =>
+      "Prueba enviada. Mientras esta página esté al frente, el sistema puede dejarla en el centro de notificaciones sin mostrar un aviso."
+    (SimplifiedChinese, TestNotificationSent) =>
+      "测试通知已发送。此页面在前台时，系统可能不弹横幅，直接放进通知中心。"
+    (TraditionalChinese, TestNotificationSent) =>
+      "測試通知已傳送。此頁面在前景時，系統可能不顯示橫幅，直接放進通知中心。"
+    (Japanese, TestNotificationSent) =>
+      "テスト通知を送信しました。このページが前面にあるあいだは、バナーを出さずに通知センターへ直接入ることがあります。"
     (English, PreferencesReadFailed(error)) =>
       "Could not load account preferences: \{error}"
     (Spanish, PreferencesReadFailed(error)) =>

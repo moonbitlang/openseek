@@ -974,6 +974,9 @@ fn settings_account_rows(
         desc=@settings.text(model.locale, ContentImprovementDescription),
       ),
     )
+    if settings_notifications_row(dispatch, model) is Some(row) {
+      rows.push(row)
+    }
   }
   if model.settings_section() == Account && model.account_error is Some(failure) {
     rows.push(
@@ -985,6 +988,77 @@ fn settings_account_rows(
     )
   }
   rows
+}
+
+///|
+/// This browser's Web Push switch. None while the first probe runs and where
+/// the relay has no push; the window never probes, so it never shows.
+fn settings_notifications_row(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html? {
+  let locale = model.locale
+  let switch = (enabled : Bool, msg : @web_push.Msg?) => {
+    @ui.switch_control(
+      enabled~,
+      label=@settings.text(locale, PushNotifications),
+      disabled=msg is None,
+      on_click=match msg {
+        Some(msg) => dispatch(WebPush(msg))
+        None => @cmd.none
+      },
+    )
+  }
+  let test_button = (disabled : Bool) => {
+    @html.button(
+      class="button secondary",
+      type_="button",
+      disabled~,
+      on_click=dispatch(WebPush(SendTest)),
+      @settings.text(locale, SendTestNotification),
+    )
+  }
+  // The switch keeps the first slot so the test button never takes its node.
+  let (controls, desc, error) : (Array[@html.Html], @settings.Message, String?) = match
+    model.web_push {
+    Checking | Unavailable => return None
+    // Off and disabled where only the browser can change it, so the row
+    // reads like its neighbours.
+    Unsupported => ([switch(false, None)], PushNotificationsNeedInstall, None)
+    Blocked => ([switch(false, None)], PushNotificationsBlocked, None)
+    Off(error~, ..) =>
+      ([switch(false, Some(TurnOn))], PushNotificationsDescription, error)
+    Working(on~, ..) =>
+      (
+        if on {
+          [switch(true, None), test_button(true)]
+        } else {
+          [switch(false, None)]
+        },
+        PushNotificationsDescription,
+        None,
+      )
+    On(error~, tested~, ..) =>
+      (
+        [switch(true, Some(TurnOff)), test_button(false)],
+        if tested {
+          TestNotificationSent
+        } else {
+          PushNotificationsDescription
+        },
+        error,
+      )
+  }
+  if error is Some(error) {
+    controls.push(@html.span(attrs=@html.Attrs::build().role("alert"), error))
+  }
+  Some(
+    @ui.form_row(
+      @settings.text(locale, PushNotifications),
+      controls,
+      desc=@settings.text(locale, desc),
+    ),
+  )
 }
 
 ///|

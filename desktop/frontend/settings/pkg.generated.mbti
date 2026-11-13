@@ -46,6 +46,12 @@ pub(all) enum Message {
   LocalConsoleDescription
   HelpImproveSeekMoon
   ContentImprovementDescription
+  PushNotifications
+  PushNotificationsDescription
+  PushNotificationsBlocked
+  PushNotificationsNeedInstall
+  SendTestNotification
+  TestNotificationSent
   PreferencesReadFailed(String)
   PreferencesSaveFailed(String)
   CheckingSignIn

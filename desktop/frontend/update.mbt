@@ -1764,6 +1764,7 @@ fn update(
     | OpenCodex
     | NewChatRequested
     | ExplorerRequested(_)
+    | NotificationLinkOpened(_)
     | SidebarModeSelected(_) => true
     _ => false
   }
@@ -4476,6 +4477,16 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
+    WebPush(msg) => {
+      // Relay calls are the account's; a reply after sign-out has none.
+      guard model.account is Some(account) else { return (@cmd.none, model) }
+      let (web_push, command) = model.web_push.update(
+        msg,
+        { token: account.token, locale: model.locale.tag(), },
+        dispatch.map(msg => WebPush(msg)),
+      )
+      (command, { ..model, web_push, })
+    }
     DeviceAccountExpired(channel, epoch, token) => {
       guard model.account.map(account => account.token) == Some(token) &&
         model.device_state(channel) is Some(device) &&
@@ -6261,6 +6272,24 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
+    }
+    NotificationLinkOpened(path) => {
+      guard follow_page_path(dispatch, path, model) is Some((visit, next)) else {
+        return (@cmd.none, model)
+      }
+      // A notification says the conversation moved on; a copy cached from
+      // before catches up the way re-selecting it does.
+      guard next.navigation.location is Some({ target: Session(session), .. }) &&
+        next.active_session == session else {
+        return (visit, next)
+      }
+      let (reload, next) = open_session_on(
+        dispatch,
+        next.focused,
+        next,
+        session,
+      )
+      (@cmd.batch([visit, reload]), next)
     }
     UserMessageEditRequested(slot~, sequence~, draft~) =>
       model.edit_user_message(dispatch, slot, sequence, draft)

@@ -348,9 +348,23 @@ fn account_loaded(
   } else {
     (@cmd.none, next)
   }
+  // A browser's push state belongs to the account it registers with; a new
+  // sign-in probes again, and the probe re-registers an existing
+  // subscription for it.
+  let push_changed = changed && !model.is_desktop
+  let push_command = if push_changed && account is Some(_) {
+    @web_push.probe(dispatch.map(msg => WebPush(msg)))
+  } else {
+    @cmd.none
+  }
+  let next = if push_changed {
+    { ..next, web_push: @web_push.State(), }
+  } else {
+    next
+  }
   let command = @cmd.batch([
     export_command, file_command, retire_command, command, persistence, console_command,
-    remote_status, skills_command,
+    remote_status, skills_command, push_command,
   ])
   (command, next)
 }

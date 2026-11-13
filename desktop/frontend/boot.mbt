@@ -738,6 +738,7 @@ fn main {
             @navigation_browser.listen(
               path,
               emit.map(snapshot => Navigation(Browser(snapshot))),
+              opened=emit.map(path => NotificationLinkOpened(path)),
             ),
           )
         }
