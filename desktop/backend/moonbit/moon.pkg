@@ -2,6 +2,8 @@ import {
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/fsx",
   "openseek_desktop/backend/internal/home",
+  "openseek_desktop/backend/internal/processx",
+  "mizchi/semver",
   "openseek_desktop/backend/pathx",
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",

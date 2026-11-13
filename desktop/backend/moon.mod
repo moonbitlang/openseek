@@ -8,6 +8,7 @@ import {
   "moonbit-community/pty@0.4.3",
   "moonbit-community/flate@0.10.0",
   "moonbit-community/skills@0.1.0",
+  "mizchi/semver@0.1.2",
   "moonbitlang/x@0.5.5",
   "moonbitlang/async@0.22.7",
   "moonbitlang/moonback@0.8.9",

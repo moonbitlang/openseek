@@ -251,6 +251,9 @@ async test "explicit seed selection checks platform and fails without fallback" 
 }
 
 ///|
+const FakeSeedVersion : String = "0.10.20+seed"
+
+///|
 /// Lay out a packaged engine beside a completed seed and return the engine
 /// command. Preparing this seed would fail: its `moon` cannot bundle.
 async fn fake_packaged_engine(root : @pathx.Absolute) -> String {
@@ -259,10 +262,32 @@ async fn fake_packaged_engine(root : @pathx.Absolute) -> String {
   @fs.mkdir(seed.join("bin").to_string(), recursive=true)
   @fs.write_text(
     seed.join(MoonbitSeedVersionFile).to_string(),
-    "test-version",
+    FakeSeedVersion,
     create_mode=CreateOrTruncate,
   )
   resources.join("bin/openseek").to_string()
+}
+
+///|
+/// A payload already prepared from the fake seed, so resolving to it reuses
+/// it instead of running `moon bundle`. Returns its `bin` directory.
+async fn fake_prepared_payload(runtime : @pathx.Absolute) -> String {
+  let payload = runtime.join("toolchains/moonbit/macos-arm64").to_path()
+  for
+    file in [
+      moonbit_command(payload),
+      moonbit_compiler_command(payload),
+      moonbit_native_bundle_probe_path(payload),
+      moonbit_wasm_gc_bundle_probe_path(payload),
+    ] {
+    touch_fake_executable(file)
+  }
+  @fs.write_text(
+    moonbit_bundle_stamp_path(payload).to_string(),
+    "version=\{FakeSeedVersion}",
+    create_mode=CreateOrTruncate,
+  )
+  moonbit_bin_dir(payload).to_string()
 }
 
 ///|
@@ -277,12 +302,41 @@ async fn touch_fake_executable(path : @pathx.Path) -> Unit {
 }
 
 ///|
-async test "a user toolchain with moonx wins over the bundled seed" {
+/// A user toolchain with `moon`, `moonx`, and a `moonc` reporting `version`.
+async fn fake_user_toolchain(
+  bin_dir : @pathx.Absolute,
+  version~ : String,
+) -> Unit {
+  touch_fake_toolchain(bin_dir)
+  touch_fake_executable(bin_dir.join("moonx").to_path())
+  @fs.write_text(
+    bin_dir.join("moonc").to_string(),
+    "#!/bin/sh\nprintf '%s\\n' '\{version}'\n",
+    create_mode=CreateOrTruncate,
+    permission=0o755,
+  )
+}
+
+///|
+test "compiler versions compare by release and ignore the build hash" {
+  guard parse_compiler_version("v0.10.20+65efd5b93 (2026-11-05)\n")
+    is Some(nightly) &&
+    parse_compiler_version("0.10.20+b410defd5") is Some(stable) &&
+    parse_compiler_version("v0.10.15+943464bfa (2026-10-12)") is Some(older) else {
+    fail("well-formed compiler versions did not parse")
+  }
+  assert_eq(nightly.compare(stable), 0)
+  assert_true(older.compare(stable) < 0)
+  assert_true(parse_compiler_version("test-version") is None)
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a user toolchain no older than the seed wins" {
   with_toolchain_test_tree(root => {
     let engine = fake_packaged_engine(root)
     let user_bin = root.join("user/bin")
-    touch_fake_toolchain(user_bin)
-    touch_fake_executable(user_bin.join("moonx" + ExecutableSuffix).to_path())
+    fake_user_toolchain(user_bin, version="v0.10.20+user (2026-11-05)")
     let runtime = root.join("runtime")
     let toolchain = desktop_toolchain(
       engine,
@@ -296,36 +350,38 @@ async test "a user toolchain with moonx wins over the bundled seed" {
 }
 
 ///|
-async test "a user moon without moonx falls back to the bundled seed" {
+#cfg(not(platform="windows"))
+async test "an older user toolchain falls back to the bundled seed" {
   with_toolchain_test_tree(root => {
     let engine = fake_packaged_engine(root)
     let user_bin = root.join("user/bin")
-    touch_fake_toolchain(user_bin)
+    fake_user_toolchain(user_bin, version="v0.10.15+old (2026-10-12)")
     let runtime = root.join("runtime")
-    let payload = runtime.join("toolchains/moonbit/macos-arm64").to_path()
-    for
-      file in [
-        moonbit_command(payload),
-        moonbit_compiler_command(payload),
-        moonbit_native_bundle_probe_path(payload),
-        moonbit_wasm_gc_bundle_probe_path(payload),
-      ] {
-      touch_fake_executable(file)
-    }
-    @fs.write_text(
-      moonbit_bundle_stamp_path(payload).to_string(),
-      "version=test-version",
-      create_mode=CreateOrTruncate,
-    )
+    let payload_bin = fake_prepared_payload(runtime)
     let toolchain = desktop_toolchain(
       engine,
       runtime_dir=runtime.to_path(),
       path_env=user_bin.to_string(),
       home_dir=root.join("home").to_path(),
     )
-    assert_eq(
-      toolchain.bin_dir.to_string(),
-      moonbit_bin_dir(payload).to_string(),
+    assert_eq(toolchain.bin_dir.to_string(), payload_bin)
+  })
+}
+
+///|
+async test "a user moon without moonx falls back to the bundled seed" {
+  with_toolchain_test_tree(root => {
+    let engine = fake_packaged_engine(root)
+    let user_bin = root.join("user/bin")
+    touch_fake_toolchain(user_bin)
+    let runtime = root.join("runtime")
+    let payload_bin = fake_prepared_payload(runtime)
+    let toolchain = desktop_toolchain(
+      engine,
+      runtime_dir=runtime.to_path(),
+      path_env=user_bin.to_string(),
+      home_dir=root.join("home").to_path(),
     )
+    assert_eq(toolchain.bin_dir.to_string(), payload_bin)
   })
 }
