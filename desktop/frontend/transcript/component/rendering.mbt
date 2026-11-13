@@ -423,7 +423,10 @@ priv enum BlockContent {
     subrun_parent~ : String?,
     wait_labels~ : Map[Int32, String],
     fork~ : ForkAction?,
-    edit~ : UserEditAction?
+    edit~ : UserEditAction?,
+    // Keys the item's native controls apart from the same item shown on the
+    // other surface, as a side chat's copied history is.
+    surface~ : @interop.ChatSurface
   )
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
@@ -435,7 +438,8 @@ priv enum BlockContent {
     reasoning~ : String?,
     reasoning_complete~ : Bool,
     step_label~ : String?,
-    assistant_name~ : String
+    assistant_name~ : String,
+    surface~ : @interop.ChatSurface
   )
 }
 
@@ -511,6 +515,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         assistant_name~,
         subrun_parent~,
         wait_labels=job_wait_labels(locale=input.locale, item, descriptions),
+        surface=input.surface,
       ),
     })
   }
@@ -528,6 +533,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
           None
         },
         assistant_name~,
+        surface=input.surface,
       ),
     })
   }
@@ -564,7 +570,8 @@ fn Block::render(
       subrun_parent~,
       wait_labels~,
       fork~,
-      edit~
+      edit~,
+      surface~
     ) =>
       transcript_item_view(
         artifact_view?,
@@ -572,6 +579,7 @@ fn Block::render(
         item,
         on_open,
         wait_labels~,
+        surface~,
         fork?=fork.map(value => value.render(locale~, actions.fork)),
         edit?=edit.map(value => value.render(locale~, begin_edit)),
         editor?,
@@ -585,7 +593,14 @@ fn Block::render(
           open: session => (actions.open_session)(session),
         }),
       )
-    Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
+    Live(
+      prose~,
+      reasoning~,
+      reasoning_complete~,
+      step_label~,
+      assistant_name~,
+      surface~
+    ) =>
       assistant_view(
         artifact_view?,
         locale~,
@@ -596,6 +611,7 @@ fn Block::render(
         assistant_name~,
         live=true,
         reasoning_complete~,
+        surface~,
       )
   }
 }
@@ -662,7 +678,7 @@ fn section_children(
   }
   children.set(
     TranscriptSectionKey::stream(input).wire(),
-    @html.div(id="stream", class="stream", stream),
+    @html.div(id=stream_id(input.surface), class="stream", stream),
   )
   // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
   // floating button is the way back to the live tail. Sticky inside the

@@ -256,6 +256,7 @@ priv enum MinimalContent {
 /// arrays is shared with application state or with a previous render.
 priv struct MinimalStream {
   stream : TranscriptSectionKey
+  surface : @interop.ChatSurface
   blocks : Array[Block]
   mut sections : Array[MinimalSection]
   mut parts : Array[MinimalPart]
@@ -348,6 +349,7 @@ fn MinimalStream::finish(
             assistant_name=ui(locale, AssistantLabel),
             subrun_parent=None,
             wait_labels=Map([]),
+            surface=self.surface,
           ),
         })
       Process(parts) =>
@@ -366,6 +368,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
   let locale = self.locale
   let builder : MinimalStream = {
     stream: TranscriptSectionKey::stream(self),
+    surface: self.surface,
     blocks: [],
     sections: [],
     parts: [],
