@@ -605,8 +605,6 @@
   line-height: var(--line-height-normal);
 }
 
-/* Viewer owns Markdown content rules; chat supplies its compact density and
-   palette without changing document layout or product-specific controls. */
 .msg-content.markdown {
   white-space: normal;
   --markdown-paragraph-margin: 0.55em 0;

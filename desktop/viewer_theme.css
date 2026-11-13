@@ -45,8 +45,8 @@
   --vscode-menu-separatorBackground: var(--color-border);
   --vscode-menu-border: var(--color-border);
 
-  /* Inline snippets and overlays keep their own surface. file_panel.css
-     binds right-panel Viewer hosts to the conversation canvas instead. */
+  /* Right-panel-only changes belong in .viewer-host (styles/file_panel.css);
+     this default also affects inline snippets and overlays. */
   --vscode-editor-background: var(--color-bg-surface);
   --vscode-editorLineNumber-foreground: var(--color-text-muted);
   --vscode-editorLineNumber-activeForeground: var(--color-text-secondary);

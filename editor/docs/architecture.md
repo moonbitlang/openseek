@@ -275,11 +275,7 @@ js-only. Concrete browser runtime packages live below the module-private
   returning failures and every other code block to the existing fallback;
   `internal/viewer/browser/markdown` adds MoonBit-owned DOM retention,
   URI/media policy, activation listeners, size notification, and per-target
-  disposal. Host-neutral Markdown content styling lives in
-  `viewer/browser/markdown_content/markdown_content.css`, shared by the document
-  article and OpenSeek's custom renderer through `moonbit-viewer-markdown-content`.
-  Hosts supply palette/density tokens and retain layout and interaction controls.
-  The public browser-only `viewer/browser/diagram_viewport` package
+  disposal. The public browser-only `viewer/browser/diagram_viewport` package
   owns the reusable pan/zoom/fit/resize controller and its stylesheet at
   `viewer/browser/diagram_viewport/diagram_viewport.css`. Narrow JS bindings
   provide inert-template parsing, browser URL resolution, realm registries,

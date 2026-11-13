@@ -1,6 +1,3 @@
-/* Content only: hosts own article measures, scrolling viewports and controls.
- * Both cmark_html and AST-to-DOM renderers use this class; palette and density
- * differences are expressed through --markdown-* tokens on the content root. */
 .moonbit-viewer-markdown-content {
   white-space: normal;
   overflow-wrap: anywhere;
@@ -114,8 +111,6 @@
   line-height: inherit;
 }
 
-/* cmark wraps tables in a region; keep that wrapper, rather than the table,
- * as the scroll and block-spacing owner. Nested quotes/lists use it too. */
 .moonbit-viewer-markdown-content :where([role="region"]:has(> table)) {
   min-width: 0;
   max-width: 100%;
@@ -135,7 +130,7 @@
 }
 
 .moonbit-viewer-markdown-content :is(th, td) {
-  /* Host-rendered inline code must share the cell's emergency wrapping policy. */
+  /* The transcript .inline-code rule also consumes this inherited token. */
   --markdown-inline-code-wrap: break-word;
   max-width: 32rem;
   padding: var(--markdown-cell-padding, 6px 12px);
