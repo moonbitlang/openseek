@@ -2,7 +2,10 @@
 
 `markdown_nodes` parses CommonMark and cmark's non-strict extensions, then maps
 that AST to Rabbita nodes. It does not use `cmark_html` or insert input HTML.
-The renderer owns the semantic mapping; transcript CSS owns presentation.
+The renderer owns the semantic mapping. Content roots opt into the shared Viewer
+stylesheet with `moonbit-viewer-markdown-content`; transcript CSS supplies palette
+and compact-density tokens, plus product-specific controls. See the shared
+[content style contract](../../../editor/viewer/browser/markdown_content/README.md).
 
 ## Semantic mapping
 

@@ -8,7 +8,7 @@ pub fn body_view(
   source_url : String,
   class? : String,
 ) -> @html.Html {
-  let base_class = "github-html-body msg-content markdown"
+  let base_class = "github-html-body msg-content markdown moonbit-viewer-markdown-content"
   @html.div(
     class=match class {
       Some(extra) => base_class + " " + extra

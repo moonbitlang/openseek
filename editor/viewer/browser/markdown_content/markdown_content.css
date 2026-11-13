@@ -1,0 +1,215 @@
+/* Content only: hosts own article measures, scrolling viewports and controls.
+ * Both cmark_html and AST-to-DOM renderers use this class; palette and density
+ * differences are expressed through --markdown-* tokens on the content root. */
+.moonbit-viewer-markdown-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.moonbit-viewer-markdown-content :is(strong, b, th) {
+  font-weight: 600;
+}
+
+.moonbit-viewer-markdown-content p {
+  margin: var(--markdown-paragraph-margin, 1em 0);
+}
+
+.moonbit-viewer-markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  margin: var(--markdown-heading-margin, 1em 0 0.5em);
+  font-weight: 600;
+}
+
+.moonbit-viewer-markdown-content h1 {
+  font-size: var(--markdown-heading-size, 1.75em);
+  line-height: var(--markdown-heading-line-height, 1.2);
+}
+
+.moonbit-viewer-markdown-content h2 {
+  font-size: var(--markdown-heading-size, 1.375em);
+  line-height: var(--markdown-heading-line-height, 1.25);
+}
+
+.moonbit-viewer-markdown-content h3 {
+  font-size: var(--markdown-heading-size, 1.125em);
+  line-height: var(--markdown-heading-line-height, 1.3);
+}
+
+.moonbit-viewer-markdown-content :is(h4, h5, h6) {
+  font-size: var(--markdown-heading-size, 1em);
+  line-height: var(--markdown-heading-line-height, 1.35);
+}
+
+.moonbit-viewer-markdown-content :is(ul, ol) {
+  margin: var(--markdown-list-margin, 1em 0);
+  padding-inline-start: 1.5em;
+}
+
+.moonbit-viewer-markdown-content li {
+  margin: var(--markdown-list-item-margin, 0.2em 0);
+}
+
+.moonbit-viewer-markdown-content :is(ul, ol).tight p {
+  margin: 0;
+}
+
+.moonbit-viewer-markdown-content blockquote {
+  box-sizing: border-box;
+  margin: var(--markdown-block-margin, 1em 0);
+  padding: var(--markdown-quote-padding, 12px);
+  border-inline-start: 3px solid var(--markdown-quote-border, var(--vscode-focusBorder, currentColor));
+  border-radius: var(--markdown-quote-radius, 6px);
+  background: var(--markdown-quote-background, color-mix(in srgb, currentColor 6%, transparent));
+  color: var(--markdown-quote-color, inherit);
+}
+
+.moonbit-viewer-markdown-content blockquote blockquote {
+  margin-inline: 0;
+}
+
+.moonbit-viewer-markdown-content > :first-child,
+.moonbit-viewer-markdown-content blockquote > :first-child {
+  margin-top: 0;
+}
+
+.moonbit-viewer-markdown-content > :last-child,
+.moonbit-viewer-markdown-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.moonbit-viewer-markdown-content pre {
+  margin: var(--markdown-block-margin, 1em 0);
+  padding: var(--markdown-code-padding, 12px 16px);
+  overflow: auto;
+  border: var(--markdown-code-border, 0);
+  border-radius: var(--markdown-code-radius, 6px);
+  background: var(--markdown-code-background, color-mix(in srgb, currentColor 7%, transparent));
+  color: inherit;
+  font-size: var(--markdown-code-size, var(--editor-font-size, 13px));
+  line-height: var(--markdown-code-line-height, var(--editor-line-height, 20px));
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.moonbit-viewer-markdown-content code {
+  font-family: var(--markdown-code-font, var(--editor-font-family, monospace));
+  font-size: var(--markdown-inline-code-size, var(--editor-font-size, 13px));
+  line-height: var(--markdown-code-line-height, var(--editor-line-height, 20px));
+}
+
+.moonbit-viewer-markdown-content :not(pre) > code {
+  padding: 0.08em 0.34em;
+  border-radius: var(--markdown-inline-code-radius, 3px);
+  background: var(--markdown-inline-code-background, color-mix(in srgb, currentColor 7%, transparent));
+  color: var(--markdown-inline-code-color, inherit);
+  box-decoration-break: clone;
+  overflow-wrap: anywhere;
+}
+
+.moonbit-viewer-markdown-content pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* cmark wraps tables in a region; keep that wrapper, rather than the table,
+ * as the scroll and block-spacing owner. Nested quotes/lists use it too. */
+.moonbit-viewer-markdown-content :where([role="region"]:has(> table)) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: var(--markdown-block-margin, 1em 0);
+}
+
+.moonbit-viewer-markdown-content :where([role="region"]) > table {
+  width: max-content;
+  min-width: 100%;
+  border: 1px solid var(--markdown-border, var(--vscode-widget-border, rgb(128 128 128 / 30%)));
+  border-radius: 4px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  font-size: inherit;
+}
+
+.moonbit-viewer-markdown-content :is(th, td) {
+  max-width: 32rem;
+  padding: var(--markdown-cell-padding, 6px 12px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.moonbit-viewer-markdown-content tr + tr > :is(th, td),
+.moonbit-viewer-markdown-content :is(thead, tbody, tfoot) + :is(thead, tbody, tfoot) > tr:first-child > :is(th, td) {
+  border-top: 1px solid var(--markdown-border, var(--vscode-widget-border, rgb(128 128 128 / 30%)));
+}
+
+.moonbit-viewer-markdown-content :is(th, td) + :is(th, td) {
+  border-inline-start: 1px solid var(--markdown-border, var(--vscode-widget-border, rgb(128 128 128 / 30%)));
+}
+
+.moonbit-viewer-markdown-content :is(th, td).left { text-align: left; }
+.moonbit-viewer-markdown-content :is(th, td).center { text-align: center; }
+.moonbit-viewer-markdown-content :is(th, td).right { text-align: right; }
+
+.moonbit-viewer-markdown-content hr {
+  margin: var(--markdown-rule-margin, 1em 0);
+  border: none;
+  border-top: 1px solid var(--markdown-border, var(--vscode-widget-border, rgb(128 128 128 / 30%)));
+}
+
+.moonbit-viewer-markdown-content a {
+  color: var(--markdown-link-color, var(--vscode-textLink-foreground, #0969da));
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.16em;
+  text-decoration-color: color-mix(in srgb, currentColor 38%, transparent);
+}
+
+.moonbit-viewer-markdown-content a:hover,
+.moonbit-viewer-markdown-content a:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+.moonbit-viewer-markdown-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.moonbit-viewer-markdown-content [role="doc-endnotes"] {
+  margin: var(--markdown-list-margin, 1em 0);
+  color: var(--markdown-note-color, var(--vscode-descriptionForeground, inherit));
+  font-size: var(--markdown-note-size, 0.92em);
+}
+
+.moonbit-viewer-markdown-content [role="doc-backlink"] + [role="doc-backlink"] {
+  margin-inline-start: 0.4em;
+}
+
+.moonbit-viewer-markdown-content :is(.task-marker, .task > input) {
+  margin-inline: 0 0.4em;
+  vertical-align: middle;
+}
+
+.moonbit-viewer-markdown-content .task {
+  display: flex;
+  align-items: baseline;
+}
+
+.moonbit-viewer-markdown-content .task > :not(input) {
+  min-width: 0;
+}
+
+.moonbit-viewer-markdown-content .math {
+  white-space: pre-wrap;
+}
+
+.moonbit-viewer-markdown-content .math-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: var(--markdown-block-margin, 1em 0);
+}

@@ -233,7 +233,7 @@ fn skill_document_view(
   }
   nodes.push(
     @html.div(
-      class="skill-preview-markdown msg-content markdown",
+      class="skill-preview-markdown msg-content markdown moonbit-viewer-markdown-content",
       @markdown.markdown_nodes(locale~, document.body),
     ),
   )

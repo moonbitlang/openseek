@@ -41,6 +41,11 @@ Rendering delegates to `internal/viewer/browser/markdown`. The retained
 `MarkdownDocumentProjection` is therefore the exact projection produced by the
 same cmark parse as the installed HTML. Every source or theme replacement
 advances `projection_generation` and records the source model content version.
+The article uses `moonbit-viewer-markdown-content` and the shared
+[content stylesheet](../../../../viewer/browser/markdown_content/README.md).
+This package retains document measures, outer block cadence, folding, and overlay
+layout; the shared stylesheet owns element presentation, table alignment, and
+region-wrapper horizontal scrolling.
 The view also mounts the shared `DiagramViewports` lifetime on its
 article. Synchronous D2/Diago and UML SVGs, plus asynchronously committed
 Mermaid SVGs, receive pan, zoom, fit, and resize controls; replacement and

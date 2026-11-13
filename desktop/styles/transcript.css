@@ -605,61 +605,38 @@
   line-height: var(--line-height-normal);
 }
 
-/* markdown-rendered assistant content: block elements own the spacing,
-   so the pre-wrap used for plain text would double every newline */
+/* Viewer owns Markdown content rules; chat supplies its compact density and
+   palette without changing document layout or product-specific controls. */
 .msg-content.markdown {
   white-space: normal;
-}
-.msg-content.markdown :is(strong, b) {
-  font-weight: 600;
-}
-.msg-content.markdown > :first-child {
-  margin-top: 0;
-}
-.msg-content.markdown > :last-child {
-  margin-bottom: 0;
-}
-.msg-content.markdown p {
-  margin: 0.55em 0;
-}
-/* A reply's headings mark sections inside prose, so they stay at body size
-   and are told apart by weight and the space above them rather than by size.
-   `1em` also overrides the browser's own h1-h6 sizes. */
-.msg-content.markdown :is(h1, h2, h3, h4, h5, h6) {
-  margin: 0.95em 0 0.45em;
-  line-height: 1.35;
-  font-size: 1.15em;
-  font-weight: 600;
-}
-.msg-content.markdown ul,
-.msg-content.markdown ol {
-  margin: 0.45em 0;
-  padding-left: 1.5em;
-}
-.msg-content.markdown li {
-  margin: 0.2em 0;
-}
-.msg-content.markdown ul.tight p,
-.msg-content.markdown ol.tight p {
-  margin: 0;
-}
-.msg-content.markdown pre {
-  margin: 0.55em 0;
-  padding: 10px 13px;
-  overflow: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
-  white-space: pre;
-}
-.msg-content.markdown pre code {
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: inherit;
+  --markdown-paragraph-margin: 0.55em 0;
+  --markdown-block-margin: 0.55em 0;
+  --markdown-heading-margin: 0.95em 0 0.45em;
+  --markdown-heading-size: 1.15em;
+  --markdown-heading-line-height: 1.35;
+  --markdown-list-margin: 0.45em 0;
+  --markdown-quote-padding: 2px 12px;
+  --markdown-quote-border: var(--color-border);
+  --markdown-quote-radius: 0;
+  --markdown-quote-background: transparent;
+  --markdown-quote-color: var(--color-text-secondary);
+  --markdown-code-padding: 10px 13px;
+  --markdown-code-border: 1px solid var(--color-border);
+  --markdown-code-radius: var(--radius-sm);
+  --markdown-code-background: var(--color-bg-surface);
+  --markdown-code-font: var(--font-family-mono);
+  --markdown-code-size: var(--font-size-sm);
+  --markdown-code-line-height: var(--line-height-relaxed);
+  --markdown-inline-code-size: 0.92em;
+  --markdown-inline-code-radius: var(--radius-xs);
+  --markdown-inline-code-background: var(--color-bg-content);
+  --markdown-inline-code-color: var(--color-text-inline-code);
+  --markdown-border: var(--color-border);
+  --markdown-cell-padding: 4px 10px;
+  --markdown-rule-margin: 0.9em 0;
+  --markdown-link-color: var(--color-accent);
+  --markdown-note-color: var(--color-text-muted);
+  --markdown-note-size: var(--font-size-sm);
 }
 
 .msg-content.markdown .chat-code-block {
@@ -803,51 +780,7 @@
   color: var(--color-text-muted);
   white-space: pre-wrap;
 }
-.msg-content.markdown blockquote {
-  margin: 0.55em 0;
-  padding: 2px 12px;
-  border-left: 3px solid var(--color-border);
-  color: var(--color-text-secondary);
-}
-.msg-content.markdown .chat-table-scroll {
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
-  margin: 0.55em 0;
-}
-.msg-content.markdown .chat-table-scroll > table {
-  width: max-content;
-  min-width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  border-collapse: separate;
-  border-spacing: 0;
-  overflow: hidden;
-  font-size: var(--font-size-md);
-}
-.msg-content.markdown th,
-.msg-content.markdown td {
-  /* Long descriptions wrap within a column; many columns scroll together. */
-  max-width: 32rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  padding: 4px 10px;
-}
-.msg-content.markdown td {
-  border-top: 1px solid var(--color-border);
-}
-.msg-content.markdown :is(th, td) + :is(th, td) {
-  border-left: 1px solid var(--color-border);
-}
-.msg-content.markdown th {
-  font-weight: 600;
-}
-.msg-content.markdown hr {
-  margin: 0.9em 0;
-  border: none;
-  border-top: 1px solid var(--color-border);
-}
-.msg-content a,
+.msg-content:not(.markdown) a,
 .file-link {
   color: var(--color-accent);
   text-decoration-line: underline;
@@ -855,14 +788,11 @@
   text-underline-offset: 0.16em;
   text-decoration-color: color-mix(in srgb, currentColor 38%, transparent);
 }
-.msg-content a:hover,
-.msg-content a:focus-visible,
+.msg-content:not(.markdown) a:hover,
+.msg-content:not(.markdown) a:focus-visible,
 .file-link:hover,
 .file-link:focus-visible {
   text-decoration-color: currentColor;
-}
-.msg-content.markdown img {
-  max-width: 100%;
 }
 .msg-content.markdown .transcript-image.pending {
   min-width: 1px;
@@ -870,11 +800,6 @@
 }
 .msg-content.markdown .transcript-image.unavailable {
   color: var(--color-text-muted);
-}
-.msg-content.markdown .footnote {
-  margin: 0.45em 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
 }
 .msg-content.markdown .footnote-label {
   margin-right: 6px;
