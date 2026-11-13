@@ -91,6 +91,44 @@ app, and Android does not reopen it. Android rejects an APK signed with a
 different key, which is why every release must keep the same keystore.
 Debug builds (`.debug`) never check for updates.
 
+## Frontend updates
+
+The app runs the same frontend as browsers without a new APK. Each time it
+comes to the foreground, at most once every 30 minutes, it reads which Browser
+release openseek-api serves at `/cloud`
+(`https://seekmoon.moonbitlang.com/browser/releases/current.json`). That may be
+a Desktop release (`0.2.52`) or a console-only one (`browser-3.1`). These kinds
+share no order, so the app follows whatever the server selects, rollbacks
+included. When that release differs from the one the app runs, the system
+`DownloadManager` fetches its archive
+(`/desktop/releases/v<release>/SeekMoon.browser.tar.gz`) without a
+notification and only on an unmetered, non-roaming network, resuming across
+network loss and process death. Once it completes, a background job reads
+the selection again. It discards a download the server has moved past.
+Otherwise it copies the archive into app-private storage, verifies it against
+the selection's `sha256` (other apps can modify the download manager's
+external storage on Android 8–10), and extracts it, leaving out the `.br`/`.gz`
+copies the server uses. A selection without a `sha256`, published before
+openseek-api recorded it, is never downloaded. The app runs that release
+from the next time it creates its WebView (normally the next launch), so a page
+never mixes two releases' files. A release the server selects that matches the
+APK's own version switches back to the bundled frontend without a download.
+
+Each Browser bundle declares the oldest APK whose shell it works with in
+`android.json`, copied from [`frontend.json`](frontend.json) by
+`desktop/package/build.mjs browser`. Raise `min_android_version` to the release
+that ships a shell change when the frontend starts to depend on that change.
+The app adopts a release only when its own version is at least that minimum; it
+remembers a refused release and does not download it again, and keeps its
+current frontend until the APK itself updates. Bundles without `android.json`
+predate frontend updates and are never adopted. A new APK starts from its own
+bundle again and deletes the releases downloaded for the previous one. Failures
+only reach the log.
+
+Debug builds keep the frontend of their checkout. Pass `-PfrontendUpdates`
+to Gradle to follow the published one, and `-PreleaseVersion=X.Y.Z` to meet
+the bundle's minimum.
+
 The launcher icon uses the white rabbit paths from
 `desktop/package/macos/appicon.svg` and the blue background (`#3B6EF5`) from
 Desktop's packaged `AppIcon.icns` / `appicon.png`. Android applies its own
@@ -123,7 +161,8 @@ save any draft first. No notification/background-service guarantee is provided.
 ## Authentication and assets
 
 WebViewAssetLoader reserves `https://seekmoon.moonbitlang.com/console/android/`
-for the APK bundle. The real Connect HTTP/WebSocket routes use that origin and
+for the app's frontend: the downloaded Browser release once one is ready (see
+Frontend updates), otherwise the APK bundle. The real Connect HTTP/WebSocket routes use that origin and
 the shared v2 account token; WebSocket connections use single-use Connect tickets.
 Browser login uses the existing `/v2/auth/account/start` and account exchange
 with S256 PKCE. Instead of a loopback port it passes the application ID as
@@ -157,7 +196,7 @@ features. Their tests live under `desktop/e2e/tests` and require no Android
 build; see [Desktop end-to-end tests](../desktop/e2e/README.md). Android adds
 only native authentication, insets/lifecycle, Back, file picking, downloads and
 packaging. The shared frontend's `/assets/` resources are answered from the
-APK. The APK adds no styling: which controls a phone or tablet shows is the
+APK or the downloaded release, never fetched per request. The APK adds no styling: which controls a phone or tablet shows is the
 shared bundle's responsive layout, as in a mobile browser.
 
 WebView cannot fetch a `blob:` download and drops the anchor's `download`
@@ -176,6 +215,9 @@ return URL's state check, denial and rejection of other returns. The code is
 redeemed only after the browser has returned to the app, since Android 15 and
 later fail a backgrounded app's network requests.
 Origin tests cover arbitrary frontend paths and reject other origins.
+Frontend update tests cover the release pointer, the `android.json` minimum,
+archive extraction (long paths, dropped copies, unsafe and truncated archives)
+and switching releases only on the next WebView.
 On a test emulator with the Connect debug APK running:
 
 ```sh

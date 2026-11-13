@@ -287,6 +287,9 @@ class Build {
       const output = join(this.desktop, "dist/browser");
       await rm(output, { recursive: true, force: true });
       await this.stageFrontend(output, profile, profile === "release");
+      // The oldest Android shell this frontend works with; the APK adopts a
+      // downloaded Browser release only when it is at least that release.
+      await cp(join(this.repo, "android/frontend.json"), join(output, "android.json"));
       return;
     }
   }

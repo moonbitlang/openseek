@@ -27,12 +27,14 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
+import java.io.File
 
 /** Remote client only. No native command bridge or local agent runtime. */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var fileResult: ValueCallback<Array<Uri>>? = null
     private val updater = AppUpdater(this)
+    private val frontendUpdater = FrontendUpdater(this)
     private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val account = result.data?.getStringExtra("account")
         if (result.resultCode == Activity.RESULT_OK && account != null && ConsoleOrigin.contains(webView.url)) {
@@ -88,17 +90,19 @@ class MainActivity : ComponentActivity() {
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
-        // Reserve this path for the APK's own frontend. API calls retain the
+        // Reserve this path for the app's frontend. API calls retain the
         // real HTTPS origin, its cookies and the shared account-token and Connect-ticket protocol.
         // The frontend's own document routes (/cloud, /device/...) are answered
-        // with the same bundled document below, never fetched from the server.
-        // The bundle keeps the frontend's /assets/ resources in the APK's assets/
-        // directory, so they too come from the APK rather than the server.
-        val bundled = WebViewAssetLoader.AssetsPathHandler(this)
+        // with the same document below, never fetched from the server, and its
+        // /assets/ resources come from the same release: a downloaded Browser
+        // release once one is ready, otherwise the APK's own bundle.
+        val release = FrontendUpdater.activate(this)
+        val frontend = release?.let { WebViewAssetLoader.InternalStoragePathHandler(this, it) }
+            ?: WebViewAssetLoader.AssetsPathHandler(this)
         val assets = WebViewAssetLoader.Builder()
             .setDomain(ConsoleOrigin.HOST)
-            .addPathHandler(ConsoleOrigin.ASSET_PATH, bundled)
-            .addPathHandler(ConsoleOrigin.FRONTEND_PATH) { path -> bundled.handle("assets/$path") }
+            .addPathHandler(ConsoleOrigin.ASSET_PATH, frontend)
+            .addPathHandler(ConsoleOrigin.FRONTEND_PATH) { path -> frontend.handle("assets/$path") }
             .build()
         val downloads = BlobDownloads(this, webView)
         webView.webViewClient = object : WebViewClient() {
@@ -106,7 +110,9 @@ class MainActivity : ComponentActivity() {
                 val url = request.url
                 if (request.isForMainFrame && request.method == "GET" &&
                     ConsoleOrigin.contains(url.toString()) && ConsoleOrigin.servesDocument(url.path)) {
-                    return WebResourceResponse("text/html", "utf-8", this@MainActivity.assets.open("index.html"))
+                    val document = release?.let { File(it, "index.html").inputStream() }
+                        ?: this@MainActivity.assets.open("index.html")
+                    return WebResourceResponse("text/html", "utf-8", document)
                 }
                 return assets.shouldInterceptRequest(url)
             }
@@ -186,10 +192,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         updater.onStart()
+        frontendUpdater.onStart()
     }
 
     override fun onStop() {
         updater.onStop()
+        frontendUpdater.onStop()
         super.onStop()
     }
 

@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Android 12+: with REQUEST_INSTALL_PACKAGES, lets a self-update skip the confirmation once this app installed the current version. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- Frontend updates download in the background without a notification. -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
     <application
         android:label="SeekMoon"
         android:icon="@mipmap/ic_launcher"
