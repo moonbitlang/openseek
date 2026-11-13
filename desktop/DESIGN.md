@@ -160,14 +160,8 @@ remain separate from wire values.
 
 `rui` owns the live selection, open state, active option, typeahead, focus,
 keyboard handling, dismissal, and accessibility behavior. `default_value` and
-`default_open` initialize the component; they are not externally controlled
-state. An `on_open_change` notification does not transfer ownership of open
-state to the application.
-
-Do not mirror these internal states into the parent model to drive the control,
-recreate the component on each parent update to reapply defaults, or manipulate
-its private DOM to force state changes. Product integration must use the public
-component contract.
+`default_open` provide initial configuration. `on_open_change` reports changes
+to the application.
 
 ### Review requirements
 
