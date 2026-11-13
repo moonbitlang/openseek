@@ -394,11 +394,16 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, RemovingDevice) => "正在移除…"
     (TraditionalChinese, RemovingDevice) => "正在移除…"
     (Japanese, RemovingDevice) => "削除中…"
-    (English, RemoveDeviceWarning) => "Removing this device will immediately disconnect its remote connection."
-    (Spanish, RemoveDeviceWarning) => "Al eliminar este dispositivo, se desconectará inmediatamente su conexión remota."
-    (SimplifiedChinese, RemoveDeviceWarning) => "移除后将立即断开此设备的远程连接。"
-    (TraditionalChinese, RemoveDeviceWarning) => "移除後將立即中斷此裝置的遠端連線。"
-    (Japanese, RemoveDeviceWarning) => "削除すると、このデバイスのリモート接続が直ちに切断されます。"
+    (English, RemoveDeviceWarning) =>
+      "Removing this device will immediately disconnect its remote connection."
+    (Spanish, RemoveDeviceWarning) =>
+      "Al eliminar este dispositivo, se desconectará inmediatamente su conexión remota."
+    (SimplifiedChinese, RemoveDeviceWarning) =>
+      "移除后将立即断开此设备的远程连接。"
+    (TraditionalChinese, RemoveDeviceWarning) =>
+      "移除後將立即中斷此裝置的遠端連線。"
+    (Japanese, RemoveDeviceWarning) =>
+      "削除すると、このデバイスのリモート接続が直ちに切断されます。"
     (English, Devices) => "Device"
     (Spanish, Devices) => "Dispositivo"
     (SimplifiedChinese, Devices) => "设备"
