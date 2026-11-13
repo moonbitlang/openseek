@@ -2353,7 +2353,7 @@ fn update_msg(
         @cmd.none
       }
       // The sign-in page lists the relay's apps before anyone signs in.
-      let (downloads_fetch, downloads) = if model.is_relay_console() {
+      let (downloads_fetch, downloads) = if model.show_app_downloads() {
         @downloads.Model::load(fetch_downloads(dispatch))
       } else {
         (@cmd.none, model.downloads)

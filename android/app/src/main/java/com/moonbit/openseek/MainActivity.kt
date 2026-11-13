@@ -109,10 +109,15 @@ class MainActivity : ComponentActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
                 if (request.isForMainFrame && request.method == "GET" &&
-                    ConsoleOrigin.contains(url.toString()) && ConsoleOrigin.servesDocument(url.path)) {
+                    ConsoleOrigin.contains(url.toString()) &&
+                    (url.path == "${ConsoleOrigin.ASSET_PATH}index.html" || ConsoleOrigin.servesDocument(url.path))) {
                     val document = release?.let { File(it, "index.html").inputStream() }
                         ?: this@MainActivity.assets.open("index.html")
-                    return WebResourceResponse("text/html", "utf-8", document)
+                    // Mark every document served inside the app, including a
+                    // downloaded Browser release and reloads after navigation.
+                    val html = document.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                        .replace("<head>", "<head>\n    <meta name=\"seekmoon-android-app\" content=\"true\" />")
+                    return WebResourceResponse("text/html", "utf-8", html.byteInputStream(Charsets.UTF_8))
                 }
                 return assets.shouldInterceptRequest(url)
             }

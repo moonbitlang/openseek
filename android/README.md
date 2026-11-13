@@ -180,6 +180,12 @@ whether login, Back or file selection is available. CSR route parsing and histor
 belong to the frontend. After #2045 lands, verify deep-link refresh and asset
 resolution with that frontend before claiming end-to-end CSR support.
 
+The Android shell adds a `seekmoon-android-app` meta marker when serving
+`index.html`, from either the APK or a downloaded Browser release. The frontend
+reads it at startup to hide “Download apps” in the sidebar and the signed-out
+Cloud home. Reloads and device switches receive the same marker; browsers keep
+their download links.
+
 There is no native JavaScript command bridge. Cleartext, mixed content and file
 URL access are disabled; backup is disabled and inspection is debug-only.
 
