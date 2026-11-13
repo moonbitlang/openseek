@@ -210,16 +210,26 @@
   --font-size-base: 18px;
 }
 
-/* Keep the editor chrome's type size aligned with the measured code view
-   supplied through ViewerOptions. This stylesheet loads after the Viewer theme. */
+/* Keep CSS and the measured code view supplied through ViewerOptions on the
+   same scale. Right-panel documents use app body size; embedded snippets keep
+   their compact scale. This stylesheet loads after the Viewer theme. */
 .editor-shell,
 .moonbit-source,
 .composer-approval-body {
   --editor-font-family: var(--font-family-mono);
-  --editor-font-size: var(--font-size-sm);
   --editor-line-height: var(--line-height-relaxed);
   --monaco-monospace-font: var(--font-family-mono);
   --ui-font-family: var(--font-family-sans);
+}
+
+.editor-shell {
+  --editor-font-size: var(--font-size-md);
+  --ui-font-size: var(--font-size-md);
+}
+
+.moonbit-source,
+.composer-approval-body {
+  --editor-font-size: var(--font-size-sm);
   --ui-font-size: var(--font-size-sm);
 }
 

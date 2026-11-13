@@ -60,7 +60,7 @@ const DiagnosticsOwner = "moon-lsp"
 const DefaultEditorFontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
 
 ///|
-const DefaultEditorFontSize : Double = 13.0
+const DefaultEditorFontSize : Double = 15.0
 
 ///|
 /// The viewer's imperative state — the attached widget, its services, and the

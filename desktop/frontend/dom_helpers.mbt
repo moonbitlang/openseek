@@ -86,8 +86,13 @@ fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
       Some(size) => root.set_attribute("data-font-size", size.wire())
       None => root.remove_attribute("data-font-size")
     }
-    // The registered <length> resolves rem/calc to pixels, just as it does
-    // when a new terminal mounts. Read after applying the root setting.
+    scheduler.add(
+      @fileeditor.apply_font_size(
+        AppFontSize::current().base_pixels().to_double(),
+      ),
+    )
+    // The terminal retains its compact scale. The registered <length> resolves
+    // rem/calc to pixels after applying the root setting, as it does on mount.
     let size = @dom.window()
       .get_computed_style(root)
       .get_property_value("--font-size-sm")
@@ -95,7 +100,6 @@ fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
       .to_owned()
     guard size.strip_suffix("px") is Some(value) else { return }
     let pixels = @string.parse_double(value) catch { _ => return }
-    scheduler.add(@fileeditor.apply_font_size(pixels))
     scheduler.add(@terminal.apply_font_size(pixels))
   })
 }

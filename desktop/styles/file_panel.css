@@ -118,7 +118,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   max-width: min(200px, 100%);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -952,7 +952,7 @@ html:is(
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
 }
@@ -1017,7 +1017,7 @@ html:is(
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   font-family: var(--font-family-mono);
   line-height: 1.5;
   text-align: left;
@@ -1320,7 +1320,7 @@ html:is(
   background: var(--color-bg-canvas);
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   text-align: left;
 }
 
@@ -1907,7 +1907,7 @@ button.git-history-file.selected {
 
 .file-panel-empty {
   padding: var(--space-5);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-text-secondary);
 }
 
@@ -1921,7 +1921,7 @@ button.git-history-file.selected {
   min-height: 1.75rem;
   padding: 0 var(--space-2) 0 var(--tree-indent);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--color-text-primary);
   cursor: pointer;
   white-space: nowrap;
@@ -2351,7 +2351,7 @@ button.git-history-file.selected {
   color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
 }
