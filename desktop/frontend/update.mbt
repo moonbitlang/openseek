@@ -3999,7 +3999,13 @@ fn update_msg(
         return (@cmd.none, model)
       }
       match owner {
-        Host(_) => request_open_path(dispatch, model, path.path, Some(range))
+        Host(_) => {
+          guard ctx.root() is Some(root) &&
+            @resource.relative_to(path, root) is Some(relative) else {
+            return (@cmd.none, model)
+          }
+          request_open_path(dispatch, model, relative.0, Some(range))
+        }
         Cloud(..) => {
           let model = model.begin_editor_navigation()
           show_editor_resource(

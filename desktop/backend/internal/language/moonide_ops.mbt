@@ -23,7 +23,6 @@ priv struct MoonIdeRequest {
 priv struct MoonIdeSpawnConfig {
   executable : String
   extra_env : Map[String, String]?
-  stdlib_root : @pathx.Absolute?
 }
 
 ///|
@@ -106,13 +105,7 @@ async fn moonide_spawn_config(state : MoonCliState) -> MoonIdeSpawnConfig {
     runtime_dir?=state.runtime_dir,
     source=state.source,
   )
-  let stdlib_root = @pathx.Path(
-    @fs.realpath(toolchain.bin_dir.join("../lib/core").to_string()),
-  ).to_absolute() catch {
-    _ => None
-  }
   {
-    stdlib_root,
     executable: toolchain.moon.to_string(),
     extra_env: Some(toolchain.tool_env()),
   }
@@ -317,41 +310,28 @@ fn moonide_client_path(
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
   physical_result : String,
-  stdlib_root? : @pathx.Absolute,
 ) -> String? raise {
   guard moonide_relative_path(physical_workspace, physical_result)
     is Some(relative) else {
-    guard stdlib_root is Some(root) &&
-      moonide_relative_path(root, physical_result) is Some(_) else {
-      return None
-    }
-    return @pathx.Path(physical_result)
-      .to_absolute()
-      .map(path => path.resource_path())
+    return None
   }
   Some(lexical_workspace.join(Relative(relative)).normalize().resource_path())
 }
 
 ///|
 /// Follow result symlinks and retain only files physically beneath the exact
-/// canonical workspace or the selected toolchain's standard library. Workspace
-/// results map back to the lexical root before crossing the wire. Unreadable/stale
+/// canonical workspace that owned the request. A safe result is mapped back
+/// to the lexical attached root before crossing the wire. Unreadable/stale
 /// paths are dropped, while line and column numbers pass through unchanged.
 async fn canonical_moonide_locations(
   reply : @protocol.MoonIdeLocationsReply,
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
-  stdlib_root? : @pathx.Absolute,
 ) -> @protocol.MoonIdeLocationsReply {
   let locations : Array[@protocol.MoonIdeLocation] = []
   for location in reply.locations {
     let canonical = @fs.realpath(location.path) catch { _ => continue }
-    guard moonide_client_path(
-        lexical_workspace,
-        physical_workspace,
-        canonical,
-        stdlib_root?,
-      )
+    guard moonide_client_path(lexical_workspace, physical_workspace, canonical)
       is Some(path) else {
       continue
     }
@@ -372,7 +352,6 @@ async fn canonical_moonide_codelenses(
   reply : @protocol.MoonIdeCodeLensReply,
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
-  stdlib_root? : @pathx.Absolute,
 ) -> @protocol.MoonIdeCodeLensReply {
   let lenses : Array[@protocol.MoonIdeCodeLens] = []
   for lens in reply.lenses {
@@ -383,7 +362,6 @@ async fn canonical_moonide_codelenses(
           { locations, },
           lexical_workspace,
           physical_workspace,
-          stdlib_root?,
         )
         Local(position~, locations=canonical.locations)
       }
@@ -427,7 +405,6 @@ async fn moonide_navigation_op(
     parse_moonide_output(output, request.physical_workspace),
     request.lexical_workspace,
     request.physical_workspace,
-    stdlib_root?=config.stdlib_root,
   )
 }
 
@@ -495,7 +472,6 @@ pub async fn moonide_codelens(
     parse_moonide_codelens_output(output),
     location.root.lexical,
     location.root.physical,
-    stdlib_root?=config.stdlib_root,
   )
 }
 

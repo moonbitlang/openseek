@@ -49,7 +49,7 @@ fn NavigationContext::accepts_location(
   uri : @common.Uri,
 ) -> Bool {
   match self.owner {
-    Host(owner) => @resource.belongs_to(uri, owner.channel)
+    Host(_) => self.relative_path(uri) is Some(_)
     Cloud(..) => self.target(uri) is Some(_)
   }
 }
