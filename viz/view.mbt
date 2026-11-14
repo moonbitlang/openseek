@@ -488,6 +488,7 @@ fn event_card(
         tags,
         plans,
         step_label~,
+        session_id=subrun.parent,
       )
     Tool(result) => tool_card(seq, time, result, escalated, tags, subrun)
     Runtime(notice) => runtime_card(seq, time, notice.content())
@@ -1006,6 +1007,7 @@ fn assistant_card(
   tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
   step_label~ : String,
+  session_id~ : String,
 ) -> @html.Html {
   let calls = message.tool_calls()
   let body : Array[@html.Html] = [
@@ -1018,7 +1020,7 @@ fn assistant_card(
       ]
     },
     ..if !message.content().is_blank() {
-      workspace_file_content(message.content())
+      workspace_file_content(message.content(), session_id~)
     },
     ..if !calls.is_empty() {
       [
@@ -2467,9 +2469,15 @@ fn model_content_view(content : @agent_session.Content) -> Array[@html.Html] {
       Text(text) => if text.is_blank() { None } else { Some(text_block(text)) }
       Image(image) =>
         Some(
-          text_block(
-            "[Image: \{image.media_type}, \{image.bytes.length()} bytes]",
-          ),
+          if standalone_export() {
+            @html.img(src=image.data_url(), alt="Image", style=[
+              "max-width:100%",
+            ])
+          } else {
+            text_block(
+              "[Image: \{image.media_type}, \{image.bytes.length()} bytes]",
+            )
+          },
         )
     }
   })
@@ -2480,12 +2488,33 @@ fn model_content_view(content : @agent_session.Content) -> Array[@html.Html] {
 /// Project assistant text into ordinary preformatted pieces and static file
 /// cards. The source remains in the durable JSONL; this function only changes
 /// the visual projection used by the standalone viewer.
-fn workspace_file_content(content : String) -> Array[@html.Html] {
+fn workspace_file_content(
+  content : String,
+  session_id~ : String = "",
+) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
   for part in @workspace_file_ref.markdown_parts(content) {
     match part {
       Text(text) => if !text.is_blank() { out.push(text_block(text)) }
-      File(reference) => out.push(workspace_file_card(reference))
+      File(reference) => {
+        let content = embedded_artifact(session_id, reference.path).to_option()
+        if reference.artifact && content is Some(content) {
+          out.push(
+            @html.iframe(
+              class="workspace-artifact",
+              title=reference.name,
+              sandbox="allow-scripts",
+              style=["width:100%", "height:600px", "border:0"],
+              attrs=@html.Attrs::build().srcdoc(
+                "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'\">" +
+                content,
+              ),
+            ),
+          )
+        } else {
+          out.push(workspace_file_card(reference))
+        }
+      }
     }
   }
   if out.is_empty() {
@@ -2494,6 +2523,22 @@ fn workspace_file_content(content : String) -> Array[@html.Html] {
     out
   }
 }
+
+///|
+extern "js" fn embedded_artifact(
+  session : String,
+  path : String,
+) -> @js.Nullable[String] =
+  #|(session, path) => {
+  #|  const entry = globalThis.__OPENSEEK_DATA__?.["/api/artifacts/" + session];
+  #|  if (typeof entry !== "string") return null;
+  #|  const files = JSON.parse(entry);
+  #|  return typeof files[path] === "string" ? files[path] : null;
+  #|}
+
+///|
+extern "js" fn standalone_export() -> Bool =
+  #|() => typeof globalThis.__OPENSEEK_DATA__ === "object"
 
 ///|
 /// A standalone export has no desktop host to open a path through. Keep this
@@ -2629,6 +2674,7 @@ fn message_card(
         time~,
         step_label~,
         anchor~,
+        session_id=subrun.parent,
       )
     }
     Assistant =>
@@ -2643,6 +2689,7 @@ fn message_card(
         time~,
         step_label~,
         anchor~,
+        session_id=subrun.parent,
       )
     Tool(_) =>
       model_tool_card(
@@ -2867,6 +2914,7 @@ fn model_card(
   time~ : String,
   step_label~ : String,
   anchor~ : String?,
+  session_id~ : String,
 ) -> @html.Html {
   let body : Array[@html.Html] = [
     ..if message.reasoning_content is Some(reasoning) && !reasoning.is_blank() {
@@ -2880,6 +2928,7 @@ fn model_card(
     ..request_content_view(
       message.content,
       render_workspace_files=message.role is Assistant,
+      session_id~,
     ),
     ..if !message.tool_calls.is_empty() {
       [
@@ -3243,6 +3292,7 @@ pub extend ViewMode with Eq::{equal, not_equal}
 fn request_content_view(
   content : @deepseek.Content,
   render_workspace_files~ : Bool = false,
+  session_id~ : String = "",
 ) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
   for part in content.iter() {
@@ -3250,13 +3300,30 @@ fn request_content_view(
       Text(text) =>
         if !text.is_blank() {
           if render_workspace_files {
-            out.append(workspace_file_content(text))
+            out.append(workspace_file_content(text, session_id~))
           } else {
             out.push(text_block(text))
           }
         }
       File(file_id~) => out.push(text_block("Image file: \{file_id}"))
-      ImageUrl(_) => out.push(text_block("[Image]"))
+      ImageUrl(url~) => {
+        let image = if standalone_export() {
+          Some(@agent_session.Image::from_data_url(url)) catch {
+            _ => None
+          }
+        } else {
+          None
+        }
+        match image {
+          Some(image) =>
+            out.push(
+              @html.img(src=image.data_url(), alt="Image", style=[
+                "max-width:100%",
+              ]),
+            )
+          None => out.push(text_block("[Image]"))
+        }
+      }
     }
   }
   out

@@ -156,7 +156,7 @@ export class VizBrowserHarness {
     };
   }
 
-  async install({ standalone = false, watchMs = 0 } = {}) {
+  async install({ standalone = false, watchMs = 0, artifacts = {} } = {}) {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
     if (watchMs > 0) {
       // What `inspect --watch` injects into the shell it serves.
@@ -175,6 +175,7 @@ export class VizBrowserHarness {
       }, {
         '/api/sessions': JSON.stringify(this.sessionRows()),
         [`/api/sessions/${this.sessionId}`]: JSON.stringify(this.sessionEnvelope()),
+        ...artifacts,
       });
     }
     await this.page.route('**/viz_app.js', route => route.fulfill({

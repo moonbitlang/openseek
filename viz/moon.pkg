@@ -6,6 +6,7 @@ import {
   "moonbitlang/openseek/agent_tool/mbtx/html" @read_html,
   "moonbitlang/openseek/deepseek",
   "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/svg",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
