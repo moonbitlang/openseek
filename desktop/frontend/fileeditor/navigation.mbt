@@ -49,7 +49,8 @@ fn NavigationContext::accepts_location(
   uri : @common.Uri,
 ) -> Bool {
   match self.owner {
-    Host(_) => self.relative_path(uri) is Some(_)
+    // Host results have already been restricted to workspace/toolchain files.
+    Host(owner) => @resource.belongs_to(uri, owner.channel)
     Cloud(..) => self.target(uri) is Some(_)
   }
 }
