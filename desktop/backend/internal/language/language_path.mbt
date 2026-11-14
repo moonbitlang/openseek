@@ -1,6 +1,6 @@
 // One file location for Desktop language operations. The frontend supplies
-// the exact editor root and a path relative to it; the host keeps both the
-// lexical spelling used by Viewer resources and the physical spelling used
+// the editor root and a workspace-relative or standard-library path. The host
+// keeps the lexical spelling used by Viewer resources and the physical spelling
 // to contain symlinks before invoking MoonBit tooling.
 
 ///|
@@ -12,7 +12,7 @@ priv struct LanguageRoot {
 ///|
 priv struct LanguagePath {
   root : LanguageRoot
-  physical_relative : @pathx.Relative
+  file : @pathx.Absolute
 }
 
 ///|
@@ -68,14 +68,50 @@ async fn LanguageRoot::authorize(
 }
 
 ///|
-/// Resolve one host-authorized editor root and relative file path. The
-/// physical containment check also rejects a symlink target leaving it.
+/// Standard-library authority comes from the selected executable's toolchain.
+async fn toolchain_stdlib_root(
+  toolchain : @moonbit.ResolvedToolchain,
+) -> @pathx.Absolute? {
+  @pathx.Path(@fs.realpath(toolchain.bin_dir.join("../lib/core").to_string())).to_absolute() catch {
+    _ => None
+  }
+}
+
+///|
+/// Keep existing workspace command arguments relative; standard-library
+/// queries use a canonical absolute target with the same project cwd.
+fn LanguagePath::cli_path(self : LanguagePath) -> String {
+  self.file
+  .relative_to(root=self.root.physical)
+  .map_or(self.file.to_string(), relative => relative.0)
+}
+
+///|
+fn LanguagePath::source_file(self : LanguagePath) -> @pathx.Absolute {
+  self.file
+  .relative_to(root=self.root.physical)
+  .map_or(self.file, relative => self.root.lexical.join(relative))
+}
+
+///|
+/// Authorize the project independently of the target. Existing relative paths
+/// stay inside the workspace; absolute targets must belong to this toolchain's
+/// canonical standard library, including after following symlinks.
 async fn LanguagePath::resolve(
   session : String,
   root : String,
   path : String,
+  stdlib_root? : @pathx.Absolute,
 ) -> LanguagePath {
   let root = LanguageRoot::authorize(session, root)
+  if path.has_prefix("/") {
+    guard stdlib_root is Some(stdlib) else { raise PathOutsideRoot }
+    let file = real_path(@pathx.Absolute::parse_resource_path(path), "path")
+    guard file.relative_to(root=stdlib) is Some(relative) && !relative.is_root() else {
+      raise PathOutsideRoot
+    }
+    return { root, file, }
+  }
   guard @pathx.Path(path).to_absolute() is None else {
     raise InvalidRequest("path must be relative to root")
   }
@@ -85,10 +121,10 @@ async fn LanguagePath::resolve(
   }
   let lexical_file = root.lexical.join(relative).normalize()
   guard root.lexical.contains(lexical_file) else { raise PathOutsideRoot }
-  let physical_file = real_path(lexical_file, "path")
-  guard physical_file.relative_to(root=root.physical) is Some(physical_relative) &&
-    !physical_relative.is_root() else {
+  let file = real_path(lexical_file, "path")
+  guard file.relative_to(root=root.physical) is Some(relative) &&
+    !relative.is_root() else {
     raise PathOutsideRoot
   }
-  { root, physical_relative, }
+  { root, file, }
 }

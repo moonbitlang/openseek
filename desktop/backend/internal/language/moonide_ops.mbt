@@ -14,7 +14,7 @@ priv enum MoonIdeQuery {
 priv struct MoonIdeRequest {
   lexical_workspace : @pathx.Absolute
   physical_workspace : @pathx.Absolute
-  relative_path : String
+  path : String
   line : Int32
   column : Int32
 }
@@ -41,8 +41,8 @@ fn MoonIdeQuery::subcommand(self : MoonIdeQuery) -> String {
 
 ///|
 /// The argv handed directly to the process API — never a shell string. `path`
-/// has already been reduced to a workspace-relative address, so an absolute
-/// client path cannot choose cwd or escape through the CLI.
+/// has already been authorized against the workspace or selected toolchain;
+/// an absolute standard-library target never changes the project's cwd.
 fn MoonIdeQuery::args(
   self : MoonIdeQuery,
   path : String,
@@ -78,6 +78,7 @@ fn moonide_relative_path(
 /// used for CLI cwd, relative locations, and symlink containment.
 async fn resolve_moonide_request(
   payload : @protocol.MoonIdeNavigationPayload,
+  stdlib_root? : @pathx.Absolute,
 ) -> MoonIdeRequest {
   guard payload.line > 0 && payload.column > 0 else {
     raise InvalidRequest("line and column must be positive one-based integers")
@@ -86,11 +87,12 @@ async fn resolve_moonide_request(
     payload.session,
     payload.root,
     payload.path,
+    stdlib_root?,
   )
   {
     lexical_workspace: location.root.lexical,
     physical_workspace: location.root.physical,
-    relative_path: location.physical_relative.0,
+    path: location.cli_path(),
     line: payload.line,
     column: payload.column,
   }
@@ -106,11 +108,7 @@ async fn moonide_spawn_config(state : MoonCliState) -> MoonIdeSpawnConfig {
     runtime_dir?=state.runtime_dir,
     source=state.source,
   )
-  let stdlib_root = @pathx.Path(
-    @fs.realpath(toolchain.bin_dir.join("../lib/core").to_string()),
-  ).to_absolute() catch {
-    _ => None
-  }
+  let stdlib_root = toolchain_stdlib_root(toolchain)
   {
     stdlib_root,
     executable: toolchain.moon.to_string(),
@@ -399,9 +397,12 @@ async fn moonide_navigation_op(
   query : MoonIdeQuery,
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeLocationsReply {
-  let request = resolve_moonide_request(payload)
   let config = moonide_spawn_config(state)
-  let args = query.args(request.relative_path, request.line, request.column)
+  let request = resolve_moonide_request(
+    payload,
+    stdlib_root?=config.stdlib_root,
+  )
+  let args = query.args(request.path, request.line, request.column)
   let result = @processx.collect_output_no_stdin(
     config.executable,
     args,
@@ -464,15 +465,16 @@ pub async fn moonide_codelens(
   state : MoonCliState,
   payload : @protocol.MoonIdeCodeLensPayload,
 ) -> @protocol.MoonIdeCodeLensReply {
+  let config = moonide_spawn_config(state)
   let location = LanguagePath::resolve(
     payload.session,
     payload.root,
     payload.path,
+    stdlib_root?=config.stdlib_root,
   )
-  let config = moonide_spawn_config(state)
   let result = @processx.collect_output_no_stdin(
     config.executable,
-    moonide_codelens_args(location.physical_relative.0),
+    moonide_codelens_args(location.cli_path()),
     extra_env?=config.extra_env,
     inherit_env=config.extra_env is None,
     cwd=location.root.physical.to_string(),
