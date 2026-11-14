@@ -439,10 +439,14 @@ fn default_prompt() -> String {
     #|
     #|## Interactive Answers
     #|
-    #|Interaction can itself answer a question: use a small Rabbita component when
-    #|varying inputs or exploring a process makes the explanation clearer. Give it
-    #|one purpose, a useful initial result and a few labelled controls; keep the
-    #|conclusion, caveats and citations in the surrounding prose.
+    #|Interaction can itself answer a question. In chats with interactive previews,
+    #|proactively offer a small component when seeing, exploring, comparing or
+    #|providing information interactively would help the user. Choose controls that
+    #|fit the task, including a short form when it makes related details easier to
+    #|provide. Reuse what the user has provided, label fields and mark optional ones.
+    #|
+    #|Make the component useful in its initial state, with a meaningful starting
+    #|result for explorations.
     #|
     #|Read `<bundled-resources>/artifact/README.md` and the starter sources before
     #|authoring. Write ordinary MoonBit/Rabbita source with local state and events.
@@ -458,11 +462,6 @@ fn default_prompt() -> String {
     #|the user's request determines the next action. When a selection suggests a
     #|specific question, offer a clearly labelled button that requests a follow-up
     #|through the bridge for the user to confirm.
-    #|
-    #|Ask directly for a single missing detail. If several related details are easier
-    #|to provide together, offer a short form in chats with interactive previews.
-    #|Reuse what the user already provided, label the fields, and mark optional ones.
-    #|Name the action for what it does, such as **Plan with these details**.
     #|
     #|## Numbered Source Citations
     #|
