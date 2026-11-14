@@ -12,6 +12,7 @@ struct Session {
   last_active : Double?
   first_prompt : String
   events : String
+  artifacts : Map[String, String]
 }
 
 ///|
@@ -25,8 +26,19 @@ pub fn Session::Session(
   last_active~ : Double?,
   first_prompt~ : String,
   events~ : String,
+  artifacts~ : Map[String, String] = Map([]),
 ) -> Session {
-  { key, id, root, root_label, is_marker, last_active, first_prompt, events, }
+  {
+    key,
+    id,
+    root,
+    root_label,
+    is_marker,
+    last_active,
+    first_prompt,
+    events,
+    artifacts,
+  }
 }
 
 ///|
@@ -119,6 +131,13 @@ pub fn StandaloneExport::json(
     data["/api/sessions/\{session.key}"] = Json(
       session.envelope_json().stringify(),
     )
+    if !session.artifacts.is_empty() {
+      let artifacts : Map[String, Json] = Map([])
+      for path, content in session.artifacts {
+        artifacts[path] = Json(content)
+      }
+      data["/api/artifacts/\{session.id}"] = Json(Json(artifacts).stringify())
+    }
   }
   Json(data).stringify()
 }
