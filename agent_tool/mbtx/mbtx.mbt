@@ -1937,9 +1937,11 @@ fn description(
       #|Bundled workflows that start subagents: `@builtin/review.mbtx` (below),
       #|`@builtin/change-review.mbtx` (reviews the working tree from three
       #|perspectives), `@builtin/repo-map.mbtx` (maps architecture, validation and
-      #|extension points) and `@builtin/simplify.mbtx` (sweeps MoonBit packages for
+      #|extension points), `@builtin/simplify.mbtx` (sweeps MoonBit packages for
       #|safe simplifications and opens one pull request per package; `--no-pr`
-      #|keeps them on local branches).
+      #|keeps them on local branches) and `@builtin/shrink.mbtx` (shrinks the
+      #|public API in rounds until `moon ide analyze` finds nothing left; one
+      #|stacked pull request per round).
       #|
       #|For an independent worktree review, run `@builtin/review.mbtx`, e.g. with args
       #|`["Check the CSV parser's CRLF and escaped-quote handling"]`.
