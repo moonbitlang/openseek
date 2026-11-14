@@ -65,7 +65,7 @@ fn project_codelens_range(
 
 ///|
 priv struct MoonIdeCodeLensProvider {
-  on_error : (@interop.ConversationKey, Failure) -> Unit
+  on_error : (@interop.ConversationIdentity, Failure, Int32?) -> Unit
 }
 
 ///|
@@ -86,25 +86,14 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
     current.context == projection.context &&
     current.path == projection.path
   }
-  let reply = @interop.bridge_request(
-    projection.context.owner.channel,
-    @commands.moonide_codelens,
-    {
-      session: projection.context.owner.session,
-      root: projection.context.root.path,
-      path: projection.path,
-    },
-  )
+  let reply = projection.code_lenses()
   guard is_current() else { return [] }
   let lenses : Array[@language.CodeLens] = []
-  for lens in reply.lenses {
+  for lens in reply {
     guard project_codelens_range(model, lens.range) is Some(range) else {
       continue
     }
-    let raw_position = match lens.action {
-      @protocol.Local(position~, ..) | @protocol.Outside(position~) => position
-    }
-    guard project_codelens_position(model, raw_position) is Some(position) else {
+    guard project_codelens_position(model, lens.position) is Some(position) else {
       continue
     }
     lenses.push({
@@ -113,29 +102,22 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
       tooltip: None,
       execute: () => {
         guard is_current() else { return }
-        let locations = match lens.action {
-          @protocol.Local(locations~, ..) =>
-            MoonIdeProjection::{
-              reply: { locations, },
-              channel: projection.context.owner.channel,
-            }.to_viewer()
-          @protocol.Outside(_) =>
-            request_moon_ide_locations(
-              projection.context.owner.channel,
-              @commands.moonide_references,
-              {
-                session: projection.context.owner.session,
-                root: projection.context.root.path,
-                path: projection.path,
-                line: position.line_number,
-                column: position.column,
-              },
+        let locations = match lens.locations {
+          Some(locations) => locations
+          None =>
+            projection.locations(
+              "references",
+              position.line_number,
+              position.column,
             ) catch {
               error => {
                 if is_current() {
                   (self.on_error)(
                     projection.context.owner,
-                    ReferencesFailed(@interop.bridge_problem(error)),
+                    language_request_failure(error, problem => {
+                      ReferencesFailed(problem)
+                    }),
+                    projection.context.cloud.map(files => files.epoch),
                   )
                 }
                 return
@@ -153,10 +135,10 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
 
 ///|
 fn register_moon_ide_code_lens_provider(
-  on_error : (@interop.ConversationKey, Failure) -> Unit,
+  on_error : (@interop.ConversationIdentity, Failure, Int32?) -> Unit,
 ) -> @common.Disposable {
   @languages.languages.register_code_lens_provider(
-    LanguageFilter(LanguageFilter(language="moonbit", scheme=@resource.Scheme)),
+    moon_ide_model_selector(),
     MoonIdeCodeLensProvider::{ on_error, },
     on_did_change=listener => moon_ide_code_lens_changes.event(_ => listener()),
   )

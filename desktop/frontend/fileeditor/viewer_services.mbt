@@ -21,7 +21,7 @@ priv struct DesktopViewerServices {
 fn DesktopViewerServices::DesktopViewerServices(
   location_opener : @navigation_api.LocationOpenerHandle,
   text_model_resolver : @navigation_api.TextModelResolverHandle,
-  on_navigation_error : (@interop.ConversationKey, Failure) -> Unit,
+  on_navigation_error : (@interop.ConversationIdentity, Failure, Int32?) -> Unit,
 ) -> DesktopViewerServices {
   let markers = @markers.MarkerService(schedule=@base_browser.queue_microtask)
   let feedback = @feedback.DesktopFeedbackService()
