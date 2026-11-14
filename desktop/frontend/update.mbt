@@ -3997,7 +3997,7 @@ fn update_msg(
         file_ctx(model).owner == @interop.Host(owner) else {
         return (@cmd.none, model)
       }
-      request_open_path(dispatch, model, path.0, Some(range))
+      request_open_path(dispatch, model, path.path, Some(range))
     }
     // Definition/References providers live inside the imperative Viewer, but
     // their host failures belong on the app's ordinary toast rail. Fence the
@@ -20819,7 +20819,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(
       @fileeditor.OpenNavigationLocation(
         owner~,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         range=@common.Range(9, 1, 9, 4),
       ),
     ),
@@ -23528,7 +23528,7 @@ test "file rows and location jumps cannot open while checkout placement is missi
     FileEditor(
       OpenNavigationLocation(
         owner=file_ctx(model).owner.host().unwrap(),
-        path~,
+        path=file,
         range=@common.Range(1, 1, 1, 1),
       ),
     ),

@@ -1324,7 +1324,7 @@ pub(all) enum Msg {
   // request cannot open the target in the next workspace.
   OpenNavigationLocation(
     owner~ : @interop.ConversationKey,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     range~ : @common.Range
   )
   // `file` is the decoded reply (content + address, or a withheld-file

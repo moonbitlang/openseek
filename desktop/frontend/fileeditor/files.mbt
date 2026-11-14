@@ -345,13 +345,9 @@ fn render_office_document(
 /// not panel errors, and therefore return `None` to the resolver.
 async fn read_file_snapshot(
   owner : @interop.ConversationKey,
-  path : @pathx.Relative,
-  root~ : @common.Uri?,
+  target : @common.Uri,
 ) -> FileContent? {
-  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
-    return None
-  }
-  let target = @resource.join_relative(root, path)
+  guard @resource.belongs_to(target, owner.channel) else { return None }
   let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
     max_bytes: None,
     path: target.path,

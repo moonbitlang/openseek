@@ -277,16 +277,17 @@ fn MoonIdeProjection::to_viewer(
 /// accepted because the file panel has no second editor group; returning
 /// false lets Viewer preserve its current state and report that limitation.
 fn navigation_location_opener(
-  open_location : (@interop.ConversationKey, @pathx.Relative, @common.Range) -> Unit,
+  open_location : (@interop.ConversationKey, @common.Uri, @common.Range) -> Unit,
 ) -> @navigation_api.LocationOpenerHandle {
   LocationOpenerHandle(open=request => {
     guard request.mode is Current else { return false }
     guard viewer_state.navigation is Some(context) else { return false }
+    // The host already restricts results to the workspace and its toolchain.
     guard model_uri_path(request.location.uri) is Some(absolute) &&
-      context.relative_path(absolute) is Some(relative) else {
+      @resource.belongs_to(absolute, context.owner.channel) else {
       return false
     }
-    open_location(context.owner, relative, request.location.range)
+    open_location(context.owner, absolute, request.location.range)
     true
   })
 }
@@ -299,8 +300,8 @@ fn navigation_text_model_resolver() -> @navigation_api.TextModelResolverHandle {
 }
 
 ///|
-/// Resolve one cross-file Peek model through OpenSeek's existing safe
-/// workspace read. Each request owns one fresh readonly model; the returned
+/// Resolve a workspace or standard-library Peek model through the existing
+/// host file read. Each request owns one fresh readonly model; the returned
 /// reference disposes it when Viewer's last use of that request ends. No LSP
 /// document cache or development-shell protocol is involved.
 async fn resolve_navigation_preview(
@@ -313,16 +314,10 @@ async fn resolve_navigation_preview(
   guard viewer_state.navigation is Some(context) else { return None }
   guard @resource.channel(resource) is Some(channel) &&
     channel == context.owner.channel &&
-    model_uri_path(resource) is Some(absolute) &&
-    @resource.relative_to(absolute, context.root) is Some(relative) &&
-    !relative.is_root() else {
+    model_uri_path(resource) is Some(absolute) else {
     return None
   }
-  let file = read_file_snapshot(
-    context.owner,
-    relative,
-    root=Some(context.root),
-  ) catch {
+  let file = read_file_snapshot(context.owner, absolute) catch {
     _ => return None
   }
   if token.is_cancellation_requested() ||
@@ -330,7 +325,7 @@ async fn resolve_navigation_preview(
     return None
   }
   guard file is Some(Content(content~, sig~)) else { return None }
-  let name = basename(relative)
+  let name = @resource.label(absolute)
   let model = @model.TextModel(
     resource,
     name,
