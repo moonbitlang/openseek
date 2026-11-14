@@ -52,6 +52,7 @@ async test "language and semantic tools execute the explicit host toolchain" {
   assert_eq(state.run_moon([], root), Some((0, "selected-toolchain", "")))
   let ide = moonide_spawn_config(state)
   assert_eq(ide.executable, expected)
+  assert_eq(cli.stdlib_root, ide.stdlib_root)
   let result = @processx.collect_output_no_stdin(
     ide.executable,
     [],

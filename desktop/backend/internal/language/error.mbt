@@ -27,14 +27,3 @@ impl Show for LanguageError with fn output(self, logger) {
 
 ///|
 pub extend LanguageError with Debug::{to_repr}
-
-///|
-fn root_relative_file(
-  root : @pathx.Absolute,
-  path : String,
-) -> @pathx.Absolute raise LanguageError {
-  guard @pathx.Path(path).to_relative() is Some(relative) else {
-    raise InvalidRequest("path is not relative to root")
-  }
-  root.join(relative).normalize()
-}

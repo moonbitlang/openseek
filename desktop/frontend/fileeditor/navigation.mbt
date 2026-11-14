@@ -31,15 +31,31 @@ fn NavigationContext::relative_path(
 }
 
 ///|
+/// Keep the project context when opening a standard-library target. The host
+/// validates absolute query targets against its selected toolchain.
+fn NavigationContext::query_path(
+  self : NavigationContext,
+  absolute : @common.Uri,
+) -> String? {
+  guard @resource.belongs_to(absolute, self.owner.channel) &&
+    absolute != self.root else {
+    return None
+  }
+  Some(self.relative_path(absolute).map_or(absolute.path, path => path.0))
+}
+
+///|
 /// The navigation root for the document now on screen: the checkout root,
-/// when the document lies below it. A document outside the checkout has no
-/// module to navigate within.
+/// retained for host-owned source files outside it. The host decides whether
+/// an external target belongs to the selected toolchain's standard library.
 fn navigation_context_for_file(
   owner : @interop.ConversationKey,
   root : @common.Uri?,
   document : @common.Uri,
 ) -> NavigationContext? {
-  guard root is Some(root) && @resource.relative_to(document, root) is Some(_) else {
+  guard root is Some(root) &&
+    @resource.belongs_to(root, owner.channel) &&
+    @resource.belongs_to(document, owner.channel) else {
     return None
   }
   Some({ owner, root, })
@@ -51,7 +67,7 @@ fn navigation_context_for_file(
 /// fragments carry the section's zero-based line displacement.
 priv struct MoonIdeModelProjection {
   context : NavigationContext
-  path : @pathx.Relative
+  path : String
   line_offset : Int32
 }
 
@@ -76,7 +92,7 @@ fn moon_ide_model_projection(
     Some(absolute) => {
       guard viewer_state.live &&
         viewer_state.document == Some(absolute) &&
-        context.relative_path(absolute) is Some(path) else {
+        context.query_path(absolute) is Some(path) else {
         return None
       }
       Some({ context, path, line_offset: 0, })
@@ -87,7 +103,11 @@ fn moon_ide_model_projection(
         rel == semantic.path else {
         return None
       }
-      Some({ context, path: semantic.path, line_offset: semantic.line_offset, })
+      Some({
+        context,
+        path: semantic.path.0,
+        line_offset: semantic.line_offset,
+      })
     }
   }
 }
@@ -119,7 +139,7 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
     {
       session: projection.context.owner.session,
       root: projection.context.root.path,
-      path: projection.path.0,
+      path: projection.path,
       line: projection.source_line_number(position.line_number),
       column: position.column,
     },
@@ -156,7 +176,7 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
     {
       session: projection.context.owner.session,
       root: projection.context.root.path,
-      path: projection.path.0,
+      path: projection.path,
       line: projection.source_line_number(position.line_number),
       column: position.column,
     },
@@ -361,11 +381,16 @@ test "navigation context follows the checkout root and its documents" {
     fail("checkout root was not accepted for its own document")
   }
   assert_eq(context.relative_path(file), Some(Relative("src/main.mbt")))
+  assert_eq(context.query_path(file), Some("src/main.mbt"))
   guard @resource.of_path(@interop.ChannelId::Local, "/other/src/main.mbt")
     is Some(outside) else {
     fail("test outside resource was not absolute")
   }
-  assert_true(navigation_context_for_file(owner, Some(root), outside) is None)
+  guard navigation_context_for_file(owner, Some(root), outside)
+    is Some(external) else {
+    fail("external source lost its project context")
+  }
+  assert_eq(external.query_path(outside), Some("/other/src/main.mbt"))
   assert_true(navigation_context_for_file(owner, None, file) is None)
   assert_true(context.relative_path(outside) is None)
   for
@@ -395,7 +420,7 @@ test "semantic navigation projects fragment-local lines onto the source" {
   }
   let projection : MoonIdeModelProjection = {
     context,
-    path: Relative("src/main.mbt"),
+    path: "src/main.mbt",
     line_offset: 29,
   }
   assert_eq(projection.source_line_number(1), 30)

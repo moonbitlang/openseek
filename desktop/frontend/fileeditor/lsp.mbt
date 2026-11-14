@@ -97,19 +97,19 @@ fn register_hover_provider() -> Unit {
 }
 
 ///|
-/// Call the host `hover` op for `path` relative to the explicit absolute
-/// `root`, at a zero-based `line`/`character`.
+/// Call the host `hover` op for an authorized source in project `root`,
+/// at a zero-based `line`/`character`.
 async fn request_hover(
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri,
-  path~ : @pathx.Relative,
+  path~ : String,
   line~ : Int32,
   character~ : Int32,
 ) -> @protocol.LspHoverReply {
   @interop.bridge_request(owner.channel, @commands.lsp_hover, {
     session: owner.session,
     root: root.path,
-    path: path.0,
+    path,
     line,
     character,
   })
@@ -164,8 +164,7 @@ fn HoverProjection::range(self : HoverProjection) -> @common.Range {
 /// then apply whatever it already has. Best-effort: a failed call just leaves
 /// the file without squiggles; live re-analysis still arrives as `diagnostics`
 /// events. v1 covers MoonBit only, the only language with a server behind the
-/// op. A file outside `root` has no module for the server to check, so it
-/// requests nothing.
+/// op. Standard-library files retain their owning project check context.
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
@@ -173,7 +172,9 @@ fn request_diagnostics(
   root : @common.Uri,
   absolute : @common.Uri,
 ) -> @cmd.Cmd {
-  guard @resource.relative_to(absolute, root) is Some(path) else {
+  guard navigation_context_for_file(owner, Some(root), absolute)
+    is Some(context) &&
+    context.query_path(absolute) is Some(path) else {
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
@@ -192,16 +193,16 @@ fn request_diagnostics(
 }
 
 ///|
-/// Call the host `lsp_open` op for `path` relative to `root`.
+/// Call the host `lsp_open` op for a source in the retained project context.
 async fn request_lsp_open(
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri,
-  path~ : @pathx.Relative,
+  path~ : String,
 ) -> @protocol.LspDiagnosticsReply {
   @interop.bridge_request(owner.channel, @commands.lsp_open, {
     session: owner.session,
     root: root.path,
-    path: path.0,
+    path,
   })
 }
 
