@@ -338,31 +338,6 @@ fn render_office_document(
 }
 
 ///|
-/// Read one file for a cross-resource Peek preview without entering the tab
-/// state machine. This deliberately reuses the same `fs.read_file` wire op
-/// and decoder as ordinary file opening, so binary/oversized policy and
-/// absolute-path addressing stay identical. Failures are unavailable previews,
-/// not panel errors, and therefore return `None` to the resolver.
-async fn read_file_snapshot(
-  owner : @interop.ConversationKey,
-  path : @pathx.Relative,
-  root~ : @common.Uri?,
-) -> FileContent? {
-  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
-    return None
-  }
-  let target = @resource.join_relative(root, path)
-  let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
-    max_bytes: None,
-    path: target.path,
-    root: None,
-  }) catch {
-    _ => return None
-  }
-  Some(FileContent::from_reply(reply))
-}
-
-///|
 /// Stat the open tabs' files and fold the signatures back as `StatsLoaded`.
 /// Best-effort: a failed call is dropped — the next change push retries.
 fn stat_files(

@@ -491,7 +491,7 @@ pub(all) enum Msg {
   GitOriginalFailed(owner~ : @interop.ConversationIdentity, path~ : @common.Uri, generation~ : Int32, background~ : Bool, message~ : String)
   HistoryBlobLoaded(owner~ : @interop.ConversationIdentity, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
   HistoryBlobFailed(owner~ : @interop.ConversationIdentity, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, message~ : String)
-  OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
+  OpenNavigationLocation(owner~ : @interop.ConversationIdentity, path~ : @common.Uri, range~ : @common.Range, cloud_epoch~ : Int32?)
   FileLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, name~ : String, file~ : FileContent, file_link_generation~ : Int32?, review_generation~ : Int32?, range~ : @common.Range?, annotation~ : String?)
   FileFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, file_link_generation~ : Int32?, review_generation~ : Int32?, message~ : Failure)
   FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : Failure)
@@ -501,9 +501,9 @@ pub(all) enum Msg {
   FileVersionChecked(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, sig~ : String, unchanged~ : Bool)
   RefreshExternalFiles
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, stats~ : Array[FileStat], recheck_diagnostics~ : Bool)
-  DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
+  DiagnosticsLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
-  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : Failure)
+  LanguageRequestFailed(owner~ : @interop.ConversationIdentity, message~ : Failure, cloud_epoch~ : Int32?)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
   ApplyAllFeedback
   ApplyEditorFeedback(ModelUri)

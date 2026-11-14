@@ -3991,22 +3991,38 @@ fn update_msg(
     }
     // Definition/reference jumps share file routing. Their original owner
     // stamp rejects a language reply that outlived a conversation switch.
-    FileEditor(OpenNavigationLocation(owner~, path~, range~)) => {
-      guard model.file_panel.owner is Some(panel_owner) &&
-        panel_owner == @interop.Host(owner) &&
-        file_ctx(model).owner == @interop.Host(owner) else {
+    FileEditor(OpenNavigationLocation(owner~, path~, range~, cloud_epoch~)) => {
+      let ctx = file_ctx(model)
+      guard model.file_panel.owner == Some(owner) &&
+        ctx.owner == owner &&
+        ctx.cloud_files.map(files => files.epoch) == cloud_epoch else {
         return (@cmd.none, model)
       }
-      request_open_path(dispatch, model, path.0, Some(range))
+      match owner {
+        Host(_) => request_open_path(dispatch, model, path.path, Some(range))
+        Cloud(..) => {
+          let model = model.begin_editor_navigation()
+          show_editor_resource(
+            dispatch,
+            model,
+            path,
+            Some(range),
+            file_link_generation=model.file_panel.file_link_generation,
+          )
+        }
+      }
     }
     // Definition/References providers live inside the imperative Viewer, but
     // their host failures belong on the app's ordinary toast rail. Fence the
     // callback by its original conversation and coalesce identical live
     // toasts: one user gesture can cause Viewer to ask more than once.
-    FileEditor(@fileeditor.LanguageRequestFailed(owner~, message~)) => {
-      guard model.file_panel.owner is Some(panel_owner) &&
-        panel_owner == @interop.Host(owner) &&
-        file_ctx(model).owner == @interop.Host(owner) else {
+    FileEditor(
+      @fileeditor.LanguageRequestFailed(owner~, message~, cloud_epoch~)
+    ) => {
+      let ctx = file_ctx(model)
+      guard model.file_panel.owner == Some(owner) &&
+        ctx.owner == owner &&
+        ctx.cloud_files.map(files => files.epoch) == cloud_epoch else {
         return (@cmd.none, model)
       }
       if model.notifications.any(toast => toast.message == FileFailure(message)) {
@@ -20818,8 +20834,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.OpenNavigationLocation(
-        owner~,
-        path=Relative("src/main.mbt"),
+        owner=@interop.Host(owner),
+        path=main_file,
+        cloud_epoch=None,
         range=@common.Range(9, 1, 9, 4),
       ),
     ),
@@ -23527,8 +23544,9 @@ test "file rows and location jumps cannot open while checkout placement is missi
     dispatch,
     FileEditor(
       OpenNavigationLocation(
-        owner=file_ctx(model).owner.host().unwrap(),
-        path~,
+        owner=file_ctx(model).owner,
+        path=file,
+        cloud_epoch=None,
         range=@common.Range(1, 1, 1, 1),
       ),
     ),
@@ -23547,7 +23565,8 @@ test "language request failures toast once and remain conversation fenced" {
   let owner = file_ctx(model).owner
   let msg = FileEditor(
     @fileeditor.LanguageRequestFailed(
-      owner=owner.host().unwrap(),
+      owner~,
+      cloud_epoch=None,
       message=@fileeditor.DefinitionFailed(
         @interop.External("workspace index is unavailable"),
       ),
@@ -23568,7 +23587,8 @@ test "language request failures toast once and remain conversation fenced" {
     dispatch,
     FileEditor(
       @fileeditor.LanguageRequestFailed(
-        owner={ channel: Local, session: "another-conversation", },
+        owner=@interop.Host({ channel: Local, session: "another-conversation", }),
+        cloud_epoch=None,
         message=@fileeditor.Diagnostic("late failure"),
       ),
     ),
