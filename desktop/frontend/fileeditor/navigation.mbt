@@ -56,8 +56,21 @@ fn NavigationContext::accepts_location(
 }
 
 ///|
+/// Preserve the project context for either source. Host standard-library
+/// queries use absolute paths; Cloud sources remain relative to their root.
+fn NavigationContext::query_path(
+  self : NavigationContext,
+  absolute : @common.Uri,
+) -> String? {
+  guard self.accepts_location(absolute) && absolute != self.root else {
+    return None
+  }
+  Some(self.relative_path(absolute).map_or(absolute.path, path => path.0))
+}
+
+///|
 /// The navigation root for the document now on screen: the checkout root,
-/// with Cloud standard-library documents retaining the same project context.
+/// retained for Host and Cloud standard-library documents alike.
 fn navigation_context_for_file(
   owner : @interop.ConversationIdentity,
   root : @common.Uri?,
@@ -75,7 +88,7 @@ fn navigation_context_for_file(
     }
   }
   let context : NavigationContext = { owner, root, cloud, }
-  if context.target(document) is Some(_) {
+  if context.query_path(document) is Some(_) {
     Some(context)
   } else {
     None
@@ -89,7 +102,7 @@ fn navigation_context_for_file(
 #derive(Eq)
 priv struct MoonIdeModelProjection {
   context : NavigationContext
-  path : @pathx.Relative
+  path : String
   document : @common.Uri
   line_offset : Int32
 }
@@ -115,7 +128,7 @@ fn moon_ide_model_projection(
     Some(absolute) => {
       guard viewer_state.live &&
         viewer_state.document == Some(absolute) &&
-        context.relative_path(absolute) is Some(path) else {
+        context.query_path(absolute) is Some(path) else {
         return None
       }
       Some({ context, path, document: absolute, line_offset: 0, })
@@ -128,7 +141,7 @@ fn moon_ide_model_projection(
       }
       Some({
         context,
-        path: semantic.path,
+        path: semantic.path.0,
         document: semantic.resource,
         line_offset: semantic.line_offset,
       })
@@ -420,11 +433,16 @@ test "navigation context follows the checkout root and its documents" {
     fail("checkout root was not accepted for its own document")
   }
   assert_eq(context.relative_path(file), Some(Relative("src/main.mbt")))
+  assert_eq(context.query_path(file), Some("src/main.mbt"))
   guard @resource.of_path(@interop.ChannelId::Local, "/other/src/main.mbt")
     is Some(outside) else {
     fail("test outside resource was not absolute")
   }
-  assert_true(navigation_context_for_file(owner, Some(root), outside) is None)
+  guard navigation_context_for_file(owner, Some(root), outside)
+    is Some(external) else {
+    fail("external source lost its project context")
+  }
+  assert_eq(external.query_path(outside), Some("/other/src/main.mbt"))
   assert_true(navigation_context_for_file(owner, None, file) is None)
   assert_true(context.relative_path(outside) is None)
   for
@@ -459,7 +477,7 @@ test "semantic navigation projects fragment-local lines onto the source" {
   }
   let projection : MoonIdeModelProjection = {
     context,
-    path: Relative("src/main.mbt"),
+    path: "src/main.mbt",
     document: @common.Uri::parse("openseek://local/work/src/main.mbt"),
     line_offset: 29,
   }

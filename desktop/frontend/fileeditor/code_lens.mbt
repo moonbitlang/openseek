@@ -20,10 +20,7 @@ fn moon_ide_codelens_source_projection(
     moon_ide_codelens_source_model_matches(model, viewer.get_model()) &&
     model_uri_path(model.uri) is Some(_) &&
     moon_ide_model_projection(model) is Some(projection) &&
-    (
-      projection.path.0.has_suffix(".mbt") ||
-      projection.path.0.has_suffix(".mbtp")
-    ) else {
+    (projection.path.has_suffix(".mbt") || projection.path.has_suffix(".mbtp")) else {
     return None
   }
   Some(projection)

@@ -21,7 +21,7 @@ async fn moon_package_graph_cwd(
     payload.root,
     payload.path,
   )
-  let manifest = location.root.physical.join(location.physical_relative)
+  let manifest = location.file
   guard manifest.to_path().basename() == "moon.mod" else {
     raise InvalidRequest("path must name moon.mod")
   }

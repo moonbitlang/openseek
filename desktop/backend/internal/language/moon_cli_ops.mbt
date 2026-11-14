@@ -6,8 +6,8 @@
 // the file's module or standalone script and converts diagnostics to the
 // LSP-shaped arrays the wire protocol already speaks. `lsp.workspace_symbols`
 // fans `moon ide workspace-symbols --json` across the workspace's module roots.
-// Hover and open receive the editor's exact root plus a path relative to it,
-// then choose the script itself or the deepest module root containing it.
+// Hover and open retain the editor's project root. Workspace paths choose
+// their script/module scope; standard-library targets use that project context.
 // Symbols retain their conversation-scoped workspace request. Everything is
 // best-effort: no applicable check scope, a failed spawn, or a file moon does
 // not know all just yield nothing. moon serializes concurrent runs on a module with its own build
@@ -38,6 +38,7 @@ const MaxSymbolResults = 50
 priv struct ToolSpawnConfig {
   command : String
   env : Map[String, String]?
+  stdlib_root : @pathx.Absolute?
 }
 
 ///|
@@ -138,6 +139,7 @@ async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig? 
     }
   }
   let config = {
+    stdlib_root: toolchain_stdlib_root(toolchain),
     command: toolchain.moon.to_string(),
     env: Some(toolchain.tool_env()),
   }
@@ -289,17 +291,32 @@ async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
 }
 
 ///|
-/// Route hover by an explicit absolute root plus a root-relative file path,
+/// Route hover by an explicit project root and an authorized source path,
 /// then answer it with one `moon ide hover` run at the requested position.
 pub async fn lsp_hover(
   state : MoonCliState,
   payload : @protocol.LspHoverPayload,
 ) -> @protocol.LspHoverReply {
-  let request_root = LanguageRoot::authorize(payload.session, payload.root).lexical
-  let file = root_relative_file(request_root, payload.path)
-  guard moon_cli_scope(request_root, file) is Some(scope) else {
-    return no_hover()
+  let stdlib_root = if payload.path.has_prefix("/") {
+    state.resolve_command().bind(config => config.stdlib_root)
+  } else {
+    None
   }
+  let location = LanguagePath::resolve(
+    payload.session,
+    payload.root,
+    payload.path,
+    stdlib_root?,
+  )
+  let request_root = location.root.lexical
+  let file = location.source_file()
+  let scope = if location.file.relative_to(root=location.root.physical)
+    is Some(_) {
+    moon_cli_scope(request_root, file)
+  } else {
+    Some(Module(request_root))
+  }
+  guard scope is Some(scope) else { return no_hover() }
   let root = scope.cwd()
   // The op speaks 0-based LSP positions; `--loc` is 1-based.
   let loc = "\{file.0}:\{payload.line + 1}:\{payload.character + 1}"
@@ -323,11 +340,26 @@ pub async fn lsp_open(
   state : MoonCliState,
   payload : @protocol.LspOpenPayload,
 ) -> @protocol.LspDiagnosticsReply {
-  let request_root = LanguageRoot::authorize(payload.session, payload.root).lexical
-  let file = root_relative_file(request_root, payload.path)
-  guard moon_cli_scope(request_root, file) is Some(scope) else {
-    return { diagnostics: Some([]), }
+  let stdlib_root = if payload.path.has_prefix("/") {
+    state.resolve_command().bind(config => config.stdlib_root)
+  } else {
+    None
   }
+  let location = LanguagePath::resolve(
+    payload.session,
+    payload.root,
+    payload.path,
+    stdlib_root?,
+  )
+  let request_root = location.root.lexical
+  let file = location.source_file()
+  let scope = if location.file.relative_to(root=location.root.physical)
+    is Some(_) {
+    moon_cli_scope(request_root, file)
+  } else {
+    Some(Module(request_root))
+  }
+  guard scope is Some(scope) else { return { diagnostics: Some([]), } }
   let root = scope.cwd()
   guard state.run_moon(scope.check_args(), root) is Some((code, stdout, stderr)) else {
     return { diagnostics: None, }

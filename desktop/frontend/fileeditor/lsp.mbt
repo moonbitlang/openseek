@@ -118,7 +118,7 @@ fn register_hover_provider() -> Unit {
 async fn request_hover(
   context~ : NavigationContext,
   document~ : @common.Uri,
-  path~ : @pathx.Relative,
+  path~ : String,
   line~ : Int32,
   character~ : Int32,
 ) -> @protocol.LspHoverReply {
@@ -129,7 +129,7 @@ async fn request_hover(
     {
       session: context.owner.session(),
       root: context.root.path,
-      path: path.0,
+      path,
       line,
       character,
     },
@@ -190,7 +190,7 @@ let moon_ide_diagnostics_generation : Ref[Int32] = Ref(0)
 /// then apply whatever it already has. Best-effort: a failed call just leaves
 /// the file without squiggles; live re-analysis still arrives as `diagnostics`
 /// events. v1 covers MoonBit only, the only language with a server behind the
-/// op. Cloud standard-library checks retain the owning session context.
+/// op. Host and Cloud standard-library checks retain the owning project context.
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationIdentity,
@@ -201,7 +201,7 @@ fn request_diagnostics(
 ) -> @cmd.Cmd {
   guard navigation_context_for_file(owner, Some(root), absolute, cloud?)
     is Some(context) &&
-    context.target(absolute) is Some((_, path)) else {
+    context.query_path(absolute) is Some(path) else {
     return @cmd.none
   }
   @cmd.custom_cmd(
@@ -219,7 +219,7 @@ fn request_diagnostics(
           context,
           absolute,
           @commands.lsp_open,
-          { session: owner.session(), root: root.path, path: path.0, },
+          { session: owner.session(), root: root.path, path, },
           "diagnostics",
         ) catch {
           _ => return

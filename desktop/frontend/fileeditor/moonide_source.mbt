@@ -127,7 +127,7 @@ async fn MoonIdeModelProjection::locations(
   let payload : @protocol.MoonIdeNavigationPayload = {
     session: self.context.owner.session(),
     root: self.context.root.path,
-    path: self.path.0,
+    path: self.path,
     line,
     column,
   }
@@ -175,7 +175,7 @@ async fn MoonIdeModelProjection::code_lenses(
   let payload : @protocol.MoonIdeCodeLensPayload = {
     session: self.context.owner.session(),
     root: self.context.root.path,
-    path: self.path.0,
+    path: self.path,
   }
   let (reply, raw) : (@protocol.MoonIdeCodeLensReply, Array[Json]?) = match
     self.context.owner {

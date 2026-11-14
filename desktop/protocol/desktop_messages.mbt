@@ -956,8 +956,9 @@ pub impl ToJson for MoonPackageGraphPayload with fn to_json(self) {
 }
 
 ///|
-/// `lsp_open` tells the host the editor is now showing `path` relative to the
-/// explicit absolute `root`, so it runs `moon check` over the file's module.
+/// `lsp_open` checks a source in the project named by the explicit `root`.
+/// `path` is workspace-relative or an absolute standard-library resource path.
+/// Workspace files check their module; standard-library files keep project cwd.
 /// The reply carries the file's diagnostics from that run; other files'
 /// changes from the same run — and later runs — arrive as `diagnostics`
 /// events.
@@ -987,8 +988,8 @@ pub impl ToJson for LspOpenPayload with fn to_json(self) {
 
 ///|
 /// `hover` asks for hover at a zero-based `line`/`character` in `path`, which
-/// is relative to the explicit absolute `root`. The host finds the deepest
-/// Moon module containing that file beneath the supplied root.
+/// is workspace-relative or an absolute standard-library resource path. The
+/// explicit `root` remains the owning project context.
 #derive(Debug, Eq)
 pub(all) struct LspHoverPayload {
   session : String
@@ -1053,7 +1054,7 @@ pub impl ToJson for WorkspaceSymbolsPayload with fn to_json(self) {
 ///|
 /// A source position for Moon IDE navigation. `line` and `column` are positive,
 /// one-based numbers which the host passes to `moon ide --loc` unchanged.
-/// `path` is relative to the explicit editor `root`.
+/// `path` is workspace-relative, or an absolute standard-library resource path.
 #derive(Debug, Eq)
 pub(all) struct MoonIdeNavigationPayload {
   session : String
@@ -1089,7 +1090,7 @@ pub impl ToJson for MoonIdeNavigationPayload with fn to_json(self) {
 }
 
 ///|
-/// Request the reference CodeLens rows for one current checkout source file.
+/// Request reference CodeLens rows for a workspace or standard-library source.
 /// Unlike navigation, no cursor position is needed: Moon IDE scans the whole
 /// authorized file and returns zero-based LSP ranges for every lens.
 #derive(Debug, Eq)
@@ -1587,7 +1588,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 7
+pub const HostProtocolRevision : Int32 = 8
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
