@@ -73,6 +73,7 @@ async test "resumed inline images are sent directly in user and tool content" {
       api_url="http://127.0.0.1:\{server.addr.port()}/chat/completions",
     )
     let url = image.data_url()
+    let messages = messages.map(message => message.to_chat_message())
     assert_eq(messages[1].content.text(), "beforeafter")
     assert_true(
       messages[1].content.0

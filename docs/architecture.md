@@ -73,7 +73,7 @@ classDiagram
     system_prompt: String
     events: Vector~SessionEvent~
     append(SessionItem) Session
-    chat_messages() Array~ChatMessage~
+    chat_messages() Array~ModelMessage~
     compact(content, from, to) Session
     current_goal() StandingGoal?
   }

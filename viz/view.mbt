@@ -772,7 +772,7 @@ fn raw_plan_baselines(
 /// the model itself can still see. `failed` is the model view's trusted
 /// failed-call set.
 fn model_plan_baselines(
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[@agent_session.ModelMessage],
   failed : Map[String, Unit],
 ) -> Map[String, Array[@steps.PlanStep]] {
   let calls : Array[@deepseek.ToolCall] = []
@@ -2188,7 +2188,7 @@ test "model metadata omits an assistant final's duplicate terminal" {
 /// compacted-away or healed result contributes no brief, so the call line never
 /// shows a summary the model was not actually fed.
 fn model_tool_call_briefs(
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[@agent_session.ModelMessage],
   tool_results : Map[String, @agent_session.ToolResult],
 ) -> Map[String, String] {
   let briefs : Map[String, String] = Map([])
@@ -2317,7 +2317,7 @@ fn raw_escalated_result_ids(
 /// Model-view counterpart of `raw_escalated_result_ids`, based only on calls
 /// and result messages that the model projection actually renders.
 fn model_escalated_result_ids(
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[@agent_session.ModelMessage],
   tags : Map[String, Int32],
 ) -> Map[String, Unit] {
   let ids : Map[String, Unit] = Map([])
@@ -2402,7 +2402,7 @@ fn raw_pair_tags(session : @agent_session.Session) -> Map[String, Int32] {
 /// compacted away contributes nothing). Only the structural id feeds this — the
 /// error flag, tool name, and brief still come solely through `model_shown_result`.
 fn model_pair_tags(
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[@agent_session.ModelMessage],
 ) -> Map[String, Int32] {
   let call_ids : Array[String] = []
   let result_ids : Array[String] = []
@@ -2443,7 +2443,7 @@ fn pair_link(n : Int32, href~ : String, title~ : String) -> @html.Html {
 /// always has a matching error result on screen — a compacted-away failure tags
 /// nothing, just as it draws no error card.
 fn model_failed_call_ids(
-  messages : Array[@deepseek.ChatMessage],
+  messages : Array[@agent_session.ModelMessage],
   tool_results : Map[String, @agent_session.ToolResult],
 ) -> Map[String, Unit] {
   let ids : Map[String, Unit] = Map([])
@@ -2575,7 +2575,7 @@ test "viz projects workspace file fences without accepting unsafe paths" {
 
 ///|
 fn message_card(
-  message : @deepseek.ChatMessage,
+  message : @agent_session.ModelMessage,
   tool_results : Map[String, @agent_session.ToolResult],
   failed : Map[String, Unit],
   escalated : Map[String, Unit],
@@ -2667,13 +2667,12 @@ fn message_card(
 /// rather than misrepresent the model view. Shared by `model_tool_card` and
 /// `rendered_result_count` so the on-screen flags and the counts never drift.
 fn model_shown_result(
-  message : @deepseek.ChatMessage,
+  message : @agent_session.ModelMessage,
   tool_results : Map[String, @agent_session.ToolResult],
 ) -> @agent_session.ToolResult? {
   guard message.role is Tool(id) else { return None }
   match tool_results.get(id) {
-    Some(result) if message.content.0 ==
-      @agent_session.to_deepseek_parts(result.content()) => Some(result)
+    Some(result) if message.content == result.content() => Some(result)
     _ => None
   }
 }
@@ -2790,7 +2789,7 @@ pub fn session_has_mbtx_activity(session : @agent_session.Session) -> Bool {
 /// in which case the card is plain and unflagged so it never misrepresents what
 /// the model saw.
 fn model_tool_card(
-  message : @deepseek.ChatMessage,
+  message : @agent_session.ModelMessage,
   shown : @agent_session.ToolResult?,
   escalated : Map[String, Unit],
   tags : Map[String, Int32],
@@ -2859,7 +2858,7 @@ fn model_tool_card(
 fn model_card(
   kind : String,
   label : String,
-  message : @deepseek.ChatMessage,
+  message : @agent_session.ModelMessage,
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int32],
@@ -3241,7 +3240,7 @@ pub extend ViewMode with Eq::{equal, not_equal}
 /// Assistant text may additionally project workspace-file fences into static
 /// cards; the other roles keep the raw viewer presentation.
 fn request_content_view(
-  content : @deepseek.Content,
+  content : @agent_session.Content,
   render_workspace_files~ : Bool = false,
 ) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
@@ -3255,8 +3254,7 @@ fn request_content_view(
             out.push(text_block(text))
           }
         }
-      File(file_id~) => out.push(text_block("Image file: \{file_id}"))
-      ImageUrl(_) => out.push(text_block("[Image]"))
+      Image(_) => out.push(text_block("[Image]"))
     }
   }
   out

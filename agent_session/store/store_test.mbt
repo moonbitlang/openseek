@@ -1153,14 +1153,8 @@ async test "legacy JSONL can append and replay embedded images and text" {
   assert_eq(actual.content(), user.content())
   assert_eq(actual.submission_id(), Some("new-submission"))
   let messages = resumed.chat_messages()
-  assert_eq(
-    messages[messages.length() - 3].content.0,
-    @agent_session.to_deepseek_parts(user.content()),
-  )
-  assert_eq(
-    messages[messages.length() - 1].content.0,
-    @agent_session.to_deepseek_parts(result.content()),
-  )
+  assert_eq(messages[messages.length() - 3].content, user.content())
+  assert_eq(messages[messages.length() - 1].content, result.content())
   assert_true(messages[messages.length() - 1].role is Tool("image-call"))
 }
 
