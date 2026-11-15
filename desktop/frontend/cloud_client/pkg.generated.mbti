@@ -31,6 +31,8 @@ pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol
 
 pub async fn read_file_index(String, String) -> Array[String]
 
+pub async fn read_moonide_source(String, String, String, allow_large? : Bool) -> @protocol.ReadFileReply
+
 pub async fn request(String, String, @http.RequestMethod, token? : String, body? : @json.Json) -> @json.Json
 
 pub async fn skills_catalog(String) -> @protocol.SkillsCatalogReply

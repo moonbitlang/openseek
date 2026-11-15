@@ -134,10 +134,9 @@ priv struct ViewerHost {
   // review file still shows its HEAD baseline under an inert model URI, so
   // that preview takes no diagnostics and no working-side comments.
   mut live : Bool
-  // Workspace-relative feedback also applies to Cloud files, without Host
-  // language services or navigation providers.
+  // Workspace-relative feedback applies to both Host and Cloud files.
   mut feedback_root : @common.Uri?
-  // The active host/workspace route for Definition/References targets and
+  // The active conversation/workspace route for Definition/References and
   // cross-file Peek previews. Cleared together with the document so a late
   // navigation request can never reopen a previous conversation's file.
   mut navigation : NavigationContext?
@@ -408,14 +407,18 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         register_tokenizers()
         register_hover_provider()
         let services = DesktopViewerServices(
-          navigation_location_opener((owner, path, range) => {
+          navigation_location_opener((owner, path, range, cloud_epoch) => {
             scheduler.add(
-              dispatch(OpenNavigationLocation(owner~, path~, range~)),
+              dispatch(
+                OpenNavigationLocation(owner~, path~, range~, cloud_epoch~),
+              ),
             )
           }),
           navigation_text_model_resolver(),
-          (owner, message) => {
-            scheduler.add(dispatch(LanguageRequestFailed(owner~, message~)))
+          (owner, message, cloud_epoch) => {
+            scheduler.add(
+              dispatch(LanguageRequestFailed(owner~, message~, cloud_epoch~)),
+            )
           },
         )
         viewer_state.services = Some(services)
@@ -1335,6 +1338,7 @@ fn after_render_effect(action : () -> Unit) -> @cmd.Cmd {
 fn show_file_in_viewer(
   owner : @interop.ConversationIdentity,
   root~ : @common.Uri?,
+  cloud? : CloudFiles,
   name : String,
   content : String,
   document~ : @common.Uri,
@@ -1506,9 +1510,12 @@ fn show_file_in_viewer(
     viewer_state.document = Some(document)
     viewer_state.feedback_root = root
     viewer_state.live = live
-    viewer_state.navigation = owner
-      .host()
-      .bind(host => navigation_context_for_file(host, root, document))
+    viewer_state.navigation = navigation_context_for_file(
+      owner,
+      root,
+      document,
+      cloud?,
+    )
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
     if viewer_state.services is Some(services) {
@@ -1532,7 +1539,10 @@ fn show_file_in_viewer(
       )
       // Code, rendered Markdown, and modified diff panes share the live
       // resource's feedback permission.
-      services.feedback.set_feedback_enabled(uri, live && feedback_enabled)
+      services.feedback.set_feedback_enabled(
+        uri,
+        live && feedback_enabled && document.scheme != "openseek-cloud-stdlib",
+      )
       if live && !show_markdown {
         // A fresh document view starts with no bubbles (comments become
         // chips the moment they are filed, so anything lingering here is a
@@ -1730,13 +1740,11 @@ fn forget_view_state(path : @common.Uri) -> @cmd.Cmd {
 /// model's own URI, so the viewer's marker-decoration service renders their
 /// squiggles on the document on screen.
 fn apply_diagnostics(
-  channel : @interop.ChannelId,
   absolute : @common.Uri,
   diagnostics : Array[@protocol.LspDiagnostic],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if @resource.belongs_to(absolute, channel) &&
-      viewer_state.live &&
+    if viewer_state.live &&
       viewer_state.document == Some(absolute) &&
       viewer_state.services is Some(services) {
       let uri = absolute

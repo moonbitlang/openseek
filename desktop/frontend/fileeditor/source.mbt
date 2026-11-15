@@ -76,6 +76,13 @@ async fn check_source(
   path : @common.Uri,
   sig : String,
 ) -> Bool {
+  if owner is @interop.Cloud(account~, session~) &&
+    cloud is Some(_) &&
+    @resource.cloud_stdlib_root(@cloud.CloudOrigin, account, session)
+    is Some(root) &&
+    @resource.relative_to(path, root) is Some(_) {
+    return false
+  }
   guard owner is @interop.Cloud(account~, session~) &&
     cloud is Some(cloud) &&
     @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
@@ -110,12 +117,32 @@ async fn read_source(
       }
     }
     Cloud(account~, session~) => {
-      guard cloud is Some(cloud) &&
-        @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
-        @resource.relative_to(path, root) is Some(relative) else {
+      guard cloud is Some(cloud) else {
         raise SourceError(CloudFileOwnershipLost)
       }
-      @cloud.read_file(cloud.token, session, relative.0, allow_large~) catch {
+      try {
+        if @resource.cloud_root(@cloud.CloudOrigin, account, session)
+          is Some(root) &&
+          @resource.relative_to(path, root) is Some(relative) {
+          @cloud.read_file(cloud.token, session, relative.0, allow_large~)
+        } else if @resource.cloud_stdlib_root(
+            @cloud.CloudOrigin,
+            account,
+            session,
+          )
+          is Some(root) &&
+          @resource.relative_to(path, root) is Some(relative) {
+          @cloud_client.read_moonide_source(
+            cloud.token,
+            session,
+            relative.0,
+            allow_large~,
+          )
+        } else {
+          raise SourceError(CloudFileOwnershipLost)
+        }
+      } catch {
+        SourceError(failure) => raise SourceError(failure)
         @cloud.RequestError::RequestError(failure) =>
           raise SourceError(Cloud(failure))
         _ => raise SourceError(Cloud(@cloud.Failure::Unreachable))

@@ -1,44 +1,68 @@
 // Definition, References, and Peek integration for the embedded Viewer.
-// The language queries go directly to the host's `moonide.*` operations;
+// Language queries use the host operations or authenticated Cloud endpoints;
 // moon-lsp is deliberately not part of this path. Viewer owns the UI and
 // request lifecycle, while Desktop owns routing, file opening, and preview
 // model leases.
 
 ///|
 /// The active root needed by cross-resource navigation: the checkout root
-/// supplied by `Ctx`, accepted only while the shown document lies below it.
+/// supplied by `Ctx`, plus the Cloud credentials for this account lifecycle.
 #derive(Eq)
 priv struct NavigationContext {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   root : @common.Uri
+  cloud : CloudFiles?
 }
 
 ///|
 /// Bring one Viewer model URI back into this editor root. The root is the
 /// exact main checkout, linked worktree, or Codex cwd reconstructed when the
-/// file was read; a model from another host or outside that root is unrelated.
+/// file was read. Cloud standard-library documents have a separate source root.
 fn NavigationContext::relative_path(
   self : NavigationContext,
   absolute : @common.Uri,
 ) -> @pathx.Relative? {
-  guard @resource.channel(absolute) is Some(channel) &&
-    channel == self.owner.channel &&
-    @resource.relative_to(absolute, self.root) is Some(relative) &&
-    !relative.is_root() else {
-    return None
-  }
-  Some(relative)
+  self.target(absolute).map(target => target.1)
 }
 
 ///|
-/// Keep the project context when opening a standard-library target. The host
-/// validates absolute query targets against its selected toolchain.
+fn NavigationContext::target(
+  self : NavigationContext,
+  absolute : @common.Uri,
+) -> (String, @pathx.Relative)? {
+  if @resource.relative_to(absolute, self.root) is Some(path) && !path.is_root() {
+    return Some(("workspace", path))
+  }
+  guard self.owner is @interop.Cloud(account~, session~) &&
+    @resource.cloud_stdlib_root(@cloud.CloudOrigin, account, session)
+    is Some(root) &&
+    @resource.relative_to(absolute, root) is Some(path) &&
+    !path.is_root() else {
+    return None
+  }
+  Some(("stdlib", path))
+}
+
+///|
+fn NavigationContext::accepts_location(
+  self : NavigationContext,
+  uri : @common.Uri,
+) -> Bool {
+  match self.owner {
+    // Host results have already been restricted to workspace/toolchain files.
+    Host(owner) => @resource.belongs_to(uri, owner.channel)
+    Cloud(..) => self.target(uri) is Some(_)
+  }
+}
+
+///|
+/// Preserve the project context for either source. Host standard-library
+/// queries use absolute paths; Cloud sources remain relative to their root.
 fn NavigationContext::query_path(
   self : NavigationContext,
   absolute : @common.Uri,
 ) -> String? {
-  guard @resource.belongs_to(absolute, self.owner.channel) &&
-    absolute != self.root else {
+  guard self.accepts_location(absolute) && absolute != self.root else {
     return None
   }
   Some(self.relative_path(absolute).map_or(absolute.path, path => path.0))
@@ -46,28 +70,40 @@ fn NavigationContext::query_path(
 
 ///|
 /// The navigation root for the document now on screen: the checkout root,
-/// retained for host-owned source files outside it. The host decides whether
-/// an external target belongs to the selected toolchain's standard library.
+/// retained for Host and Cloud standard-library documents alike.
 fn navigation_context_for_file(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   root : @common.Uri?,
   document : @common.Uri,
+  cloud? : CloudFiles,
 ) -> NavigationContext? {
-  guard root is Some(root) &&
-    @resource.belongs_to(root, owner.channel) &&
-    @resource.belongs_to(document, owner.channel) else {
-    return None
+  guard root is Some(root) else { return None }
+  match owner {
+    Host(host) => if !@resource.belongs_to(root, host.channel) { return None }
+    Cloud(account~, session~) => {
+      guard cloud is Some(_) &&
+        @resource.cloud_root(@cloud.CloudOrigin, account, session) == Some(root) else {
+        return None
+      }
+    }
   }
-  Some({ owner, root, })
+  let context : NavigationContext = { owner, root, cloud, }
+  if context.query_path(document) is Some(_) {
+    Some(context)
+  } else {
+    None
+  }
 }
 
 ///|
 /// One Viewer model projected back onto the live checkout document MoonIDE
 /// understands. Full-file models have a zero offset; Token/Tree Modified
 /// fragments carry the section's zero-based line displacement.
+#derive(Eq)
 priv struct MoonIdeModelProjection {
   context : NavigationContext
   path : String
+  document : @common.Uri
   line_offset : Int32
 }
 
@@ -95,7 +131,7 @@ fn moon_ide_model_projection(
         context.query_path(absolute) is Some(path) else {
         return None
       }
-      Some({ context, path, line_offset: 0, })
+      Some({ context, path, document: absolute, line_offset: 0, })
     }
     None => {
       guard semantic_modified_model_projection(model) is Some(semantic) &&
@@ -106,6 +142,7 @@ fn moon_ide_model_projection(
       Some({
         context,
         path: semantic.path.0,
+        document: semantic.resource,
         line_offset: semantic.line_offset,
       })
     }
@@ -119,7 +156,7 @@ priv struct MoonIdeNavigationProvider {
   // Viewer providers run outside Rabbita's update function. This callback
   // re-enters the owning app through a scheduled `Msg`; it never mutates the
   // panel model directly.
-  on_error : (@interop.ConversationKey, Failure) -> Unit
+  on_error : (@interop.ConversationIdentity, Failure, Int32?) -> Unit
 }
 
 ///|
@@ -133,26 +170,28 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
     return []
   }
   guard moon_ide_model_projection(model) is Some(projection) else { return [] }
-  let locations = request_moon_ide_locations(
-    projection.context.owner.channel,
-    @commands.moonide_definition,
-    {
-      session: projection.context.owner.session,
-      root: projection.context.root.path,
-      path: projection.path,
-      line: projection.source_line_number(position.line_number),
-      column: position.column,
-    },
+  let version = model.get_version_id()
+  let locations = projection.locations(
+    "definition",
+    projection.source_line_number(position.line_number),
+    position.column,
   ) catch {
     error => {
-      (self.on_error)(
-        projection.context.owner,
-        DefinitionFailed(@interop.bridge_problem(error)),
-      )
+      if !token.is_cancellation_requested() &&
+        projection.is_current(model) &&
+        model.get_version_id() == version {
+        (self.on_error)(
+          projection.context.owner,
+          language_request_failure(error, problem => DefinitionFailed(problem)),
+          projection.context.cloud.map(files => files.epoch),
+        )
+      }
       return []
     }
   }
-  if token.is_cancellation_requested() {
+  if token.is_cancellation_requested() ||
+    !projection.is_current(model) ||
+    model.get_version_id() != version {
     []
   } else {
     locations
@@ -170,26 +209,28 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
     return []
   }
   guard moon_ide_model_projection(model) is Some(projection) else { return [] }
-  let locations = request_moon_ide_locations(
-    projection.context.owner.channel,
-    @commands.moonide_references,
-    {
-      session: projection.context.owner.session,
-      root: projection.context.root.path,
-      path: projection.path,
-      line: projection.source_line_number(position.line_number),
-      column: position.column,
-    },
+  let version = model.get_version_id()
+  let locations = projection.locations(
+    "references",
+    projection.source_line_number(position.line_number),
+    position.column,
   ) catch {
     error => {
-      (self.on_error)(
-        projection.context.owner,
-        ReferencesFailed(@interop.bridge_problem(error)),
-      )
+      if !token.is_cancellation_requested() &&
+        projection.is_current(model) &&
+        model.get_version_id() == version {
+        (self.on_error)(
+          projection.context.owner,
+          language_request_failure(error, problem => ReferencesFailed(problem)),
+          projection.context.cloud.map(files => files.epoch),
+        )
+      }
       return []
     }
   }
-  if token.is_cancellation_requested() {
+  if token.is_cancellation_requested() ||
+    !projection.is_current(model) ||
+    model.get_version_id() != version {
     []
   } else {
     locations
@@ -201,7 +242,7 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
 /// The returned handles are retained by `DesktopViewerServices` for the full
 /// lifetime of the one mounted Viewer.
 fn register_moon_ide_navigation_providers(
-  on_error : (@interop.ConversationKey, Failure) -> Unit,
+  on_error : (@interop.ConversationIdentity, Failure, Int32?) -> Unit,
 ) -> Array[@common.Disposable] {
   let provider = MoonIdeNavigationProvider::{ on_error, }
   [
@@ -257,39 +298,42 @@ priv struct MoonIdeProjection {
 fn MoonIdeProjection::to_viewer(
   self : MoonIdeProjection,
 ) -> Array[@language.Location] {
-  let result : Array[@language.Location] = []
-  for location in self.reply.locations {
-    guard !location.path.is_empty() &&
-      location.start_line > 0 &&
-      location.start_column > 0 &&
-      location.end_line > 0 &&
-      location.end_column > 0 &&
-      (
-        location.end_line > location.start_line ||
-        (
-          location.end_line == location.start_line &&
-          location.end_column >= location.start_column
-        )
-      ) else {
-      continue
-    }
-    // Host navigation locations are external input. Ignore malformed paths
-    // instead of letting them acquire Absolute's invariant.
-    guard @resource.of_path(self.channel, location.path) is Some(absolute) else {
-      continue
-    }
-    result.push(@language.Location::{
-      is_test: location.is_test,
-      uri: absolute,
-      range: @common.Range(
-        location.start_line,
-        location.start_column,
-        location.end_line,
-        location.end_column,
-      ),
+  self.reply.locations.filter_map(location => {
+    @resource.of_path(self.channel, location.path).bind(uri => {
+      project_moonide_location(location, uri)
     })
+  })
+}
+
+///|
+fn project_moonide_location(
+  location : @protocol.MoonIdeLocation,
+  uri : @common.Uri,
+) -> @language.Location? {
+  guard !location.path.is_empty() &&
+    location.start_line > 0 &&
+    location.start_column > 0 &&
+    location.end_line > 0 &&
+    location.end_column > 0 &&
+    (
+      location.end_line > location.start_line ||
+      (
+        location.end_line == location.start_line &&
+        location.end_column >= location.start_column
+      )
+    ) else {
+    return None
   }
-  result
+  Some(@language.Location::{
+    is_test: location.is_test,
+    uri,
+    range: @common.Range(
+      location.start_line,
+      location.start_column,
+      location.end_line,
+      location.end_column,
+    ),
+  })
 }
 
 ///|
@@ -297,17 +341,24 @@ fn MoonIdeProjection::to_viewer(
 /// accepted because the file panel has no second editor group; returning
 /// false lets Viewer preserve its current state and report that limitation.
 fn navigation_location_opener(
-  open_location : (@interop.ConversationKey, @common.Uri, @common.Range) -> Unit,
+  open_location : (
+    @interop.ConversationIdentity,
+    @common.Uri,
+    @common.Range,
+    Int32?,
+  ) -> Unit,
 ) -> @navigation_api.LocationOpenerHandle {
   LocationOpenerHandle(open=request => {
     guard request.mode is Current else { return false }
     guard viewer_state.navigation is Some(context) else { return false }
-    // The host already restricts results to the workspace and its toolchain.
-    guard model_uri_path(request.location.uri) is Some(absolute) &&
-      @resource.belongs_to(absolute, context.owner.channel) else {
-      return false
-    }
-    open_location(context.owner, absolute, request.location.range)
+    let absolute = request.location.uri
+    guard context.accepts_location(absolute) else { return false }
+    open_location(
+      context.owner,
+      absolute,
+      request.location.range,
+      context.cloud.map(files => files.epoch),
+    )
     true
   })
 }
@@ -320,8 +371,8 @@ fn navigation_text_model_resolver() -> @navigation_api.TextModelResolverHandle {
 }
 
 ///|
-/// Resolve a workspace or standard-library Peek model through the existing
-/// host file read. Each request owns one fresh readonly model; the returned
+/// Resolve a cross-file Peek model through OpenSeek's existing file read.
+/// Each request owns one fresh readonly model; the returned
 /// reference disposes it when Viewer's last use of that request ends. No LSP
 /// document cache or development-shell protocol is involved.
 async fn resolve_navigation_preview(
@@ -332,20 +383,21 @@ async fn resolve_navigation_preview(
     return None
   }
   guard viewer_state.navigation is Some(context) else { return None }
-  guard @resource.channel(resource) is Some(channel) &&
-    channel == context.owner.channel &&
-    model_uri_path(resource) is Some(absolute) else {
-    return None
-  }
-  let file = read_file_snapshot(context.owner, absolute) catch {
+  let document = viewer_state.document
+  let version = viewer_state.version
+  guard context.accepts_location(resource) else { return None }
+  let reply = read_source(context.owner, context.cloud, resource) catch {
     _ => return None
   }
+  let file = FileContent::from_reply(reply)
   if token.is_cancellation_requested() ||
-    viewer_state.navigation != Some(context) {
+    viewer_state.navigation != Some(context) ||
+    viewer_state.document != document ||
+    viewer_state.version != version {
     return None
   }
-  guard file is Some(Content(content~, sig~)) else { return None }
-  let name = @resource.label(absolute)
+  guard file is Content(content~, sig~) else { return None }
+  let name = @resource.label(resource)
   let model = @model.TextModel(
     resource,
     name,
@@ -373,10 +425,10 @@ test "navigation context follows the checkout root and its documents" {
     is Some(root) else {
     fail("test root path was not absolute")
   }
-  let owner : @interop.ConversationKey = {
+  let owner = @interop.Host({
     channel: @interop.ChannelId::Local,
     session: "test",
-  }
+  })
   guard navigation_context_for_file(owner, Some(root), file) is Some(context) else {
     fail("checkout root was not accepted for its own document")
   }
@@ -402,6 +454,7 @@ test "navigation context follows the checkout root and its documents" {
   }
   let windows : NavigationContext = {
     owner: context.owner,
+    cloud: None,
     root: @common.Uri::parse("openseek://local/C:/work/project/"),
   }
   assert_eq(
@@ -415,12 +468,17 @@ test "navigation context follows the checkout root and its documents" {
 ///|
 test "semantic navigation projects fragment-local lines onto the source" {
   let context : NavigationContext = {
-    owner: { channel: @interop.ChannelId::Local, session: "test", },
+    owner: @interop.Host({
+      channel: @interop.ChannelId::Local,
+      session: "test",
+    }),
+    cloud: None,
     root: @common.Uri::parse("openseek://local/work"),
   }
   let projection : MoonIdeModelProjection = {
     context,
     path: "src/main.mbt",
+    document: @common.Uri::parse("openseek://local/work/src/main.mbt"),
     line_offset: 29,
   }
   assert_eq(projection.source_line_number(1), 30)

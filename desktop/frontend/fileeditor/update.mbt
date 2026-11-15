@@ -214,6 +214,7 @@ fn show_tab_impl(
       let show = show_file_in_viewer(
         ctx.owner,
         root=ctx.root(),
+        cloud?=ctx.cloud_files,
         doc.name,
         content,
         document=path,
@@ -229,11 +230,14 @@ fn show_tab_impl(
         ctx.root() is Some(root) {
         @cmd.batch([
           show,
-          ctx.owner
-          .host()
-          .map_or(@cmd.none, host => {
-            request_diagnostics(dispatch, host, ctx.request_epoch, root, path)
-          }),
+          request_diagnostics(
+            dispatch,
+            ctx.owner,
+            ctx.request_epoch,
+            root,
+            path,
+            cloud?=ctx.cloud_files,
+          ),
         ])
       } else {
         show
@@ -258,6 +262,7 @@ fn show_tab_impl(
           show_file_in_viewer(
             ctx.owner,
             root=ctx.root(),
+            cloud?=ctx.cloud_files,
             doc.name,
             content,
             document=path,
@@ -1409,7 +1414,7 @@ fn active_moonbit_diagnostics(
     language_id(name) == "moonbit" else {
     return None
   }
-  Some(request_diagnostics(dispatch, owner, epoch, root, active))
+  Some(request_diagnostics(dispatch, @interop.Host(owner), epoch, root, active))
 }
 
 ///|
@@ -4144,7 +4149,27 @@ fn update_inner(
       }
       let docs = state.docs.copy()
       docs[path] = { ..doc, stale: false, }
-      (@cmd.none, { ..state, docs, })
+      let diagnostics = if ctx.active_file == Some(path) &&
+        language_id(doc.name) == "moonbit" &&
+        ctx.root() is Some(root) {
+        request_diagnostics(
+          dispatch,
+          owner,
+          epoch,
+          root,
+          path,
+          cloud?=ctx.cloud_files,
+        )
+      } else {
+        @cmd.none
+      }
+      (
+        @cmd.batch([
+          diagnostics,
+          @cmd.custom_cmd(_ => moon_ide_code_lens_changes.fire(())),
+        ]),
+        { ..state, docs, },
+      )
     }
     FileLoaded(
       owner~,
@@ -4239,6 +4264,7 @@ fn update_inner(
               let show = show_file_in_viewer(
                 ctx.owner,
                 root=ctx.root(),
+                cloud?=ctx.cloud_files,
                 name,
                 content,
                 document=path,
@@ -4256,17 +4282,14 @@ fn update_inner(
               if language_id(name) == "moonbit" && ctx.root() is Some(root) {
                 @cmd.batch([
                   show,
-                  ctx.owner
-                  .host()
-                  .map_or(@cmd.none, host => {
-                    request_diagnostics(
-                      dispatch,
-                      host,
-                      ctx.request_epoch,
-                      root,
-                      path,
-                    )
-                  }),
+                  request_diagnostics(
+                    dispatch,
+                    ctx.owner,
+                    ctx.request_epoch,
+                    root,
+                    path,
+                    cloud?=ctx.cloud_files,
+                  ),
                 ])
               } else {
                 show
@@ -4503,7 +4526,7 @@ fn update_inner(
             @cmd.custom_cmd(_scheduler => {
               // A sibling edit changes counts without changing the open model.
               if viewer_state.navigation is Some(context) &&
-                context.owner == owner &&
+                context.owner == @interop.Host(owner) &&
                 context.root == root {
                 moon_ide_code_lens_changes.fire(())
               }
@@ -4810,15 +4833,19 @@ fn update_inner(
       }
     DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
+        state_owner == owner &&
+        ctx.owner == owner &&
+        state.cloud_epoch == ctx.cloud_files.map(files => files.epoch) &&
         state.request_epoch == epoch {
-        (apply_diagnostics(owner.channel, absolute, diagnostics), state)
+        (apply_diagnostics(absolute, diagnostics), state)
       } else {
         (@cmd.none, state)
       }
     DiagnosticsPublished(channel~, absolute~, diagnostics~) =>
-      if state.owner is Some(@interop.Host(owner)) && owner.channel == channel {
-        (apply_diagnostics(channel, absolute, diagnostics), state)
+      if state.owner is Some(@interop.Host(owner)) &&
+        owner.channel == channel &&
+        @resource.belongs_to(absolute, channel) {
+        (apply_diagnostics(absolute, diagnostics), state)
       } else {
         (@cmd.none, state)
       }
@@ -5312,7 +5339,8 @@ test "language request failures remain a pure no-op below the root toast owner" 
   let emit = test_emit()
   let state = owned_state()
   let msg = LanguageRequestFailed(
-    owner=test_ctx().owner.host().unwrap(),
+    owner=test_ctx().owner,
+    cloud_epoch=None,
     message=Diagnostic("definition failed"),
   )
   let (_, first) = update(emit, msg, state, test_ctx())

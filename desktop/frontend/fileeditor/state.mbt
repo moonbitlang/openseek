@@ -1323,9 +1323,10 @@ pub(all) enum Msg {
   // Carry the captured owner so a conversation switch that races the async
   // request cannot open the target in the next workspace.
   OpenNavigationLocation(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     path~ : @common.Uri,
-    range~ : @common.Range
+    range~ : @common.Range,
+    cloud_epoch~ : Int32?
   )
   // `file` is the decoded reply (content + address, or a withheld-file
   // case). `range`, when present, is a jumped-to symbol's one-based range,
@@ -1414,7 +1415,7 @@ pub(all) enum Msg {
   // The language server's diagnostics returned by `lsp_open`. The full owner
   // fences a reply that lost a device/session switch while the request ran.
   DiagnosticsLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     absolute~ : @common.Uri,
     diagnostics~ : Array[@protocol.LspDiagnostic]
@@ -1430,7 +1431,11 @@ pub(all) enum Msg {
   // A user-invoked Definition/References request reached the host but failed.
   // The root app intercepts this message and shows its transient toast; the
   // owner prevents a late reply from surfacing over another conversation.
-  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : Failure)
+  LanguageRequestFailed(
+    owner~ : @interop.ConversationIdentity,
+    message~ : Failure,
+    cloud_epoch~ : Int32?
+  )
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input). NOT handled by this package's `update`:
   // the comment becomes a chip on the main package's composer draft, so the

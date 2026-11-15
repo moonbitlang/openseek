@@ -1,11 +1,10 @@
 // The viewer's hover provider: when the pointer rests on a symbol in a MoonBit
-// source or standalone script, ask the host's `hover` op (served by
-// `moon ide hover`) and render the reply as a viewer tooltip. The host owns
-// the language tooling; the frontend marshals positions and decodes replies.
+// source or standalone script, request Moon IDE hover through the owning
+// Host or Cloud session and render the reply as a Viewer tooltip.
 
 ///|
-/// A viewer model URI this app minted (the `to_string()` of an `openseek`-
-/// scheme `Uri` naming the file's absolute path) — the document key the
+/// A viewer model URI this app minted (the `to_string()` of a Host or Cloud
+/// resource `Uri`) — the document key the
 /// viewer's services (feedback, markers) index by. The newtype keeps
 /// arbitrary strings and filesystem paths out of APIs that mean a viewer
 /// document. Revision/fragment feedback may also retain its Cloud workspace
@@ -35,18 +34,30 @@ pub fn ModelUri::resource(self : ModelUri) -> @common.Uri {
 /// The returned URI is the same typed resource: no browser-host filesystem
 /// conversion is involved.
 fn model_uri_path(uri : @common.Uri) -> @common.Uri? {
-  guard @resource.channel(uri) is Some(_) else { return None }
+  guard @resource.channel(uri) is Some(_) ||
+    (
+      (uri.scheme == "openseek-cloud" || uri.scheme == "openseek-cloud-stdlib") &&
+      !uri.authority.is_empty() &&
+      uri.query.is_empty() &&
+      uri.fragment.is_empty()
+    ) else {
+    return None
+  }
   Some(uri)
 }
 
 ///|
 /// Desktop language features are revision-sensitive today: host operations
-/// read the live checkout named by an `openseek` URI. Token/Tree's Modified
+/// read live workspace/toolchain sources. Token/Tree's Modified
 /// fragments opt in through their distinct scheme and an explicit coordinate
 /// projection; Original and historical schemes remain excluded.
 fn moon_ide_model_selector() -> @language.LanguageSelector {
   LanguageSelectorList([
     LanguageFilter(LanguageFilter(language="moonbit", scheme=@resource.Scheme)),
+    LanguageFilter(LanguageFilter(language="moonbit", scheme="openseek-cloud")),
+    LanguageFilter(
+      LanguageFilter(language="moonbit", scheme="openseek-cloud-stdlib"),
+    ),
     LanguageFilter(
       LanguageFilter(language="moonbit", scheme=SemanticReviewModifiedScheme),
     ),
@@ -72,15 +83,21 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   guard moon_ide_model_projection(model) is Some(projection) else {
     return None
   }
+  let version = model.get_version_id()
   let reply = request_hover(
-    owner=projection.context.owner,
-    root=projection.context.root,
+    context=projection.context,
+    document=projection.document,
     path=projection.path,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
     line=projection.source_line_number(position.line_number) - 1,
     character=position.column - 1,
   ) catch {
     _ => return None
+  }
+  guard !token.is_cancellation_requested() &&
+    projection.is_current(model) &&
+    model.get_version_id() == version else {
+    return None
   }
   HoverProjection::{ reply, model, line_offset: projection.line_offset, }.to_viewer()
 }
@@ -97,22 +114,27 @@ fn register_hover_provider() -> Unit {
 }
 
 ///|
-/// Call the host `hover` op for an authorized source in project `root`,
-/// at a zero-based `line`/`character`.
+/// Query hover for the captured source at zero-based `line`/`character`.
 async fn request_hover(
-  owner~ : @interop.ConversationKey,
-  root~ : @common.Uri,
+  context~ : NavigationContext,
+  document~ : @common.Uri,
   path~ : String,
   line~ : Int32,
   character~ : Int32,
 ) -> @protocol.LspHoverReply {
-  @interop.bridge_request(owner.channel, @commands.lsp_hover, {
-    session: owner.session,
-    root: root.path,
-    path,
-    line,
-    character,
-  })
+  request_moonide(
+    context,
+    document,
+    @commands.lsp_hover,
+    {
+      session: context.owner.session(),
+      root: context.root.path,
+      path,
+      line,
+      character,
+    },
+    "hover",
+  )
 }
 
 ///|
@@ -159,51 +181,66 @@ fn HoverProjection::range(self : HoverProjection) -> @common.Range {
 }
 
 ///|
+// A later refresh of the active file supersedes an older diagnostics request.
+let moon_ide_diagnostics_generation : Ref[Int32] = Ref(0)
+
+///|
 /// Tell the host the viewer now shows `absolute` below its exact editor root,
 /// so its language server syncs the file and starts publishing diagnostics,
 /// then apply whatever it already has. Best-effort: a failed call just leaves
 /// the file without squiggles; live re-analysis still arrives as `diagnostics`
 /// events. v1 covers MoonBit only, the only language with a server behind the
-/// op. Standard-library files retain their owning project check context.
+/// op. Host and Cloud standard-library checks retain the owning project context.
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   epoch : Int32,
   root : @common.Uri,
   absolute : @common.Uri,
+  cloud? : CloudFiles,
 ) -> @cmd.Cmd {
-  guard navigation_context_for_file(owner, Some(root), absolute)
+  guard navigation_context_for_file(owner, Some(root), absolute, cloud?)
     is Some(context) &&
     context.query_path(absolute) is Some(path) else {
     return @cmd.none
   }
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = request_lsp_open(owner~, root~, path~) catch { _ => return }
-      // An absent `diagnostics` field means the host's check could not run:
-      // keep the markers we have rather than clearing them with fake "no
-      // problems".
-      guard reply.diagnostics is Some(diagnostics) else { return }
-      scheduler.add(
-        dispatch(DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~)),
-      )
-    })
-    |> ignore
-  })
-}
-
-///|
-/// Call the host `lsp_open` op for a source in the retained project context.
-async fn request_lsp_open(
-  owner~ : @interop.ConversationKey,
-  root~ : @common.Uri,
-  path~ : String,
-) -> @protocol.LspDiagnosticsReply {
-  @interop.bridge_request(owner.channel, @commands.lsp_open, {
-    session: owner.session,
-    root: root.path,
-    path,
-  })
+  @cmd.custom_cmd(
+    scheduler => {
+      guard viewer_state.document == Some(absolute) &&
+        viewer_state.live &&
+        viewer_state.navigation == Some(context) else {
+        return
+      }
+      moon_ide_diagnostics_generation.val += 1
+      let generation = moon_ide_diagnostics_generation.val
+      let version = viewer_state.version
+      @js.Promise::from_async(() => {
+        let reply = request_moonide(
+          context,
+          absolute,
+          @commands.lsp_open,
+          { session: owner.session(), root: root.path, path, },
+          "diagnostics",
+        ) catch {
+          _ => return
+        }
+        // Absence means the check could not run; only an actual empty result
+        // clears diagnostics already displayed by the Viewer.
+        guard generation == moon_ide_diagnostics_generation.val &&
+          viewer_state.version == version &&
+          viewer_state.document == Some(absolute) &&
+          viewer_state.navigation == Some(context) &&
+          reply.diagnostics is Some(diagnostics) else {
+          return
+        }
+        scheduler.add(
+          dispatch(DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~)),
+        )
+      })
+      |> ignore
+    },
+    kind=@cmd.after_render,
+  )
 }
 
 ///|

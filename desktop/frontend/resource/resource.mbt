@@ -26,6 +26,20 @@ pub fn cloud_root(
 }
 
 ///|
+/// Keep toolchain sources separate from identically named workspace files.
+pub fn cloud_stdlib_root(
+  origin : String,
+  account : String,
+  session : String,
+) -> @common.Uri? {
+  cloud_root(origin, account, session).bind(root => {
+    Some(root.with_(scheme="openseek-cloud-stdlib")) catch {
+      _ => None
+    }
+  })
+}
+
+///|
 /// Bind a protocol resource path to the channel whose backend produced it.
 /// The backend has already converted its native absolute path and rejected
 /// UNC; this boundary independently rejects non-rooted and double-rooted
@@ -98,7 +112,10 @@ pub fn contains(root : @common.Uri, path : @common.Uri) -> Bool {
   (
     channel(root) is Some(_) ||
     (
-      root.scheme == "openseek-cloud" &&
+      (
+        root.scheme == "openseek-cloud" ||
+        root.scheme == "openseek-cloud-stdlib"
+      ) &&
       !root.authority.is_empty() &&
       root.query.is_empty() &&
       root.fragment.is_empty()

@@ -325,6 +325,17 @@ export class CloudHarness {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
+    const moonide = path.match(/^\/v1\/sessions\/[^/]+\/moonide\/(hover|definition|references|diagnostics|codelens)$/);
+    if (moonide && request.method() === 'POST') {
+      const empty = {
+        hover: { value: '', markdown: false, has_range: false, start_line: 0, start_character: 0, end_line: 0, end_character: 0 },
+        definition: { kind: 'locations', locations: [] },
+        references: { kind: 'locations', locations: [] },
+        diagnostics: { diagnostics: [] },
+        codelens: { lenses: [] },
+      };
+      return json(empty[moonide[1]]);
+    }
     if (/^\/v1\/sessions\/[^/]+\/files\/events$/.test(path)) {
       return route.fulfill({ status: this.fileEventStatus, headers, contentType: 'text/event-stream', body: 'event: workspace_invalidated\ndata: {}\n\n' });
     }

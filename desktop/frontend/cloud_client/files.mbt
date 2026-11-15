@@ -120,6 +120,26 @@ pub async fn read_file(
 }
 
 ///|
+/// Toolchain sources share the file response and size policy, but are readonly.
+pub async fn read_moonide_source(
+  token : String,
+  session : String,
+  path : String,
+  allow_large~ : Bool = false,
+) -> @protocol.ReadFileReply {
+  let query = if allow_large { "&allow_large=true" } else { "" }
+  let json = request(
+    CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/moonide/source?source=stdlib&path=\{@uri.encode_component(path)}\{query}",
+    Get,
+    token~,
+  )
+  @json.from_json(json) catch {
+    _ => raise RequestError(Malformed)
+  }
+}
+
+///|
 /// Validate the complete representation without downloading its body. A
 /// changed file must still be read through the default preview size limit.
 pub async fn file_unchanged(
