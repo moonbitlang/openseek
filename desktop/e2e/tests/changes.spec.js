@@ -43,6 +43,7 @@ test('the changes card lists the checkout and what the agent attached, and remov
       additions: 120,
       deletions: 8,
       changed_files: 6,
+      checks: { passed: 8, failed: 1, pending: 0 },
     },
   };
   app.sessionArtifacts['session-1'] = [
@@ -71,22 +72,29 @@ test('the changes card lists the checkout and what the agent attached, and remov
   const card = changesCard(panel);
   const rows = card.locator('.conv-changes-row');
 
-  // The checkout comes first, as its pull request; then the attachments in
-  // the order the agent attached them. Each opens its page.
+  // The checkout comes first, as its pull request: its title over its
+  // repository, number and GitHub's line totals, with its checks. Then the
+  // attachments in the order the agent attached them. Each opens its page.
   await expect(rows).toHaveCount(3);
   const current = rows.nth(0);
-  await expect(current.getByText('#2130', { exact: true })).toBeVisible();
   await expect(current.getByText('Add a changes card to the conversation overview')).toBeVisible();
+  await expect(current.getByText('#2130', { exact: true })).toBeVisible();
+  await expect(current.getByText('+120', { exact: true })).toBeVisible();
+  await expect(current.getByText('−8', { exact: true })).toBeVisible();
   await expect(current.getByText('Current', { exact: true })).toBeVisible();
-  await expect(current.getByRole('link')).toHaveAttribute('href', `${repo}/pull/2130`);
-  await expect(current.getByRole('button', { name: 'Remove from this conversation' })).toHaveCount(0);
-  await expect(rows.nth(1).getByText('#2119', { exact: true })).toBeVisible();
+  await expect(current.locator('.conv-changes-link')).toHaveAttribute('href', `${repo}/pull/2130`);
+  const checks = current.getByRole('link', { name: 'CI · 1 failed · 8 passed' });
+  await expect(checks).toHaveText('1 failing');
+  await expect(checks).toHaveAttribute('href', `${repo}/pull/2130/checks`);
   await expect(rows.nth(1).getByText('Show session artifacts with the current checkout', { exact: true })).toBeVisible();
-  await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', `${repo}/pull/2119`);
+  await expect(rows.nth(1).getByText('#2119', { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText('+1726', { exact: true })).toBeVisible();
+  await expect(rows.nth(1).locator('.conv-changes-link')).toHaveAttribute('href', `${repo}/pull/2119`);
   await expect(rows.nth(1).locator('.conv-changes-icon')).toHaveClass(/\bclosed\b/);
   await expect(current.locator('.conv-changes-icon')).toHaveClass(/\bopen\b/);
   await expect(rows.nth(2).getByText('codex/session-artifacts-ui', { exact: true })).toBeVisible();
-  await expect(rows.nth(2).getByRole('link')).toHaveAttribute('href', `${repo}/tree/codex/session-artifacts-ui`);
+  await expect(rows.nth(2).getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
+  await expect(rows.nth(2).locator('.conv-changes-link')).toHaveAttribute('href', `${repo}/tree/codex/session-artifacts-ui`);
   expect(requests(app, 'session.artifacts_list').map(request => request.params)).toEqual([{ session: 'session-1' }]);
   // Every attached pull request is looked up, the checkout's own included;
   // branches are not.
@@ -100,9 +108,17 @@ test('the changes card lists the checkout and what the agent attached, and remov
   await expect(card.getByText('2 PRs · 1 branch', { exact: true })).toBeVisible();
   await card.getByRole('button', { name: 'Changes', exact: true }).click();
 
+  // The checkout's menu opens and copies its pull request; it cannot be
+  // removed.
+  await current.getByRole('button', { name: 'More actions' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Open on GitHub', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Copy link', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Remove from this conversation' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
   // Removing an attachment takes it off the conversation's list only.
-  await rows.nth(1).hover();
-  await rows.nth(1).getByRole('button', { name: 'Remove from this conversation' }).click();
+  await rows.nth(1).getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Remove from this conversation' }).click();
   await expect(rows).toHaveCount(2);
   await expect(card.getByText('#2119', { exact: true })).toBeHidden();
   expect(requests(app, 'session.artifacts_remove').map(request => request.params)).toEqual([
@@ -127,6 +143,7 @@ test('the changes card appears when the agent attaches something to a conversati
   const card = changesCard(panel);
   // GitHub has nothing to say about it, so it reads as its address.
   await expect(card.getByText('#2030', { exact: true })).toBeVisible();
+  await expect(card.locator('.conv-changes-checks')).toHaveCount(0);
   await expect(card.getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
   expect(requests(app, 'session.artifacts_list')).toHaveLength(2);
 
@@ -154,8 +171,85 @@ test('a checkout without a pull request reads as its branch and local diff, mark
   await expect(current.getByText('−3', { exact: true })).toBeVisible();
   // Untracked files past the host's limits were not counted: the totals are a
   // floor, and the row says so instead of presenting them as the whole size.
-  await expect(current.locator('.conv-changes-diff')).toHaveAttribute('title', 'Some untracked files were not counted');
-  await expect(current.getByRole('link')).toHaveCount(0);
+  await expect(current.locator('.conv-changes-meta .partial')).toHaveAttribute('title', 'Some untracked files were not counted');
+  await expect(current.locator('.conv-changes-link')).not.toHaveAttribute('href', /./);
+  await expect(current.getByRole('button', { name: 'More actions' })).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a published branch without a pull request offers to create one', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.gitBranch = {
+    branch: 'haoxiang/ready',
+    diffstat: { added: 258, removed: 97, files: 9, partial: false },
+  };
+  app.gitPullRequest = {
+    branch: 'haoxiang/ready',
+    compare_url: `${repo}/compare/haoxiang/ready?expand=1`,
+  };
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const panel = await showOverview(page);
+  const current = changesCard(panel).locator('.conv-changes-row').first();
+  await expect(current.getByText('+258', { exact: true })).toBeVisible();
+  await expect(current.getByRole('link', { name: 'Create PR' })).toHaveAttribute(
+    'href',
+    `${repo}/compare/haoxiang/ready?expand=1`,
+  );
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('past five rows the rest of the changes wait behind show more', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionArtifacts['session-1'] = [1, 2, 3, 4, 5, 6, 7].map(number => ({
+    type: 'pull_request',
+    url: `${repo}/pull/${number}`,
+  }));
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const panel = await showOverview(page);
+  const card = changesCard(panel);
+  const rows = card.locator('.conv-changes-row');
+  await expect(rows).toHaveCount(5);
+  await card.getByRole('button', { name: 'Show 2 more' }).click();
+  await expect(rows).toHaveCount(7);
+  await card.getByRole('button', { name: 'Show less' }).click();
+  await expect(rows).toHaveCount(5);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a row menu opens beside its row and follows it when the overview scrolls', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await page.setViewportSize({ width: 1440, height: 420 });
+  app.sessionArtifacts['session-1'] = [1, 2, 3, 4, 5, 6, 7].map(number => ({
+    type: 'pull_request',
+    url: `${repo}/pull/${number}`,
+  }));
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const panel = await showOverview(page);
+  const card = changesCard(panel);
+  await card.getByRole('button', { name: 'Show 2 more' }).click();
+  const trigger = card.locator('.conv-changes-row').nth(1).getByRole('button', { name: 'More actions' });
+  await trigger.click();
+  const remove = page.getByRole('menuitem', { name: 'Remove from this conversation' });
+  await expect(remove).toBeVisible();
+  // The menu hangs just below its trigger, however far the overview scrolled.
+  const gap = async () => {
+    const button = await trigger.boundingBox();
+    const item = await remove.boundingBox();
+    return item.y - (button.y + button.height);
+  };
+  await expect.poll(gap).toBeGreaterThanOrEqual(0);
+  await expect.poll(gap).toBeLessThan(80);
+  await panel.evaluate(element => {
+    element.scrollTop += 120;
+  });
+  await expect.poll(gap).toBeGreaterThanOrEqual(0);
+  await expect.poll(gap).toBeLessThan(80);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -205,10 +299,11 @@ test('merged attached pull requests fold into one row that unfolds them', async 
   await fold.click();
   await expect(rows).toHaveCount(2);
 
-  // One button takes every merged pull request off the conversation's list.
+  // The fold's menu takes every merged pull request off the conversation's
+  // list.
   const foldRow = rows.filter({ has: page.getByRole('button', { name: '2 merged', exact: true }) });
-  await foldRow.hover();
-  await foldRow.getByRole('button', { name: 'Remove merged pull requests from this conversation' }).click();
+  await foldRow.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Remove merged pull requests from this conversation' }).click();
   await expect(fold).toHaveCount(0);
   await expect(rows).toHaveCount(1);
   await expect(card.getByText('Pull request 2201', { exact: true })).toBeVisible();
