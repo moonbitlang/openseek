@@ -392,8 +392,7 @@ async fn engine_mcp_args(
     let path = skills.join("\{@mcp.SkillName}/mcp.json")
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
-    let text =
-      #|{"mcpServers":{"seekmoon":{"url":"${OPENSEEK_DESKTOP_TOOLS_URL}","headers":{"Authorization":"Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"}}}}
+    let text = @mcp.skill_mcp_config()
     let skill = skills.join("\{@mcp.SkillName}/SKILL.md").to_path()
     for file in [(path.to_path(), text), (skill, @mcp.skill_markdown())] {
       let (path, text) = file
