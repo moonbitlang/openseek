@@ -88,7 +88,9 @@ pub fn render_markdown(
   } else {
     None
   }
-  let renderer = @cmark_html.renderer(safe=true, node_attributes?)
+  let renderer = @cmark_html.renderer(safe=true, node_attributes?).compose(
+    markdown_math_renderer(),
+  )
   let block_override = @cmark_renderer.Renderer::new(block=fn(
     ctx,
     block,

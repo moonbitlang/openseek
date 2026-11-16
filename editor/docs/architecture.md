@@ -171,6 +171,9 @@ common -> foundations
   stores, queues, backends, attached-view aggregation, and scheduling machinery
   are package-private.
 - `services` and `tokens`: language-id encoding and compact line tokens.
+- `math`: untrusted TeX-to-KaTeX HTML shared by Markdown and host renderers,
+  including escaped source and visible diagnostics for invalid formulas. Hosts
+  own the compatible CSS/font assets.
 - `editor_api`: the single owner of public cursor/model/scroll event values and
   editor-option enums shared by root, cursor, layout, view-model, and browser
   consumers.

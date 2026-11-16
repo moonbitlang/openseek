@@ -114,6 +114,7 @@ fn render_markdown_with_mermaid_loader(
     source_mapping=options.source_mapping,
     language_id?=options.language_id,
     code_block_renderer?=options.code_block_renderer,
+    render_math=(tex, display) => @math.render(tex, display~),
   )
   let element = match target {
     Some(target) => target

@@ -20,6 +20,7 @@ pub fn markdown_nodes(
   open_file? : (String) -> @cmd.Cmd,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
+  render_math~ : (String, Bool) -> @html.Html = math_node,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
@@ -29,6 +30,7 @@ pub fn markdown_nodes(
       open_file,
       artifact_view,
       defer_artifacts,
+      render_math,
       citations: [],
       footnotes: Footnotes::new(),
       in_sources: false,
@@ -56,6 +58,7 @@ priv struct MarkdownRender {
   open_file : ((String) -> @cmd.Cmd)?
   artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
   defer_artifacts : Bool
+  render_math : (String, Bool) -> @html.Html
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
@@ -90,7 +93,7 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     ExtMathBlock(node) =>
-      out.push(math_node(lines_text(node.v.code), display=true, block=true))
+      out.push((self.render_math)(lines_text(node.v.code), true))
     CodeBlock(node) =>
       out.push(
         code_block(
@@ -101,7 +104,6 @@ fn MarkdownRender::push_block(
           defer_artifacts=self.defer_artifacts,
         ),
       )
-    // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
     List(node) => out.push(self.list(node.v))
@@ -573,14 +575,7 @@ fn MarkdownRender::push_inline(
       out.push(@html.strong(self.inline_nodes(node.v.inline, linkify_urls~)))
     ExtStrikethrough(node) =>
       out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
-    ExtMathSpan(node) =>
-      out.push(
-        math_node(
-          tights_text(node.v.tex_layout),
-          display=node.v.display,
-          block=false,
-        ),
-      )
+    ExtMathSpan({ v, .. }) => out.push((self.render_math)(v.tex(), v.display))
     Autolink(node) => {
       let url = node.v.link.v
       // Email autolinks resolve to a safe `mailto:`; a URI autolink like
@@ -651,7 +646,6 @@ fn MarkdownRender::push_inline(
         }
       }
     }
-    // Raw HTML is shown as text, not injected; see the module comment.
     RawHtml(node) => out.push(@html.text(tights_text(node.v.0)))
   }
 }

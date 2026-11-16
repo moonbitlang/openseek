@@ -7,7 +7,6 @@ import {
   "moonbit-community/cmark/cmark_html",
   "moonbit-community/cmark/cmark_renderer",
   "moonbitlang/editor/base/common",
-  "moonbitlang/editor/viewer/common/math",
   "moonbitlang/editor/syntax",
   "moonbitlang/editor/viewer/common/languages",
   "moonbitlang/editor/viewer/common/model",
