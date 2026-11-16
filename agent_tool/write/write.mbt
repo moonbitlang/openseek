@@ -49,8 +49,6 @@ pub fn definition(
       #|content (.mbt, .mbt.md, moon.mod, moon.pkg) that fails to lex/parse is rejected
       #|BEFORE writing or approval — see revert_on_parse_errors. Do not
       #|create Markdown or README files unless the user explicitly asks for them.
-      #|After saving a .mbtx script, moon check --target wasm reports compiler
-      #|diagnostics without executing it.
     ),
     schema=JsonSchema({
       "type": "object",

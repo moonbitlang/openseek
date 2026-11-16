@@ -76,8 +76,6 @@ pub fn definition(
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
-      #|Standalone .mbtx files are checked individually with moon check --target wasm,
-      #|without executing them.
       #|Both diagnostic guards default off. When either is enabled, moon check runs
       #|before and after writing. Otherwise only the post-write check runs, reporting
       #|diagnostics without reverting the edit.

@@ -42,8 +42,6 @@ pub fn definition(
       #|original files before anything is written; a batch that would introduce lex/parse
       #|errors into a .mbt file is also rejected BEFORE writing (see
       #|revert_on_parse_errors); if any edit fails, no files are changed.
-      #|Each changed .mbtx script is checked separately with moon check --target wasm,
-      #|without executing it, including batches that also change project sources.
     ),
     schema=JsonSchema({
       "type": "object",
