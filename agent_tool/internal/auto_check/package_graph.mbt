@@ -22,8 +22,8 @@ const PackageGraphMaxOutputChars : Int32 = 4000000
 ///|
 /// The project directory `count_errors` would check `path` from — the nearest
 /// ancestor holding a `moon.mod` or `moon.work` — or `None` when `path` is not
-/// a MoonBit source or manifest inside a project. A caller pairing a check with
-/// a package graph runs both from here.
+/// a MoonBit source or manifest inside a project. Standalone .mbtx scripts
+/// return their containing directory, which need not have a package graph.
 pub async fn check_cwd(path : String) -> String? {
   moon_check_cwd(path)
 }

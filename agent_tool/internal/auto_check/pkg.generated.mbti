@@ -13,6 +13,8 @@ pub async fn check(String) -> CheckOutcome
 
 pub async fn check_cwd(String) -> String?
 
+pub async fn check_identity(String) -> String?
+
 pub async fn content_parse_errors(String, String) -> ParseGate?
 
 pub async fn count_errors(String) -> CheckErrors?

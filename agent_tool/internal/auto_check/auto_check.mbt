@@ -1,8 +1,9 @@
 ///|
 /// Append bounded raw `moon check` feedback after successful writes to MoonBit
 /// source or manifest files. The check runs from the containing MoonBit module
-/// or workspace root. Non-MoonBit paths and paths outside a MoonBit project are
-/// returned unchanged.
+/// or workspace root. Standalone .mbtx scripts are checked individually for
+/// Wasm, without running them; they do not require a surrounding project.
+/// Other paths outside a MoonBit project are returned unchanged.
 pub async fn append_summary(path : String, content : String) -> String {
   let summary = auto_check_summary(path) catch { _ => None }
   match summary {
@@ -13,11 +14,16 @@ pub async fn append_summary(path : String, content : String) -> String {
 
 ///|
 async fn auto_check_summary(path : String) -> String? {
+  // remove also uses this summary; a deleted standalone script has no
+  // remaining project to check. Missing project sources still check their module.
+  if path.has_suffix(".mbtx") && !@fs.exists(path) {
+    return None
+  }
   guard moon_check_cwd(path) is Some(cwd) else { return None }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
     collect_process_output(
       "moon",
-      ["check", "--diagnostic-limit", "1"],
+      check_args(path, ["--diagnostic-limit", "1"]),
       cwd~,
       max_output_chars=@moon_check.MaxOutputChars,
     )
@@ -297,7 +303,7 @@ pub async fn count_errors(path : String) -> CheckErrors? {
 /// them differently: a non-MoonBit path gets no check line at all, while a
 /// check that could not run deserves a sentence.
 pub(all) enum CheckOutcome {
-  /// `path` is not a MoonBit source or manifest inside a MoonBit project.
+  /// `path` is neither a standalone script nor source/manifest inside a project.
   NotApplicable
   /// The check could not run; carries the reason, e.g. `timed out`.
   Unavailable(String)
@@ -311,14 +317,18 @@ pub(all) enum CheckOutcome {
 }
 
 ///|
-/// Run `moon check --json` for the project containing `path` and tally its
-/// diagnostics, or say why that was not possible.
+/// Run `moon check --json` for the project containing `path`, or for the
+/// standalone .mbtx script itself, and tally its diagnostics.
 pub async fn check(path : String) -> CheckOutcome {
   guard moon_check_cwd(path) is Some(cwd) else { return NotApplicable }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
     collect_process_output(
       "moon",
-      ["check", "--json", "--diagnostic-limit", "\{MoonCheckDiagnosticLimit}"],
+      check_args(path, [
+        "--json",
+        "--diagnostic-limit",
+        "\{MoonCheckDiagnosticLimit}",
+      ]),
       cwd~,
       max_output_chars=MoonCheckJsonMaxOutputChars,
     )
@@ -433,6 +443,9 @@ fn parse_check_document(text : String) -> CheckDocument? {
 
 ///|
 async fn moon_check_cwd(path : String) -> String? {
+  if path.has_suffix(".mbtx") {
+    return Some(containing_dir(path))
+  }
   if !is_relevant_moonbit_path(path) {
     return None
   }
@@ -557,3 +570,29 @@ pub extend ErrorSite with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend ErrorSite with Eq::{equal, not_equal}
+
+///|
+/// Standalone scripts use the same Wasm target as mbtx execution, without
+/// executing their entry point. Project checks retain their configured target.
+fn check_args(path : String, options : Array[String]) -> Array[String] {
+  if path.has_suffix(".mbtx") {
+    [
+      "check",
+      "--target",
+      "wasm",
+      ..options,
+      "./" + @workspace_path.path_basename(path),
+    ]
+  } else {
+    ["check", ..options]
+  }
+}
+
+///|
+/// Identity for deduplicating checks: each standalone script is independent,
+/// while source files in one project share a project check.
+pub async fn check_identity(path : String) -> String? {
+  guard moon_check_cwd(path) is Some(cwd) else { return None }
+  let target = if path.has_suffix(".mbtx") { path } else { cwd }
+  Some(@fs.realpath(target) catch { _ => target })
+}

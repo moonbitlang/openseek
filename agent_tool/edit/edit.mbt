@@ -76,6 +76,8 @@ pub fn definition(
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
+      #|Standalone .mbtx files are checked individually with moon check --target wasm,
+      #|without executing them.
       #|Both diagnostic guards default off. When either is enabled, moon check runs
       #|before and after writing. Otherwise only the post-write check runs, reporting
       #|diagnostics without reverting the edit.
@@ -1045,14 +1047,14 @@ async fn commit_edit(
 const TruncatedCapture : String = "moon check hid some diagnostic sites behind its diagnostic limit, so the guard cannot compare the two runs"
 
 ///|
-/// The spellings of `path` whose projects a check must cover: the written one
+/// The spellings of `path` whose projects or scripts a check must cover: the written one
 /// and, when it is a link into a different project, its target. Spellings
-/// outside any MoonBit project are dropped; an unresolvable link is just its
+/// outside any MoonBit project are dropped unless they are scripts; a dangling link uses its
 /// written spelling.
 async fn check_projects(path : String) -> Array[String] {
   let target = resolved_target(path)
-  let own = @auto_check.check_cwd(path)
-  let theirs = @auto_check.check_cwd(target)
+  let own = @auto_check.check_identity(path)
+  let theirs = @auto_check.check_identity(target)
   let spellings = []
   // The resolved target first: a fully resolved path has no link left to
   // retarget, so the module checked is the module written.
@@ -1061,8 +1063,8 @@ async fn check_projects(path : String) -> Array[String] {
   }
   // The written spelling too, when it belongs to a project of its own (a
   // link inside module a pointing into module b is compiled by both).
-  // Compare canonical project directories: `/tmp/x` and `/private/tmp/x`
-  // are one project, not two checks.
+  // Compare canonical check identities: aliases share a check; standalone
+  // scripts and their containing projects do not.
   match (own, theirs) {
     (Some(own_dir), Some(their_dir)) =>
       if resolved_target(own_dir) != resolved_target(their_dir) {
@@ -1075,13 +1077,13 @@ async fn check_projects(path : String) -> Array[String] {
 }
 
 ///|
-/// The canonical project directory each spelling is checked from, so a
+/// The canonical project or script checked for each spelling, so a
 /// project that vanishes or is replaced under an edit (a manifest removed,
 /// discovery falling back to a parent module) is a visible change.
 async fn project_roots(spellings : Array[String]) -> Array[String?] {
   let roots = []
   for spelling in spellings {
-    let root = match @auto_check.check_cwd(spelling) {
+    let root = match @auto_check.check_identity(spelling) {
       Some(dir) => Some(resolved_target(dir))
       None => None
     }

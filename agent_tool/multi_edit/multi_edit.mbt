@@ -42,6 +42,8 @@ pub fn definition(
       #|original files before anything is written; a batch that would introduce lex/parse
       #|errors into a .mbt file is also rejected BEFORE writing (see
       #|revert_on_parse_errors); if any edit fails, no files are changed.
+      #|Each changed .mbtx script is checked separately with moon check --target wasm,
+      #|without executing it, including batches that also change project sources.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -777,16 +779,14 @@ async fn revert_guarded_response(
 }
 
 ///|
-/// One representative path per distinct project the batch touches, in batch
-/// order: each written path and, for a link, its resolved target, keyed by
-/// the canonical project directory so `/tmp/x` and `/private/tmp/x` are one.
-/// Paths outside any MoonBit project are dropped.
+/// One representative per project or standalone script, in batch order.
+/// Written paths and symlink targets use canonical check identities so aliases
+/// share a check, but distinct scripts in one directory remain independent.
 async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
   let seen : Map[String, Bool] = Map([])
   let representatives : Array[String] = []
   async fn consider(path : String) -> Unit {
-    guard @auto_check.check_cwd(path) is Some(dir) else { return }
-    let key = @fs.realpath(dir) catch { _ => dir }
+    guard @auto_check.check_identity(path) is Some(key) else { return }
     if !seen.contains(key) {
       seen[key] = true
       representatives.push(path)

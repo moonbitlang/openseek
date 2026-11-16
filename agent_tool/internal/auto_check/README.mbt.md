@@ -16,6 +16,13 @@ arrays. The private collector bounds merged stdout/stderr by Unicode character
 count, closes stdin immediately, and cancels the child on output overflow or
 when the caller's timeout expires.
 
+Standalone `.mbtx` files are checked with `moon check --target wasm` after
+write/edit operations, even outside a MoonBit project. The check resolves the
+script's inline imports and reports type errors without running its entry point.
+Batches check every distinct script as well as each affected project; scripts
+share the existing diagnostic guards. The pre-write parse gate remains limited
+to project source and manifests.
+
 ## Everything here fails open
 
 Each entry point returns `None` (or the content unchanged) when it cannot do its
