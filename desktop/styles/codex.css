@@ -194,9 +194,9 @@
   }
 
   .transcript,
-  .composer {
-    padding-left: var(--space-5);
-    padding-right: var(--space-5);
+  .composer,
+  .user-question-region {
+    --conversation-padding-inline: var(--space-5);
   }
 
   /* The scroller already insets the stream here; a full 2em on top leaves

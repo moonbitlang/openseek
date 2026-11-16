@@ -184,34 +184,6 @@
   --z-connection-lost: 80;
 }
 
-:root[data-font-size="12"] {
-  --font-size-base: 12px;
-}
-
-:root[data-font-size="13"] {
-  --font-size-base: 13px;
-}
-
-:root[data-font-size="14"] {
-  --font-size-base: 14px;
-}
-
-:root[data-font-size="15"] {
-  --font-size-base: 15px;
-}
-
-:root[data-font-size="16"] {
-  --font-size-base: 16px;
-}
-
-:root[data-font-size="17"] {
-  --font-size-base: 17px;
-}
-
-:root[data-font-size="18"] {
-  --font-size-base: 18px;
-}
-
 /* Keep CSS and the measured code view supplied through ViewerOptions on the
    same scale. Right-panel documents use app body size; embedded snippets keep
    their compact scale. Preserve these roles when changing the base default,

@@ -383,6 +383,7 @@ html.is-resizing-review .review-split-handle {
      Component styles consume the dimension that matches their seam. */
   --resize-handle-width: 6px;
   --resize-handle-height: 6px;
+  --conversation-width: 820px;
   --sidebar-mode-padding: calc(var(--titlebar-control-gap) / 2);
   /* Native controls, navigation and the mode switch must all fit. The
      trailing 13px includes the sidebar inset and its border. */
