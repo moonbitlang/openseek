@@ -1,9 +1,3 @@
-// Markdown rendering for transcript content. The engine's assistant text is
-// CommonMark (with the GFM-ish cmark extensions: tables, strikethrough, task
-// lists); this module parses it with moonbit-community/cmark and maps the
-// document tree directly onto Rabbita nodes. Raw HTML stays visible as text;
-// no input HTML is inserted into the live document.
-
 ///|
 /// Render a markdown string to a list of block-level Rabbita nodes.
 ///
@@ -26,6 +20,7 @@ pub fn markdown_nodes(
   open_file? : (String) -> @cmd.Cmd,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
+  render_math~ : (String, Bool) -> @html.Html = math_node,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
@@ -35,6 +30,7 @@ pub fn markdown_nodes(
       open_file,
       artifact_view,
       defer_artifacts,
+      render_math,
       citations: [],
       footnotes: Footnotes::new(),
       in_sources: false,
@@ -62,6 +58,7 @@ priv struct MarkdownRender {
   open_file : ((String) -> @cmd.Cmd)?
   artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
   defer_artifacts : Bool
+  render_math : (String, Bool) -> @html.Html
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
@@ -96,13 +93,7 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     ExtMathBlock(node) =>
-      out.push(
-        @html.div(
-          class="math math-display",
-          attrs=@html.Attrs::build().data_set("math-display", "true"),
-          "\\[\n" + lines_text(node.v.code) + "\n\\]",
-        ),
-      )
+      out.push((self.render_math)(lines_text(node.v.code), true))
     CodeBlock(node) =>
       out.push(
         code_block(
@@ -113,7 +104,6 @@ fn MarkdownRender::push_block(
           defer_artifacts=self.defer_artifacts,
         ),
       )
-    // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
     List(node) => out.push(self.list(node.v))
@@ -585,23 +575,7 @@ fn MarkdownRender::push_inline(
       out.push(@html.strong(self.inline_nodes(node.v.inline, linkify_urls~)))
     ExtStrikethrough(node) =>
       out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
-    ExtMathSpan(node) => {
-      let (opening, closing) = if node.v.display {
-        ("\\[", "\\]")
-      } else {
-        ("\\(", "\\)")
-      }
-      out.push(
-        @html.span(
-          class=if node.v.display { "math math-display" } else { "math" },
-          attrs=@html.Attrs::build().data_set(
-            "math-display",
-            node.v.display.to_string(),
-          ),
-          opening + tights_text(node.v.tex_layout) + closing,
-        ),
-      )
-    }
+    ExtMathSpan({ v, .. }) => out.push((self.render_math)(v.tex(), v.display))
     Autolink(node) => {
       let url = node.v.link.v
       // Email autolinks resolve to a safe `mailto:`; a URI autolink like
@@ -672,7 +646,6 @@ fn MarkdownRender::push_inline(
         }
       }
     }
-    // Raw HTML is shown as text, not injected; see the module comment.
     RawHtml(node) => out.push(@html.text(tights_text(node.v.0)))
   }
 }

@@ -35,9 +35,13 @@ With source mapping enabled, paragraphs, headings, quotes, lists, tables,
 code blocks, and thematic breaks carry their own source ranges. List items,
 table rows, and table cells also carry ranges from the same AST, so tight list
 text and individual cells resolve without expanding to the whole container.
-Math text has no cmark attribute callback and receives one package-owned
-source-bearing wrapper. Blank lines, link definitions, and omitted raw HTML
-have no element to mark. A tight list paragraph has no `<p>`; its `<li>`
+Math blocks have no cmark attribute callback and receive one package-owned
+source-bearing wrapper. The optional `render_math(tex, display)` callback
+renders both math spans and blocks; without it, cmark keeps escaped TeX source.
+The browser adapter supplies `viewer/common/math` for KaTeX HTML and visible
+parse errors. Hosts load compatible CSS and fonts. Callback-generated HTML
+must preserve the host's content trust boundary.
+Blank lines, link definitions, and omitted raw HTML have no element to mark. A tight list paragraph has no `<p>`; its `<li>`
 owns the item source range.
 Nested paragraphs and code blocks retain their own source ranges. A container
 and its sole child can share the same source range; ranges describe source

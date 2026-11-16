@@ -30,20 +30,23 @@ pub fn markdown_source_attributes(source_range : @common.OffsetRange) -> String 
 
 ///|
 /// A renderer override may emit any number of roots. One owned wrapper keeps
-/// all of them associated with the code block that produced them.
-fn markdown_write_code_override(
+/// all of them associated with the source block that produced them.
+fn markdown_write_source_block(
   ctx : @cmark_renderer.Context,
-  source_range : @common.OffsetRange,
-  html : String,
-  source_mapping~ : Bool,
-) -> Unit {
-  if source_mapping {
-    ctx.string(
-      "<div class=\"moonbit-viewer-markdown-source-block\"\{markdown_source_attributes(source_range)}>",
-    )
-    ctx.string(html)
-    ctx.string("</div>")
-  } else {
-    ctx.string(html)
+  source_range : @common.OffsetRange?,
+  write : () -> Unit raise,
+) -> Unit raise {
+  match source_range {
+    None => write()
+    Some(range) => {
+      let attrs = markdown_source_attributes(range)
+      ctx.string(
+        (
+          $|<div class="moonbit-viewer-markdown-source-block"\{attrs}>
+        ),
+      )
+      write()
+      ctx.string("</div>")
+    }
   }
 }

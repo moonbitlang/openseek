@@ -7,6 +7,7 @@ fn answer_citations(source : String) -> Array[Citation] {
     open_file: None,
     artifact_view: None,
     defer_artifacts: false,
+    render_math: math_node,
     citations: [],
     footnotes: Footnotes::new(),
     in_sources: false,
