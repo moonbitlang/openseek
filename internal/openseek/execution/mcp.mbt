@@ -20,10 +20,9 @@ struct McpRegistry {
 /// `skills` brings in its `mcp.json` join them, ahead of the files, so a
 /// file's server replaces a skill's of the same name. A skill's configuration
 /// expands only `${OPENSEEK_SKILL_DIR}`, its own directory — no variable of
-/// the engine's environment, which a skill nobody vetted could carry off;
-/// its stdio servers run through `moonx` inside a
-/// moonrun policy written under `policy_dir` (see `confine_skill_servers`). No
-/// server connects here: each connects in the background on `scope`'s group
+/// the engine's environment. Stdio commands run as configured, without an
+/// engine-injected sandbox. No server connects here: each connects in the
+/// background on `scope`'s group
 /// when a script first reaches it. `on_change` runs each time `status` may
 /// have changed since — a server started connecting or settled, or a connected
 /// server's connection closed — and must not block. Nothing here fails the
@@ -33,7 +32,6 @@ pub async fn start_mcp(
   scope : @agent_runtime.AgentTaskScope,
   config_paths : Array[String],
   skills~ : Array[@agent_skill.Skill] = [],
-  policy_dir~ : String,
   workspace_root~ : String,
   on_change? : () -> Unit,
 ) -> McpRegistry {
@@ -41,7 +39,7 @@ pub async fn start_mcp(
   async fn load(
     path : String,
     env : Map[String, String],
-    confine : async (Array[@mcpconfig.McpServer]) -> Array[@mcpconfig.McpServer],
+    prepare : (Array[@mcpconfig.McpServer]) -> Array[@mcpconfig.McpServer] raise,
   ) -> Array[@mcpconfig.McpServer]? {
     let text = @fs.read_text(path) catch {
       error => {
@@ -51,7 +49,7 @@ pub async fn start_mcp(
         return None
       }
     }
-    let servers = confine(@mcpconfig.decode(@json.parse(text), env~)) catch {
+    let servers = prepare(@mcpconfig.decode(@json.parse(text), env~)) catch {
       error => {
         let error = "\{error}"
         @emit.emit(McpConfigInvalid(path~, error~))
@@ -65,25 +63,16 @@ pub async fn start_mcp(
 
   let host_env = @env.get_env_vars()
   let skill_servers : Array[@mcpconfig.McpServer] = []
-  let moonx = if skills.any(skill => skill.mcp_config_path() is Some(_)) {
-    @which.find(SkillServerProgram, path=host_env.get("PATH").unwrap_or(""))
-  } else {
-    None
-  }
-  let mut policies = 0
   for skill in skills {
     guard skill.mcp_config_path() is Some(path) else { continue }
     let dir = match path.rev_split_once("/") {
       Some((dir, _)) => dir.to_owned()
       None => "."
     }
-    let confined = load(path, Map([(SkillDirEnv, dir)]), servers => {
-      confine_skill_servers(servers, skill_dir=dir, workspace_root~, moonx~, policy=() => {
-        policies += 1
-        "\{policy_dir}/\{policies}.json"
-      })
+    let prepared = load(path, Map([(SkillDirEnv, dir)]), servers => {
+      prepare_skill_servers(servers, skill_dir=dir)
     })
-    if confined is Some(servers) {
+    if prepared is Some(servers) {
       skill_servers.append(servers)
     }
   }

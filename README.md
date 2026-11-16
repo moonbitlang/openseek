@@ -358,19 +358,15 @@ skill's name, description, and file path; the agent reads the file before
 applying it. See `agent_skill/README.mbt.md`.
 
 A `<name>/SKILL.md` skill can bring MCP servers in an `mcp.json` beside it, in
-the shape `--mcp-config` reads. A skill may come from a checkout or a library
-nobody vetted, so its servers are confined:
+the shape `--mcp-config` reads. Skill configurations have these rules:
 
 - Its entries expand only `${OPENSEEK_SKILL_DIR}`, the skill's own directory;
-  referencing any other variable makes the file invalid. A server that needs
-  a secret from the environment belongs in an `--mcp-config` file.
-- A stdio server must run `moonx` (a `.mbtx` script or a registry package, as
-  Wasm); the engine runs the first `moonx` in an absolute `PATH` directory, so
-  a checkout's own `moonx` never stands in for it. The engine writes a moonrun
-  policy for it and passes it as `--experimental-policy`: it may read the skill's directory and the
-  workspace, and nothing else — no writes, no network, no processes — and its
-  environment is its own `env` plus `OPENSEEK_SKILL_DIR`. A server that runs
-  another command or names a policy of its own makes the file invalid.
+  referencing any other variable makes the file invalid. Configuration values
+  that reference host environment variables belong in an `--mcp-config` file.
+- Stdio servers run their configured command and arguments, with their `env`
+  values and `OPENSEEK_SKILL_DIR` added to the inherited process environment.
+  The engine does not inject a sandbox policy or restrict the command.
+  Approval and permissions for skill servers are deferred to future work.
 - An HTTP server may not run a `headersHelper`.
 
 The agent learns of a skill's server from the skill, and reaches it like any

@@ -96,7 +96,6 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       let mcp = @execution.start_mcp(
         AgentTaskScope(group),
         [first, broken, missing, second],
-        policy_dir="\{directory}/policies",
         workspace_root=directory,
       )
       let items = catalog(mcp.serve(AgentTaskScope(group)))
@@ -163,7 +162,6 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         let failed = @execution.start_mcp(
           AgentTaskScope(group),
           paths,
-          policy_dir="\{directory}/policies",
           workspace_root=directory,
         )
         assert_true(failed.status().servers is [])
@@ -218,7 +216,6 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     let registry = @execution.start_mcp(
       AgentTaskScope(group),
       [path],
-      policy_dir="\{dir}/policies",
       workspace_root=dir,
       on_change=() => ignore(changed.try_put(()) catch { _ => false }),
     )
@@ -280,14 +277,14 @@ async fn write_skill(dir : String, name : String, config : Json) -> Unit {
 }
 
 ///|
-async test "a skill's stdio server runs moonx confined to a policy the engine writes" {
+async test "a skill's stdio server accepts a configured native command" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
   defer @fs.rmdir(dir, recursive=true)
   write_skill(dir, "tracker", {
     "mcpServers": {
       "tracker": {
-        "command": "moonx",
-        "args": ["${OPENSEEK_SKILL_DIR}/server.mbtx"],
+        "command": "node",
+        "args": ["${OPENSEEK_SKILL_DIR}/server.js"],
         "env": { "MODE": "read-only" },
       },
     },
@@ -297,7 +294,6 @@ async test "a skill's stdio server runs moonx confined to a policy the engine wr
       AgentTaskScope(group),
       [],
       skills=@agent_skill.discover_skills("\{dir}/skills"),
-      policy_dir="\{dir}/policies",
       workspace_root=dir,
     )
     guard registry.status()
@@ -305,37 +301,18 @@ async test "a skill's stdio server runs moonx confined to a policy the engine wr
         configs: [{ state: Loaded, .. }],
         servers: [{ target, state: Idle, .. }],
       } else {
-      fail("a moonx server from a skill should load, idle")
+      fail("a native server from a skill should load, idle")
     }
-    // The trusted `moonx`, by its absolute path, not whatever the name finds.
-    assert_true(target != "moonx" && target.contains("moonx"))
-    // Reading the skill's directory and the workspace, nothing else; its
-    // environment is its own `env` and its directory.
-    let skill = "\{dir}/skills/tracker"
-    assert_eq(@json.parse(@fs.read_text("\{dir}/policies/1.json")), {
-      "fs": { "read": [Json(skill), Json(dir)] },
-      "env": {
-        "set": { "MODE": "read-only", "OPENSEEK_SKILL_DIR": Json(skill) },
-      },
-    })
+    assert_eq(target, "node")
+    assert_false(@fs.exists("\{dir}/policies"))
   })
 }
 
 ///|
-async test "a skill's server that leaves the sandbox makes its configuration invalid" {
+async test "a skill's headers helper or host variable makes its configuration invalid" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
   defer @fs.rmdir(dir, recursive=true)
   let rejected : Array[(String, Json)] = [
-    ("native", { "native": { "command": "node", "args": ["server.js"] } }),
-    (
-      "own-policy",
-      {
-        "own-policy": {
-          "command": "moonx",
-          "args": ["--experimental-policy", "open.json", "a/b/c"],
-        },
-      },
-    ),
     (
       "helper",
       {
@@ -365,7 +342,6 @@ async test "a skill's server that leaves the sandbox makes its configuration inv
       AgentTaskScope(group),
       [],
       skills=@agent_skill.discover_skills("\{dir}/skills"),
-      policy_dir="\{dir}/policies",
       workspace_root=dir,
     )
     let status = registry.status()
@@ -389,7 +365,6 @@ async test "a skill's HTTP server connects when a script reaches it" {
         AgentTaskScope(group),
         [],
         skills=@agent_skill.discover_skills("\{dir}/skills"),
-        policy_dir="\{dir}/policies",
         workspace_root=dir,
       )
       assert_true(registry.status().servers is [{ state: Idle, .. }])
