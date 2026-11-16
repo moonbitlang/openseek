@@ -156,11 +156,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
 /// trimmed; empty after trimming clears the stored value.
 pub(all) struct SettingsPatch {
   provider : String?
-  custom_api_url : String?
-  deepseek_api_key : String?
-  glm_api_key : String?
-  openrouter_api_key : String?
-  custom_api_key : String?
+  providers : Map[String, @protocol.ProviderPatch]?
 }
 
 ///|
@@ -171,19 +167,21 @@ fn settings_status_payload(
   revision : Int32,
   custom_prompt~ : String = "",
 ) -> @protocol.SettingsStatusPayload {
+  let providers : Map[String, @protocol.ProviderStatus] = Map([])
+  for provider in [Deepseek, Glm, OpenRouter, Custom] {
+    let config = settings.provider_config(provider)
+    let has_api_key = config.api_key is Some(_) ||
+      (match provider {
+        Deepseek => @env.get("DEEPSEEK") is Some(_)
+        Glm => @env.get("GLM") is Some(_)
+        OpenRouter | Custom => false
+      })
+    providers[provider.wire()] = { api_url: config.api_url, has_api_key, }
+  }
   {
     revision,
     provider: settings.provider.wire(),
-    custom_api_url: settings.provider_config(Custom).api_url,
-    // Presence ORs in the provider's environment fallback exactly as the run
-    // config resolves it (`configured_api_key`): an env-configured install
-    // is runnable, and the frontend gates Send on this bit.
-    has_deepseek_key: settings.provider_config(Deepseek).api_key is Some(_) ||
-    @env.get("DEEPSEEK") is Some(_),
-    has_glm_key: settings.provider_config(Glm).api_key is Some(_) ||
-    @env.get("GLM") is Some(_),
-    has_openrouter_key: settings.provider_config(OpenRouter).api_key is Some(_),
-    has_custom_key: settings.provider_config(Custom).api_key is Some(_),
+    providers,
     followup_behavior: settings.followup_behavior,
     prompt_source: match settings.raw.get("prompt_source") {
       Some(String("custom")) => "custom"
@@ -258,11 +256,7 @@ pub async fn update_settings(
     )
   }
   let edits_json = patch.provider is Some(_) ||
-    patch.custom_api_url is Some(_) ||
-    patch.deepseek_api_key is Some(_) ||
-    patch.glm_api_key is Some(_) ||
-    patch.custom_api_key is Some(_) ||
-    patch.openrouter_api_key is Some(_) ||
+    patch.providers is Some(_) ||
     followup_behavior is Some(_) ||
     prompt_source is Some(_)
   guard !(custom_prompt is Some(_) && edits_json) else {
@@ -287,32 +281,35 @@ pub async fn update_settings(
     }
     raw["provider"] = Json(provider.wire())
   }
-  let custom_url = match patch.custom_api_url {
-    Some(url) if !url.is_blank() => Some(normalize_custom_api_url(url))
-    other => other
-  }
-  let providers = match raw.get("providers") {
-    Some(Object(providers)) => providers
-    _ => Map([])
-  }
-  for
-    (name, key) in [
-      ("deepseek", patch.deepseek_api_key),
-      ("glm", patch.glm_api_key),
-      ("openrouter", patch.openrouter_api_key),
-      ("custom", patch.custom_api_key),
-    ] {
-    let fields = match providers.get(name) {
-      Some(Object(fields)) => fields
+  if patch.providers is Some(edits) {
+    let providers = match raw.get("providers") {
+      Some(Object(providers)) => providers
       _ => Map([])
     }
-    apply_text_patch(fields, "api_key", key)
-    if name == "custom" {
-      apply_text_patch(fields, "api_url", custom_url)
+    for name, edit in edits {
+      guard ApiProvider::parse(name) is Some(provider) else {
+        raise EngineError("unknown API provider '\{name}'")
+      }
+      guard edit.api_url is None || provider is Custom else {
+        raise EngineError(
+          "the \{name} endpoint URL is fixed; use the custom provider",
+        )
+      }
+      let name = provider.wire()
+      let fields = match providers.get(name) {
+        Some(Object(fields)) => fields
+        _ => Map([])
+      }
+      let url = match edit.api_url {
+        Some(url) if !url.is_blank() => Some(normalize_custom_api_url(url))
+        other => other
+      }
+      apply_text_patch(fields, "api_url", url)
+      apply_text_patch(fields, "api_key", edit.api_key)
+      providers[name] = Json(fields)
     }
-    providers[name] = Json(fields)
+    raw["providers"] = Json(providers)
   }
-  raw["providers"] = Json(providers)
   if followup_behavior is Some(value) {
     guard value == "steer" || value == "queue" else {
       raise EngineError("unknown follow-up behavior '\{value}'")
@@ -516,14 +513,7 @@ async fn with_settings_dir(
 ///|
 async test "host prompt settings preserve literal text and publish only committed changes" {
   with_settings_dir((dir, manager) => {
-    let empty : SettingsPatch = {
-      provider: None,
-      custom_api_url: None,
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
-    }
+    let empty : SettingsPatch = { provider: None, providers: None, }
     let committed : Array[Int32] = []
     let custom = "  Host instructions\n中文\n"
     let saved = update_settings(manager, empty, custom_prompt=custom, on_committed=status => {
@@ -594,10 +584,12 @@ async test "missing settings read as the BYOK defaults" {
     json_inspect(settings_status(manager), content={
       "revision": 0,
       "provider": "deepseek",
-      "has_deepseek_key": false,
-      "has_glm_key": false,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": false },
+        "glm": { "has_api_key": false },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -615,10 +607,12 @@ async test "the DEEPSEEK env fallback reads as a usable key" {
     json_inspect(settings_status(manager), content={
       "revision": 0,
       "provider": "deepseek",
-      "has_deepseek_key": true,
-      "has_glm_key": false,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": true },
+        "glm": { "has_api_key": false },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -631,19 +625,19 @@ async test "a saved key round-trips as presence, never as text" {
   with_settings_dir((dir, manager) => {
     let status = update_settings(manager, {
       provider: Some("deepseek"),
-      custom_api_url: None,
-      deepseek_api_key: Some("  sk-secret  "),
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "deepseek": { api_url: None, api_key: Some("  sk-secret  "), },
+      }),
     })
     json_inspect(status, content={
       "revision": 1,
       "provider": "deepseek",
-      "has_deepseek_key": true,
-      "has_glm_key": false,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": true },
+        "glm": { "has_api_key": false },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -670,19 +664,17 @@ async test "retired hosted providers converge on the DeepSeek default" {
     // accepted and persisted as the default it means now.
     let status = update_settings(manager, {
       provider: Some("openseek-staging"),
-      custom_api_url: None,
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: None,
     })
     json_inspect(status, content={
       "revision": 1,
       "provider": "deepseek",
-      "has_deepseek_key": false,
-      "has_glm_key": false,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": false },
+        "glm": { "has_api_key": false },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -700,27 +692,26 @@ async test "a present-but-blank field clears the stored value" {
   with_settings_dir((_dir, manager) => {
     let _ = update_settings(manager, {
       provider: Some("custom"),
-      custom_api_url: Some("https://proxy.example/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: Some("sk-custom"),
+      providers: Some({
+        "custom": {
+          api_url: Some("https://proxy.example/chat/completions"),
+          api_key: Some("sk-custom"),
+        },
+      }),
     })
     let status = update_settings(manager, {
       provider: None,
-      custom_api_url: Some("   "),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: Some(""),
+      providers: Some({ "custom": { api_url: Some("   "), api_key: Some(""), } }),
     })
     json_inspect(status, content={
       "revision": 2,
       "provider": "custom",
-      "has_deepseek_key": false,
-      "has_glm_key": false,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": false },
+        "glm": { "has_api_key": false },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -737,11 +728,9 @@ async test "a save removes the retired WSL settings group" {
     )
     let _ = update_settings(manager, {
       provider: None,
-      custom_api_url: None,
-      deepseek_api_key: Some("sk-kept"),
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "deepseek": { api_url: None, api_key: Some("sk-kept"), },
+      }),
     })
     guard @json.parse(@fsx.read_text(settings_file(dir))) is Object(fields) else {
       fail("settings file is not valid JSON")
@@ -770,11 +759,9 @@ async test "concurrent disjoint settings patches merge and publish in revision o
           manager,
           {
             provider: Some("deepseek"),
-            custom_api_url: None,
-            deepseek_api_key: Some("sk-concurrent"),
-            glm_api_key: None,
-            openrouter_api_key: None,
-            custom_api_key: None,
+            providers: Some({
+              "deepseek": { api_url: None, api_key: Some("sk-concurrent"), },
+            }),
           },
           on_committed=status => committed.push(status.revision),
         )
@@ -785,11 +772,12 @@ async test "concurrent disjoint settings patches merge and publish in revision o
           manager,
           {
             provider: None,
-            custom_api_url: Some("https://custom.example/chat"),
-            deepseek_api_key: None,
-            glm_api_key: None,
-            openrouter_api_key: None,
-            custom_api_key: Some("sk-custom"),
+            providers: Some({
+              "custom": {
+                api_url: Some("https://custom.example/chat"),
+                api_key: Some("sk-custom"),
+              },
+            }),
           },
           on_committed=status => committed.push(status.revision),
         )
@@ -833,11 +821,9 @@ async test "saves preserve fields a newer build added" {
     )
     let _ = update_settings(manager, {
       provider: None,
-      custom_api_url: None,
-      deepseek_api_key: Some("sk-new"),
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "deepseek": { api_url: None, api_key: Some("sk-new"), },
+      }),
     })
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"future_field\""))
@@ -862,14 +848,7 @@ async test "a newer-version file is read best-effort but never rewritten" {
     assert_true(settings.provider_config(Deepseek).api_key is Some("sk-kept"))
     // Writes are refused so a downgrade cannot eat the newer schema.
     let refused = try
-      update_settings(manager, {
-        provider: Some("openseek"),
-        custom_api_url: None,
-        deepseek_api_key: None,
-        glm_api_key: None,
-        openrouter_api_key: None,
-        custom_api_key: None,
-      })
+      update_settings(manager, { provider: Some("openseek"), providers: None, })
     catch {
       EngineError(message) => message
       _ => ""
@@ -886,14 +865,7 @@ async test "a newer-version file is read best-effort but never rewritten" {
 async test "an unknown provider is refused on write, defaulted on read" {
   with_settings_dir((dir, manager) => {
     let refused = try
-      update_settings(manager, {
-        provider: Some("acme"),
-        custom_api_url: None,
-        deepseek_api_key: None,
-        glm_api_key: None,
-        openrouter_api_key: None,
-        custom_api_key: None,
-      })
+      update_settings(manager, { provider: Some("acme"), providers: None, })
     catch {
       EngineError(message) => message
       _ => ""
@@ -932,11 +904,9 @@ async test "run config resolves the endpoint from the stored provider" {
     let workspace = attach_run_workspace(dir)
     let _ = update_settings(manager, {
       provider: Some("deepseek"),
-      custom_api_url: None,
-      deepseek_api_key: Some("sk-stored"),
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "deepseek": { api_url: None, api_key: Some("sk-stored"), },
+      }),
     })
     let config = run_config(manager, {
       system_prompt: None,
@@ -964,11 +934,7 @@ async test "run config resolves the endpoint from the stored provider" {
     })
     let _ = update_settings(manager, {
       provider: Some("glm"),
-      custom_api_url: None,
-      deepseek_api_key: None,
-      glm_api_key: Some("glm-stored"),
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({ "glm": { api_url: None, api_key: Some("glm-stored"), } }),
     })
     let glm = run_config(manager, {
       system_prompt: None,
@@ -988,11 +954,12 @@ async test "run config resolves the endpoint from the stored provider" {
     assert_eq(glm.model, "glm-5.3")
     let _ = update_settings(manager, {
       provider: Some("custom"),
-      custom_api_url: Some("https://proxy.example/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "custom": {
+          api_url: Some("https://proxy.example/chat/completions"),
+          api_key: None,
+        },
+      }),
     })
     let custom = run_config(manager, {
       system_prompt: None,
@@ -1021,19 +988,19 @@ async test "the GLM provider stores its own key and reports presence" {
   with_settings_dir((_dir, manager) => {
     let status = update_settings(manager, {
       provider: Some("glm"),
-      custom_api_url: None,
-      deepseek_api_key: None,
-      glm_api_key: Some("  glm-secret  "),
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "glm": { api_url: None, api_key: Some("  glm-secret  "), },
+      }),
     })
     json_inspect(status, content={
       "revision": 1,
       "provider": "glm",
-      "has_deepseek_key": false,
-      "has_glm_key": true,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": false },
+        "glm": { "has_api_key": true },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -1058,10 +1025,12 @@ async test "the GLM env fallback reads as a usable key" {
     json_inspect(settings_status(manager), content={
       "revision": 0,
       "provider": "deepseek",
-      "has_deepseek_key": false,
-      "has_glm_key": true,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": {
+        "deepseek": { "has_api_key": false },
+        "glm": { "has_api_key": true },
+        "openrouter": { "has_api_key": false },
+        "custom": { "has_api_key": false },
+      },
       "followup_behavior": "steer",
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
@@ -1074,11 +1043,7 @@ async test "a custom provider without a URL refuses to start" {
   with_settings_dir((_dir, manager) => {
     let _ = update_settings(manager, {
       provider: Some("custom"),
-      custom_api_url: None,
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: None,
     })
     let refused = try
       run_config(manager, {
@@ -1108,11 +1073,12 @@ async test "pattern repair uses provider credentials and leaves run options to a
   with_settings_dir((_dir, manager) => {
     let _ = update_settings(manager, {
       provider: Some("custom"),
-      custom_api_url: Some("https://proxy.example/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: Some("repair-key"),
+      providers: Some({
+        "custom": {
+          api_url: Some("https://proxy.example/chat/completions"),
+          api_key: Some("repair-key"),
+        },
+      }),
     })
     let previous = ["OPENSEEK_MODEL", "OPENSEEK_THINKING", "OPENSEEK_MAX_STEPS"].map(name => {
         (name, @sys.get_env_var(name))

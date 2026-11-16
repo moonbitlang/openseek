@@ -2,17 +2,15 @@
 test "settings patches preserve optional GLM fields and omit absence" {
   let patch : @protocol.SettingsSetPayload = @json.from_json({
     "provider": "glm",
-    "custom_api_url": null,
-    "deepseek_api_key": null,
-    "glm_api_key": "glm-secret",
+    "providers": { "glm": { "api_url": null, "api_key": "glm-secret" } },
     "prompt_source": "custom",
     "future_field": true,
   })
   assert_eq(patch.provider, Some("glm"))
-  assert_eq(patch.glm_api_key, Some("glm-secret"))
+  assert_eq(patch.providers.unwrap()["glm"].api_key, Some("glm-secret"))
   @debug.assert_eq(patch.to_json(), {
     "provider": "glm",
-    "glm_api_key": "glm-secret",
+    "providers": { "glm": { "api_key": "glm-secret" } },
     "prompt_source": "custom",
   })
   let text : @protocol.SettingsSetPayload = @json.from_json({
@@ -27,24 +25,17 @@ test "settings status preserves and requires the GLM capability flag" {
   let status : @protocol.SettingsStatusPayload = @json.from_json({
     "revision": 8,
     "provider": "glm",
-    "custom_api_url": null,
-    "has_deepseek_key": false,
-    "has_glm_key": true,
-    "has_openrouter_key": false,
-    "has_custom_key": false,
+    "providers": { "glm": { "has_api_key": true } },
     "followup_behavior": "queue",
     "prompt_source": "custom",
     "custom_prompt": "  Rules\n中文\n",
     "future_field": true,
   })
-  assert_true(status.has_glm_key)
+  assert_true(status.providers["glm"].has_api_key)
   @debug.assert_eq(status.to_json(), {
     "revision": 8,
     "provider": "glm",
-    "has_deepseek_key": false,
-    "has_glm_key": true,
-    "has_openrouter_key": false,
-    "has_custom_key": false,
+    "providers": { "glm": { "has_api_key": true } },
     "followup_behavior": "queue",
     "prompt_source": "custom",
     "custom_prompt": "  Rules\n中文\n",
@@ -53,9 +44,10 @@ test "settings status preserves and requires the GLM capability flag" {
     @json.from_json({
       "revision": 8,
       "provider": "glm",
-      "has_deepseek_key": false,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": { "glm": {} },
+      "followup_behavior": "steer",
+      "prompt_source": "custom",
+      "custom_prompt": "",
     }),
   ) catch {
     _ => None
@@ -65,10 +57,7 @@ test "settings status preserves and requires the GLM capability flag" {
     @json.from_json({
       "revision": 8,
       "provider": "glm",
-      "has_deepseek_key": false,
-      "has_glm_key": true,
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": { "glm": { "has_api_key": true } },
     }),
   ) catch {
     _ => None
@@ -78,10 +67,10 @@ test "settings status preserves and requires the GLM capability flag" {
     @json.from_json({
       "revision": 8,
       "provider": "glm",
-      "has_deepseek_key": false,
-      "has_glm_key": "yes",
-      "has_openrouter_key": false,
-      "has_custom_key": false,
+      "providers": { "glm": { "has_api_key": "yes" } },
+      "followup_behavior": "steer",
+      "prompt_source": "custom",
+      "custom_prompt": "",
     }),
   ) catch {
     _ => None

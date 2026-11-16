@@ -11,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 9;
+    this.hostProtocol = 10;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -80,11 +80,12 @@ export class DesktopBrowserHarness {
     this.hostSettings = {
       revision: 1,
       provider: 'deepseek',
-      custom_api_url: '',
-      has_deepseek_key: true,
-      has_glm_key: false,
-      has_openrouter_key: false,
-      has_custom_key: false,
+      providers: {
+        deepseek: { has_api_key: true },
+        glm: { has_api_key: false },
+        openrouter: { has_api_key: false },
+        custom: { has_api_key: false },
+      },
       followup_behavior: 'steer',
       prompt_source: 'builtin_moonbit_guide',
       custom_prompt: '',
@@ -690,26 +691,17 @@ export class DesktopBrowserHarness {
         return this.hostSettings;
       case 'settings.set': {
         const patch = request.params || {};
-        for (const key of [
-          'provider',
-          'custom_api_url',
-          'deepseek_api_key',
-          'glm_api_key',
-          'openrouter_api_key',
-          'custom_api_key',
-          'followup_behavior',
-          'prompt_source',
-          'custom_prompt',
-        ]) {
-          if (patch[key] === undefined) {
-            continue;
+        for (const key of ['provider', 'followup_behavior', 'prompt_source', 'custom_prompt']) {
+          if (patch[key] != null) this.hostSettings[key] = patch[key];
+        }
+        for (const [name, edit] of Object.entries(patch.providers || {})) {
+          const provider = this.hostSettings.providers[name] ??= { has_api_key: false };
+          if (edit.api_url != null) {
+            const value = edit.api_url.trim();
+            if (value) provider.api_url = value;
+            else delete provider.api_url;
           }
-          if (['provider', 'custom_api_url', 'followup_behavior', 'prompt_source', 'custom_prompt'].includes(key)) {
-            this.hostSettings[key] = patch[key];
-          } else {
-            const savedKey = `has_${key.replace('_api_key', '')}_key`;
-            this.hostSettings[savedKey] = patch[key].trim().length > 0;
-          }
+          if (edit.api_key != null) provider.has_api_key = edit.api_key.trim().length > 0;
         }
         this.hostSettings.revision += 1;
         return this.hostSettings;

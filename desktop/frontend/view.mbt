@@ -1408,7 +1408,9 @@ fn api_settings_rows(
             input_type=@html.InputType::Text,
             value=model
               .host_settings()
-              .map(settings => settings.endpoint.custom_api_url)
+              .map(settings => {
+                settings.endpoint.config(Custom).api_url.unwrap_or("")
+              })
               .unwrap_or(""),
             placeholder="https://host/v1",
             on_change=dispatch.map(value => CustomApiUrlChanged(value)),

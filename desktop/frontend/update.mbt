@@ -4380,11 +4380,7 @@ fn update_msg(
       }
       let patch : @protocol.SettingsSetPayload = {
         provider: None,
-        custom_api_url: None,
-        deepseek_api_key: None,
-        glm_api_key: None,
-        openrouter_api_key: None,
-        custom_api_key: None,
+        providers: None,
         followup_behavior: None,
         prompt_source: source,
         custom_prompt: text,
@@ -4482,7 +4478,13 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        model.edit_host_endpoint({ ..endpoint, custom_api_url: value, }),
+        model.edit_host_endpoint({
+          ..endpoint,
+          providers: endpoint.providers.add("custom", {
+            ..endpoint.config(Custom),
+            api_url: Some(value),
+          }),
+        }),
       )
     }
     NotificationCornerChanged(value) => {
@@ -5102,13 +5104,10 @@ fn update_msg(
             let next = {
               ..model.edit_host_endpoint({
                 ..endpoint,
-                deepseek_key_saved: endpoint.deepseek_key_saved ||
-                provider is Deepseek,
-                glm_key_saved: endpoint.glm_key_saved || provider is Glm,
-                openrouter_key_saved: endpoint.openrouter_key_saved ||
-                provider is OpenRouter,
-                custom_key_saved: endpoint.custom_key_saved ||
-                provider is Custom,
+                providers: endpoint.providers.add(provider.wire(), {
+                  ..endpoint.config(provider),
+                  has_api_key: true,
+                }),
               }),
               setup_api_key: "",
             }
@@ -10984,18 +10983,31 @@ fn Model::with_host_endpoint(
   self.with_host_settings(mirror => {
     let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
     let endpoint = current.endpoint
+    let mut providers = endpoint.providers
+    for
+      (name, key) in [
+        ("deepseek", deepseek_key_saved),
+        ("glm", glm_key_saved),
+        ("openrouter", openrouter_key_saved),
+        ("custom", custom_key_saved),
+      ] {
+      if key is Some(has_api_key) {
+        let config = providers
+          .get(name)
+          .unwrap_or({ api_url: None, has_api_key: false, })
+        providers = providers.add(name, { ..config, has_api_key, })
+      }
+    }
+    if custom_api_url is Some(url) {
+      let config = providers
+        .get("custom")
+        .unwrap_or({ api_url: None, has_api_key: false, })
+      providers = providers.add("custom", { ..config, api_url: Some(url), })
+    }
     let endpoint = {
       provider: provider.unwrap_or(endpoint.provider),
-      custom_api_url: custom_api_url.unwrap_or(endpoint.custom_api_url),
+      providers,
       followup_behavior: followup_behavior.unwrap_or(endpoint.followup_behavior),
-      deepseek_key_saved: deepseek_key_saved.unwrap_or(
-        endpoint.deepseek_key_saved,
-      ),
-      glm_key_saved: glm_key_saved.unwrap_or(endpoint.glm_key_saved),
-      openrouter_key_saved: openrouter_key_saved.unwrap_or(
-        endpoint.openrouter_key_saved,
-      ),
-      custom_key_saved: custom_key_saved.unwrap_or(endpoint.custom_key_saved),
     }
     { ..mirror, current: Some({ ..current, endpoint, }), }
   })
@@ -17052,11 +17064,12 @@ fn host_settings(
   HostSettings::from_status({
     revision,
     provider,
-    custom_api_url: Some(custom_api_url),
-    has_deepseek_key,
-    has_glm_key,
-    has_openrouter_key,
-    has_custom_key,
+    providers: {
+      "deepseek": { api_url: None, has_api_key: has_deepseek_key, },
+      "glm": { api_url: None, has_api_key: has_glm_key, },
+      "openrouter": { api_url: None, has_api_key: has_openrouter_key, },
+      "custom": { api_url: Some(custom_api_url), has_api_key: has_custom_key, },
+    },
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
@@ -17137,7 +17150,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(restored.screen is Chat)
   assert_true(!restored.api_setup_open)
-  assert_true(restored.test_endpoint().deepseek_key_saved)
+  assert_true(restored.test_endpoint().config(Deepseek).has_api_key)
 }
 
 ///|
@@ -17470,7 +17483,7 @@ test "saving the key from the setup modal retires it" {
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.test_endpoint().deepseek_key_saved)
+  assert_true(saved.test_endpoint().config(Deepseek).has_api_key)
   assert_true(saved.screen is Chat)
   assert_true(!saved.api_setup_open)
   assert_eq(saved.setup_api_key, "")
@@ -17575,7 +17588,7 @@ test "host settings are deferred while this client's writes are in flight" {
   )
   inspect(settled.host_settings_mirror().saves, content="0")
   assert_true(settled.api_provider() is Deepseek)
-  assert_true(settled.test_endpoint().deepseek_key_saved)
+  assert_true(settled.test_endpoint().config(Deepseek).has_api_key)
   assert_true(settled.host_settings() is Some({ revision: 2, .. }))
   // With more writes still out, even a reply only decrements.
   let stacked = model.with_host_settings(mirror => { ..mirror, saves: 2, })
@@ -17820,8 +17833,8 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
-  assert_true(saved_deepseek.test_endpoint().deepseek_key_saved)
-  assert_false(saved_deepseek.test_endpoint().custom_key_saved)
+  assert_true(saved_deepseek.test_endpoint().config(Deepseek).has_api_key)
+  assert_false(saved_deepseek.test_endpoint().config(Custom).has_api_key)
   inspect(saved_deepseek.setup_api_key, content="")
   inspect(saved_deepseek.host_settings_mirror().saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
@@ -17839,8 +17852,8 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
-  assert_false(saved_custom.test_endpoint().deepseek_key_saved)
-  assert_true(saved_custom.test_endpoint().custom_key_saved)
+  assert_false(saved_custom.test_endpoint().config(Deepseek).has_api_key)
+  assert_true(saved_custom.test_endpoint().config(Custom).has_api_key)
   assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
@@ -17853,9 +17866,9 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
-  assert_true(saved_glm.test_endpoint().glm_key_saved)
-  assert_false(saved_glm.test_endpoint().deepseek_key_saved)
-  assert_false(saved_glm.test_endpoint().custom_key_saved)
+  assert_true(saved_glm.test_endpoint().config(Glm).has_api_key)
+  assert_false(saved_glm.test_endpoint().config(Deepseek).has_api_key)
+  assert_false(saved_glm.test_endpoint().config(Custom).has_api_key)
   assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
     ..test_model().with_host_endpoint(
@@ -17867,8 +17880,8 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
-  assert_true(saved_openrouter.test_endpoint().openrouter_key_saved)
-  assert_false(saved_openrouter.test_endpoint().deepseek_key_saved)
+  assert_true(saved_openrouter.test_endpoint().config(OpenRouter).has_api_key)
+  assert_false(saved_openrouter.test_endpoint().config(Deepseek).has_api_key)
 }
 
 ///|

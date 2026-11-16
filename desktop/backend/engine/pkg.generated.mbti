@@ -158,11 +158,7 @@ pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.S
 
 pub(all) struct SettingsPatch {
   provider : String?
-  custom_api_url : String?
-  deepseek_api_key : String?
-  glm_api_key : String?
-  openrouter_api_key : String?
-  custom_api_key : String?
+  providers : Map[String, @protocol.ProviderPatch]?
 }
 
 // Type aliases

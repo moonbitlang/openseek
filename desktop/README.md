@@ -406,6 +406,14 @@ providers preserves every other provider's URL and key. Version 3 migrates
 older flat settings on read and writes the new structure on the next save;
 an old OpenRouter preset becomes an independent OpenRouter entry.
 
+The settings protocol uses the same `providers` map. A `settings.set` request
+merges only the named entries and supplied fields: omitted or null fields
+remain unchanged, while an empty string clears a URL or key. For example,
+`{"providers":{"custom":{"api_url":"https://host/v1"}}}` edits Custom
+without changing the selected `provider`. Replies and broadcasts return
+`providers[name]` with `api_url` and `has_api_key`; credentials are never
+returned. `has_api_key` includes the official provider's environment fallback.
+
 Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
 ending in `/v<number>` (with an optional trailing slash) receive
 `/chat/completions`; other paths remain complete endpoints. Query parameters

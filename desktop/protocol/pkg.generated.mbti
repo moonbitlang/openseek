@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 9
+pub const HostProtocolRevision : Int32 = 10
 
 pub const MaxImageBytes : Int32 = 20971520
 
@@ -2961,6 +2961,32 @@ pub impl @json.FromJson for PreviewOpenRequest
 pub impl @json.ToJson for PreviewOpenRequest
 
 #derive(Eq, @debug.Debug)
+pub(all) struct ProviderPatch {
+  api_url : String?
+  api_key : String?
+}
+pub fn ProviderPatch::equal(Self, Self) -> Bool
+pub fn ProviderPatch::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ProviderPatch::not_equal(Self, Self) -> Bool
+pub fn ProviderPatch::to_json(Self) -> @json.Json
+pub fn ProviderPatch::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ProviderPatch
+pub impl @json.ToJson for ProviderPatch
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ProviderStatus {
+  api_url : String?
+  has_api_key : Bool
+}
+pub fn ProviderStatus::equal(Self, Self) -> Bool
+pub fn ProviderStatus::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ProviderStatus::not_equal(Self, Self) -> Bool
+pub fn ProviderStatus::to_json(Self) -> @json.Json
+pub fn ProviderStatus::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ProviderStatus
+pub impl @json.ToJson for ProviderStatus
+
+#derive(Eq, @debug.Debug)
 pub(all) enum QueueAction {
   QueueAdd(id~ : String, text~ : String, images~ : Array[String])
   QueueEdit(id~ : String, text~ : String, images~ : Array[String])
@@ -4170,11 +4196,7 @@ pub impl @json.ToJson for SetSkillEnabledReply
 #derive(Eq, @debug.Debug)
 pub(all) struct SettingsSetPayload {
   provider : String?
-  custom_api_url : String?
-  deepseek_api_key : String?
-  glm_api_key : String?
-  openrouter_api_key : String?
-  custom_api_key : String?
+  providers : Map[String, ProviderPatch]?
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
@@ -4191,11 +4213,7 @@ pub impl @json.ToJson for SettingsSetPayload
 pub(all) struct SettingsStatusPayload {
   revision : Int32
   provider : String
-  custom_api_url : String?
-  has_deepseek_key : Bool
-  has_glm_key : Bool
-  has_openrouter_key : Bool
-  has_custom_key : Bool
+  providers : Map[String, ProviderStatus]
   followup_behavior : String
   prompt_source : String
   custom_prompt : String

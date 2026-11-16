@@ -1615,15 +1615,9 @@ priv struct ProjectAdoption {
 /// presence (placeholder wording, the ready gate).
 #derive(Eq)
 priv struct HostEndpoint {
-  // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`.
   provider : ApiProvider
-  custom_api_url : String
+  providers : @sorted_map.SortedMap[String, @protocol.ProviderStatus]
   followup_behavior : FollowupBehavior
-  deepseek_key_saved : Bool
-  glm_key_saved : Bool
-  openrouter_key_saved : Bool
-  custom_key_saved : Bool
 }
 
 ///|
@@ -3368,7 +3362,8 @@ fn Model::api_ready(self : Model) -> Bool {
   guard self.host_settings() is Some({ endpoint, .. }) else { return false }
   match endpoint.provider {
     Deepseek | Glm | OpenRouter => endpoint.key_saved()
-    Custom => plausible_endpoint_url(endpoint.custom_api_url)
+    Custom =>
+      plausible_endpoint_url(endpoint.config(Custom).api_url.unwrap_or(""))
   }
 }
 

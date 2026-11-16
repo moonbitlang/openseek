@@ -10,18 +10,13 @@
 fn HostSettings::from_status(
   payload : @protocol.SettingsStatusPayload,
 ) -> HostSettings {
-  let custom_api_url = payload.custom_api_url.unwrap_or("")
   let provider = ApiProvider::parse(payload.provider)
   {
     revision: payload.revision,
     endpoint: {
       provider,
-      custom_api_url,
+      providers: @sorted_map.SortedMap::from_iter(payload.providers.iter()),
       followup_behavior: FollowupBehavior::parse(payload.followup_behavior),
-      deepseek_key_saved: payload.has_deepseek_key,
-      glm_key_saved: payload.has_glm_key,
-      openrouter_key_saved: payload.has_openrouter_key,
-      custom_key_saved: payload.has_custom_key,
     },
     prompt_source: payload.prompt_source,
     custom_prompt: payload.custom_prompt,
@@ -41,15 +36,18 @@ fn HostSettings::prompt_text(
 }
 
 ///|
-/// Whether the host has a key saved for this endpoint's provider. OpenRouter
-/// has its own credential.
+fn HostEndpoint::config(
+  self : HostEndpoint,
+  provider : ApiProvider,
+) -> @protocol.ProviderStatus {
+  self.providers
+  .get(provider.wire())
+  .unwrap_or({ api_url: None, has_api_key: false, })
+}
+
+///|
 fn HostEndpoint::key_saved(self : HostEndpoint) -> Bool {
-  match self.provider {
-    Deepseek => self.deepseek_key_saved
-    Glm => self.glm_key_saved
-    OpenRouter => self.openrouter_key_saved
-    Custom => self.custom_key_saved
-  }
+  self.config(self.provider).has_api_key
 }
 
 ///|
@@ -210,11 +208,7 @@ fn provider_settings_patch(
 ) -> @protocol.SettingsSetPayload {
   {
     provider: Some(provider.wire()),
-    custom_api_url: None,
-    deepseek_api_key: None,
-    glm_api_key: None,
-    openrouter_api_key: None,
-    custom_api_key: None,
+    providers: None,
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
@@ -227,11 +221,7 @@ fn provider_settings_patch(
 fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
   {
     provider: None,
-    custom_api_url: Some(url),
-    deepseek_api_key: None,
-    glm_api_key: None,
-    openrouter_api_key: None,
-    custom_api_key: None,
+    providers: Some({ "custom": { api_url: Some(url), api_key: None, } }),
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
@@ -245,27 +235,9 @@ fn api_key_settings_patch(
 ) -> @protocol.SettingsSetPayload {
   {
     provider: None,
-    custom_api_url: None,
-    openrouter_api_key: if provider is OpenRouter {
-      Some(key)
-    } else {
-      None
-    },
-    deepseek_api_key: if provider is Deepseek {
-      Some(key)
-    } else {
-      None
-    },
-    glm_api_key: if provider is Glm {
-      Some(key)
-    } else {
-      None
-    },
-    custom_api_key: if provider is Custom {
-      Some(key)
-    } else {
-      None
-    },
+    providers: Some(
+      Map([(provider.wire(), { api_url: None, api_key: Some(key), })]),
+    ),
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
@@ -278,7 +250,7 @@ test "OpenRouter has independent settings" {
     "provider": "openrouter",
   })
   json_inspect(api_key_settings_patch(OpenRouter, "sk-openrouter").to_json(), content={
-    "openrouter_api_key": "sk-openrouter",
+    "providers": { "openrouter": { "api_key": "sk-openrouter" } },
   })
   json_inspect(provider_settings_patch(Custom).to_json(), content={
     "provider": "custom",
@@ -291,11 +263,7 @@ fn followup_behavior_patch(
 ) -> @protocol.SettingsSetPayload {
   {
     provider: None,
-    custom_api_url: None,
-    deepseek_api_key: None,
-    glm_api_key: None,
-    openrouter_api_key: None,
-    custom_api_key: None,
+    providers: None,
     followup_behavior: Some(behavior.wire()),
     prompt_source: None,
     custom_prompt: None,

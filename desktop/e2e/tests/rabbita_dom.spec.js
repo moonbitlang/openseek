@@ -760,7 +760,7 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   await page.getByRole('textbox', { name: 'Endpoint URL' }).press('Tab');
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.custom_api_url === 'https://example.test/chat/completions'))
+    request.params?.providers?.custom?.api_url === 'https://example.test/chat/completions'))
     .toBe(true);
   await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
     'https://example.test/chat/completions',
@@ -770,7 +770,7 @@ test('settings persist host API changes through settings.set', async ({ page }) 
 
 test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.hostSettings.has_deepseek_key = false;
+  app.hostSettings.providers.deepseek.has_api_key = false;
   await app.install();
   await app.goto();
 
@@ -785,9 +785,9 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.params?.provider === 'openrouter')).toBe(true);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.openrouter_api_key === 'sk-openrouter-test')).toBe(true);
+    request.params?.providers?.openrouter?.api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
-  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
+  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.providers?.deepseek?.api_key !== undefined)).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
 

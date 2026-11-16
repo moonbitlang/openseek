@@ -963,11 +963,12 @@ async fn configure_custom_provider(manager : EngineManager) -> Unit {
   ignore(
     update_settings(manager, {
       provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      openrouter_api_key: None,
-      custom_api_key: None,
+      providers: Some({
+        "custom": {
+          api_url: Some("https://example.invalid/chat/completions"),
+          api_key: None,
+        },
+      }),
     }),
   )
 }
