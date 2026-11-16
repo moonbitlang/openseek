@@ -263,8 +263,9 @@ The agent can use tools from [MCP](https://modelcontextprotocol.io) servers
 listed in `~/.openseek/mcp.json`, the `{"mcpServers": {...}}` shape described
 in the repository README. The user file is created and edited by hand. When no
 user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment applies.
-The host also supplies a `seekmoon` skill under `host-skills/seekmoon/` in
-its runtime directory, handed to each engine through `--skills-dir`. Its
+The host also bundles a `seekmoon` skill under `seekmoon/skills/seekmoon/` in
+its application resources. The bundled `seekmoon/skills` directory is handed
+to each engine through `--skills-dir` and read directly without a runtime copy. Its
 `SKILL.md` describes the host tools, and its `mcp.json` reaches the host through
 the conversation's grant using environment-variable placeholders. The user
 MCP configuration overrides a same-named server supplied by the skill.

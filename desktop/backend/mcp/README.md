@@ -86,9 +86,8 @@ The adapter writes only JSON-RPC responses to its supplied output stream.
 ## Configuration
 
 Engines started by a host configured with tools reach it, for both
-conversations and scheduled runs. The engine launcher writes
-`host-skills/seekmoon/mcp.json` in the runtime directory (or the global store
-directory when no runtime directory was supplied). It contains:
+conversations and scheduled runs. The application bundles
+`seekmoon/skills/seekmoon/mcp.json` under its resource directory. It contains:
 
 ```json
 {
@@ -109,10 +108,12 @@ that was not granted access cannot connect through this entry. Only variable
 placeholders are persisted; the URL and token remain conversation-specific
 environment values.
 
-Beside it the launcher writes the `seekmoon` skill under `host-skills/seekmoon/`
-and passes `host-skills` as a `--skills-dir` argument. The skill's `SKILL.md`
-is `skill_markdown`; the agent learns of the tools from it, and the engine
-connects the server when a script first searches or calls it.
+The launcher passes the bundled `seekmoon/skills` directory through
+`--skills-dir`. The agent learns of the tools from the adjacent `SKILL.md`,
+and the engine connects the server when a script first searches or calls it.
+Both files are maintained in `desktop/skills/seekmoon/` and copied unchanged
+when packaging. They are read directly; no embedded source, runtime copy, or
+user-directory fallback is used. Unbundled development reads `desktop/skills`.
 
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
 file is absent, is passed through `--mcp-config` and overrides the skill defaults.

@@ -30,25 +30,3 @@ options(
     "moonbitlang/core/async/socket",
   ],
 )
-
-rule(
-  name: "embed_skill_markdown",
-  command: ":embed -i $input -o $output --name embedded_skill_markdown --text",
-)
-
-dev_build(
-  rule: "embed_skill_markdown",
-  input: "skill/SKILL.md",
-  output: "generated_skill_markdown.mbt",
-)
-
-rule(
-  name: "embed_skill_mcp_config",
-  command: ":embed -i $input -o $output --name embedded_skill_mcp_config --text",
-)
-
-dev_build(
-  rule: "embed_skill_mcp_config",
-  input: "skill/mcp.json",
-  output: "generated_skill_mcp_config.mbt",
-)

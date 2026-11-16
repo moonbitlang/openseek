@@ -34,6 +34,7 @@ Application-owned files live below Proton's resource directory:
 seekmoon/
   bin/
   licenses/
+  skills/seekmoon/
   toolchains/
   web/
 ```

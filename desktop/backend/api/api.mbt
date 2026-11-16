@@ -285,6 +285,7 @@ pub fn ApiState::ApiState(
     runtime_dir?,
     host_mcp?,
     moonbit=resources.moonbit,
+    skills_dir?=resources.skills,
   )
   {
     codex: Actor(codex),
