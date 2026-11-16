@@ -195,7 +195,7 @@ async test "MCP configs reuse valid host defaults and report broken files once" 
       })
     })
     let args = engine_mcp_args(None, Some(runtime), {}, host_mcp=true)
-    let host_path = runtime.join("host-mcp.json")
+    let host_path = runtime.join("host-skills/\{@mcp.SkillName}/mcp.json")
     let template = @fsx.read_text(host_path)
     // A valid default remains usable when its directory becomes read-only.
     @fs.chmod(runtime.to_string(), 0o500)
@@ -366,14 +366,9 @@ test "an inherited MCP configuration counts as one the engine will load" {
 }
 
 ///|
-/// Put the host defaults before the user's configuration. Once an explicit
-/// host path is passed, argparse no longer reads OPENSEEK_MCP_CONFIG, so carry
-/// that fallback explicitly when the user's usual file is absent. The host's
-/// server comes with the skill that tells the agent about it, written as
-/// `host-skills/seekmoon/SKILL.md` and handed over as a skills directory; the
-/// server itself stays in the host's configuration rather than the skill's
-/// `mcp.json`, because it expands the conversation's grant, and a skill's
-/// `mcp.json` expands no host variable.
+/// Write the host's skill and MCP configuration together under
+/// `host-skills/seekmoon/`. Explicit user configuration and the environment
+/// fallback override same-named servers from the skill.
 async fn engine_mcp_args(
   config : McpConfig?,
   runtime_dir : @pathx.Path?,
@@ -393,8 +388,8 @@ async fn engine_mcp_args(
         root.to_path()
       }
     }
-    let path = directory.join("host-mcp.json").resolve()
     let skills = directory.join("host-skills").resolve()
+    let path = skills.join("\{@mcp.SkillName}/mcp.json")
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
     let text =
@@ -408,7 +403,6 @@ async fn engine_mcp_args(
       }
     }
     args.push("--skills-dir=\{skills.to_string()}")
-    args.push("--mcp-config=\{path.to_string()}")
   }
   if config is Some(mcp) {
     args.push("--mcp-config=\{mcp.path.to_string()}")

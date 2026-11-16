@@ -19,8 +19,8 @@ struct McpRegistry {
 /// server replaces an earlier one of the same name. The servers each of
 /// `skills` brings in its `mcp.json` join them, ahead of the files, so a
 /// file's server replaces a skill's of the same name. A skill's configuration
-/// expands only `${OPENSEEK_SKILL_DIR}`, its own directory — no variable of
-/// the engine's environment. Stdio commands run as configured, without an
+/// expands the engine's environment plus `${OPENSEEK_SKILL_DIR}`, its own
+/// directory. Stdio commands run as configured, without an
 /// engine-injected sandbox. No server connects here: each connects in the
 /// background on `scope`'s group
 /// when a script first reaches it. `on_change` runs each time `status` may
@@ -69,7 +69,9 @@ pub async fn start_mcp(
       Some((dir, _)) => dir.to_owned()
       None => "."
     }
-    let prepared = load(path, Map([(SkillDirEnv, dir)]), servers => {
+    let skill_env = host_env.copy()
+    skill_env[SkillDirEnv] = dir
+    let prepared = load(path, skill_env, servers => {
       prepare_skill_servers(servers, skill_dir=dir)
     })
     if prepared is Some(servers) {

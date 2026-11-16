@@ -360,9 +360,9 @@ applying it. See `agent_skill/README.mbt.md`.
 A `<name>/SKILL.md` skill can bring MCP servers in an `mcp.json` beside it, in
 the shape `--mcp-config` reads. Skill configurations have these rules:
 
-- Its entries expand only `${OPENSEEK_SKILL_DIR}`, the skill's own directory;
-  referencing any other variable makes the file invalid. Configuration values
-  that reference host environment variables belong in an `--mcp-config` file.
+- Its entries expand variables from the engine's environment, with
+  `${OPENSEEK_SKILL_DIR}` set to the skill's own directory. Expansion is
+  single-pass, and missing variables make the file invalid.
 - Stdio servers run their configured command and arguments, with their `env`
   values and `OPENSEEK_SKILL_DIR` added to the inherited process environment.
   The engine does not inject a sandbox policy or restrict the command.

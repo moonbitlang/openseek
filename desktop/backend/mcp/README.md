@@ -86,9 +86,9 @@ The adapter writes only JSON-RPC responses to its supplied output stream.
 ## Configuration
 
 Engines started by a host configured with tools reach it, for both
-conversations and scheduled runs. The engine launcher writes `host-mcp.json`
-in the runtime directory (or the global store directory when no runtime directory
-was supplied) and passes it as the first `--mcp-config` argument. It contains:
+conversations and scheduled runs. The engine launcher writes
+`host-skills/seekmoon/mcp.json` in the runtime directory (or the global store
+directory when no runtime directory was supplied). It contains:
 
 ```json
 {
@@ -105,9 +105,9 @@ was supplied) and passes it as the first `--mcp-config` argument. It contains:
 
 OpenSeek expands the HTTP URL and header values from the engine's environment
 when it loads the configuration. Missing variables are errors, so a process
-that was not granted access cannot connect through this entry. The server
-stays out of the skill's own `mcp.json` because a skill's configuration
-expands no variable of the engine's environment.
+that was not granted access cannot connect through this entry. Only variable
+placeholders are persisted; the URL and token remain conversation-specific
+environment values.
 
 Beside it the launcher writes the `seekmoon` skill under `host-skills/seekmoon/`
 and passes `host-skills` as a `--skills-dir` argument. The skill's `SKILL.md`
@@ -115,7 +115,7 @@ is `skill_markdown()`; the agent learns of the tools from it, and the engine
 connects the server when a script first searches or calls it.
 
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
-file is absent, follows the host defaults as another `--mcp-config` argument.
+file is absent, is passed through `--mcp-config` and overrides the skill defaults.
 Later entries replace whole same-named servers before any connection starts.
 A user can therefore override `seekmoon` to customize its headers. A broken
 user file is reported without preventing the host defaults from loading.

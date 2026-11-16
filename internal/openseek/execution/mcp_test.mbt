@@ -285,7 +285,7 @@ async test "a skill's stdio server accepts a configured native command" {
       "tracker": {
         "command": "node",
         "args": ["${OPENSEEK_SKILL_DIR}/server.js"],
-        "env": { "MODE": "read-only" },
+        "env": { "MODE": "read-only", "HOST_PATH": "${PATH}" },
       },
     },
   })
@@ -309,7 +309,7 @@ async test "a skill's stdio server accepts a configured native command" {
 }
 
 ///|
-async test "a skill's headers helper or host variable makes its configuration invalid" {
+async test "a skill's headers helper or missing variable makes its configuration invalid" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
   defer @fs.rmdir(dir, recursive=true)
   let rejected : Array[(String, Json)] = [
@@ -322,13 +322,15 @@ async test "a skill's headers helper or host variable makes its configuration in
         },
       },
     ),
-    // No variable of the engine's environment expands.
+    // Missing variables remain configuration errors.
     (
       "secret",
       {
         "secret": {
           "url": "https://example.com/mcp",
-          "headers": { "Authorization": "${HOME}" },
+          "headers": {
+            "Authorization": "${OPENSEEK_TEST_MISSING_SKILL_MCP_VARIABLE_2505}",
+          },
         },
       },
     ),

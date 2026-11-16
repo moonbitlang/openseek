@@ -3106,7 +3106,10 @@ async test "native engine env has one authoritative bundled moon path" {
   }
   // Automatic host config is first; explicit user files and the environment
   // fallback remain effective overrides. No grant value is written to disk.
-  let host_path = runtime.join("host-mcp.json").resolve().to_string()
+  let host_path = runtime
+    .join("host-skills/\{@mcp.SkillName}/mcp.json")
+    .resolve()
+    .to_string()
   let automatic = engine_process_args(
     config,
     runtime_dir=runtime,
@@ -3114,7 +3117,7 @@ async test "native engine env has one authoritative bundled moon path" {
     host_mcp=true,
   )
   let skills_dir = runtime.join("host-skills").resolve().to_string()
-  assert_true(automatic.contains("--mcp-config=\{host_path}"))
+  assert_false(automatic.contains("--mcp-config=\{host_path}"))
   assert_true(automatic.contains("--skills-dir=\{skills_dir}"))
   // The skill telling the agent about the host's tools sits beside it.
   assert_eq(
@@ -3129,7 +3132,6 @@ async test "native engine env has one authoritative bundled moon path" {
   let fallback = { "OPENSEEK_MCP_CONFIG": "/fallback/mcp.json" }
   assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=true), [
     "--skills-dir=\{skills_dir}",
-    "--mcp-config=\{host_path}",
     "--mcp-config=/fallback/mcp.json",
   ])
   assert_eq(
@@ -3139,11 +3141,7 @@ async test "native engine env has one authoritative bundled moon path" {
       fallback,
       host_mcp=true,
     ),
-    [
-      "--skills-dir=\{skills_dir}",
-      "--mcp-config=\{host_path}",
-      "--mcp-config=\{mcp_path.to_string()}",
-    ],
+    ["--skills-dir=\{skills_dir}", "--mcp-config=\{mcp_path.to_string()}"],
   )
   assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=false), [])
   let moon_bin = moon_home.join("bin").to_string()
