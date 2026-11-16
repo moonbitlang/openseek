@@ -54,6 +54,12 @@ const PwaFiles = ["manifest.json", "icon-192.png", "icon-512.png", "icon-maskabl
 // exact tarballs avoids installing a package manager or recreating its
 // dependency graph during an application build.
 const WebArchives = {
+  katex: {
+    filename: "katex-0.19.1.tgz",
+    url: "https://registry.npmjs.org/katex/-/katex-0.19.1.tgz",
+    sha: "24da5a599eb2fcede2e270b99a6ff48bca816beecc95feeb84e8cccbd1bb34fd",
+    path: "katex",
+  },
   pdfjs: OfficePdfArchive,
   snapdom: {
     filename: "snapdom-3.3.4.tgz",
@@ -247,6 +253,11 @@ class Build {
     await cp(join(this.officeViewerSource(), "public", "licenses"),
       join(output, "licenses/office-viewer"), { recursive: true });
     await cp(join(this.desktop, "vendor/katex"), join(output, "vendor/katex"), { recursive: true });
+    const katexFonts = join(work, "katex/dist/fonts");
+    await cp(katexFonts, join(output, "vendor/katex/fonts"), {
+      recursive: true,
+      filter: source => source === katexFonts || source.endsWith(".woff2"),
+    });
     await cp(join(work, "snapdom/dist/snapdom.js"), join(output, "snapdom.js"));
     await cp(join(work, "snapdom/LICENSE"), join(output, "snapdom.LICENSE"));
     await stageOfficePdfAssets(
