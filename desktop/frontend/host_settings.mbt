@@ -11,11 +11,20 @@ fn HostSettings::from_status(
   payload : @protocol.SettingsStatusPayload,
 ) -> HostSettings {
   let provider = ApiProvider::parse(payload.provider)
+  let mut providers = @sorted_map.SortedMap([])
+  for provider in [Deepseek, Glm, OpenRouter, Custom] {
+    if payload.providers.get(provider.wire()) is Some(config) {
+      providers = providers.add(provider, ProviderConfig::{
+        api_url: config.api_url,
+        has_api_key: config.has_api_key,
+      })
+    }
+  }
   {
     revision: payload.revision,
     endpoint: {
       provider,
-      providers: @sorted_map.SortedMap::from_iter(payload.providers.iter()),
+      providers,
       followup_behavior: FollowupBehavior::parse(payload.followup_behavior),
     },
     prompt_source: payload.prompt_source,
@@ -39,10 +48,8 @@ fn HostSettings::prompt_text(
 fn HostEndpoint::config(
   self : HostEndpoint,
   provider : ApiProvider,
-) -> @protocol.ProviderStatus {
-  self.providers
-  .get(provider.wire())
-  .unwrap_or({ api_url: None, has_api_key: false, })
+) -> ProviderConfig {
+  self.providers.get(provider).unwrap_or({ api_url: None, has_api_key: false, })
 }
 
 ///|

@@ -4480,7 +4480,7 @@ fn update_msg(
         ),
         model.edit_host_endpoint({
           ..endpoint,
-          providers: endpoint.providers.add("custom", {
+          providers: endpoint.providers.add(Custom, {
             ..endpoint.config(Custom),
             api_url: Some(value),
           }),
@@ -5104,7 +5104,7 @@ fn update_msg(
             let next = {
               ..model.edit_host_endpoint({
                 ..endpoint,
-                providers: endpoint.providers.add(provider.wire(), {
+                providers: endpoint.providers.add(provider, {
                   ..endpoint.config(provider),
                   has_api_key: true,
                 }),
@@ -10986,10 +10986,10 @@ fn Model::with_host_endpoint(
     let mut providers = endpoint.providers
     for
       (name, key) in [
-        ("deepseek", deepseek_key_saved),
-        ("glm", glm_key_saved),
-        ("openrouter", openrouter_key_saved),
-        ("custom", custom_key_saved),
+        (Deepseek, deepseek_key_saved),
+        (Glm, glm_key_saved),
+        (OpenRouter, openrouter_key_saved),
+        (Custom, custom_key_saved),
       ] {
       if key is Some(has_api_key) {
         let config = providers
@@ -11000,9 +11000,9 @@ fn Model::with_host_endpoint(
     }
     if custom_api_url is Some(url) {
       let config = providers
-        .get("custom")
+        .get(Custom)
         .unwrap_or({ api_url: None, has_api_key: false, })
-      providers = providers.add("custom", { ..config, api_url: Some(url), })
+      providers = providers.add(Custom, { ..config, api_url: Some(url), })
     }
     let endpoint = {
       provider: provider.unwrap_or(endpoint.provider),
