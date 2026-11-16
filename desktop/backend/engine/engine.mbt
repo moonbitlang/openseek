@@ -1491,7 +1491,9 @@ async fn engine_process_args(
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
   }
-  args.append(engine_mcp_args(config.mcp_config, skills_dir, env, host_mcp~))
+  args.append(
+    engine_mcp_args(config?=config.mcp_config, skills_dir?, env~, host_mcp~),
+  )
   if config.session_root is Some(root) {
     let store = @store.SessionStore(root.to_string())
     if capture_session_prompt(
@@ -3128,22 +3130,22 @@ async test "native engine env has one authoritative bundled moon path" {
   let skills_dir = skills.resolve().to_string()
   assert_true(automatic.contains("--skills-dir=\{skills_dir}"))
   assert_false(@fs.exists(skills.to_string()))
-  assert_eq(engine_mcp_args(None, None, {}, host_mcp=true), [])
+  assert_eq(engine_mcp_args(env={}, host_mcp=true), [])
   let fallback = { "OPENSEEK_MCP_CONFIG": "/fallback/mcp.json" }
-  assert_eq(engine_mcp_args(None, Some(skills), fallback, host_mcp=true), [
+  assert_eq(engine_mcp_args(skills_dir=skills, env=fallback, host_mcp=true), [
     "--skills-dir=\{skills_dir}",
     "--mcp-config=/fallback/mcp.json",
   ])
   assert_eq(
     engine_mcp_args(
-      Some({ path: mcp_path, revision: McpConfigRevision::of_text("{}"), }),
-      Some(skills),
-      fallback,
+      config={ path: mcp_path, revision: McpConfigRevision::of_text("{}"), },
+      skills_dir=skills,
+      env=fallback,
       host_mcp=true,
     ),
     ["--skills-dir=\{skills_dir}", "--mcp-config=\{mcp_path.to_string()}"],
   )
-  assert_eq(engine_mcp_args(None, Some(skills), fallback, host_mcp=false), [])
+  assert_eq(engine_mcp_args(skills_dir=skills, env=fallback, host_mcp=false), [])
   let moon_bin = moon_home.join("bin").to_string()
   let expected_path = if ambient_path is Some(path) && !path.is_empty() {
     "\{moon_bin}\{@env.path_sep}\{path}"

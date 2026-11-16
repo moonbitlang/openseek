@@ -352,9 +352,9 @@ test "an inherited MCP configuration counts as one the engine will load" {
 /// configuration and the environment fallback override same-named servers
 /// from the skill.
 fn engine_mcp_args(
-  config : McpConfig?,
-  skills_dir : @pathx.Path?,
-  env : Map[String, String],
+  config? : McpConfig,
+  skills_dir? : @pathx.Path,
+  env~ : Map[String, String],
   host_mcp~ : Bool,
 ) -> Array[String] {
   let args : Array[String] = []
