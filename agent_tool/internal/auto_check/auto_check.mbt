@@ -19,7 +19,7 @@ async fn auto_check_summary(path : String) -> String? {
   if path.has_suffix(".mbtx") && !@fs.exists(path) {
     return None
   }
-  guard moon_check_cwd(path) is Some(cwd) else { return None }
+  guard check_cwd(path) is Some(cwd) else { return None }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
     collect_process_output(
       "moon",
@@ -320,7 +320,7 @@ pub(all) enum CheckOutcome {
 /// Run `moon check --json` for the project containing `path`, or for the
 /// standalone .mbtx script itself, and tally its diagnostics.
 pub async fn check(path : String) -> CheckOutcome {
-  guard moon_check_cwd(path) is Some(cwd) else { return NotApplicable }
+  guard check_cwd(path) is Some(cwd) else { return NotApplicable }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
     collect_process_output(
       "moon",
@@ -442,7 +442,10 @@ fn parse_check_document(text : String) -> CheckDocument? {
 }
 
 ///|
-async fn moon_check_cwd(path : String) -> String? {
+/// The directory to run a check from: standalone scripts use their containing
+/// directory; project sources and manifests use the nearest MoonBit project.
+/// Returns None for paths outside these categories.
+pub async fn check_cwd(path : String) -> String? {
   if path.has_suffix(".mbtx") {
     return Some(containing_dir(path))
   }
@@ -592,7 +595,7 @@ fn check_args(path : String, options : Array[String]) -> Array[String] {
 /// Identity for deduplicating checks: each standalone script is independent,
 /// while source files in one project share a project check.
 pub async fn check_identity(path : String) -> String? {
-  guard moon_check_cwd(path) is Some(cwd) else { return None }
+  guard check_cwd(path) is Some(cwd) else { return None }
   let target = if path.has_suffix(".mbtx") { path } else { cwd }
   Some(@fs.realpath(target) catch { _ => target })
 }
