@@ -2,6 +2,12 @@
 
 ///|
 priv enum UiMessage {
+  NewSessionSuggestion
+  SessionSuggestionPrompt
+  CreateSessionAndStart
+  SessionCreating
+  OpenCreatedSession
+  RetryCreateSession
   WhatBuild
   ChooseProject
   NoProjects
@@ -80,6 +86,36 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, NewSessionSuggestion) => "Continue in a new conversation"
+    (Spanish, NewSessionSuggestion) => "Continuar en una conversación nueva"
+    (SimplifiedChinese, NewSessionSuggestion) => "在新会话中继续"
+    (TraditionalChinese, NewSessionSuggestion) => "在新對話中繼續"
+    (Japanese, NewSessionSuggestion) => "新しい会話で続ける"
+    (English, SessionSuggestionPrompt) => "Task"
+    (Spanish, SessionSuggestionPrompt) => "Tarea"
+    (SimplifiedChinese, SessionSuggestionPrompt) => "任务内容"
+    (TraditionalChinese, SessionSuggestionPrompt) => "任務內容"
+    (Japanese, SessionSuggestionPrompt) => "タスク内容"
+    (English, CreateSessionAndStart) => "Create and start"
+    (Spanish, CreateSessionAndStart) => "Crear e iniciar"
+    (SimplifiedChinese, CreateSessionAndStart) => "创建并开始"
+    (TraditionalChinese, CreateSessionAndStart) => "建立並開始"
+    (Japanese, CreateSessionAndStart) => "作成して開始"
+    (English, SessionCreating) => "Creating…"
+    (Spanish, SessionCreating) => "Creando…"
+    (SimplifiedChinese, SessionCreating) => "正在创建…"
+    (TraditionalChinese, SessionCreating) => "正在建立…"
+    (Japanese, SessionCreating) => "作成中…"
+    (English, OpenCreatedSession) => "Open conversation"
+    (Spanish, OpenCreatedSession) => "Abrir conversación"
+    (SimplifiedChinese, OpenCreatedSession) => "打开会话"
+    (TraditionalChinese, OpenCreatedSession) => "開啟對話"
+    (Japanese, OpenCreatedSession) => "会話を開く"
+    (English, RetryCreateSession) => "Retry"
+    (Spanish, RetryCreateSession) => "Reintentar"
+    (SimplifiedChinese, RetryCreateSession) => "重试"
+    (TraditionalChinese, RetryCreateSession) => "重試"
+    (Japanese, RetryCreateSession) => "再試行"
     (English, SubagentTranscript) => "subagent transcript"
     (Spanish, SubagentTranscript) => "transcripción del subagente"
     (SimplifiedChinese, SubagentTranscript) => "子智能体记录"

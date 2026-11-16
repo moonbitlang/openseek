@@ -36,6 +36,7 @@ fn assistant_view(
   subrun? : SubrunLink,
   fork? : @html.Html,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  session_view? : (Int32, String) -> @html.Html,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -122,6 +123,7 @@ fn assistant_view(
     parts.push(
       assistant_message_view(
         artifact_view?,
+        session_view?,
         locale~,
         text,
         on_open,
@@ -1109,6 +1111,7 @@ fn transcript_item_view(
   edit? : @html.Html,
   editor? : @html.Html,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  session_view? : (Int32, String) -> @html.Html,
 ) -> @html.Html {
   match item.kind {
     User(content~) =>
@@ -1125,6 +1128,7 @@ fn transcript_item_view(
     Assistant(reasoning~, prose~, calls~, replay=_, finished~, end_sequence=_) =>
       assistant_view(
         artifact_view?,
+        session_view?,
         locale~,
         on_open,
         prose?,
@@ -1142,6 +1146,7 @@ fn transcript_item_view(
     Answer(text) =>
       assistant_message_view(
         artifact_view?,
+        session_view?,
         locale~,
         text,
         on_open,
@@ -1191,6 +1196,7 @@ fn assistant_message_view(
   fork? : @html.Html,
   streaming~ : Bool = false,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  session_view? : (Int32, String) -> @html.Html,
 ) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
@@ -1217,6 +1223,11 @@ fn assistant_message_view(
           None
         },
         defer_artifacts=!show_actions || streaming,
+        session_view?=if show_actions && !streaming {
+          session_view
+        } else {
+          None
+        },
       ),
     )
   }

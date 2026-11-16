@@ -258,6 +258,8 @@ pub let session_artifacts_list : Command[@protocol.SessionArtifactsChangedPayloa
 
 pub let session_artifacts_remove : Command[@protocol.SessionArtifactRemovePayload, @protocol.SessionArtifacts]
 
+pub let session_create_from_message : Command[@protocol.SessionCreateFromMessagePayload, @protocol.SessionCreateFromMessageReply]
+
 pub let session_delete : Command[@protocol.SessionDeletePayload, @protocol.SessionDeleteReply]
 
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]
@@ -289,6 +291,8 @@ pub let session_share : Command[@protocol.SessionSharePayload, @protocol.Session
 pub let session_snapshot : Command[@protocol.SessionExportPayload, @protocol.SessionSnapshot]
 
 pub let session_snapshot_save : Command[@protocol.SnapshotSavePayload, @protocol.SessionExportReply]
+
+pub let session_suggestions : Command[@protocol.SessionSuggestionsPayload, @protocol.SessionSuggestionsReply]
 
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 

@@ -237,6 +237,7 @@ priv enum MinimalContent {
     assistant~ : String,
     finished~ : Bool,
     live~ : Bool,
+    sequence~ : Int32?,
     // The durable commit instant of the item this prose came from, shown
     // beside the copy action on a finished answer exactly as detailed mode's
     // completion stamp is. `None` for prose still inside the process, for a
@@ -395,6 +396,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               assistant~,
               finished=true,
               live=false,
+              sequence=row.item.sequence,
               completed_at=row.item.ts,
               fork=self.fork_action(row.item),
             ),
@@ -407,6 +409,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               assistant~,
               finished=false,
               live=false,
+              sequence=row.item.sequence,
               completed_at=None,
               fork=None,
             ),
@@ -453,6 +456,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               assistant~,
               finished=true,
               live=false,
+              sequence=row.item.sequence,
               completed_at=row.item.ts,
               fork=self.fork_action(row.item),
             ),
@@ -525,6 +529,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         assistant~,
         finished=false,
         live=true,
+        sequence=None,
         completed_at=None,
         fork=None,
       ),
@@ -744,6 +749,7 @@ fn MinimalContent::render(
   actions : Actions,
   active~ : Bool = false,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  session_view? : (Int32, Int32, String) -> @html.Html,
 ) -> @html.Html {
   match self {
     Messages(parts, active_group~) => {
@@ -755,6 +761,7 @@ fn MinimalContent::render(
           locale~,
           actions,
           artifact_view?,
+          session_view?,
           active=active_group is Some(identity) && identity == part.identity,
         )
       }
@@ -770,9 +777,14 @@ fn MinimalContent::render(
           }),
         ),
       ])
-    Prose(text~, assistant~, finished~, live~, completed_at~, fork~) =>
+    Prose(text~, assistant~, finished~, live~, sequence~, completed_at~, fork~) =>
       assistant_message_view(
         artifact_view?,
+        session_view?=session_view.bind(render => {
+          sequence.map(sequence => {
+            (block, prompt) => render(sequence, block, prompt)
+          })
+        }),
         locale~,
         text,
         path => (actions.open)(path),

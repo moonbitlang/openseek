@@ -68,6 +68,33 @@ Files and downloaded JSON are limited to 16 MiB. Share imports fetch the public
 JSON resource without account credentials or redirects; expired/revoked shares
 report an error and retain the link for retry.
 
+## Suggested sessions in assistant answers
+
+A completed assistant answer in a workspace chat can offer an independent task:
+
+````markdown
+```openseek-session create
+Investigate input latency in desktop/frontend and report measurements and an
+improvement proposal. Keep the investigation separate from the current task.
+```
+````
+
+The closed fence becomes a card with the complete prompt and a **Create and
+start** button. Nothing starts until the user clicks. The host then creates a
+new worktree of the source workspace and submits the body as the new session's
+first user message, without copying conversation history. It uses the source's
+saved base system prompt and the model, thinking and approval settings selected
+when the user first clicks. The original chat and its composer draft remain in
+place; the completed card opens the new conversation.
+
+Successful associations are stored with the source conversation. Reloads,
+concurrent clicks and retries recover the same target, including an archived
+target. A deleted target can be created again. Errors stay on the card with a
+retry action. The feature uses ordinary Desktop commands, without an MCP
+proposal or composer approval. Streaming text, reasoning, user messages and
+ordinary file previews keep the fence as text. Use a longer outer fence when
+the initial prompt contains its own code fences.
+
 ## Sessions and streaming
 
 Each conversation is served by one persistent `openseek serve` engine

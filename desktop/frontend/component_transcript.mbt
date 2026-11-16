@@ -316,6 +316,8 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     can_fork=conversation
       .map(conversation => conversation.can_fork())
       .unwrap_or(false),
+    can_create_session=self.session_suggestion_source() is Some(_),
+    suggestion_states=self.visible_session_suggestions(),
     editable_users=conversation
       .map(conv => conv.editable_messages().map(edit => edit.sequence))
       .unwrap_or([]),
