@@ -64,11 +64,15 @@ pub async fn start_mcp(
   let host_env = @env.get_env_vars()
   let skill_servers : Array[@mcpconfig.McpServer] = []
   for skill in skills {
-    guard skill.mcp_config_path() is Some(path) else { continue }
-    let dir = match path.rev_split_once("/") {
-      Some((dir, _)) => dir.to_owned()
-      None => "."
+    // Only directory skills carry MCP configuration. Use the already-merged
+    // library so a shadowed skill cannot contribute servers.
+    guard skill.path().rev_split_once("/") is Some((dir, "SKILL.md")) else {
+      continue
     }
+    let dir = dir.to_owned()
+    let path = "\{dir}/mcp.json"
+    let has_config = @fs.exists(path) catch { _ => false }
+    guard has_config else { continue }
     let skill_env = host_env.copy()
     skill_env[SkillDirEnv] = dir
     let prepared = load(path, skill_env, servers => {
