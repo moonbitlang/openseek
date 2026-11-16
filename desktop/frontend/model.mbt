@@ -304,9 +304,6 @@ fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
 }
 
 ///|
-const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
-
-///|
 /// Which chat-completions endpoint the engine talks to. SeekMoon runs are
 /// bring-your-own-key only: the hosted proxy is retired. `Deepseek` is the
 /// official endpoint and needs the user's own key; `OpenRouter` is a preset
@@ -1625,6 +1622,7 @@ priv struct HostEndpoint {
   followup_behavior : FollowupBehavior
   deepseek_key_saved : Bool
   glm_key_saved : Bool
+  openrouter_key_saved : Bool
   custom_key_saved : Bool
 }
 

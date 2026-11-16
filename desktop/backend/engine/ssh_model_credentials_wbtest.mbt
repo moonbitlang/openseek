@@ -18,6 +18,7 @@ async test "SSH forwards only the selected local provider credential" {
           custom_api_url: None,
           deepseek_api_key: Some("stored-deepseek"),
           glm_api_key: Some("stored-glm"),
+          openrouter_api_key: None,
           custom_api_key: None,
         }),
       )
@@ -40,6 +41,7 @@ async test "SSH custom keys follow the model family without forwarding endpoint 
         custom_api_url: Some("https://custom.example/chat/completions"),
         deepseek_api_key: None,
         glm_api_key: None,
+        openrouter_api_key: None,
         custom_api_key: Some("custom-key"),
       }),
     )
@@ -58,6 +60,7 @@ async test "SSH custom keys follow the model family without forwarding endpoint 
         custom_api_url: None,
         deepseek_api_key: None,
         glm_api_key: None,
+        openrouter_api_key: None,
         custom_api_key: Some(""),
       }),
     )

@@ -10,6 +10,7 @@ fn @protocol.SettingsSetPayload::to_patch(
     custom_api_url: self.custom_api_url,
     deepseek_api_key: self.deepseek_api_key,
     glm_api_key: self.glm_api_key,
+    openrouter_api_key: self.openrouter_api_key,
     custom_api_key: self.custom_api_key,
   }
 }

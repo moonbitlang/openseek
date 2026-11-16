@@ -30,6 +30,7 @@ test "settings status preserves and requires the GLM capability flag" {
     "custom_api_url": null,
     "has_deepseek_key": false,
     "has_glm_key": true,
+    "has_openrouter_key": false,
     "has_custom_key": false,
     "followup_behavior": "queue",
     "prompt_source": "custom",
@@ -42,6 +43,7 @@ test "settings status preserves and requires the GLM capability flag" {
     "provider": "glm",
     "has_deepseek_key": false,
     "has_glm_key": true,
+    "has_openrouter_key": false,
     "has_custom_key": false,
     "followup_behavior": "queue",
     "prompt_source": "custom",
@@ -52,6 +54,7 @@ test "settings status preserves and requires the GLM capability flag" {
       "revision": 8,
       "provider": "glm",
       "has_deepseek_key": false,
+      "has_openrouter_key": false,
       "has_custom_key": false,
     }),
   ) catch {
@@ -64,6 +67,7 @@ test "settings status preserves and requires the GLM capability flag" {
       "provider": "glm",
       "has_deepseek_key": false,
       "has_glm_key": true,
+      "has_openrouter_key": false,
       "has_custom_key": false,
     }),
   ) catch {
@@ -76,6 +80,7 @@ test "settings status preserves and requires the GLM capability flag" {
       "provider": "glm",
       "has_deepseek_key": false,
       "has_glm_key": "yes",
+      "has_openrouter_key": false,
       "has_custom_key": false,
     }),
   ) catch {

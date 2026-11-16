@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 8
+pub const HostProtocolRevision : Int32 = 9
 
 pub const MaxImageBytes : Int32 = 20971520
 
@@ -4173,6 +4173,7 @@ pub(all) struct SettingsSetPayload {
   custom_api_url : String?
   deepseek_api_key : String?
   glm_api_key : String?
+  openrouter_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
   prompt_source : String?
@@ -4193,6 +4194,7 @@ pub(all) struct SettingsStatusPayload {
   custom_api_url : String?
   has_deepseek_key : Bool
   has_glm_key : Bool
+  has_openrouter_key : Bool
   has_custom_key : Bool
   followup_behavior : String
   prompt_source : String

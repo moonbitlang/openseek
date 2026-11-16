@@ -11,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 8;
+    this.hostProtocol = 9;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -83,6 +83,7 @@ export class DesktopBrowserHarness {
       custom_api_url: '',
       has_deepseek_key: true,
       has_glm_key: false,
+      has_openrouter_key: false,
       has_custom_key: false,
       followup_behavior: 'steer',
       prompt_source: 'builtin_moonbit_guide',
@@ -694,6 +695,7 @@ export class DesktopBrowserHarness {
           'custom_api_url',
           'deepseek_api_key',
           'glm_api_key',
+          'openrouter_api_key',
           'custom_api_key',
           'followup_behavior',
           'prompt_source',

@@ -279,6 +279,7 @@ pub(all) struct SettingsSetPayload {
   custom_api_url : String?
   deepseek_api_key : String?
   glm_api_key : String?
+  openrouter_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
   prompt_source : String?
@@ -293,6 +294,7 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     custom_api_url: object.optional_string("custom_api_url"),
     deepseek_api_key: object.optional_string("deepseek_api_key"),
     glm_api_key: object.optional_string("glm_api_key"),
+    openrouter_api_key: object.optional_string("openrouter_api_key"),
     custom_api_key: object.optional_string("custom_api_key"),
     followup_behavior: object.optional_string("followup_behavior"),
     prompt_source: object.optional_string("prompt_source"),
@@ -317,6 +319,9 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.followup_behavior is Some(value) {
     fields["followup_behavior"] = Json(value)
+  }
+  if self.openrouter_api_key is Some(value) {
+    fields["openrouter_api_key"] = Json(value)
   }
   if self.custom_api_key is Some(value) {
     fields["custom_api_key"] = Json(value)
@@ -1542,6 +1547,7 @@ pub(all) struct SettingsStatusPayload {
   custom_api_url : String?
   has_deepseek_key : Bool
   has_glm_key : Bool
+  has_openrouter_key : Bool
   has_custom_key : Bool
   followup_behavior : String
   prompt_source : String
@@ -1557,6 +1563,7 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     custom_api_url: object.optional_string("custom_api_url"),
     has_deepseek_key: object.required_bool("has_deepseek_key"),
     has_glm_key: object.required_bool("has_glm_key"),
+    has_openrouter_key: object.required_bool("has_openrouter_key"),
     has_custom_key: object.required_bool("has_custom_key"),
     followup_behavior: object.required_string("followup_behavior"),
     prompt_source: object.required_string("prompt_source"),
@@ -1571,6 +1578,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
     "provider": Json(self.provider),
     "has_deepseek_key": Json(self.has_deepseek_key),
     "has_glm_key": Json(self.has_glm_key),
+    "has_openrouter_key": Json(self.has_openrouter_key),
     "has_custom_key": Json(self.has_custom_key),
     "followup_behavior": Json(self.followup_behavior),
     "prompt_source": Json(self.prompt_source),
@@ -1588,7 +1596,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 8
+pub const HostProtocolRevision : Int32 = 9
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads

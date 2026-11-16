@@ -4383,6 +4383,7 @@ fn update_msg(
         custom_api_url: None,
         deepseek_api_key: None,
         glm_api_key: None,
+        openrouter_api_key: None,
         custom_api_key: None,
         followup_behavior: None,
         prompt_source: source,
@@ -4418,20 +4419,11 @@ fn update_msg(
       let push = push_host_settings(
         dispatch,
         model.focused,
-        provider_settings_patch(provider, endpoint.custom_api_url),
+        provider_settings_patch(provider),
         model.focused_connection_generation(),
       )
       let next = {
-        ..model.edit_host_endpoint({
-          ..endpoint,
-          provider,
-          custom_api_url: if provider is Custom &&
-            endpoint.custom_api_url == OpenRouterChatCompletionsUrl {
-            ""
-          } else {
-            endpoint.custom_api_url
-          },
-        }),
+        ..model.edit_host_endpoint({ ..endpoint, provider, }),
         setup_api_key: "",
         select_menu: None,
       }.align_new_chats_with_provider(model.focused)
@@ -5113,8 +5105,10 @@ fn update_msg(
                 deepseek_key_saved: endpoint.deepseek_key_saved ||
                 provider is Deepseek,
                 glm_key_saved: endpoint.glm_key_saved || provider is Glm,
+                openrouter_key_saved: endpoint.openrouter_key_saved ||
+                provider is OpenRouter,
                 custom_key_saved: endpoint.custom_key_saved ||
-                provider is (OpenRouter | Custom),
+                provider is Custom,
               }),
               setup_api_key: "",
             }
@@ -10984,6 +10978,7 @@ fn Model::with_host_endpoint(
   followup_behavior? : FollowupBehavior,
   deepseek_key_saved? : Bool,
   glm_key_saved? : Bool,
+  openrouter_key_saved? : Bool,
   custom_key_saved? : Bool,
 ) -> Model {
   self.with_host_settings(mirror => {
@@ -10997,6 +10992,9 @@ fn Model::with_host_endpoint(
         endpoint.deepseek_key_saved,
       ),
       glm_key_saved: glm_key_saved.unwrap_or(endpoint.glm_key_saved),
+      openrouter_key_saved: openrouter_key_saved.unwrap_or(
+        endpoint.openrouter_key_saved,
+      ),
       custom_key_saved: custom_key_saved.unwrap_or(endpoint.custom_key_saved),
     }
     { ..mirror, current: Some({ ..current, endpoint, }), }
@@ -16334,14 +16332,14 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
 }
 
 ///|
-test "OpenRouter setup requires only its stored custom key" {
+test "OpenRouter setup requires only its own stored key" {
   let openrouter = test_model().with_host_endpoint(
     deepseek_key_saved=true,
     custom_key_saved=false,
     provider=OpenRouter,
   )
   assert_false(openrouter.api_ready())
-  let keyed = openrouter.with_host_endpoint(custom_key_saved=true)
+  let keyed = openrouter.with_host_endpoint(openrouter_key_saved=true)
   assert_true(keyed.api_ready())
   // Model choice belongs to the chat, just as with the official endpoint.
   assert_true({ ..keyed, default_model: Deepseek(V4Pro), }.api_ready())
@@ -17047,6 +17045,7 @@ fn host_settings(
   revision~ : Int32 = 0,
   has_deepseek_key~ : Bool = false,
   has_glm_key~ : Bool = false,
+  has_openrouter_key~ : Bool = false,
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
 ) -> HostSettings {
@@ -17056,6 +17055,7 @@ fn host_settings(
     custom_api_url: Some(custom_api_url),
     has_deepseek_key,
     has_glm_key,
+    has_openrouter_key,
     has_custom_key,
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
@@ -17064,14 +17064,10 @@ fn host_settings(
 }
 
 ///|
-test "the OpenRouter custom preset restores as OpenRouter" {
+test "the OpenRouter provider restores independently of Custom" {
   let restored = test_model().apply_host_settings(
     Local,
-    host_settings(
-      provider="custom",
-      custom_api_url=OpenRouterChatCompletionsUrl,
-      has_custom_key=true,
-    ),
+    host_settings(provider="openrouter", has_openrouter_key=true),
   )
   assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
@@ -17871,7 +17867,7 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
-  assert_true(saved_openrouter.test_endpoint().custom_key_saved)
+  assert_true(saved_openrouter.test_endpoint().openrouter_key_saved)
   assert_false(saved_openrouter.test_endpoint().deepseek_key_saved)
 }
 

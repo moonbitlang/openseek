@@ -757,6 +757,7 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   await page.getByRole('textbox', { name: 'Endpoint URL' }).fill(
     'https://example.test/chat/completions',
   );
+  await page.getByRole('textbox', { name: 'Endpoint URL' }).press('Tab');
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
     request.params?.custom_api_url === 'https://example.test/chat/completions'))
@@ -781,12 +782,10 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
 
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.provider === 'custom' &&
-    request.params?.custom_api_url === 'https://openrouter.ai/api/v1/chat/completions')).toBe(true);
+    request.params?.provider === 'openrouter')).toBe(true);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.provider === 'custom' &&
-    request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
+    request.params?.openrouter_api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
   expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
   expect(app.pageErrors).toEqual([]);

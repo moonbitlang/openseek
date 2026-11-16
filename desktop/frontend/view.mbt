@@ -1410,14 +1410,24 @@ fn api_settings_rows(
               .host_settings()
               .map(settings => settings.endpoint.custom_api_url)
               .unwrap_or(""),
-            placeholder="https://host/chat/completions",
-            on_input=dispatch.map(value => CustomApiUrlChanged(value)),
+            placeholder="https://host/v1",
+            on_change=dispatch.map(value => CustomApiUrlChanged(value)),
             attrs=@html.Attrs::build()
               .aria_label(@settings.text(model.locale, EndpointUrl))
+              .on_keydown(event => {
+                if event.key() == "Enter" && !event.is_composing() {
+                  event.prevent_default()
+                  if event.target().to_html_input_element() is Some(input) {
+                    input.blur()
+                  }
+                }
+                @cmd.none
+              })
               .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
         ],
+        desc=@settings.text(model.locale, EndpointUrlDescription),
         stack=true,
       ),
     )

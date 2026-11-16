@@ -161,6 +161,7 @@ pub(all) struct SettingsPatch {
   custom_api_url : String?
   deepseek_api_key : String?
   glm_api_key : String?
+  openrouter_api_key : String?
   custom_api_key : String?
 }
 
