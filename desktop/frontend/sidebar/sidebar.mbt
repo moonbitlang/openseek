@@ -190,7 +190,23 @@ pub fn component(
 ) -> @rabbita.Val[@html.Html] {
   let chat_list = actions.list_component(input, ChatMode)
   let work_list = actions.list_component(input, WorkMode)
-  input.map3(chat_list, work_list, (input, chat_list, work_list) => {
+  let avatar = input
+    .map(input => input.account.map(account => account.avatar).unwrap_or(""))
+    .switch_by(
+      src => {
+        @rui.avatar_with_fallback(
+          id="sidebar-account-avatar",
+          src~,
+          alt="",
+          class="console-avatar",
+          style=["--rui-avatar-size:16px"],
+          fallback_style=["background:transparent;color:inherit"],
+          @icons.icon(@icons.icon_account),
+        )
+      },
+      by=src => src,
+    )
+  input.map4(chat_list, work_list, avatar, (input, chat_list, work_list, avatar) => {
     let rows : Map[String, @html.Html] = Map([])
     for index, notice in input.notices {
       rows["notice:\{index}"] = @html.div(
@@ -289,14 +305,7 @@ pub fn component(
         class="sidebar-button console-account",
         on_click=actions.open_account,
         [
-          @html.span(
-            class="sidebar-icon",
-            if input.account is Some(account) && !account.avatar.is_empty() {
-              @html.img(class="console-avatar", src=account.avatar, alt="")
-            } else {
-              @icons.icon(@icons.icon_account)
-            },
-          ),
+          @html.span(class="sidebar-icon", avatar),
           @html.span(
             class="sidebar-label console-login",
             if input.account is Some(account) {
