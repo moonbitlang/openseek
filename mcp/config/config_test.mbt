@@ -78,6 +78,7 @@ test "configuration resolves environment references once" {
       "mcpServers": {
         "host": {
           "url": "http://${HOST}:${PORT}/mcp",
+          "headersHelper": ["${COMMAND}", "${ARG}", "${TOKEN}"],
           "headers": {
             "Authorization": "Bearer ${TOKEN}",
             "X-Literal": "原样 $TOKEN",
@@ -92,7 +93,15 @@ test "configuration resolves environment references once" {
     },
     env~,
   )
-  guard servers[0] is Http(url~, headers~, ..) else { fail("expected HTTP") }
+  guard servers[0] is Http(url~, headers~, headers_helper~, ..) else {
+    fail("expected HTTP")
+  }
+  assert_true(
+    headers_helper
+    is Some(
+      { command: "/opt/server", arguments: ["--fast", "secret-${OTHER}"], }
+    ),
+  )
   assert_eq(url, "http://127.0.0.1:3210/mcp")
   assert_eq(headers.get("Authorization"), Some("Bearer secret-${OTHER}"))
   assert_eq(headers.get("X-Literal"), Some("原样 $TOKEN"))

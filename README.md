@@ -311,7 +311,8 @@ tools is logged and reported as unavailable — MCP never breaks a session. Tool
 results are size-capped and calls are bounded by a timeout.
 
 A stdio entry's `command`, `args`, and `env` values, and an HTTP entry's `url`
-and `headers` values, support `${VAR}` references to the engine's environment,
+and `headers` values, plus `headersHelper` executable and arguments, support
+`${VAR}` references to the engine's environment,
 for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion is single-pass
 and missing variables are configuration errors.
 
@@ -367,7 +368,9 @@ the shape `--mcp-config` reads. Skill configurations have these rules:
   values and `OPENSEEK_SKILL_DIR` added to the inherited process environment.
   The engine does not inject a sandbox policy or restrict the command.
   Approval and permissions for skill servers are deferred to future work.
-- An HTTP server may not run a `headersHelper`.
+- HTTP servers may run a `headersHelper` to obtain request headers at connection
+  time. Use `${OPENSEEK_SKILL_DIR}` in its arguments to reference bundled scripts.
+  Helpers inherit the engine environment and run without an engine-injected sandbox.
 
 The agent learns of a skill's server from the skill, and reaches it like any
 other. A server of the same name in an `--mcp-config` file replaces it. A

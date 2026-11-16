@@ -309,7 +309,7 @@ async test "a skill's stdio server accepts a configured native command" {
 }
 
 ///|
-async test "a skill's headers helper or missing variable makes its configuration invalid" {
+async test "a skill's malformed helper or missing variable makes its configuration invalid" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
   defer @fs.rmdir(dir, recursive=true)
   let rejected : Array[(String, Json)] = [
@@ -359,7 +359,12 @@ async test "a skill's HTTP server connects when a script reaches it" {
   defer @fs.rmdir(dir, recursive=true)
   // Nothing listens on port 9, so connecting settles at once as failed.
   write_skill(dir, "tracker", {
-    "mcpServers": { "tracker": { "url": "http://127.0.0.1:9/mcp" } },
+    "mcpServers": {
+      "tracker": {
+        "url": "http://127.0.0.1:9/mcp",
+        "headersHelper": ["${OPENSEEK_SKILL_DIR}/missing-helper"],
+      },
+    },
   })
   @async.with_timeout(10000, () => {
     @async.with_task_group(group => {

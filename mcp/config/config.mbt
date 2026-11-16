@@ -6,7 +6,7 @@
 // JSON parsing are the caller's; this layer is pure and decodes a parsed `Json`.
 
 ///|
-/// A headers helper executable and its literal arguments, decoded from configuration.
+/// A headers helper executable and arguments after configuration variable expansion.
 #derive(Eq, Debug)
 pub(all) struct HeadersHelperCommand {
   command : String
@@ -172,6 +172,7 @@ fn decode_http_server(
         "server `\{name}`: `headersHelper` must be a nonempty array of strings",
       )
     }
+    let command = expand_env(name, command, env)
     guard !command.is_empty() else {
       raise Invalid("server `\{name}`: `headersHelper` needs an executable")
     }
@@ -182,7 +183,7 @@ fn decode_http_server(
             "server `\{name}`: every `headersHelper` entry must be a string",
           )
         }
-        argument
+        expand_env(name, argument, env)
       }
     ]
     Some({ command, arguments, })
