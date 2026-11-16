@@ -427,7 +427,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   // Selecting text offers Reply just above it; Reply opens a composer that
   // keeps the quote in view and painted while the comment is typed.
   await selectWord(first);
-  await expect(bar.getByRole('button')).toHaveText(['Copy', 'Reply']);
+  await expect(bar.getByRole('button')).toHaveText(['Reply']);
   const barBox = await bar.boundingBox();
   const firstBox = await first.boundingBox();
   expect(barBox.y + barBox.height).toBeLessThanOrEqual(firstBox.y);

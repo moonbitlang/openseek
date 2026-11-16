@@ -19,14 +19,6 @@
   background: var(--color-accent-soft);
   color: var(--color-accent);
 }
-.selection-actions .action-menu-item:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.selection-actions .action-menu-item:disabled:hover {
-  background: transparent;
-  color: var(--color-text-primary);
-}
 .selection-actions .action-menu-item.destructive:hover,
 .selection-actions .action-menu-item.destructive:focus-visible {
   background: var(--color-danger-soft);
@@ -64,36 +56,10 @@
 .selection-actions.below {
   transform: translate(-50%, 0);
 }
-.selection-actions-buttons {
-  display: flex;
-}
-.selection-actions:has(.selection-actions-buttons) {
-  flex-direction: column;
-}
-.selection-actions-buttons > .action-menu-item {
+.selection-actions > .action-menu-item {
   width: auto;
   justify-content: center;
   padding: var(--space-2) var(--space-5);
-}
-.selection-copy-feedback {
-  /* Match the text-only buttons' content height, including the check icon. */
-  --icon-size: 1em;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-tight);
-}
-.selection-copy-error {
-  padding: var(--space-2) var(--space-5) var(--space-3);
-  color: var(--color-danger);
-  font-size: var(--font-size-sm);
-}
-.selection-actions-separator {
-  align-self: center;
-  width: 1px;
-  height: 16px;
-  background: var(--color-divider);
 }
 .selection-actions.replying {
   flex-direction: column;
