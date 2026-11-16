@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/viewer/diagrams/svg"
+
+import {
+  "moonbitlang/editor/viewer/diagrams",
+}
+
+// Values
+pub fn render(@diagrams.DiagramKind, String) -> String?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

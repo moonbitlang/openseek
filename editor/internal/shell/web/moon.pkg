@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/editor/viewer/diagrams",
+  "moonbitlang/editor/viewer/diagrams/svg",
   "moonbitlang/editor/internal/shell/workbench",
 }
 

@@ -32,6 +32,7 @@ import {
   "moonbitlang/editor/viewer/diff_provider/moondiff" @moon_diff_provider,
   "moonbitlang/editor/viewer",
   "moonbitlang/editor/viewer/browser/diagram_viewport",
+  "moonbitlang/editor/viewer/diagrams",
   "moonbitlang/editor/viewer/common/agent_feedback_api",
   "moonbitlang/editor/viewer/common/diff",
   "moonbitlang/editor/viewer/common/languages",

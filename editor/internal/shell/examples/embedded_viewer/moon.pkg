@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/editor/viewer/diagrams",
+  "moonbitlang/editor/viewer/diagrams/svg",
   "moonbitlang/editor/base/common" @base_common,
   "moonbitlang/editor/language",
   "moonbitlang/editor/platform/log",

@@ -25,19 +25,11 @@ pub fn markdown_source_attributes(@common.OffsetRange) -> String
 
 pub fn markdown_table_of_contents(MarkdownDocumentProjection) -> Array[MarkdownTocEntry]
 
-pub fn render_diago_svg(String) -> String?
-
 pub fn render_markdown(String, language_id? : String, source_mapping? : Bool, code_block_renderer_owns_source_root? : Bool, code_block_renderer? : (MarkdownCodeBlock, String?) -> String) -> MarkdownRenderFact
-
-pub fn render_mbti_diagram_svg(String) -> String?
-
-pub fn render_package_dep_diagram_svg(String) -> String?
 
 pub fn render_tokenized_code_block(MarkdownCodeBlock, String?) -> String
 
 pub fn render_tokenized_code_lines(MarkdownCodeBlock, String?, (Int32, MarkdownCodeLine, String) -> String) -> String
-
-pub fn render_uml_diagram_svg(String) -> String?
 
 // Errors
 

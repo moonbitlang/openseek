@@ -1,28 +1,26 @@
 ///|
-test "public Viewer UML renderer returns SVG only for valid diagrams" {
+test "UML renderer returns SVG only for valid diagrams" {
   let valid =
     #|@startuml
     #|participant Alice
     #|Alice -> Bob : hello
     #|@enduml
-  guard @viewer.render_uml_diagram_svg(valid) is Some(svg) else {
-    fail("expected UML SVG")
-  }
+  guard @svg.render(Uml, valid) is Some(svg) else { fail("expected UML SVG") }
   assert_true(svg.contains("<svg"))
   assert_true(svg.contains("--vscode-editor-foreground"))
   // UML 0.4.3 treats a bare `@startuml`/`@enduml` pair as a valid empty
   // sequence diagram, so it renders a diagram with no content.
-  guard @viewer.render_uml_diagram_svg("@startuml\n@enduml") is Some(empty_svg) else {
+  guard @svg.render(Uml, "@startuml\n@enduml") is Some(empty_svg) else {
     fail("expected an empty UML SVG")
   }
   assert_true(empty_svg.contains("<svg"))
   assert_true(empty_svg.contains("aria-label=\"Sequence diagram\""))
   assert_false(empty_svg.contains("<g"))
-  assert_true(@viewer.render_uml_diagram_svg("@startuml\n@@@\n@enduml") is None)
+  assert_true(@svg.render(Uml, "@startuml\n@@@\n@enduml") is None)
 }
 
 ///|
-test "public Viewer MBTI renderer accepts a bare generated interface" {
+test "MBTI renderer accepts a bare generated interface" {
   let source =
     #|package "example/geometry"
     #|
@@ -36,19 +34,17 @@ test "public Viewer MBTI renderer accepts a bare generated interface" {
     #|}
     #|
     #|impl Shape for Point
-  guard @viewer.render_mbti_diagram_svg(source) is Some(svg) else {
+  guard @svg.render(Mbti, source) is Some(svg) else {
     fail("expected MBTI SVG")
   }
   assert_true(svg.contains("<svg"))
   assert_true(svg.contains("Point"))
   assert_true(svg.contains("--vscode-editor-foreground"))
-  assert_true(
-    @viewer.render_mbti_diagram_svg("pub struct MissingPackage") is None,
-  )
+  assert_true(@svg.render(Mbti, "pub struct MissingPackage") is None)
 }
 
 ///|
-test "public Viewer package dependency renderer accepts moon tree JSON" {
+test "package dependency renderer accepts moon tree JSON" {
   // The UML renderer's default filter selects nodes with in/out degree above
   // one, so this fixture deliberately branches at `main` and exercises the
   // default rather than overriding product behavior in the test.
@@ -69,7 +65,7 @@ test "public Viewer package dependency renderer accepts moon tree JSON" {
     #|  ],
     #|  "logs": []
     #|}
-  guard @viewer.render_package_dep_diagram_svg(source) is Some(svg) else {
+  guard @svg.render(PackageDependencies, source) is Some(svg) else {
     fail("expected package dependency SVG")
   }
   assert_true(svg.contains("<svg"))
@@ -77,14 +73,14 @@ test "public Viewer package dependency renderer accepts moon tree JSON" {
   assert_true(svg.contains("core"))
   assert_true(svg.contains("util"))
   assert_true(svg.contains("--vscode-editor-foreground"))
-  assert_true(@viewer.render_package_dep_diagram_svg("{\"nodes\":[]}") is None)
+  assert_true(@svg.render(PackageDependencies, "{\"nodes\":[]}") is None)
 }
 
 ///|
-test "public Viewer Diago renderer preserves invalid source fallback" {
-  guard @viewer.render_diago_diagram_svg("a -> b") is Some(svg) else {
+test "Diago renderer preserves invalid source fallback" {
+  guard @svg.render(Diago, "a -> b") is Some(svg) else {
     fail("expected Diago SVG")
   }
   assert_true(svg.contains("<svg"))
-  assert_true(@viewer.render_diago_diagram_svg("a ->") is None)
+  assert_true(@svg.render(Diago, "a ->") is None)
 }

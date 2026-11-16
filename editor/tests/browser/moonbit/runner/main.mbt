@@ -1,5 +1,7 @@
 ///|
 fn main {
+  // Scenarios render diagrams with the renderer linked into this bundle.
+  @diagrams.use_bundled_renderer(@svg.render)
   match scenario_parameter().to_option() {
     Some(scenario) => run_scenario(scenario)
     None => report_runner_failure("missing required `scenario` query parameter")
