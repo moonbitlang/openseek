@@ -388,7 +388,7 @@ async fn multi_edit_files(
   }
   // Measure every touched project before writing, using the same scope for
   // both guards. An unavailable baseline refuses the batch without a write.
-  let check_paths = batch_projects(writes)
+  let check_paths = batch_check_paths(writes)
   let baseline = if !check_paths.is_empty() {
     fn not_verified(reason : String) -> @agent_tool.ToolAction {
       @agent_tool.respond(
@@ -782,7 +782,7 @@ async fn revert_guarded_response(
 /// One representative per project or standalone script, in batch order.
 /// Written paths and symlink targets use canonical check identities so aliases
 /// share a check, but distinct scripts in one directory remain independent.
-async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
+async fn batch_check_paths(writes : Array[PreparedWrite]) -> Array[String] {
   let seen : Map[String, Bool] = Map([])
   let representatives : Array[String] = []
   async fn consider(path : String) -> Unit {
