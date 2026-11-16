@@ -205,6 +205,10 @@
   white-space: pre-wrap;
 }
 
+.moonbit-viewer-markdown-content .math-error {
+  color: var(--vscode-errorForeground, #c00);
+}
+
 .moonbit-viewer-markdown-content .math-display {
   display: block;
   max-width: 100%;

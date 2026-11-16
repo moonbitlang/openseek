@@ -1,9 +1,3 @@
-// Markdown rendering for transcript content. The engine's assistant text is
-// CommonMark (with the GFM-ish cmark extensions: tables, strikethrough, task
-// lists); this module parses it with moonbit-community/cmark and maps the
-// document tree directly onto Rabbita nodes. Raw HTML stays visible as text;
-// no input HTML is inserted into the live document.
-
 ///|
 /// Render a markdown string to a list of block-level Rabbita nodes.
 ///
@@ -96,13 +90,7 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     ExtMathBlock(node) =>
-      out.push(
-        @html.div(
-          class="math math-display",
-          attrs=@html.Attrs::build().data_set("math-display", "true"),
-          "\\[\n" + lines_text(node.v.code) + "\n\\]",
-        ),
-      )
+      out.push(math_node(lines_text(node.v.code), display=true, block=true))
     CodeBlock(node) =>
       out.push(
         code_block(
@@ -585,23 +573,14 @@ fn MarkdownRender::push_inline(
       out.push(@html.strong(self.inline_nodes(node.v.inline, linkify_urls~)))
     ExtStrikethrough(node) =>
       out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
-    ExtMathSpan(node) => {
-      let (opening, closing) = if node.v.display {
-        ("\\[", "\\]")
-      } else {
-        ("\\(", "\\)")
-      }
+    ExtMathSpan(node) =>
       out.push(
-        @html.span(
-          class=if node.v.display { "math math-display" } else { "math" },
-          attrs=@html.Attrs::build().data_set(
-            "math-display",
-            node.v.display.to_string(),
-          ),
-          opening + tights_text(node.v.tex_layout) + closing,
+        math_node(
+          tights_text(node.v.tex_layout),
+          display=node.v.display,
+          block=false,
         ),
       )
-    }
     Autolink(node) => {
       let url = node.v.link.v
       // Email autolinks resolve to a safe `mailto:`; a URI autolink like
