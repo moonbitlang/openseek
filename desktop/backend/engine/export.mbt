@@ -88,10 +88,51 @@ async fn SessionExport::sessions(
         last_active=None,
         first_prompt=if entry_id == self.session { self.title } else { "" },
         events~,
+        artifacts=self.artifacts(entry_id, events),
       ),
     )
   }
   sessions
+}
+
+///|
+async fn SessionExport::artifacts(
+  self : SessionExport,
+  session : String,
+  events : String,
+) -> Map[String, String] {
+  let files : Map[String, String] = Map([])
+  let checkout = Some(@worktree.run_dir(self.workspace, self.session)) catch {
+    _ => None
+  }
+  for event in @session_log.parse_events(events).events {
+    if event.item() is Assistant(message) {
+      for part in @workspace_file_ref.markdown_parts(message.content()) {
+        if part is File(reference) &&
+          reference.artifact &&
+          reference.extension is Some("html" | "htm" | "svg") &&
+          !files.contains(reference.path) {
+          let root = if reference.artifact_path() is Some(_) {
+            Some(self.root.join("sessions").join(session).resource_path())
+          } else {
+            checkout.map(path => path.resource_path())
+          }
+          guard root is Some(root) else { continue }
+          let reply = @files.read_file({
+            root: Some(root),
+            path: reference.path,
+            max_bytes: Some(8 * 1024 * 1024),
+          }) catch {
+            _ => continue
+          }
+          if reply is Content(content~, ..) {
+            files[reference.path] = content
+          }
+        }
+      }
+    }
+  }
+  files
 }
 
 ///|

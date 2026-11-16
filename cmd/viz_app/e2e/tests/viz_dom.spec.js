@@ -1,6 +1,34 @@
 import { test, expect } from '@playwright/test';
 import { VizBrowserHarness } from './support/viz_browser_harness.js';
 
+test('standalone exports show embedded images and interactive artifacts', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  const events = viewer.events.trim().split('\n').map(line => JSON.parse(line));
+  const user = events.find(event => event.item?.kind === 'user');
+  user.item.payload.content = [
+    { type: 'text', text: 'Inspect the session viewer' },
+    { type: 'image', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==' },
+  ];
+  events.find(event => event.item?.kind === 'assistant').item.payload.content =
+    '```openseek-file artifact\nscratch/artifact/chart.html\n```';
+  viewer.events = events.map(event => JSON.stringify(event)).join('\n') + '\n';
+  await viewer.install({ standalone: true, artifacts: {
+    '/api/artifacts/viz-1': JSON.stringify({
+      'scratch/artifact/chart.html': '<button onclick="this.textContent=\'Clicked\'">Chart</button>',
+    }),
+  } });
+  await viewer.goto();
+  await viewer.openSession();
+  for (const mode of ['Raw log', 'Model view']) {
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await expect(page.locator('img[alt="Image"]').first()).toBeVisible();
+    const chart = page.frameLocator('iframe.workspace-artifact').getByRole('button');
+    await chart.click();
+    await expect(chart).toHaveText('Clicked');
+  }
+  expect(viewer.pageErrors).toEqual([]);
+});
+
 test('session filters and argument modes change what the reader can see', async ({ page }) => {
   const viewer = new VizBrowserHarness(page);
   await viewer.install();
