@@ -15,28 +15,43 @@ for (const entry of ['sidebar', 'Settings']) {
     };
     const account = page.getByRole('region', { name: 'Account', exact: true });
     if (entry === 'Settings') await openAccount();
-    else await page.locator('.console-account').click();
-    const scope = account;
-    const start = () => scope.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const scope = entry === 'Settings' ? account : page.locator('.console-account');
+    const start = () => entry === 'Settings'
+      ? scope.getByRole('button', { name: 'Sign in', exact: true }).click()
+      : scope.click();
 
     await start();
-    await expect(scope).toContainText('Finish signing in in your browser…');
-    const cancel = scope.getByRole('button', { name: 'Cancel', exact: true });
+    if (entry === 'Settings') await expect(scope).toContainText('Finish signing in in your browser…');
+    else {
+      await expect(scope).toHaveText('Cancel sign-in');
+      await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).not.toBeVisible();
+    }
+    const cancel = entry === 'Settings' ? scope.getByRole('button', { name: 'Cancel', exact: true }) : scope;
     await expect(cancel).toBeEnabled();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
     await cancel.click();
-    await expect(scope).toContainText('Cancelling');
+    if (entry === 'Settings') await expect(scope).toContainText('Cancelling');
     await expect(cancel).toBeDisabled();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
     cancellation.resolve();
-    await expect(scope.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+    const signIn = entry === 'Settings' ? scope.getByRole('button', { name: 'Sign in', exact: true }) : scope;
+    await expect(signIn).toBeEnabled();
+    await expect(signIn).toHaveText('Sign in');
     await expect(page.getByText('the sign-in was cancelled', { exact: true })).toHaveCount(0);
 
     cloud.authorization = Promise.withResolvers();
     await start();
-    await expect(scope).toContainText('Finish signing in in your browser…');
+    if (entry === 'Settings') await expect(scope).toContainText('Finish signing in in your browser…');
+    else {
+      await expect(scope).toHaveText('Cancel sign-in');
+      await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).not.toBeVisible();
+    }
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(2);
     cloud.authorization.resolve();
+    if (entry === 'sidebar') {
+      await expect(scope).not.toHaveText('Cancel sign-in');
+      await scope.click();
+    }
     await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);

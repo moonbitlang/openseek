@@ -675,6 +675,13 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     settings_active: self.management_dialog is Some(Settings(_)),
     downloads: self.show_app_downloads(),
     account: self.sidebar_account(),
+    account_action: if self.sidebar_account() is Some(_) {
+      OpenSettings
+    } else if self.is_desktop && self.account_login is Some(_) {
+      CancelSignIn(disabled=self.account_login is Some(Cancelling(..)))
+    } else {
+      SignIn(disabled=self.remote_connecting)
+    },
   }.filtered()
 }
 

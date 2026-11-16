@@ -34,6 +34,7 @@ test "the sidebar input keeps peer sections in one component value" {
     settings_active: false,
     downloads: false,
     account: None,
+    account_action: SignIn(disabled=false),
   }
   assert_eq(input.work_sections.length(), 2)
   assert_eq(input.work_sections[0].id().source(), "openseek.projects")
