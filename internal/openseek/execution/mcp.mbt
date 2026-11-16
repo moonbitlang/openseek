@@ -71,7 +71,14 @@ pub async fn start_mcp(
     }
     let dir = dir.to_owned()
     let path = "\{dir}/mcp.json"
-    let has_config = @fs.exists(path) catch { _ => false }
+    let has_config = @fs.exists(path) catch {
+      error => {
+        let error = "\{error}"
+        @emit.emit(McpConfigUnreadable(path~, error~))
+        configs.push({ path, state: Failed(error), })
+        continue
+      }
+    }
     guard has_config else { continue }
     let skill_env = host_env.copy()
     skill_env[SkillDirEnv] = dir
