@@ -1,6 +1,7 @@
 ///|
-/// Renders delimiter-free TeX as KaTeX HTML, or escaped source and a visible
-/// parse error. HTML extensions and URL-bearing commands remain untrusted.
+/// Renders delimiter-free TeX as KaTeX HTML with a copy-tex source annotation,
+/// or escaped source and a visible parse error. HTML extensions and URL-bearing
+/// commands remain untrusted.
 /// Embedders must load compatible KaTeX CSS and fonts alongside the HTML.
 pub fn render(tex : String, display~ : Bool) -> String {
   let nodes = @katex.parse(
@@ -17,6 +18,6 @@ pub fn render(tex : String, display~ : Bool) -> String {
   }
   @katex_html.render(
     nodes,
-    config=@katex_html.RenderConfig::make(display_mode=display),
+    config=@katex_html.RenderConfig::make(display_mode=display, annotation=tex),
   )
 }

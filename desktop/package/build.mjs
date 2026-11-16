@@ -258,6 +258,7 @@ class Build {
       recursive: true,
       filter: source => source === katexFonts || source.endsWith(".woff2"),
     });
+    await cp(join(work, "katex/dist/contrib/copy-tex.min.js"), join(output, "vendor/katex/copy-tex.min.js"));
     await cp(join(work, "snapdom/dist/snapdom.js"), join(output, "snapdom.js"));
     await cp(join(work, "snapdom/LICENSE"), join(output, "snapdom.LICENSE"));
     await stageOfficePdfAssets(

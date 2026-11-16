@@ -14,7 +14,7 @@ import {
   "moonbitlang/workflow@0.11.0",
   "Yoorkin/multipart@0.1.3",
   "moonbit-community/yaml@0.0.8",
-  "kokic/katex-parser@0.7.0",
+  "kokic/katex-parser@0.7.1",
 }
 
 readme = "README.md"
