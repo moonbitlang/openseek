@@ -210,7 +210,7 @@ pub fn component(
           src~,
           alt="",
           class="console-avatar",
-          style=["--rui-avatar-size:16px;overflow:visible"],
+          style=["--rui-avatar-size:var(--icon-size)"],
           fallback_style=["background:transparent;color:inherit"],
           @icons.icon(@icons.icon_account),
         )
