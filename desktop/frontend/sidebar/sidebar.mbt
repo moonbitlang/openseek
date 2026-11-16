@@ -6,6 +6,14 @@ pub(all) struct Account {
 }
 
 ///|
+#derive(Debug, Eq)
+pub(all) enum AccountAction {
+  SignIn(disabled~ : Bool)
+  CancelSignIn(disabled~ : Bool)
+  OpenSettings
+}
+
+///|
 /// The id of the grab strip the sidebar renders on its right edge. The
 /// shell's sidebar resize (desktop/frontend/sidebar_resize.mbt) finds the
 /// handle by this id to install its drag listeners.
@@ -46,6 +54,7 @@ pub(all) struct Input {
   // download, signed in or not.
   downloads : Bool
   account : Account?
+  account_action : AccountAction
 }
 
 ///|
@@ -64,6 +73,8 @@ pub(all) struct Actions {
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
   open_account : @cmd.Cmd
+  sign_in : @cmd.Cmd
+  cancel_sign_in : @cmd.Cmd
   open_downloads : @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
@@ -303,12 +314,29 @@ pub fn component(
     footer.push(
       @html.button(
         class="sidebar-button console-account",
-        on_click=actions.open_account,
+        disabled=match input.account_action {
+          SignIn(disabled~) | CancelSignIn(disabled~) => disabled
+          OpenSettings => false
+        },
+        on_click=match input.account_action {
+          SignIn(..) => actions.sign_in
+          CancelSignIn(..) => actions.cancel_sign_in
+          OpenSettings => actions.open_account
+        },
         [
-          @html.span(class="sidebar-icon", avatar),
+          @html.span(
+            class="sidebar-icon",
+            if input.account_action is CancelSignIn(..) {
+              @icons.icon(@icons.icon_close)
+            } else {
+              avatar
+            },
+          ),
           @html.span(
             class="sidebar-label console-login",
-            if input.account is Some(account) {
+            if input.account_action is CancelSignIn(..) {
+              @settings.text(input.locale, CancelSignIn)
+            } else if input.account is Some(account) {
               account.login
             } else {
               @settings.text(input.locale, SignIn)
@@ -386,3 +414,9 @@ pub extend Mode with Eq::{equal, not_equal}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend AccountAction with Debug::{to_repr}
+
+///|
+pub extend AccountAction with Eq::{equal, not_equal}

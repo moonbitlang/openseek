@@ -29,6 +29,16 @@ pub fn Account::equal(Self, Self) -> Bool
 pub fn Account::not_equal(Self, Self) -> Bool
 pub fn Account::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
+pub(all) enum AccountAction {
+  SignIn(disabled~ : Bool)
+  CancelSignIn(disabled~ : Bool)
+  OpenSettings
+}
+pub fn AccountAction::equal(Self, Self) -> Bool
+pub fn AccountAction::not_equal(Self, Self) -> Bool
+pub fn AccountAction::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Actions {
   update : @cmd.Cmd
   search : @cmd.Emit[@session_search.Msg]
@@ -36,6 +46,8 @@ pub(all) struct Actions {
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
   open_account : @cmd.Cmd
+  sign_in : @cmd.Cmd
+  cancel_sign_in : @cmd.Cmd
   open_downloads : @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
@@ -59,6 +71,7 @@ pub(all) struct Input {
   settings_active : Bool
   downloads : Bool
   account : Account?
+  account_action : AccountAction
 }
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::filtered(Self) -> Self

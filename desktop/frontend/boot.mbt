@@ -540,6 +540,8 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     open_skills: self.emit(OpenSkills),
     open_settings: self.emit(OpenSetup),
     open_account: self.emit(SettingsSectionSelected(Account)),
+    sign_in: self.emit(RemoteConnectClicked),
+    cancel_sign_in: self.emit(RemoteCancelClicked),
     open_downloads: self.emit(OpenDownloads),
     select_mode: mode => self.emit(SidebarModeSelected(mode)),
     section,
