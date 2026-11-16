@@ -77,10 +77,16 @@ pub struct ServerEntry {
 /// One configured server and the task that connects it in the background (see
 /// `Server::new`), whose result is what connecting came to. It has no task until a
 /// script first reaches it.
-pub struct Server {
+struct Server {
   config : @config.McpServer
-  priv mut connecting : @async.Task[ServerEntry]?
-  priv connect : () -> @async.Task[ServerEntry]
+  mut connecting : @async.Task[ServerEntry]?
+  connect : () -> @async.Task[ServerEntry]
+}
+
+///|
+/// The configuration this server connects with.
+pub fn Server::config(self : Server) -> @config.McpServer {
+  self.config
 }
 
 ///|

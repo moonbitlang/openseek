@@ -27,11 +27,9 @@ pub enum Connection {
   Failed(String)
 }
 
-pub struct Server {
-  config : @config.McpServer
-  // private fields
-}
+type Server
 pub async fn Server::call(Self, String, @json.Json, wait_ms? : Int32) -> @agent_tool.ToolAction
+pub fn Server::config(Self) -> @config.McpServer
 pub fn Server::new(@agent_runtime.AgentTaskScope, @config.McpServer, client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32, on_change? : () -> Unit) -> Self
 pub async fn Server::settled(Self) -> ServerEntry
 pub fn Server::started(Self) -> Bool

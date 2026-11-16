@@ -177,7 +177,9 @@ async fn Service::answer(self : Service, input : Json) -> Json {
       ..
     } => {
       let action = match
-        self.servers.search_by(configured => configured.config.name() == server) {
+        self.servers.search_by(configured => {
+          configured.config().name() == server
+        }) {
         Some(index) => self.servers[index].call(tool, arguments)
         None =>
           @agent_tool.respond(

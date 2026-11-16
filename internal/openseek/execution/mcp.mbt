@@ -126,7 +126,7 @@ pub async fn McpRegistry::serve(
 pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
   let servers : Array[@protocol.McpServerStatus] = []
   for configured in self.servers {
-    let server = configured.config
+    let server = configured.config()
     fn tools(entry : @mcptools.ServerEntry) -> Array[@protocol.McpTool] {
       entry.tools.map(tool => {
         name: tool.name,
