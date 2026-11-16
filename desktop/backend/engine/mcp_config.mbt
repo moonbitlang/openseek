@@ -392,9 +392,9 @@ async fn engine_mcp_args(
     let path = skills.join("\{@mcp.SkillName}/mcp.json")
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
-    let text = @mcp.skill_mcp_config()
+    let text = @mcp.skill_mcp_config
     let skill = skills.join("\{@mcp.SkillName}/SKILL.md").to_path()
-    for file in [(path.to_path(), text), (skill, @mcp.skill_markdown())] {
+    for file in [(path.to_path(), text), (skill, @mcp.skill_markdown)] {
       let (path, text) = file
       if @fsx.read_text_if_exists(path) != Some(text) {
         @fsx.ensure_dir(path.dirname())

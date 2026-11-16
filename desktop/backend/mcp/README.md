@@ -111,7 +111,7 @@ environment values.
 
 Beside it the launcher writes the `seekmoon` skill under `host-skills/seekmoon/`
 and passes `host-skills` as a `--skills-dir` argument. The skill's `SKILL.md`
-is `skill_markdown()`; the agent learns of the tools from it, and the engine
+is `skill_markdown`; the agent learns of the tools from it, and the engine
 connects the server when a script first searches or calls it.
 
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that

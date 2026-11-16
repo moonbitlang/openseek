@@ -3122,7 +3122,7 @@ async test "native engine env has one authoritative bundled moon path" {
   // The skill telling the agent about the host's tools sits beside it.
   assert_eq(
     @fsx.read_text(Path("\{skills_dir}/\{@mcp.SkillName}/SKILL.md")),
-    @mcp.skill_markdown(),
+    @mcp.skill_markdown,
   )
   let host_text = @fsx.read_text(Path(host_path))
   assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_URL}"))
