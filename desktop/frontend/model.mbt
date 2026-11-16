@@ -279,7 +279,7 @@ priv struct AppFontSize(Int32)
 const AppFontSizeMinPixels : Int32 = 12
 
 ///|
-const AppFontSizeMaxPixels : Int32 = 18
+const AppFontSizeMaxPixels : Int32 = 22
 
 ///|
 fn AppFontSize::parse(value : String) -> AppFontSize? {

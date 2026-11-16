@@ -82,10 +82,15 @@ fn AppFontSize::current() -> AppFontSize {
 /// so pre-mount pixel caches receive the stylesheet default.
 fn apply_app_font_size(font_size : AppFontSize?) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard @dom.document().get_document_element() is Some(root) else { return }
+    guard @dom.document().get_document_element() is Some(root) &&
+      root.to_html_element() is Some(html) else {
+      return
+    }
+    let style = html.get_style()
     match font_size {
-      Some(size) => root.set_attribute("data-font-size", size.wire())
-      None => root.remove_attribute("data-font-size")
+      Some(size) =>
+        style.set_property("--font-size-base", "\{size.base_pixels()}px")
+      None => ignore(style.remove_property("--font-size-base"))
     }
     scheduler.add(
       @fileeditor.apply_font_size(
