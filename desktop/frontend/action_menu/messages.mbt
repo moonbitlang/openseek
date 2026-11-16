@@ -20,10 +20,6 @@ priv enum UiMessage {
   OpenFile
   CopyPath
   CopyFilePath
-  CopyLabel
-  CopySelected
-  CopySuccess
-  CopyFailure
   ReplyLabel
   ReplyHint
   ReplyDialog
@@ -133,27 +129,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, CopyFilePath) => "复制文件路径"
     (TraditionalChinese, CopyFilePath) => "複製檔案路徑"
     (Japanese, CopyFilePath) => "ファイルパスをコピー"
-    (English, CopyLabel) => "Copy"
-    (Spanish, CopyLabel) => "Copiar"
-    (SimplifiedChinese, CopyLabel) => "复制"
-    (TraditionalChinese, CopyLabel) => "複製"
-    (Japanese, CopyLabel) => "コピー"
-    (English, CopySelected) => "Copy selected text"
-    (Spanish, CopySelected) => "Copiar texto seleccionado"
-    (SimplifiedChinese, CopySelected) => "复制选中文本"
-    (TraditionalChinese, CopySelected) => "複製選中文字"
-    (Japanese, CopySelected) => "選択したテキストをコピー"
-    (English, CopySuccess) => "Copied"
-    (Spanish, CopySuccess) => "Copiado"
-    (SimplifiedChinese, CopySuccess) => "已复制"
-    (TraditionalChinese, CopySuccess) => "已複製"
-    (Japanese, CopySuccess) => "コピーしました"
-    (English, CopyFailure) => "Copy failed. Try again."
-    (Spanish, CopyFailure) => "No se pudo copiar. Inténtalo de nuevo."
-    (SimplifiedChinese, CopyFailure) => "复制失败，请重试。"
-    (TraditionalChinese, CopyFailure) => "複製失敗，請重試。"
-    (Japanese, CopyFailure) =>
-      "コピーに失敗しました。再試行してください。"
     (English, ReplyLabel) => "Reply"
     (Spanish, ReplyLabel) => "Responder"
     (SimplifiedChinese, ReplyLabel) => "回复"

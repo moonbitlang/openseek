@@ -1,10 +1,6 @@
 ///|
 test "selection offers actions before explicitly starting a reply" {
-  let initial : SelectionState[String] = {
-    open: None,
-    batched: false,
-    generation: 0,
-  }
+  let initial : SelectionState[String] = { open: None, batched: false, }
   let anchor : SelectionAnchor = {
     text: "Selected text",
     x: 300,

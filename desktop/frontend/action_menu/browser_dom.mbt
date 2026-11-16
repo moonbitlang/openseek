@@ -33,19 +33,6 @@ extern "js" fn BrowserSelection::range(
   #| (selection, index) => selection.getRangeAt(index)
 
 ///|
-extern "js" fn BrowserRange::intersects(
-  self : BrowserRange,
-  element : @dom.Element,
-) -> Bool =
-  #| (range, element) => range.intersectsNode(element)
-
-///|
-extern "js" fn BrowserRange::rects(
-  self : BrowserRange,
-) -> FixedArray[@dom.DOMRect] =
-  #| range => Array.from(range.getClientRects())
-
-///|
 extern "js" fn BrowserRange::bounds(self : BrowserRange) -> @dom.DOMRect =
   #| range => range.getBoundingClientRect()
 

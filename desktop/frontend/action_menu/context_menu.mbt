@@ -1,5 +1,5 @@
 // The shell is the fallback context-menu trigger. Nested controls retain first
-// refusal; this adapter resolves links and selections, while RUI owns the menu.
+// refusal; this adapter resolves links, while RUI owns the menu.
 
 ///|
 #derive(Eq)
@@ -48,21 +48,14 @@ priv enum ContextTarget {
 
 ///|
 #derive(Eq)
-priv struct ContextRequest {
-  target : ContextTarget
-  selected_text : String?
-}
-
-///|
-#derive(Eq)
 priv struct ContextState {
-  request : ContextRequest?
+  request : ContextTarget?
   restore_focus_id : String?
 }
 
 ///|
 priv enum ContextMsg {
-  Requested(ContextRequest, String?)
+  Requested(ContextTarget, String?)
 }
 
 ///|
@@ -74,44 +67,6 @@ fn event_element(event : @dom.Event) -> @dom.Element? {
     Some(element) => Some(element)
     None => event.target().to_node().bind(node => node.get_parent_element())
   }
-}
-
-///|
-fn selected_at(
-  element : @dom.Element,
-  x : Int32,
-  y : Int32,
-  keyboard : Bool,
-) -> String? {
-  guard browser_selection().to_option() is Some(selection) &&
-    !selection.collapsed() &&
-    selection.count() > 0 else {
-    return None
-  }
-  let text = selection.text()
-  guard !text.is_empty() else { return None }
-  for index in 0..<selection.count() {
-    let range = selection.range(index)
-    if keyboard {
-      let intersects : Bool = @js.Error_::wrap(() => {
-        @js.Value::cast_from(range.intersects(element))
-      }) catch {
-        _ => false
-      }
-      if intersects {
-        return Some(text)
-      }
-    }
-    for rect in range.rects() {
-      if x.to_double() >= rect.get_left() &&
-        x.to_double() <= rect.get_right() &&
-        y.to_double() >= rect.get_top() &&
-        y.to_double() <= rect.get_bottom() {
-        return Some(text)
-      }
-    }
-  }
-  None
 }
 
 ///|
@@ -219,12 +174,12 @@ fn reveal_label(
 fn context_definition(
   locale~ : @i18n.Locale = English,
   input : ContextInput,
-  request : ContextRequest,
+  request : ContextTarget,
   actions : ContextActions,
 ) -> Definition? {
   let navigation : Array[Entry] = []
   let clipboard : Array[Entry] = []
-  match request.target {
+  match request {
     NoTarget => ()
     WebLink(url) => {
       if input.platform is Web {
@@ -332,12 +287,6 @@ fn context_definition(
       )
     }
   }
-  if request.selected_text is Some(text) {
-    clipboard.insert(
-      0,
-      copy_item(ui(locale, CopyLabel), ui(locale, CopySelected), text),
-    )
-  }
   guard !navigation.is_empty() || !clipboard.is_empty() else { return None }
   let entries = navigation
   if !navigation.is_empty() && !clipboard.is_empty() {
@@ -368,9 +317,8 @@ pub fn context_component(
       }
     },
   )
-  let remembered_selection : Ref[(Int32, Int32, String?)?] = Ref(None)
   let next_focus_id = Ref(0)
-  let keyboard_request : Ref[ContextRequest?] = Ref(None)
+  let keyboard_request : Ref[ContextTarget?] = Ref(None)
   let visible = Ref(false)
   let render : Ref[
     (@html.Html, @i18n.Locale, ContextInput, ContextState) -> @html.Html,
@@ -385,17 +333,6 @@ pub fn context_component(
       // RUI's item indices belong to this scope, not to shell-only updates.
       let rendered_menu : Ref[@html.Html?] = Ref(None)
       render.val = (content, locale, input, state) => {
-        let requested = (element, x, y, keyboard) => {
-          let mut selected_text = selected_at(element, x, y, keyboard)
-          if selected_text is None &&
-            remembered_selection.val is Some((old_x, old_y, text)) &&
-            (old_x - x).abs() <= 2 &&
-            (old_y - y).abs() <= 2 {
-            selected_text = text
-          }
-          remembered_selection.val = None
-          { target: element_context(element), selected_text, }
-        }
         let accept = (event : @dom.Event, request) => {
           guard context_definition(locale~, input, request, actions)
             is Some(definition) &&
@@ -409,24 +346,13 @@ pub fn context_component(
         // the focused content, not at the shell's upper-left corner.
         let keyboard_open = (event : @dom.Event, element) => {
           event.prevent_default()
-          keyboard_request.val = Some(requested(element, 0, 0, true))
+          keyboard_request.val = Some(element_context(element))
           let (x, y) = context_keyboard_anchor(element)
           dispatch_context_at(element, x, y)
           keyboard_request.val = None
           @cmd.none
         }
         let trigger_attrs = @html.Attrs::build()
-          .on_mousedown(event => {
-            if event.get_button() == 2 &&
-              event_element(event.as_event()) is Some(element) {
-              let x = event.get_client_x().to_int()
-              let y = event.get_client_y().to_int()
-              remembered_selection.val = Some(
-                (x, y, selected_at(element, x, y, false)),
-              )
-            }
-            @cmd.none
-          })
           .on_contextmenu(event => {
             guard !event.get_default_prevented() &&
               event_element(event.as_event()) is Some(element) else {
@@ -444,7 +370,7 @@ pub fn context_component(
             if x == 0 && y == 0 {
               keyboard_open(event.as_event(), element)
             } else {
-              accept(event.as_event(), requested(element, x, y, false))
+              accept(event.as_event(), element_context(element))
             }
           })
           .on_keydown(event => {
