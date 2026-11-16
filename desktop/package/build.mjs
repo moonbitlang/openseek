@@ -246,6 +246,7 @@ class Build {
     }
     await cp(join(this.officeViewerSource(), "public", "licenses"),
       join(output, "licenses/office-viewer"), { recursive: true });
+    await cp(join(this.desktop, "vendor/katex"), join(output, "vendor/katex"), { recursive: true });
     await cp(join(work, "snapdom/dist/snapdom.js"), join(output, "snapdom.js"));
     await cp(join(work, "snapdom/LICENSE"), join(output, "snapdom.LICENSE"));
     await stageOfficePdfAssets(
@@ -343,6 +344,7 @@ class Build {
     await cp(join(generated, "licenses/office-viewer"), join(output, "licenses/office-viewer"), { recursive: true });
     await cp(join(generated, "pdf-runtime.js"), join(output, "pdf-runtime.js"));
     await cp(join(generated, "vendor/pdfjs"), join(output, "vendor/pdfjs"), { recursive: true });
+    await cp(join(generated, "vendor/katex"), join(output, "vendor/katex"), { recursive: true });
     await cp(join(generated, "mermaid"), join(output, "mermaid"), { recursive: true });
   }
 
