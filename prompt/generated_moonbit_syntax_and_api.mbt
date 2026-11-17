@@ -222,7 +222,7 @@ fn moonbit_syntax_and_api() -> String {
     #|// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
     #|// a host-backed test that runs it through the real sandbox and host.
     #|import {
-    #|  "moonbitlang/openseek_tools@0.4.1",
+    #|  "moonbitlang/openseek_tools@0.4.2",
     #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
@@ -262,7 +262,7 @@ fn moonbit_syntax_and_api() -> String {
     #|        "outcome": "applied",
     #|        "check": { "warning_count": Number(warnings, ..), .. },
     #|        ..
-    #|      }
+    #|      },
     #|    ) => println("applied; \{warnings} warning(s) remain")
     #|    Some({ "outcome": "applied", .. }) => println("applied")
     #|    // A revert whose restore failed (a concurrent save, an IO error) leaves
@@ -287,7 +287,7 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/openseek_tools@0.4.1" @tools,
+    #|  "moonbitlang/openseek_tools@0.4.2" @tools,
     #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/json",
     #|}
@@ -319,7 +319,7 @@ fn moonbit_syntax_and_api() -> String {
     #|    })
     #|    guard read.data
     #|      is Some(
-    #|        { "report": { "chunk": String(chunk), "complete": complete, .. }, .. }
+    #|        { "report": { "chunk": String(chunk), "complete": complete, .. }, .. },
     #|      ) else {
     #|      return None
     #|    }

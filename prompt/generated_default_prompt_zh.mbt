@@ -323,7 +323,7 @@ fn default_prompt_zh() -> String {
     #|    ```mbtx
     #|    ---
     #|    import {
-    #|      "moonbitlang/openseek_tools@0.4.1" @tools,
+    #|      "moonbitlang/openseek_tools@0.4.2" @tools,
     #|      "moonbitlang/core/async",
     #|      "moonbitlang/core/json",
     #|    }
