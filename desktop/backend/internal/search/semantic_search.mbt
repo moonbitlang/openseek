@@ -100,17 +100,17 @@ priv enum SemanticSearchRequest {
     command~ : @moonbit.MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchSemanticPayload,
-    reply~ : @async.Queue[@protocol.SearchSemanticReply]
+    reply~ : @async.Queue[@protocol.SearchSemanticReply],
   )
   Cancel(
     session_key~ : String,
     generation~ : Int32,
-    reply~ : @async.Queue[Unit]
+    reply~ : @async.Queue[Unit],
   )
   Finished(
     session_key~ : String,
     generation~ : Int32,
-    outcome~ : SemanticSearchOutcome
+    outcome~ : SemanticSearchOutcome,
   )
 }
 
@@ -683,7 +683,7 @@ async fn run_semantic_search(
     }
     let stderr_task = group.spawn(() => {
       defer stderr_reader.close()
-      let retained = @buffer.Buffer(size_hint=4096)
+      let retained = @buffer.Buffer(capacity=4096)
       let mut retained_bytes = 0
       for ;; {
         guard stderr_reader.read() is Some(chunk) else { break }

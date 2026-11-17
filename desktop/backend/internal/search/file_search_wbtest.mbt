@@ -6,7 +6,7 @@ fn test_scan_entry(name : String, is_dir : Bool) -> FileScanEntry {
 ///|
 async test "file scan respects Git ignores and keeps tracked files" {
   let root = @fs.tmpdir(prefix="openseek-search-ignore-")
-  defer @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+  defer @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
   git_test_run(root, ["init", "--quiet"])
   @fs.mkdir("\{root}/toolchains")
   @fs.mkdir("\{root}/src")
@@ -59,7 +59,7 @@ async test "file scan prunes ignored trees before reading them" {
 ///|
 async test "file scan supports ordinary folders without Git" {
   let root = @fs.tmpdir(prefix="openseek-search-no-git-")
-  defer @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+  defer @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
   @fs.write_text("\{root}/main.mbt", "", create_mode=CreateOrTruncate)
   let snapshot = scan_workspace_files(@pathx.Path(root).resolve())
   assert_eq(snapshot.files, ["main.mbt"])
@@ -96,7 +96,7 @@ async test "file scan skips a directory that cannot be opened" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="openseek-file-search-unreadable-")
     group.add_defer(() => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     })
     @fs.mkdir("\{root}/b-readable")
     @fs.write_text(
