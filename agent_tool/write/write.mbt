@@ -1,9 +1,8 @@
 ///|
 /// Tool definition for `write`: creates a new file at `arguments.path` with
-/// `arguments.content`, or overwrites an existing non-source file. Overwriting
-/// an existing `.mbt`/`.mbt.md` source file requires one-shot approval (prefer `edit`/`multi_edit`,
-/// which also insert). Missing parent directories are created (so `dir/moon.pkg`
-/// works without a separate mkdir).
+/// `arguments.content`, or overwrites an existing non-source file. Use
+/// `edit`/`multi_edit` to change existing MoonBit source. Missing parent
+/// directories are created.
 ///
 /// ## Arguments
 /// - `path` (string, required): filesystem path to write. `filename` is accepted
@@ -38,15 +37,15 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     owns_file_access=true,
-    can_request_approval=approval is Some(_),
+    can_request_approval=write_scope is Some(_) && approval is Some(_),
     name="write",
     program_callable=true,
     description=(
       #|Create a new file at arguments.path with arguments.content (missing parent
-      #|directories are created), or overwrite an existing non-source file. Overwriting an
-      #|existing .mbt/.mbt.md source file requires approval for the supplied full contents.
-      #|Use edit or multi_edit for partial changes (an empty old_string inserts new code). New syntax-checkable
-      #|content (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg) that fails to lex/parse is rejected
+      #|directories are created), or overwrite an existing non-source file.
+      #|Overwriting an existing .mbt/.mbt.md source file is rejected.
+      #|Use edit or multi_edit to change existing source.
+      #|Syntax-checkable content (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg) that fails to lex/parse is rejected
       #|BEFORE writing or approval — see revert_on_parse_errors. Do not
       #|create Markdown or README files unless the user explicitly asks for them.
     ),
@@ -131,15 +130,15 @@ async fn write_file(
   if @manifest_error.write_error(path, input.content) is Some(message) {
     return err(message)
   }
-  // Resolve symlinks once, up front: the realpath decides both whether this
-  // is an existing-source overwrite requiring approval and — for the syntax gate below
-  // — what KIND the written file really is. A brand-new path has no target, so
-  // realpath fails and it falls back to its own name.
+  // Classify the source and syntax gate by both the requested path and the
+  // resolved target. New paths have no realpath yet.
   let target = @fs.realpath(path) catch { _ => path }
-  // Replacing existing MoonBit source is an explicit operation-level grant,
-  // including aliases whose destination is source. New source remains ordinary.
-  let source_overwrite = @fs.exists(path) &&
-    (is_mbt_source(path) || is_mbt_source(target))
+  let initially_exists = @fs.exists(path)
+  if initially_exists && (is_mbt_source(path) || is_mbt_source(target)) {
+    return err(
+      "cannot overwrite an existing source file; use edit or multi_edit",
+    )
+  }
   // Pre-write syntax gate for syncheck inputs (`.mbt`, `.mbt.md`, `.mbtx`, `moon.mod`,
   // `moon.pkg`): parse the candidate content in a scratch file first (moonc
   // syncheck needs no project context), so malformed content is rejected
@@ -172,11 +171,6 @@ async fn write_file(
     file_state~,
     write_scope?,
     approval?,
-    reason?=if source_overwrite {
-      Some("overwrite existing source file")
-    } else {
-      None
-    },
   ) catch {
     error => return err(@tool_error.failure_message("\{error}"))
   }
@@ -190,27 +184,13 @@ async fn write_file(
     return err("file target changed before writing; re-read and retry")
   }
   file_state.create_parent_directories(path)
-  // Probe before writing so the result can tell the model whether it created a
-  // new file or clobbered an existing one — a wholesale `write` over content it
-  // never read is a common way to lose work. A non-ENOENT `exists` error (e.g.
-  // ENOTDIR) falls through to the write below, and the dispatch boundary in
-  // `@agent_tool.execute_tool_call` reports the fault.
-  let existed = @fs.exists(path)
-  // Truncation requires a pre-existing non-source file or an approved source replacement;
-  // everything else commits to CreateNew, which fails instead of writing
-  // through when (a) the "new" path gained a file since the probe — for a
-  // source path that racer's file would otherwise be truncated despite the
-  // guard above — or (b) a DANGLING symlink lurks at the path (`exists`
-  // follows links, so it reads false, but O_CREAT would create the link's
-  // target, e.g. alias.txt -> lib/new.mbt landing ungated source).
+  let existed = initially_exists && @fs.exists(path)
+  // Exclusive creation rejects dangling symlinks and new paths that gained a
+  // file after classification.
   @fs.write_text(
     path,
     input.content,
-    create_mode=if existed && (!is_mbt_source(path) || source_overwrite) {
-      CreateOrTruncate
-    } else {
-      CreateNew
-    },
+    create_mode=if existed { CreateOrTruncate } else { CreateNew },
   )
   // Record this write's provenance and content digest for the session so
   // `remove` can later tell a file the agent created from one it merely

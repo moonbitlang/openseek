@@ -240,31 +240,37 @@ async test "edit tools retain scope restrictions in direct and programmatic call
 }
 
 ///|
-async test "operation approval permits a validated full source replacement but never invalid source" {
+async test "write refuses to replace session-created source without requesting approval" {
   @vfs.with_tmpdir(ws => {
     let path = "\{ws}/template.mbt"
     let before = "///|\nfn template() -> Int { 1 }\n"
     let after = "///|\nfn template() -> Int { 2 }\n"
-    @fs.write_text(path, before)
     let asks = Ref(0)
-    let tool = @write.definition(
-      approval=ApprovalChannel(ask => {
-        asks.val += 1
-        assert_eq(ask.detail, "\{path} (overwrite existing source file)")
-        assert_true(ask.body is Some(body) && body.contains("template.mbt"))
-        AllowedOnce
-      }),
-    )
-    let invalid = operation_result(tool, {
-      "path": path,
-      "content": "fn invalid( {",
+    let approval = @agent_runtime.ApprovalChannel(_ => {
+      asks.val += 1
+      AllowedOnce
     })
-    assert_true(invalid.is_error)
+    let state = @agent_tool.FileStateMap()
+    let tool = @write.definition(file_state=state, approval~)
+    let created = operation_result(tool, { "path": path, "content": before })
+    assert_false(created.is_error, msg=created.content)
+    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
+      is Ok(scope) else {
+      fail("scope")
+    }
+    let scoped = @write.definition(
+      file_state=state,
+      write_scope=scope,
+      approval~,
+    )
+    for writer in [tool, scoped] {
+      let overwrite = operation_result(writer, {
+        "path": path,
+        "content": after,
+      })
+      assert_true(overwrite.is_error)
+      assert_eq(@fs.read_text(path), before)
+    }
     assert_eq(asks.val, 0)
-    assert_eq(@fs.read_text(path), before)
-    let valid = operation_result(tool, { "path": path, "content": after })
-    assert_false(valid.is_error, msg=valid.content)
-    assert_eq(asks.val, 1)
-    assert_eq(@fs.read_text(path), after)
   })
 }
