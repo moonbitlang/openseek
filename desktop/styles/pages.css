@@ -128,8 +128,8 @@ h2 {
 }
 
 .form-section-body .skill-row + .skill-row,
-.form-section-body .setup-guide + .form-row,
-.setup-modal-form .setup-guide + .form-row {
+.form-section-body .setup-guide:not([hidden]) + .form-row,
+.setup-modal-form .setup-guide:not([hidden]) + .form-row {
   border-top: 1px solid var(--color-divider);
 }
 

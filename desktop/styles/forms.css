@@ -173,3 +173,8 @@
 .form-row-status.success {
   color: var(--color-success);
 }
+
+.form-row[hidden],
+.setup-guide[hidden] {
+  display: none;
+}

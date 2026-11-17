@@ -1312,6 +1312,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   @html.div(
     class="setup-guide",
+    attrs=@html.Attrs::build().hidden(model.api_ready()),
     [
       @html.p(@settings.text(model.locale, OwnProviderDescription)),
       @html.div(class="setup-guide-steps", steps),
@@ -1362,11 +1363,10 @@ fn api_settings_rows(
     ]
   }
   let settings_loaded = model.host_settings_loaded()
-  let ready = model.api_ready()
   let rows : Array[@html.Html] = [
-    ..if !ready {
-      [byok_setup_guide(dispatch, model)]
-    },
+    // Keep row positions stable: conditional removal can reuse a URL input
+    // as the password input and retain its browser-owned value.
+    byok_setup_guide(dispatch, model),
     @ui.form_row(
       @settings.text(model.locale, ApiEndpoint),
       [
@@ -1398,42 +1398,41 @@ fn api_settings_rows(
       desc=provider_hint(model, model.api_provider()),
     ),
   ]
-  if model.api_provider() is Custom {
-    rows.push(
-      @ui.form_row(
-        @settings.text(model.locale, EndpointUrl),
-        [
-          @html.input(
-            class="setting-input field-surface",
-            input_type=@html.InputType::Text,
-            value=model
-              .host_settings()
-              .map(settings => {
-                settings.endpoint.config(Custom).api_url.unwrap_or("")
-              })
-              .unwrap_or(""),
-            placeholder="https://host/v1",
-            on_change=dispatch.map(value => CustomApiUrlChanged(value)),
-            attrs=@html.Attrs::build()
-              .aria_label(@settings.text(model.locale, EndpointUrl))
-              .on_keydown(event => {
-                if event.key() == "Enter" && !event.is_composing() {
-                  event.prevent_default()
-                  if event.target().to_html_input_element() is Some(input) {
-                    input.blur()
-                  }
+  rows.push(
+    @ui.form_row(
+      @settings.text(model.locale, EndpointUrl),
+      [
+        @html.input(
+          class="setting-input field-surface",
+          input_type=@html.InputType::Text,
+          value=model
+            .host_settings()
+            .map(settings => {
+              settings.endpoint.config(Custom).api_url.unwrap_or("")
+            })
+            .unwrap_or(""),
+          placeholder="https://host/v1",
+          on_change=dispatch.map(value => CustomApiUrlChanged(value)),
+          attrs=@html.Attrs::build()
+            .aria_label(@settings.text(model.locale, EndpointUrl))
+            .on_keydown(event => {
+              if event.key() == "Enter" && !event.is_composing() {
+                event.prevent_default()
+                if event.target().to_html_input_element() is Some(input) {
+                  input.blur()
                 }
-                @cmd.none
-              })
-              .data_set("focus-owner", "")
-              .disabled(!settings_loaded),
-          ),
-        ],
-        desc=@settings.text(model.locale, EndpointUrlDescription),
-        stack=true,
-      ),
-    )
-  }
+              }
+              @cmd.none
+            })
+            .data_set("focus-owner", "")
+            .disabled(!settings_loaded),
+        ),
+      ],
+      desc=@settings.text(model.locale, EndpointUrlDescription),
+      stack=true,
+      hidden=!(model.api_provider() is Custom),
+    ),
+  )
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
