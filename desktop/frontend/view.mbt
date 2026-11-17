@@ -1995,7 +1995,7 @@ fn conversation_header(
       ),
     )
   }
-  items.push(conversation_transfer_button(model.locale))
+  items.push(model.conversation_export_button(dispatch))
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
@@ -2288,10 +2288,10 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  shell_overlays : (@html.Html, @html.Html, @html.Html),
+  shell_overlays : (@html.Html, @html.Html),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, selection_actions_html, transfer_menu_html) = shell_overlays
+  let (quick_open_html, selection_actions_html) = shell_overlays
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2368,7 +2368,7 @@ fn view(
               title,
               selected.map(selected => selected.workspace),
             )
-            items.push(conversation_transfer_button(model.locale))
+            items.push(model.conversation_export_button(dispatch))
             items
           }
         }
@@ -2720,7 +2720,6 @@ fn view(
   // placeholder — so opening it never shifts the overlay children around it.
   children.push(quick_open_html)
   children.push(selection_actions_html)
-  children.push(transfer_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last

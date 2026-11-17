@@ -1592,7 +1592,6 @@ fn desired_browser_view(model : Model) -> Int32? {
     model.right_panel_open &&
     !model.right_panel_menu_open &&
     !model.dock_tab_menu_open &&
-    !model.conversation_transfer_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
     !covering_overlay(model) else {
@@ -6657,8 +6656,6 @@ fn update_msg(
     }
     CloseRightPanelMenu =>
       (@cmd.none, { ..model, right_panel_menu_open: false, })
-    ConversationTransferMenuChanged(open) =>
-      (@cmd.none, { ..model, conversation_transfer_menu_open: open, })
     DockTabMenuChanged(open) =>
       (
         @cmd.none,
