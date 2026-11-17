@@ -79,3 +79,36 @@ test "authorization error allows retry and refresh supersedes old list" {
   let changing = step(ready, Disconnect("github"))
   assert_true(step(changing, Connect("github")) == changing)
 }
+
+///|
+test "only a successful empty list shows the empty state" {
+  let initial = @connectors.State::empty()
+  assert_false(initial.is_empty())
+  let loading = step(initial, Refresh)
+  assert_false(loading.is_empty())
+  let failed = step(
+    loading,
+    Received(1, None, {
+      connectors: [],
+      authorization: None,
+      error: Some("offline"),
+    }),
+  )
+  assert_false(failed.is_empty())
+  let retry = step(failed, Refresh)
+  let empty = step(
+    retry,
+    Received(2, None, { connectors: [], authorization: None, error: None, }),
+  )
+  assert_true(empty.is_empty())
+  let refreshing = step(empty, Refresh)
+  let failed_again = step(
+    refreshing,
+    Received(3, None, {
+      connectors: [],
+      authorization: None,
+      error: Some("read failed"),
+    }),
+  )
+  assert_false(failed_again.is_empty())
+}

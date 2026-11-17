@@ -7,6 +7,7 @@ struct Pending {
   expires_at : Int64
   mut next_poll : Int64
   mut interval_ms : Int64
+  commit_lock : @async.Mutex
   mut cancelled : Bool
 }
 
@@ -97,6 +98,7 @@ pub async fn begin(config : @config.OAuthConfig) -> Pending {
     device_code,
     verification_uri,
     user_code,
+    commit_lock: Mutex(),
     cancelled: false,
     expires_at: @env.now().reinterpret_as_int64() + expires.to_int64() * 1000,
     next_poll: @async.now() + interval_ms,
@@ -156,6 +158,8 @@ async fn save(
     create_mode=CreateNew,
     permission=0o600,
   )
+  pending.commit_lock.acquire()
+  defer pending.commit_lock.release()
   guard !pending.cancelled else { fail("Authorization cancelled") }
   @fs.rename(temp, "\{dir}/\{key(resource, config)}.json", replace=true)
 }
@@ -244,8 +248,11 @@ pub async fn disconnect(
 }
 
 ///|
-/// Fence an in-flight token response before it can be saved.
-pub fn Pending::cancel(self : Pending) -> Unit {
+/// Fence an in-flight token response, or await a credential commit that already
+/// acquired the lock. Once this returns, this attempt cannot publish later.
+pub async fn Pending::cancel(self : Pending) -> Unit {
+  self.commit_lock.acquire()
+  defer self.commit_lock.release()
   self.cancelled = true
 }
 

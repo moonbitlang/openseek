@@ -31,6 +31,7 @@ pub(all) enum Msg {
 type State
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::is_empty(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 
 // Type aliases

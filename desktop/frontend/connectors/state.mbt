@@ -12,6 +12,7 @@ priv enum Operation {
 #derive(Eq)
 struct State {
   rows : @vector.Vector[@protocol.ConnectorInfo]
+  loaded : Bool
   operation : Operation
   epoch : Int32
   error : String?
@@ -19,7 +20,13 @@ struct State {
 
 ///|
 pub fn State::empty() -> State {
-  { rows: @vector.new(), operation: Idle, epoch: 0, error: None, }
+  {
+    rows: @vector.new(),
+    loaded: false,
+    operation: Idle,
+    epoch: 0,
+    error: None,
+  }
 }
 
 ///|
@@ -140,10 +147,19 @@ pub fn update(
       if reply.authorization is Some(authorization) && id is Some(id) {
         (
           @cmd.delay(emit(Poll(epoch, id, authorization.attempt)), 1000),
-          { ..state, rows, operation: Waiting(id, authorization), error: None, },
+          {
+            ..state,
+            rows,
+            loaded: true,
+            operation: Waiting(id, authorization),
+            error: None,
+          },
         )
       } else {
-        (@cmd.none, { ..state, rows, operation: Idle, error: None, })
+        (
+          @cmd.none,
+          { ..state, rows, loaded: true, operation: Idle, error: None, },
+        )
       }
     }
   }
@@ -151,3 +167,12 @@ pub fn update(
 
 ///|
 pub extend State with Eq::{equal, not_equal}
+
+///|
+/// Whether a successful list reply confirms that there are no connectors.
+pub fn State::is_empty(self : State) -> Bool {
+  self.loaded &&
+  self.rows.is_empty() &&
+  self.error is None &&
+  self.operation is Idle
+}

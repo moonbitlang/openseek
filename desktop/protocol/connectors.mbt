@@ -99,6 +99,7 @@ pub(all) struct ConnectorInfo {
   name : String
   skill : String
   source : String
+  // "oauth" means configuration validated; credential errors retain actions.
   auth : String
   connected : Bool
   error : String?
