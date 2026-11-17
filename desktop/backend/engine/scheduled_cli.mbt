@@ -140,9 +140,9 @@ async fn Schedules::run_cli(
   // A scheduled run uses the same MCP servers a conversation does.
   args.append(
     engine_mcp_args(
-      resolved_mcp_config(),
-      self.manager.runtime_dir,
-      env,
+      config?=resolved_mcp_config(),
+      skills_dir?=self.manager.skills_dir,
+      env~,
       host_mcp=self.manager.mcp.server is Some(_),
     ),
   )

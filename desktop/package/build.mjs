@@ -419,6 +419,7 @@ class Build {
     await rm(root, { recursive: true, force: true });
     await mkdir(join(root, "web/viz"), { recursive: true });
     await mkdir(join(root, "bin"), { recursive: true });
+    await cp(join(this.desktop, "skills"), join(root, "skills"), { recursive: true });
     await this.stageFrontend(join(root, "web"), profile);
     await cp(join(this.repo, "web/index.html"), join(root, "web/viz/index.html"));
     await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));

@@ -245,7 +245,7 @@ async test "call_tool returns image content as image input" {
 
 ///|
 /// A server that handshakes but never answers tools/list is skipped at the
-/// discovery deadline instead of hanging engine startup.
+/// discovery deadline instead of hanging the script that reached it.
 async test "connect times out discovery on a wedged server" {
   @async.with_task_group(group => {
     let scope = @agent_runtime.AgentTaskScope(group)
@@ -325,7 +325,7 @@ async fn respond_json(
 }
 
 ///|
-/// End-to-end over HTTP: `start` connects a configured Http server (a local
+/// End-to-end over HTTP: a `Server` connects a configured Http server (a local
 /// mock MCP endpoint), discovers its tool, and a call is proxied as a live
 /// tools/call through the Streamable HTTP transport, directly and through the
 /// MCP host.
@@ -403,14 +403,16 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
         headers=Map([]),
       ),
     ]
-    let configured = @tools.start(
-      scope,
-      servers,
-      client_name="openseek",
-      client_version="0.1",
-    )
+    let configured = servers.map(server => {
+      @tools.Server::new(
+        scope,
+        server,
+        client_name="openseek",
+        client_version="0.1",
+      )
+    })
     guard configured is [connecting] else { fail("expected one server") }
-    let remote = connecting.connecting.wait()
+    let remote = connecting.settled()
     assert_eq([ for tool in remote.tools => tool.name ], ["ping", "big"])
     // The catalog caps what the server supplied, so any item fits a reply.
     guard @tools.catalog_items(configured)
@@ -477,7 +479,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
 }
 
 ///|
-/// Beside the tools, `start` keeps what connecting each server came to, and
+/// Beside the tools, a `Server` keeps what connecting each server came to, and
 /// a live connection goes on saying whether it is still there.
 async test "connect keeps what each server came to, and a live one reports its loss" {
   @async.with_task_group(group => {
@@ -570,15 +572,17 @@ async fn connect_all(
 ) -> Array[@tools.ServerEntry] {
   let entries : Array[@tools.ServerEntry] = []
   for
-    server in @tools.start(
-      scope,
-      servers,
-      client_name~,
-      client_version~,
-      workspace_root?,
-      discovery_timeout_ms?,
-    ) {
-    entries.push(server.connecting.wait())
+    server in servers.map(server => {
+      @tools.Server::new(
+        scope,
+        server,
+        client_name~,
+        client_version~,
+        workspace_root?,
+        discovery_timeout_ms?,
+      )
+    }) {
+    entries.push(server.settled())
   }
   entries
 }
@@ -588,21 +592,24 @@ async fn connect_all(
 async fn unavailable(
   scope : @agent_runtime.AgentTaskScope,
 ) -> Array[@tools.Server] {
-  let servers = @tools.start(
-    scope,
-    [
-      Stdio(
-        name="bad",
-        command="openseek-no-such-mcp-server-xyz",
-        args=[],
-        env=Map([]),
-      ),
-    ],
-    client_name="openseek",
-    client_version="0.1",
-  )
+  let configs : Array[@config.McpServer] = [
+    Stdio(
+      name="bad",
+      command="openseek-no-such-mcp-server-xyz",
+      args=[],
+      env=Map([]),
+    ),
+  ]
+  let servers = configs.map(server => {
+    @tools.Server::new(
+      scope,
+      server,
+      client_name="openseek",
+      client_version="0.1",
+    )
+  })
   for server in servers {
-    ignore(server.connecting.wait())
+    ignore(server.settled())
   }
   servers
 }
@@ -668,25 +675,28 @@ async test "a call or search before a server settles gets the real result, and a
         )
       }
       let base = "http://127.0.0.1:\{server.addr.port()}"
-      let servers = @tools.start(
-        AgentTaskScope(group),
-        [
-          Http(
-            name="slow",
-            url="\{base}/slow",
-            headers=Map([]),
-            headers_helper=None,
-          ),
-          Http(
-            name="stuck",
-            url="\{base}/stuck",
-            headers=Map([]),
-            headers_helper=None,
-          ),
-        ],
-        client_name="openseek",
-        client_version="0.1",
-      )
+      let configs : Array[@config.McpServer] = [
+        Http(
+          name="slow",
+          url="\{base}/slow",
+          headers=Map([]),
+          headers_helper=None,
+        ),
+        Http(
+          name="stuck",
+          url="\{base}/stuck",
+          headers=Map([]),
+          headers_helper=None,
+        ),
+      ]
+      let servers = configs.map(server => {
+        @tools.Server::new(
+          AgentTaskScope(group),
+          server,
+          client_name="openseek",
+          client_version="0.1",
+        )
+      })
       guard servers is [slow, stuck] else { fail("expected two servers") }
       let host = @mcphost.Service::start(group, servers)
       // A script's call and search scoped to `slow`, both sent before it
@@ -799,19 +809,22 @@ async test "a script that stops mid-call cancels the call on its server" {
           max_connections=8,
         )
       }
-      let servers = @tools.start(
-        AgentTaskScope(group),
-        [
-          Http(
-            name="slow",
-            url="http://127.0.0.1:\{server.addr.port()}/mcp",
-            headers=Map([]),
-            headers_helper=None,
-          ),
-        ],
-        client_name="openseek",
-        client_version="0.1",
-      )
+      let configs : Array[@config.McpServer] = [
+        Http(
+          name="slow",
+          url="http://127.0.0.1:\{server.addr.port()}/mcp",
+          headers=Map([]),
+          headers_helper=None,
+        ),
+      ]
+      let servers = configs.map(server => {
+        @tools.Server::new(
+          AgentTaskScope(group),
+          server,
+          client_name="openseek",
+          client_version="0.1",
+        )
+      })
       let host = @mcphost.Service::start(group, servers)
       // The script stops while its call runs, which closes its connection.
       let stopped = @async.with_timeout_opt(500, () => {

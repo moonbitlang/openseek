@@ -1,0 +1,1 @@
+{"mcpServers":{"seekmoon":{"url":"${OPENSEEK_DESKTOP_TOOLS_URL}","headers":{"Authorization":"Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"}}}}

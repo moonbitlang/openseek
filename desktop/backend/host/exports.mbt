@@ -75,7 +75,15 @@ pub fn desktop_resources(resources : @resources.Resources) -> HostResources {
       bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
     }
   }
-  { moonbit: DesktopBundle, viz: Some(assets), }
+  {
+    moonbit: DesktopBundle,
+    viz: Some(assets),
+    skills: Some(
+      resources.dir
+      .join(if resources.packaged { "seekmoon/skills" } else { "skills" })
+      .normalize(),
+    ),
+  }
 }
 
 ///|

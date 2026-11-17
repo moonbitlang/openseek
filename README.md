@@ -294,7 +294,8 @@ Repeat the option to load multiple files, for example
 a later server with the same name replaces the entire earlier entry before
 any connections are opened. Explicit options replace the single-file
 `OPENSEEK_MCP_CONFIG` fallback. Empty values are ignored; `--mcp-config=` alone
-disables MCP. During `run` and `serve`, an unreadable or invalid file is reported
+loads no file, even when `OPENSEEK_MCP_CONFIG` is set (skills may still bring
+servers; see Skills). During `run` and `serve`, an unreadable or invalid file is reported
 and skipped while other files still load. The `mcp` validation command exits
 nonzero if any file cannot be loaded.
 
@@ -309,10 +310,11 @@ servers are configured. A server that fails to start, handshake, or list its
 tools is logged and reported as unavailable — MCP never breaks a session. Tool
 results are size-capped and calls are bounded by a timeout.
 
-HTTP `url` and `headers` values support `${VAR}` references to the engine's
-environment, for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion
-is single-pass and missing variables are configuration errors. Stdio fields
-remain literal.
+A stdio entry's `command`, `args`, and `env` values, and an HTTP entry's `url`
+and `headers` values, plus `headersHelper` executable and arguments, support
+`${VAR}` references to the engine's environment,
+for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion is single-pass
+and missing variables are configuration errors.
 
 Validate a configuration without starting a session:
 
@@ -320,9 +322,10 @@ Validate a configuration without starting a session:
 moon run . -- mcp --mcp-config mcp.json
 ```
 
-A running engine connects those servers in the background, so a slow server
-does not hold up the session. A script that reaches a server still connecting
-waits for it: a call waits for its server, a search naming a server waits for
+A running engine connects a server when a script first reaches it, in the
+background, so a slow server holds up only the script that needs it. A skill
+can bring MCP servers too (see Skills). A script that reaches a server still
+connecting waits for it: a call waits for its server, a search naming a server waits for
 that one, and any other search waits for every server. Each wait ends after 60
 seconds, since a server may never finish connecting (a headers helper waiting
 on the user, say); a call then is an error saying so, and a search lists the
@@ -334,8 +337,8 @@ that state changes — a server finishing connecting, or a connected server
 exiting, say. Each event carries the whole state: every configuration file in
 the order given, `loaded` or `failed` with the error, and each server of the
 merged configuration with its `transport`, its `target` (the command, or the
-URL without credentials), and a `state` — `connecting` until it has come to
-anything, `connected` with the tools it registered, `lost` when it connected and the connection has closed
+URL without credentials), and a `state` — `idle` until a script reaches it,
+`connecting` until it has come to anything, `connected` with the tools it registered, `lost` when it connected and the connection has closed
 since, `no_tools`, `failed` with the error, or `skipped` when earlier servers
 used up the tool budget. A controller keeps the latest one; it is this engine's
 own connections, not what connecting again would yield.
@@ -348,11 +351,30 @@ tool. This keeps the surface small; revisit if a concrete need appears.
 
 Reusable markdown playbooks the agent loads on demand. A skill is a
 `<name>.md` file or a `<name>/SKILL.md` directory layout with optional
-`name:`/`description:` frontmatter. Two libraries are merged: the global one
-(`~/.openseek/skills`, or `--global-skills-dir`) and the workspace one
-(`.openseek/skills`), with workspace skills shadowing same-named global ones.
-The system prompt lists each skill's name, description, and file path; the
-agent reads the file before applying it. See `agent_skill/README.mbt.md`.
+`name:`/`description:` frontmatter. Libraries are merged in order: any
+`--skills-dir` given, the global one (`~/.openseek/skills`, or
+`--global-skills-dir`), and the workspace one (`.openseek/skills`), each
+shadowing same-named skills of the ones before it. The system prompt lists each
+skill's name, description, and file path; the agent reads the file before
+applying it. See `agent_skill/README.mbt.md`.
+
+A `<name>/SKILL.md` skill can bring MCP servers in an `mcp.json` beside it, in
+the shape `--mcp-config` reads. Skill configurations have these rules:
+
+- Its entries expand variables from the engine's environment, with
+  `${OPENSEEK_SKILL_DIR}` set to the skill's own directory. Expansion is
+  single-pass, and missing variables make the file invalid.
+- Stdio servers run their configured command and arguments, with their `env`
+  values and `OPENSEEK_SKILL_DIR` added to the inherited process environment.
+  The engine does not inject a sandbox policy or restrict the command.
+  Approval and permissions for skill servers are deferred to future work.
+- HTTP servers may run a `headersHelper` to obtain request headers at connection
+  time. Use `${OPENSEEK_SKILL_DIR}` in its arguments to reference bundled scripts.
+  Helpers inherit the engine environment and run without an engine-injected sandbox.
+
+The agent learns of a skill's server from the skill, and reaches it like any
+other. A server of the same name in an `--mcp-config` file replaces it. A
+delegated run starts none of them.
 
 ## Terminal UI
 

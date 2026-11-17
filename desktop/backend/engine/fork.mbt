@@ -167,9 +167,9 @@ async fn fork_session_in(
       }
       args.append(
         engine_mcp_args(
-          mcp_config,
-          manager.runtime_dir,
-          @sys.get_env_vars(),
+          config?=mcp_config,
+          skills_dir?=manager.skills_dir,
+          env=@sys.get_env_vars(),
           host_mcp=manager.mcp.server is Some(_),
         ),
       )

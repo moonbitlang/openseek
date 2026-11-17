@@ -65,13 +65,20 @@ test "decode defaults missing http headers" {
 }
 
 ///|
-test "HTTP configuration resolves environment references once and keeps stdio literal" {
-  let env = { "HOST": "127.0.0.1", "PORT": "3210", "TOKEN": "secret-${OTHER}" }
+test "configuration resolves environment references once" {
+  let env = {
+    "HOST": "127.0.0.1",
+    "PORT": "3210",
+    "TOKEN": "secret-${OTHER}",
+    "COMMAND": "/opt/server",
+    "ARG": "--fast",
+  }
   let servers = @config.decode(
     {
       "mcpServers": {
         "host": {
           "url": "http://${HOST}:${PORT}/mcp",
+          "headersHelper": ["${COMMAND}", "${ARG}", "${TOKEN}"],
           "headers": {
             "Authorization": "Bearer ${TOKEN}",
             "X-Literal": "原样 $TOKEN",
@@ -86,15 +93,28 @@ test "HTTP configuration resolves environment references once and keeps stdio li
     },
     env~,
   )
-  guard servers[0] is Http(url~, headers~, ..) else { fail("expected HTTP") }
+  guard servers[0] is Http(url~, headers~, headers_helper~, ..) else {
+    fail("expected HTTP")
+  }
+  assert_true(
+    headers_helper
+    is Some(
+      { command: "/opt/server", arguments: ["--fast", "secret-${OTHER}"], }
+    ),
+  )
   assert_eq(url, "http://127.0.0.1:3210/mcp")
   assert_eq(headers.get("Authorization"), Some("Bearer secret-${OTHER}"))
   assert_eq(headers.get("X-Literal"), Some("原样 $TOKEN"))
-  assert_true(servers[1] is Stdio(command="${COMMAND}", args=["${ARG}"], ..))
+  guard servers[1] is Stdio(command~, args~, env~, ..) else {
+    fail("expected stdio")
+  }
+  assert_eq(command, "/opt/server")
+  assert_eq(args, ["--fast"])
+  assert_eq(env.get("TOKEN"), Some("secret-${OTHER}"))
 }
 
 ///|
-test "HTTP environment references reject missing or malformed values" {
+test "environment references reject missing or malformed values" {
   for value in ["${MISSING}", "${}", "${UNCLOSED"] {
     for
       entry in [
@@ -104,6 +124,9 @@ test "HTTP environment references reject missing or malformed values" {
             "url": "http://localhost/mcp",
             "headers": { "Authorization": Json(value) },
           } : Json),
+        { "command": Json(value) },
+        { "command": "server", "args": [Json(value)] },
+        { "command": "server", "env": { "TOKEN": Json(value) } },
       ] {
       try @config.decode({ "mcpServers": { "host": entry } }) |> ignore catch {
         @config.Invalid(_) => ()

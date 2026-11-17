@@ -6,7 +6,7 @@
 // JSON parsing are the caller's; this layer is pure and decodes a parsed `Json`.
 
 ///|
-/// A headers helper executable and its literal arguments, decoded from configuration.
+/// A headers helper executable and arguments after configuration variable expansion.
 #derive(Eq, Debug)
 pub(all) struct HeadersHelperCommand {
   command : String
@@ -91,7 +91,8 @@ impl Show for ConfigError with fn output(self, logger) {
 /// Decode the parsed configuration into the list of configured servers. Raises
 /// `ConfigError` when the shape is wrong. An empty `mcpServers` is allowed —
 /// the caller decides whether zero servers is expected.
-/// HTTP URLs and header values may reference `${VAR}` in the supplied
+/// A stdio server's command, arguments, and environment values, and an HTTP
+/// server's URL and header values, may reference `${VAR}` in the supplied
 /// environment. Values are expanded once; missing variables are errors.
 pub fn decode(
   json : Json,
@@ -133,14 +134,17 @@ fn decode_server(
         guard item is String(arg) else {
           raise Invalid("server `\{name}`: every `args` entry must be a string")
         }
-        arg
+        expand_env(name, arg, env)
       }
     ]
   } else {
     []
   }
-  let env = decode_string_map(name, entry, "env")
-  Stdio(name~, command~, args~, env~)
+  let command = expand_env(name, command, env)
+  let server_env = decode_string_map(name, entry, "env").map((_, value) => {
+    expand_env(name, value, env)
+  })
+  Stdio(name~, command~, args~, env=server_env)
 }
 
 ///|
@@ -168,6 +172,7 @@ fn decode_http_server(
         "server `\{name}`: `headersHelper` must be a nonempty array of strings",
       )
     }
+    let command = expand_env(name, command, env)
     guard !command.is_empty() else {
       raise Invalid("server `\{name}`: `headersHelper` needs an executable")
     }
@@ -178,7 +183,7 @@ fn decode_http_server(
             "server `\{name}`: every `headersHelper` entry must be a string",
           )
         }
-        argument
+        expand_env(name, argument, env)
       }
     ]
     Some({ command, arguments, })
