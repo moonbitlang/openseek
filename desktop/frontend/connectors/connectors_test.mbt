@@ -4,8 +4,12 @@ fn step(
   msg : @connectors.Msg,
 ) -> @connectors.State raise {
   let emit = @cmd.Emit(_ => @cmd.none)
-  let (_, first) = @connectors.update(emit, msg, state)
-  let (_, second) = @connectors.update(emit, msg, state)
+  let (_, first) = @connectors.update(emit, msg, state, open_external=_ => {
+    @cmd.none
+  })
+  let (_, second) = @connectors.update(emit, msg, state, open_external=_ => {
+    @cmd.none
+  })
   assert_true(first == second)
   first
 }
@@ -111,4 +115,53 @@ test "only a successful empty list shows the empty state" {
     }),
   )
   assert_false(failed_again.is_empty())
+}
+
+///|
+test "the authorization page opens once when connect returns not on polls" {
+  let emit = @cmd.Emit(_ => @cmd.none)
+  let opened : Array[String] = []
+  let open_external = (url : String) => {
+    opened.push(url)
+    @cmd.none
+  }
+  let (_, starting) = @connectors.update(
+    emit,
+    Connect("github"),
+    @connectors.State::empty(),
+    open_external~,
+  )
+  let reply : @protocol.ConnectorReply = {
+    connectors: [],
+    error: None,
+    authorization: Some({
+      attempt: "login",
+      url: "https://github.com/login/device",
+      code: "ABCD",
+    }),
+  }
+  let (_, waiting) = @connectors.update(
+    emit,
+    Received(1, Some("github"), reply),
+    starting,
+    open_external~,
+  )
+  assert_eq(opened, ["https://github.com/login/device"])
+  let (_, waiting_again) = @connectors.update(
+    emit,
+    Received(1, Some("github"), reply),
+    waiting,
+    open_external~,
+  )
+  assert_true(waiting_again == waiting)
+  assert_eq(opened.length(), 1)
+  let (_, cancelled) = @connectors.update(emit, Cancel, waiting, open_external~)
+  let (_, stale) = @connectors.update(
+    emit,
+    Received(1, Some("github"), reply),
+    cancelled,
+    open_external~,
+  )
+  assert_true(stale == cancelled)
+  assert_eq(opened.length(), 1)
 }

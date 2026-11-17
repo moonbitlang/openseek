@@ -83,6 +83,7 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
+  open_external~ : (String) -> @cmd.Cmd,
 ) -> (@cmd.Cmd, State) {
   match msg {
     Refresh => {
@@ -146,7 +147,14 @@ pub fn update(
       let rows = @vector.from_array(reply.connectors)
       if reply.authorization is Some(authorization) && id is Some(id) {
         (
-          @cmd.delay(emit(Poll(epoch, id, authorization.attempt)), 1000),
+          @cmd.batch([
+            @cmd.delay(emit(Poll(epoch, id, authorization.attempt)), 1000),
+            if state.operation is Starting(started) && started == id {
+              open_external(authorization.url)
+            } else {
+              @cmd.none
+            },
+          ]),
           {
             ..state,
             rows,

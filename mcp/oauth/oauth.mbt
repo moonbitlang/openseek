@@ -146,7 +146,7 @@ async fn save(
   json : Json,
 ) -> Unit {
   let dir = directory()
-  @fs.mkdir(dir, permission=0o700, recursive=true)
+  @fs.mkdir(dir, permission=0o700, recursive=true, allow_exist=true)
   guard @env.rand(16) is Some(random) else {
     fail("Cannot obtain randomness for credential storage")
   }
@@ -183,7 +183,18 @@ pub async fn poll(
     ("client_id", config.client_id),
     ("device_code", pending.device_code),
     ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-  ])
+  ]) catch {
+    @async.TimeoutError => {
+      guard !pending.cancelled else { fail("Authorization cancelled") }
+      let remaining = pending.expires_at - @env.now().reinterpret_as_int64()
+      guard remaining > 0 else { fail("Authorization expired; connect again") }
+      // RFC 8628: a connection timeout backs off instead of ending the grant.
+      pending.interval_ms = (pending.interval_ms * 2).min(remaining)
+      pending.next_poll = @async.now() + pending.interval_ms
+      return Waiting
+    }
+    error => raise error
+  }
   guard !pending.cancelled else { fail("Authorization cancelled") }
   match json {
     { "error": "authorization_pending", .. } => Waiting
