@@ -1,0 +1,81 @@
+///|
+fn step(
+  state : @connectors.State,
+  msg : @connectors.Msg,
+) -> @connectors.State raise {
+  let emit = @cmd.Emit(_ => @cmd.none)
+  let (_, first) = @connectors.update(emit, msg, state)
+  let (_, second) = @connectors.update(emit, msg, state)
+  assert_true(first == second)
+  first
+}
+
+///|
+test "cancel fences a late successful OAuth poll and permits another login" {
+  let initial = @connectors.State::empty()
+  let starting = step(initial, Connect("github"))
+  assert_true(step(starting, Connect("other")) == starting)
+  let waiting = step(
+    starting,
+    Received(1, Some("github"), {
+      connectors: [],
+      error: None,
+      authorization: Some({
+        attempt: "attempt-1",
+        url: "https://github.com/login/device",
+        code: "ABCD",
+      }),
+    }),
+  )
+  assert_true(step(waiting, Refresh) == waiting)
+  let cancelling = step(waiting, Cancel)
+  assert_true(
+    step(
+      cancelling,
+      Received(1, Some("github"), {
+        connectors: [],
+        error: None,
+        authorization: None,
+      }),
+    ) ==
+    cancelling,
+  )
+  assert_true(step(cancelling, Poll(1, "github", "attempt-1")) == cancelling)
+  let cancelled = step(
+    cancelling,
+    Received(2, Some("github"), {
+      connectors: [],
+      error: None,
+      authorization: None,
+    }),
+  )
+  assert_false(step(cancelled, Connect("github")) == cancelled)
+}
+
+///|
+test "authorization error allows retry and refresh supersedes old list" {
+  let loading = step(@connectors.State::empty(), Refresh)
+  let ready = step(
+    loading,
+    Received(1, None, { connectors: [], error: None, authorization: None, }),
+  )
+  let starting = step(ready, Connect("github"))
+  let expired = step(
+    starting,
+    Received(2, Some("github"), {
+      connectors: [],
+      authorization: None,
+      error: Some("Authorization expired"),
+    }),
+  )
+  assert_false(step(expired, Connect("github")) == expired)
+  assert_true(
+    step(
+      starting,
+      Received(1, None, { connectors: [], error: None, authorization: None, }),
+    ) ==
+    starting,
+  )
+  let changing = step(ready, Disconnect("github"))
+  assert_true(step(changing, Connect("github")) == changing)
+}

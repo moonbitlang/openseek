@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "oauth": {
+        "grantType": "device_code",
+        "clientId": "Ov23liDY0j2riv3dZtVY",
+        "deviceAuthorizationEndpoint": "https://github.com/login/device/code",
+        "tokenEndpoint": "https://github.com/login/oauth/access_token",
+        "scopes": "repo read:org"
+      }
+    }
+  }
+}

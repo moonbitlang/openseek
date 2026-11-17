@@ -138,6 +138,16 @@ pub let codex_turn_start : Command[@protocol.CodexTurnStartPayload, @protocol.Co
 
 pub let codex_turn_steer : Command[@protocol.CodexTurnSteerPayload, @protocol.CodexCommandReply[@protocol.CodexTurnReply]]
 
+pub let connectors_cancel : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
+pub let connectors_connect : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
+pub let connectors_disconnect : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
+pub let connectors_list : Command[@protocol.EmptyPayload, @protocol.ConnectorReply]
+
+pub let connectors_poll : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
 pub let extension_contract : @proton_contract.ExtensionContract
 
 pub let fs_browse : Command[@protocol.BrowseDirectoryPayload, @protocol.BrowseDirectoryReply]

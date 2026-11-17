@@ -917,6 +917,7 @@ priv enum SettingsSection {
   Account
   Devices
   Connections
+  Connectors
   ArchivedChats
   SystemSettings
 }
@@ -1440,6 +1441,7 @@ priv struct Model {
   // The Skills page's own state — the registry catalog, the search filter,
   // in-flight actions, the last failure — which only that page can see.
   schedules : SchedulePage
+  connectors : @connectors.State
   skills : @skills.State
   // The focused host's skills library. Root-owned rather than page-owned
   // because the composer's `$` completion reads the same list, which is why
@@ -1881,6 +1883,7 @@ priv enum Msg {
   SchedulePage(SchedulePageMsg)
   OpenSkills
   // Everything the Skills page does with itself once it is open.
+  Connectors(@connectors.Msg)
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
@@ -2829,6 +2832,7 @@ fn initial_model(
     },
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
+    connectors: @connectors.State::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
     cloud_skills: [],

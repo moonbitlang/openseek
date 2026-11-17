@@ -28,7 +28,8 @@ pub(all) enum McpServer {
     name~ : String,
     url~ : String,
     headers~ : Map[String, String],
-    headers_helper~ : HeadersHelperCommand?
+    headers_helper~ : HeadersHelperCommand?,
+    oauth~ : OAuthConfig?
   )
 }
 
@@ -122,6 +123,9 @@ fn decode_server(
       "server `\{name}` needs a string `command` (stdio) or `url` (http)",
     )
   }
+  if entry is { "oauth": _, .. } {
+    raise Invalid("OAuth requires an HTTP MCP server")
+  }
   // A present-but-mistyped optional field is a config mistake, not an omission:
   // silently treating `"args": "--flag"` as no args would launch the server
   // wrong. Absent keys stay optional.
@@ -190,7 +194,23 @@ fn decode_http_server(
   } else {
     None
   }
-  Http(name~, url~, headers~, headers_helper~)
+  let oauth = match entry {
+    { "oauth": value, .. } => Some(decode_oauth(value, name, env))
+    _ => None
+  }
+  if oauth is Some(_) &&
+    (
+      headers_helper is Some(_) ||
+      headers.keys().any(k => k.to_lower() == "authorization")
+    ) {
+    raise Invalid(
+      "server `\{name}`: oauth cannot be combined with Authorization or headersHelper",
+    )
+  }
+  if oauth is Some(_) && !url.has_prefix("https://") {
+    raise Invalid("OAuth MCP resources must use HTTPS")
+  }
+  Http(name~, url~, headers~, headers_helper~, oauth~)
 }
 
 ///|

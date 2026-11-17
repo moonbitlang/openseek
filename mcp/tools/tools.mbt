@@ -79,6 +79,7 @@ pub struct ServerEntry {
 /// script first reaches it.
 struct Server {
   config : @config.McpServer
+  mut credential : String?
   mut connecting : @async.Task[ServerEntry]?
   connect : () -> @async.Task[ServerEntry]
 }
@@ -109,6 +110,7 @@ pub fn Server::new(
 ) -> Server {
   {
     config,
+    credential: None,
     connecting: None,
     connect: () => {
       let task = scope
@@ -177,6 +179,7 @@ pub fn Server::try_wait(self : Server) -> ServerEntry? {
 /// What connecting this server comes to, starting it first if it has not
 /// started. Cancellation propagates.
 pub async fn Server::settled(self : Server) -> ServerEntry {
+  self.check_credential()
   self.task().wait()
 }
 
@@ -185,6 +188,7 @@ pub async fn Server::settled(self : Server) -> ServerEntry {
 /// started, and waiting up to `timeout_ms` for it to settle: `None` when it is
 /// still connecting by then.
 async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
+  self.check_credential()
   let task = self.task()
   @async.with_timeout_opt(timeout_ms, () => task.wait())
 }
@@ -206,6 +210,9 @@ pub async fn settle(
       None => true
     }
   })
+  for configured in waiting {
+    configured.check_credential()
+  }
   let tasks = waiting.map(configured => configured.task())
   ignore(
     @async.with_timeout_opt(timeout_ms, () => {
@@ -394,7 +401,7 @@ async fn connect_server(
         )
         (connection.client(), connection.init())
       }
-      Http(url~, headers~, headers_helper~, ..) => {
+      Http(url~, headers~, headers_helper~, oauth~, ..) => {
         // Resolve configuration before connecting. The transport receives only
         // ordinary headers; helper output overrides static keys regardless of case.
         let resolved : Map[String, String] = Map([])
@@ -405,6 +412,12 @@ async fn connect_server(
           for name, value in @headers_helper.run(helper, cwd?=workspace_root) {
             resolved[name.to_lower()] = value
           }
+        }
+        if oauth is Some(oauth) {
+          guard @oauth.token(url, oauth) is Some(token) else {
+            fail("Connect this server in Settings > Connectors before using it")
+          }
+          resolved["authorization"] = "Bearer \{token}"
         }
         let connection = @streamhttp.connect(
           scope.group(),
@@ -572,4 +585,21 @@ fn cap_chars(text : String, limit : Int32) -> (String, Bool) {
     continue count + 1
   }
   (kept.to_string(), false)
+}
+
+///|
+/// A login/logout changes the credential without requiring an engine restart.
+async fn Server::check_credential(self : Server) -> Unit {
+  guard self.config is Http(url~, oauth=Some(oauth), ..) else { return }
+  let credential = @oauth.token(url, oauth)
+  if credential != self.credential {
+    if self.try_wait() is Some({ connection: Live(client), .. }) {
+      client.close()
+    }
+    if self.connecting is Some(task) {
+      task.cancel()
+    }
+    self.connecting = None
+    self.credential = credential
+  }
 }

@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/connectors",
   "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/prompt",
   "openseek_desktop/frontend/cloud_client",

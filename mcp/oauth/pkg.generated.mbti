@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/mcp/oauth"
+
+import {
+  "moonbitlang/openseek/mcp/config",
+}
+
+// Values
+pub async fn begin(@config.OAuthConfig) -> Pending
+
+pub async fn disconnect(String, @config.OAuthConfig) -> Unit
+
+pub fn key(String, @config.OAuthConfig) -> String
+
+pub async fn poll(Pending, String, @config.OAuthConfig) -> PollResult
+
+pub async fn token(String, @config.OAuthConfig) -> String?
+
+// Errors
+
+// Types and methods
+type Pending
+pub fn Pending::authorization_url(Self) -> String
+pub fn Pending::cancel(Self) -> Unit
+pub fn Pending::user_code(Self) -> String
+
+pub enum PollResult {
+  Waiting
+  Authorized
+}
+
+// Type aliases
+
+// Traits

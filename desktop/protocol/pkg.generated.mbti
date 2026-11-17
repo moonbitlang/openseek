@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 11
+pub const HostProtocolRevision : Int32 = 12
 
 pub const MaxImageBytes : Int32 = 20971520
 
@@ -1166,6 +1166,65 @@ pub fn ConnectedPayload::to_json(Self) -> @json.Json
 pub fn ConnectedPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ConnectedPayload
 pub impl @json.ToJson for ConnectedPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ConnectorAuthorization {
+  attempt : String
+  url : String
+  code : String
+}
+pub fn ConnectorAuthorization::equal(Self, Self) -> Bool
+pub fn ConnectorAuthorization::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConnectorAuthorization::not_equal(Self, Self) -> Bool
+pub fn ConnectorAuthorization::to_json(Self) -> @json.Json
+pub fn ConnectorAuthorization::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ConnectorAuthorization
+pub impl @json.ToJson for ConnectorAuthorization
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ConnectorInfo {
+  id : String
+  name : String
+  skill : String
+  source : String
+  auth : String
+  connected : Bool
+  error : String?
+}
+pub fn ConnectorInfo::equal(Self, Self) -> Bool
+pub fn ConnectorInfo::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConnectorInfo::not_equal(Self, Self) -> Bool
+pub fn ConnectorInfo::to_json(Self) -> @json.Json
+pub fn ConnectorInfo::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ConnectorInfo
+pub impl @json.ToJson for ConnectorInfo
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ConnectorReply {
+  connectors : Array[ConnectorInfo]
+  authorization : ConnectorAuthorization?
+  error : String?
+}
+pub fn ConnectorReply::equal(Self, Self) -> Bool
+pub fn ConnectorReply::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConnectorReply::not_equal(Self, Self) -> Bool
+pub fn ConnectorReply::to_json(Self) -> @json.Json
+pub fn ConnectorReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ConnectorReply
+pub impl @json.ToJson for ConnectorReply
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ConnectorRequest {
+  id : String
+  attempt : String?
+}
+pub fn ConnectorRequest::equal(Self, Self) -> Bool
+pub fn ConnectorRequest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConnectorRequest::not_equal(Self, Self) -> Bool
+pub fn ConnectorRequest::to_json(Self) -> @json.Json
+pub fn ConnectorRequest::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ConnectorRequest
+pub impl @json.ToJson for ConnectorRequest
 
 #derive(Eq, @debug.Debug)
 pub(all) struct CreateDirectoryPayload {

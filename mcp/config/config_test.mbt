@@ -180,6 +180,7 @@ test "a server's target identifies it without its secrets" {
       url~,
       headers={},
       headers_helper=None,
+      oauth=None,
     ).target()
   }
 
