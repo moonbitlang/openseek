@@ -19,7 +19,7 @@ type PatternRepairReport
 
 #derive(@json.FromJson)
 type PatternRepairValidator
-pub fn PatternRepairValidator::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PatternRepairValidator::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 
 // Type aliases
 
