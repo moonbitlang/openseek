@@ -1,7 +1,7 @@
 ///|
 async test "completed predictions survive reopening without changing the transcript" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("prediction")
   let session = @agent_session.Session(id, system_prompt="system")
     .append(User(UserMessage(Content([Text("fix it")]))))
@@ -37,7 +37,7 @@ async test "completed predictions survive reopening without changing the transcr
 ///|
 async test "legacy attempts and failures do not block a completed result" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(
       SessionId("legacy"),
       system_prompt="system",
@@ -77,7 +77,7 @@ async test "legacy attempts and failures do not block a completed result" {
 ///|
 async test "corrupt prediction metadata remains an error rather than a cache miss" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("corrupt")
   store.create(Session(id, system_prompt="system"))
   @fs.write_text(store.root() + "/sessions/corrupt/prediction.json", "broken")

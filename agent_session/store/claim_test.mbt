@@ -25,7 +25,7 @@ async fn refusal(body : async () -> Unit) -> String {
 ///|
 async test "a claim creates the session directory once" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let token = claimed(store, "p-sr-1")
   assert_eq(token.length(), 32)
   assert_true(store.exists(SessionId("p-sr-1")))
@@ -40,7 +40,7 @@ async test "a claim creates the session directory once" {
 ///|
 async test "concurrent claims on one id have exactly one winner" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let outcomes : Array[Bool] = []
   @async.with_task_group(group => {
     for _ in 0..<8 {
@@ -55,7 +55,7 @@ async test "concurrent claims on one id have exactly one winner" {
 ///|
 async test "a claim is accepted once, with its token, and then records" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("p-sr-3")
   let token = claimed(store, "p-sr-3")
   inspect(
@@ -78,7 +78,7 @@ async test "a claim is accepted once, with its token, and then records" {
 ///|
 async test "a claim is refused once its session has records" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("p-sr-4")
   let token = claimed(store, "p-sr-4")
   @fs.write_text(session_file(store, "p-sr-4"), "", create_mode=CreateNew)
@@ -91,7 +91,7 @@ async test "a claim is refused once its session has records" {
 ///|
 async test "a claim is refused for a session nobody claimed" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   inspect(
     refusal(() => store.accept_claim(SessionId("p-sr-5"), wrong_token)),
     content="session p-sr-5 was not claimed: it does not exist",
@@ -106,7 +106,7 @@ async test "a claim is refused for a session nobody claimed" {
 ///|
 async test "a reader's session lock does not block acceptance" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("p-sr-7")
   let token = claimed(store, "p-sr-7")
   @fs.write_text(
@@ -120,7 +120,7 @@ async test "a reader's session lock does not block acceptance" {
 ///|
 async test "of two runs presenting one token, one is accepted" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("p-sr-8")
   let token = claimed(store, "p-sr-8")
   let accepted : Array[Bool] = []
@@ -150,7 +150,7 @@ let wrong_token : String = "00000000000000000000000000000000"
 /// record; then it lists like any session and its marker is gone.
 async test "listings leave out claims until their first record" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let pending = claimed(store, "p-sr-9")
   ignore(pending)
   let id = @agent_session.SessionId("p-sr-10")
