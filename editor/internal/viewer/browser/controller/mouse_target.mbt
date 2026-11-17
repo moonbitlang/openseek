@@ -44,7 +44,7 @@ priv enum HitTestResult {
   ContentHitTestResult(
     position~ : @base_common.Position,
     span_node~ : @rdom.Element,
-    injected_text~ : @view_model.InjectedText?
+    injected_text~ : @view_model.InjectedText?,
   )
 }
 

@@ -18,7 +18,7 @@ test "a listing keeps its raw protocol path" {
       channel=@interop.ChannelId::Local,
       location=Directory("/C:/project"),
       entries=[],
-      generation=7
+      generation=7,
     ),
   )
 }

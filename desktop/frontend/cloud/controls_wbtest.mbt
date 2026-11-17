@@ -222,7 +222,7 @@ test "Cloud paused queue permits edit and withdrawal but not addition or steerin
             state: @composer.Queued(interactive=true, steer_available=false, ..),
             ..
           },
-        ]
+        ],
       ),
     ],
   )

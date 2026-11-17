@@ -9,7 +9,7 @@ pub(all) enum GithubReviewAction {
     side~ : String,
     line~ : Int32,
     body~ : String,
-    head~ : String
+    head~ : String,
   )
   Reply(comment~ : String, body~ : String)
   Delete(comment~ : String)

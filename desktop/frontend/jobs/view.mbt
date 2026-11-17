@@ -56,7 +56,7 @@ fn job_extent(
 ) -> String {
   match job.subagent {
     Some(
-      { usage: Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)), .. }
+      { usage: Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)), .. },
     ) => {
       let tokens = (prompt_tokens + completion_tokens).to_string()
       match steps {

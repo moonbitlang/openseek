@@ -27,7 +27,7 @@ pub enum ProjectedLinePartKind {
   InjectedSegment(
     model_column~ : Int32,
     injected_text_index~ : Int32,
-    class_name~ : String
+    class_name~ : String,
   )
 }
 

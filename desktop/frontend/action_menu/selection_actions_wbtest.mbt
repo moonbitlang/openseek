@@ -42,7 +42,7 @@ test "selection offers actions before explicitly starting a reply" {
         stage: Replying(comment="", declined=false),
         anchor: { text: "Selected text", .. },
         ..
-      }
+      },
     ),
   )
   let (closed, _) = reply.update(Some("session"), Closed, emit, deliver)

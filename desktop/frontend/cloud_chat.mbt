@@ -231,7 +231,7 @@ fn update_cloud(
           edit: @cloud.Archive(true),
           navigation: generation,
           ..
-        }
+        },
       ) &&
       pending == request &&
       generation == model.chat_navigation_generation &&
@@ -450,7 +450,7 @@ fn update_cloud(
         @wire.CommandError(error~)
         | @wire.SessionError(error~)
         | @wire.CompactionFailed(error~)
-        | @wire.AutoCompactionFailed(error~)
+        | @wire.AutoCompactionFailed(error~),
       ) => Some(error)
       _ => None
     }

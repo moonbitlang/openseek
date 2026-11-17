@@ -151,7 +151,7 @@ fn observe_navigation(
         connection_generation~,
         request_generation~,
         ..
-      )
+      ),
     ) if channel == previous.focused &&
       previous.device_state(channel) is Some(dev) &&
       connection_generation == dev.connection_generation &&

@@ -68,7 +68,7 @@ async test "PTC real script edits and receives reply without deadlock" {
               ..,
             ],
             ..
-          }
+          },
         ),
       )
     })
@@ -403,7 +403,7 @@ async test "PTC write and remove approve individual scope escapes without liftin
               { "name": "remove", "status": "done", .. },
             ],
             ..
-          }
+          },
         ),
       )
     })

@@ -45,10 +45,10 @@ priv enum EditorContributionInstance {
   ContentHover(ContentHoverContributionState)
   Folding(@folding_browser.FoldingController)
   AgentFeedbackInput(
-    @agent_feedback_browser.AgentFeedbackEditorInputContribution
+    @agent_feedback_browser.AgentFeedbackEditorInputContribution,
   )
   AgentFeedbackWidget(
-    @agent_feedback_browser.AgentFeedbackEditorWidgetContribution
+    @agent_feedback_browser.AgentFeedbackEditorWidgetContribution,
   )
   QuickDiff(QuickDiffContributionState)
   MarkdownComments(MarkdownCommentContributionState)

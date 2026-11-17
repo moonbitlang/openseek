@@ -107,7 +107,7 @@ fn assign_structure(
       | "Caption"
       | "TD"
       | "TH"
-      | "BlockQuote"
+      | "BlockQuote",
     ) {
     let members = entries.filter(e => {
       e.marked_id is Some(id) && ids.contains(id) && !assigned.contains(e.index)

@@ -98,7 +98,7 @@ pub(all) enum Event {
   BindingCalled(
     name~ : String,
     payload~ : String,
-    execution_context_id~ : Int32
+    execution_context_id~ : Int32,
   )
 }
 

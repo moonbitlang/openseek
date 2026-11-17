@@ -329,7 +329,7 @@ test "changed-file replies decode presentation categories and rename sources" {
         index_status: "R",
         worktree_status: " ",
         kind: ChangeRenamed,
-      }
+      },
     ),
   )
 }

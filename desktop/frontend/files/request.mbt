@@ -121,7 +121,7 @@ priv suberror SearchingSub {
     Request,
     String,
     (Array[@pathx.Relative], Bool) -> @cmd.Cmd,
-    () -> @cmd.Cmd
+    () -> @cmd.Cmd,
   )
 }
 

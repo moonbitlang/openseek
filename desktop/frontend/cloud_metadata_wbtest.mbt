@@ -199,7 +199,7 @@ test "late background archives preserve navigation and archived Cloud has no sen
           ..
         },
         ..
-      }
+      },
     ),
   )
 }

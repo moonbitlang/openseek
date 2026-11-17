@@ -316,8 +316,8 @@ test "Cloud service supplements preserve repeated and rich inputs without dedupl
     items[2].kind
     is User(
       content=Content(
-        [Text("Same"), ImageUrl(url="data:image/png;base64,iVBORw0KGgo=")]
-      )
+        [Text("Same"), ImageUrl(url="data:image/png;base64,iVBORw0KGgo=")],
+      ),
     ),
   )
   assert_true(items[3].kind is Failure("Spawn failed"))

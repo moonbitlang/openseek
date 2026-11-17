@@ -12,7 +12,7 @@ let intent_max_messages : Int32 = 3
 /// What answers a permission question under `--approval review`. Only
 /// cancellation of the asking turn raises out of it.
 struct ApprovalReviewer(
-  async (@agent_runtime.ApprovalAsk) -> @agent_approval.Decision
+  async (@agent_runtime.ApprovalAsk) -> @agent_approval.Decision,
 )
 
 ///|

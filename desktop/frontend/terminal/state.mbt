@@ -322,7 +322,7 @@ pub(all) enum Msg {
   CloudDisconnected(
     connection~ : Connection,
     authenticated~ : Bool,
-    reason~ : String?
+    reason~ : String?,
   )
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
@@ -355,7 +355,7 @@ pub(all) enum Msg {
     key~ : String,
     id~ : String,
     token~ : String,
-    result~ : Result[Unit, InputWriteFailure]
+    result~ : Result[Unit, InputWriteFailure],
   )
   /// The panel has paused input and discarded the unsent tail; the main
   /// frontend displays the reason. Output and explicit close remain available.
@@ -371,7 +371,7 @@ pub(all) enum Msg {
     shell~ : String,
     exit_code~ : Int32?,
     output~ : String,
-    truncated~ : Bool
+    truncated~ : Bool,
   )
   /// A command tab's session could not be opened, so its command never ran.
   /// Consumed by the main frontend like `CommandFinished`.

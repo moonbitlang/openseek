@@ -122,7 +122,7 @@ fn feedback_item_from_json(
     is {
       "text": String(text),
       "range": Array(
-        [Number(sl, ..), Number(sc, ..), Number(el, ..), Number(ec, ..)]
+        [Number(sl, ..), Number(sc, ..), Number(el, ..), Number(ec, ..)],
       ),
       ..
     } else {

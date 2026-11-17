@@ -341,7 +341,7 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   // The next turn starts with saved options, never a pending edit.
   !(self.metadata_saves.get(id)
   is Some(
-    { edit: Archive(true) | SetApproval(_) | SetModel(_) | SetThinking(_), .. }
+    { edit: Archive(true) | SetApproval(_) | SetModel(_) | SetThinking(_), .. },
   )) &&
   !conversation.loading &&
   !conversation.sending &&

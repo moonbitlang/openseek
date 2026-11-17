@@ -126,7 +126,7 @@ pub(all) enum PrimaryAction {
     steer_available~ : Bool,
     can_stop~ : Bool,
     submit~ : RunningSubmit,
-    queue_available~ : Bool
+    queue_available~ : Bool,
   )
 }
 
@@ -342,30 +342,30 @@ pub(all) enum Action {
   DraftAttachmentsSubmitted(
     identity~ : Identity,
     draft~ : Draft,
-    attachments~ : Array[@protocol.AttachmentSource]
+    attachments~ : Array[@protocol.AttachmentSource],
   )
   FollowupSubmitted(
     identity~ : Identity,
     draft~ : Draft,
     choice~ : FollowupChoice,
-    attachments~ : Array[@protocol.AttachmentSource]
+    attachments~ : Array[@protocol.AttachmentSource],
   )
   DraftPresenceChanged(
     identity~ : Identity,
     present~ : Bool,
-    cleared_source~ : Draft?
+    cleared_source~ : Draft?,
   )
   ReviewContextChanged(
     identity~ : Identity,
-    selections~ : Array[@mention_context.ReviewChanges]
+    selections~ : Array[@mention_context.ReviewChanges],
   )
   ReviewChangesRemoved(
     identity~ : Identity,
-    selections~ : Array[@mention_context.ReviewChanges]
+    selections~ : Array[@mention_context.ReviewChanges],
   )
   ReviewChangesOpened(
     identity~ : Identity,
-    selection~ : @mention_context.ReviewChanges
+    selection~ : @mention_context.ReviewChanges,
   )
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
@@ -377,7 +377,7 @@ pub(all) enum Action {
     identity~ : Identity,
     id~ : String,
     text~ : String,
-    choice~ : FollowupChoice?
+    choice~ : FollowupChoice?,
   )
   // Show the terminal tab of the running `!` command at `index` in
   // `ShellCommandsRunning`.
@@ -400,23 +400,23 @@ pub(all) enum Action {
     identity~ : Identity,
     request_key~ : String,
     question_id~ : String,
-    answer~ : String
+    answer~ : String,
   )
   CodexQuestionChanged(
     identity~ : Identity,
     request_key~ : String,
-    action~ : @question_card.Action
+    action~ : @question_card.Action,
   )
   CodexRequestResponded(
     identity~ : Identity,
     request_key~ : String,
-    decision~ : Json
+    decision~ : Json,
   )
   PermissionMenuToggled(identity~ : Identity)
   PermissionMenuDismissed(identity~ : Identity)
   PermissionSelected(
     identity~ : Identity,
-    mode~ : @protocol.CodexPermissionMode
+    mode~ : @protocol.CodexPermissionMode,
   )
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
@@ -609,7 +609,7 @@ pub(all) enum EntryChange {
   Retire(@interop.ConversationIdentity)
   Move(
     from~ : @interop.ConversationIdentity,
-    to~ : @interop.ConversationIdentity
+    to~ : @interop.ConversationIdentity,
   )
 }
 

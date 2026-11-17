@@ -21,8 +21,8 @@ test "decode recognizes the streaming events" {
       @transcript.StreamRetry(
         attempt=2,
         max_attempts=5,
-        reason="Stream ended before [DONE]"
-      )
+        reason="Stream ended before [DONE]",
+      ),
     ),
   )
   guard @transcript.decode_engine_event(
@@ -127,7 +127,7 @@ test "decode maps background notices onto the notice path" {
       }),
     )
     is Some(
-      @transcript.BackgroundNotice("background job bg-1 finished (exit=0)")
+      @transcript.BackgroundNotice("background job bg-1 finished (exit=0)"),
     ) else {
     fail("background_notice not decoded")
   }
@@ -152,8 +152,8 @@ test "decode recognizes the steer events" {
     is Some(
       @transcript.SteerApplied(
         content=Content([Text("left")]),
-        submission_id=Some("input-7")
-      )
+        submission_id=Some("input-7"),
+      ),
     ) else {
     fail("steer_applied not decoded")
   }
@@ -163,8 +163,8 @@ test "decode recognizes the steer events" {
     is Some(
       @transcript.SteerDropped(
         content=Content([Text("left")]),
-        submission_id=None
-      )
+        submission_id=None,
+      ),
     ) else {
     fail("steer_dropped not decoded")
   }
@@ -186,12 +186,12 @@ test "decode recognizes the steer events" {
       is Some(
         @transcript.SteerApplied(
           content=actual,
-          submission_id=Some("image-steer")
+          submission_id=Some("image-steer"),
         )
         | @transcript.SteerDropped(
           content=actual,
-          submission_id=Some("image-steer")
-        )
+          submission_id=Some("image-steer"),
+        ),
       ) &&
       actual == content,
     )
@@ -219,7 +219,7 @@ test "decode recognizes automatic checkpoint and context yield events" {
       }),
     )
     is Some(
-      @transcript.ContextYield("[context ceiling] continue in a new turn")
+      @transcript.ContextYield("[context ceiling] continue in a new turn"),
     ) else {
     fail("context_yield not decoded")
   }
@@ -270,7 +270,7 @@ test "decode surfaces a failed durable append off the raw stream" {
       }),
     )
     is Some(
-      @transcript.SessionAppendFailed("failed to append goal update: disk full")
+      @transcript.SessionAppendFailed("failed to append goal update: disk full"),
     ) else {
     fail("session_error not decoded")
   }
@@ -290,8 +290,8 @@ test "decode surfaces the ways a configured MCP server ends up without tools" {
     is Some(
       @transcript.McpConfigFailed(
         path="/home/.openseek/mcp.json",
-        error="configuration is missing an `mcpServers` object"
-      )
+        error="configuration is missing an `mcpServers` object",
+      ),
     ) else {
     fail("mcp_config_invalid not decoded")
   }
@@ -315,8 +315,8 @@ test "decode surfaces the ways a configured MCP server ends up without tools" {
     is Some(
       @transcript.McpServerFailed(
         server="playwright",
-        error="npx: command not found"
-      )
+        error="npx: command not found",
+      ),
     ) else {
     fail("mcp_connect_failed not decoded")
   }
@@ -360,7 +360,7 @@ test "decode maps subrun brackets onto the lane's open and close" {
       }),
     )
     is Some(
-      @transcript.SubrunOpened(id="sr-1", kind="review", label="goal review")
+      @transcript.SubrunOpened(id="sr-1", kind="review", label="goal review"),
     ) else {
     fail("subrun_started not decoded")
   }
@@ -382,8 +382,8 @@ test "decode maps subrun brackets onto the lane's open and close" {
         status="captured",
         steps=12,
         tokens=39600,
-        unaccounted=None
-      )
+        unaccounted=None,
+      ),
     ) else {
     fail("subrun_finished not decoded")
   }
