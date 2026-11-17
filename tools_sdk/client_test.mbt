@@ -46,7 +46,7 @@ async test "public calls discover the host and forward JSON arguments unchanged"
         (
           {
             "version": 1,
-            "url": "http://127.0.0.1:\{server.addr.port()}/call",
+            "url": "http://127.0.0.1:\{server.addr.port}/call",
             "token": "public-api-test",
           } : Json).stringify(),
       )

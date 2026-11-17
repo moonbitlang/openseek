@@ -83,7 +83,7 @@ async test "HTTP failures are not retried" {
     let rejected = try {
       ignore(
         request(
-          "http://127.0.0.1:\{server.addr.port()}/call",
+          "http://127.0.0.1:\{server.addr.port}/call",
           "test-capability",
           "edit",
           {},
@@ -112,7 +112,7 @@ async test "caller cancellation is not converted to a transport failure" {
         defer conn.close()
         conn.send_response(200, "OK")
         conn.text.write("{")
-        conn.flush()
+        conn.flush_partial_data()
         @async.sleep(60000)
       })
     })
@@ -124,7 +124,7 @@ async test "caller cancellation is not converted to a transport failure" {
       ignore(
         @async.with_timeout(50, () => {
           request(
-            "http://127.0.0.1:\{server.addr.port()}/call",
+            "http://127.0.0.1:\{server.addr.port}/call",
             "test-capability",
             "web_search",
             {},
@@ -162,7 +162,7 @@ async test "approval calls wait beyond the ordinary client deadline" {
         @async.protect_from_cancel(() => worker.wait() catch { _ => () })
       }
       let result = request(
-        "http://127.0.0.1:\{server.addr.port()}/call",
+        "http://127.0.0.1:\{server.addr.port}/call",
         "token",
         "remove",
         {},

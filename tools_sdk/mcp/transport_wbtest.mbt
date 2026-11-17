@@ -81,7 +81,7 @@ async test "HTTP failures are not retried" {
     }
     let rejected = try {
       ignore(
-        post("http://127.0.0.1:\{server.addr.port()}/call", "test-capability", {}),
+        post("http://127.0.0.1:\{server.addr.port}/call", "test-capability", {}),
       )
       false
     } catch {
@@ -105,7 +105,7 @@ async test "caller cancellation is not converted to a transport failure" {
         defer conn.close()
         conn.send_response(200, "OK")
         conn.text.write("{")
-        conn.flush()
+        conn.flush_partial_data()
         @async.sleep(60000)
       })
     })
@@ -116,11 +116,7 @@ async test "caller cancellation is not converted to a transport failure" {
     let timed_out = try {
       ignore(
         @async.with_timeout(50, () => {
-          post(
-            "http://127.0.0.1:\{server.addr.port()}/call",
-            "test-capability",
-            {},
-          )
+          post("http://127.0.0.1:\{server.addr.port}/call", "test-capability", {})
         }),
       )
       false
