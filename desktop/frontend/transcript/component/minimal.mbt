@@ -1,6 +1,6 @@
 ///|
-/// A minimal call retains presentation text, image URLs and derived edit
-/// previews, never raw parameters or text output. Categories describe the
+/// A minimal call retains presentation text and image URLs, never edit
+/// previews, raw parameters or text output. Categories describe the
 /// operation, not its success.
 #derive(Eq)
 priv struct MinimalCall {
@@ -9,7 +9,6 @@ priv struct MinimalCall {
   category : String?
   caption : String
   status : ToolStatus
-  changes : EditChanges?
   image_urls : Array[String]
 }
 
@@ -89,11 +88,6 @@ fn MinimalCall::from_tool(
   } else {
     call.name
   }
-  let changes = if call.arguments is Some(arguments) {
-    EditChanges::from_arguments(call.name, arguments)
-  } else {
-    None
-  }
   let image_urls : Array[String] = []
   if call.outcome is Done(content~, ..) {
     for part in content.0 {
@@ -108,7 +102,6 @@ fn MinimalCall::from_tool(
     category,
     caption,
     status,
-    changes,
     image_urls,
   }
 }
@@ -618,12 +611,11 @@ fn MinimalContent::summary(
 
 ///|
 /// Render an operation identically inside a tool group or as the only call of
-/// its group. This preserves statuses and edits when the redundant group
+/// its group. This preserves statuses when the redundant group
 /// disclosure is omitted.
 fn MinimalActivity::render(
   locale~ : @i18n.Locale = English,
   self : MinimalActivity,
-  actions : Actions,
   single~ : Bool = false,
 ) -> @html.Html {
   match self {
@@ -701,17 +693,6 @@ fn MinimalActivity::render(
               ]),
             ]
           },
-          if call.changes is Some(changes) {
-            @html.div(
-              class="minimal-edit-changes",
-              attrs=@html.Attrs::build().aria_label(
-                ui(locale, RequestedChanges),
-              ),
-              changes.render_minimal(locale~, actions),
-            )
-          } else {
-            @html.nothing
-          },
         ],
       )
     }
@@ -724,7 +705,6 @@ fn MinimalActivity::render(
 fn minimal_activity_views(
   locale~ : @i18n.Locale,
   entries : Array[MinimalActivity],
-  actions : Actions,
 ) -> Map[String, @html.Html] {
   let rows : Map[String, @html.Html] = Map([])
   for entry in entries {
@@ -732,7 +712,7 @@ fn minimal_activity_views(
       Call(call) => "call\u{0}\{call.call_id}"
       Notice(identity~, ..) => "notice\u{0}\{identity}"
     }
-    rows[key] = entry.render(locale~, actions)
+    rows[key] = entry.render(locale~)
   }
   rows
 }
@@ -794,9 +774,9 @@ fn MinimalContent::render(
       )
     Activity(entries) => {
       // A single call has nothing to summarize separately. Render its caption
-      // once, including running/failed status and any requested edit preview.
+      // once, including its running status and image previews.
       if entries is [Call(call)] {
-        return MinimalActivity::Call(call).render(locale~, actions, single=true)
+        return MinimalActivity::Call(call).render(locale~, single=true)
       }
       if active {
         return @html.div(
@@ -806,7 +786,7 @@ fn MinimalContent::render(
           // makes Rabbita insert rows in Map::map's reverse traversal order.
           @html.div(
             class="minimal-rows",
-            minimal_activity_views(locale~, entries, actions),
+            minimal_activity_views(locale~, entries),
           ),
         )
       }
@@ -815,7 +795,7 @@ fn MinimalContent::render(
         self.summary_view(locale~),
         @html.div(
           class="minimal-call-list",
-          minimal_activity_views(locale~, entries, actions),
+          minimal_activity_views(locale~, entries),
         ),
       ])
     }

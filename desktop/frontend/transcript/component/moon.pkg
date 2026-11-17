@@ -15,7 +15,6 @@ import {
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
-  "moonbitlang/core/string",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/syntax",
   "moonbitlang/editor/syntax/lang_moonbit",
