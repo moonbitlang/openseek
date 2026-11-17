@@ -80,7 +80,7 @@ async test "submodule checkout stops at its hard timeout" {
   worktree_env_test_lock.acquire()
   defer worktree_env_test_lock.release()
   let root = worktree_test_root("openseek-worktree-sub-timeout-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let dependency = root.join("dependency")
   prepare_git_repo(dependency)
   let repo = root.join("repo")
@@ -124,7 +124,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-submodules-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let required = root.join("required")
@@ -184,7 +184,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   )
   assert_false(@fsx.exists(checkout.join("deps/optional/.git").to_path()))
   // Repair follows the same provisioning rule after an external deletion.
-  @fs.rmdir(checkout.to_string(), recursive=true)
+  @fs.remove(checkout.to_string(), recursive=true)
   ignore(
     create(
       host,

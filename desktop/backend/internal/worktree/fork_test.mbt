@@ -2,7 +2,7 @@
 #cfg(not(platform="windows"))
 async test "fork preserves checkout probe errors without creating a member" {
   let root = @fs.tmpdir(prefix="openseek-fork-probe-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let workspace = @pathx.Path(root).resolve()
   let registry = workspace.join(".openseek/worktrees.json").to_string()
   @fs.mkdir(workspace.join(".openseek").to_string())

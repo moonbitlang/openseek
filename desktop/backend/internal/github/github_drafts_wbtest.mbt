@@ -1,7 +1,7 @@
 ///|
 async test "native comment drafts survive independent reads and remain scoped to their PR" {
   let dir = @fs.tmpdir(prefix="openseek-github-drafts-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let url = "https://github.example/owner/repo/pull/42"
   let other = "https://github.example/owner/repo/pull/43"
   let draft : @protocol.GithubDraft = {
@@ -27,7 +27,7 @@ async test "native comment drafts survive independent reads and remain scoped to
 ///|
 async test "native draft storage reports corruption and I/O failures instead of an empty draft" {
   let dir = @fs.tmpdir(prefix="openseek-github-drafts-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let url = "https://github.example/owner/repo/pull/42"
   let path = github_drafts_path(Some(dir), url)
   @fsx.ensure_dir(path.dirname())

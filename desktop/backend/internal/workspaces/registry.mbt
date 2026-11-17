@@ -446,7 +446,7 @@ async test "workspace identity follows symlinks and survives deletion" {
   let canonical = canonical_path(real_path)
   let linked = canonical_path(link_path)
   let vanished = canonical_path(missing_path)
-  @fs.rmdir(dir, recursive=true) catch {
+  @fs.remove(dir, recursive=true) catch {
     _ => ()
   }
   assert_eq(linked, canonical)

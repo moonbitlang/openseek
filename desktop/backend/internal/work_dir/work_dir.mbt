@@ -323,10 +323,10 @@ async test "real_contains rejects a symlink escaping the boundary" {
   // A path that does not exist is trusted: no link to follow, no file to leak.
   let missing_ok = real_contains(root_path, missing_path)
   let link_escapes = real_contains(root_path, link_path)
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
-  @fs.rmdir(outside, recursive=true) catch {
+  @fs.remove(outside, recursive=true) catch {
     _ => ()
   }
   assert_true(inside_ok)
