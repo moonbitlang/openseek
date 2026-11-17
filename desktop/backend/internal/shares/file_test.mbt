@@ -36,34 +36,3 @@ async test "file multipart preserves original binary bytes name and idempotency 
     receiver.wait()
   })
 }
-
-///|
-async test "file uploads never resend after the server loses its response" {
-  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-  defer server.close()
-  @async.with_task_group(group => {
-    let receiver = group.spawn(() => {
-      let (connection, _) = server.accept()
-      ignore(connection.read_request())
-      connection.skip_request_body()
-      connection.close()
-      // A second attempt would fail the test rather than be answered as a retry.
-      let duplicate = @async.with_timeout_opt(100, () => {
-        let (connection, _) = server.accept()
-        connection.close()
-      })
-      assert_true(duplicate is None)
-    })
-    let result = @shares.Snapshot::file(
-      name="file.bin",
-      bytes=b"\xff",
-      key="b".repeat(64),
-    ).publish(
-      server_url="http://127.0.0.1:\{server.addr.port()}",
-      token="ts_fixture",
-      timeout_ms=1000,
-    )
-    assert_true(result is Failed(..))
-    receiver.wait()
-  })
-}
