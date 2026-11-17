@@ -255,8 +255,8 @@ fn parse_positive_position(raw : StringView) -> @base_common.Position? {
   }
   let parsed = Some(
     (
-      @string.parse_int(line_text, base=10),
-      @string.parse_int(column_text, base=10),
+      @string.parse_int(line_text, radix=10),
+      @string.parse_int(column_text, radix=10),
     ),
   ) catch {
     _ => None
