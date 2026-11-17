@@ -641,6 +641,20 @@ button.composer-worktree:hover {
   color: var(--color-text-muted);
 }
 
+.composer-actions .composer-prediction-accept {
+  min-height: 2.25rem;
+  padding: 0 var(--space-5);
+  font-size: var(--font-size-md);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .composer-actions .composer-prediction-accept {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+
 .composer-followup {
   display: flex;
   min-width: 0;
