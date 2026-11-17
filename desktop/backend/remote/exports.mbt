@@ -38,7 +38,7 @@ pub async fn LocalConsole::bind(
   {
     server,
     account_origin,
-    sign_in: Flow(relay=account_origin, port=server.addr.port()),
+    sign_in: Flow(relay=account_origin, port=server.addr.port.to_int()),
     name,
   }
 }
