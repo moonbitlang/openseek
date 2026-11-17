@@ -9,8 +9,6 @@ import {
 }
 
 // Values
-pub fn title(@i18n.Locale) -> String
-
 pub fn update(@cmd.Emit[Msg], Msg, State, open_external~ : (String) -> @cmd.Cmd) -> (@cmd.Cmd, State)
 
 pub fn view(@cmd.Emit[Msg], State, @i18n.Locale) -> @html.Html
