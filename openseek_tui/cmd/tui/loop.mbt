@@ -69,6 +69,11 @@ async fn drain_stderr_capped(reader : @process.ReadFromProcess) -> String {
       // record the failure so it is surfaced below. `0` ends the loop the
       // same way EOF does.
       error => {
+        let error : Error = if error is TransportError(cause, ..) {
+          cause
+        } else {
+          error
+        }
         read_error = Some("\{error}")
         0
       }
