@@ -90,7 +90,7 @@ async fn download(
   }
   let total_bytes = match response.headers.get("content-length") {
     Some(raw) => {
-      let parsed = @string.parse_int(raw.trim(), base=10) catch { _ => 0 }
+      let parsed = @string.parse_int(raw.trim(), radix=10) catch { _ => 0 }
       if parsed > 0 {
         Some(parsed)
       } else {
@@ -135,7 +135,7 @@ async fn download_response(
   let mut current = url
   for hop in 0..<6 {
     // Content-Length must describe the bytes written to the archive.
-    let (response, client) = @http.get(current, headers={
+    let (response, client) = @http.get_stream(current, headers={
       "Accept-Encoding": "identity",
     }) catch {
       error => raise UpdateError("update download failed: \{error}")
