@@ -7,6 +7,7 @@ struct Pending {
   expires_at : Int64
   mut next_poll : Int64
   mut interval_ms : Int64
+  commit_lock : @async.Mutex
   mut cancelled : Bool
 }
 
@@ -97,6 +98,7 @@ pub async fn begin(config : @config.OAuthConfig) -> Pending {
     device_code,
     verification_uri,
     user_code,
+    commit_lock: Mutex(),
     cancelled: false,
     expires_at: @env.now().reinterpret_as_int64() + expires.to_int64() * 1000,
     next_poll: @async.now() + interval_ms,
@@ -144,7 +146,7 @@ async fn save(
   json : Json,
 ) -> Unit {
   let dir = directory()
-  @fs.mkdir(dir, permission=0o700, recursive=true)
+  @fs.mkdir(dir, permission=0o700, recursive=true, allow_exist=true)
   guard @env.rand(16) is Some(random) else {
     fail("Cannot obtain randomness for credential storage")
   }
@@ -156,6 +158,8 @@ async fn save(
     create_mode=CreateNew,
     permission=0o600,
   )
+  pending.commit_lock.acquire()
+  defer pending.commit_lock.release()
   guard !pending.cancelled else { fail("Authorization cancelled") }
   @fs.rename(temp, "\{dir}/\{key(resource, config)}.json", replace=true)
 }
@@ -179,7 +183,18 @@ pub async fn poll(
     ("client_id", config.client_id),
     ("device_code", pending.device_code),
     ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-  ])
+  ]) catch {
+    @async.TimeoutError => {
+      guard !pending.cancelled else { fail("Authorization cancelled") }
+      let remaining = pending.expires_at - @env.now().reinterpret_as_int64()
+      guard remaining > 0 else { fail("Authorization expired; connect again") }
+      // RFC 8628: a connection timeout backs off instead of ending the grant.
+      pending.interval_ms = (pending.interval_ms * 2).min(remaining)
+      pending.next_poll = @async.now() + pending.interval_ms
+      return Waiting
+    }
+    error => raise error
+  }
   guard !pending.cancelled else { fail("Authorization cancelled") }
   match json {
     { "error": "authorization_pending", .. } => Waiting
@@ -244,8 +259,11 @@ pub async fn disconnect(
 }
 
 ///|
-/// Fence an in-flight token response before it can be saved.
-pub fn Pending::cancel(self : Pending) -> Unit {
+/// Fence an in-flight token response, or await a credential commit that already
+/// acquired the lock. Once this returns, this attempt cannot publish later.
+pub async fn Pending::cancel(self : Pending) -> Unit {
+  self.commit_lock.acquire()
+  defer self.commit_lock.release()
   self.cancelled = true
 }
 

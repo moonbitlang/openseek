@@ -41,6 +41,21 @@ async test "settings discovers bundled skills user overrides and reports malform
   assert_eq(row.auth, "oauth")
   assert_false(row.connected)
   assert_eq(row.error, None)
+  let configs = @config.decode(
+    @json.parse(@fs.read_text("\{dir}/user/github/mcp.json")),
+  )
+  guard configs is [Http(url~, oauth=Some(oauth), ..)] else {
+    fail("missing fixture OAuth")
+  }
+  @fs.mkdir("\{dir}/tokens")
+  @fs.write_text("\{dir}/tokens/\{@oauth.key(url, oauth)}.json", "malformed")
+  let broken = service.list()
+  assert_eq(broken.connectors[0].auth, "oauth")
+  assert_true(broken.connectors[0].error is Some(_))
+  let removed = service.action("disconnect", { id: row.id, attempt: None, })
+  assert_eq(removed.error, None)
+  assert_eq(removed.connectors[0].error, None)
+  assert_false(removed.connectors[0].connected)
   let stale = service.action("poll", { id: row.id, attempt: Some("stale"), })
   assert_true(stale.error is Some(_))
   // Cancel remains idempotent even after a skill has been removed.
@@ -51,6 +66,13 @@ async test "settings discovers bundled skills user overrides and reports malform
   })
   assert_eq(cancelled.error, None)
   assert_eq(cancelled.connectors.length(), 0)
+  @fs.write_text(
+    "\{dir}/user/github/mcp.json",
+    "{\"mcpServers\":{\"github\":{\"url\":\"https://example.com/mcp\",\"oauth\":{}}}}",
+  )
+  let invalid_config = service.list()
+  assert_eq(invalid_config.connectors[0].auth, "invalid")
+  assert_true(invalid_config.connectors[0].error is Some(_))
   @fs.write_text("\{dir}/user/github/mcp.json", "malformed")
   let invalid = service.list()
   assert_eq(invalid.error, None)

@@ -79,7 +79,7 @@ pub struct ServerEntry {
 /// script first reaches it.
 struct Server {
   config : @config.McpServer
-  mut credential : String?
+  mut credential : Result[String?, String]
   mut connecting : @async.Task[ServerEntry]?
   connect : () -> @async.Task[ServerEntry]
 }
@@ -110,7 +110,7 @@ pub fn Server::new(
 ) -> Server {
   {
     config,
-    credential: None,
+    credential: Ok(None),
     connecting: None,
     connect: () => {
       let task = scope
@@ -591,7 +591,13 @@ fn cap_chars(text : String, limit : Int32) -> (String, Bool) {
 /// A login/logout changes the credential without requiring an engine restart.
 async fn Server::check_credential(self : Server) -> Unit {
   guard self.config is Http(url~, oauth=Some(oauth), ..) else { return }
-  let credential = @oauth.token(url, oauth)
+  // Keep read failures in the server's connection path, which reports Failed.
+  // Retain the error state so recovery also invalidates a cached failure.
+  let credential = try @oauth.token(url, oauth) catch {
+    error => Err("\{error}")
+  } noraise {
+    token => Ok(token)
+  }
   if credential != self.credential {
     if self.try_wait() is Some({ connection: Live(client), .. }) {
       client.close()

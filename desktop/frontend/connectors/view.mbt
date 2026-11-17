@@ -37,7 +37,7 @@ pub fn view(
   if state.operation is Loading {
     rows.push(@ui.form_row(text(locale, "Loading…", "加载中…"), []))
   }
-  if state.rows.is_empty() && !busy {
+  if state.is_empty() {
     rows.push(
       @ui.form_row(
         text(
@@ -51,36 +51,39 @@ pub fn view(
     let controls : Array[@html.Html] = []
     if row.error is Some(error) {
       controls.push(@html.span(class="form-row-status danger", error))
-    } else if row.auth == "oauth" {
-      controls.push(
-        @html.span(
-          class=if row.connected {
-            "form-row-status success"
-          } else {
-            "form-row-status"
-          },
-          if row.connected {
-            text(
-              locale, "Authorized on this computer", "已在这台电脑上授权",
-            )
-          } else {
-            text(locale, "Not authorized", "未授权")
-          },
-        ),
-      )
+    }
+    if row.auth == "oauth" {
+      if row.error is None {
+        controls.push(
+          @html.span(
+            class=if row.connected {
+              "form-row-status success"
+            } else {
+              "form-row-status"
+            },
+            if row.connected {
+              text(
+                locale, "Authorized on this computer", "已在这台电脑上授权",
+              )
+            } else {
+              text(locale, "Not authorized", "未授权")
+            },
+          ),
+        )
+      }
       controls.push(
         @html.button(
           class="button",
           disabled=busy,
           on_click=emit(Connect(row.id)),
-          if row.connected {
+          if row.connected || row.error is Some(_) {
             text(locale, "Reconnect", "重新授权")
           } else {
             text(locale, "Connect", "连接")
           },
         ),
       )
-      if row.connected {
+      if row.connected || row.error is Some(_) {
         controls.push(
           @html.button(
             class="button secondary",
@@ -90,7 +93,7 @@ pub fn view(
           ),
         )
       }
-    } else {
+    } else if row.error is None {
       controls.push(
         @html.span(
           class="form-row-status",

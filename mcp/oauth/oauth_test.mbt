@@ -1,4 +1,7 @@
 ///|
+let credential_env_lock : @async.Mutex = Mutex()
+
+///|
 fn config(endpoint : String) -> @config.OAuthConfig {
   {
     client_id: "test app&client",
@@ -28,6 +31,8 @@ test "credential identities separate resources clients endpoints and scopes" {
 
 ///|
 async test "device flow waits persists scoped credentials expires and disconnects" {
+  credential_env_lock.acquire()
+  defer credential_env_lock.release()
   let original = @env.get_env_var("OPENSEEK_OAUTH_DIR")
   guard @env.rand(16) is Some(random) else { fail("randomness unavailable") }
   let dir = "/tmp/openseek-oauth-test-" + @crypto.bytes_to_hex_string(random)
@@ -105,6 +110,9 @@ async test "device flow waits persists scoped credentials expires and disconnect
     @async.sleep(1050)
     assert_true(@oauth.poll(pending, resource, c) is Authorized)
     assert_eq(@oauth.token(resource, c), Some("test-token"))
+    // A completed commit wins over a late cancel; cancel is not disconnect.
+    pending.cancel()
+    assert_eq(@oauth.token(resource, c), Some("test-token"))
     assert_eq(@oauth.token("https://other.com/mcp", c), None)
     @async.sleep(1050)
     assert_eq(@oauth.token(resource, c), None)
@@ -133,14 +141,72 @@ async test "device flow waits persists scoped credentials expires and disconnect
     })
     requested.get()
     cancelled.cancel()
+    let credential_after_cancel = @oauth.token(resource, c)
     respond.put(())
     task.wait()
-    assert_eq(@oauth.token(resource, c), None)
+    assert_eq(@oauth.token(resource, c), credential_after_cancel)
+    assert_eq(credential_after_cancel, None)
     let slow = @oauth.begin(c)
     @async.sleep(1050)
     assert_true(@oauth.poll(slow, resource, c) is Waiting)
     @async.sleep(1050)
     assert_true(@oauth.poll(slow, resource, c) is Waiting)
     assert_eq(bodies.length(), 8)
+  }
+}
+
+///|
+async test "a timed out token request preserves authorization and retries after backoff" {
+  credential_env_lock.acquire()
+  defer credential_env_lock.release()
+  // The credential directory already exists, as on reconnect.
+  let dir = @fs.tmpdir(prefix="oauth-timeout-")
+  defer @fs.rmdir(dir, recursive=true)
+  let old = @env.get_env_var("OPENSEEK_OAUTH_DIR")
+  @env.set_env_var("OPENSEEK_OAUTH_DIR", dir)
+  defer (if old is Some(value) {
+    @env.set_env_var("OPENSEEK_OAUTH_DIR", value)
+  } else {
+    @env.unset_env_var("OPENSEEK_OAUTH_DIR")
+  })
+  @async.with_task_group() <| group => {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+    let requests : Array[String] = []
+    group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
+      server.run_forever((_request, conn) => {
+        requests.push(conn.text.read_all())
+        if requests.length() == 2 {
+          @async.sleep(60000)
+          return
+        }
+        let reply : Json = if requests.length() == 1 {
+          {
+            "device_code": "device",
+            "user_code": "USER",
+            "verification_uri": "https://example.com/device",
+            "interval": 1,
+            "expires_in": 120,
+          }
+        } else {
+          { "access_token": "recovered", "token_type": "bearer" }
+        }
+        conn.send_response(200, "OK", extra_headers={
+          "Content-Type": "application/json",
+        })
+        conn.write_string(reply.stringify())
+      })
+    }
+    let c = config("http://127.0.0.1:\{server.addr.port()}/oauth")
+    let pending = @oauth.begin(c)
+    @async.sleep(1050)
+    assert_true(@oauth.poll(pending, "https://example.com/mcp", c) is Waiting)
+    assert_eq(requests.length(), 2)
+    assert_true(@oauth.poll(pending, "https://example.com/mcp", c) is Waiting)
+    assert_eq(requests.length(), 2)
+    @async.sleep(2100)
+    assert_true(
+      @oauth.poll(pending, "https://example.com/mcp", c) is Authorized,
+    )
+    assert_eq(@oauth.token("https://example.com/mcp", c), Some("recovered"))
   }
 }

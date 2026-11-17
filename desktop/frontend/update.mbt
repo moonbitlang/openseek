@@ -4878,6 +4878,7 @@ fn update_msg(
         dispatch.map(msg => Connectors(msg)),
         @connectors.Refresh,
         model.connectors,
+        open_external=url => open_external_link(dispatch, url),
       )
       (
         cmd,
@@ -4895,6 +4896,7 @@ fn update_msg(
         dispatch.map(msg => Connectors(msg)),
         msg,
         model.connectors,
+        open_external=url => open_external_link(dispatch, url),
       )
       (cmd, { ..model, connectors, })
     }

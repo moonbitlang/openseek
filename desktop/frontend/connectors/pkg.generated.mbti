@@ -11,7 +11,7 @@ import {
 // Values
 pub fn title(@i18n.Locale) -> String
 
-pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
+pub fn update(@cmd.Emit[Msg], Msg, State, open_external~ : (String) -> @cmd.Cmd) -> (@cmd.Cmd, State)
 
 pub fn view(@cmd.Emit[Msg], State, @i18n.Locale) -> @html.Html
 
@@ -31,6 +31,7 @@ pub(all) enum Msg {
 type State
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::is_empty(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 
 // Type aliases

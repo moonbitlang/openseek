@@ -93,7 +93,7 @@ async fn Service::entries(self : Service) -> Array[Entry] {
       ) catch {
         error => {
           result.push({
-            info: { ..info, error: Some("\{error}"), },
+            info: { ..info, auth: "invalid", error: Some("\{error}"), },
             resource: "",
             oauth: None,
           })
@@ -170,7 +170,12 @@ pub async fn Service::action(
     if self.attempts.get(request.id) is Some(attempt) &&
       request.attempt == Some(attempt.id) {
       attempt.pending.cancel()
-      self.attempts.remove(request.id)
+      // A commit may have yielded while cancellation waited for it. Do not
+      // remove a newer attempt that another client started in the meantime.
+      if self.attempts.get(request.id) is Some(current) &&
+        current.id == attempt.id {
+        self.attempts.remove(request.id)
+      }
     }
     return self.list()
   }

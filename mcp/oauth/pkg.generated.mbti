@@ -21,7 +21,7 @@ pub async fn token(String, @config.OAuthConfig) -> String?
 // Types and methods
 type Pending
 pub fn Pending::authorization_url(Self) -> String
-pub fn Pending::cancel(Self) -> Unit
+pub async fn Pending::cancel(Self) -> Unit
 pub fn Pending::user_code(Self) -> String
 
 pub enum PollResult {
