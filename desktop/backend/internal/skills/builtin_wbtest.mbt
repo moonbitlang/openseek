@@ -12,7 +12,7 @@ async test "startup installs and updates skills while preserving disablement and
       return
     }
     let lib = @fs.tmpdir(prefix="builtin-skills-")
-    defer @fs.rmdir(lib, recursive=true)
+    defer @fs.remove(lib, recursive=true)
     let builtins = { entries: [widget_identity()], errors: [], }
     let mut commits = 0
     builtins.sync(registry=v1, library_dir=lib, () => commits += 1)
@@ -42,7 +42,7 @@ async test "one missing catalog entry leaves other built-ins installable" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="builtin-skills-partial-")
-    defer @fs.rmdir(lib, recursive=true)
+    defer @fs.remove(lib, recursive=true)
     let builtins = {
       entries: [
         { module_name: "acme/missing", package_path: "cli", },
@@ -78,7 +78,7 @@ async test "automatic commit skips an installation completed during download" {
         return
       }
       let lib = @fs.tmpdir(prefix="builtin-skills-race-")
-      defer @fs.rmdir(lib, recursive=true)
+      defer @fs.remove(lib, recursive=true)
       if updating {
         ignore(
           install_skill(
@@ -127,7 +127,7 @@ async test "standalone built-ins upgrade legacy entries in place and retain disa
     }
     for enabled in [true, false] {
       let lib = @fs.tmpdir(prefix="builtin-migration-")
-      defer @fs.rmdir(lib, recursive=true)
+      defer @fs.remove(lib, recursive=true)
       let directory = if enabled { lib } else { "\{lib}/.disabled" }
       for
         (id, module_name, package_path) in [
@@ -195,7 +195,7 @@ async test "a new standalone skill is not mistaken for a legacy built-in with th
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="builtin-identity-")
-    defer @fs.rmdir(lib, recursive=true)
+    defer @fs.remove(lib, recursive=true)
     let custom = install_skill(
       module_name="moonbitlang/office",
       version="1.0.0",

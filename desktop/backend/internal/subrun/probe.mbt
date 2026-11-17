@@ -106,9 +106,9 @@ async fn SubrunProbeState::poll(self : SubrunProbeState) -> Bool {
   }
   let want = size - self.offset
   let take = @cmp.minimum(want, subrun_probe_max_chunk)
-  let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
-    _ => return false
-  }
+  let chunk = file.at(self.offset).read_exactly(take.to_int()) catch {
+      _ => return false
+    }
   self.offset += take
   self.anchor = anchor_of(chunk)
   let pending = self.carry + chunk

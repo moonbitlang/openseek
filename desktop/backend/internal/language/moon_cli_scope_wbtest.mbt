@@ -1,7 +1,7 @@
 ///|
 async test "standalone script checks do not require or inherit a module" {
   let dir = @fs.tmpdir(prefix="openseek-script-scope-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(dir).resolve()
   let scripts = root.join("scripts")
   @fs.mkdir(scripts.to_string())

@@ -125,7 +125,7 @@ async fn fetch_archive(
 ) -> (@zip.Archive, String) {
   try {
     let temporary = @fs.tmpdir(prefix="openseek-skill-download-")
-    defer @fs.rmdir(temporary, recursive=true)
+    defer @fs.remove(temporary, recursive=true)
     let download = @registry.Client(registry~).download(
       entry,
       output="\{temporary}/skill.zip",
