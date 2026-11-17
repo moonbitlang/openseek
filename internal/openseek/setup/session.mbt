@@ -69,7 +69,7 @@ pub async fn generated_session_id() -> @agent_session.SessionId {
 pub async fn random_salt() -> String {
   let prefix = "openseek-salt-"
   let dir = @fs.tmpdir(prefix~) catch { _ => return "" }
-  @fs.rmdir(dir) catch {
+  @fs.remove(dir) catch {
     _ => ()
   }
   // Locate the prefix instead of splitting on a path separator: Windows

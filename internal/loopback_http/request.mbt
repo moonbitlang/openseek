@@ -137,7 +137,7 @@ pub async fn RequestReader::body(
         guard !line.is_empty() && line.all(c => c.is_ascii_hexdigit()) else {
           fail("Invalid chunk size")
         }
-        let size = @string.parse_int(line, base=16) catch {
+        let size = @string.parse_int(line, radix=16) catch {
           _ => raise RequestTooLarge("Request exceeds 64 KiB")
         }
         guard size >= 0 && size <= MaxBodyBytes - bytes.length() else {
