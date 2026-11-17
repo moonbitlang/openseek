@@ -84,7 +84,7 @@ fn configured_api_key(
 fn ApiProvider::default_model(self : ApiProvider) -> String {
   match self {
     Glm => "glm-5.3"
-    Deepseek | Custom => DefaultModel
+    Deepseek | OpenRouter | Custom => DefaultModel
   }
 }
 
@@ -131,7 +131,7 @@ fn key_env_for(
       }
       "GLM"
     }
-    Custom => model_key
+    OpenRouter | Custom => model_key
   }
 }
 
@@ -451,10 +451,9 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   // The BYOK configuration: the official provider with its key.
   let _ = update_settings(manager, {
     provider: Some("deepseek"),
-    custom_api_url: None,
-    deepseek_api_key: Some("sk-official"),
-    glm_api_key: None,
-    custom_api_key: None,
+    providers: Some({
+      "deepseek": { api_url: None, api_key: Some("sk-official"), },
+    }),
   })
   let config = run_config(manager, {
     system_prompt: None,

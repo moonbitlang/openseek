@@ -99,6 +99,7 @@ pub(all) enum Message {
   GlmOfficial
   CustomUrl
   EndpointUrl
+  EndpointUrlDescription
   DeepseekApiKey
   GlmApiKey
   OpenRouterApiKey

@@ -740,7 +740,7 @@ test('a failed first conversation load keeps selection and can retry', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('settings persist host API changes through settings.set', async ({ page }) => {
+for (const commitKey of ['Enter', 'Tab']) test(`settings persist host API changes through settings.set (${commitKey})`, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -757,19 +757,37 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   await page.getByRole('textbox', { name: 'Endpoint URL' }).fill(
     'https://example.test/chat/completions',
   );
+  await page.getByRole('textbox', { name: 'Endpoint URL' }).press(commitKey);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.custom_api_url === 'https://example.test/chat/completions'))
+    request.params?.providers?.custom?.api_url === 'https://example.test/chat/completions'))
     .toBe(true);
   await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
     'https://example.test/chat/completions',
   );
+  const keyInput = page.getByLabel('API key', { exact: true });
+  await expect(keyInput).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
+  for (const provider of ['DeepSeek official (your API key)', 'Z.AI GLM (your API key)', 'OpenRouter', 'Custom URL']) {
+    await page.getByRole('button', { name: 'API endpoint' }).click();
+    await page.getByRole('option', { name: provider, exact: true }).click();
+    await expect(keyInput).toHaveValue('');
+    if (provider === 'Custom URL') {
+      await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
+        'https://example.test/chat/completions',
+      );
+    } else {
+      await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toBeHidden();
+    }
+  }
+  expect(app.requests.some(request => request.method === 'settings.set' &&
+    Object.values(request.params?.providers || {}).some(config => config.api_key !== undefined))).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
 
 test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.hostSettings.has_deepseek_key = false;
+  app.hostSettings.providers.deepseek.has_api_key = false;
   await app.install();
   await app.goto();
 
@@ -781,14 +799,12 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
 
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.provider === 'custom' &&
-    request.params?.custom_api_url === 'https://openrouter.ai/api/v1/chat/completions')).toBe(true);
+    request.params?.provider === 'openrouter')).toBe(true);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'settings.set' &&
-    request.params?.provider === 'custom' &&
-    request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
+    request.params?.providers?.openrouter?.api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
-  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
+  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.providers?.deepseek?.api_key !== undefined)).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
 

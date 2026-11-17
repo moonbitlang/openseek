@@ -304,20 +304,17 @@ fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
 }
 
 ///|
-const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
-
-///|
 /// Which chat-completions endpoint the engine talks to. SeekMoon runs are
 /// bring-your-own-key only: the hosted proxy is retired. `Deepseek` is the
-/// official endpoint and needs the user's own key; `OpenRouter` is a preset
-/// over the existing custom endpoint; `Custom` accepts any other
+/// official endpoint and needs the user's own key; `OpenRouter` uses its
+/// fixed endpoint and independent credentials; `Custom` accepts any other
 /// OpenAI-compatible endpoint, whose key is optional. The retired hosted
 /// names (`openseek` / `openseek-staging`) parse as `Deepseek` so old
 /// stores and old clients land on the BYOK default instead of wedging.
 /// The setting (and its credentials) live on the host; this mirror is what
 /// `settings.get`/`set` replies and the `settings.changed` broadcast last
 /// reported.
-#derive(Eq)
+#derive(Eq, Compare)
 priv enum ApiProvider {
   Deepseek
   Glm
@@ -1612,19 +1609,22 @@ priv struct ProjectAdoption {
 }
 
 ///|
+/// Frontend-owned configuration for one provider, without credential material.
+#derive(Eq)
+priv struct ProviderConfig {
+  api_url : String?
+  has_api_key : Bool
+}
+
+///|
 /// A host's engine endpoint settings, with key material reduced to presence:
 /// the key text never reaches a client — the Settings page only needs
 /// presence (placeholder wording, the ready gate).
 #derive(Eq)
 priv struct HostEndpoint {
-  // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`.
   provider : ApiProvider
-  custom_api_url : String
+  providers : @sorted_map.SortedMap[ApiProvider, ProviderConfig]
   followup_behavior : FollowupBehavior
-  deepseek_key_saved : Bool
-  glm_key_saved : Bool
-  custom_key_saved : Bool
 }
 
 ///|
@@ -3367,7 +3367,8 @@ fn Model::api_ready(self : Model) -> Bool {
   guard self.host_settings() is Some({ endpoint, .. }) else { return false }
   match endpoint.provider {
     Deepseek | Glm | OpenRouter => endpoint.key_saved()
-    Custom => plausible_endpoint_url(endpoint.custom_api_url)
+    Custom =>
+      plausible_endpoint_url(endpoint.config(Custom).api_url.unwrap_or(""))
   }
 }
 

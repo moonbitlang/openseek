@@ -11,7 +11,7 @@ async fn main {
   guard settings
     is {
       "provider": String("deepseek"),
-      "deepseek_api_key": String(api_key),
+      "providers": { "deepseek": { "api_key": String(api_key), .. }, .. },
       ..
     } &&
     !api_key.trim().is_empty() else {

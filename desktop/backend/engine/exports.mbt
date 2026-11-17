@@ -41,24 +41,24 @@ pub async fn ssh_model_credentials(
   let settings = manager.settings_snapshot()
   let (name, key) = match settings.provider {
     Deepseek => {
-      let key = match settings.deepseek_api_key {
+      let key = match settings.provider_config(Deepseek).api_key {
         Some(_) as key => key
         None => @env.get("DEEPSEEK")
       }
       ("DEEPSEEK", key)
     }
     Glm => {
-      let key = match settings.glm_api_key {
+      let key = match settings.provider_config(Glm).api_key {
         Some(_) as key => key
         None => @env.get("GLM")
       }
       ("GLM", key)
     }
-    Custom => {
+    OpenRouter | Custom as provider => {
       let model = @env.get("OPENSEEK_MODEL").unwrap_or(
         settings.provider.default_model(),
       )
-      (model_key_env(model), settings.custom_api_key)
+      (model_key_env(model), settings.provider_config(provider).api_key)
     }
   }
   let values : Map[String, String] = Map([])

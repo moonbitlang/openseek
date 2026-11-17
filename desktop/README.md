@@ -388,19 +388,39 @@ billed to that account. The default, **DeepSeek official**, sends requests
 to `api.deepseek.com` with your own key; the engine also falls back to the
 `DEEPSEEK` environment variable when no key is stored. **Z.AI GLM** sends
 requests to `api.z.ai` with its own key (env fallback `GLM`) and offers the
-GLM 5.3 models on the composer's model chip. **OpenRouter** configures its
-canonical chat-completions endpoint through the existing custom backend; its
+GLM 5.3 models on the composer's model chip. **OpenRouter** uses its
+canonical chat-completions endpoint and independent credentials; its
 setup form only asks for an API key. Choose Flash or Pro in the composer, just
 as with DeepSeek official. The shared request encoder maps each tier to its
 OpenRouter id (`deepseek/deepseek-v4.1-flash`, `deepseek/deepseek-v4-pro`) and
 translates the reasoning fields; Desktop keeps the same model preference for
 both endpoints. **Custom URL**
-accepts any other OpenAI-compatible chat-completions endpoint, with the key
+accepts an OpenAI-compatible base URL or full chat-completions endpoint, with the key
 optional — whether one is needed is the endpoint's business. The provider
 choice, the custom URL, and the keys live in the host's settings store
 (`engine-settings.json` in the runtime dir), shared by the desktop window
 and every remote page; a key is never echoed back to a client, only its
-presence. While no usable endpoint is configured, an API-setup modal opens
+presence. The current selection remains in `provider`; each provider's
+configuration is stored independently under `providers[name]`. Switching
+providers preserves every other provider's URL and key. Version 3 migrates
+older flat settings on read and writes the new structure on the next save;
+an old OpenRouter preset becomes an independent OpenRouter entry.
+
+The settings protocol uses the same `providers` map. A `settings.set` request
+merges only the named entries and supplied fields: omitted or null fields
+remain unchanged, while an empty string clears a URL or key. For example,
+`{"providers":{"custom":{"api_url":"https://host/v1"}}}` edits Custom
+without changing the selected `provider`. Replies and broadcasts return
+`providers[name]` with `api_url` and `has_api_key`; credentials are never
+returned. `has_api_key` includes the official provider's environment fallback.
+
+Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
+ending in `/v<number>` (with an optional trailing slash) receive
+`/chat/completions`; other paths remain complete endpoints. Query parameters
+are preserved, fragments are rejected, and invalid URLs fail at save time.
+Existing base URLs are also normalized when resolving a run's endpoint.
+
+While no usable endpoint is configured, an API-setup modal opens
 over the chat (the Settings page's API section lifted out of the page) and
 the composer keeps Send disabled, with a notice saying why. The host passes
 a custom endpoint to the engine as `OPENSEEK_API_URL`, substituting a
