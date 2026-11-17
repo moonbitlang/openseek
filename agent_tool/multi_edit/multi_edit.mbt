@@ -105,7 +105,7 @@ pub fn definition(
           "type": "boolean",
           "description": (
             #|Syntax gate, on by default. Before the batch is written, each edited
-            #|syntax-checkable file's (.mbt, .mbt.md, moon.mod, moon.pkg) rendered result
+            #|syntax-checkable file's (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg) rendered result
             #|is parsed standalone (moonc syncheck); if any file would gain new lex/parse
             #|errors — measured against its pre-batch content parsed the same way, so
             #|pre-existing parse errors are ignored — the WHOLE batch is rejected with no

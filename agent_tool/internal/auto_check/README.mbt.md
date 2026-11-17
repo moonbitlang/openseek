@@ -20,8 +20,8 @@ Standalone `.mbtx` files are checked with `moon check --target wasm` after
 write/edit operations, even outside a MoonBit project. The check resolves the
 script's inline imports and reports type errors without running its entry point.
 Batches check every distinct script as well as each affected project; scripts
-share the existing diagnostic guards. The pre-write parse gate remains limited
-to project source and manifests.
+share the existing diagnostic guards. Before writing a script, the parse gate
+uses `moonc syncheck -mbtx-frontmatter true` to check its syntax.
 
 ## Everything here fails open
 
@@ -97,9 +97,10 @@ on the struct rather than folded into the lists.
 ### `gate_paths` — which input kinds to check
 
 `syncheck` recognizes its input by *name*: `.mbt`, `.mbt.md` (where it parses
-only ` ```mbt check ` fences), and an exact `moon.mod` or `moon.pkg`. `gate_paths`
-returns the distinct kinds named by a path and its resolved symlink target, as
-representative paths to hand to `content_parse_errors`.
+only ` ```mbt check ` fences), `.mbtx` (with frontmatter enabled), and an exact
+`moon.mod` or `moon.pkg`. `gate_paths` returns representatives of the distinct
+input kinds named by a path and its resolved symlink target for
+`content_parse_errors`.
 
 Usually that is one entry. It is two only when a symlink **crosses kinds**:
 

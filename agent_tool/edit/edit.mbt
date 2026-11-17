@@ -23,7 +23,7 @@
 ///   loop (deprecated alias + fix what `moon check` flags) remains the better
 ///   tool — seeing a code-heavy match list is the cue to switch to it.
 /// - `revert_on_parse_errors` (boolean, optional, default true): before an
-///   edit to a syncheck input (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`) is
+///   edit to a syncheck input (`.mbt`, `.mbt.md`, `.mbtx`, `moon.mod`, `moon.pkg`) is
 ///   written, the edited result is parsed standalone (`moonc syncheck`); an
 ///   edit that would introduce new lex/parse errors is rejected and the file is
 ///   left untouched. Pre-existing parse errors never trigger the gate; in
@@ -74,7 +74,7 @@ pub fn definition(
       #|top-level order does not matter, so add new functions, tests, or types by
       #|appending at end of file — an append cannot mismatch an anchor; reserve mid-file
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
-      #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
+      #|into a syntax-checkable file (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
       #|Both diagnostic guards default off. When either is enabled, moon check runs
       #|before and after writing. Otherwise only the post-write check runs, reporting
@@ -109,7 +109,7 @@ pub fn definition(
           "type": "boolean",
           "description": (
             #|Syntax gate, on by default. Before the edit is written to a syntax-checkable
-            #|file (.mbt, .mbt.md, moon.mod, moon.pkg), the edited result is parsed
+            #|file (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg), the edited result is parsed
             #|standalone (moonc syncheck); an edit that would INTRODUCE new lex/parse
             #|errors — measured against the pre-edit content parsed the same way, so
             #|pre-existing parse errors are ignored — is REJECTED, the file is left
@@ -1381,8 +1381,8 @@ const SmallerEditsHintThreshold : Int32 = 3
 /// false-fire constantly; the blind spot (an edit that fixes one parse error
 /// while introducing another, keeping the count flat) is accepted. The gate
 /// applies to every syncheck input — `.mbt`, `.mbt.md` (checked fenced blocks
-/// only), `moon.mod`, `moon.pkg` — under each kind the file could be classified
-/// as (a cross-kind symlink is checked under both). Fail-open: when the gate
+/// only), `.mbtx`, `moon.mod`, `moon.pkg` — under each kind the file could be
+/// classified as (a cross-kind symlink is checked under both). Fail-open: when the gate
 /// cannot run, the edit proceeds as before the gate existed.
 async fn parse_gate_rejection(
   path : String,

@@ -9,9 +9,9 @@
 /// `syncheck` recognizes its input kind by name (see `gate_scratch_name`):
 /// `.mbt` source; `.mbt.md` doc files, where it parses only the ` ```mbt check `
 /// and ` ```moonbit check ` fenced blocks and skips plain and `nocheck` fences,
-/// matching moon's own extraction; and the textual `moon.mod` / `moon.pkg`
-/// config files. `moon.work` and the legacy `*.json` config files are not
-/// `syncheck` inputs, so they are not gated.
+/// matching moon's own extraction; `.mbtx` scripts with frontmatter enabled;
+/// and the textual `moon.mod` / `moon.pkg` config files. `moon.work` and
+/// legacy `*.json` config files do not go through the gate.
 ///
 /// How many lex/parse errors a reject report surfaces. Each entry carries a
 /// source excerpt, and parse errors cascade — a handful shows the shape of the
@@ -46,10 +46,9 @@ const MooncParseMaxOutputChars : Int32 = 200000
 ///|
 /// The scratch-file basename `moonc syncheck` needs for `path`'s input kind, or
 /// `None` when `path` is not a syncheck input (so the gate does not apply).
-/// syncheck keys off the name: `.mbt` / `.mbt.md` match by suffix, while
-/// `moon.mod` / `moon.pkg` must be that EXACT basename (a `foo.moon.pkg` or a
-/// `moon.pkg.json` is not recognized). The manifest classifiers are shared with
-/// the write/edit tools, so they normalize Windows separators the same way. The
+/// Source and script inputs match by suffix. `moon.mod` / `moon.pkg` must be
+/// an exact basename. The manifest classifiers use the same Windows separator
+/// normalization as the write/edit tools. The
 /// command always runs from the scratch directory against this bare name, so the
 /// command line never embeds a host path that would need platform-specific
 /// quoting.
@@ -58,6 +57,8 @@ fn gate_scratch_name(path : String) -> String? {
     Some("parse_gate.mbt.md")
   } else if path.has_suffix(".mbt") {
     Some("parse_gate.mbt")
+  } else if path.has_suffix(".mbtx") {
+    Some("parse_gate.mbtx")
   } else if @manifest_path.is_moon_mod_path(path) {
     Some("moon.mod")
   } else if @manifest_path.is_moon_pkg_path(path) {
@@ -128,6 +129,11 @@ pub async fn content_parse_errors(
   content : String,
 ) -> ParseGate? {
   guard gate_scratch_name(path) is Some(scratch_name) else { return None }
+  let frontmatter_args = if scratch_name.has_suffix(".mbtx") {
+    ["-mbtx-frontmatter", "true"]
+  } else {
+    []
+  }
   let dir = @fs.tmpdir(prefix="openseek-parse-gate-") catch { _ => return None }
   // Best-effort cleanup on every path; a leaked scratch dir must never turn
   // into a raised error that masks the gate's answer.
@@ -141,7 +147,7 @@ pub async fn content_parse_errors(
     let result = @async.with_timeout_opt(MooncParseTimeoutMs, () => {
       collect_process_output(
         "moonc",
-        ["syncheck", "-error-format", "json", scratch_name],
+        ["syncheck", "-error-format", "json", ..frontmatter_args, scratch_name],
         cwd=dir,
         max_output_chars=MooncParseMaxOutputChars,
       )
@@ -375,8 +381,8 @@ test "format_parse_gate_errors caps at the display limit and handles bad locs" {
 
 ///|
 /// `gate_scratch_name` accepts exactly the input kinds `moonc syncheck` accepts:
-/// `.mbt`, `.mbt.md`, and an exact `moon.mod` / `moon.pkg` basename. Nested
-/// config files count; prefixed names (`x.moon.pkg`) and the legacy JSON /
+/// `.mbt`, `.mbt.md`, `.mbtx`, and an exact `moon.mod` / `moon.pkg` basename.
+/// Nested config files count; prefixed names (`x.moon.pkg`) and the legacy JSON /
 /// `moon.work` files do not.
 test "gate_scratch_name covers syncheck input kinds only" {
   assert_true(gate_scratch_name("lib/a.mbt") is Some(_))
