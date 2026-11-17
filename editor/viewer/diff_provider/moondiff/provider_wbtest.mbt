@@ -7,12 +7,32 @@ fn changed_line(
 ) -> @mbtdiff.DiffLine {
   {
     index,
+    intraline: Computed,
     segments: [
       { kind: Unchanged, text: prefix, },
       { kind: Changed, text: changed, },
       { kind: Unchanged, text: suffix, },
     ],
   }
+}
+
+///|
+test "uncomputed intraline results retain line-level changes" {
+  let plain : @mbtdiff.DiffLine = {
+    index: 0,
+    segments: [{ kind: Unchanged, text: "", }],
+    intraline: NotComputed,
+  }
+  let computed = { ..plain, intraline: Computed, }
+  assert_true(paired_change(plain, computed).inner_changes is None)
+  assert_true(paired_change(computed, plain).inner_changes is None)
+  assert_true(old_only_change(plain, 0, [""]).inner_changes is None)
+  assert_true(new_only_change(plain, 0, [""]).inner_changes is None)
+  assert_true(paired_change(computed, computed).inner_changes is Some([]))
+  let changed = { ..plain, segments: [{ kind: Changed, text: "x", }], }
+  assert_true(old_only_change(changed, 0, [""]).inner_changes is Some([_]))
+  assert_true(new_only_change(changed, 0, [""]).inner_changes is Some([_]))
+  assert_true(paired_change(changed, computed).inner_changes is Some([_]))
 }
 
 ///|
@@ -78,10 +98,12 @@ test "fragment adapter preserves one-sided intraline mappings" {
 test "ignored fragment rows do not become visible changes" {
   let old : @mbtdiff.DiffLine = {
     index: 0,
+    intraline: Computed,
     segments: [{ kind: Changed, text: "// old", }],
   }
   let new : @mbtdiff.DiffLine = {
     index: 0,
+    intraline: Computed,
     segments: [{ kind: Changed, text: "// new", }],
   }
   let document : @mbtdiff.HunkDocument = {
@@ -121,7 +143,11 @@ test "fragment provider returns its prevalidated document unchanged" {
 ///|
 test "fragment adapter groups same-kind rows while retaining visibility boundaries" {
   let line = fn(index, text) {
-    @mbtdiff.DiffLine::{ index, segments: [{ kind: Ignored, text, }], }
+    @mbtdiff.DiffLine::{
+      index,
+      intraline: Computed,
+      segments: [{ kind: Ignored, text, }],
+    }
   }
   let document : @mbtdiff.HunkDocument = {
     hunks: [
@@ -166,10 +192,12 @@ test "fragment adapter groups same-kind rows while retaining visibility boundari
 test "fragment adapter does not merge away overlapping ignored hunks" {
   let old : @mbtdiff.DiffLine = {
     index: 0,
+    intraline: Computed,
     segments: [{ kind: Ignored, text: "// old", }],
   }
   let new : @mbtdiff.DiffLine = {
     index: 0,
+    intraline: Computed,
     segments: [{ kind: Ignored, text: "// new", }],
   }
   let hunk : @mbtdiff.DiffHunk = {

@@ -207,7 +207,9 @@ test "comment filtering recomputes mixed-line highlights in both semantic modes"
           continue
         }
         guard change.mapping.inner_changes is Some(inner) else {
-          fail("expected character mappings")
+          fail(
+            "expected character mappings for \{Repr(mode)}, ignore_comments=\{ignore_comments}: \{Repr(change)}",
+          )
         }
         for span in inner {
           if span.original.start_line_number == 2 {
