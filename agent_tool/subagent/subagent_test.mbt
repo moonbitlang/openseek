@@ -46,7 +46,7 @@ async fn tool_and_runtime(
   script? : String,
 ) -> (@agent_tool.AgentToolDefinition, @bgjobs.BgJobRuntime) {
   let root = @fs.tmpdir(prefix="openseek-subagent-tool-")
-  group.add_defer(() => @fs.rmdir(root, recursive=true))
+  group.add_defer(() => @fs.remove(root, recursive=true))
   let runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group))
   let launcher = @agent_subagent.Launcher(
     AgentTaskScope(group),
@@ -102,7 +102,7 @@ async test "subagent starts a child and answers with its job at once" {
     assert_true(
       runtime.snapshot(job_id)
       is Some(
-        { subagent: Some({ outcome: Some(Captured), label: "find X", .. }), .. }
+        { subagent: Some({ outcome: Some(Captured), label: "find X", .. }), .. },
       ),
     )
   })
@@ -150,7 +150,7 @@ async test "subagent bounds every child's step budget by its kind's ceiling" {
   for (requested, expected) in [(None, 40), (Some(10), 10), (Some(500), 40)] {
     @async.with_task_group(group => {
       let seen = @fs.tmpdir(prefix="openseek-subagent-request-")
-      group.add_defer(() => @fs.rmdir(seen, recursive=true))
+      group.add_defer(() => @fs.remove(seen, recursive=true))
       let (tool, runtime) = tool_and_runtime(
         group,
         script="read line; printf '%s' \"$line\" > \{seen}/request.json",
@@ -213,7 +213,7 @@ async test "only a kind that changes code takes a worktree, and it must" {
 async test "subagent_send refuses a kind that takes no instructions" {
   @async.with_task_group(group => {
     let root = @fs.tmpdir(prefix="openseek-subagent-send-")
-    group.add_defer(() => @fs.rmdir(root, recursive=true))
+    group.add_defer(() => @fs.remove(root, recursive=true))
     let runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     let launcher = @agent_subagent.Launcher(
       AgentTaskScope(group),
