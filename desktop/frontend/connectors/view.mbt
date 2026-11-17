@@ -1,12 +1,6 @@
 ///|
-pub fn title(locale : @i18n.Locale) -> String {
-  match locale {
-    SimplifiedChinese => "连接器"
-    TraditionalChinese => "連接器"
-    Spanish => "Conectores"
-    Japanese => "コネクタ"
-    English => "Connectors"
-  }
+pub fn title() -> String {
+  "MCP"
 }
 
 ///|
@@ -41,7 +35,7 @@ pub fn view(
     rows.push(
       @ui.form_row(
         text(
-          locale, "No connectors found in installed skills.", "已安装的 skill 中没有连接器。",
+          locale, "No MCP servers found in installed skills.", "已安装的 skill 中没有 MCP 服务器。",
         ),
         [],
       ),
@@ -100,7 +94,7 @@ pub fn view(
           if row.auth == "helper" {
             text(locale, "Uses a credentials helper", "使用凭据 helper")
           } else {
-            text(locale, "No Desktop OAuth", "不使用 Desktop OAuth")
+            text(locale, "No sign-in required here", "无需在此登录")
           },
         ),
       )
@@ -155,7 +149,7 @@ pub fn view(
       _ => ()
     }
   }
-  @ui.form_section(@icons.icon_link_external, title(locale), rows, actions=[
+  @ui.form_section(@icons.icon_link_external, title(), rows, actions=[
     @html.button(
       class="button",
       disabled=busy,

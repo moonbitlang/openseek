@@ -22,7 +22,7 @@ fn SettingsSection::label(
     Account => @settings.text(locale, Account)
     Devices => @settings.text(locale, Devices)
     Engine => @settings.text(locale, Engine)
-    Connectors => @connectors.title(locale)
+    Connectors => @connectors.title()
     Connections => @settings.text(locale, Connections)
     ArchivedChats => @archived_chats.text(locale, Title)
     SystemSettings => @settings.text(locale, SystemSettings)

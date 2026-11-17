@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn title(@i18n.Locale) -> String
+pub fn title() -> String
 
 pub fn update(@cmd.Emit[Msg], Msg, State, open_external~ : (String) -> @cmd.Cmd) -> (@cmd.Cmd, State)
 
