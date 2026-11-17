@@ -198,7 +198,11 @@ fn model_turn(messages : String) -> Json {
       } else if !read_b && messages.contains("job \{b} (explore: scout B) reported") {
         calls([tool_call(0, "read-b", "job_output", { "job_id": b })])
       } else {
-        calls([tool_call(0, "wait", "job_wait", { "job_ids": [a, b] })])
+        // A completed job would otherwise wake every subsequent wait immediately.
+        let pending : Array[String] = []
+        if !read_a { pending.push(a) }
+        if !read_b { pending.push(b) }
+        calls([tool_call(0, "wait", "job_wait", { "job_ids": Json::array(pending.map(Json::string)) })])
       }
     }
     _ => abort("only one subagent started: \{messages}")
