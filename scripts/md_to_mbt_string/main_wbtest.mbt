@@ -6,7 +6,7 @@
 /// we cannot import the testkit/filesystem package here.
 async fn[T] with_tmpdir(f : async (String) -> T) -> T {
   let dir = @fs.tmpdir(prefix="")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   f(dir)
 }
 

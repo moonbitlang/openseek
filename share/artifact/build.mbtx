@@ -98,7 +98,7 @@ async fn main {
   guard !directory.is_empty() else {
     fail("output directory must not be empty")
   }
-  @fs.mkdir(directory, recursive=true, allow_exist=true)
+  @fs.mkdir(directory, recursive=true, allow_existing=true)
   guard @fs.kind(directory, follow_symlink=false) is Directory else {
     fail("output directory must be a regular directory")
   }
@@ -112,7 +112,7 @@ async fn main {
   // Compile a snapshot to keep the HTML and its retained sources consistent.
   // Compiler output lives in the temporary build directory.
   let temporary = @fs.realpath(@fs.tmpdir(prefix="artifact-build-"))
-  defer (@fs.rmdir(temporary, recursive=true) catch { _ => () })
+  defer (@fs.remove(temporary, recursive=true) catch { _ => () })
   let snapshot = temporary + "/source"
   copy_sources(project, snapshot)
   let build_directory = temporary + "/build"
@@ -174,7 +174,7 @@ async fn main {
   // The session can live on a different volume from the OS temporary directory.
   // Claim the new source directory, then clean it up if publishing fails.
   @fs.mkdir(sources)
-  errdefer @fs.rmdir(sources, recursive=true)
+  errdefer @fs.remove(sources, recursive=true)
   copy_source_files(snapshot, sources)
   @fs.write_text(output, html, create_mode=CreateNew)
   println("```openseek-file artifact\nscratch/artifact/\{filename}\n```")
