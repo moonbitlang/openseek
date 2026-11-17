@@ -6,7 +6,7 @@ import {
   "moonbitlang/async@0.22.7",
   "moonbit-community/proton@0.9.0",
   "moonbit-community/proton_ext@0.9.0",
-  "tonyfettes/xlog@0.4.2",
+  "tonyfettes/xlog@0.5.1",
   "moonbit-community/proton_contract@0.9.0",
   "openseek_desktop@0.1.5",
   "openseek_desktop/backend@0.1.5",
