@@ -21,13 +21,14 @@ warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_pack
 import {
   "moonbit-community/cmark@0.4.14",
   "kokic/katex-parser@0.7.1",
-  "moonbit-community/moondiff@0.0.10",
-  "moonbit-community/prettyprinter@0.4.11",
+  "moonbit-community/moondiff@0.1.4",
+  "moonbit-community/prettyprinter@0.4.12",
   "moonbit-community/casefold@0.1.6",
   "moonbit-community/diago@0.4.0",
   "moonbitlang/async@0.22.7",
   "moonbit-community/rabbita@0.16.4",
   "moonbitlang/x@0.5.5",
-  "moonbit-community/uml@0.4.3",
+  "moonbit-community/uml@0.4.4",
   "moonbitlang/lexer@0.4.4",
+  "moonbit-community/graphviz@0.1.11",
 }
