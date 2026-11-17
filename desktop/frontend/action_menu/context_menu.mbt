@@ -327,9 +327,7 @@ pub fn content_attrs(region : String) -> @html.Attrs {
       return @cmd.none
     }
     let target = element_context(element, container)
-    guard target != NoTarget else {
-      return @cmd.none
-    }
+    guard target != NoTarget else { return @cmd.none }
     event.prevent_default()
     event.stop_propagation()
     let (x, y) = if keyboard {
