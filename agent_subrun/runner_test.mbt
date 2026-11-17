@@ -234,7 +234,7 @@ async test "a run emits a matched started/finished bracket pair" {
         steps=2,
         prompt_tokens=90,
         completion_tokens=10,
-        unaccounted=None
+        unaccounted=None,
       ),
     ] else {
     fail("expected exactly one started/finished pair, got \{Repr(events)}")
@@ -366,7 +366,7 @@ async test "child_session claims the session and appends its argv" {
     return
   }
   let root = @fs.tmpdir(prefix="openseek-subrun-claim-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let result = run_script(
     script,
     child_session=ChildSession(root~, parent="parent-id"),
@@ -400,7 +400,7 @@ async test "child_session's ordinal floor skips persisted ids" {
     return
   }
   let root = @fs.tmpdir(prefix="openseek-subrun-floor-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let result = run_script(
     script,
     child_session=ChildSession(root~, parent="resumed", first_free=50_000),
@@ -439,7 +439,7 @@ fn ordinal_of(subrun_id : String) -> Int32 raise {
 /// shared. (The floor is far above every other test's allocations.)
 async test "a claim steps over a session that already exists" {
   let root = @fs.tmpdir(prefix="openseek-subrun-taken-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   for ordinal in [70_000, 70_001] {
     @fs.mkdir("\{root}/sessions/taken-sr-\{ordinal}", recursive=true)
   }
@@ -458,7 +458,7 @@ async test "a claim steps over a session that already exists" {
 /// child id and no brackets, which the gate degrades to its notice.
 async test "a failed claim is Failed and launches nothing" {
   let root = @fs.tmpdir(prefix="openseek-subrun-noclaim-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   // A file where the sessions directory should be makes every claim fail.
   @fs.write_text("\{root}/sessions", "", create_mode=CreateNew)
   let events : Array[@protocol.Event] = []
@@ -481,7 +481,7 @@ async test "a failed claim is Failed and launches nothing" {
 /// was read does not exhaust the claim: the floor is refreshed past them.
 async test "a claim refreshes a stale floor past a sibling's children" {
   let root = @fs.tmpdir(prefix="openseek-subrun-stale-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   for ordinal in 80_000..<80_100 {
     @fs.mkdir("\{root}/sessions/busy-sr-\{ordinal}", recursive=true)
   }
