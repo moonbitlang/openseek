@@ -19,7 +19,7 @@ pub(all) struct ShellOutput {
 /// runtime so a wasm build follows the host running it.
 let shell_program : String = match @async.platform {
   Windows => "powershell.exe"
-  Linux | MacOS => "sh"
+  _ => "sh"
 }
 
 ///|
@@ -36,7 +36,7 @@ fn shell_args(cmd : String) -> Array[String] {
         "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
         cmd,
       ]
-    Linux | MacOS => ["-c", cmd]
+    _ => ["-c", cmd]
   }
 }
 
