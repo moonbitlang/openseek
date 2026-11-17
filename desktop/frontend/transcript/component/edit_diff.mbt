@@ -6,8 +6,7 @@
 // after the other. What the model actually did is the difference between them,
 // and reading it out of two escaped blobs is work a reader should not be
 // doing. The card below synthesizes the diff, the way `viz` does for the same
-// two tools. Detailed mode keeps argument chips; minimal mode uses a file
-// titlebar and the shared editor diff preview with source-line gutters.
+// two tools. Detailed mode keeps argument chips alongside the diff.
 //
 // The diff is *derived*, not recorded: it is these two strings compared, not
 // what the tool wrote to the file. Whether the edit applied at all is the
@@ -17,15 +16,10 @@
 // which detailed mode keeps a click away in its Original JSON tab.
 
 ///|
-/// One recorded edit with structured coordinates and a bounded numbered
-/// preview. Detailed mode retains its argument chips; copying uses the full diff.
-#derive(Eq)
+/// One recorded edit with argument chips and its requested diff.
 priv struct EditDiff {
   anchors : Array[String]
   diff : String
-  path : String?
-  start_line : Int32?
-  lines : Array[EditDiffLine]
 }
 
 ///|
@@ -36,14 +30,12 @@ priv struct EditDiff {
 const MAX_RENDERED_EDITS = 50
 
 ///|
-/// The decoded change an `edit` or `multi_edit` call asked for, shared by both
-/// transcript modes: one anchored diff per readable entry, and how many
+/// The decoded change an `edit` or `multi_edit` call asked for in the
+/// detailed transcript: one anchored diff per readable entry, and how many
 /// entries are not shown. `None` for any other tool and for a payload with no
 /// readable edit — a batch whose entries are only partly readable renders the
 /// ones that are, since dropping the whole card would hide the edits that did
-/// decode. Holding derived text rather than raw arguments keeps the minimal
-/// projection structurally comparable.
-#derive(Eq)
+/// decode.
 priv struct EditChanges {
   edits : Array[EditDiff]
   omitted : Int32
@@ -77,13 +69,7 @@ fn EditChanges::from_arguments(
           chip_text("path", path) is Some(anchor) {
           anchors.push(anchor)
         }
-        let path = if change.get("path") is Some(String(path)) &&
-          !path.is_blank() {
-          Some(path)
-        } else {
-          None
-        }
-        edits.push(EditDiff::new(anchors, path, None, diff, unified=true))
+        edits.push({ anchors, diff, })
       }
     }
     guard !edits.is_empty() else { return None }
@@ -108,8 +94,7 @@ fn EditChanges::from_arguments(
 
 ///|
 /// A batch longer than the card renders says so, rather than reading as the
-/// whole batch. The wording names only what is missing: minimal mode has no
-/// Original JSON tab to point at.
+/// whole batch. The Original JSON tab retains the complete payload.
 fn EditChanges::render(self : EditChanges) -> @html.Html {
   let body : Array[@html.Html] = []
   for edit in self.edits {
@@ -153,22 +138,7 @@ fn EditDiff::from_fields(
       anchors.push(text)
     }
   }
-  let path = if fields.get(path_key) is Some(String(path)) && !path.is_blank() {
-    Some(path)
-  } else {
-    None
-  }
-  let start_line : Int32? = fields
-    .get("start_line")
-    .bind(value => {
-      let line : Int32 = @json.from_json(value) catch { _ => return None }
-      if value is Number(number, ..) && line > 0 && number == line.to_double() {
-        Some(line)
-      } else {
-        None
-      }
-    })
-  Some(EditDiff::new(anchors, path, start_line, @edit_diff.generate(old, new)))
+  Some({ anchors, diff: @edit_diff.generate(old, new), })
 }
 
 ///|
@@ -198,340 +168,4 @@ fn diff_block(text : String) -> @html.Html {
     }
   ]
   @html.div(class="tool-diff", lines)
-}
-
-///|
-/// Numbers are computed before display truncation. Omitted rows must still
-/// advance each side, and a unified hunk resets both absolute positions.
-#derive(Eq)
-priv struct EditDiffLine {
-  text : String
-  old_line : Int32?
-  new_line : Int32?
-  class_name : String
-  content : EditDiffLineContent
-  truncated : Bool
-}
-
-///|
-#derive(Eq)
-priv enum EditDiffLineContent {
-  SourceRow(Int32)
-  Boundary
-  Metadata
-  Unknown
-}
-
-///|
-/// Unified ranges omit the count for a single line; zero counts describe
-/// insertions/deletions. Keep counts so header-looking source stays source.
-fn edit_diff_range(value : StringView) -> (Int32, Int32)? {
-  let fields = [..value.split(",")]
-  guard fields.length() == 1 || fields.length() == 2 else { return None }
-  try {
-    let start = @string.parse_int(fields[0])
-    let count = if fields.length() == 2 {
-      @string.parse_int(fields[1])
-    } else {
-      1
-    }
-    if start >= 0 && count >= 0 && (start > 0 || count == 0) {
-      Some((start, count))
-    } else {
-      None
-    }
-  } catch {
-    _ => None
-  }
-}
-
-///|
-fn edit_diff_metadata(text : String) -> Bool {
-  text.has_prefix("index ") ||
-  text.has_prefix("old mode ") ||
-  text.has_prefix("new mode ") ||
-  text.has_prefix("deleted file mode ") ||
-  text.has_prefix("new file mode ") ||
-  text.has_prefix("copy from ") ||
-  text.has_prefix("copy to ") ||
-  text.has_prefix("rename from ") ||
-  text.has_prefix("rename to ") ||
-  text.has_prefix("similarity index ") ||
-  text.has_prefix("dissimilarity index ")
-}
-
-///|
-fn EditDiff::new(
-  anchors : Array[String],
-  path : String?,
-  start_line : Int32?,
-  diff : String,
-  unified~ : Bool = false,
-) -> EditDiff {
-  let mut old_line = start_line
-  let mut new_line = start_line
-  let mut first_line = start_line
-  let mut in_hunk = !unified
-  let mut remaining : (Int32, Int32)? = None
-  let rows : Array[EditDiffLine] = []
-  for raw in diff.split("\n") {
-    let text = raw.to_owned()
-    if unified && text.has_prefix("@@ ") {
-      // Section names after the closing @@ do not participate in parsing.
-      let fields = [..text.split(" ")]
-      old_line = None
-      new_line = None
-      remaining = None
-      in_hunk = false
-      if fields.length() >= 4 &&
-        fields[3] == "@@" &&
-        fields[1].has_prefix("-") &&
-        fields[2].has_prefix("+") &&
-        edit_diff_range(fields[1][1:]) is Some((old_start, old_count)) &&
-        edit_diff_range(fields[2][1:]) is Some((new_start, new_count)) {
-        old_line = Some(old_start)
-        new_line = Some(new_start)
-        remaining = Some((old_count, new_count))
-        in_hunk = old_count > 0 || new_count > 0
-        if first_line is None {
-          first_line = Some(new_start.max(1))
-        }
-      }
-      rows.push({
-        text,
-        old_line: None,
-        new_line: None,
-        class_name: "diff-ctx",
-        content: Boundary,
-        truncated: false,
-      })
-      continue
-    }
-    let added = in_hunk &&
-      text.has_prefix("+") &&
-      remaining.map(counts => counts.1 > 0).unwrap_or(true)
-    let removed = in_hunk &&
-      text.has_prefix("-") &&
-      remaining.map(counts => counts.0 > 0).unwrap_or(true)
-    let context = in_hunk &&
-      text.has_prefix(" ") &&
-      remaining.map(counts => counts.0 > 0 && counts.1 > 0).unwrap_or(true)
-    let content : EditDiffLineContent = if added || removed || context {
-      SourceRow(if unified { 1 } else { 2 })
-    } else if unified && text.has_prefix("\\ ") {
-      // The no-newline note describes the preceding source row; its wording
-      // may be localized. It consumes no coordinate and does not end a hunk.
-      Metadata
-    } else if unified &&
-      (
-        text.has_prefix("diff --git ") ||
-        (!in_hunk && (text.has_prefix("--- ") || text.has_prefix("+++ ")))
-      ) {
-      in_hunk = false
-      remaining = None
-      old_line = None
-      new_line = None
-      Boundary
-    } else if unified &&
-      !in_hunk &&
-      (text.is_empty() || edit_diff_metadata(text)) {
-      Metadata
-    } else {
-      // Unrecognized records cannot safely carry source coordinates or
-      // lexical state into subsequent rows. Keep their text for fallback.
-      if unified {
-        in_hunk = false
-        remaining = None
-        old_line = None
-        new_line = None
-      }
-      Unknown
-    }
-    rows.push({
-      content,
-      truncated: false,
-      text,
-      old_line: if removed || context {
-        old_line
-      } else {
-        None
-      },
-      new_line: if added || context {
-        new_line
-      } else {
-        None
-      },
-      class_name: if added {
-        "diff-add"
-      } else if removed {
-        "diff-del"
-      } else {
-        "diff-ctx"
-      },
-    })
-    if remaining is Some((old_count, new_count)) {
-      let old_remaining = old_count - (if removed || context { 1 } else { 0 })
-      let new_remaining = new_count - (if added || context { 1 } else { 0 })
-      remaining = Some((old_remaining, new_remaining))
-      in_hunk = old_remaining > 0 || new_remaining > 0
-    }
-    if removed || context {
-      old_line = old_line.bind(line => {
-        if line < 2147483647 {
-          Some(line + 1)
-        } else {
-          None
-        }
-      })
-    }
-    if added || context {
-      new_line = new_line.bind(line => {
-        if line < 2147483647 {
-          Some(line + 1)
-        } else {
-          None
-        }
-      })
-    }
-  }
-  // Keep the same head/tail proportions as the transcript's text previews.
-  // Bound characters as well as rows, but retain each surviving row's number.
-  let visible : Array[EditDiffLine] = []
-  let mut head_chars = 0
-  let mut head_end = 0
-  while head_end < rows.length() && head_end < 60 && head_chars < 12000 {
-    let row = rows[head_end]
-    let text = if row.text.length() > 12000 - head_chars {
-      row.text[:12000 - head_chars].to_owned() + "…"
-    } else {
-      row.text
-    }
-    visible.push({ ..row, text, truncated: text != row.text, })
-    head_chars += row.text.length()
-    head_end += 1
-  }
-  let mut tail_start = rows.length()
-  let mut tail_chars = 0
-  let tail : Array[EditDiffLine] = []
-  while tail_start > head_end &&
-        rows.length() - tail_start < 40 &&
-        tail_chars < 8000 {
-    tail_start -= 1
-    let row = rows[tail_start]
-    let text = if row.text.length() > 8000 - tail_chars {
-      row.text[:8000 - tail_chars].to_owned() + "…"
-    } else {
-      row.text
-    }
-    tail.push({ ..row, text, truncated: text != row.text, })
-    tail_chars += row.text.length()
-  }
-  if tail_start > head_end {
-    visible.push({
-      content: Boundary,
-      truncated: false,
-      text: "⋯ \{tail_start - head_end} lines skipped ⋯",
-      old_line: None,
-      new_line: None,
-      class_name: "diff-ctx",
-    })
-  }
-  for row in tail.rev_iter() {
-    visible.push(row)
-  }
-  { anchors, path, start_line: first_line, diff, lines: visible, }
-}
-
-///|
-/// Minimal mode keeps source coordinates in the gutter. Its title opens the
-/// current file in the ordinary editor, without requesting a source position.
-fn EditChanges::render_minimal(
-  locale~ : @i18n.Locale = English,
-  self : EditChanges,
-  actions : Actions,
-) -> @html.Html {
-  let entries : Array[@html.Html] = []
-  for index, edit in self.edits {
-    let name = match edit.path {
-      Some(path) => path
-      None => ui(locale, RequestedChanges)
-    }
-    let coordinate = match edit.start_line {
-      Some(line) => " L\{line}"
-      None => ""
-    }
-    let label = "\{name}\{coordinate} · \{index + 1}"
-    let preview = @syntax_html.diff_preview(
-      edit.preview_lines(),
-      label~,
-      tokenizer?=path_tokenizer(edit.path),
-    )
-    entries.push(
-      @html.div(class="edit-entry minimal-edit-block", [
-        @html.div(class="edit-titlebar", [
-          if edit.path is Some(path) {
-            @html.button(
-              class="edit-path",
-              type_="button",
-              title=ui(locale, OpenDiffFile) + ": " + path,
-              on_click=(actions.open)(path),
-              path,
-            )
-          } else {
-            @html.span(class="edit-path-label", ui(locale, ChangeLabel))
-          },
-          @markdown.copy_button(
-            edit.diff,
-            class="icon-button edit-copy",
-            title=ui(locale, CopyDiff),
-            label=ui(locale, CopyDiff),
-          ),
-        ]),
-        @html.div(class="minimal-diff-preview moonbit-source", preview),
-      ]),
-    )
-  }
-  if self.omitted > 0 {
-    entries.push(
-      @html.div(
-        class="edit-omitted",
-        "⋯ \{self.omitted} more edits not shown ⋯",
-      ),
-    )
-  }
-  @html.div(class="edit-args", entries)
-}
-
-///|
-/// File headers stay in the copied patch and detailed view. Minimal previews
-/// show source rows; hunk boundaries and omitted rows reset lexical context.
-fn EditDiff::preview_lines(self : EditDiff) -> Array[@syntax_html.DiffLine] {
-  let rows : Array[@syntax_html.DiffLine] = []
-  let mut gap = false
-  for line in self.lines {
-    if line.content is SourceRow(offset) && offset <= line.text.length() {
-      if gap && !rows.is_empty() {
-        rows.push(Gap)
-      }
-      gap = false
-      let source = line.text[offset:].to_owned()
-      rows.push(
-        match line.class_name {
-          "diff-add" => Added(source, line=line.new_line)
-          "diff-del" => Removed(source, line=line.old_line)
-          _ => Context(source, old_line=line.old_line, new_line=line.new_line)
-        },
-      )
-      gap = line.truncated
-    } else if line.content != Metadata {
-      gap = true
-    }
-  }
-  // Preserve unfamiliar or malformed recorded patches as escaped text.
-  if rows.is_empty() {
-    for line in self.lines {
-      rows.push(Context(line.text, old_line=None, new_line=None))
-    }
-  }
-  rows
 }

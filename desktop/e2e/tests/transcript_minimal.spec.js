@@ -291,7 +291,7 @@ for (const replayed of [false, true]) test(`minimal transcript clears jump to la
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal edit previews render unified lines and preserve call state', async ({ page }) => {
+test('minimal edits keep summaries and states while detailed mode retains diffs', async ({ page }, testInfo) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture requested edits' } } },
@@ -314,102 +314,41 @@ test('minimal edit previews render unified lines and preserve call state', async
   await app.enableMinimal();
   const stream = page.locator('#stream');
   const tools = stream.locator('.minimal-tools-live');
-  await expect(tools.locator('.editor-diff-preview').first()).toBeVisible();
   const calls = tools.locator('.minimal-call');
   await expect(calls.locator('.tool-status.pending')).toHaveCount(2);
-  await expect(calls.nth(0).locator('.editor-diff-source')).toHaveText(['first', 'old', 'new', 'last']);
-  await expect(calls.nth(0).locator('.editor-diff-sign')).toHaveText(['', '−', '+', '']);
-  await expect(calls.nth(0).locator('.edit-path')).toHaveText('src/main.mbt');
-  await expect(calls.nth(0).locator('.editor-diff-number')).toHaveText(['12', '13', '13', '14']);
-  await expect(calls.locator('.tool-card-chip')).toHaveCount(0);
-  await expect(calls.nth(1).locator('.edit-path')).toHaveText(['src/add.mbt', 'src/remove.mbt']);
-  await expect(calls.nth(1).locator('.added .editor-diff-source')).toHaveText('added <script>');
-  await expect(calls.nth(1).locator('.removed .editor-diff-source')).toHaveText('deleted');
-  await expect(calls.locator('.editor-diff-preview script')).toHaveCount(0);
-  await expect(tools.locator('summary')).toHaveCount(0);
+  await expect(calls.locator('.minimal-call-caption')).toHaveText([
+    'Update the entry point', 'Update supporting files',
+  ]);
+  await expect(tools.locator('.editor-diff-preview, .tool-diff')).toHaveCount(0);
+  await expect(tools).not.toContainText('added <script>');
+  await expect(tools).not.toContainText('src/main.mbt');
   for (const [id, name, failed] of [['edit-one', 'edit', false], ['edit-many', 'multi_edit', true]]) {
     app.append('tool_result', { tool_call_id: id, tool_name: name, content: 'OUTPUT_SENTINEL',
       is_error: failed, brief: failed ? 'Batch rejected' : 'Updated entry point' });
   }
   await expect(calls.last().locator('.minimal-call-caption')).toHaveText('Batch rejected');
-  await expect(calls.locator('.editor-diff-preview').first()).toBeVisible();
   await expect(calls.nth(1).locator('.tool-status.failed')).toHaveCount(0);
-  await expect(calls.locator('.editor-diff-preview')).toHaveCount(3);
+  await expect(calls.locator('.editor-diff-preview, .tool-diff')).toHaveCount(0);
   await expect(stream).not.toContainText('PARAMETER_SENTINEL');
   await expect(stream).not.toContainText('OUTPUT_SENTINEL');
   await expect(stream.locator('.tool-call-tabs')).toHaveCount(0);
-  await page.setViewportSize({ width: 640, height: 900 });
-  await page.emulateMedia({ colorScheme: 'dark' });
-  for (const block of await calls.locator('.minimal-edit-block').all()) {
-    await expect(block.getByRole('button', { name: 'Copy diff', exact: true })).toBeVisible();
-    const box = await block.boundingBox();
-    expect(box.x + box.width).toBeLessThanOrEqual(640);
-  }
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.emulateMedia({ colorScheme: 'light' });
+  await page.screenshot({ path: testInfo.outputPath('minimal-edit-summary.png') });
+  await page.evaluate(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
+  await page.reload();
+  await app.openSession();
+  await expect(stream.locator('.tool-diff')).toHaveCount(3);
+  await stream.locator('details.tool-call > summary').first().click();
+  await expect(stream.locator('.tool-diff').first()).toBeVisible();
+  await expect(stream.locator('.tool-diff').first()).toContainText('- old');
+  await expect(stream.locator('.tool-diff').first()).toContainText('+ new');
+  await page.screenshot({ path: testInfo.outputPath('detailed-edit-diff.png') });
+  await page.evaluate(() => localStorage.setItem('openseek.minimal_transcript', 'true'));
+  await page.reload();
+  await app.openSession();
   app.append('assistant', { content: 'Finished reviewing the edits.' });
   app.append('terminal', { kind: 'finished', message: 'Finished reviewing the edits.' });
   await expect(stream.getByText('Finished reviewing the edits.', { exact: true })).toBeVisible();
   await expect(stream.locator('.minimal-call, .editor-diff-preview')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('minimal diff pins line numbers and markers while source scrolls', async ({ page }) => {
-  await page.setViewportSize({ width: 640, height: 900 });
-  const app = new MinimalTranscriptHarness(page);
-  const source = '  let message = "' + 'long source '.repeat(24) + '"';
-  app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture long diff lines' } } },
-    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'long-edit', name: 'edit', arguments: JSON.stringify({
-        path: 'desktop/frontend/component_transcript.mbt', start_line: 1529,
-        old_string: 'fn main {\n  let message = "before"\n}',
-        new_string: `fn main {\n${source}\n}`,
-      }) },
-    ] } } },
-  ];
-  await app.install();
-  await app.goto();
-  await app.showSidebar();
-  await app.openSession();
-  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
-  const block = page.locator('.minimal-edit-block');
-  const diff = block.locator('.editor-diff-preview');
-  await expect(block.locator('.added .editor-diff-source')).toHaveText(source);
-  for (const colorScheme of ['light', 'dark']) {
-    await page.emulateMedia({ colorScheme });
-    const title = await block.locator('.edit-titlebar').boundingBox();
-    const geometry = await diff.evaluate(el => ({
-      width: el.clientWidth, contentWidth: el.scrollWidth,
-      heights: [...el.querySelectorAll('.editor-diff-row')].map(row => row.getBoundingClientRect().height),
-      widths: [...el.querySelectorAll('.editor-diff-row')].map(row => row.getBoundingClientRect().width),
-      lineHeight: parseFloat(getComputedStyle(el).lineHeight),
-      pageWidth: document.documentElement.scrollWidth,
-    }));
-    expect(geometry.contentWidth).toBeGreaterThan(geometry.width);
-    expect(geometry.pageWidth).toBeLessThanOrEqual(640);
-    for (const height of geometry.heights) expect(height).toBeCloseTo(geometry.lineHeight, 0);
-    for (const width of geometry.widths) expect(width).toBeCloseTo(geometry.widths[0], 0);
-    const gutters = block.locator('.editor-diff-number, .editor-diff-sign');
-    const before = await gutters.evaluateAll(els => els.map(el => el.getBoundingClientRect().x));
-    for (const row of await block.locator('.editor-diff-row').all()) {
-      const spacing = await row.evaluate(el => {
-        const number = el.querySelector('.editor-diff-number');
-        const range = document.createRange();
-        range.selectNodeContents(number);
-        return { number: range.getBoundingClientRect().right,
-          marker: el.querySelector('.editor-diff-sign').getBoundingClientRect().x };
-      });
-      if (spacing.number > 0) expect(spacing.marker - spacing.number).toBeGreaterThanOrEqual(6);
-    }
-    await diff.evaluate(el => { el.scrollLeft = 160; });
-    await expect.poll(() => diff.evaluate(el => el.scrollLeft)).toBe(160);
-    expect(await gutters.evaluateAll(els => els.map(el => el.getBoundingClientRect().x))).toEqual(before);
-    expect(await block.locator('.edit-titlebar').boundingBox()).toEqual(title);
-    await block.hover();
-    await expect(block.getByRole('button', { name: 'Copy diff', exact: true })).toBeVisible();
-    await diff.evaluate(el => { el.scrollLeft = 0; });
-  }
   expect(app.pageErrors).toEqual([]);
 });
 
