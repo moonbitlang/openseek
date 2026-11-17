@@ -69,3 +69,51 @@ References: [versioning](https://modelcontextprotocol.io/specification/2026-07-2
 [stdio](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio),
 [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
 [MRTR](https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr).
+
+## Device OAuth for HTTP servers
+
+A skill's `mcp.json` can declare a public OAuth client instead of a static
+Authorization header or `headersHelper`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "oauth": {
+        "grantType": "device_code",
+        "clientId": "Ov23liDY0j2riv3dZtVY",
+        "deviceAuthorizationEndpoint": "https://github.com/login/device/code",
+        "tokenEndpoint": "https://github.com/login/oauth/access_token",
+        "scopes": "repo read:org"
+      }
+    }
+  }
+}
+```
+
+Desktop Settings → Connectors lists MCP configurations in bundled and globally
+installed skills (user skills override bundled skills of the same name). Connect
+starts device authorization and displays the provider's URL and user code. The
+host retains the device code, respects polling intervals and `slow_down`, and
+saves the token after authorization. Cancel fences outstanding token responses.
+The bundled GitHub skill uses the OpenSeek OAuth App; no gh CLI is needed.
+
+Credentials are stored under `~/.openseek/oauth` (`OPENSEEK_OAUTH_DIR` overrides
+this for isolated environments), keyed by the MCP URL, OAuth endpoints, client
+ID and scopes. Files are atomically replaced with mode 0600 on POSIX; the
+credential directory is created with mode 0700. They are local credential files,
+not OS-keychain entries. Token values are never returned to the settings UI.
+HTTP MCP servers read the credentials when used; a changed credential resets the
+existing connection on the next search or call. Disconnect deletes the local
+credential; revocation on the provider remains separate.
+
+This initial implementation supports explicitly configured Device Authorization
+Grant only. It does not implement authorization-code/PKCE discovery, dynamic
+client registration, or refresh tokens. Expired credentials require reconnect.
+The resource and OAuth endpoints must use HTTPS; OAuth cannot be combined with
+an Authorization header or `headersHelper`. Environment placeholders expand as
+in other MCP configuration fields. Workspace-only skills and standalone MCP
+configurations are not listed in the Desktop settings page. Explicit MCP config
+still overrides same-named skill servers, including an existing gh-based GitHub
+entry in `~/.openseek/mcp.json`.

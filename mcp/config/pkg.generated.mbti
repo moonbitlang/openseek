@@ -26,10 +26,21 @@ pub(all) struct HeadersHelperCommand {
 #derive(Eq, @debug.Debug)
 pub(all) enum McpServer {
   Stdio(name~ : String, command~ : String, args~ : Array[String], env~ : Map[String, String])
-  Http(name~ : String, url~ : String, headers~ : Map[String, String], headers_helper~ : HeadersHelperCommand?)
+  Http(name~ : String, url~ : String, headers~ : Map[String, String], headers_helper~ : HeadersHelperCommand?, oauth~ : OAuthConfig?)
 }
 pub fn McpServer::name(Self) -> String
 pub fn McpServer::target(Self) -> String
+
+#derive(Eq, @debug.Debug)
+pub(all) struct OAuthConfig {
+  client_id : String
+  device_authorization_endpoint : String
+  token_endpoint : String
+  scopes : String
+}
+pub fn OAuthConfig::equal(Self, Self) -> Bool
+pub fn OAuthConfig::not_equal(Self, Self) -> Bool
+pub fn OAuthConfig::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -1054,3 +1054,33 @@ pub let fs_share_file : Command[
 pub let cloud_mcp : Command[@protocol.CloudMcpRequest, Json] = Command(
   "cloud.mcp",
 )
+
+///|
+pub let connectors_list : Command[
+  @protocol.EmptyPayload,
+  @protocol.ConnectorReply,
+] = Command("connectors.list")
+
+///|
+pub let connectors_connect : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.connect")
+
+///|
+pub let connectors_poll : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.poll")
+
+///|
+pub let connectors_cancel : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.cancel")
+
+///|
+pub let connectors_disconnect : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.disconnect")

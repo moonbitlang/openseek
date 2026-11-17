@@ -398,6 +398,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
     let servers = [
       @config.Http(
         headers_helper=None,
+        oauth=None,
         name="remote",
         url="http://127.0.0.1:\{server.addr.port()}/mcp",
         headers=Map([]),
@@ -681,12 +682,14 @@ async test "a call or search before a server settles gets the real result, and a
           url="\{base}/slow",
           headers=Map([]),
           headers_helper=None,
+          oauth=None,
         ),
         Http(
           name="stuck",
           url="\{base}/stuck",
           headers=Map([]),
           headers_helper=None,
+          oauth=None,
         ),
       ]
       let servers = configs.map(server => {
@@ -815,6 +818,7 @@ async test "a script that stops mid-call cancels the call on its server" {
           url="http://127.0.0.1:\{server.addr.port()}/mcp",
           headers=Map([]),
           headers_helper=None,
+          oauth=None,
         ),
       ]
       let servers = configs.map(server => {

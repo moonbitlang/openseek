@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/connectors"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn title(@i18n.Locale) -> String
+
+pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
+
+pub fn view(@cmd.Emit[Msg], State, @i18n.Locale) -> @html.Html
+
+// Errors
+
+// Types and methods
+pub(all) enum Msg {
+  Refresh
+  Connect(String)
+  Disconnect(String)
+  Cancel
+  Poll(Int32, String, String)
+  Received(Int32, String?, @protocol.ConnectorReply)
+}
+
+#derive(Eq)
+type State
+pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

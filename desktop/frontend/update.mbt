@@ -4873,6 +4873,31 @@ fn update_msg(
           select_menu: None,
         },
       )
+    SettingsSectionSelected(Connectors) => {
+      let (cmd, connectors) = @connectors.update(
+        dispatch.map(msg => Connectors(msg)),
+        @connectors.Refresh,
+        model.connectors,
+      )
+      (
+        cmd,
+        {
+          ..model,
+          connectors,
+          management_dialog: Some(Settings(Connectors)),
+          api_setup_open: false,
+          select_menu: None,
+        },
+      )
+    }
+    Connectors(msg) => {
+      let (cmd, connectors) = @connectors.update(
+        dispatch.map(msg => Connectors(msg)),
+        msg,
+        model.connectors,
+      )
+      (cmd, { ..model, connectors, })
+    }
     SettingsSectionSelected(section) =>
       (
         @cmd.none,

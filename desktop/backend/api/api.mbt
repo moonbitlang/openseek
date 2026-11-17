@@ -10,6 +10,7 @@
 /// process; each transport connection supplies its own `HostConnection` when
 /// dispatching filesystem watch methods.
 struct ApiState {
+  connectors : @connectors.Service
   // One Codex app-server process for this Desktop process. It is independent
   // of the OpenSeek engine actor and owns Codex account/thread state through
   // Codex's own data directory.
@@ -288,6 +289,7 @@ pub fn ApiState::ApiState(
     skills_dir?=resources.skills,
   )
   {
+    connectors: Service(resources.skills),
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),
     codex_draft_threads: CodexDraftThreads(),
@@ -845,6 +847,19 @@ pub fn endpoints(
           publish_worktree_changed(state, payload.workspace, worktrees)
         },
       )
+    }),
+    Endpoint(@commands.connectors_list, _ => state.connectors.list()),
+    Endpoint(@commands.connectors_connect, payload => {
+      state.connectors.action("connect", payload)
+    }),
+    Endpoint(@commands.connectors_poll, payload => {
+      state.connectors.action("poll", payload)
+    }),
+    Endpoint(@commands.connectors_cancel, payload => {
+      state.connectors.action("cancel", payload)
+    }),
+    Endpoint(@commands.connectors_disconnect, payload => {
+      state.connectors.action("disconnect", payload)
     }),
     Endpoint(@commands.auth_status, _ => auth_status(state)),
     Endpoint(@commands.auth_connect, _ => auth_connect(state)),
