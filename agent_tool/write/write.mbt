@@ -11,8 +11,8 @@
 /// - `content` (string, required): text to write. The file is truncated
 ///   before writing.
 /// - `revert_on_parse_errors` (boolean, optional, default true): before a new
-///   syncheck input (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`) is written, its
-///   content is parsed standalone (`moonc syncheck`); content with lex/parse
+///   syncheck input (`.mbt`, `.mbt.md`, `.mbtx`, `moon.mod`, `moon.pkg`) is written,
+///   its content is parsed standalone (`moonc syncheck`); content with lex/parse
 ///   errors is rejected and the errors are returned with excerpts — nothing
 ///   lands on disk. In `.mbt.md` only the checked fenced blocks are parsed. Set
 ///   false only to intentionally create a file that does not parse (e.g. a
@@ -46,7 +46,7 @@ pub fn definition(
       #|directories are created), or overwrite an existing non-source file. Overwriting an
       #|existing .mbt/.mbt.md source file requires approval for the supplied full contents.
       #|Use edit or multi_edit for partial changes (an empty old_string inserts new code). New syntax-checkable
-      #|content (.mbt, .mbt.md, moon.mod, moon.pkg) that fails to lex/parse is rejected
+      #|content (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg) that fails to lex/parse is rejected
       #|BEFORE writing or approval — see revert_on_parse_errors. Do not
       #|create Markdown or README files unless the user explicitly asks for them.
     ),
@@ -59,7 +59,7 @@ pub fn definition(
           "type": "boolean",
           "description": (
             #|Syntax gate, on by default. Before a new syntax-checkable file (.mbt,
-            #|.mbt.md, moon.mod, moon.pkg) is written, its content is parsed standalone
+            #|.mbt.md, .mbtx, moon.mod, moon.pkg) is written, its content is parsed standalone
             #|(moonc syncheck); content with lex/parse errors is REJECTED — nothing is
             #|written — and the call returns the errors with excerpts of the offending
             #|lines. A file that does not parse is never a valid intermediate state, and
@@ -140,7 +140,7 @@ async fn write_file(
   // including aliases whose destination is source. New source remains ordinary.
   let source_overwrite = @fs.exists(path) &&
     (is_mbt_source(path) || is_mbt_source(target))
-  // Pre-write syntax gate for syncheck inputs (`.mbt`, `.mbt.md`, `moon.mod`,
+  // Pre-write syntax gate for syncheck inputs (`.mbt`, `.mbt.md`, `.mbtx`, `moon.mod`,
   // `moon.pkg`): parse the candidate content in a scratch file first (moonc
   // syncheck needs no project context), so malformed content is rejected
   // before anything — parent directories included — is created on disk. Gate
