@@ -1,7 +1,9 @@
 import {
   "moonbit-community/diago",
   "moonbit-community/uml/api" @uml,
+  "moonbit-community/uml/metrics/heuristic" @uml_heuristic,
   "moonbit-community/uml/style" @uml_style,
+  "moonbit-community/graphviz/text/heuristic" @graphviz_heuristic,
   "moonbit-community/cmark/cmark_base",
   "moonbit-community/cmark/cmark",
   "moonbit-community/cmark/cmark_html",
