@@ -37,7 +37,7 @@ async fn mbtx_fixture(
   let spill_dir = @fs.tmpdir(prefix~)
   group.add_defer(() => {
     @async.protect_from_cancel(() => {
-      @fs.rmdir(spill_dir, recursive=true) catch {
+      @fs.remove(spill_dir, recursive=true) catch {
         _ => ()
       }
     })

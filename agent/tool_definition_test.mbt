@@ -34,7 +34,7 @@ async test "a turn advertises escalation exactly when it is given a channel" {
 async test "registered remove uses approval without holding the shared file gate" {
   @async.with_timeout(5000, () => {
     let dir = @fs.tmpdir(prefix="openseek-remove-approval-")
-    defer @fs.rmdir(dir, recursive=true)
+    defer @fs.remove(dir, recursive=true)
     @async.with_task_group(group => {
       let registered : Ref[@agent_tool.Tools?] = Ref(None)
       let mut asks = 0

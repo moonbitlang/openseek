@@ -19,7 +19,7 @@ let reporting_child : String =
 #cfg(not(platform="windows"))
 async test "a session's subagent ends with a notice and a readable report" {
   let root = @fs.tmpdir(prefix="openseek-agent-subagents-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @async.with_timeout(10000, () => {
     @async.with_task_group(group => {
       let runtime = @agent_runtime.AgentRuntime()

@@ -1,7 +1,7 @@
 ///|
 async test "direct and unprinted PTC image results reach the next request and replay after source deletion" {
   let root = @fs.tmpdir(prefix="openseek-image-turn-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let bytes = @fs.read_binary("deepseek/client/testdata/two-colors.png")
   let image = @agent_session.Image::from_bytes(bytes)
   for ptc in [false, true] {
