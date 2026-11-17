@@ -1,9 +1,4 @@
 ///|
-pub fn title() -> String {
-  "MCP"
-}
-
-///|
 fn text(locale : @i18n.Locale, english : String, chinese : String) -> String {
   match locale {
     SimplifiedChinese | TraditionalChinese => chinese
@@ -149,7 +144,7 @@ pub fn view(
       _ => ()
     }
   }
-  @ui.form_section(@icons.icon_link_external, title(), rows, actions=[
+  @ui.form_section(@icons.icon_link_external, "MCP", rows, actions=[
     @html.button(
       class="button",
       disabled=busy,
