@@ -26,7 +26,7 @@ async test "archive names the missing store after a workspace detach" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-detach-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let workspace = dir + "/ws"
   let home = dir + "/home"
   let global_root = home + "/.openseek"
@@ -78,7 +78,7 @@ async test "archive reports a workspace record whose directory vanished" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-gone-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let workspace = dir + "/ws"
   let home = dir + "/home"
   let global_root = home + "/.openseek"
@@ -94,7 +94,7 @@ async test "archive reports a workspace record whose directory vanished" {
   manager.pump = Serving(sessions=Map([]))
   // The workspace directory vanishes outside the app; the registry keeps
   // its dead entry addressable, so the sidebar still shows the workspace.
-  @fs.rmdir(workspace, recursive=true)
+  @fs.remove(workspace, recursive=true)
   let detail = archive_refusal(manager, "s-ws")
   debug_inspect(
     detail,
@@ -112,7 +112,7 @@ async test "loading a conversation from a detached workspace names that state" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-load-detached-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let workspace = dir + "/ws"
   let home = dir + "/home"
   let global_root = home + "/.openseek"
@@ -154,7 +154,7 @@ async test "archiving an already-archived conversation names that state" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-again-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"

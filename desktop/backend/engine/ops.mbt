@@ -1020,7 +1020,7 @@ fn test_start_payload(
 #cfg(not(platform="windows"))
 async test "start echoes the client submission id in Started" {
   let dir = @fs.tmpdir(prefix="openseek-start-submission-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   // A run is handed the global skills library under `HOME`. Own it, so this
   // test neither races one that moves `HOME` nor reads the developer's own.
@@ -1111,7 +1111,7 @@ async test "start echoes the client submission id in Started" {
 #cfg(not(platform="windows"))
 async test "native commands share writer delivery and preserve turn ownership" {
   let dir = @fs.tmpdir(prefix="openseek-goal-ack-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   // A run is handed the global skills library under `HOME`. Own it, so this
   // test neither races one that moves `HOME` nor reads the developer's own.
@@ -1349,7 +1349,7 @@ async test "a discarded command answers its sender" {
 #cfg(not(platform="windows"))
 async test "setup failure retires the writer before an immediate next start" {
   let dir = @fs.tmpdir(prefix="openseek-setup-failed-seam-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   // A run is handed the global skills library under `HOME`. Own it, so this
   // test neither races one that moves `HOME` nor reads the developer's own.
@@ -1458,7 +1458,7 @@ async test "setup failure retires the writer before an immediate next start" {
 #cfg(not(platform="windows"))
 async test "a prompt bigger than the pipe still settles exactly once" {
   let dir = @fs.tmpdir(prefix="openseek-backpressured-command-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   // A run is handed the global skills library under `HOME`. Own it, so this
   // test neither races one that moves `HOME` nor reads the developer's own.
@@ -1538,7 +1538,7 @@ async test "named session retries after its first prompt creates no record" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-first-prompt-retry-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -1644,7 +1644,7 @@ async test "session load preserves a future item without hiding known events" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let dir = @fs.tmpdir(prefix="openseek-load-future-item-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   defer restore_home_env(previous)
   // A hint-less load resolves the store from where the record actually
@@ -1680,7 +1680,7 @@ async test "archived session load reads without restoring the record" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let dir = @fs.tmpdir(prefix="openseek-load-archived-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   defer restore_home_env(previous)
   // A hint-less load resolves the store from where the record actually
@@ -1717,7 +1717,7 @@ async test "load rejects a detached workspace hint instead of probing global" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let dir = @fs.tmpdir(prefix="openseek-load-detached-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let marker = dir + "/engine-ran"
   let engine = dir + "/engine.sh"
   @sys.set_env_var("HOME", dir)
@@ -1757,7 +1757,7 @@ async test "workspace detach refuses a running conversation without hiding it" {
   let root : @pathx.Path = Path(
     @fs.realpath(@fs.tmpdir(prefix="openseek-detach-running-")),
   )
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let global_store = root.join("global")
   let workspace = root.join("workspace")
   let engine = root.join("bin/engine.sh")
@@ -1829,7 +1829,7 @@ async test "workspace detach drains an idle writer and its follower first" {
   let root : @pathx.Path = Path(
     @fs.realpath(@fs.tmpdir(prefix="openseek-detach-idle-")),
   )
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let global_store = root.join("global")
   let workspace = root.join("workspace")
   let engine = root.join("bin/engine.sh")

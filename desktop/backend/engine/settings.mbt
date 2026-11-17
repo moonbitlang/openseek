@@ -497,7 +497,7 @@ async fn with_settings_dir(
   defer (if previous_glm_key is Some(value) { @sys.set_env_var("GLM", value) })
   defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-settings-"))
-  defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(dir.to_string(), recursive=true) catch { _ => () })
   let previous_home = @sys.get_env_var("HOME")
   let previous_profile = @sys.get_env_var("USERPROFILE")
   @sys.set_env_var("HOME", dir.to_string())

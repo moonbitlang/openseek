@@ -277,7 +277,7 @@ async test "fork validates its request before spawning and releases its reader l
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-desktop-fork-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let workspace = dir + "/workspace"
   @sys.set_env_var("HOME", dir + "/home")
   @fs.mkdir(dir + "/home/.openseek", recursive=true)

@@ -105,7 +105,7 @@ async test "an absent MCP configuration names nothing; a present one is read" {
   let root : @pathx.Path = Path(
     @fs.realpath(@fs.tmpdir(prefix="openseek-mcp-config-")),
   )
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   set_test_home(root.to_string())
   assert_true(resolved_mcp_config() is None)
   guard mcp_config_path() is Some(path) else {
@@ -144,7 +144,7 @@ async test "an unreadable MCP configuration is carried, not treated as absent" {
   let root : @pathx.Path = Path(
     @fs.realpath(@fs.tmpdir(prefix="openseek-mcp-config-unreadable-")),
   )
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   set_test_home(root.to_string())
   // A directory where the file belongs exists but can never be read as one,
   // on every platform and regardless of the user's permissions.
@@ -470,7 +470,7 @@ async test "MCP status is the live engine's latest report" {
             session: "s-live",
             event: McpStatus(status={ servers: [server], .. }),
             ..
-          }
+          },
         ) {
         reported.push(server.state)
       }
