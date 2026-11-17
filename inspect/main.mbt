@@ -151,7 +151,7 @@ async fn main {
   // record there, so the root must exist before either is computed; a missing
   // relative `.openseek` would otherwise hash the same in every project.
   if config.ensure {
-    @fs.mkdir(config.session_root, recursive=true, allow_exist=true)
+    @fs.mkdir(config.session_root, recursive=true, allow_existing=true)
   }
   let catalog = session_catalog(
     config.session_root,
@@ -391,10 +391,7 @@ async fn local_lan_ip() -> String? {
   probe.close()
   // The probe forces an IPv4 route, so the local address is IPv4; bail on the
   // unexpected IPv6 case rather than mis-format it.
-  if addr.is_ipv6() {
-    return None
-  }
-  let ip = addr.ip()
+  guard addr.ip is Ipv4(ip) else { return None }
   let a = (ip >> 24) & 255
   let b = (ip >> 16) & 255
   let c = (ip >> 8) & 255
@@ -1516,5 +1513,5 @@ async test "locate_bundle prefers the freshest artifact; explicit wins" {
   // Missing candidates are skipped; nothing existing is None.
   assert_eq(locate_bundle(["", "\{root}/absent.js", old_path]), Some(old_path))
   assert_eq(locate_bundle(["", "\{root}/absent.js"]), None)
-  @fs.rmdir(root, recursive=true)
+  @fs.remove(root, recursive=true)
 }
