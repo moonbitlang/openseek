@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/action_menu",
   "moonbit-community/rui",
   "moonbit-community/rabbita/dialog",
   "moonbit-community/rabbita/js",

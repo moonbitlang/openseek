@@ -152,6 +152,8 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
   let ctx = file_ctx(self)
   {
     platform,
+    scope: ctx.owner.key() +
+    (if self.screen is Chat { ":chat" } else { ":codex" }),
     open_web_links_in_app,
     reveal_files,
     preview_files: ctx.can_preview_html(desktop=self.is_desktop),
@@ -1196,7 +1198,7 @@ fn main {
         )
       },
     )
-    @action_menu.context_component(
+    let context_menu = @action_menu.context_component(
       state.map(model => model.locale),
       state.map(model => model.context_menu_input()),
       {
@@ -1208,8 +1210,10 @@ fn main {
         download_file: path => emit(DownloadFile(path)),
         preview_file: path => emit(PreviewFile(path)),
       },
-      shell,
     )
+    shell.map2(context_menu, (shell, menu) => {
+      @rui.theme(style=["display:contents"], @html.fragment([shell, menu]))
+    })
   })
   app.mount("app")
 }

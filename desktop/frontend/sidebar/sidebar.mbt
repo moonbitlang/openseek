@@ -345,7 +345,7 @@ pub fn component(
         ],
       ),
     )
-    @html.aside([
+    @html.aside(attrs=@action_menu.content_attrs("sidebar"), [
       // The leading edge stays clear for the shell-owned fixed toggle and
       // native controls; the mode switch sits at the trailing edge.
       @html.div(class="sidebar-header", [

@@ -1315,7 +1315,7 @@ fn transcript_view(
   // rotation has no other visible signal (`rabbita_dom.spec.js`, "new-chat
   // project title filters and switches registered projects").
   @html.section(
-    attrs=@html.Attrs::build()
+    attrs=@action_menu.content_attrs("transcript")
       .id("transcript")
       .class("transcript")
       // Text selected here gets the shell's floating reply.
