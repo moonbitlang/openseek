@@ -28,7 +28,7 @@ pub async fn[X] run_indexed_with_concurrency(
 /// `logs/` directories — removing any previous run's artifacts first.
 pub async fn prepare_output_dir(out_dir : String) -> Unit {
   if @fs.exists(out_dir) {
-    @fs.rmdir(out_dir, recursive=true)
+    @fs.remove(out_dir, recursive=true)
   }
   @fs.mkdir("\{out_dir}/workspaces", recursive=true)
   @fs.mkdir("\{out_dir}/logs", recursive=true)

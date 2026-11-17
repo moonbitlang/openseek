@@ -58,7 +58,7 @@ async fn run_read_case(
     "args": ["\{root}/src/read.txt:1:1"],
   })
   let reason = expect_respond(action, contains=["hello read"], error=false)
-  @fs.rmdir(root, recursive=true)
+  @fs.remove(root, recursive=true)
   row(
     index~,
     name="mbtx",
@@ -86,7 +86,7 @@ async fn run_write_case(
   if reason == "" {
     reason = @vfs.FileSystem({ "created.txt": content }).mismatch_on_disk(root)
   }
-  @fs.rmdir(root, recursive=true)
+  @fs.remove(root, recursive=true)
   row(
     index~,
     name="write",
@@ -131,7 +131,7 @@ async fn run_edit_case(
       ),
     }).mismatch_on_disk(root)
   }
-  @fs.rmdir(root, recursive=true)
+  @fs.remove(root, recursive=true)
   row(
     index~,
     name="edit",
@@ -187,7 +187,7 @@ async fn run_multi_edit_case(
       ),
     }).mismatch_on_disk(root)
   }
-  @fs.rmdir(root, recursive=true)
+  @fs.remove(root, recursive=true)
   row(
     index~,
     name="multi_edit",

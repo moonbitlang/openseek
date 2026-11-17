@@ -65,7 +65,7 @@ async test "mbtx builds a Rabbita answer and can revise it from retained source 
     assert_eq(@fs.read_binary(retained + "/assets/data.bin"), b"\x00\xff")
     assert_eq(@fs.read_text(retained + "/.answer-settings.json"), "{}")
     // The scratch working project is gone, as it would be in a session fork.
-    @fs.rmdir(project, recursive=true)
+    @fs.remove(project, recursive=true)
     let rebuilt = dispatch(tool, {
       "filename": recipe,
       "args": [retained, output, "speedup-v2.html"],
