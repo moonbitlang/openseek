@@ -793,12 +793,12 @@ async fn commit_edit(
   // verdict has to cover both, so the tree is checked from each project the
   // two spellings belong to (once, when they share one), and the tallies are
   // merged.
-  let check_from = check_projects(path)
+  let check_from = check_paths(path)
   // The file's identity, pinned: the write and any restore go to the
   // resolved target, so a link retargeted during a check cannot redirect
   // them, and a target that changes before the write refuses the edit.
   let target = resolved_target(path)
-  let roots_from = project_roots(check_from)
+  let identities_before = check_identities(check_from)
   async fn check_tree() -> @auto_check.CheckOutcome {
     let mut merged : @auto_check.CheckErrors? = None
     for spelling in check_from {
@@ -852,8 +852,8 @@ async fn commit_edit(
     // Likewise the file's identity: a link retargeted meanwhile would be
     // written in one module and checked in another.
     if resolved_target(path) != target ||
-      check_projects(path) != check_from ||
-      project_roots(check_from) != roots_from {
+      check_paths(path) != check_from ||
+      check_identities(check_from) != identities_before {
       return not_verified(
         "the file's target or project changed while the baseline was measured; retry",
       )
@@ -931,7 +931,10 @@ async fn commit_edit(
   // The identity pinned before the baseline must still hold after the check:
   // a link or project replaced meanwhile makes the tally about another tree.
   let after = if baseline is Some(_) &&
-    (resolved_target(path) != target || project_roots(check_from) != roots_from) {
+    (
+      resolved_target(path) != target ||
+      check_identities(check_from) != identities_before
+    ) {
     @auto_check.CheckOutcome::Unavailable(
       "the file's target or project changed during the check",
     )
@@ -1045,14 +1048,13 @@ async fn commit_edit(
 const TruncatedCapture : String = "moon check hid some diagnostic sites behind its diagnostic limit, so the guard cannot compare the two runs"
 
 ///|
-/// The spellings of `path` whose projects a check must cover: the written one
-/// and, when it is a link into a different project, its target. Spellings
-/// outside any MoonBit project are dropped; an unresolvable link is just its
-/// written spelling.
-async fn check_projects(path : String) -> Array[String] {
+/// Paths whose projects or standalone scripts a check must cover: the written
+/// path and its resolved target, deduplicated by check identity. Paths outside
+/// any MoonBit project are dropped unless they are standalone scripts.
+async fn check_paths(path : String) -> Array[String] {
   let target = resolved_target(path)
-  let own = @auto_check.check_cwd(path)
-  let theirs = @auto_check.check_cwd(target)
+  let own = @auto_check.check_identity(path)
+  let theirs = @auto_check.check_identity(target)
   let spellings = []
   // The resolved target first: a fully resolved path has no link left to
   // retarget, so the module checked is the module written.
@@ -1061,11 +1063,11 @@ async fn check_projects(path : String) -> Array[String] {
   }
   // The written spelling too, when it belongs to a project of its own (a
   // link inside module a pointing into module b is compiled by both).
-  // Compare canonical project directories: `/tmp/x` and `/private/tmp/x`
-  // are one project, not two checks.
+  // Compare canonical check identities: aliases share a check; standalone
+  // scripts and their containing projects do not.
   match (own, theirs) {
-    (Some(own_dir), Some(their_dir)) =>
-      if resolved_target(own_dir) != resolved_target(their_dir) {
+    (Some(own_identity), Some(target_identity)) =>
+      if own_identity != target_identity {
         spellings.push(path)
       }
     (Some(_), None) => spellings.push(path)
@@ -1075,19 +1077,15 @@ async fn check_projects(path : String) -> Array[String] {
 }
 
 ///|
-/// The canonical project directory each spelling is checked from, so a
+/// The canonical project or script checked for each spelling, so a
 /// project that vanishes or is replaced under an edit (a manifest removed,
 /// discovery falling back to a parent module) is a visible change.
-async fn project_roots(spellings : Array[String]) -> Array[String?] {
-  let roots = []
+async fn check_identities(spellings : Array[String]) -> Array[String?] {
+  let identities = []
   for spelling in spellings {
-    let root = match @auto_check.check_cwd(spelling) {
-      Some(dir) => Some(resolved_target(dir))
-      None => None
-    }
-    roots.push(root)
+    identities.push(@auto_check.check_identity(spelling))
   }
-  roots
+  identities
 }
 
 ///|
@@ -1193,14 +1191,14 @@ async fn guarded_outcome(
   ]
   let detail = if listed.is_empty() { "" } else { "\n\{listed.join("\n")}" }
   let advice = if errors_hit {
-    let projects = check_projects(path)
+    let paths_to_check = check_paths(path)
     let measured = @diagnostic_guard.gather_comparability(
-      projects.get(0).unwrap_or(path),
+      paths_to_check.get(0).unwrap_or(path),
       Some(before),
       after,
       [path],
     )
-    let evidence = if projects.length() > 1 {
+    let evidence = if paths_to_check.length() > 1 {
       { ..measured, graph_available: false, }
     } else {
       measured
