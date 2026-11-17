@@ -161,7 +161,7 @@ async test "a timed out token request preserves authorization and retries after 
   defer credential_env_lock.release()
   // The credential directory already exists, as on reconnect.
   let dir = @fs.tmpdir(prefix="oauth-timeout-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let old = @env.get_env_var("OPENSEEK_OAUTH_DIR")
   @env.set_env_var("OPENSEEK_OAUTH_DIR", dir)
   defer (if old is Some(value) {
@@ -196,7 +196,7 @@ async test "a timed out token request preserves authorization and retries after 
         conn.write_string(reply.stringify())
       })
     }
-    let c = config("http://127.0.0.1:\{server.addr.port()}/oauth")
+    let c = config("http://127.0.0.1:\{server.addr.port}/oauth")
     let pending = @oauth.begin(c)
     @async.sleep(1050)
     assert_true(@oauth.poll(pending, "https://example.com/mcp", c) is Waiting)

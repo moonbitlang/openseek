@@ -146,7 +146,7 @@ async fn save(
   json : Json,
 ) -> Unit {
   let dir = directory()
-  @fs.mkdir(dir, permission=0o700, recursive=true, allow_exist=true)
+  @fs.mkdir(dir, permission=0o700, recursive=true, allow_existing=true)
   guard @env.rand(16) is Some(random) else {
     fail("Cannot obtain randomness for credential storage")
   }
