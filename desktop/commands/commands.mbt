@@ -175,6 +175,13 @@ pub let settings_set : Command[
 ] = Command("settings.set")
 
 ///|
+/// Ask the selected provider how much the configured key can still spend.
+pub let settings_balance : Command[
+  @protocol.EmptyPayload,
+  @protocol.ApiBalanceReply,
+] = Command("settings.balance")
+
+///|
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply] = Command(
   "app.info",
 )

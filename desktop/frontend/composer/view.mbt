@@ -411,6 +411,26 @@ fn ApprovalNotice::render(
 }
 
 ///|
+/// A notice row whose one button opens the API settings.
+fn api_settings_notice(
+  text : String,
+  button : String,
+  open_settings : @cmd.Cmd,
+  title~ : String,
+) -> @html.Html {
+  @html.div(class="composer-context-row composer-notice", [
+    @html.span(class="composer-notice-text", text),
+    @html.button(
+      class="composer-notice-btn",
+      type_="button",
+      title~,
+      on_click=open_settings,
+      button,
+    ),
+  ])
+}
+
+///|
 /// Render one caller-supplied context state. Keeping this method in the
 /// composer package prevents callers from smuggling arbitrary DOM into the
 /// stable context column.
@@ -438,16 +458,21 @@ fn ContextComponent::render(
       }
     ApiSetupNotice(text~) =>
       Some(
-        @html.div(class="composer-context-row composer-notice", [
-          @html.span(class="composer-notice-text", text),
-          @html.button(
-            class="composer-notice-btn",
-            type_="button",
-            title=ui(locale, ConfigureEndpoint),
-            on_click=action_emit(ApiSetupRequested(identity~)),
-            ui(locale, SetupLabel),
-          ),
-        ]),
+        api_settings_notice(
+          text,
+          ui(locale, SetupLabel),
+          action_emit(ApiSetupRequested(identity~)),
+          title=ui(locale, ConfigureEndpoint),
+        ),
+      )
+    BalanceNotice(text~, button~) =>
+      Some(
+        api_settings_notice(
+          text,
+          button,
+          action_emit(ApiSetupRequested(identity~)),
+          title=button,
+        ),
       )
     ApprovalRequest(approval) =>
       Some(approval.render(locale~, identity, action_emit))

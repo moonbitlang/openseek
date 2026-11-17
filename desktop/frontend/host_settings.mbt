@@ -12,7 +12,7 @@ fn HostSettings::from_status(
 ) -> HostSettings {
   let custom_api_url = payload.custom_api_url.unwrap_or("")
   let provider = if payload.provider == "custom" &&
-    custom_api_url == OpenRouterChatCompletionsUrl {
+    custom_api_url == @protocol.OpenRouterChatCompletionsUrl {
     OpenRouter
   } else {
     ApiProvider::parse(payload.provider)
@@ -221,8 +221,9 @@ fn provider_settings_patch(
       },
     ),
     custom_api_url: match provider {
-      OpenRouter => Some(OpenRouterChatCompletionsUrl)
-      Custom if custom_api_url == OpenRouterChatCompletionsUrl => Some("")
+      OpenRouter => Some(@protocol.OpenRouterChatCompletionsUrl)
+      Custom if custom_api_url == @protocol.OpenRouterChatCompletionsUrl =>
+        Some("")
       _ => None
     },
     deepseek_api_key: None,
@@ -264,7 +265,7 @@ fn api_key_settings_patch(
       },
     ),
     custom_api_url: if provider is OpenRouter {
-      Some(OpenRouterChatCompletionsUrl)
+      Some(@protocol.OpenRouterChatCompletionsUrl)
     } else {
       None
     },
@@ -301,7 +302,7 @@ test "OpenRouter is an atomic custom-backend preset" {
     "custom_api_key": "sk-openrouter",
   })
   json_inspect(
-    provider_settings_patch(Custom, OpenRouterChatCompletionsUrl).to_json(),
+    provider_settings_patch(Custom, @protocol.OpenRouterChatCompletionsUrl).to_json(),
     content={ "provider": "custom", "custom_api_url": "" },
   )
 }
@@ -320,4 +321,20 @@ fn followup_behavior_patch(
     prompt_source: None,
     custom_prompt: None,
   }
+}
+
+///|
+/// Follow-ups once a status is `channel`'s mirror: the API-setup modal it
+/// may call for, and, for the focused host, the balance of the key it names.
+fn Model::settled(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+) -> (@cmd.Cmd, Model) {
+  let (balance, next) = if channel == self.focused {
+    self.refresh_api_balance(dispatch, force=false)
+  } else {
+    (@cmd.none, self)
+  }
+  (@cmd.batch([next.api_setup_dialog(channel), balance]), next)
 }

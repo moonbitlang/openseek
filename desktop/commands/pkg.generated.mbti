@@ -292,6 +292,8 @@ pub let session_snapshot_save : Command[@protocol.SnapshotSavePayload, @protocol
 
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 
+pub let settings_balance : Command[@protocol.EmptyPayload, @protocol.ApiBalanceReply]
+
 pub let settings_get : Command[@protocol.EmptyPayload, @protocol.SettingsStatusPayload]
 
 pub let settings_set : Command[@protocol.SettingsSetPayload, @protocol.SettingsStatusPayload]
