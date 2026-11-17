@@ -10,6 +10,7 @@
     <!-- Proton uses this file's directory as its asset root. Keeping the file
          at the repository root lets CEF serve source CSS, cached vendor files,
          and Moon's _build artifact without copying them into a data_dir. -->
+    <link rel="stylesheet" href="/desktop/target/web/vendor/katex/katex-tune.css" />
     <link rel="stylesheet" href="/desktop/dev/viewer.css" />
     <link rel="stylesheet" href="/desktop/app.css" />
     <link rel="stylesheet" href="/desktop/target/web/xterm.css" />
@@ -25,6 +26,7 @@
   <body>
     <div id="app"></div>
     <script src="/desktop/target/web/xterm.js"></script>
+    <script src="/desktop/target/web/vendor/katex/copy-tex.min.js"></script>
     <script src="/desktop/target/web/snapdom.js"></script>
     <script src="/_build/js/debug/build/openseek_desktop/frontend/frontend.js"></script>
   </body>
