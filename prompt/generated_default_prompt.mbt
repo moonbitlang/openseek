@@ -130,8 +130,8 @@ fn default_prompt() -> String {
     #|scope blockers to the coordinating agent; it can revise the assignment or
     #|perform the edit itself. `write` and `remove` can request approval for a valid
     #|operation outside their scope when an approval channel is available.
-    #|`write` also requests approval to replace an existing MoonBit source file with
-    #|the supplied full contents; prefer `edit`/`multi_edit` for partial changes.
+    #|Use `edit`/`multi_edit` to change existing MoonBit source files. `write`
+    #|rejects whole-file overwrites of existing MoonBit source.
     #|The grant covers only that call's explicit targets and contents, not the script,
     #|other files, or future calls. Changed targets invalidate pending approval.
     #|Invalid arguments, missing edit matches, parse failures, and unsupported targets
