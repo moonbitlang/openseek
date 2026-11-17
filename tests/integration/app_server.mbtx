@@ -115,8 +115,12 @@ async fn main {
         ignore(
           request(ws, 3, "settings.set", {
             "provider": "custom",
-            "custom_api_url": "http://127.0.0.1:1/unused",
-            "custom_api_key": "fixture",
+            "providers": {
+              "custom": {
+                "api_url": "http://127.0.0.1:1/unused",
+                "api_key": "fixture",
+              },
+            },
           }),
         )
         ignore(
