@@ -143,7 +143,7 @@ async fn windows_drive_list() -> Array[String] {
 ///|
 async test "directory browsing accepts native input and returns URI paths" {
   let dir = @fs.tmpdir(prefix="openseek-browse-path-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @fsx.ensure_dir(Path(dir + "/child"))
   let absolute = @pathx.Path(dir).resolve().normalize()
   guard browse({ path: Some(dir), }) is Listing(path~, entries~, ..) else {
@@ -184,7 +184,7 @@ async test "a bad browse path reports its refusal in the reply" {
 ///|
 async test "directory creation makes and enters one direct child" {
   let dir = @fs.tmpdir(prefix="openseek-create-directory-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let parent = @pathx.Path(dir).resolve().normalize()
   guard create_directory({
       parent: parent.resource_path(),
@@ -207,7 +207,7 @@ async test "directory creation makes and enters one direct child" {
 ///|
 async test "directory creation rejects traversal and existing names" {
   let dir = @fs.tmpdir(prefix="openseek-create-directory-refusal-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let parent = @pathx.Path(dir).resolve().normalize()
   @fs.mkdir(parent.join(("taken" : @pathx.Relative)).to_string())
   for name in ["../outside", "taken"] {

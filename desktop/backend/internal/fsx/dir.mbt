@@ -45,5 +45,5 @@ pub fn DirectoryEntry::is_dir(self : DirectoryEntry) -> Bool {
 
 ///|
 pub async fn rmdir(path : @pathx.Path, recursive~ : Bool = false) -> Unit {
-  @fs.rmdir(path.to_string(), recursive~)
+  @fs.remove(path.to_string(), recursive~)
 }

@@ -132,7 +132,7 @@ async test "share download is anonymous and expiry leaves no imported record" {
       }
     })
     let source : @protocol.SessionImportSource = ShareLink(
-      url="http://127.0.0.1:\{server.addr.port()}/v1/shares/sh_test",
+      url="http://127.0.0.1:\{server.addr.port}/v1/shares/sh_test",
     )
     let records = @session_import.prepare(source)
     assert_eq(records[0].title, "Imported test")

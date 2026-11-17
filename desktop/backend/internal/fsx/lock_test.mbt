@@ -16,7 +16,7 @@ async fn temp_leftovers(root : @pathx.Path, base : String) -> Array[String] {
 ///|
 async test "an atomic save replaces the target and leaves no temp behind" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-atomic-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let file = root.join("registry.json")
   @fsx.write_text_atomic(file, "first")
   assert_eq(@fsx.read_text(file), "first")
@@ -32,7 +32,7 @@ async test "an atomic save replaces the target and leaves no temp behind" {
 #cfg(not(platform="windows"))
 async test "a lock refuses a sidecar that is not a regular file" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-locklink-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let victim = root.join("victim.txt")
   let file = root.join("registry.json")
   @fs.symlink(
@@ -56,7 +56,7 @@ async test "a lock refuses a sidecar that is not a regular file" {
 #cfg(not(platform="windows"))
 async test "an atomic save never writes through a guessable temp name" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-symlink-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let victim = root.join("victim.txt")
   @fsx.write_text_atomic(victim, "precious")
   let planted = root.join("registry.json.tmp")
@@ -72,7 +72,7 @@ async test "an atomic save never writes through a guessable temp name" {
 ///|
 async test "an exclusive lock makes the next holder wait for the release" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-exclusive-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let file = root.join("registry.json")
   let log : Array[String] = []
   @async.with_task_group(group => {
@@ -95,7 +95,7 @@ async test "an exclusive lock makes the next holder wait for the release" {
 /// take that for a stale target to clear out of the way.
 async test "an atomic save refuses a target that is not a regular file" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-kind-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let occupied = root.join("registry.json")
   @fsx.ensure_dir(occupied)
   let kept = occupied.join("keep.txt")
@@ -118,7 +118,7 @@ async test "an atomic save refuses a target that is not a regular file" {
 /// unlocking, which only shows up on the second acquire.
 async test "a lock can be retaken after release" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-retake-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let file = root.join("registry.json")
   for _ in 0..<3 {
     let lock = @fsx.FileLock::acquire(file)

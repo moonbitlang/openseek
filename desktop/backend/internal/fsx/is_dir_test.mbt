@@ -6,7 +6,7 @@
 #cfg(not(platform="windows"))
 async test "is_dir reads only a path that is not there as false" {
   let dir = @fs.tmpdir(prefix="openseek-is-dir-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let file = root.join("file")
   @fsx.write_text(file, "")
@@ -24,7 +24,7 @@ async test "is_dir reads only a path that is not there as false" {
 #cfg(not(platform="windows"))
 async test "is_dir raises when the path cannot be inspected" {
   let dir = @fs.tmpdir(prefix="openseek-is-dir-unreadable-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let too_long = root.join("n".repeat(300))
   let overlong = try @fsx.is_dir(too_long) catch {

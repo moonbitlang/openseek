@@ -72,7 +72,7 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   if !office {
     // Twelve bytes cover every supported raster signature, including WebP.
     let header_size = if size < 12 { size.to_int() } else { 12 }
-    let header = source.read_exactly_at(header_size, position=0)
+    let header = source.at(0).read_exactly(header_size)
     match @filekind.classify(header) {
       Pdf => {
         guard size <= @files.MaxOfficeFileBytes.to_int64() else {
@@ -122,7 +122,7 @@ fn is_office_path(path : String) -> Bool {
 /// colons in the path.
 fn Reference::editor_candidate(self : Reference) -> EditorCandidate? {
   if self.0.rev_split_once("#L") is Some((path, line_text)) {
-    let line = @string.parse_int(line_text, base=10) catch { _ => 0 }
+    let line = @string.parse_int(line_text, radix=10) catch { _ => 0 }
     if line > 0 && !path.is_empty() {
       return Some({ path: path.to_owned(), line, column: None, })
     }
@@ -130,10 +130,10 @@ fn Reference::editor_candidate(self : Reference) -> EditorCandidate? {
   guard self.0.rev_split_once(":") is Some((before_last, last_text)) else {
     return None
   }
-  let last = @string.parse_int(last_text, base=10) catch { _ => 0 }
+  let last = @string.parse_int(last_text, radix=10) catch { _ => 0 }
   guard last > 0 && !before_last.is_empty() else { return None }
   if before_last.rev_split_once(":") is Some((path, line_text)) {
-    let line = @string.parse_int(line_text, base=10) catch { _ => 0 }
+    let line = @string.parse_int(line_text, radix=10) catch { _ => 0 }
     if line > 0 && !path.is_empty() {
       return Some({ path: path.to_owned(), line, column: Some(last), })
     }
