@@ -345,18 +345,12 @@
 .office-viewer-surface .office-context-word > .office-context-document {
   overflow-x: auto;
 }
-.office-viewer-surface .office-context-excel {
-  flex: 1 1 auto;
-  min-height: 0;
-}
 .office-viewer-surface .office-context-excel > .office-context-document {
   display: flex;
   flex-direction: column;
-  min-height: 0;
   overflow: hidden;
 }
 .office-viewer-surface .office-context-excel > .office-context-rail {
-  min-height: 0;
   overflow: auto;
 }
 .office-viewer-surface .office-context-rail {
@@ -615,8 +609,6 @@
    the standalone spreadsheet's instructions and inspector out of this host. */
 .office-viewer-surface.sheet-mode {
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
   padding: 0;
 }
 .office-viewer-surface .excel-view-toolbar,
@@ -637,7 +629,6 @@
 .office-viewer-surface .sheet-document.office-excel-workbook {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 0;
   overflow: hidden;
   padding: 0;
   background: transparent;
@@ -647,7 +638,6 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 0;
   margin: 0;
 }
 .office-viewer-surface .office-excel-workbook section[data-sheet][hidden] {
@@ -655,7 +645,6 @@
 }
 .office-viewer-surface .office-sheet-viewport {
   flex: 1 1 auto;
-  min-height: 0;
   /* The viewer sets an inline 65vh cap; this host owns the available height. */
   max-height: none !important;
 }
