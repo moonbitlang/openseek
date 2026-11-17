@@ -118,7 +118,7 @@ async test "auth.json persists 0600 and deletes cleanly" {
     delete_session_file(dir)
     assert_true(load_session_file(dir) is None)
   }
-  defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(dir.to_string(), recursive=true) catch { _ => () })
   body()
 }
 
@@ -136,7 +136,7 @@ async test "session commit persists before memory and wakes each local transitio
   assert_true(store.wakeups().try_get() is Some(_))
 
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-auth-fail-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let unavailable = root.join("missing")
   let failing = AuthStore::load(runtime_dir=unavailable)
   failing.session = Some({
@@ -243,21 +243,22 @@ async test "the loopback listener takes the matching redirect and ignores strays
   @async.with_task_group(group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let port = server.addr.port()
+    let port = server.addr.port
     let waiter = group.spawn(() => wait_for_code(server, oauth_state="st"))
     // A stray (forged state) answers 404 and keeps the wait alive.
-    let (stray, _) = @http.get_text(
+    let (stray, _) = @http.get(
       "http://127.0.0.1:\{port}/cb?code=x&state=forged",
     )
     assert_true(stray.code == 404)
     let browser = group.spawn(() => {
-      @http.get_text("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
+      @http.get("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
     })
     let (code, conn) = waiter.wait()
     defer conn.close()
     assert_true(code == "one-time")
     respond_html(conn, 200, "OK", sign_in_done_page())
-    let (granted, granted_page) = browser.wait()
+    let (granted, body) = browser.wait()
+    let granted_page = body.text()
     assert_true(granted.code == 200)
     assert_true(granted_page.contains("Return to SeekMoon"))
     assert_false(granted_page.contains("?device="))
@@ -350,7 +351,7 @@ async test "environment relay survives account login and local sign-out without 
 async test "account code exchange uses v2 without registering a device" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  let origin = "http://127.0.0.1:\{server.addr.port}"
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let (connection, _) = server.accept()

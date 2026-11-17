@@ -1,7 +1,7 @@
 ///|
 async test "Cloud history survives a host restart and follows account retirement" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-cloud-cache-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let first = sample_session(avatar="")
   let store = AuthStore::load(runtime_dir=root)
   store.commit_session(first)
@@ -83,7 +83,7 @@ async test "Cloud history survives a host restart and follows account retirement
   defer server.close()
   reopened.session = Some({
     ..first,
-    server_url: "http://127.0.0.1:\{server.addr.port()}",
+    server_url: "http://127.0.0.1:\{server.addr.port}",
     device: None,
   })
   @async.with_timeout(5000, () => {
