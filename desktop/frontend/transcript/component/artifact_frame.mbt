@@ -202,10 +202,10 @@ fn ArtifactFrameMessage::decode(data : @js.Value) -> ArtifactFrameMessage? {
 }
 
 ///|
-fn source_frame(event : @dom.Event) -> @dom.Element? {
+fn source_frame(root_id : String, event : @dom.Event) -> @dom.Element? {
   for
     frame in @dom.document().query_selector_all(
-      "#transcript .chat-artifact-frame",
+      "#\{root_id} .chat-artifact-frame",
     ) {
     if message_from_frame(event, frame) {
       return Some(frame)
@@ -231,8 +231,10 @@ fn current_artifact_frame(
 }
 
 ///|
-/// Installs the frame message and selection listeners. Returns the uninstaller.
+/// Installs the frame message and selection listeners of the transcript
+/// whose scroller is `root_id`. Returns the uninstaller.
 fn artifact_frame_listener(
+  root_id : String,
   changed : () -> Unit,
   interact : (String, ArtifactInteraction) -> Unit,
 ) -> () -> Unit {
@@ -242,7 +244,7 @@ fn artifact_frame_listener(
   let message : @dom.Listener = event => {
     guard event.to_message_event() is Some(message_event) &&
       ArtifactFrameMessage::decode(message_event.get_data()) is Some(message) &&
-      source_frame(event) is Some(frame) else {
+      source_frame(root_id, event) is Some(frame) else {
       return
     }
     match message {
@@ -290,7 +292,7 @@ fn artifact_frame_listener(
   let click : @dom.Listener = event => {
     guard event_is_trusted(event) &&
       event.target().to_element() is Some(target) &&
-      target.closest("#transcript .chat-artifact-context") is Some(button) &&
+      target.closest("#\{root_id} .chat-artifact-context") is Some(button) &&
       !button.has_attribute("disabled") &&
       button.closest("[data-transcript-artifact]") is Some(node) &&
       node.query_selector("iframe") is Some(frame) &&

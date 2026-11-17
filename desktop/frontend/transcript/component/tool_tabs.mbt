@@ -59,14 +59,20 @@ fn tool_call_tabs(
 /// Stable radio group identity for one recorded call. The call id takes
 /// priority because one durable assistant event can emit several calls that
 /// all share its sequence. Legacy calls without an id fall back to that
-/// sequence; transient/test items use the empty id's stable hash last.
-fn tool_call_tabs_key(call_id : String, sequence : Int32?) -> String {
+/// sequence; transient/test items use the empty id's stable hash last. A
+/// side chat's transcript copies its conversation's calls, so the dock's
+/// keys are its own: radio groups and label targets are document-wide.
+fn tool_call_tabs_key(
+  call_id : String,
+  sequence : Int32?,
+  surface~ : @interop.ChatSurface,
+) -> String {
   if !call_id.is_empty() {
-    return "call-\{call_id.hash()}"
+    return surface.scoped("call-\{call_id.hash()}")
   }
   match sequence {
-    Some(sequence) => "sequence-\{sequence}"
-    None => "call-\{call_id.hash()}"
+    Some(sequence) => surface.scoped("sequence-\{sequence}")
+    None => surface.scoped("call-\{call_id.hash()}")
   }
 }
 

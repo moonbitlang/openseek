@@ -111,13 +111,14 @@ fn artifact_file_view(
 }
 
 ///|
-fn discover_artifact_files(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn discover_artifact_files(
+  surface : @interop.ChatSurface,
+  emit : @cmd.Emit[Msg],
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
-      for
-        element in @dom.document().query_selector_all(
-          "[data-transcript-artifact]",
-        ) {
+      guard transcript_root(surface) is Some(transcript) else { return }
+      for element in transcript.query_selector_all("[data-transcript-artifact]") {
         if element.get_attribute("data-transcript-artifact") is Some(reference) {
           scheduler.add(emit(ArtifactRequested(reference)))
         }

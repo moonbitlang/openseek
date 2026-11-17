@@ -199,3 +199,30 @@ pub extend ConversationKey with Eq::{equal, not_equal}
 
 ///|
 pub extend ConversationKey with Hash::{hash, hash_combine}
+
+///|
+/// Where a conversation's transcript and composer are on screen. The
+/// conversation column and a side chat in the dock can show at the same time,
+/// so each surface owns its element ids and a component mounted on one never
+/// reaches into the other's DOM.
+#derive(Debug, Eq)
+pub(all) enum ChatSurface {
+  Column
+  Dock
+}
+
+///|
+/// `id` as an element id on this surface. Ids are document-wide and both
+/// surfaces can be mounted at once, so the dock's ids carry a prefix.
+pub fn ChatSurface::scoped(self : ChatSurface, id : String) -> String {
+  match self {
+    Column => id
+    Dock => "side-chat-" + id
+  }
+}
+
+///|
+pub extend ChatSurface with Eq::{equal, not_equal}
+
+///|
+pub extend ChatSurface with Debug::{to_repr}
