@@ -4,7 +4,7 @@
 ///|
 async test "HTTP helpers resolve once before connect and leave configuration unchanged" {
   let dir = @fs.tmpdir(prefix="mcp-headers-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   // Spaces and shell syntax in the filename must survive argv unchanged.
   let filename = "headers $(never-execute); literal.json"
   let path = dir + "/" + filename
@@ -63,7 +63,7 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
     let servers = @config.decode({
       "mcpServers": {
         "remote": {
-          "url": "http://127.0.0.1:\{server.addr.port()}/mcp",
+          "url": "http://127.0.0.1:\{server.addr.port}/mcp",
           "headers": { "authorization": "static", "X-Static": "preserved" },
           "headersHelper": [
             "moonx",

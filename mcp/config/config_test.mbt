@@ -99,7 +99,7 @@ test "configuration resolves environment references once" {
   assert_true(
     headers_helper
     is Some(
-      { command: "/opt/server", arguments: ["--fast", "secret-${OTHER}"], }
+      { command: "/opt/server", arguments: ["--fast", "secret-${OTHER}"], },
     ),
   )
   assert_eq(url, "http://127.0.0.1:3210/mcp")

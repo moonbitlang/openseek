@@ -4,7 +4,7 @@
 ///|
 async test "helper returns headers with literal arguments workspace cwd and stdin EOF" {
   let dir = @fs.tmpdir(prefix="headers-helper-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let filename = "headers $(never-execute); literal.json"
   @fs.write_text(dir + "/" + filename, "{\"Authorization\":\"Bearer fixture\"}")
   @fs.write_text(

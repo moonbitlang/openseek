@@ -13,7 +13,7 @@ async fn send_body(
     "Authorization": "Bearer \{token.unwrap_or(handed)}",
   })
   if response.code == 200 {
-    (response.code, Some(@json.parse(reply)))
+    (response.code, Some(reply.json()))
   } else {
     (response.code, None)
   }
@@ -179,7 +179,7 @@ async test "a call's reply saves its images and names their files" {
     @fs.read_binary("deepseek/client/testdata/two-colors.png"),
   )
   let root = @fs.tmpdir(prefix="mcp-host-images")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let directory = "\{root}/mcp-images"
   guard @agent_tool.respond("took it", images=[image, image]) is Respond(output) else {
     fail("expected a respond action")

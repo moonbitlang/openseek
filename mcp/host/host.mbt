@@ -72,7 +72,7 @@ pub async fn Service::start(
       socket,
       _,
     ) => {
-      let conn = @http.ServerConnection::new(socket)
+      let conn = @http.ServerConnection(socket)
       defer conn.close()
       let reader = @loopback_http.RequestReader(socket)
       // Bound the entire admission phase, as PTC does: nothing runs until
@@ -151,7 +151,7 @@ pub fn Service::env(self : Service) -> Map[String, String] {
     "OPENSEEK_MCP": (
       {
         "version": 1,
-        "url": "http://127.0.0.1:\{self.server.addr.port()}/call",
+        "url": "http://127.0.0.1:\{self.server.addr.port}/call",
         "token": self.token,
       } : Json).stringify(),
   }
@@ -388,7 +388,7 @@ async fn save_image(
   }
   let path = "\{directory}/mcp-image-\{@crypto.bytes_to_hex_string(entropy)}\{extension}"
   try {
-    @fs.mkdir(directory, permission=0o700, recursive=true, allow_exist=true)
+    @fs.mkdir(directory, permission=0o700, recursive=true, allow_existing=true)
     @fs.write_binary(path, image.bytes, create_mode=CreateNew, permission=0o600)
   } catch {
     error => Err("\{error}")

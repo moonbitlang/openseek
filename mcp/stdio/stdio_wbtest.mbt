@@ -38,8 +38,8 @@ async fn pipe_mcp_server(transport : &@jsonrpc.Transport) -> Unit {
 async test "the MCP stack runs a handshake, list, and call over an ndjson pipe" {
   @async.with_task_group(group => {
     // client -> server and server -> client byte pipes.
-    let (server_reads, client_writes) = @io.pipe()
-    let (client_reads, server_writes) = @io.pipe()
+    let (server_reads, client_writes) = @io.memory_pipe()
+    let (client_reads, server_writes) = @io.memory_pipe()
     let client_transport = NdjsonTransport::NdjsonTransport(
       @io.Utf8Reader(client_reads),
       @io.Utf8Writer(client_writes),

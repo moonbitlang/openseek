@@ -102,7 +102,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
             conn.write_string(
               "event: message\rdata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\r\r",
             )
-            conn.flush()
+            conn.flush_partial_data()
             // Split at a token boundary: SSE joins the lines with a newline,
             // which JSON tolerates only between tokens. The reply is spelled
             // out here rather than built and stringified, because the split is
@@ -110,7 +110,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
             conn.write_string(
               "data: {\"jsonrpc\":\"2.0\",\"id\":\{id.stringify()},\r\ndata: \"result\":{\"tools\":[{\"name\":\"fetch\",\"description\":\"Fetch a URL\",\"inputSchema\":{\"type\":\"object\"}}]}}\r\n\r\n",
             )
-            conn.flush()
+            conn.flush_partial_data()
             // Hold the stream open past the reply: the client must release the
             // exchange (and answer promptly) instead of reading to EOF.
             @async.sleep(3000)
@@ -122,7 +122,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
       max_connections=8,
     )
   }
-  Some(("http://127.0.0.1:\{server.addr.port()}/mcp", seen))
+  Some(("http://127.0.0.1:\{server.addr.port}/mcp", seen))
 }
 
 ///|
@@ -218,7 +218,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
               conn.write_string(
                 "data: {\"jsonrpc\":\"2.0\",\"id\":\"srv-ping\",\"method\":\"ping\"}\n\n",
               )
-              conn.flush()
+              conn.flush_partial_data()
               let pong = pongs.get()
               assert_true(pong is { "id": "srv-ping", "result": _, .. })
               let reply : Json = {
@@ -241,7 +241,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port()}/mcp",
+      "http://127.0.0.1:\{server.addr.port}/mcp",
     )
     let tools = @async.with_timeout_opt(10000, () => conn.client().list_tools())
     guard tools is Some(tools) else {
@@ -284,7 +284,7 @@ async test "an http error fails the request fast" {
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port()}/mcp",
+      "http://127.0.0.1:\{server.addr.port}/mcp",
     )
     // Bounded well below any outer timeout: the failure must arrive promptly.
     let outcome = @async.with_timeout_opt(5000, () => {
@@ -349,7 +349,7 @@ async test "an expired legacy session fails the request and ends the connection"
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port()}/mcp",
+      "http://127.0.0.1:\{server.addr.port}/mcp",
     )
     let client = conn.client()
     let closed : @async.Queue[Unit] = Queue(kind=Unbounded)
@@ -423,7 +423,7 @@ async test "tools/list waits for the initialized notification to complete" {
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port()}/mcp",
+      "http://127.0.0.1:\{server.addr.port}/mcp",
     )
     let tools = conn.client().list_tools()
     assert_eq(tools[0].name, "ordered")

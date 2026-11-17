@@ -43,7 +43,7 @@ async test "device flow waits persists scoped credentials expires and disconnect
     } else {
       @env.unset_env_var("OPENSEEK_OAUTH_DIR")
     }
-    @fs.rmdir(dir, recursive=true, allow_missing=true)
+    @fs.remove(dir, recursive=true, allow_missing=true)
   }
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
@@ -98,7 +98,7 @@ async test "device flow waits persists scoped credentials expires and disconnect
         conn.write_string(json.stringify())
       })
     }
-    let c = config("http://127.0.0.1:\{server.addr.port()}/oauth")
+    let c = config("http://127.0.0.1:\{server.addr.port}/oauth")
     let resource = "https://example.com/mcp"
     let pending = @oauth.begin(c)
     assert_eq(pending.user_code(), "ABCD")
