@@ -132,7 +132,7 @@ async test "job_output windows a large job's output and notes truncation" {
     assert_true(output.content.contains("truncated=true"))
     assert_true(output.content.contains("20000"))
     assert_true(output.content.char_length() < 80000)
-    @fs.rmdir(dir, recursive=true) catch {
+    @fs.remove(dir, recursive=true) catch {
       _ => ()
     }
   })
@@ -320,7 +320,7 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
     let fine = run_job_output(bg, { "job_id": quiet })
     assert_false(fine.is_error, msg=fine.content)
     assert_false(fine.content.contains("mbtx sandbox:"))
-    @fs.rmdir(dir, recursive=true) catch {
+    @fs.remove(dir, recursive=true) catch {
       _ => ()
     }
   })

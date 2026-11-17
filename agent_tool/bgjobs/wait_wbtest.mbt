@@ -145,7 +145,7 @@ async test "metadata_changed reports a publication that could not be persisted" 
     @async.with_task_group(group => {
       let dir = @fs.tmpdir(prefix="bgjobs-metadata-")
       defer @async.protect_from_cancel(() => {
-        @fs.rmdir(dir, recursive=true) catch {
+        @fs.remove(dir, recursive=true) catch {
           _ => ()
         }
       })

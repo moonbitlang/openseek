@@ -777,7 +777,7 @@ async test "stop terminates a running job" {
 #cfg(not(platform="windows"))
 async test "a large-output job spills; snapshot previews, read_output is full" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   @async.with_task_group(group => {
     let rt = BgJobRuntime::BgJobRuntime(
       AgentTaskScope(group),
@@ -903,7 +903,7 @@ async test "snapshot, read_output, and stop handle unknown ids" {
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "start allocates one id per job (id matches its spill file)" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   @async.with_task_group(group => {
     let rt = BgJobRuntime::BgJobRuntime(
       AgentTaskScope(group),
