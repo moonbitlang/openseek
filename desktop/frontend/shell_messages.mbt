@@ -20,7 +20,6 @@ priv enum ShellMessage {
   ArchivedReadOnly
   RestoreBeforeContinue
   RestoreLabel
-  ConversationTransfer
   ExportConversation
   HideTerminal
   ShowTerminal
@@ -222,11 +221,6 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, RestoreLabel) => "恢复"
     (TraditionalChinese, RestoreLabel) => "恢復"
     (Japanese, RestoreLabel) => "復元"
-    (English, ConversationTransfer) => "Conversation actions"
-    (Spanish, ConversationTransfer) => "Acciones de conversación"
-    (SimplifiedChinese, ConversationTransfer) => "对话操作"
-    (TraditionalChinese, ConversationTransfer) => "對話操作"
-    (Japanese, ConversationTransfer) => "会話の操作"
     (English, ExportConversation) => "Export"
     (Spanish, ExportConversation) => "Exportar"
     (SimplifiedChinese, ExportConversation) => "导出"

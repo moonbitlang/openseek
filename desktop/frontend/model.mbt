@@ -1350,7 +1350,6 @@ priv struct Model {
   right_panel_menu_open : Bool
   // Reported by the tab-menu component so native views yield to its surface.
   dock_tab_menu_open : Bool
-  conversation_transfer_menu_open : Bool
   right_panel_expanded : Bool
   // Terminal tabs and their connection snapshots affect both the component
   // view and root layout. The root owns the opaque state once so neither side
@@ -2096,7 +2095,6 @@ priv enum Msg {
   ToggleRightPanelExpanded
   CloseRightPanelMenu
   DockTabMenuChanged(Bool)
-  ConversationTransferMenuChanged(Bool)
   // Close a selection through ordinary teardown; All keeps the launcher open.
   CloseDockTabs(@dock.CloseSelection)
   // The composer's goal-editing mode over the active conversation: open
@@ -2794,7 +2792,6 @@ fn initial_model(
     right_panel_open: false,
     right_panel_menu_open: false,
     dock_tab_menu_open: false,
-    conversation_transfer_menu_open: false,
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
     mcp: @mcp.State::initial(),

@@ -81,16 +81,7 @@ try {
   await page.locator('#stop').click();
   // Back dismisses an open menu or modal instead of leaving the page beneath it.
   const deviceUrl = page.url();
-  const transfer = page.getByRole('button', { name: 'Export and import', exact: true });
-  await transfer.click();
-  const transferMenu = page.getByRole('menu', { name: 'Export and import', exact: true });
-  await transferMenu.waitFor();
-  run('shell', 'input', 'keyevent', '4');
-  // Action menus stay mounted as popovers; a closed one leaves the tree.
-  await transferMenu.waitFor({ state: 'hidden' });
-  check(page.url() === deviceUrl, 'Back left the page under the action menu');
-  await transfer.click();
-  await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
+  await page.locator('main .topbar').getByRole('button', { name: 'Export', exact: true }).click();
   const exportDialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
   await exportDialog.waitFor();
   // Download hands the export's blob to the system's save dialog; Back
