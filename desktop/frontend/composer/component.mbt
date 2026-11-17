@@ -22,7 +22,7 @@ priv enum FileCompletion {
     root~ : @common.Uri,
     query~ : String,
     files~ : Array[@files.Match],
-    epoch~ : Int32
+    epoch~ : Int32,
   )
 }
 
@@ -510,7 +510,7 @@ priv enum Msg {
     Identity,
     @common.Uri?,
     Int32,
-    Result[@protocol.PrepareAttachmentReply, AttachmentFailure]
+    Result[@protocol.PrepareAttachmentReply, AttachmentFailure],
   )
   AttachmentConfirmed(Identity, @common.Uri?, Int32)
   AttachmentCancelled(Identity, @common.Uri?, Int32)
@@ -518,7 +518,7 @@ priv enum Msg {
     Identity,
     @common.Uri?,
     Int32,
-    Result[String, AttachmentFailure]
+    Result[String, AttachmentFailure],
   )
   MentionJumped(Int32)
   GoalCancelled
@@ -532,25 +532,25 @@ priv enum Msg {
     owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
-    items~ : Array[@symbols.Symbol]
+    items~ : Array[@symbols.Symbol],
   )
   SymbolsFailed(
     owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
-    query~ : String
+    query~ : String,
   )
   FilesLoaded(
     owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
     epoch~ : Int32,
-    files~ : Array[@pathx.Relative]
+    files~ : Array[@pathx.Relative],
   )
   FilesFailed(
     owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int32
+    epoch~ : Int32,
   )
 }
 

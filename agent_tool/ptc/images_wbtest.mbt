@@ -51,7 +51,7 @@ async test "PTC attaches unprinted images even when the outer script fails and b
 ///|
 async test "PTC background images have durable snapshots separate from trace and stable repeat reads" {
   let root = @fs.tmpdir(prefix="openseek-ptc-images-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let picture = @protocol.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
   let tool = leaf(
     name="picture",
@@ -101,7 +101,7 @@ async test "PTC background images have durable snapshots separate from trace and
 ///|
 async test "image persistence errors settle the call without attaching a picture or consuming its budget" {
   let root = @fs.tmpdir(prefix="openseek-ptc-image-failure-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let picture = @protocol.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
   let tool = leaf(
     name="picture",

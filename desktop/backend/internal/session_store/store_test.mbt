@@ -53,7 +53,7 @@ async test "a session lookup raises when a store cannot be inspected" {
   store_env_test_lock.acquire()
   defer store_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-session-lookup-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())

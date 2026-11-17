@@ -113,7 +113,7 @@ test "share login failure success and clipboard feedback transitions" {
               publication: Some({ url: "http://shares.test/a", .. }),
               operation: Ready,
               ..
-            }
+            },
           ),
         )
         let (_, duplicate) = first.advance(emit, Share)

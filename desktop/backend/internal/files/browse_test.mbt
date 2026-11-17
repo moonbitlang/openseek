@@ -2,7 +2,7 @@
 async test "folder picker creates a direct child for parent path spellings" {
   for suffix in ["", "/", "//", "/./"] {
     let dir = @fs.tmpdir(prefix="openseek-picker-create-")
-    defer @fs.rmdir(dir, recursive=true)
+    defer @fs.remove(dir, recursive=true)
     let listing = @files.browse({ path: Some(dir + suffix), })
     guard listing is Listing(path=parent, ..) else {
       fail("expected parent listing: \{Repr(listing)}")

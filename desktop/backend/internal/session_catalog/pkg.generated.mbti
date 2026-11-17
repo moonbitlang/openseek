@@ -15,7 +15,7 @@ pub struct ListPage {
   offset : Int32
   limit : Int32
 }
-pub fn ListPage::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ListPage::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn ListPage::page(Self, @protocol.SessionsReply) -> @json.Json raise
 pub impl @json.FromJson for ListPage
 

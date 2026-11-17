@@ -2,7 +2,7 @@
 #cfg(not(platform="windows"))
 async test "live and archived listings read stores without an engine executable" {
   let dir = @fs.tmpdir(prefix="openseek-direct-list-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let previous = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", dir)
   defer (match previous {
@@ -185,7 +185,7 @@ async test "live and archived listings read stores without an engine executable"
     @engine.search_sessions({ query: "recovered", include_archived: false, }).hits.length(),
     1,
   )
-  @fs.rmdir(workspace + "/.openseek/sessions/prompt", recursive=true)
+  @fs.remove(workspace + "/.openseek/sessions/prompt", recursive=true)
   assert_eq(
     @engine.search_sessions({ query: "recovered", include_archived: false, }).hits.length(),
     0,

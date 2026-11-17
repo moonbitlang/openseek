@@ -1,7 +1,7 @@
 ///|
 async test "creation prompts survive retries and cannot be overwritten on resume" {
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-prompt-capture-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(dir).resolve()
   let store = @store.SessionStore(dir)
   for i, text in ["", "  Custom instructions\n中文\n"] {

@@ -8,7 +8,7 @@
 /// `lib/a.txt` committed; `work` itself is a plain directory.
 async fn repositories(group : @async.TaskGroup) -> (String, String) {
   let root = @fs.tmpdir(prefix="openseek-directory-")
-  group.add_defer(() => @fs.rmdir(root, recursive=true))
+  group.add_defer(() => @fs.remove(root, recursive=true))
   let work = "\{root}/work"
   for name in ["a", "b"] {
     let repo = "\{work}/\{name}"

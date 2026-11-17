@@ -1,7 +1,7 @@
 ///|
 async test "file share capture preserves bytes and has no text preview limit" {
   let root = @fs.tmpdir(prefix="seekmoon-file-share-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let path = @pathx.Path(root).join("报告.bin").to_string()
   let original = b"\x00\xff\xfe\r\noriginal\x00"
   @fs.write_binary(path, original)

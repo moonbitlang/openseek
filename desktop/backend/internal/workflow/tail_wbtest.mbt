@@ -98,7 +98,7 @@ test "sidecar lines are launches and finishes, carrying the child's session" {
 /// and starts over when the file it was reading is replaced by a shorter one.
 async test "a file tail reads appended lines exactly once" {
   let dir = @fs.tmpdir(prefix="workflow-tail-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let path = "\{dir}/events.jsonl"
   let tail : FileTail = { path, offset: 0, carry: b"", }
   // Nothing yet: not an error, just nothing.
@@ -119,7 +119,7 @@ async test "a file tail reads appended lines exactly once" {
 ///|
 async test "follow_run reports launches, finishes and ledger rows in file order" {
   let dir = @fs.tmpdir(prefix="workflow-follow-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let events = "\{dir}/events.jsonl"
   let journal = "\{dir}/journal.jsonl"
   let seen : Array[String] = []

@@ -2,7 +2,7 @@
 #cfg(not(platform="windows"))
 async test "cancelling the Codex actor settles an in-flight API call" {
   let dir = @fs.tmpdir(prefix="openseek-codex-cancel-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let script = dir + "/app-server.sh"
   let source =
     #|#!/bin/sh

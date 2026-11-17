@@ -2,7 +2,7 @@
 #cfg(not(platform="windows"))
 async test "job lifecycle publishes ordered durable start and failure with retained UTF8" {
   let root = @fs.tmpdir(prefix="openseek-job-events-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let events : Array[(@protocol.JobEventKind, @protocol.JobRecord)] = []
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
@@ -68,7 +68,7 @@ async test "stop emits stopping before one settled terminal event" {
 #cfg(not(platform="windows"))
 async test "session cleanup persists a terminal record after cancellation" {
   let root = @fs.tmpdir(prefix="openseek-job-finalize-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let mut path = ""
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
@@ -95,7 +95,7 @@ async test "session cleanup persists a terminal record after cancellation" {
 #cfg(not(platform="windows"))
 async test "metadata write failure remains visible and does not strand stop settlement" {
   let root = @fs.tmpdir(prefix="openseek-job-metadata-fail-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let events : Array[@protocol.JobRecord] = []
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {

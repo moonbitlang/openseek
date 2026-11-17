@@ -444,7 +444,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   // A run needs a workspace before the endpoint matters; attach one so this
   // test fails only for the reason it is named after.
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-config-endpoint-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   set_test_home(root.join("home").to_string())
   let workspace = attach_run_workspace(root)
   let manager = new_engine_manager("openseek", runtime_dir=root)
@@ -534,7 +534,7 @@ async test "host chooses durable placement from workspace state" {
   // The registry canonicalizes workspace paths, so build the fixture from
   // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-config-workspace-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"

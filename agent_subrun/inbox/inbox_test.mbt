@@ -1,7 +1,7 @@
 ///|
 async test "a post reaches the reader once, in order" {
   let dir = @fs.tmpdir(prefix="openseek-inbox-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   // The receiver's own directory does not exist until it opens the inbox.
   let path = "\{dir}/sessions/p-sr-1/inbox.jsonl"
   let reader = @inbox.Reader(path)
@@ -32,7 +32,7 @@ async test "a post reaches the reader once, in order" {
 ///|
 async test "a damaged line costs only itself" {
   let dir = @fs.tmpdir(prefix="openseek-inbox-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/inbox.jsonl"
   @inbox.open(path)
   let before = @inbox.Message(from="p", text="whole")
@@ -56,7 +56,7 @@ async test "a damaged line costs only itself" {
 ///|
 async test "a record this build does not know is not delivered" {
   let dir = @fs.tmpdir(prefix="openseek-inbox-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/inbox.jsonl"
   @fs.write_text(
     path,
@@ -75,7 +75,7 @@ async test "a record this build does not know is not delivered" {
 ///|
 async test "two senders' messages with one id stay two messages" {
   let dir = @fs.tmpdir(prefix="openseek-inbox-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/inbox.jsonl"
   @inbox.open(path)
   let ours : @inbox.Message = { id: "m1", from: "p", text: "from the parent", }

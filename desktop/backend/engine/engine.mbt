@@ -349,6 +349,11 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
     let command = self.commands.get() catch { _ => break }
     self.writer.write(@utf8.encode(command.command.to_jsonl())) catch {
       error => {
+        let error : Error = if error is TransportError(cause, ..) {
+          cause
+        } else {
+          error
+        }
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
         failure = Some(reason)
@@ -1863,7 +1868,7 @@ async fn ServeEngine::consume(
           // that file again.
           Some(
             McpConfigUnreadable(path~, error~)
-            | McpConfigInvalid(path~, error~)
+            | McpConfigInvalid(path~, error~),
           ) => {
             if manager.mcp.current_engine_id != Some(engine.id) ||
               manager.mcp.errors.get(path) == Some(error) {
@@ -1931,7 +1936,7 @@ async fn ServeEngine::consume(
               }
             }
           Some(
-            WorkflowStarted(id~, journal~, events~, first_child~, child_count~)
+            WorkflowStarted(id~, journal~, events~, first_child~, child_count~),
           ) =>
             // The bracket names both files by absolute path, so the tail
             // needs no store root; only the per-child PROBE does (it locates
@@ -3003,7 +3008,7 @@ async test "timed out command-lock waiter is removed" {
 async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))
-  defer (@fs.rmdir(root.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(root.to_string(), recursive=true) catch { _ => () })
   let input = root.join("Resources/seekmoon")
   let engine = input.join("bin/openseek")
   let seed = input.join("toolchains/moonbit/macos-arm64")
@@ -3212,7 +3217,7 @@ async fn write_fake_executable(path : @pathx.Path) -> Unit {
 #cfg(not(platform="windows"))
 async test "engine startup rolls back follower on pre-spawn failure" {
   let dir = @fs.tmpdir(prefix="openseek-engine-startup-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let baseline_engine = dir + "/baseline.sh"
   @fs.write_text(
     baseline_engine,

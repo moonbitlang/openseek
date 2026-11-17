@@ -1182,7 +1182,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
       {
         review: Some({ generation: 4, baseline: ReviewContent("HEAD"), .. }),
         ..
-      }
+      },
     ),
   )
   let missing_epoch = gone.file_panel.request_epoch

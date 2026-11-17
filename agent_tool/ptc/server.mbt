@@ -157,7 +157,7 @@ pub async fn Service::start(
       socket,
       _,
     ) => {
-      let conn = @http.ServerConnection::new(socket)
+      let conn = @http.ServerConnection(socket)
       defer conn.close()
       let reader = @loopback_http.RequestReader(socket)
       // Bound the entire admission phase, starting at acceptance, including
@@ -356,7 +356,7 @@ pub fn Program::env(self : Program) -> Map[String, String] {
     "OPENSEEK_PTC": (
       {
         "version": 1,
-        "url": "http://127.0.0.1:\{self.service.server.addr.port()}/call",
+        "url": "http://127.0.0.1:\{self.service.server.addr.port}/call",
         "token": self.token,
         "approval_tools": Json(
           [

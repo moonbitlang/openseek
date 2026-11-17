@@ -76,7 +76,7 @@ test "ordinary retries preserve a review's visible or pending baseline" {
           state: TabReadFailed(Diagnostic("failed")),
           review: Some(retained),
           ..
-        }
+        },
       ) &&
       retained.baseline == baseline,
     )

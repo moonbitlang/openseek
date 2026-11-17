@@ -157,7 +157,7 @@ async test "the seed is found in the canonical seekmoon resource tree" {
     }
   }
   let tmp = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-seed-layout-")).resolve()
-  defer (@fs.rmdir(tmp.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(tmp.to_string(), recursive=true) catch { _ => () })
   let resources = tmp.join("seekmoon")
   let seed = resources.join("toolchains/moonbit/macos-arm64")
   write_fake_seed(seed)

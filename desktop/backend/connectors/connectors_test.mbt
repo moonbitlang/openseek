@@ -1,7 +1,7 @@
 ///|
 async test "settings discovers bundled skills user overrides and reports malformed MCP" {
   let dir = @fs.tmpdir(prefix="seekmoon-connectors-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let old_library = @env.get_env_var("OPENSEEK_GLOBAL_SKILLS_DIR")
   let old_tokens = @env.get_env_var("OPENSEEK_OAUTH_DIR")
   defer {

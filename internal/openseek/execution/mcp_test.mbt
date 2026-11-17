@@ -11,7 +11,7 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
   let (_, body) = @http.post_text(url, request.stringify(), headers={
     "Authorization": "Bearer \{token}",
   })
-  guard @json.parse(body) is { "data": { "items": Array(items), .. }, .. } else {
+  guard body.json() is { "data": { "items": Array(items), .. }, .. } else {
     fail("expected the whole catalog in one listing")
   }
   items
@@ -20,7 +20,7 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
 ///|
 async test "multiple MCP files merge before connecting and bad files do not hide valid tools" {
   let directory = @fs.tmpdir(prefix="openseek-mcp-merge-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   let first = directory + "/first.json"
   let second = directory + "/second.json"
   let broken = directory + "/broken.json"
@@ -80,7 +80,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
           allow_failure=true,
         )
       })
-      let base = "http://127.0.0.1:\{server.addr.port()}"
+      let base = "http://127.0.0.1:\{server.addr.port}"
       let earlier : Json = {
         "mcpServers": {
           "seekmoon": { "url": base + "/overridden" },
@@ -194,7 +194,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
 async test "the MCP registry tells its owner as a server settles and when it is lost" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-mcp-registry-")
-    defer @fs.rmdir(dir, recursive=true)
+    defer @fs.remove(dir, recursive=true)
     // Offers one tool, then exits a moment later.
     let brief =
       #|read _
@@ -279,7 +279,7 @@ async fn write_skill(dir : String, name : String, config : Json) -> Unit {
 ///|
 async test "a skill's stdio server accepts a configured native command" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   write_skill(dir, "tracker", {
     "mcpServers": {
       "tracker": {
@@ -311,7 +311,7 @@ async test "a skill's stdio server accepts a configured native command" {
 ///|
 async test "a skill's malformed helper or missing variable makes its configuration invalid" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let rejected : Array[(String, Json)] = [
     (
       "helper",
@@ -356,7 +356,7 @@ async test "a skill's malformed helper or missing variable makes its configurati
 ///|
 async test "a skill's HTTP server connects when a script reaches it" {
   let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   // Nothing listens on port 9, so connecting settles at once as failed.
   write_skill(dir, "tracker", {
     "mcpServers": {

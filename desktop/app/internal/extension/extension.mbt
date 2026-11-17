@@ -811,8 +811,8 @@ async test "a full inbox preserves local events before the hub resync boundary" 
         bridge.inbox.get()
         is Deliver(
           Hub(
-            AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), })
-          )
+            AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+          ),
         ),
       )
       assert_true(bridge.inbox.try_get() is None)

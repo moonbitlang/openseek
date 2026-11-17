@@ -84,7 +84,7 @@ test "a reply sent now submits the draft past an open completion menu" {
         sequence_before=0,
         { task: "@main\n\n> quoted\n\nwhy?\n\n", .. },
         ..
-      )
+      ),
     ),
   )
 }
@@ -434,7 +434,7 @@ test "Cloud annotations preserve typing, owner isolation and ordinary send avail
   assert_true(
     sent.pending_submission
     is Some(
-      PromptSubmission({ task: "unsent typing", mentions: [saved], .. }, ..)
+      PromptSubmission({ task: "unsent typing", mentions: [saved], .. }, ..),
     ) &&
     saved == mention,
   )

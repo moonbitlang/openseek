@@ -60,7 +60,7 @@ pub struct ControlApproval {
   body : String?
 }
 pub fn ControlApproval::equal(Self, Self) -> Bool
-pub fn ControlApproval::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlApproval::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn ControlApproval::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlApproval
 
@@ -107,7 +107,7 @@ pub enum ControlRunStatus {
   Stopping
 }
 pub fn ControlRunStatus::equal(Self, Self) -> Bool
-pub fn ControlRunStatus::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlRunStatus::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn ControlRunStatus::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlRunStatus
 
@@ -119,7 +119,7 @@ pub struct ControlSnapshot {
   data : ControlState
 }
 pub fn ControlSnapshot::equal(Self, Self) -> Bool
-pub fn ControlSnapshot::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlSnapshot::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn ControlSnapshot::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlSnapshot
 
@@ -135,7 +135,7 @@ pub struct ControlState {
   approval : ControlApproval?
 }
 pub fn ControlState::equal(Self, Self) -> Bool
-pub fn ControlState::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlState::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn ControlState::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlState
 
@@ -372,7 +372,7 @@ pub struct QueueEntry {
   content : @openseek_protocol.Content
 }
 pub fn QueueEntry::equal(Self, Self) -> Bool
-pub fn QueueEntry::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QueueEntry::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn QueueEntry::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for QueueEntry
 
@@ -464,7 +464,7 @@ pub struct SteerReceipt {
   status : SteerStatus
 }
 pub fn SteerReceipt::equal(Self, Self) -> Bool
-pub fn SteerReceipt::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SteerReceipt::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn SteerReceipt::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for SteerReceipt
 
@@ -476,7 +476,7 @@ pub enum SteerStatus {
   Unknown
 }
 pub fn SteerStatus::equal(Self, Self) -> Bool
-pub fn SteerStatus::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SteerStatus::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn SteerStatus::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for SteerStatus
 

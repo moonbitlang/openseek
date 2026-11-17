@@ -14,7 +14,7 @@ async fn invoke_shared(
 ///|
 async test "shared endpoints persist preferences and drafts without a window" {
   let dir = @fs.tmpdir(prefix="seekmoon-shared-endpoints-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let state = @api.ApiState(engine="unused-test-engine", runtime_dir=Path(dir))
   let language : @protocol.UiLanguagePreference = @json.from_json(
     invoke_shared(state, "app.language_get", {}),
@@ -53,7 +53,7 @@ async test "shared endpoints persist preferences and drafts without a window" {
 ///|
 async test "shared endpoints report signed-out sharing" {
   let dir = @fs.tmpdir(prefix="seekmoon-shared-share-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let state = @api.ApiState(engine="unused-test-engine")
   let share : @protocol.SessionShareReply = @json.from_json(
     invoke_shared(

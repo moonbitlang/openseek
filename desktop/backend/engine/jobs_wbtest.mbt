@@ -1,7 +1,7 @@
 ///|
 async test "job log pages follow byte cursors across multibyte output and no newline" {
   let root = @fs.tmpdir(prefix="job-page-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let path = "\{root}/job.out"
   @fs.write_text(path, "a你好🙂tail")
   let first = read_job_page(path, Some(0L), 5)
@@ -37,7 +37,7 @@ async test "job log pages follow byte cursors across multibyte output and no new
 ///|
 async test "job output pages are bounded for a large retained file" {
   let root = @fs.tmpdir(prefix="job-large-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let path = "\{root}/large.out"
   @fs.write_text(path, "x".repeat(200000))
   let page = read_job_page(path, Some(0L), 65536)
@@ -80,7 +80,7 @@ fn job_record_fixture() -> @wire.JobRecord {
 ///|
 async test "job history distinguishes dead owner from disconnected client and malformed metadata" {
   let root = @fs.tmpdir(prefix="job-history-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   let record = job_record_fixture()
   @fs.write_text("\{root}/gen-1/bg-1.json", record.to_json().stringify())
@@ -122,7 +122,7 @@ async test "job history distinguishes dead owner from disconnected client and ma
 ///|
 async test "history decodes only its requested page and preserves runtime job order" {
   let root = @fs.tmpdir(prefix="job-history-pages-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   @fs.write_text("\{root}/gen-1/owner.lock", "")
   for index in 1..<=101 {
@@ -169,7 +169,7 @@ async test "history decodes only its requested page and preserves runtime job or
   // One malformed runtime entry produces one actionable diagnostic.
   // Use an otherwise empty root so pagination cannot hide a second error.
   let broken_root = @fs.tmpdir(prefix="job-broken-runtime-")
-  defer @fs.rmdir(broken_root, recursive=true)
+  defer @fs.remove(broken_root, recursive=true)
   @fs.write_text("\{broken_root}/stray-file", "not a runtime directory")
   let broken = job_history_page(broken_root, Map([]), 0, [])
   assert_eq(broken.errors.length(), 1)
@@ -195,7 +195,7 @@ async test "history decodes only its requested page and preserves runtime job or
 #cfg(not(platform="windows"))
 async test "owner lock inspection failures preserve durable and live jobs" {
   let root = @fs.tmpdir(prefix="job-owner-inspection-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   let record = job_record_fixture()
   @fs.write_text("\{root}/gen-1/bg-1.json", record.to_json().stringify())
@@ -255,7 +255,7 @@ test "job ownership paths normalize POSIX roots and joins equally" {
 ///|
 async test "a tail at byte zero rejects corrupt leading UTF8 instead of hiding it" {
   let root = @fs.tmpdir(prefix="job-invalid-tail-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let path = "\{root}/output"
   @fs.write_binary(path, b"\x80a")
   try read_job_page(path, None, 65536) catch {
@@ -329,7 +329,7 @@ async test "correlated job replies reach their waiter but never the stream sink"
 ///|
 async test "UUIDv7 history preserves newest-first bounded pages across terminal updates" {
   let root = @fs.tmpdir(prefix="job-uuid-pages-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   @fs.write_text("\{root}/gen-1/owner.lock", "")
   let ids : Array[String] = []
@@ -389,7 +389,7 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
 ///|
 async test "the first page lists every running job and paging never skips one" {
   let root = @fs.tmpdir(prefix="job-history-running-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   @fs.write_text("\{root}/gen-1/owner.lock", "")
   for index in 1..<=250 {

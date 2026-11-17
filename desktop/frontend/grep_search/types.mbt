@@ -214,7 +214,7 @@ pub(all) enum Msg {
   PatternRepairFinished(
     root~ : String,
     generation~ : Int32,
-    reply~ : @protocol.PatternRepairReply?
+    reply~ : @protocol.PatternRepairReply?,
   )
   IncludeChanged(String)
   ExcludeChanged(String)
@@ -236,19 +236,19 @@ pub(all) enum Msg {
   RequestStarted(
     owner~ : @interop.ConversationIdentity,
     root~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   Loaded(
     owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32,
-    reply~ : @protocol.SearchTextReply
+    reply~ : @protocol.SearchTextReply,
   )
   SemanticLoaded(
     owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32,
-    reply~ : @protocol.SearchSemanticReply
+    reply~ : @protocol.SearchSemanticReply,
   )
   // One partial batch of a semantic search still in flight. The Host pushes
   // these through the notification channel so a long scan paints hits early;
@@ -260,14 +260,14 @@ pub(all) enum Msg {
     generation~ : Int32,
     matches~ : Array[@protocol.SemanticSearchHit],
     match_count~ : Int32,
-    file_count~ : Int32
+    file_count~ : Int32,
   )
   RequestFailed(
     owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32,
     code~ : String,
-    message~ : RequestFailure
+    message~ : RequestFailure,
   )
 }
 

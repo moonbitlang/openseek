@@ -44,14 +44,14 @@ fn form(fields : Array[(String, String)]) -> String {
 ///|
 async fn post(endpoint : String, fields : Array[(String, String)]) -> Json {
   @async.with_timeout(30000, () => {
-    let (response, text) = @http.post_text(endpoint, form(fields), headers={
+    let (response, body) = @http.post_text(endpoint, form(fields), headers={
       "Accept": "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
     })
     guard response.code == 200 || response.code == 400 else {
       fail("OAuth endpoint returned HTTP \{response.code}")
     }
-    @json.parse(text)
+    body.json()
   })
 }
 
@@ -146,7 +146,7 @@ async fn save(
   json : Json,
 ) -> Unit {
   let dir = directory()
-  @fs.mkdir(dir, permission=0o700, recursive=true, allow_exist=true)
+  @fs.mkdir(dir, permission=0o700, recursive=true, allow_existing=true)
   guard @env.rand(16) is Some(random) else {
     fail("Cannot obtain randomness for credential storage")
   }

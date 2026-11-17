@@ -1,7 +1,7 @@
 ///|
 async test "a corrupt OAuth credential is isolated and a repaired credential retries" {
   let dir = @fs.tmpdir(prefix="mcp-oauth-isolation-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let old = @env.get_env_var("OPENSEEK_OAUTH_DIR")
   @env.set_env_var("OPENSEEK_OAUTH_DIR", dir)
   defer (if old is Some(value) {
@@ -24,7 +24,7 @@ async test "a corrupt OAuth credential is isolated and a repaired credential ret
         }
       })
     }
-    let url = "http://127.0.0.1:\{server.addr.port()}/mcp"
+    let url = "http://127.0.0.1:\{server.addr.port}/mcp"
     let oauth : @config.OAuthConfig = {
       client_id: "test",
       device_authorization_endpoint: "https://example.com/device",

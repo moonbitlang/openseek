@@ -248,7 +248,7 @@ test "steer preserves an optional submission id and refuses malformed ids" {
       ),
     )
     is Ok(
-      Steer(content=Content([Text("same text")]), submission_id=Some("steer-2"))
+      Steer(content=Content([Text("same text")]), submission_id=Some("steer-2")),
     ),
   )
   for bad in [null, Json(7), Json(false)] {

@@ -143,7 +143,7 @@ async fn fake_registry(
     }
     error => raise error
   }
-  let base = "http://127.0.0.1:\{server.addr.port()}"
+  let base = "http://127.0.0.1:\{server.addr.port}"
   let widget_v1 = zip_of([
     ("SKILL.md", skill_body),
     ("reference/usage.md", reference_body),
@@ -497,7 +497,7 @@ async test "legacy subpackages cannot accidentally install a standalone skill" {
     let requests : Array[String] = []
     guard fake_registry(group, requests~) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
-    defer @fs.rmdir(lib, recursive=true)
+    defer @fs.remove(lib, recursive=true)
     try
       install_skill(
         module_name="acme/widget",

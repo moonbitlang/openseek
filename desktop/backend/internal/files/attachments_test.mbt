@@ -11,7 +11,7 @@ async fn attachment_test_workspace(session : String) -> @pathx.Absolute {
 async test "workspace documents become references without creating an upload" {
   let session = "attachment-inside"
   let root = attachment_test_workspace(session)
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })
@@ -37,8 +37,8 @@ async test "external imports require preparation and preserve original bytes and
   let session = "attachment-outside"
   let root = attachment_test_workspace(session)
   let outside = @fs.tmpdir(prefix="openseek-attachment-original-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
-  defer @fs.rmdir(outside, recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
+  defer @fs.remove(outside, recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })
@@ -73,7 +73,7 @@ async test "external imports require preparation and preserve original bytes and
 async test "browser document bytes import one original file and reject traversal" {
   let session = "attachment-browser"
   let root = attachment_test_workspace(session)
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })
@@ -120,8 +120,8 @@ async test "attachment imports reject escaping directory links before writing" {
   let session = "attachment-link"
   let root = attachment_test_workspace(session)
   let outside = @fs.tmpdir(prefix="openseek-attachment-link-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
-  defer @fs.rmdir(outside, recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
+  defer @fs.remove(outside, recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })
@@ -149,7 +149,7 @@ async test "attachment imports reject escaping directory links before writing" {
 async test "attachment preparation rejects unavailable workspace empty and oversized files" {
   let session = "attachment-limits"
   let root = attachment_test_workspace(session)
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })
@@ -194,8 +194,8 @@ async test "imported originals reach a newly bound worktree and remain available
   let checkout = @pathx.Path(
     @fs.realpath(@fs.tmpdir(prefix="openseek-attachment-worktree-")),
   ).resolve()
-  defer @fs.rmdir(source.to_string(), recursive=true)
-  defer @fs.rmdir(checkout.to_string(), recursive=true)
+  defer @fs.remove(source.to_string(), recursive=true)
+  defer @fs.remove(checkout.to_string(), recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })
@@ -237,9 +237,9 @@ async test "attachment staging rejects non-imported paths and escaping source li
     @fs.realpath(@fs.tmpdir(prefix="openseek-attachment-stage-source-")),
   ).resolve()
   let outside = @fs.tmpdir(prefix="openseek-attachment-stage-link-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
-  defer @fs.rmdir(source.to_string(), recursive=true)
-  defer @fs.rmdir(outside, recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
+  defer @fs.remove(source.to_string(), recursive=true)
+  defer @fs.remove(outside, recursive=true)
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace(session)
   })

@@ -31,7 +31,7 @@ async fn modern_post(
     headers=all,
   )
   assert_eq(response.headers.get("Mcp-Session-Id"), None)
-  (response.code, @json.parse(body))
+  (response.code, body.json())
 }
 
 ///|

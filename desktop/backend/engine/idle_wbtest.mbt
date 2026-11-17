@@ -365,7 +365,7 @@ async test "a command sent while the reaper asks about jobs keeps its engine" {
 #cfg(not(platform="windows"))
 async test "a conversation resumes on a fresh engine after an idle stop" {
   let dir = @fs.tmpdir(prefix="openseek-idle-reap-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()

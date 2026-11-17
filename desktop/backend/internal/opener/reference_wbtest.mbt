@@ -106,7 +106,7 @@ async test "existing files win before editor positions" {
 ///|
 async test "PDF content is recognized before the text size limit" {
   let dir = @fs.tmpdir(prefix="openseek-opener-pdf-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/中文 #100%"
   @fs.write_text(
     path,
@@ -131,7 +131,7 @@ async test "PDF content is recognized before the text size limit" {
 ///|
 async test "raster images use browser routing regardless of name and text size limit" {
   let dir = @fs.tmpdir(prefix="openseek-opener-images-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/image.txt"
   for
     header in [

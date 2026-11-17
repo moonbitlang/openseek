@@ -21,7 +21,7 @@ pub async fn hand_off(
   let entry = reload_entry(geometry.common_git_dir, entry)
   guard !entry.is_released() else { return Ok(entry) }
   if entry.state is Committed {
-    @fs.rmdir(entry.worker_root, recursive=true) catch {
+    @fs.remove(entry.worker_root, recursive=true) catch {
       _ => ()
     }
     let _ = git_run(["worktree", "prune"], cwd=geometry.origin_root)

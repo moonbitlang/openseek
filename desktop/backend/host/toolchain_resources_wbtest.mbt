@@ -1,7 +1,7 @@
 ///|
 async test "desktop resource selection preserves missing tools and lazy export validation" {
   let root = @pathx.Path(@fs.tmpdir(prefix="host-resource-policy-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let resources = desktop_resources({ dir: root, packaged: true, })
   assert_true(resources.moonbit is DesktopBundle)
   assert_eq(resources.skills, Some(root.join("seekmoon/skills").normalize()))

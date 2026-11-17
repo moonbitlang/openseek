@@ -137,7 +137,7 @@ pub async fn content_parse_errors(
   let dir = @fs.tmpdir(prefix="openseek-parse-gate-") catch { _ => return None }
   // Best-effort cleanup on every path; a leaked scratch dir must never turn
   // into a raised error that masks the gate's answer.
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   try {
     @fs.write_text(
       "\{dir}/\{scratch_name}",

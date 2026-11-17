@@ -72,7 +72,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "baseline": { "warning_count": Number(2, ..), .. },
           "threshold": Number(10, ..),
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(fixed.data)}")
     }
@@ -111,7 +111,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
             ..
           },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }
@@ -142,7 +142,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "introduced_count": { "warnings": Number(2, ..), .. },
           "removed_count": { "warnings": Number(0, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(over.data)}")
     }
@@ -168,7 +168,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "introduced_count": { "warnings": Number(1, ..), .. },
           "removed_count": { "warnings": Number(0, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(tolerated.data)}")
     }
@@ -199,7 +199,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
             ..
           },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(unguarded.data)}")
     }
@@ -237,7 +237,7 @@ async test "the error guard's data names the verdict and the sites" {
           "restore_failures": [],
           "check": { "error_count": Number(1, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }
@@ -268,7 +268,7 @@ async test "the error guard's data names the verdict and the sites" {
           "introduced_count": { "errors": Number(1, ..), .. },
           "removed_count": { "errors": Number(0, ..), .. },
           ..
-        }
+        },
       ),
     )
     assert_eq(@fs.read_text(path), original)
@@ -304,7 +304,7 @@ async test "failed and rejected batches report their problems in data; an unchec
             },
           ],
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(failed.data)}")
     }
@@ -334,7 +334,7 @@ async test "failed and rejected batches report their problems in data; an unchec
             },
           ],
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(rejected.data)}")
     }
@@ -453,7 +453,7 @@ async test "the guards cover every project a batch touches" {
           "baseline": { "warning_count": Number(0, ..), .. },
           "baseline_all": { "warning_count": Number(1, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }
@@ -497,7 +497,7 @@ async test "the guards cover every project a batch touches" {
           "baseline": { "warning_count": Number(0, ..), .. },
           "baseline_all": { "warning_count": Number(1, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(kept.data)}")
     }

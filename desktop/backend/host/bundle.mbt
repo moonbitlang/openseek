@@ -59,7 +59,7 @@ pub async fn VizAssets::read(self : VizAssets) -> (String, String) {
 ///|
 async test "development frontend comes from the declared resource root" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-frontend-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let development = root.join("desktop-dev.html").to_string()
   @fs.write_text(development, "development", create_mode=CreateOrTruncate)
   let resources = root.join("desktop")

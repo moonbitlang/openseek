@@ -68,7 +68,7 @@ test "range and foreign anchor constructors retain every source field" {
       priority~,
       range=stored_range,
       initial_mouse_pos_x~,
-      initial_mouse_pos_y~
+      initial_mouse_pos_y~,
     ) => {
       assert_eq(priority, 4)
       assert_true(stored_range == Range(2, 3, 2, 5))
@@ -96,7 +96,7 @@ test "range and foreign anchor constructors retain every source field" {
       range=stored_range,
       initial_mouse_pos_x~,
       initial_mouse_pos_y~,
-      supports_marker_hover~
+      supports_marker_hover~,
     ) => {
       assert_eq(priority, 10)
       assert_true(stored_owner == owner)

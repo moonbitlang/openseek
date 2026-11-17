@@ -9,7 +9,7 @@ async fn accept_request(
   for ;; {
     let (conn, _) = server.accept()
     let request = conn.read_request() catch {
-      @io.ReaderClosed => {
+      @io.UnexpectedEof => {
         conn.close()
         continue
       }
@@ -20,4 +20,25 @@ async fn accept_request(
     }
     return (conn, request)
   }
+}
+
+///|
+async test "accept_request skips connections closed before a request" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      let accepted = group.spawn(() => {
+        let (conn, request) = accept_request(server)
+        defer conn.close()
+        assert_eq(request.path, "/ready")
+      })
+      let abandoned = @socket.Tcp::connect(server.addr)
+      abandoned.close()
+      let client = @socket.Tcp::connect(server.addr)
+      defer client.close()
+      client.write(b"GET /ready HTTP/1.1\r\nHost: localhost\r\n\r\n")
+      accepted.wait()
+    })
+  })
 }

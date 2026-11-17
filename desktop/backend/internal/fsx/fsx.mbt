@@ -132,7 +132,7 @@ pub async fn remove_if_exists(path : @pathx.Path) -> Unit {
     @os_error.OsError(NotFound, ..) => ()
     error => raise error
   } noraise {
-    Directory => @fs.rmdir(path, recursive=true)
+    Directory => @fs.remove(path, recursive=true)
     _ => @fs.remove(path)
   }
 }

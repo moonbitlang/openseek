@@ -285,7 +285,7 @@ fn parse_moon_check_diagnostics_impl(
           "loc": String(loc),
           "message": String(message),
           ..
-        }
+        },
       ) => {
         let normalized = normalize_host_path(path)
         let relative = match normalized.strip_prefix(prefix) {
@@ -346,8 +346,8 @@ fn parse_check_position(view : StringView) -> @base_common.Position? {
     Some((line_text, column_text)) => {
       let parsed = Some(
         (
-          @string.parse_int(line_text, base=10),
-          @string.parse_int(column_text, base=10),
+          @string.parse_int(line_text, radix=10),
+          @string.parse_int(column_text, radix=10),
         ),
       ) catch {
         _ => None

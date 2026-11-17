@@ -86,7 +86,7 @@ async fn moonbit_available(
 ///|
 async fn copy_tree(source : String, destination : String) -> Unit {
   if @fs.kind(source) is Directory {
-    @fs.mkdir(destination, recursive=true, allow_exist=true)
+    @fs.mkdir(destination, recursive=true, allow_existing=true)
     for name in @fs.readdir(source, include_hidden=true) {
       copy_tree(source + "/" + name, destination + "/" + name)
     }
@@ -106,7 +106,7 @@ async fn install(
   let source = @path.Path(source_cli).dirname().dirname().to_string()
   let root = home + "/.openseek"
   let bin = root + "/bin"
-  @fs.mkdir(bin, recursive=true, allow_exist=true)
+  @fs.mkdir(bin, recursive=true, allow_existing=true)
   let lock = @fs.open(
     root + "/setup.lock",
     mode=ReadWrite,
@@ -119,13 +119,13 @@ async fn install(
   let needs_cli = !available(bin + "/" + cli_name, ["--help"])
   // The installed CLI can run setup too: preserve its source before removal.
   let stage = @fs.tmpdir(prefix="openseek-share-")
-  defer @fs.rmdir(stage, recursive=true)
+  defer @fs.remove(stage, recursive=true)
   copy_tree(source + "/share", stage + "/share")
   let needs_moonbit = !moonbit_available(home, available)
   if needs_moonbit {
     toolchain(home + "/.moon")
   }
-  @fs.rmdir(root + "/share", recursive=true) catch {
+  @fs.remove(root + "/share", recursive=true) catch {
     @os_error.OsError(NotFound, ..) => ()
     error => raise error
   }
@@ -160,7 +160,7 @@ async fn download_file(url : String, destination : String) -> Unit {
 ///|
 async fn install_moonbit(destination : String) -> Unit {
   let stage = @fs.tmpdir(prefix="moonbit-install-")
-  defer @fs.rmdir(stage, recursive=true)
+  defer @fs.remove(stage, recursive=true)
   let windows = is_windows()
   let script = stage + (if windows { "/install.ps1" } else { "/install.sh" })
   download_file(

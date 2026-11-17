@@ -45,7 +45,7 @@ test "serve commands decode and reject with actionable errors" {
       "submission_id": "page-1-submission-2",
     })
     is Ok(
-      Prompt(Content([Text("hi")]), submission_id=Some("page-1-submission-2"))
+      Prompt(Content([Text("hi")]), submission_id=Some("page-1-submission-2")),
     ),
   )
   assert_true(

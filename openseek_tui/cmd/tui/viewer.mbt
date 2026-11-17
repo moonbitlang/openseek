@@ -45,7 +45,7 @@ async fn start_viewer(
   wait_ms~ : Int32,
 ) -> String {
   let dir = @fs.tmpdir(prefix="openseek-tui-inspect-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let out = "\{dir}/inspect.out"
   // One handle for both streams: opening the file twice gives two writers
   // that Windows does not let share it.
@@ -213,8 +213,8 @@ test "/inspect starts the viewer, and its answer lands in the transcript" {
     is [
       AppendItem(
         Input(
-          Notice("watch this session live:\nhttp://127.0.0.1:41612/?t=abc#s=s1")
-        )
+          Notice("watch this session live:\nhttp://127.0.0.1:41612/?t=abc#s=s1"),
+        ),
       ),
     ],
   )
@@ -243,7 +243,7 @@ test "each browser outcome lands in the transcript under the link" {
     update(state, BrowserOpened(Skipped("over SSH")))
     is [
       AppendItem(
-        Input(Notice("not opening a browser over SSH; use the link above"))
+        Input(Notice("not opening a browser over SSH; use the link above")),
       ),
     ],
   )
@@ -253,9 +253,9 @@ test "each browser outcome lands in the transcript under the link" {
       AppendItem(
         Input(
           Notice(
-            "could not open a browser (`xdg-open` not found); use the link above"
-          )
-        )
+            "could not open a browser (`xdg-open` not found); use the link above",
+          ),
+        ),
       ),
     ],
   )

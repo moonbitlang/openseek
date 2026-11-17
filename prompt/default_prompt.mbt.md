@@ -177,7 +177,7 @@ something cannot be done, search the catalog and print the page:
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
+  "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
   "moonbitlang/core/async",
 }
 ---

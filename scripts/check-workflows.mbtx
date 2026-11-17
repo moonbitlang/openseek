@@ -13,7 +13,7 @@ import {
 /// maintenance scripts.
 async fn main {
   let temporary = @fs.tmpdir(prefix="bundled-check-")
-  defer (@fs.rmdir(temporary, recursive=true) catch { _ => () })
+  defer (@fs.remove(temporary, recursive=true) catch { _ => () })
   let mut checked = 0
   for directory in ["share/workflow", "share/examples", "share/artifact"] {
     let scripts = @fs.readdir(directory, sort=true).filter(name => {

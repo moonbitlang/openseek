@@ -10,7 +10,7 @@ priv enum TranscriptSlot {
   HostTranscript(
     source~ : @transcript_component.Source,
     channel~ : @interop.ChannelId,
-    session~ : String?
+    session~ : String?,
   )
   CloudTranscriptSlot(@interop.ConversationIdentity)
 }

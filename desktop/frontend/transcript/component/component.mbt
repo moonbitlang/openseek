@@ -235,7 +235,7 @@ priv enum Msg {
   ArtifactResolved(
     ArtifactOwner,
     String,
-    Result[@protocol.ReadFileReply, String]
+    Result[@protocol.ReadFileReply, String],
   )
   Overview(@transcript_overview.Msg)
 }
@@ -762,7 +762,7 @@ priv suberror TranscriptSubscription {
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
     pinned~ : Bool,
-    active~ : @transcript_overview.TurnKey?
+    active~ : @transcript_overview.TurnKey?,
   )
 }
 
@@ -809,7 +809,7 @@ fn transcript_sub_loader(
       load_older~,
       localization~,
       pinned~,
-      active~
+      active~,
     ) => {
       let mut emit = emit
       let mut departed = departed
@@ -953,7 +953,7 @@ fn transcript_sub_loader(
               load_older=next_load_older,
               localization=_,
               pinned=next_pinned,
-              active=next_active
+              active=next_active,
             ) else {
             return
           }

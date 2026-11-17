@@ -197,7 +197,7 @@ async fn remove_worktree_and_branch(
   entry : SubtaskEntry,
   force~ : Bool,
 ) -> Unit {
-  @fs.rmdir(entry.worker_root, recursive=true) catch {
+  @fs.remove(entry.worker_root, recursive=true) catch {
     _ => ()
   }
   let _ = git_run(["worktree", "prune"], cwd=origin)

@@ -116,7 +116,7 @@ test "working feedback keeps rendered selection text separate from source range"
           range=actual_range,
           quote~,
           comment~,
-          feedback_id~
+          feedback_id~,
         ),
       ] else {
       fail("expected one working-file annotation")

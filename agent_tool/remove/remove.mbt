@@ -233,7 +233,7 @@ async fn delete_directory(
         file_state.forget(entry)
       }
       Directory(_) => {
-        @fs.rmdir(entry)
+        @fs.remove(entry)
         file_state.forget_directory(entry)
       }
     }

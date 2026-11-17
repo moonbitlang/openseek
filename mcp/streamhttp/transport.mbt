@@ -471,7 +471,10 @@ async fn HttpTransport::exchange(
   deliver : (Json) -> Unit,
   answered~ : () -> Bool,
 ) -> Unit {
-  let client = @http.post(self.url, headers=self.request_headers(message))
+  let client = @http.post_stream(
+    self.url,
+    headers=self.request_headers(message),
+  )
   defer client.close()
   client.text.write(message.stringify())
   let response = client.end_request()

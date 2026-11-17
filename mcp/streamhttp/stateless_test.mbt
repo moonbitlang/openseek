@@ -89,7 +89,7 @@ async test "stateless HTTP has per-request metadata mirrored headers no initiali
     })
     let connection = @streamhttp.connect(
       group,
-      url="http://127.0.0.1:\{server.addr.port()}/mcp",
+      url="http://127.0.0.1:\{server.addr.port}/mcp",
       headers={
         "Authorization": "Bearer test",
         "mCp-MeThOd": "wrong",
@@ -184,7 +184,7 @@ async test "modern HTTP errors and authentication failures never trigger legacy 
       try
         @streamhttp.connect(
           group,
-          url="http://127.0.0.1:\{server.addr.port()}/mcp",
+          url="http://127.0.0.1:\{server.addr.port}/mcp",
           client_name="test",
           client_version="1",
         )
@@ -224,7 +224,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
     let methods : Array[String] = []
     group.spawn_bg(no_wait=true, () => {
       server.run_forever((tcp, _) => {
-        let conn = @http.ServerConnection::new(tcp)
+        let conn = @http.ServerConnection(tcp)
         defer conn.close()
         let _ = conn.read_request()
         let message = @json.parse(conn.text.read_all())
@@ -245,7 +245,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
             "Content-Type": "text/event-stream",
           })
           conn.write_string(": waiting\n\n")
-          conn.flush()
+          conn.flush_partial_data()
           started.put(())
           tcp.read() |> ignore
           disconnected.put(())
@@ -272,7 +272,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
     })
     let connection = @streamhttp.connect(
       group,
-      url="http://127.0.0.1:\{server.addr.port()}/mcp",
+      url="http://127.0.0.1:\{server.addr.port}/mcp",
       client_name="test",
       client_version="1",
     )

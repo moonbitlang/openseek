@@ -9,7 +9,7 @@ priv suberror BridgeSubscription {
     dispatch~ : @cmd.Emit[Event],
     device_id~ : String,
     websocket_epoch~ : Int32,
-    account~ : @protocol.AccountSession?
+    account~ : @protocol.AccountSession?,
   )
 }
 

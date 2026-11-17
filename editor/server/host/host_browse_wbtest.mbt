@@ -3,7 +3,7 @@ async test "host directory listing keeps directories and flags repositories" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-host-browse")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.mkdir("\{root}/alpha", recursive=true)
     @fs.write_text(
@@ -49,7 +49,7 @@ async test "switch target validation realpaths directories and rejects others" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-host-switch")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.mkdir("\{root}/repo", recursive=true)
     @fs.write_text("\{root}/file.txt", "x\n", create_mode=CreateOrTruncate)
@@ -89,7 +89,7 @@ async test "browse scope confines listings and switches to its subtree" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-host-scope")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.mkdir("\{root}/inside/child", recursive=true)
     @fs.mkdir("\{root}/outside", recursive=true)

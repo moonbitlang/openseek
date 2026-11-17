@@ -336,7 +336,7 @@ fn[T] ViewLayerRenderer::finish_rendering(
 }
 
 ///|
-let view_layer_string_builder : StringBuilder = StringBuilder(size_hint=100000)
+let view_layer_string_builder : StringBuilder = StringBuilder(capacity=100000)
 
 ///|
 /// Rabbita's `get_children` exposes the live `HTMLCollection`; renderer

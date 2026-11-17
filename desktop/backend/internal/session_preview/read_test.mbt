@@ -24,7 +24,7 @@ async fn append_raw(
 ///|
 async test "listing extracts text without decoding image payloads" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("image-preview")
   store.create(Session(id, system_prompt="system"))
   // A listing is display metadata, not a loadability check. Even an image
@@ -59,7 +59,7 @@ async test "listing extracts text without decoding image payloads" {
 ///|
 async test "listing reads current prompt on demand without retaining errors" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("changing")
   store.create(Session(id, system_prompt="system"))
   @fs.remove(store.session_file(id))
@@ -82,7 +82,7 @@ async test "listing reads current prompt on demand without retaining errors" {
 ///|
 async test "listing distinguishes absent empty and unreadable prompts" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("prompt-states")
   let empty = @agent_session.Session(id, system_prompt="system")
   store.create(empty)
@@ -140,7 +140,7 @@ async test "listing distinguishes absent empty and unreadable prompts" {
 ///|
 async test "listing scan limit reports absence rather than empty text" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let mut session = @agent_session.Session(
     SessionId("scan-limit"),
     system_prompt="system",

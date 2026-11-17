@@ -222,7 +222,7 @@ async fn run_general(
       }
       let session_scratch_dir = @fs.tmpdir(prefix="openseek-session-")
       defer @async.protect_from_cancel(() => {
-        @fs.rmdir(session_scratch_dir, recursive=true)
+        @fs.remove(session_scratch_dir, recursive=true)
       })
       let system_prompt_text = @setup.configured_system_prompt(
         matches,

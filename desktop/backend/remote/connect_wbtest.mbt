@@ -22,7 +22,7 @@ async fn fake_control(
 ///|
 async test "a registered connector tells the relay about a settled run" {
   let root = @fs.tmpdir(prefix="openseek-connector-push-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let state = @api.ApiState(engine="unused-test-engine", runtime_dir=Path(root))
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   let frames : @async.Queue[String] = Queue(kind=Unbounded)
@@ -34,7 +34,7 @@ async test "a registered connector tells the relay about a settled run" {
     group.spawn_bg(no_wait=true, () => fake_control(server, frames))
     group.spawn_bg(no_wait=true, () => {
       actor.connect_once({
-        relay_url: "ws://127.0.0.1:\{server.addr.port()}/v1/tunnel",
+        relay_url: "ws://127.0.0.1:\{server.addr.port}/v1/tunnel",
         device_token: "odt_test",
         device_name: "Test Mac",
       })
@@ -65,7 +65,7 @@ async test "a registered connector tells the relay about a settled run" {
     assert_true(
       @tunnel.Frame::decode(text)
       is Some(
-        Notify(Finished(session="s1", status="finished", answer=Some("Done.")))
+        Notify(Finished(session="s1", status="finished", answer=Some("Done."))),
       ),
     )
   })

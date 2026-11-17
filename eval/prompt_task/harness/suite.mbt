@@ -355,7 +355,7 @@ pub async fn run_suite(config : SuiteConfig) -> SuiteManifest {
 ///|
 async fn prepare_suite_output_dir(out_dir : String) -> Unit {
   if @fs.exists(out_dir) {
-    @fs.rmdir(out_dir, recursive=true)
+    @fs.remove(out_dir, recursive=true)
   }
   @fs.mkdir("\{out_dir}/combos", recursive=true)
 }

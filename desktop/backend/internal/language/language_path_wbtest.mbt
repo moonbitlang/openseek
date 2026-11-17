@@ -21,8 +21,8 @@ async fn resolve_rejected(
 async test "language paths accept frontend resource roots and reject escapes" {
   let root = @fs.tmpdir(prefix="openseek-language-root-")
   let outside = @fs.tmpdir(prefix="openseek-language-outside-")
-  defer (@fs.rmdir(outside, recursive=true) catch { _ => () })
-  defer (@fs.rmdir(root, recursive=true) catch { _ => () })
+  defer (@fs.remove(outside, recursive=true) catch { _ => () })
+  defer (@fs.remove(root, recursive=true) catch { _ => () })
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace("language-test") catch {
       _ => ()

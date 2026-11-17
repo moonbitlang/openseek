@@ -18,20 +18,20 @@ async fn lifetime_request(
 
 ///|
 async fn with_lifetime_server(
-  body : async (@async.Task[Unit], @io.PipeWrite, String, String) -> Unit,
+  body : async (@async.Task[Unit], @io.MemoryPipeWrite, String, String) -> Unit,
   startup_timeout_ms~ : Int32 = 5000,
   heartbeat_ms~ : Int32 = 5000,
 ) -> Unit {
   let root = @fs.tmpdir(prefix="app-server-lifetime-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let state = @api.ApiState(
     engine="unused-lifetime-test-engine",
     runtime_dir=Path(root),
   )
-  let (lifetime, writer) = @io.pipe()
+  let (lifetime, writer) = @io.memory_pipe()
   defer lifetime.close()
   defer writer.close()
-  let (announcement, output) = @io.pipe()
+  let (announcement, output) = @io.memory_pipe()
   defer announcement.close()
   defer output.close()
   @async.with_timeout(10000, () => {

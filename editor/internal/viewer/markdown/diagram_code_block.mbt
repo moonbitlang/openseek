@@ -51,7 +51,14 @@ pub fn render_diago_svg(source : String) -> String? {
 /// current foreground and surface colors without a theme-time rerender.
 pub fn render_uml_diagram_svg(source : String) -> String? {
   let color_scheme = viewer_uml_color_scheme()
-  Some(@uml.render_svg(source, color_scheme~)) catch {
+  Some(
+    @uml.render_svg(
+      source,
+      color_scheme~,
+      measurer=@uml_heuristic.measurer(),
+      graphviz_context=@graphviz_heuristic.context(),
+    ),
+  ) catch {
     _ => None
   }
 }
@@ -63,7 +70,14 @@ pub fn render_uml_diagram_svg(source : String) -> String? {
 /// path.
 pub fn render_mbti_diagram_svg(source : String) -> String? {
   let color_scheme = viewer_uml_color_scheme()
-  Some(@uml.render_mbti_svg(source, color_scheme~)) catch {
+  Some(
+    @uml.render_mbti_svg(
+      source,
+      color_scheme~,
+      measurer=@uml_heuristic.measurer(),
+      graphviz_context=@graphviz_heuristic.context(),
+    ),
+  ) catch {
     _ => None
   }
 }
@@ -75,7 +89,13 @@ pub fn render_mbti_diagram_svg(source : String) -> String? {
 /// the caller's fallback path.
 pub fn render_package_dep_diagram_svg(source : String) -> String? {
   let color_scheme = viewer_uml_color_scheme()
-  Some(@uml.render_package_dep_svg(source, color_scheme~)) catch {
+  Some(
+    @uml.render_package_dep_svg(
+      source,
+      color_scheme~,
+      graphviz_context=@graphviz_heuristic.context(),
+    ),
+  ) catch {
     _ => None
   }
 }

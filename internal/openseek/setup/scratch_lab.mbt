@@ -22,7 +22,7 @@ pub async fn new_scratch_lab(prefix : String) -> String {
 /// directory is touched and the lab would outlive the run.
 pub async fn remove_scratch_lab(dir : String) -> Unit {
   @async.protect_from_cancel(() => {
-    @fs.rmdir(dir, recursive=true) catch {
+    @fs.remove(dir, recursive=true) catch {
       _ => ()
     }
   })

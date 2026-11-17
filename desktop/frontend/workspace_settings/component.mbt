@@ -12,7 +12,7 @@ pub(all) enum SettingsSnapshot {
   Loaded(
     worktree_mode~ : Bool,
     checkout_submodules~ : Bool,
-    submodule_checkout_timeout_seconds~ : Int32
+    submodule_checkout_timeout_seconds~ : Int32,
   )
 }
 
@@ -158,7 +158,7 @@ fn dialog_contents(
     Loaded(
       worktree_mode~,
       checkout_submodules~,
-      submodule_checkout_timeout_seconds~
+      submodule_checkout_timeout_seconds~,
     ) =>
       (worktree_mode, checkout_submodules, submodule_checkout_timeout_seconds)
     Unloaded => (false, true, 10)

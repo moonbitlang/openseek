@@ -4,7 +4,7 @@ priv suberror SearchRequestSub {
     @interop.ConversationIdentity,
     SearchRequest,
     Int32,
-    @cmd.Emit[Msg]
+    @cmd.Emit[Msg],
   )
 }
 

@@ -71,7 +71,7 @@ pub(all) enum MentionRef {
     end_line~ : Int32,
     quote~ : String,
     comment~ : String,
-    side~ : AnnotationSide
+    side~ : AnnotationSide,
   )
 }
 

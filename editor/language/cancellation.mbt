@@ -230,7 +230,7 @@ fn CancellationTokenSource::dispose_impl(
     None => self.token_value = Some(cancellation_none)
     Some({ state: SourceMutable(token), }) => token.dispose()
     Some(
-      { state: NeverCancelled | AlreadyCancelled(_) | CompatibilityMutable(_), }
+      { state: NeverCancelled | AlreadyCancelled(_) | CompatibilityMutable(_), },
     ) => ()
   }
 }

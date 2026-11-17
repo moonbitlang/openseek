@@ -33,7 +33,7 @@ async fn revoke_device(
   device : DeviceRegistration,
 ) -> Unit {
   guard @async.with_timeout_opt(RevokeTimeoutMs, () => {
-      let conn = @http.request(
+      let conn = @http.request_stream(
         Delete,
         "\{server_url}/v2/devices/\{device.id}",
         headers={ "Authorization": "Bearer \{device.token}" },

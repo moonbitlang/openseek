@@ -212,7 +212,7 @@ fn remove_source_ranges(
   ranges : Array[SourceRange],
 ) -> String {
   let len = markdown.length()
-  let out = StringBuilder(size_hint=len)
+  let out = StringBuilder(capacity=len)
   let mut cursor = 0
   for range in ranges {
     let first = range.first.clamp(min=0, max=len)

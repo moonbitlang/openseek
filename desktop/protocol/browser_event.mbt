@@ -10,7 +10,7 @@ pub(all) enum BrowserEventPayload {
     account~ : String,
     request~ : String,
     session~ : String,
-    url~ : String
+    url~ : String,
   )
   Navigated(id~ : Int32, url~ : String)
   LoadingChanged(id~ : Int32, loading~ : Bool)
@@ -20,7 +20,7 @@ pub(all) enum BrowserEventPayload {
     id~ : Int32,
     url~ : String,
     code~ : Int32,
-    text~ : String
+    text~ : String,
   )
 }
 

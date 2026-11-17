@@ -27,7 +27,7 @@ async test "resource layout is sorted, directory-only, skips build output and tu
     let with_tutorial = resource_layout(root)
     assert_true(with_tutorial.contains("└── tutorial"))
     assert_false(with_tutorial.contains("for-go-programmers"))
-    @fs.rmdir("\{root}/doc/moonbit/tutorial", recursive=true)
+    @fs.remove("\{root}/doc/moonbit/tutorial", recursive=true)
     assert_false(resource_layout(root).contains("tutorial"))
   })
 }

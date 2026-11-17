@@ -644,7 +644,7 @@ async test "resume_running refuses conflicted slices and gone worktrees" {
       conflicted.entry,
     )
     assert_eq(aborted.result, "aborted")
-    @fs.rmdir(entry.worker_root, recursive=true)
+    @fs.remove(entry.worker_root, recursive=true)
     guard @agent_subtask.resume_running(provisioned.geometry, "fix-lib")
       is Err(gone) else {
       fail("expected a gone-worktree refusal")

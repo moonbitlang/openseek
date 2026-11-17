@@ -1,7 +1,7 @@
 ///|
 async test "ordinary rooted file reads keep session files separate and follow archived storage" {
   let dir = @fs.tmpdir(prefix="openseek-session-file-read-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(@fs.realpath(dir)).resolve().resource_path()
   let first = ".openseek/sessions/one/scratch/artifact/page.html"
   let second = ".openseek/sessions/two/scratch/artifact/page.html"
@@ -37,7 +37,7 @@ async test "ordinary rooted file reads keep session files separate and follow ar
 ///|
 async test "interactive reads can exceed the editor default with an explicit byte limit" {
   let dir = @fs.tmpdir(prefix="openseek-read-limit-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = @pathx.Path(@fs.realpath(dir))
     .join("page.html")
     .resolve()

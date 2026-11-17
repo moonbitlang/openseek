@@ -9,7 +9,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-sub-archive-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())
@@ -114,7 +114,7 @@ async test "worktree deletion refuses a replaced checkout" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-replaced-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())
@@ -140,7 +140,7 @@ async test "worktree deletion refuses a replaced checkout" {
   // repository fails that validation, so both deletion surfaces refuse and
   // leave it untouched.
   let target = repo.join(".worktrees/wt-1")
-  @fs.rmdir(target.to_string(), recursive=true)
+  @fs.remove(target.to_string(), recursive=true)
   @fsx.ensure_dir(target.to_path())
   ignore(@gitx.run(target, ["init", "-q"]))
   let sha = @gitx.run(repo, ["rev-parse", "HEAD"])

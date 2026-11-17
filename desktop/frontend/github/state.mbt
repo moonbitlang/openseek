@@ -142,7 +142,7 @@ pub(all) enum Msg {
   Listed(
     Int32,
     @protocol.GithubListKind,
-    Result[@protocol.GithubListReply, String]
+    Result[@protocol.GithubListReply, String],
   )
 }
 

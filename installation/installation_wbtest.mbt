@@ -5,7 +5,7 @@ async fn executable(path : String, text : String) -> Unit {
 
 ///|
 async fn fixture_toolchain(destination : String) -> Unit {
-  @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
+  @fs.mkdir(destination + "/bin", recursive=true, allow_existing=true)
   for name in ["moon", "moonc", "moonrun", "moonx"] {
     executable(destination + "/bin/" + name, "existing-sdk")
   }
@@ -13,12 +13,12 @@ async fn fixture_toolchain(destination : String) -> Unit {
 
 ///|
 async fn fixture_bundle(destination : String) -> Unit {
-  @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
+  @fs.mkdir(destination + "/bin", recursive=true, allow_existing=true)
   for directory in ["doc/moonbit/language", "doc/moonbit/toolchain", "workflow"] {
     @fs.mkdir(
       destination + "/share/" + directory,
       recursive=true,
-      allow_exist=true,
+      allow_existing=true,
     )
   }
   for
@@ -28,7 +28,7 @@ async fn fixture_bundle(destination : String) -> Unit {
     ] {
     @fs.write_text(destination + "/share/" + file, "resource")
   }
-  @fs.mkdir(destination + "/share/licenses", allow_exist=true)
+  @fs.mkdir(destination + "/share/licenses", allow_existing=true)
   @fs.write_text(destination + "/share/licenses/LICENSE", "fixture license")
 }
 
@@ -52,7 +52,7 @@ async test "setup installs missing dependencies and reuses them offline" {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   install(
     home,
@@ -66,7 +66,7 @@ async test "setup installs missing dependencies and reuses them offline" {
     @fs.read_text(home + "/.openseek/share/licenses/LICENSE"),
     "fixture license",
   )
-  @fs.rmdir(home + "/download", recursive=true)
+  @fs.remove(home + "/download", recursive=true)
   install(
     home,
     home + "/.openseek/bin/openseek",
@@ -91,7 +91,7 @@ async test "setup resolves a launcher symlink outside the extracted distribution
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   let launcher = home + "/launchers/openseek"
   @fs.mkdir(home + "/launchers")
@@ -118,7 +118,7 @@ async test "setup reuses PATH MoonBit but replaces the complete resource tree" {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   fixture_bundle(home + "/.openseek")
   @fs.write_text(
@@ -163,7 +163,7 @@ async test "setup keeps a working MoonBit and CLI" {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   fixture_toolchain(home + "/.moon")
   fixture_bundle(home + "/.openseek")
@@ -182,7 +182,7 @@ async test "setup propagates installer failure and trusts successful return" {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   let available : async (String, Array[String]) -> Bool = (program, args) => {
     if program.has_suffix("/openseek") {
@@ -213,7 +213,7 @@ async test "concurrent setup checks installed files again after taking the lock"
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   let installations = Ref(0)
   let setup : async () -> Unit = () => {
@@ -237,10 +237,10 @@ async test "a missing resource source fails before installing MoonBit or deletin
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let source_cli = fixture_distribution(home)
   fixture_bundle(home + "/.openseek")
-  @fs.rmdir(home + "/download/share", recursive=true)
+  @fs.remove(home + "/download/share", recursive=true)
   let error = try {
     install(home, source_cli, available=isolated_available, toolchain=_ => {
       fail("must validate the archive before installing MoonBit")
@@ -263,7 +263,7 @@ async test "setup installs the app-server companion and repairs its absence" {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-companion-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let cli = fixture_distribution(home)
   let companion = home + "/download/bin/openseek-app-server"
   executable(companion, "fixture-server")

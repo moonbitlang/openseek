@@ -1,7 +1,7 @@
 ///|
 async fn remove_toolchain_test_tree(root : @pathx.Absolute) -> Unit nocancel {
   @async.protect_from_cancel(() => {
-    @fs.rmdir(root.to_string(), recursive=true) catch {
+    @fs.remove(root.to_string(), recursive=true) catch {
       _ => ()
     }
   })

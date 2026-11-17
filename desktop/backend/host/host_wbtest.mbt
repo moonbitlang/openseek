@@ -7,7 +7,7 @@
 ///|
 async test "native language preference survives independent reads and rejects invalid writes" {
   let dir = @fs.tmpdir(prefix="openseek-ui-language-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   assert_eq(read_ui_language(Some(dir)).language, None)
   write_ui_language(Some(dir), { language: Some("zh-Hans"), }) |> ignore
   assert_eq(read_ui_language(Some(dir)).language, Some("zh-Hans"))
@@ -34,7 +34,7 @@ async test "native language preference survives independent reads and rejects in
 ///|
 async test "native preference read reports corrupt files" {
   let dir = @fs.tmpdir(prefix="openseek-ui-language-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @fs.write_text(dir + "/ui-language.json", "{broken")
   let rejected = try {
     read_ui_language(Some(dir)) |> ignore
@@ -48,7 +48,7 @@ async test "native preference read reports corrupt files" {
 ///|
 async test "native preference read propagates filesystem errors" {
   let dir = @fs.tmpdir(prefix="openseek-ui-language-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   // A directory at the preference path is a read failure, not an absent choice.
   @fs.mkdir(dir + "/ui-language.json")
   try read_ui_language(Some(dir)) catch {

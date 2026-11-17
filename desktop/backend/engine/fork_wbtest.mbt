@@ -40,7 +40,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-fork-title-failure-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let workspace = dir + "/workspace"
   @sys.set_env_var("HOME", dir + "/home")
   @fs.mkdir(dir + "/home/.openseek", recursive=true)
@@ -196,7 +196,7 @@ async fn with_worktree_fork_fixture(
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-fork-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())

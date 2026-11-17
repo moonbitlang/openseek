@@ -2,13 +2,13 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. SDK `moonbitlang/openseek_tools@0.4.1` uses
+implementation. SDK `moonbitlang/openseek_tools@0.4.2` uses
 `moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
 
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.1" @tools,
+  "moonbitlang/openseek_tools@0.4.2" @tools,
   "moonbitlang/core/async",
 }
 ---
@@ -72,7 +72,7 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
+  "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
   "moonbitlang/core/async",
 }
 ---
@@ -182,12 +182,14 @@ SDK 0.4.0 and later use `moonbitlang/core/async`; 0.3.0 and earlier releases
 use the separate `moonbitlang/async` runtime. The wire protocol remains v1.
 SDK 0.4.1 pages an MCP catalog download through one host snapshot, so a server
 that connects or loses its connection mid-download cannot shift the pages; its
-API is unchanged from 0.4.0. The next release names the server of a scoped
+API is unchanged from 0.4.0. SDK 0.4.2 names the server of a scoped
 search in its first `list` request, so the host waits for that server alone;
-a listing from an earlier SDK waits for every server. Publish a release before pinning scripts and
-prompts to it. Keep SDK and wire
-versions separate. Documentation and host tool additions do not require
-changing the SDK API. For a future SDK release, check and test the independent module first:
+a listing from an earlier SDK waits for every server. This release also uses
+the current core async streaming HTTP API for PTC and MCP requests without
+changing their public APIs or wire protocols. Publish a release before pinning
+scripts and prompts to it. Keep SDK and wire versions separate. Documentation
+and host tool additions do not require changing the SDK API. For a future SDK
+release, check and test the independent module first:
 
 ```sh
 moon -C tools_sdk check --target native --deny-warn

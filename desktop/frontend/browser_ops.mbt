@@ -380,8 +380,8 @@ test "browser event policy drops ERR_ABORTED but keeps real failures" {
           id=1,
           text="Renderer process terminated (status 3): killed",
           ..
-        )
-      )
+        ),
+      ),
     ),
   )
   let refused : @protocol.BrowserEventPayload = LoadFailed(

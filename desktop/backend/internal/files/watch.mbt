@@ -471,7 +471,7 @@ async test "watch activation fails through its request and can be retried" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-restart-")
     group.add_defer(() => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     })
     let file = "\{dir}/not-a-directory"
     @fs.write_text(file, "", create_mode=CreateOrTruncate)
@@ -517,7 +517,7 @@ async test "only an identical generation retains its active watcher" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-idempotent-")
     group.add_defer(() => {
-      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
     })
     let actor = Watcher()
     let pushes : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(2))
@@ -586,7 +586,7 @@ async test "file_signature reads a missing path as absent, not as a failure" {
   // A path through a regular file fails with ENOTDIR rather than ENOENT and
   // is just as absent.
   let dir = @fs.tmpdir(prefix="openseek-file-signature-")
-  defer @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+  defer @async.protect_from_cancel(() => @fs.remove(dir, recursive=true))
   @fs.write_binary("\{dir}/plain", b"x", create_mode=CreateOrTruncate)
   assert_true(file_signature("\{dir}/plain/child") is Missing)
   assert_true(file_signature("\{dir}/plain") is Present(_))

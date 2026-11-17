@@ -5,7 +5,7 @@
 #cfg(not(platform="windows"))
 async test "copy_dir reproduces a nested tree over what is already there" {
   let dir = @fs.tmpdir(prefix="openseek-copy-dir-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let source = root.join("source")
   @fsx.ensure_dir(source.join("events"))

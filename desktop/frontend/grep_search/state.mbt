@@ -501,7 +501,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       generation~,
       matches~,
       match_count~,
-      file_count~
+      file_count~,
     ) => {
       // Partial rows are only meaningful for the search that is currently
       // in flight: once the final reply landed (Ready/Failed) or a newer

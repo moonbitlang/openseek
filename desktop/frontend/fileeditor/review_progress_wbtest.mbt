@@ -239,7 +239,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
         hunk: current_hunk,
         file_changes: Some(current_file_changes),
         position: Some(current_position),
-      }
+      },
     ) &&
     change == selected &&
     active_surface_generation == surface_generation &&
@@ -349,7 +349,7 @@ test "navigation retains the completed presentation until a replacement complete
         file_position: Some((1, 2)),
         position: Some({ current: 1, total: 15, }),
         ..
-      }
+      },
     ),
   )
   // An empty result is also a complete presentation, and must retire the

@@ -20,7 +20,7 @@ async test "activating the inspected page preserves a selection arriving before 
         )
         ws.send_text("{\"id\":1,\"result\":{}}")
       })
-      let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
+      let connection = connect("ws://127.0.0.1:\{server.addr.port}")
       defer connection.close()
       connection.bring_to_front()
       assert_true(
@@ -89,7 +89,7 @@ async test "typed commands preserve interleaved events and correlate replies" {
         ignore(ws.recv().read_all())
         ws.send_text("{\"id\":3,\"result\":{}}")
       })
-      let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
+      let connection = connect("ws://127.0.0.1:\{server.addr.port}")
       defer connection.close()
       let result : Int32 = connection.evaluate("1 + 1").decode_value()
       assert_eq(result, 2)
@@ -132,11 +132,11 @@ async test "interrupted CDP reads close the connection" {
           }
           // Text frame with an extended length, deliberately missing that length.
           conn.write(b"\x81\x7e")
-          conn.flush()
+          conn.flush_partial_data()
           partial_frame_sent = true
           assert_true(conn.read() is None)
         })
-        let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
+        let connection = connect("ws://127.0.0.1:\{server.addr.port}")
         defer connection.close()
         let reader = group.spawn(
           () => {

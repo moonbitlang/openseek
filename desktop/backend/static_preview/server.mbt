@@ -114,7 +114,7 @@ async fn serve(
   }
   let provider = moonx.resolve()
   let temp = @fs.tmpdir(prefix="seekmoon-preview-")
-  defer (@fs.rmdir(temp, recursive=true) catch { _ => () })
+  defer (@fs.remove(temp, recursive=true) catch { _ => () })
   let policy_path = temp + "/policy.json"
   let policy : Json = {
     "fs": { "read": [fixed.to_string()] },
@@ -175,7 +175,7 @@ async fn serve(
         break port
       }
     })
-    @fs.rmdir(temp, recursive=true)
+    @fs.remove(temp, recursive=true)
     let escaped = relative
       .to_string()
       .split("/")

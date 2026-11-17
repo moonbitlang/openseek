@@ -231,7 +231,13 @@ async fn ShellExecution::monitor(
       for ;; {
         match
           (@async.any([
-            () => Some(reader.read_into(buffer)),
+            () => {
+              let read = reader.read_into(buffer) catch {
+                TransportError(cause, ..) => raise cause
+                error => raise error
+              }
+              Some(read)
+            },
             () => {
               // A read can already be blocked when the child exits.
               ignore(exited.wait())

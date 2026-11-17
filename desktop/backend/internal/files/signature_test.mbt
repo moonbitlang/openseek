@@ -22,7 +22,7 @@ async fn signature(path : String) -> @protocol.FileSignature {
 #cfg(not(platform="windows"))
 async test "file signatures detect atomic replacement with preserved mtime" {
   let dir = @fs.tmpdir(prefix="openseek-file-signature-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/document.txt"
   @fs.write_text(path, "original", create_mode=CreateOrTruncate)
   let original_signature = signature(path)
@@ -50,7 +50,7 @@ async test "file signatures detect atomic replacement with preserved mtime" {
 #cfg(not(platform="windows"))
 async test "read and stat signatures follow the same symlink target" {
   let dir = @fs.tmpdir(prefix="openseek-file-signature-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let target = "\{dir}/document.txt"
   let link = "\{dir}/link"
   @fs.write_text(target, "target contents", create_mode=CreateOrTruncate)

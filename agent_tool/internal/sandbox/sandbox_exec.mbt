@@ -70,7 +70,7 @@ async fn probe_sandbox_exec_available() -> Bool {
   // Resolve the dir first, exactly like the real source-write profile does for
   // the workspace root.
   let probe_dir = @fs.realpath(probe_dir) catch { _ => probe_dir }
-  defer (@fs.rmdir(probe_dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(probe_dir, recursive=true) catch { _ => () })
   let blocked_path = @path.Path(probe_dir)
     .join(Path("blocked"))
     .normalize()

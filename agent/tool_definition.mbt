@@ -99,7 +99,7 @@ pub async fn build_tools(
   .group()
   .add_defer(() => {
     @async.protect_from_cancel(() => {
-      @fs.rmdir(scratch, recursive=true) catch {
+      @fs.remove(scratch, recursive=true) catch {
         _ => ()
       }
     })
@@ -135,7 +135,7 @@ pub async fn build_tools(
         // Exclusive creation: a collision never reuses another engine's logs.
         @fs.mkdir(spill_dir, permission=0o700)
         errdefer @async.protect_from_cancel(() => {
-          @fs.rmdir(spill_dir, recursive=true) catch {
+          @fs.remove(spill_dir, recursive=true) catch {
             _ => ()
           }
         })
@@ -180,7 +180,7 @@ pub async fn build_tools(
         try {
           if @fs.readdir(spill_dir) == ["owner.lock"] {
             @fs.remove("\{spill_dir}/owner.lock")
-            @fs.rmdir(spill_dir)
+            @fs.remove(spill_dir)
           }
         } catch {
           _ => () // Best effort; never remove unexpected files recursively.

@@ -62,7 +62,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
           "baseline": { "warning_count": Number(2, ..), .. },
           "reach_caveat": false,
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(fixed.data)}")
     }
@@ -100,7 +100,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
             ..
           },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }
@@ -141,7 +141,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
           "introduced_count": { "warnings": Number(1, ..), .. },
           "removed_count": { "warnings": Number(1, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(tolerated.data)}")
     }
@@ -198,7 +198,7 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
           },
           "check": { "error_count": Number(1, ..), .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }
@@ -223,7 +223,7 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
           "outcome": "applied",
           "check": { "error_count": Number(1, ..), .. },
           ..
-        }
+        },
       ),
     )
   })
@@ -349,7 +349,7 @@ async test "error guard compares net counts even when diagnostic identity change
               "check": { "error_count": Number(1, ..), .. },
               "introduced_count": { "errors": Number(1, ..), .. },
               ..
-            }
+            },
           ),
         )
       }
@@ -488,7 +488,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
     assert_true(
       deleted.data
       is Some(
-        { "lines": { "start": Number(1, ..), "end": Number(1, ..), .. }, .. }
+        { "lines": { "start": Number(1, ..), "end": Number(1, ..), .. }, .. },
       ),
       msg=shown(deleted.data),
     )
@@ -519,7 +519,7 @@ async test "a rejected edit reports its parse errors in data" {
           "introduced": Number(introduced, ..),
           "parse_errors": [{ "loc": String(_), "message": String(_), .. }, ..],
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(out.data)}")
     }
@@ -596,7 +596,7 @@ async test "guards check the module of a link's target as well as the link's own
           "reason": "error_delta",
           "introduced": { "errors": [{ "path": String(site), .. }, ..], .. },
           ..
-        }
+        },
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }

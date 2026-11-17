@@ -1,7 +1,7 @@
 ///|
 async test "a recorded session model is read back and carried into forks" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("origin")
   store.create(
     @agent_session.Session(id, system_prompt="system")
@@ -26,7 +26,7 @@ async test "a recorded session model is read back and carried into forks" {
 ///|
 async test "a malformed session model raises instead of reading as absent" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("s1")
   store.create(Session(id, system_prompt="system"))
   @fs.write_text(

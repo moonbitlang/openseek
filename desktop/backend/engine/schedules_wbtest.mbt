@@ -53,7 +53,7 @@ fn exit_host(service : Schedules) -> Unit {
 ///|
 async test "a scheduled run that left no session reports its exit code" {
   let folder = @fs.tmpdir(prefix="schedules-no-session-")
-  defer @fs.rmdir(folder, recursive=true)
+  defer @fs.remove(folder, recursive=true)
   let run : @protocol.ScheduleRun = {
     id: "r",
     schedule_id: "s",
@@ -104,7 +104,7 @@ test "schedule recovery skips downtime without delaying a future deadline" {
 ///|
 async test "schedule tick persists independent runs and caps concurrency without overlap" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-tick-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let service = Schedules(new_engine_manager("unused"), Some(root))
   ignore(service.list())
   service.commit({
@@ -137,7 +137,7 @@ async test "schedule tick persists independent runs and caps concurrency without
 /// meets it exactly as a second process would.
 async test "a second host reads the owner's schedules and neither runs nor changes them" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-two-hosts-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let owner = Schedules(new_engine_manager("unused"), Some(root))
   ignore(owner.list())
   owner.commit({
@@ -167,7 +167,7 @@ async test "a second host reads the owner's schedules and neither runs nor chang
 ///|
 async test "a host takes over the store once its owner has exited" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-takeover-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let owner = Schedules(new_engine_manager("unused"), Some(root))
   ignore(owner.list())
   owner.commit({
@@ -191,7 +191,7 @@ async test "a host takes over the store once its owner has exited" {
 ///|
 async test "schedule Run now preserves a paused plan and its future interval" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-manual-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let service = Schedules(new_engine_manager("unused"), Some(root))
   ignore(service.list())
   let entry = schedule_fixture("p", 500000, Every(10))
@@ -215,7 +215,7 @@ async test "schedule Run now preserves a paused plan and its future interval" {
 ///|
 async test "editing a schedule keeps its deadline unless its timing changes" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-edit-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let service = Schedules(new_engine_manager("unused"), Some(root))
   ignore(service.list())
   // Five minutes away on an hourly plan: no recomputed deadline lands there.
@@ -248,7 +248,7 @@ async test "editing a schedule keeps its deadline unless its timing changes" {
 ///|
 async test "schedule changes the user can correct are refused with a reason" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-refused-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let service = Schedules(new_engine_manager("unused"), Some(root))
   ignore(service.list())
   let entry = schedule_fixture("p", 500000, Every(10))
@@ -305,7 +305,7 @@ async test "schedule changes the user can correct are refused with a reason" {
 ///|
 async test "a schedule that cannot start does not hold back the others" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-isolated-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   // Without a home directory no automatic folder can be named.
@@ -339,7 +339,7 @@ async test "a schedule that cannot start does not hold back the others" {
 ///|
 async test "schedule sleep gap skips old ticks and corrupt persistence is never erased" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-recovery-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let service = Schedules(new_engine_manager("unused"), Some(root))
   ignore(service.list())
   service.commit({
@@ -366,7 +366,7 @@ async test "schedule sleep gap skips old ticks and corrupt persistence is never 
 #cfg(not(platform="windows"))
 async test "scheduled CLI writes bounded-memory logs and settles an independent run" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-cli-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_home = @sys.get_env_var("HOME")
@@ -527,7 +527,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
 #cfg(not(platform="windows"))
 async test "scheduled run Stop and timeout reap CLI processes" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-cancel-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_home = @sys.get_env_var("HOME")
@@ -656,7 +656,7 @@ async test "scheduled run Stop and timeout reap CLI processes" {
 ///|
 async test "schedule setup failure creates a readable diagnostic log" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedule-setup-"))
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let service = Schedules(new_engine_manager("unused"), Some(root))
   ignore(service.list())
   let entry = schedule_fixture("setup", 100000, Once(100000))
