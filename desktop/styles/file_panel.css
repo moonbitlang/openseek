@@ -202,9 +202,6 @@ button.panel-toggle:not(:disabled):hover {
 .office-viewer-surface.word-mode {
   padding: 2rem var(--space-7) 4rem;
 }
-.office-viewer-surface.sheet-mode {
-  padding: var(--space-7) var(--space-7) 3.25rem;
-}
 .office-viewer-surface.office-viewer-surface-empty {
   display: none !important;
 }
