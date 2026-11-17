@@ -177,7 +177,7 @@ fn markdown_cmark_input(markdown : String) -> String {
     }
   }
   guard needs_cleaning else { return markdown }
-  let cleaned = StringBuilder(size_hint=markdown.length())
+  let cleaned = StringBuilder(capacity=markdown.length())
   i = 0
   while i < markdown.length() {
     let unit = markdown[i].to_int()
