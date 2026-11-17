@@ -1,5 +1,5 @@
-// The shell is the fallback context-menu trigger. Nested controls retain first
-// refusal; this adapter resolves links, while RUI owns the menu.
+// Content regions resolve their own right-click targets. The shared menu is a
+// sibling overlay, never an ancestor of application content or editable controls.
 
 ///|
 #derive(Eq)
@@ -14,6 +14,7 @@ pub(all) enum ClientPlatform {
 #derive(Eq)
 pub(all) struct ContextInput {
   platform : ClientPlatform
+  scope : String
   // Whether ordinary web links have a visible in-app Browser destination on
   // the current screen. This is a screen capability, not a platform fact.
   open_web_links_in_app : Bool
@@ -38,7 +39,7 @@ pub(all) struct ContextActions {
 }
 
 ///|
-#derive(Eq)
+#derive(Eq, Debug)
 priv enum ContextTarget {
   NoTarget
   WebLink(String)
@@ -48,18 +49,19 @@ priv enum ContextTarget {
 
 ///|
 #derive(Eq)
-priv struct ContextState {
-  request : ContextTarget?
-  restore_focus_id : String?
+priv struct ContextOpen {
+  request : ContextTarget
+  open : Open
 }
 
 ///|
 priv enum ContextMsg {
-  Requested(ContextTarget, String?)
+  Requested(ContextOpen)
+  Closed(ContextOpen)
 }
 
 ///|
-const GlobalContextTarget : String = "app-context-menu"
+const ContentContextEvent : String = "openseek-content-context-open"
 
 ///|
 fn event_element(event : @dom.Event) -> @dom.Element? {
@@ -70,8 +72,12 @@ fn event_element(event : @dom.Event) -> @dom.Element? {
 }
 
 ///|
-fn element_context(element : @dom.Element) -> ContextTarget {
+fn element_context(
+  element : @dom.Element,
+  region : @dom.Element,
+) -> ContextTarget {
   if element.closest("[data-context-file]") is Some(file) &&
+    region.contains(file.as_node()) &&
     file.get_attribute("data-context-file") is Some(path) {
     return FileLink(
       path,
@@ -81,6 +87,7 @@ fn element_context(element : @dom.Element) -> ContextTarget {
     )
   }
   guard element.closest("a[href]") is Some(anchor) &&
+    region.contains(anchor.as_node()) &&
     !anchor.has_attribute("download") else {
     return NoTarget
   }
@@ -119,7 +126,7 @@ fn context_editable(element : @dom.Element) -> Bool {
 }
 
 ///|
-fn context_focus_id(next_id : Ref[Int32]) -> String? {
+fn context_focus_id(region : String) -> String? {
   guard @dom.document().get_active_element() is Some(active) &&
     active.to_html_element() is Some(_) &&
     !active.matches("body") else {
@@ -128,9 +135,16 @@ fn context_focus_id(next_id : Ref[Int32]) -> String? {
   if active.get_attribute("id") is Some(id) && !id.is_empty() {
     return Some(id)
   }
-  next_id.val += 1
-  let id = "app-context-focus:\{next_id.val}"
+  let id = "content-context-focus:\{region}"
+  // A previous invocation may have focused a different unnamed element.
+  // Keep this region's temporary restore target unique across invocations.
+  if @dom.document().get_element_by_id(id).to_option() is Some(previous) &&
+    previous.get_attribute(TemporaryFocusAttribute) == Some(id) {
+    previous.remove_attribute("id")
+    previous.remove_attribute(TemporaryFocusAttribute)
+  }
   active.set_attribute("id", id)
+  active.set_attribute(TemporaryFocusAttribute, id)
   Some(id)
 }
 
@@ -299,171 +313,170 @@ fn context_definition(
 }
 
 ///|
-/// RUI 0.5 exposes its scope through an HTML callback, rather than as an
-/// incremental value. Its renderer and open notifications supply the scope
-/// and root state for composing the changing shell and context actions.
+/// Register a content region, without installing RUI's menu keyboard handler
+/// on its descendants. Nested controls and editable elements retain first refusal.
+pub fn content_attrs(region : String) -> @html.Attrs {
+  let request = (event : @dom.Event, x, y, keyboard) => {
+    guard !event.get_default_prevented() &&
+      event_element(event) is Some(element) &&
+      !context_editable(element) &&
+      event.current_target().to_option().bind(target => target.to_element())
+      is Some(container) &&
+      element.closest("[data-content-context]") is Some(owner) &&
+      owner.is_same_node(container.as_node()) else {
+      return @cmd.none
+    }
+    let target = element_context(element, container)
+    guard target != NoTarget else { return @cmd.none }
+    event.prevent_default()
+    event.stop_propagation()
+    let (x, y) = if keyboard {
+      context_keyboard_anchor(element)
+    } else {
+      (x, y)
+    }
+    let context : ContextOpen = {
+      request: target,
+      open: {
+        target: "content-context:" + region,
+        anchor: Pointer(x, y),
+        restore_focus_id: context_focus_id(region),
+      },
+    }
+    @cmd.custom_cmd(_ => {
+      // An internal, typed in-memory event, not a JSON wire message.
+      let event = @dom.CustomEvent::new(
+        ContentContextEvent,
+        detail=@js.Optional::from_option(Some(@js.Value::cast_from(context))),
+      )
+      @dom.document().as_event_target().dispatch_event(event.as_event())
+    })
+  }
+  @html.Attrs::build()
+  .data_set("content-context", region)
+  .on_contextmenu(event => {
+    let x = event.get_client_x().to_int()
+    let y = event.get_client_y().to_int()
+    request(event.as_event(), x, y, x == 0 && y == 0)
+  })
+  .on_keydown(event => {
+    guard !event.is_composing() &&
+      !event.repeat() &&
+      (
+        event.key() == "ContextMenu" ||
+        (event.key() == "F10" && event.shift_key())
+      ) else {
+      return @cmd.none
+    }
+    request(event.as_event(), 0, 0, true)
+  })
+}
+
+///|
+/// Add a trigger to content with no suitable owning element of its own.
+pub fn content_region(region : String, content : @html.Html) -> @html.Html {
+  @html.div(style=["display:contents"], attrs=content_attrs(region), content)
+}
+
+///|
+priv suberror ContextSubscription {
+  ContextSubscription(@cmd.Emit[ContextOpen])
+}
+
+///|
+fn context_subscription(emit : @cmd.Emit[ContextOpen]) -> @sub.Sub {
+  @sub.custom_sub("content-context-open", Local, ContextSubscription(emit), (
+    payload,
+    scheduler,
+  ) => {
+    guard payload is ContextSubscription(emit) else { return None }
+    let mut emit = emit
+    let target = @dom.document().as_event_target()
+    let listener : @dom.Listener = event => {
+      if event.to_custom_event() is Some(event) {
+        scheduler.add(emit(event.get_detail().cast()))
+      }
+    }
+    target.add_event_listener(ContentContextEvent, listener)
+    Some({
+      unload: _ => target.remove_event_listener(ContentContextEvent, listener),
+      update_tagger: payload => {
+        if payload is ContextSubscription(next) {
+          emit = next
+        }
+      },
+    })
+  })
+}
+
+///|
+/// Only the open menu is a RUI surface. Changing conversation/workspace drops
+/// its request so file actions cannot be applied to a different owner.
 pub fn context_component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[ContextInput],
   actions : ContextActions,
-  content : @rabbita.Val[@html.Html],
 ) -> @rabbita.Val[@html.Html] {
-  let (state, emit) = @rabbita.create_state_with_init(
-    init=_ => ({ request: None, restore_focus_id: None, }, @cmd.none),
-    update=(_, msg, _) => {
+  let (state, emit) = @rabbita.create_state_with_input(
+    input~,
+    init=(_, _) => (None, @cmd.none),
+    update=(state, input, msg, _) => {
       match msg {
-        Requested(request, restore_focus_id) =>
-          ({ request: Some(request), restore_focus_id, }, @cmd.none)
-      }
-    },
-  )
-  let next_focus_id = Ref(0)
-  let keyboard_request : Ref[ContextTarget?] = Ref(None)
-  let visible = Ref(false)
-  let render : Ref[
-    (@html.Html, @i18n.Locale, ContextInput, ContextState) -> @html.Html,
-  ] = Ref((content, _, _, _) => content)
-  let native = @rui.context_menu(
-    id=GlobalContextTarget,
-    on_open_change=open => {
-      visible.val = open
-      @cmd.none
-    },
-    scope => {
-      // RUI's item indices belong to this scope, not to shell-only updates.
-      let rendered_menu : Ref[@html.Html?] = Ref(None)
-      render.val = (content, locale, input, state) => {
-        let accept = (event : @dom.Event, request) => {
-          guard context_definition(locale~, input, request, actions)
-            is Some(definition) &&
-            definition.has_enabled_actions() else {
-            event.prevent_default()
-            return @rui.popover_close(GlobalContextTarget + "-content")
-          }
-          emit(Requested(request, context_focus_id(next_focus_id)))
-        }
-        // The shell is the trigger, but keyboard invocation belongs beside
-        // the focused content, not at the shell's upper-left corner.
-        let keyboard_open = (event : @dom.Event, element) => {
-          event.prevent_default()
-          keyboard_request.val = Some(element_context(element))
-          let (x, y) = context_keyboard_anchor(element)
-          dispatch_context_at(element, x, y)
-          keyboard_request.val = None
-          @cmd.none
-        }
-        let trigger_attrs = @html.Attrs::build()
-          .on_contextmenu(event => {
-            guard !event.get_default_prevented() &&
-              event_element(event.as_event()) is Some(element) else {
-              return @cmd.none
-            }
-            if context_editable(element) {
-              event.stop_immediate_propagation()
-              return @cmd.none
-            }
-            if keyboard_request.val is Some(request) {
-              return accept(event.as_event(), request)
-            }
-            let x = event.get_client_x().to_int()
-            let y = event.get_client_y().to_int()
-            if x == 0 && y == 0 {
-              keyboard_open(event.as_event(), element)
+        Requested(open) => (Some((input.scope, open)), @cmd.none)
+        Closed(open) =>
+          (
+            if state is Some((_, current)) && current == open {
+              None
             } else {
-              accept(event.as_event(), element_context(element))
-            }
-          })
-          .on_keydown(event => {
-            guard !event.get_default_prevented() &&
-              (
-                event.key() == "ContextMenu" ||
-                (event.key() == "F10" && event.shift_key())
-              ) &&
-              event_element(event.as_event()) is Some(element) else {
-              return @cmd.none
-            }
-            if context_editable(element) {
-              event.stop_immediate_propagation()
-              return @cmd.none
-            }
-            keyboard_open(event.as_event(), element)
-          })
-        let menu_attrs = @html.Attrs::build()
-          .data_set("action-menu-surface", GlobalContextTarget)
-          .on_contextmenu(event => {
-            event.prevent_default()
-            event.stop_propagation()
-            @cmd.none
-          })
-        if state.restore_focus_id is Some(id) {
-          ignore(menu_attrs.data_set("final-focus-id", id))
-        }
-        let menu = match rendered_menu.val {
-          Some(menu) => menu
-          None => {
-            let definition = state.request.bind(request => {
-              context_definition(locale~, input, request, actions)
-            })
-            let menu = @rui.context_menu_content(
-              scope,
-              aria_label=ui(locale, ContextMenu),
-              class="action-menu",
-              attrs=menu_attrs,
-              definition.map_or([], definition => {
-                definition.entries.map(entry => {
-                  match entry {
-                    Separator => @rui.context_menu_separator()
-                    Action(item) =>
-                      @rui.context_menu_item(
-                        scope,
-                        disabled=!item.enabled,
-                        destructive=item.destructive,
-                        on_select=item.command,
-                        class="action-menu-item",
-                        title=item.title,
-                        item_children(item),
-                      )
-                  }
-                })
-              }),
-            )
-            rendered_menu.val = Some(menu)
-            menu
-          }
-        }
-        @html.fragment([
-          @rui.context_menu_trigger(
-            scope,
-            tabindex=-1,
-            style=["width:100%;height:100%"],
-            attrs=trigger_attrs,
-            content,
-          ),
-          menu,
-        ])
+              state
+            },
+            @cmd.none,
+          )
       }
-      @html.nothing
+    },
+    subscriptions=(state, _, emit) => {
+      @sub.batch(
+        [
+          context_subscription(emit.map(open => Requested(open))),
+          ..state.map_or([], pair => {
+            let (_, open) = pair
+            [
+              @dismiss.on_back("content-context-back", level=TopLayer, _ => {
+                emit(Closed(open))
+              }),
+              @sub.on_resize(_ => emit(Closed(open))),
+            ]
+          }),
+        ],
+      )
     },
   )
-  @rabbita.Val::map5(native, content, locale, input, state, (
-    _,
-    content,
-    locale,
-    input,
-    state,
-  ) => {
-    @rui.theme(
-      style=["display:contents"],
-      @html.span(
-        id=GlobalContextTarget + "-root",
-        style=["display:contents"],
-        attrs=@html.Attrs::build()
-          .data_set("slot", "context-menu")
-          .data_set("state", if visible.val { "open" } else { "closed" }),
-        (render.val)(content, locale, input, state),
-      ),
-    )
-  })
+  state.switch_by(
+    current => {
+      guard current is Some((scope, context)) else {
+        return @rabbita.Val::constant(@html.nothing)
+      }
+      menu_component(
+        input.map2(locale, (input, locale) => (input, locale)),
+        context.open,
+        pair => {
+          let (input, locale) = pair
+          if input.scope == scope {
+            context_definition(locale~, input, context.request, actions)
+          } else {
+            None
+          }
+        },
+        emit(Closed(context)),
+      )
+    },
+    by=current => {
+      current.map_or("closed", pair => {
+        let (scope, context) = pair
+        scope + context.open.key() + Repr::Repr(context.request).to_string()
+      })
+    },
+  )
 }
 
 ///|

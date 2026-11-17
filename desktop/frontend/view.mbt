@@ -2554,6 +2554,7 @@ fn view(
   let page_content = [
     @html.div(
       class=if model.screen is Codex { "topbar codex-topbar" } else { "topbar" },
+      attrs=@action_menu.content_attrs("heading"),
       header,
     ),
     ..content,
@@ -2729,6 +2730,14 @@ fn view(
     model.focused == Local &&
     model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
+  }
+  // Dialogs and notices keep link actions, without a shell-wide trigger.
+  // The first three slots are the toggle, sidebar and conversation/panel layout.
+  for index in 3..<children.length() {
+    children[index] = @action_menu.content_region(
+      "overlay:\{index}",
+      children[index],
+    )
   }
   @html.div(class=app_shell_class(model.sidebar_open), children)
 }

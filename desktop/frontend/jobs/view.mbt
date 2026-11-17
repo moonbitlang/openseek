@@ -569,7 +569,7 @@ pub fn panel(
       body.push(@html.div(class="jobs-detail", details))
     }
   }
-  @html.div(class="jobs-panel", body)
+  @html.div(class="jobs-panel", attrs=@action_menu.content_attrs("jobs"), body)
 }
 
 ///|
