@@ -329,7 +329,7 @@ async test "a bundle that cannot update itself leaves the staging directory alon
   // `codesign` is how the question is asked; only macOS has it to ask.
   guard @async.platform is MacOS else { return }
   let work : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-update-shared-"))
-  defer @fs.rmdir(work.to_string(), recursive=true)
+  defer @fs.remove(work.to_string(), recursive=true)
   // An unsigned code object stands in for the bundle: what the probe reads
   // is whether anyone signed it, not what it contains.
   let bundle = work.join("SeekMoonDev.app")
@@ -354,7 +354,7 @@ async test "a bundle that cannot update itself leaves the staging directory alon
 /// leftovers would otherwise stay with nothing to say why.
 async test "a bundle whose signature cannot be read sweeps nothing and says so" {
   let work : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-update-unread-"))
-  defer @fs.rmdir(work.to_string(), recursive=true)
+  defer @fs.remove(work.to_string(), recursive=true)
   let staged = work.join("update/extract/SeekMoon.app")
   @fs.mkdir(staged.to_string(), recursive=true)
   let updates : SelfUpdate = {

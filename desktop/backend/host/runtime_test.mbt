@@ -1,7 +1,7 @@
 ///|
 async test "development state stays inside the detected checkout" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-state-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let command_dir = root.join(
     "desktop/app/_build/native/debug/build/openseek_desktop/app",
   )

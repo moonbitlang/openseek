@@ -11,7 +11,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
   let root = @pathx.Path(
     @fs.realpath(@fs.tmpdir(prefix="seekmoon-pr-artifacts-")),
   ).resolve()
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.to_string())
   defer (match previous {

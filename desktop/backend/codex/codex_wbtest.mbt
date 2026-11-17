@@ -4,7 +4,7 @@
 /// home again succeeds.
 async test "preparing the isolated codex home creates the directory" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-codex-home-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let home = home_dir(root)
   prepare_home_directory(home)
   assert_true(@fs.kind(home.to_string()) is Directory)

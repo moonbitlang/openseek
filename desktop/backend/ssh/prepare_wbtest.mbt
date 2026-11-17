@@ -72,7 +72,7 @@ async test "remote preparation downloads verifies installs and reuses the cached
     return
   }
   let home = @fs.tmpdir(prefix="ssh-prepare-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let release = preparation_fixture(home)
   let (code, out, err) = run_preparation(home, release)
   assert_eq(code, 0, msg=err)
@@ -83,7 +83,7 @@ async test "remote preparation downloads verifies installs and reuses the cached
   )
   assert_eq(@fs.read_text(home + "/actions"), "setup\nserver\n")
   assert_true(@fs.exists(home + "/.openseek/ssh/v" + CliRelease + "/.prepared"))
-  @fs.rmdir(release, recursive=true)
+  @fs.remove(release, recursive=true)
   let (again, output, error) = run_preparation(home, release)
   assert_eq(again, 0, msg=error)
   assert_false(output.contains("downloading") || output.contains("installing"))
@@ -96,7 +96,7 @@ async test "archive checksum failure never executes setup and a fresh download c
     return
   }
   let home = @fs.tmpdir(prefix="ssh-prepare-checksum-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let release = preparation_fixture(home)
   let sums = @fs.read_binary(release + "/SHA256SUMS")
   @fs.write_text(
@@ -118,7 +118,7 @@ async test "failed setup is reported without starting or caching an app-server" 
     return
   }
   let home = @fs.tmpdir(prefix="ssh-prepare-install-")
-  defer @fs.rmdir(home, recursive=true)
+  defer @fs.remove(home, recursive=true)
   let release = preparation_fixture(home, fail_setup=true)
   let (code, output, _) = run_preparation(home, release)
   assert_eq(code, 19)

@@ -4,7 +4,7 @@ async test "SSH bootstrap preserves its startup pipe and passes provider credent
     return
   }
   let directory = @fs.tmpdir(prefix="ssh-model-settings-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   let home = directory + "/home with spaces"
   let prepared = home + "/.openseek/ssh/v" + CliRelease
   @fs.mkdir(prepared + "/bin", recursive=true)
