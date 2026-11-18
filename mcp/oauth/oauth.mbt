@@ -41,16 +41,26 @@ fn form(fields : Array[(String, String)]) -> String {
 }
 
 ///|
-async fn post(endpoint : String, fields : Array[(String, String)]) -> Json {
+async fn post(
+  endpoint : String,
+  fields : Array[(String, String)],
+  accept_invalid_client~ : Bool = false,
+) -> Json {
   @async.with_timeout(30000, () => {
     let (response, body) = @http.post_text(endpoint, form(fields), headers={
       "Accept": "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
     })
-    guard response.code == 200 || response.code == 400 else {
-      fail("OAuth endpoint returned HTTP \{response.code}")
+    if response.code == 200 || response.code == 400 {
+      return body.json()
     }
-    body.json()
+    if accept_invalid_client && response.code == 401 {
+      let json = body.json()
+      if json is { "error": "invalid_client", .. } {
+        return json
+      }
+    }
+    fail("OAuth endpoint returned HTTP \{response.code}")
   })
 }
 

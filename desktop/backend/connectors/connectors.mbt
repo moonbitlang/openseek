@@ -6,6 +6,13 @@ priv struct Entry {
 }
 
 ///|
+fn Entry::same_configuration(self : Entry, other : Entry) -> Bool {
+  self.info.id == other.info.id &&
+  self.resource == other.resource &&
+  self.oauth == other.oauth
+}
+
+///|
 priv struct Attempt {
   id : String
   pending : Authorization
@@ -209,6 +216,42 @@ pub async fn Service::list(self : Service) -> @protocol.ConnectorReply {
 }
 
 ///|
+async fn Service::cancel_requested_attempt(
+  self : Service,
+  request : @protocol.ConnectorRequest,
+) -> Unit {
+  if self.attempts.get(request.id) is Some(attempt) &&
+    request.attempt == Some(attempt.id) {
+    attempt.pending.cancel()
+    // A commit may have yielded while cancellation waited for it.
+    if self.attempts.get(request.id) is Some(current) &&
+      current.id == attempt.id {
+      self.attempts.remove(request.id)
+    }
+  }
+}
+
+///|
+async fn Service::validate_browser_attempt(
+  self : Service,
+  entry : Entry,
+  attempt_id : String,
+) -> Unit {
+  guard self.attempts.get(entry.info.id) is Some(attempt) &&
+    attempt.id == attempt_id else {
+    fail("Authorization was cancelled or replaced; connect again")
+  }
+  // The callback can commit before the next UI poll. Read the current skill
+  // configuration here without taking the service mutex that poll holds.
+  guard self
+    .entries()
+    .iter()
+    .any(candidate => entry.same_configuration(candidate)) else {
+    fail("Connector configuration changed; connect again")
+  }
+}
+
+///|
 /// Each short RPC polls at most once; navigation/cancel never starts a hidden login.
 pub async fn Service::action(
   self : Service,
@@ -217,16 +260,7 @@ pub async fn Service::action(
 ) -> @protocol.ConnectorReply {
   // Cancellation must fence an outstanding HTTP poll before waiting on its lock.
   if operation == "cancel" {
-    if self.attempts.get(request.id) is Some(attempt) &&
-      request.attempt == Some(attempt.id) {
-      attempt.pending.cancel()
-      // A commit may have yielded while cancellation waited for it. Do not
-      // remove a newer attempt that another client started in the meantime.
-      if self.attempts.get(request.id) is Some(current) &&
-        current.id == attempt.id {
-        self.attempts.remove(request.id)
-      }
-    }
+    self.cancel_requested_attempt(request)
     return self.list()
   }
   if operation == "disconnect" || operation == "connect" {
@@ -247,6 +281,9 @@ pub async fn Service::action(
     let entries = self.entries()
     guard entries.iter().find_first(e => e.info.id == request.id) is Some(entry) &&
       entry.oauth is Some(config) else {
+      if operation == "poll" {
+        self.cancel_requested_attempt(request)
+      }
       fail(
         "This connector has no available OAuth configuration; refresh the list",
       )
@@ -262,7 +299,11 @@ pub async fn Service::action(
             guard self.group is Some(group) else {
               fail("Browser authorization requires a running Desktop host")
             }
-            Browser(begin_browser(group, entry.resource, config))
+            Browser(
+              begin_browser(group, entry.resource, config, validate=() => {
+                self.validate_browser_attempt(entry, id)
+              }),
+            )
           }
         }
         let attempt = { id, pending, entry, }
@@ -274,10 +315,8 @@ pub async fn Service::action(
           request.attempt == Some(attempt.id) else {
           fail("Authorization was cancelled or replaced; connect again")
         }
-        guard attempt.entry.oauth == entry.oauth &&
-          attempt.entry.resource == entry.resource else {
-          attempt.pending.cancel()
-          self.attempts.remove(request.id)
+        guard attempt.entry.same_configuration(entry) else {
+          self.cancel_requested_attempt(request)
           fail("Connector configuration changed; connect again")
         }
         errdefer self.attempts.remove(request.id)

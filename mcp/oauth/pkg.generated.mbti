@@ -28,7 +28,7 @@ pub async fn token(String, @config.OAuthConfig) -> String?
 type BrowserAuthorization
 pub fn BrowserAuthorization::accepts_issuer(Self, String?) -> Bool
 pub async fn BrowserAuthorization::cancel(Self) -> Unit
-pub async fn BrowserAuthorization::finish(Self, code~ : String, verifier~ : String) -> Unit
+pub async fn BrowserAuthorization::finish(Self, code~ : String, verifier~ : String, validate~ : async () -> Unit) -> Unit
 pub fn BrowserAuthorization::url(Self) -> String
 
 type Pending

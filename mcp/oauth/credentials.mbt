@@ -88,10 +88,16 @@ async fn Commit::cancel(self : Commit) -> Unit {
 }
 
 ///|
-async fn Commit::save(self : Commit, path : String, record : Json) -> Unit {
+async fn Commit::save(
+  self : Commit,
+  path : String,
+  record : Json,
+  validate~ : async () -> Unit = () => (),
+) -> Unit {
   write_credential(path, record, commit=(temp, path) => {
     self.lock.acquire()
     defer self.lock.release()
+    validate()
     guard !self.cancelled else { fail("Authorization cancelled") }
     @fs.rename(temp, path, replace=true)
   })
@@ -110,28 +116,37 @@ async fn read_credential(path : String) -> Json? {
 }
 
 ///|
-fn token_record(json : Json) -> Json raise {
+fn token_record(json : Json, proactive_refresh~ : Bool = false) -> Json raise {
   guard json
     is { "access_token": String(token), "token_type": String(kind), .. } &&
     !token.is_empty() &&
     kind.to_lower() == "bearer" else {
     fail("OAuth server did not return a bearer token")
   }
-  let expires = seconds(json, "expires_in", default=0)
-  {
+  let lifetime_ms = seconds(json, "expires_in", default=0).to_double() * 1000
+  let expires_at = @env.now().to_double() + lifetime_ms
+  let record : Map[String, Json] = {
     "access_token": token,
-    "expires_at": if expires > 0 {
-      Json(@env.now().to_double() + expires.to_double() * 1000)
+    "expires_at": if lifetime_ms > 0 {
+      Json(expires_at)
     } else {
       Json::null()
     },
   }
+  if proactive_refresh && lifetime_ms > 0 {
+    // Leave most of the lifetime usable, even when an issuer returns a
+    // token with a lifetime shorter than the maximum refresh window.
+    let window = (lifetime_ms * 0.1).min(300000)
+    record["refresh_at"] = Json(expires_at - window)
+  }
+  Json::object(record)
 }
 
 ///|
 priv struct StoredToken {
   access_token : String
   expires_at : Double?
+  refresh_at : Double?
 }
 
 ///|
@@ -146,15 +161,26 @@ fn stored_token(json : Json) -> StoredToken raise {
     Number(n, ..) if n > 0 => Some(n)
     _ => fail("Invalid OAuth credential expiry")
   }
-  { access_token, expires_at, }
+  let refresh_at = match (json, expires_at) {
+    ({ "refresh_at": Number(at, ..), .. }, Some(expiry)) if at > 0 &&
+      at <= expiry => Some(at)
+    // Existing credentials have no issued lifetime. Refresh them at expiry.
+    _ => expires_at
+  }
+  { access_token, expires_at, refresh_at, }
 }
 
 ///|
-fn StoredToken::valid(self : StoredToken, leeway_ms~ : Double = 0) -> Bool {
+fn StoredToken::valid(self : StoredToken) -> Bool {
   match self.expires_at {
     None => true
-    Some(expires) => expires > @env.now().to_double() + leeway_ms
+    Some(expires) => expires > @env.now().to_double()
   }
+}
+
+///|
+fn StoredToken::refresh_due(self : StoredToken) -> Bool {
+  self.refresh_at is Some(at) && at <= @env.now().to_double()
 }
 
 ///|
@@ -176,9 +202,6 @@ pub async fn authorized(
 }
 
 ///|
-const BrowserRefreshLeewayMs : Double = 300000
-
-///|
 /// Read a usable token, refreshing browser grants before they expire.
 pub async fn token(resource : String, config : @config.OAuthConfig) -> String? {
   let path = credential_path(resource, config)
@@ -188,7 +211,7 @@ pub async fn token(resource : String, config : @config.OAuthConfig) -> String? {
     DeviceCode(_) => if token.valid() { Some(token.access_token) } else { None }
     AuthorizationCode(config) => {
       let grant = browser_grant(json, config)
-      if token.valid(leeway_ms=BrowserRefreshLeewayMs) {
+      if !token.refresh_due() {
         Some(token.access_token)
       } else if grant.refresh_token is Some(_) {
         refresh(path, resource, config)

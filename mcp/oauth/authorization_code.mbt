@@ -82,6 +82,18 @@ fn registration_path(issuer : String) -> String raise {
 }
 
 ///|
+async fn forget_registration(issuer : String, client_id : String) -> Unit {
+  let path = registration_path(issuer)
+  let lock = lock_credential(path)
+  defer lock.close()
+  // Another engine may already have replaced the rejected registration.
+  if read_credential(path) is Some({ "client_id": String(saved), .. }) &&
+    saved == client_id {
+    @fs.remove(path, allow_missing=true)
+  }
+}
+
+///|
 async fn register(
   issuer : String,
   provider : Provider,
@@ -227,7 +239,7 @@ fn browser_grant(
 
 ///|
 fn browser_record(json : Json, grant : BrowserGrant) -> Json raise {
-  guard token_record(json) is Object(record) else {
+  guard token_record(json, proactive_refresh=true) is Object(record) else {
     fail("Invalid OAuth token")
   }
   let refresh_token = match json {
@@ -251,16 +263,24 @@ pub async fn BrowserAuthorization::finish(
   self : BrowserAuthorization,
   code~ : String,
   verifier~ : String,
+  validate~ : async () -> Unit,
 ) -> Unit {
   guard !self.commit.cancelled else { fail("Authorization cancelled") }
-  let json = post(self.provider.token_endpoint, [
-    ("grant_type", "authorization_code"),
-    ("resource", self.resource),
-    ("client_id", self.client_id),
-    ("redirect_uri", self.redirect_uri),
-    ("code", code),
-    ("code_verifier", verifier),
-  ])
+  let json = post(
+    self.provider.token_endpoint,
+    [
+      ("grant_type", "authorization_code"),
+      ("resource", self.resource),
+      ("client_id", self.client_id),
+      ("redirect_uri", self.redirect_uri),
+      ("code", code),
+      ("code_verifier", verifier),
+    ],
+    accept_invalid_client=true,
+  )
+  if json is { "error": "invalid_client", .. } {
+    forget_registration(self.config.issuer, self.client_id)
+  }
   if json is { "error": String(_), .. } {
     fail("OAuth code exchange failed; connect again")
   }
@@ -272,7 +292,7 @@ pub async fn BrowserAuthorization::finish(
   let path = credential_path(self.resource, AuthorizationCode(self.config))
   let lock = lock_credential(path)
   defer lock.close()
-  self.commit.save(path, tokens)
+  self.commit.save(path, tokens, validate~)
 }
 
 ///|
@@ -294,7 +314,7 @@ async fn refresh(
   guard read_credential(path) is Some(json) else { return None }
   let token = stored_token(json)
   let grant = browser_grant(json, config)
-  if token.valid(leeway_ms=BrowserRefreshLeewayMs) {
+  if !token.refresh_due() {
     return Some(token.access_token)
   }
   guard grant.refresh_token is Some(refresh_token) else {
@@ -303,14 +323,23 @@ async fn refresh(
   // A turn cancellation must not drop the new token once refresh has started.
   @async.protect_from_cancel(() => {
     try {
-      let result = post(grant.endpoint, [
-        ("grant_type", "refresh_token"),
-        ("resource", resource),
-        ("client_id", grant.client_id),
-        ("refresh_token", refresh_token),
-      ])
+      let result = post(
+        grant.endpoint,
+        [
+          ("grant_type", "refresh_token"),
+          ("resource", resource),
+          ("client_id", grant.client_id),
+          ("refresh_token", refresh_token),
+        ],
+        accept_invalid_client=true,
+      )
       match result {
-        { "error": "invalid_grant" | "invalid_client", .. } => {
+        { "error": "invalid_client", .. } => {
+          forget_registration(config.issuer, grant.client_id)
+          @fs.remove(path, allow_missing=true)
+          None
+        }
+        { "error": "invalid_grant", .. } => {
           @fs.remove(path, allow_missing=true)
           None
         }
