@@ -108,6 +108,7 @@ test('a dismissed feedback submission can be reopened before and after its recei
   await task.press('Enter');
   await expect(dialog).toBeVisible();
   await dialog.press('Escape');
+  await expect(dialog).toBeHidden();
   finish();
   await expect(task).toHaveValue('');
   await expect(dialog).toBeHidden();
@@ -116,6 +117,7 @@ test('a dismissed feedback submission can be reopened before and after its recei
   await dialog.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(/\/v1\/shares\//);
   await dialog.press('Escape');
+  await expect(dialog).toBeHidden();
   await task.fill('/feedback ' + message);
   await task.press('Enter');
   await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(url);
