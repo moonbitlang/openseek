@@ -1,6 +1,8 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, cloudOrigin, sessionA } from './support/cloud_harness.js';
 
+const publicOrigin = 'https://public-feedback.test';
+const receipt = id => ({ id, url: `${publicOrigin}/v1/feedback/${id}` });
 const message = '  窗口闪烁\nsecond line  ';
 
 test('Cloud feedback sends the verbatim command body from the latest history page', async ({ page }) => {
@@ -33,6 +35,7 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
   await task.fill('/feed');
   const completion = page.locator('.completion-item').filter({ hasText: '/feedback' });
   await expect(completion).toContainText('full conversation and runtime environment');
+  await expect(completion).toContainText('Anyone with the link can view');
   await completion.click();
   await expect(task).toHaveValue('/feedback ');
   await expect(page.locator('#send')).toBeDisabled();
@@ -45,11 +48,25 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
     await expect(task).toHaveValue('/feedback ' + message);
   }
   status = 201;
-  response = { id: 'fb_cloud' };
+  for (const invalid of [{ id: 'fb_cloud' }, { id: 'fb_cloud', url: 'javascript:alert(1)' }]) {
+    response = invalid;
+    await task.press('Enter');
+    await expect(page.getByText('Invalid feedback receipt.').last()).toBeVisible();
+    await expect(task).toHaveValue('/feedback ' + message);
+    await expect(page.locator('#send')).toBeEnabled();
+  }
+  response = receipt('fb_cloud');
   await page.locator('#send').click();
-  await expect(page.getByText(/Feedback submitted.*fb_cloud/)).toBeVisible();
+  const link = page.getByRole('link', { name: /Feedback submitted.*fb_cloud/ });
+  await expect(link).toHaveAttribute('href', response.url);
+  await page.context().route(response.url, route => route.fulfill({ body: 'Feedback' }));
+  const opened = page.waitForEvent('popup');
+  await link.click();
+  const popup = await opened;
+  await expect(popup).toHaveURL(response.url);
+  await popup.close();
   await expect(task).toHaveValue('');
-  expect(posts).toHaveLength(4);
+  expect(posts).toHaveLength(6);
   for (const post of posts) {
     expect(post).toEqual({ method: 'POST', auth: 'Bearer ts_fixture-123', parts: ['metadata'], metadata: {
       message, environment: { client: 'browser', app_version: process.env.SEEKMOON_BROWSER_RELEASE || 'unknown', platform: expect.any(String), locale: expect.any(String), user_agent: expect.any(String) },
@@ -65,7 +82,11 @@ test('Local feedback targets the selected host session and displays its receipt'
   await app.install();
   const original = app.device.replyFor.bind(app.device);
   let reply = { Err: 'no durable record for this conversation' };
-  app.device.replyFor = request => request.method === 'session.feedback' ? reply : original(request);
+  app.device.replyFor = request => {
+    if (request.method === 'session.feedback') return reply;
+    if (request.method === 'shell.open_external') return { opened: true };
+    return original(request);
+  };
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
   await app.device.openSession();
   const task = page.locator('#task');
@@ -73,9 +94,12 @@ test('Local feedback targets the selected host session and displays its receipt'
   await task.press('Enter');
   await expect(page.getByText(reply.Err)).toBeVisible();
   await expect(task).toHaveValue('/feedback ' + message);
-  reply = { Ok: { id: 'fb_local' } };
+  reply = { Ok: receipt('fb_local') };
   await task.press('Enter');
-  await expect(page.getByText(/Feedback submitted.*fb_local/)).toBeVisible();
+  const link = page.getByRole('link', { name: /Feedback submitted.*fb_local/ });
+  await expect(link).toHaveAttribute('href', reply.Ok.url);
+  await link.click();
+  await expect.poll(() => app.hostRequests.filter(r => r.method === 'shell.open_external').map(r => r.params.url)).toEqual([reply.Ok.url]);
   await expect(task).toHaveValue('');
   const requests = app.hostRequests.filter(request => request.method === 'session.feedback');
   expect(requests).toHaveLength(2);
@@ -93,7 +117,7 @@ test('Cloud feedback releases a stalled submission and retries only on request',
   let attempts = 0;
   await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
     attempts++;
-    if (attempts > 1) await route.fulfill({ status: 201, json: { id: 'fb_retry' } });
+    if (attempts > 1) await route.fulfill({ status: 201, json: receipt('fb_retry') });
   });
   await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
   const task = page.locator('#task');
@@ -108,7 +132,12 @@ test('Cloud feedback releases a stalled submission and retries only on request',
   await expect(send).toBeEnabled();
   expect(attempts).toBe(1);
   await send.click();
-  await expect(page.getByText(/Feedback submitted.*fb_retry/)).toBeVisible();
+  const link = page.getByRole('link', { name: /Feedback submitted.*fb_retry/ });
+  await expect(link).toHaveAttribute('href', receipt('fb_retry').url);
+  await page.clock.fastForward(7000);
+  await expect(link).toBeVisible();
+  await page.locator('.feedback-receipt').getByRole('button').click();
+  await expect(link).toHaveCount(0);
   await expect(task).toHaveValue('');
   expect(attempts).toBe(2);
 });

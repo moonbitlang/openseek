@@ -605,15 +605,15 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, NoDeepSeekKey) =>
       "DeepSeek API キーが未設定のため送信できません。"
     (English, SubmitFeedback) =>
-      "Send feedback with the full conversation and runtime environment"
+      "Attach the full conversation and runtime environment. Anyone with the link can view them."
     (Spanish, SubmitFeedback) =>
-      "Enviar comentarios con la conversación completa y el entorno de ejecución"
+      "Adjunta la conversación completa y el entorno de ejecución. Cualquiera con el enlace puede verlos."
     (SimplifiedChinese, SubmitFeedback) =>
-      "提交反馈，附上完整对话和运行环境"
+      "附上完整对话和运行环境，持链接者可查看。"
     (TraditionalChinese, SubmitFeedback) =>
-      "提交意見，附上完整對話和執行環境"
+      "附上完整對話和執行環境，持連結者可查看。"
     (Japanese, SubmitFeedback) =>
-      "会話の全履歴と実行環境を添えてフィードバックを送信"
+      "会話の全履歴と実行環境を添付します。リンクを知っている人は誰でも閲覧できます。"
     (English, FeedbackSent(id)) => "Feedback submitted (ID: \{id})."
     (Spanish, FeedbackSent(id)) => "Comentarios enviados (ID: \{id})."
     (SimplifiedChinese, FeedbackSent(id)) =>

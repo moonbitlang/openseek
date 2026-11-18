@@ -2678,11 +2678,11 @@ fn update_msg(
         _ => codex_composer_action(dispatch, model, action)
       }
     FeedbackFinished(identity, result) => {
-      let message = match result {
-        Ok(receipt) => shell_text(model.locale, FeedbackSent(receipt.id))
-        Err(error) => error
+      let message : NotificationMessage = match result {
+        Ok(receipt) => FeedbackLink(id=receipt.id, url=receipt.url)
+        Err(error) => Raw(error)
       }
-      let (notice, next) = model.notify(dispatch, Raw(message))
+      let (notice, next) = model.notify(dispatch, message)
       (
         @cmd.batch([
           notice,

@@ -1259,6 +1259,32 @@ fn provider_hint(model : Model, provider : ApiProvider) -> String {
 }
 
 ///|
+/// Open in the system browser on Desktop and a separate tab on the web.
+fn external_link_button(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  url : String,
+  label : String,
+) -> @html.Html {
+  @html.a(
+    class="button secondary setting-link",
+    href=url,
+    target=Blank,
+    rel="noopener noreferrer",
+    escape=true,
+    attrs=@html.Attrs::build().on_click(event => {
+      if model.is_desktop {
+        event.prevent_default()
+        open_external_link(dispatch, url)
+      } else {
+        @cmd.none
+      }
+    }),
+    [icon(icon_link_external), @html.span(label)],
+  )
+}
+
+///|
 /// The bring-your-own-key guide shown at the top of the API group while the
 /// configured endpoint is not usable. SeekMoon ships no hosted API: every
 /// request goes straight from this machine to the user's own model
@@ -1266,26 +1292,6 @@ fn provider_hint(model : Model, provider : ApiProvider) -> String {
 /// configured first. The steps follow the selected provider.
 fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let provider = model.api_provider()
-  // Account setup belongs in the user's system browser, even while this
-  // guide is displayed over Chat. Bypass Rabbita's dock URL routing.
-  let provider_link = (url, label) => {
-    @html.a(
-      class="button secondary setting-link",
-      href=url,
-      target=Blank,
-      rel="noopener noreferrer",
-      escape=true,
-      attrs=@html.Attrs::build().on_click(event => {
-        if model.is_desktop {
-          event.prevent_default()
-          open_external_link(dispatch, url)
-        } else {
-          @cmd.none
-        }
-      }),
-      [icon(icon_link_external), @html.span(label)],
-    )
-  }
   let step : (Int32, String) -> @html.Html = (index, text) => {
     @html.div(class="setup-guide-step", [
       @html.span(class="setup-guide-index", index.to_string()),
@@ -1325,7 +1331,9 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.div(class="setup-guide-steps", steps),
       ..if provider is Deepseek {
         [
-          provider_link(
+          external_link_button(
+            dispatch,
+            model,
             "https://platform.deepseek.com/api_keys",
             @settings.text(model.locale, DeepseekKeysLink),
           ),
@@ -1333,7 +1341,9 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       },
       ..if provider is Glm {
         [
-          provider_link(
+          external_link_button(
+            dispatch,
+            model,
             "https://z.ai/manage-apikey/apikey-list",
             @settings.text(model.locale, GlmKeysLink),
           ),
@@ -2859,6 +2869,32 @@ fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     ),
   ]
   for toast in model.notifications {
+    if toast.message is FeedbackLink(url~, ..) {
+      toasts.push(
+        @html.div(
+          class="feedback-receipt",
+          attrs=@html.Attrs::build().role("status"),
+          [
+            external_link_button(
+              dispatch,
+              model,
+              url,
+              toast.message.text(model.locale),
+            ),
+            @html.button(
+              class="button secondary",
+              title=shell_text(model.locale, DismissLabel),
+              attrs=@html.Attrs::build().aria_label(
+                shell_text(model.locale, DismissLabel),
+              ),
+              on_click=dispatch(DismissNotification(toast.id)),
+              icon(@icons.icon_close),
+            ),
+          ],
+        ),
+      )
+      continue
+    }
     toasts.push(
       @html.div(
         class="notification",
