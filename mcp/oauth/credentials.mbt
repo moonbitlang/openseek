@@ -94,10 +94,7 @@ async fn Commit::save(
   token : StoredToken,
   browser? : BrowserGrant,
 ) -> Unit {
-  write_credential(path, encode_token_record(token, browser?), commit=(
-    temp,
-    path,
-  ) => {
+  write_credential(path, token.encode(browser?), commit=(temp, path) => {
     self.lock.acquire()
     defer self.lock.release()
     guard !self.cancelled else { fail("Authorization cancelled") }
@@ -153,16 +150,16 @@ priv struct StoredToken {
 }
 
 ///|
-fn encode_token_record(token : StoredToken, browser? : BrowserGrant) -> Json {
+fn StoredToken::encode(self : StoredToken, browser? : BrowserGrant) -> Json {
   let record : Map[String, Json] = {
-    "access_token": Json(token.access_token),
-    "expires_at": if token.expires_at is Some(expiry) {
+    "access_token": Json(self.access_token),
+    "expires_at": if self.expires_at is Some(expiry) {
       Json(expiry)
     } else {
       Json::null()
     },
   }
-  if token.refresh_at is Some(at) {
+  if self.refresh_at is Some(at) {
     record["refresh_at"] = Json(at)
   }
   if browser is Some(grant) {
@@ -178,7 +175,7 @@ fn encode_token_record(token : StoredToken, browser? : BrowserGrant) -> Json {
 }
 
 ///|
-fn stored_token(json : Json) -> StoredToken raise {
+fn StoredToken::decode(json : Json) -> StoredToken raise {
   guard json
     is { "access_token": String(access_token), "expires_at": expires, .. } &&
     !access_token.is_empty() else {
@@ -220,7 +217,7 @@ pub async fn authorized(
   guard read_credential(credential_path(resource, config)) is Some(json) else {
     return false
   }
-  let token = stored_token(json)
+  let token = StoredToken::decode(json)
   if config is AuthorizationCode(config) {
     let grant = browser_grant(json, config)
     token.valid() || grant.refresh_token is Some(_)
@@ -234,7 +231,7 @@ pub async fn authorized(
 pub async fn token(resource : String, config : @config.OAuthConfig) -> String? {
   let path = credential_path(resource, config)
   guard read_credential(path) is Some(json) else { return None }
-  let token = stored_token(json)
+  let token = StoredToken::decode(json)
   match config {
     DeviceCode(_) => if token.valid() { Some(token.access_token) } else { None }
     AuthorizationCode(config) => {

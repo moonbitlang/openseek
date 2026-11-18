@@ -305,7 +305,7 @@ async fn refresh(
   // Other engine processes use this file too. Read it after taking the lock:
   // the provider rotates the previous refresh token out when it is used.
   guard read_credential(path) is Some(json) else { return None }
-  let token = stored_token(json)
+  let token = StoredToken::decode(json)
   let grant = browser_grant(json, config)
   if !token.refresh_due() {
     return Some(token.access_token)
@@ -339,7 +339,7 @@ async fn refresh(
         { "error": String(_), .. } => fail("OAuth token refresh failed")
         _ => {
           let (next, browser) = build_browser_record(result, grant)
-          write_credential(path, encode_token_record(next, browser~))
+          write_credential(path, next.encode(browser~))
           Some(next.access_token)
         }
       }
