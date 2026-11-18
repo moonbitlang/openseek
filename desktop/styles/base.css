@@ -295,6 +295,18 @@ html {
 .icon > .codicon {
   font-size: var(--icon-size, var(--icon-lg));
 }
+.codicon-arrow-left::before {
+  content: "\ea9b";
+}
+.codicon-arrow-right::before {
+  content: "\ea9c";
+}
+.codicon-bell::before {
+  content: "\eaa2";
+}
+.codicon-circle-small-filled::before {
+  content: "\eb8a";
+}
 .codicon-newline::before {
   content: "\ebea";
 }

@@ -3,6 +3,31 @@
 // Tool icons inherit currentColor, matching the surrounding transcript text.
 
 ///|
+pub fn icon_arrow_left() -> @html.Html {
+  @html.span(class="codicon codicon-arrow-left", "")
+}
+
+///|
+pub fn icon_arrow_right() -> @html.Html {
+  @html.span(class="codicon codicon-arrow-right", "")
+}
+
+///|
+pub fn icon_chevron_right() -> @html.Html {
+  @html.span(class="codicon codicon-chevron-right", "")
+}
+
+///|
+pub fn icon_circle_small_filled() -> @html.Html {
+  @html.span(class="codicon codicon-circle-small-filled", "")
+}
+
+///|
+pub fn icon_bell() -> @html.Html {
+  @html.span(class="codicon codicon-bell", "")
+}
+
+///|
 /// Codicon book.svg.
 pub fn icon_book() -> @html.Html {
   codicon(

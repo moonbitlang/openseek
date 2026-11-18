@@ -179,9 +179,9 @@ fn EmptyProjectControl::render(
               class="empty-project-option-check",
               attrs=@html.Attrs::build().aria_hidden("true"),
               if selected {
-                "✓"
+                @icons.icon(@icons.icon_check)
               } else {
-                ""
+                @html.nothing
               },
             ),
           ],

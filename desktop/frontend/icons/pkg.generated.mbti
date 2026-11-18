@@ -22,7 +22,13 @@ pub fn icon_archive() -> @html.Html
 
 pub fn icon_arrow_down() -> @html.Html
 
+pub fn icon_arrow_left() -> @html.Html
+
+pub fn icon_arrow_right() -> @html.Html
+
 pub fn icon_arrow_up() -> @html.Html
+
+pub fn icon_bell() -> @html.Html
 
 pub fn icon_book() -> @html.Html
 
@@ -34,7 +40,11 @@ pub fn icon_check() -> @html.Html
 
 pub fn icon_chevron_down() -> @html.Html
 
+pub fn icon_chevron_right() -> @html.Html
+
 pub fn icon_circle() -> @html.Html
+
+pub fn icon_circle_small_filled() -> @html.Html
 
 pub fn icon_clockface() -> @html.Html
 
