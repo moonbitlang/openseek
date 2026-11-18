@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 12
+pub const HostProtocolRevision : Int32 = 13
 
 pub const MaxImageBytes : Int32 = 20971520
 
@@ -1171,7 +1171,7 @@ pub impl @json.ToJson for ConnectedPayload
 pub(all) struct ConnectorAuthorization {
   attempt : String
   url : String
-  code : String
+  code : String?
 }
 pub fn ConnectorAuthorization::equal(Self, Self) -> Bool
 pub fn ConnectorAuthorization::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError

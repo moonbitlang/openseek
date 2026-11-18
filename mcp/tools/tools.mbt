@@ -79,9 +79,12 @@ pub struct ServerEntry {
 /// script first reaches it.
 struct Server {
   config : @config.McpServer
-  mut credential : Result[String?, String]
+  group : @async.TaskGroup
+  on_change : (() -> Unit)?
+  mut credential : Result[String?, Error]
+  mut checking : @async.Task[Unit]?
   mut connecting : @async.Task[ServerEntry]?
-  connect : () -> @async.Task[ServerEntry]
+  connect : (Result[String?, Error]) -> @async.Task[ServerEntry]
 }
 
 ///|
@@ -110,35 +113,35 @@ pub fn Server::new(
 ) -> Server {
   {
     config,
+    group: scope.group(),
+    on_change,
     credential: Ok(None),
+    checking: None,
     connecting: None,
-    connect: () => {
-      let task = scope
-        .group()
-        .spawn(no_wait=true, () => {
-          let entry = connect_server(
-            scope,
-            config,
-            client_name~,
-            client_version~,
-            workspace_root?,
-            discovery_timeout_ms~,
-          )
-          if on_change is Some(on_change) {
-            // The close handler goes on first, so a connection that closes
-            // from here on reports itself, and one already closed shows as
-            // lost.
-            if entry.connection is Live(client) {
-              client.set_close_handler(on_change)
-            }
-            on_change()
+    connect: credential => {
+      scope
+      .group()
+      .spawn(no_wait=true, () => {
+        let entry = connect_server(
+          scope,
+          config,
+          credential,
+          client_name~,
+          client_version~,
+          workspace_root?,
+          discovery_timeout_ms~,
+        )
+        if on_change is Some(on_change) {
+          // The close handler goes on first, so a connection that closes
+          // from here on reports itself, and one already closed shows as
+          // lost.
+          if entry.connection is Live(client) {
+            client.set_close_handler(on_change)
           }
-          entry
-        })
-      if on_change is Some(on_change) {
-        on_change()
-      }
-      task
+          on_change()
+        }
+        entry
+      })
     },
   }
 }
@@ -149,18 +152,52 @@ fn Server::task(self : Server) -> @async.Task[ServerEntry] {
   match self.connecting {
     Some(task) => task
     None => {
-      let task = (self.connect)()
+      let task = (self.connect)(self.credential)
       self.connecting = Some(task)
+      if self.on_change is Some(on_change) {
+        on_change()
+      }
       task
     }
   }
 }
 
 ///|
+/// Start credential lookup on the server's group so the caller can stop
+/// waiting at its deadline while a rotating refresh completes and is saved.
+fn Server::start_credential_check(self : Server) -> @async.Task[Unit] {
+  if self.checking is Some(task) {
+    let pending = (task.try_wait() is None) catch { _ => false }
+    if pending {
+      return task
+    }
+  }
+  let first = !self.started()
+  let task = self.group.spawn(no_wait=true, allow_failure=true, () => {
+    self.check_credential()
+    // Continue connecting even if the caller already stopped waiting.
+    ignore(self.task())
+  })
+  self.checking = Some(task)
+  if first && self.on_change is Some(on_change) {
+    on_change()
+  }
+  task
+}
+
+///|
+async fn Server::ready(self : Server) -> ServerEntry {
+  if self.config is Http(oauth=Some(_), ..) {
+    self.start_credential_check().wait()
+  }
+  self.task().wait()
+}
+
+///|
 /// Whether this server has started connecting, which it does when a script
 /// first reaches it.
 pub fn Server::started(self : Server) -> Bool {
-  self.connecting is Some(_)
+  self.checking is Some(_) || self.connecting is Some(_)
 }
 
 ///|
@@ -179,8 +216,7 @@ pub fn Server::try_wait(self : Server) -> ServerEntry? {
 /// What connecting this server comes to, starting it first if it has not
 /// started. Cancellation propagates.
 pub async fn Server::settled(self : Server) -> ServerEntry {
-  self.check_credential()
-  self.task().wait()
+  self.ready()
 }
 
 ///|
@@ -188,9 +224,7 @@ pub async fn Server::settled(self : Server) -> ServerEntry {
 /// started, and waiting up to `timeout_ms` for it to settle: `None` when it is
 /// still connecting by then.
 async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
-  self.check_credential()
-  let task = self.task()
-  @async.with_timeout_opt(timeout_ms, () => task.wait())
+  @async.with_timeout_opt(timeout_ms, () => self.ready())
 }
 
 ///|
@@ -210,15 +244,13 @@ pub async fn settle(
       None => true
     }
   })
-  for configured in waiting {
-    configured.check_credential()
-  }
-  let tasks = waiting.map(configured => configured.task())
   ignore(
     @async.with_timeout_opt(timeout_ms, () => {
-      for task in tasks {
-        ignore(task.wait())
-      }
+      @async.with_task_group(group => {
+        for configured in waiting {
+          group.spawn_bg(() => ignore(configured.ready()))
+        }
+      })
     }),
   )
 }
@@ -371,6 +403,7 @@ fn cut(text : String, limit : Int32, marked~ : Bool) -> String {
 async fn connect_server(
   scope : @agent_runtime.AgentTaskScope,
   server : @config.McpServer,
+  credential : Result[String?, Error],
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
@@ -413,9 +446,12 @@ async fn connect_server(
             resolved[name.to_lower()] = value
           }
         }
-        if oauth is Some(oauth) {
-          guard @oauth.token(url, oauth) is Some(token) else {
-            fail("Connect this server in Settings > Connectors before using it")
+        if oauth is Some(_) {
+          let token = match credential {
+            Ok(Some(token)) => token
+            Ok(None) =>
+              fail("Connect this server in Settings > MCP before using it")
+            Err(error) => raise error
           }
           resolved["authorization"] = "Bearer \{token}"
         }
@@ -589,21 +625,24 @@ fn cap_chars(text : String, limit : Int32) -> (String, Bool) {
 /// A login/logout changes the credential without requiring an engine restart.
 async fn Server::check_credential(self : Server) -> Unit {
   guard self.config is Http(url~, oauth=Some(oauth), ..) else { return }
-  // Keep read failures in the server's connection path, which reports Failed.
-  // Retain the error state so recovery also invalidates a cached failure.
+  // The connection uses this snapshot. Compare usable credentials and pass
+  // each lookup failure through to the connection's error report.
   let credential = try @oauth.token(url, oauth) catch {
-    error => Err("\{error}")
+    error => Err(error)
   } noraise {
     token => Ok(token)
   }
-  if credential != self.credential {
-    if self.try_wait() is Some({ connection: Live(client), .. }) {
-      client.close()
-    }
-    if self.connecting is Some(task) {
-      task.cancel()
-    }
-    self.connecting = None
-    self.credential = credential
+  if credential is Ok(token) &&
+    self.credential is Ok(previous) &&
+    token == previous {
+    return
   }
+  if self.try_wait() is Some({ connection: Live(client), .. }) {
+    client.close()
+  }
+  if self.connecting is Some(task) {
+    task.cancel()
+  }
+  self.connecting = None
+  self.credential = credential
 }

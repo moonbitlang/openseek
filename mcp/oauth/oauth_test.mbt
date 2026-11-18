@@ -2,7 +2,7 @@
 let credential_env_lock : @async.Mutex = Mutex()
 
 ///|
-fn config(endpoint : String) -> @config.OAuthConfig {
+fn config(endpoint : String) -> @config.DeviceOAuthConfig {
   {
     client_id: "test app&client",
     device_authorization_endpoint: endpoint,
@@ -14,7 +14,7 @@ fn config(endpoint : String) -> @config.OAuthConfig {
 ///|
 test "credential identities separate resources clients endpoints and scopes" {
   let c = config("https://example.com/token")
-  let identity = @oauth.key("https://example.com/mcp", c)
+  let identity = @oauth.key("https://example.com/mcp", DeviceCode(c))
   for
     (resource, other) in [
       ("https://other.com/mcp", c),
@@ -25,7 +25,7 @@ test "credential identities separate resources clients endpoints and scopes" {
       ),
       ("https://example.com/mcp", { ..c, scopes: "admin", }),
     ] {
-    assert_false(identity == @oauth.key(resource, other))
+    assert_false(identity == @oauth.key(resource, DeviceCode(other)))
   }
 }
 
@@ -100,37 +100,41 @@ async test "device flow waits persists scoped credentials expires and disconnect
     }
     let c = config("http://127.0.0.1:\{server.addr.port}/oauth")
     let resource = "https://example.com/mcp"
-    let pending = @oauth.begin(c)
-    assert_eq(pending.user_code(), "ABCD")
+    let device = @oauth.device_auth(c)
+    assert_eq(device.user_code(), "ABCD")
+    assert_eq(device.verification_uri(), "https://example.com/device")
     assert_true(bodies[0].contains("client_id=test%20app%26client"))
-    assert_true(@oauth.poll(pending, resource, c) is Waiting)
+    let credential = @oauth.CredentialCommit(DeviceCode(c), resource~)
+    let task = group.spawn(() => {
+      let token = @oauth.device_access_token(c, device)
+      credential.save(token)
+    })
+    @async.sleep(100)
     assert_eq(bodies.length(), 1)
-    @async.sleep(1050)
-    assert_true(@oauth.poll(pending, resource, c) is Waiting)
-    @async.sleep(1050)
-    assert_true(@oauth.poll(pending, resource, c) is Authorized)
-    assert_eq(@oauth.token(resource, c), Some("test-token"))
+    task.wait()
+    assert_eq(bodies.length(), 3)
+    assert_eq(@oauth.token(resource, DeviceCode(c)), Some("test-token"))
     // A completed commit wins over a late cancel; cancel is not disconnect.
-    pending.cancel()
-    assert_eq(@oauth.token(resource, c), Some("test-token"))
-    assert_eq(@oauth.token("https://other.com/mcp", c), None)
+    credential.cancel()
+    assert_eq(@oauth.token(resource, DeviceCode(c)), Some("test-token"))
+    assert_eq(@oauth.token("https://other.com/mcp", DeviceCode(c)), None)
     @async.sleep(1050)
-    assert_eq(@oauth.token(resource, c), None)
-    @oauth.disconnect(resource, c)
-    assert_eq(@oauth.token(resource, c), None)
-    @oauth.disconnect(resource, c)
-    let expired = @oauth.begin(c)
-    @async.sleep(1050)
-    try @oauth.poll(expired, resource, c) catch {
+    assert_eq(@oauth.token(resource, DeviceCode(c)), None)
+    @oauth.disconnect(resource, DeviceCode(c))
+    assert_eq(@oauth.token(resource, DeviceCode(c)), None)
+    @oauth.disconnect(resource, DeviceCode(c))
+    let expired = @oauth.device_auth(c)
+    try @oauth.device_access_token(c, expired) catch {
       error => assert_true("\{error}".contains("expired"))
     } noraise {
       _ => fail("expired authorization was polled")
     }
     assert_eq(bodies.length(), 4)
-    let cancelled = @oauth.begin(c)
-    @async.sleep(1050)
+    let cancelled = @oauth.device_auth(c)
+    let credential = @oauth.CredentialCommit(DeviceCode(c), resource~)
     let task = group.spawn(() => {
-      try @oauth.poll(cancelled, resource, c) catch {
+      let token = @oauth.device_access_token(c, cancelled)
+      try credential.save(token) catch {
         error => {
           assert_true("\{error}".contains("cancelled"))
           return
@@ -140,41 +144,31 @@ async test "device flow waits persists scoped credentials expires and disconnect
       }
     })
     requested.get()
-    cancelled.cancel()
-    let credential_after_cancel = @oauth.token(resource, c)
+    credential.cancel()
+    let credential_after_cancel = @oauth.token(resource, DeviceCode(c))
     respond.put(())
     task.wait()
-    assert_eq(@oauth.token(resource, c), credential_after_cancel)
+    assert_eq(@oauth.token(resource, DeviceCode(c)), credential_after_cancel)
     assert_eq(credential_after_cancel, None)
-    let slow = @oauth.begin(c)
-    @async.sleep(1050)
-    assert_true(@oauth.poll(slow, resource, c) is Waiting)
-    @async.sleep(1050)
-    assert_true(@oauth.poll(slow, resource, c) is Waiting)
+    let slow = @oauth.device_auth(c)
+    let task = group.spawn(no_wait=true, () => {
+      @oauth.device_access_token(c, slow)
+    })
+    @async.sleep(2100)
+    assert_true(task.try_wait() is None)
     assert_eq(bodies.length(), 8)
   }
 }
 
 ///|
 async test "a timed out token request preserves authorization and retries after backoff" {
-  credential_env_lock.acquire()
-  defer credential_env_lock.release()
-  // The credential directory already exists, as on reconnect.
-  let dir = @fs.tmpdir(prefix="oauth-timeout-")
-  defer @fs.remove(dir, recursive=true)
-  let old = @env.get_env_var("OPENSEEK_OAUTH_DIR")
-  @env.set_env_var("OPENSEEK_OAUTH_DIR", dir)
-  defer (if old is Some(value) {
-    @env.set_env_var("OPENSEEK_OAUTH_DIR", value)
-  } else {
-    @env.unset_env_var("OPENSEEK_OAUTH_DIR")
-  })
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    let requests : Array[String] = []
+    let requests : Array[Int64] = []
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever((_request, conn) => {
-        requests.push(conn.text.read_all())
+        let _ = conn.text.read_all()
+        requests.push(@async.now())
         if requests.length() == 2 {
           @async.sleep(60000)
           return
@@ -197,16 +191,10 @@ async test "a timed out token request preserves authorization and retries after 
       })
     }
     let c = config("http://127.0.0.1:\{server.addr.port}/oauth")
-    let pending = @oauth.begin(c)
-    @async.sleep(1050)
-    assert_true(@oauth.poll(pending, "https://example.com/mcp", c) is Waiting)
-    assert_eq(requests.length(), 2)
-    assert_true(@oauth.poll(pending, "https://example.com/mcp", c) is Waiting)
-    assert_eq(requests.length(), 2)
-    @async.sleep(2100)
-    assert_true(
-      @oauth.poll(pending, "https://example.com/mcp", c) is Authorized,
-    )
-    assert_eq(@oauth.token("https://example.com/mcp", c), Some("recovered"))
+    let device = @oauth.device_auth(c)
+    let token = @oauth.device_access_token(c, device)
+    assert_eq(token.access_token(), "recovered")
+    assert_eq(requests.length(), 3)
+    assert_true(requests[2] - requests[1] >= 31500)
   }
 }

@@ -1,21 +1,12 @@
 ///|
 /// One device authorization. Device codes remain in the host, never in UI replies.
-struct Pending {
+struct DeviceAuthResponse {
   device_code : String
   verification_uri : String
   user_code : String
   expires_at : Int64
-  mut next_poll : Int64
-  mut interval_ms : Int64
-  commit_lock : @async.Mutex
-  mut cancelled : Bool
-}
-
-///|
-/// The result of one device-token poll.
-pub enum PollResult {
-  Waiting
-  Authorized
+  first_poll_at : Int64
+  interval_ms : Int64
 }
 
 ///|
@@ -42,16 +33,27 @@ fn form(fields : Array[(String, String)]) -> String {
 }
 
 ///|
-async fn post(endpoint : String, fields : Array[(String, String)]) -> Json {
-  @async.with_timeout(30000, () => {
+async fn post(
+  endpoint : String,
+  fields : Array[(String, String)],
+  accept_invalid_client~ : Bool = false,
+  timeout_ms~ : Int32 = 30000,
+) -> Json {
+  @async.with_timeout(timeout_ms, () => {
     let (response, body) = @http.post_text(endpoint, form(fields), headers={
       "Accept": "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
     })
-    guard response.code == 200 || response.code == 400 else {
-      fail("OAuth endpoint returned HTTP \{response.code}")
+    if response.code == 200 || response.code == 400 {
+      return body.json()
     }
-    body.json()
+    if accept_invalid_client && response.code == 401 {
+      let json = body.json()
+      if json is { "error": "invalid_client", .. } {
+        return json
+      }
+    }
+    fail("OAuth endpoint returned HTTP \{response.code}")
   })
 }
 
@@ -70,7 +72,9 @@ fn seconds(json : Json, name : String, default~ : Int32) -> Int32 raise {
 
 ///|
 /// Start a user-initiated device authorization.
-pub async fn begin(config : @config.OAuthConfig) -> Pending {
+pub async fn device_auth(
+  config : @config.DeviceOAuthConfig,
+) -> DeviceAuthResponse {
   let json = post(config.device_authorization_endpoint, [
     ("client_id", config.client_id),
     ("scope", config.scopes),
@@ -94,14 +98,13 @@ pub async fn begin(config : @config.OAuthConfig) -> Pending {
   let interval_ms = seconds(json, "interval", default=5).to_int64() * 1000
   let expires = seconds(json, "expires_in", default=0)
   guard expires > 0 else { fail("OAuth response is missing expires_in") }
+  let now = @async.now()
   {
     device_code,
     verification_uri,
     user_code,
-    commit_lock: Mutex(),
-    cancelled: false,
-    expires_at: @env.now().reinterpret_as_int64() + expires.to_int64() * 1000,
-    next_poll: @async.now() + interval_ms,
+    expires_at: now + expires.to_int64() * 1000,
+    first_poll_at: now + interval_ms,
     interval_ms,
   }
 }
@@ -109,172 +112,83 @@ pub async fn begin(config : @config.OAuthConfig) -> Pending {
 ///|
 /// Scope credentials to the complete MCP resource and OAuth client configuration.
 pub fn key(resource : String, config : @config.OAuthConfig) -> String {
-  let text : Json = [
-    resource,
-    config.client_id,
-    config.device_authorization_endpoint,
-    config.token_endpoint,
-    config.scopes,
-  ]
-  @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(text.stringify())))
+  let identity : Json = match config {
+    DeviceCode(config) =>
+      [
+        resource,
+        config.client_id,
+        config.device_authorization_endpoint,
+        config.token_endpoint,
+        config.scopes,
+      ]
+    AuthorizationCode(config) =>
+      ["authorization_code", resource, config.issuer, config.scopes]
+  }
+  hash_identity(identity)
 }
 
 ///|
-fn directory() -> String raise {
-  if @env.get_env_var("OPENSEEK_OAUTH_DIR") is Some(dir) && !dir.is_empty() {
-    return dir
-  }
-  let home = if @async.platform is Windows {
-    match @env.get_env_var("USERPROFILE") {
-      Some(home) => Some(home)
-      None => @env.get_env_var("HOME")
-    }
-  } else {
-    @env.get_env_var("HOME")
-  }
-  guard home is Some(home) else {
-    fail("Cannot locate OAuth credential directory")
-  }
-  "\{home}/.openseek/oauth"
-}
-
-///|
-async fn save(
-  pending : Pending,
-  resource : String,
-  config : @config.OAuthConfig,
-  json : Json,
-) -> Unit {
-  let dir = directory()
-  @fs.mkdir(dir, permission=0o700, recursive=true, allow_existing=true)
-  guard @env.rand(16) is Some(random) else {
-    fail("Cannot obtain randomness for credential storage")
-  }
-  let temp = "\{dir}/.\{@crypto.bytes_to_hex_string(random)}.tmp"
-  defer (@fs.remove(temp, allow_missing=true) catch { _ => () })
-  @fs.write_text(
-    temp,
-    json.stringify(),
-    create_mode=CreateNew,
-    permission=0o600,
-  )
-  pending.commit_lock.acquire()
-  defer pending.commit_lock.release()
-  guard !pending.cancelled else { fail("Authorization cancelled") }
-  @fs.rename(temp, "\{dir}/\{key(resource, config)}.json", replace=true)
-}
-
-///|
-/// Poll at the provider's interval. The caller serializes polling and cancellation.
-pub async fn poll(
-  pending : Pending,
-  resource : String,
-  config : @config.OAuthConfig,
-) -> PollResult {
-  guard !pending.cancelled else { fail("Authorization cancelled") }
-  guard @env.now().reinterpret_as_int64() < pending.expires_at else {
-    fail("Authorization expired; connect again")
-  }
-  if @async.now() < pending.next_poll {
-    return Waiting
-  }
-  pending.next_poll = @async.now() + pending.interval_ms
-  let json = post(config.token_endpoint, [
+/// Poll at the provider's interval until a token is issued or the flow ends.
+pub async fn device_access_token(
+  config : @config.DeviceOAuthConfig,
+  device : DeviceAuthResponse,
+) -> Token {
+  let fields = [
     ("client_id", config.client_id),
-    ("device_code", pending.device_code),
+    ("device_code", device.device_code),
     ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-  ]) catch {
-    @async.TimeoutError => {
-      guard !pending.cancelled else { fail("Authorization cancelled") }
-      let remaining = pending.expires_at - @env.now().reinterpret_as_int64()
-      guard remaining > 0 else { fail("Authorization expired; connect again") }
-      // RFC 8628: a connection timeout backs off instead of ending the grant.
-      pending.interval_ms = (pending.interval_ms * 2).min(remaining)
-      pending.next_poll = @async.now() + pending.interval_ms
-      return Waiting
+  ]
+  let mut interval_ms = device.interval_ms
+  let mut next_poll = device.first_poll_at
+  for ;; {
+    let now = @async.now()
+    let remaining = device.expires_at - now
+    guard remaining > 0 else { fail("Authorization expired; connect again") }
+    if next_poll > now {
+      let delay = (next_poll - now).min(remaining).min(2147483647)
+      @async.sleep(delay.to_int())
+      continue
     }
-    error => raise error
-  }
-  guard !pending.cancelled else { fail("Authorization cancelled") }
-  match json {
-    { "error": "authorization_pending", .. } => Waiting
-    { "error": "slow_down", .. } => {
-      pending.interval_ms += 5000
-      pending.next_poll = @async.now() + pending.interval_ms
-      Waiting
+    next_poll = now + interval_ms
+    let json = post(
+      config.token_endpoint,
+      fields,
+      timeout_ms=remaining.min(30000).to_int(),
+    ) catch {
+      @async.TimeoutError => {
+        // RFC 8628: back off after a connection timeout.
+        interval_ms *= 2
+        next_poll = @async.now() + interval_ms
+        continue
+      }
+      error => raise error
     }
-    { "error": "access_denied", .. } => fail("Authorization was denied")
-    { "error": "expired_token", .. } =>
-      fail("Authorization expired; connect again")
-    { "error": String(_), .. } =>
-      fail("OAuth authorization failed; connect again")
-    { "access_token": String(token), "token_type": String(kind), .. } if !token.is_empty() &&
-      kind.to_lower() == "bearer" => {
-      let expires = seconds(json, "expires_in", default=0)
-      save(pending, resource, config, {
-        "access_token": token,
-        "expires_at": if expires > 0 {
-          Json(
-            (@env.now().reinterpret_as_int64() + expires.to_int64() * 1000).to_double(),
-          )
-        } else {
-          Json::null()
-        },
-      })
-      Authorized
+    match json {
+      { "error": "authorization_pending", .. } => continue
+      { "error": "slow_down", .. } => {
+        interval_ms += 5000
+        next_poll = @async.now() + interval_ms
+      }
+      { "error": "access_denied", .. } => fail("Authorization was denied")
+      { "error": "expired_token", .. } =>
+        fail("Authorization expired; connect again")
+      { "error": String(_), .. } =>
+        fail("OAuth authorization failed; connect again")
+      _ => return { record: build_token_record(json), browser: None, }
     }
-    _ => fail("OAuth server did not return a bearer token")
   }
-}
-
-///|
-/// Read an unexpired credential. Expired or revoked grants require explicit reconnect.
-pub async fn token(resource : String, config : @config.OAuthConfig) -> String? {
-  let text = @fs.read_text("\{directory()}/\{key(resource, config)}.json") catch {
-    @os_error.OsError(NotFound, ..) => return None
-    error => raise error
-  }
-  let json = @json.parse(text) catch {
-    _ => fail("Invalid OAuth credential file")
-  }
-  guard json is { "access_token": String(token), "expires_at": expires, .. } else {
-    fail("Invalid OAuth credential file")
-  }
-  guard !token.is_empty() else { fail("Invalid OAuth credential file") }
-  match expires {
-    Null => ()
-    Number(n, ..) if n > 0 => if n <= @env.now().to_double() { return None }
-    _ => fail("Invalid OAuth credential expiry")
-  }
-  Some(token)
-}
-
-///|
-/// Remove this resource's local credential; does not revoke upstream authorization.
-pub async fn disconnect(
-  resource : String,
-  config : @config.OAuthConfig,
-) -> Unit {
-  @fs.remove("\{directory()}/\{key(resource, config)}.json", allow_missing=true)
-}
-
-///|
-/// Fence an in-flight token response, or await a credential commit that already
-/// acquired the lock. Once this returns, this attempt cannot publish later.
-pub async fn Pending::cancel(self : Pending) -> Unit {
-  self.commit_lock.acquire()
-  defer self.commit_lock.release()
-  self.cancelled = true
 }
 
 ///|
 /// The provider page where the user approves this request.
-pub fn Pending::authorization_url(self : Pending) -> String {
+pub fn DeviceAuthResponse::verification_uri(
+  self : DeviceAuthResponse,
+) -> String {
   self.verification_uri
 }
 
 ///|
 /// The short code the user enters on the provider page.
-pub fn Pending::user_code(self : Pending) -> String {
+pub fn DeviceAuthResponse::user_code(self : DeviceAuthResponse) -> String {
   self.user_code
 }
