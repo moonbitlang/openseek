@@ -429,7 +429,6 @@ pub fn component(
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
-      let revisions = Ref(0)
       let prefix = "transcript-link-" + @uuid.mint()
       let (changes, changes_emit) = message_changes_state(
         row.map(row => row.1),
@@ -441,38 +440,34 @@ pub fn component(
         _,
         _,
       ) => (!previewing, @cmd.none))
-      changes
-      .map4(row, context_input, markdown, (changes, row, context, previewing) => {
-        revisions.val += 1
-        (revisions.val, changes, row, context, previewing)
+      let prepared = changes.map3(row, markdown, (changes, row, previewing) => {
+        let (locale, block, editor, owner) = row
+        let links = @markdown.LinkMenus(prefix)
+        let view = block.render(
+          locale~,
+          actions,
+          links~,
+          artifact_view=reference => {
+            artifact_file_view(reference, locale, actions.open, owner)
+          },
+          changes?=changes.control(block, changes_emit),
+          editor?=editor.view(block, locale~, editor_emit),
+          begin_edit=editor_emit(BeginEdit),
+        )
+        (block.key.wire(), view, links)
       })
-      .switch_by(
-        value => {
-          let (_, changes, (locale, block, editor, owner), context, previewing) = value
-          let links = @markdown.LinkMenus(prefix, context, context_actions)
-          block
-          .render(
-            locale~,
-            actions,
-            links~,
-            artifact_view=reference => {
-              artifact_file_view(reference, locale, actions.open, owner)
-            },
-            changes?=changes.control(block, changes_emit),
-            editor?=editor.view(block, locale~, editor_emit),
-            begin_edit=editor_emit(BeginEdit),
-            user_markdown={ previewing, toggle: markdown_emit(()), },
-          )
-          .map(html => {
-            renders.val += 1
-            (
-              block.key.wire(),
-              @html.memo_by(html, html => html, by=_ => renders.val),
-            )
-          })
-        },
-        by=value => value.0.to_string(),
+      let menus = @markdown.LinkMenus::component(
+        prepared.map(row => row.2),
+        prefix,
+        context_input,
+        context_actions,
       )
+      prepared.map2(menus, (row, menus) => {
+        let (key, view, _) = row
+        let html = view.render(menus)
+        renders.val += 1
+        (key, @html.memo_by(html, html => html, by=_ => renders.val))
+      })
     },
     by=pair => pair.1.branch_key(),
   )

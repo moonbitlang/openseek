@@ -553,10 +553,10 @@ fn Block::render(
   begin_edit~ : @cmd.Cmd,
   user_markdown~ : UserMarkdown,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @rabbita.Val[@html.Html] {
+) -> @markdown.View {
   let on_open = path => (actions.open)(path)
   match self.content {
-    Empty(empty) => @rabbita.Val::constant(empty.render(locale~, actions))
+    Empty(empty) => @markdown.View::from_html(empty.render(locale~, actions))
     Minimal(content) => content.render(locale~, actions, links~, artifact_view?)
     Item(
       item~,
