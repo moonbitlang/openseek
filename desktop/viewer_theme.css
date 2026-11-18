@@ -32,8 +32,8 @@
   --vscode-focusBorder: var(--color-focus-ring);
   --vscode-widget-border: var(--color-border);
   /* Floating widgets and menu items round like the app's own controls. */
-  --vscode-cornerRadius-medium: var(--radius-sm);
-  --vscode-cornerRadius-large: var(--radius-md);
+  --vscode-cornerRadius-medium: var(--radius-control);
+  --vscode-cornerRadius-large: var(--radius-surface);
 
   /* The context menu mirrors the app menus (.action-menu,
      .completion-menu): surface panel, hairline border, accent-soft

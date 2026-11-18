@@ -5,7 +5,7 @@ a:where(.setting-link) {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   text-decoration: none;
 }
 
@@ -26,7 +26,7 @@ a:where(.setting-link) {
   max-width: 420px;
   padding: 2rem;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
 }
 .onboarding-card h2 {
@@ -146,7 +146,7 @@ h2 {
   box-sizing: border-box;
   padding: var(--space-4);
   resize: vertical;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   font: inherit;
 }
 
@@ -294,7 +294,7 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: var(--space-4);
   width: 100%;
   min-width: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
   letter-spacing: -0.01em;
@@ -369,7 +369,7 @@ button.archived-chat-open:hover .archived-chat-title {
   position: absolute;
   inset: 4px -12px;
   z-index: -1;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   transition: background-color 120ms ease;
 }
@@ -447,7 +447,7 @@ button.archived-chat-open:hover .archived-chat-title {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   position: relative;
 }
 
@@ -510,7 +510,7 @@ button.archived-chat-open:hover .archived-chat-title {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
-  border-radius: 4px;
+  border-radius: var(--radius-inline);
   font-size: var(--font-size-xs);
   white-space: nowrap;
 }
@@ -546,7 +546,7 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: 1rem;
   padding: var(--space-6) var(--space-7);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   flex: 1 0 100%;
 }
@@ -573,7 +573,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-metadata {
   margin-bottom: var(--space-7);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   overflow: hidden;
 }
@@ -717,7 +717,7 @@ button.archived-chat-open:hover .archived-chat-title {
   padding: var(--space-5) var(--space-5);
   overflow: auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--markdown-code-radius, 6px);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   white-space: pre;
@@ -789,10 +789,10 @@ button.archived-chat-open:hover .archived-chat-title {
 .schedule-meta { color: var(--color-text-muted); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .schedule-task { white-space: pre-wrap; overflow-wrap: anywhere; }
 .schedule-field { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-5) 0; }
-.schedule-input { width: 100%; min-width: 0; padding: var(--space-4); border-radius: var(--radius-sm); font: inherit; }
+.schedule-input { width: 100%; min-width: 0; padding: var(--space-4); border-radius: var(--radius-control); font: inherit; }
 textarea.schedule-input { min-height: 100px; resize: vertical; }
 .schedule-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
-.schedule-error { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-danger); }
+.schedule-error { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-surface); color: var(--color-danger); }
 .schedule-history-title { margin-top: 2.25rem; }
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 

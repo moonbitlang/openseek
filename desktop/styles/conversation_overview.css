@@ -33,7 +33,7 @@ main:has(> .conv-overview) {
     max-width: calc(100% - 16px);
     padding: var(--space-1) 1rem;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-surface);
     background: var(--color-bg-surface);
     box-shadow: var(--shadow-overlay);
   }
@@ -84,7 +84,7 @@ main:has(> .conv-overview) {
   .conv-overview-card {
     padding: var(--space-5);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-surface);
     background: var(--color-bg-surface);
   }
 }
@@ -147,7 +147,7 @@ main:has(> .conv-overview) {
   height: 1.75rem;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -230,7 +230,7 @@ main:has(> .conv-overview) {
   min-height: 22px;
   margin-inline: calc(-1 * var(--space-2));
   padding-inline: var(--space-2);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-control);
   color: var(--color-text-primary);
   text-decoration: none;
 }

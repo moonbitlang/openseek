@@ -30,7 +30,7 @@
   max-width: var(--conversation-width);
   margin: 0 auto;
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
@@ -90,7 +90,7 @@
   max-width: var(--conversation-width);
   margin: 0 auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-surface);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
 }
@@ -398,7 +398,7 @@
   max-height: 220px;
   overflow: auto;
   overscroll-behavior: contain;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
@@ -435,7 +435,7 @@
 
 .pending-steers,
 .queued-inputs {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
 }
 .pending-steer-icon {
   color: var(--color-text-secondary);
@@ -488,7 +488,7 @@
   width: 2rem;
   height: 2rem;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   padding: 0;
   color: var(--color-text-muted);
@@ -580,7 +580,7 @@
   margin: 0;
   padding: 0 var(--space-4);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-control-surface);
   color: var(--color-text-secondary);
   font: inherit;
@@ -613,7 +613,7 @@ button.composer-worktree:hover {
 
 .composer-toolbar .composer-worktree.on {
   border-color: var(--color-accent-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--color-accent-soft);
   color: var(--color-accent);
 }
@@ -634,7 +634,7 @@ button.composer-worktree:hover {
 }
 
 .composer-actions .icon-button {
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
 }
 
 .composer-actions .icon-button:disabled {
@@ -684,7 +684,7 @@ button.composer-worktree:hover {
   overflow: hidden;
   white-space: nowrap;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-control-surface);
   padding: 0 0.75em;
   color: var(--color-text-secondary);
@@ -739,7 +739,7 @@ button.composer-worktree:hover {
   width: min(420px, 100%);
   padding: var(--space-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-overlay);
   font-size: var(--font-size-sm);
@@ -753,7 +753,7 @@ button.composer-worktree:hover {
   gap: var(--space-4);
   width: 100%;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   color: var(--color-text-secondary);
   text-decoration: none;
 }
@@ -831,7 +831,7 @@ button.composer-worktree:hover {
   min-width: 0;
   overflow: hidden;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   margin: 0;
   padding: 0 0.75em;
   background: var(--color-control-surface);
@@ -908,7 +908,7 @@ button.composer-worktree:hover {
   min-width: var(--icon-button-size);
   height: var(--icon-button-size);
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-secondary);
   padding: 0;
@@ -922,7 +922,7 @@ button.composer-worktree:hover {
 
 .icon-button.icon-button-compact {
   --icon-button-size: calc(var(--font-size-base) * 24 / 14);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
 }
 
 .composer-image {
@@ -935,7 +935,7 @@ button.composer-worktree:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-surface);
 }
 .composer-image-remove {
   position: absolute;
@@ -970,7 +970,7 @@ button.composer-worktree:hover {
   min-width: 2.25rem;
   height: 2.25rem;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   padding: 0;
   position: relative;
@@ -1003,7 +1003,7 @@ button.composer-worktree:hover {
   padding: var(--space-5);
   border: 1px solid transparent;
   background: var(--color-control-surface);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   font-size: var(--font-size-sm);
 }
 .composer-attachment-name {
@@ -1057,7 +1057,7 @@ button.composer-worktree:hover {
   min-height: 0;
   padding: var(--space-6) var(--space-6) 0;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   box-shadow: var(--shadow-surface), 0 8px 30px #0002;
@@ -1181,7 +1181,7 @@ button.composer-worktree:hover {
 
 .changes-excerpt {
   border: 1px solid var(--color-border);
-  border-radius: 7px;
+  border-radius: var(--radius-surface);
   padding: var(--space-5);
   margin-bottom: var(--space-4);
 }
@@ -1222,7 +1222,7 @@ button.composer-worktree:hover {
   --editor-line-height: calc(22 / 12);
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 5px;
+  border-radius: var(--radius-surface);
 }
 
 .changes-popup-footer {
@@ -1293,7 +1293,7 @@ button.composer-worktree:hover {
 .composer-mode-chip {
   margin-top: var(--space-2);
   padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-accent-soft);
   color: var(--color-accent);
   font-size: var(--font-size-sm);

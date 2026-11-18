@@ -2,13 +2,6 @@
 
 A [Proton](https://github.com/moonbit-community/proton) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
-Frontend changes must follow the durable interaction principles in
-[`UX_GUIDELINES.md`](UX_GUIDELINES.md) and the visual and component conventions
-in [`DESIGN.md`](DESIGN.md).
-
-For reproducing and assessing UX issues with real components, follow
-[`UX_REVIEW_WORKFLOW.md`](UX_REVIEW_WORKFLOW.md).
-
 The native side is two modules. `backend` is a library and `app` is the
 executable that hosts it:
 
@@ -607,8 +600,7 @@ CSS, and the generated xterm files under `desktop/target/web/`. Mermaid loads
 from the verified distribution staged under that same directory. Production
 copies those outputs into the fixed package resource tree.
 
-Desktop CSS conventions, including token scope and the single-owner form focus
-contract, live in [`styles/README.md`](styles/README.md).
+Desktop's shared design tokens are defined in [`styles/tokens.css`](styles/tokens.css).
 
 The launcher declares `desktop/` as Proton's development resource directory.
 The host derives the checkout HTML and the fixed native/debug engine from that
