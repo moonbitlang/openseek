@@ -2,12 +2,17 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/shell",
+  "moonbitlang/core/env",
 }
 ---
 
+///|
+/// The same args go to both commands, so they must be flags both accept
+/// (`--target`, `-p`, package paths); test-only flags belong to test.mbtx.
 async fn main {
+  let args = @env.args()[1:]
   for command in ["check", "test"] {
-    let code = @shell.Cmd("moon", [command]).each_line(line => println(line))
+    let code = @shell.Cmd("moon", [command, ..args]).each_line(line => println(line))
     if code != 0 { fail("moon \{command} failed (exit=\{code})") }
   }
 }

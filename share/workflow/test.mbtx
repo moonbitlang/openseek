@@ -2,10 +2,11 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/shell",
+  "moonbitlang/core/env",
 }
 ---
 
 async fn main {
-  let code = @shell.Cmd("moon", ["test"]).each_line(line => println(line))
+  let code = @shell.Cmd("moon", ["test", ..@env.args()[1:]]).each_line(line => println(line))
   if code != 0 { fail("moon test failed (exit=\{code})") }
 }

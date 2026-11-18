@@ -10,9 +10,18 @@ this resource root's absolute path.
   its arguments go to rg unchanged (ripgrep flags and Rust regex, not POSIX
   grep; a PATH is required), output is `path:line:text` bounded to 40000
   bytes, and no match exits zero with a note.
+- `cmd.mbtx` runs one program: `args[0]` is the program and the rest are its
+  arguments, passed as-is with no shell. The program must be on the mbtx spawn
+  allowlist, like any `@shell.Cmd` in a script. Stdout and stderr are merged,
+  streamed, and bounded to 40000 bytes, keeping the first and last lines; it
+  prints `exit=N` last and exits with the program's status (see below).
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.
+
+`check.mbtx`, `test.mbtx` and `check-test.mbtx` pass their `args` on to moon;
+`check-test.mbtx` gives the same args to both commands, so use flags both
+accept (`--target`, `-p`, package paths).
 - `info-fmt.mbtx` runs info then fmt, modifying generated interfaces and formatting.
 - `check-json.mbtx` relays `moon check --output-json` diagnostics without filtering.
 - `fix-deprecations.mbtx` (needs `ptc=true`) fixes deprecation warnings whose
@@ -75,6 +84,31 @@ such path with a range-like suffix), and `--` before paths starting with `--`.
 Range parsing proceeds from the right, preserving Windows drive letters and
 other colons. Paths with spaces are single args without shell quoting.
 `args=["--help"]` prints usage. Relative file paths use cwd (default workspace).
+
+## Running one command
+
+See [Running a command with `cmd.mbtx`](../../tests/cram/cmd-workflow.md) for
+executable examples.
+
+```json
+{"description":"Show recent commits","filename":"@builtin/cmd.mbtx","args":["git","log","--oneline","-5"]}
+```
+
+Each list item is one argument; nothing is split, globbed, or expanded, so
+pipes, redirection and `&&` do not exist here (write a script for those). The
+spawn is checked against the same allowlist as a hand-written `@shell.Cmd`;
+the mbtx tool description lists the allowed programs under "Which programs a
+snippet may start". A refused program fails with the sandbox's refusal
+message. Stdin is empty.
+
+Output is bounded to 40000 UTF-8 bytes: the first 20000 stream as they arrive,
+and the last lines, up to 19000 bytes, are printed when the program ends,
+after a `<system>truncated=true omitted_lines=N total_lines=M ...</system>`
+note when lines were dropped between them. A line over 2000 bytes is cut and
+marked `[N bytes cut]`. The last line is `exit=N`, and the call exits with the
+same status; a program killed by a signal reports `exit=128+S signal=S`. A
+program that cannot be started exits 127 with an `error: could not start`
+line. `args=[]` or `["--help"]` prints usage.
 
 ## Agent workflows
 
