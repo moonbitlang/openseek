@@ -238,23 +238,17 @@ fn browser_grant(
 }
 
 ///|
-fn browser_record(json : Json, grant : BrowserGrant) -> Json raise {
-  guard build_token_record(json, save_refresh_at=true) is Object(record) else {
-    fail("Invalid OAuth token")
-  }
+fn build_browser_record(
+  json : Json,
+  grant : BrowserGrant,
+) -> (StoredToken, BrowserGrant) raise {
+  let token = build_token_record(json, save_refresh_at=true)
   let refresh_token = match json {
     { "refresh_token": String(token), .. } if !token.is_empty() => Some(token)
     Object(fields) if !fields.contains("refresh_token") => grant.refresh_token
     _ => fail("Invalid OAuth refresh token")
   }
-  record["client_id"] = Json(grant.client_id)
-  record["token_endpoint"] = Json(grant.endpoint)
-  record["refresh_token"] = if refresh_token is Some(token) {
-    Json(token)
-  } else {
-    Json::null()
-  }
-  Json::object(record)
+  (token, { ..grant, refresh_token, })
 }
 
 ///|
@@ -283,7 +277,7 @@ pub async fn BrowserAuthorization::finish(
   if json is { "error": String(_), .. } {
     fail("OAuth code exchange failed; connect again")
   }
-  let tokens = browser_record(json, {
+  let (token, browser) = build_browser_record(json, {
     client_id: self.client_id,
     endpoint: self.provider.token_endpoint,
     refresh_token: None,
@@ -291,7 +285,7 @@ pub async fn BrowserAuthorization::finish(
   let path = credential_path(self.resource, AuthorizationCode(self.config))
   let lock = lock_credential(path)
   defer lock.close()
-  self.commit.save(path, tokens)
+  self.commit.save(path, token, browser~)
 }
 
 ///|
@@ -344,9 +338,9 @@ async fn refresh(
         }
         { "error": String(_), .. } => fail("OAuth token refresh failed")
         _ => {
-          let next = browser_record(result, grant)
-          write_credential(path, next)
-          Some(stored_token(next).access_token)
+          let (next, browser) = build_browser_record(result, grant)
+          write_credential(path, encode_token_record(next, browser~))
+          Some(next.access_token)
         }
       }
     } catch {

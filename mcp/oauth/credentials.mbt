@@ -88,8 +88,16 @@ async fn Commit::cancel(self : Commit) -> Unit {
 }
 
 ///|
-async fn Commit::save(self : Commit, path : String, record : Json) -> Unit {
-  write_credential(path, record, commit=(temp, path) => {
+async fn Commit::save(
+  self : Commit,
+  path : String,
+  token : StoredToken,
+  browser? : BrowserGrant,
+) -> Unit {
+  write_credential(path, encode_token_record(token, browser?), commit=(
+    temp,
+    path,
+  ) => {
     self.lock.acquire()
     defer self.lock.release()
     guard !self.cancelled else { fail("Authorization cancelled") }
@@ -113,7 +121,7 @@ async fn read_credential(path : String) -> Json? {
 fn build_token_record(
   json : Json,
   save_refresh_at~ : Bool = false,
-) -> Json raise {
+) -> StoredToken raise {
   guard json
     is { "access_token": String(token), "token_type": String(kind), .. } &&
     !token.is_empty() &&
@@ -121,22 +129,20 @@ fn build_token_record(
     fail("OAuth server did not return a bearer token")
   }
   let lifetime_ms = seconds(json, "expires_in", default=0).to_double() * 1000
-  let expires_at = @env.now().to_double() + lifetime_ms
-  let record : Map[String, Json] = {
-    "access_token": token,
-    "expires_at": if lifetime_ms > 0 {
-      Json(expires_at)
-    } else {
-      Json::null()
-    },
+  let expires_at = if lifetime_ms > 0 {
+    Some(@env.now().to_double() + lifetime_ms)
+  } else {
+    None
   }
-  if save_refresh_at && lifetime_ms > 0 {
+  let refresh_at = if save_refresh_at && expires_at is Some(expiry) {
     // Leave most of the lifetime usable, even when an issuer returns a
     // token with a lifetime shorter than the maximum refresh window.
     let window = (lifetime_ms * 0.1).min(300000)
-    record["refresh_at"] = Json(expires_at - window)
+    Some(expiry - window)
+  } else {
+    None
   }
-  Json::object(record)
+  { access_token: token, expires_at, refresh_at, }
 }
 
 ///|
@@ -144,6 +150,31 @@ priv struct StoredToken {
   access_token : String
   expires_at : Double?
   refresh_at : Double?
+}
+
+///|
+fn encode_token_record(token : StoredToken, browser? : BrowserGrant) -> Json {
+  let record : Map[String, Json] = {
+    "access_token": Json(token.access_token),
+    "expires_at": if token.expires_at is Some(expiry) {
+      Json(expiry)
+    } else {
+      Json::null()
+    },
+  }
+  if token.refresh_at is Some(at) {
+    record["refresh_at"] = Json(at)
+  }
+  if browser is Some(grant) {
+    record["client_id"] = Json(grant.client_id)
+    record["token_endpoint"] = Json(grant.endpoint)
+    record["refresh_token"] = if grant.refresh_token is Some(refresh) {
+      Json(refresh)
+    } else {
+      Json::null()
+    }
+  }
+  Json::object(record)
 }
 
 ///|
