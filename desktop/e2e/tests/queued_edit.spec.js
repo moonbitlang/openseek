@@ -18,7 +18,8 @@ for (const outcome of ['accepted', 'rpc-error']) {
     await expect(queued).toContainText('Original queued message');
     await queued.getByTitle('Edit', { exact: true }).click();
     await expect(composer).toHaveValue('Original queued message');
-    await composer.fill('Edited queued message');
+    const editedText = '/feedback edited queued message';
+    await composer.fill(editedText);
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Attach files', exact: true }).click();
     await (await chooser).setFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: readFileSync(new URL('../fixtures/office/two-pages.pdf', import.meta.url)) });
@@ -49,7 +50,7 @@ for (const outcome of ['accepted', 'rpc-error']) {
     }
     await save.dispatchEvent('click');
     await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
-    await expect(composer).toHaveValue('Edited queued message');
+    await expect(composer).toHaveValue(editedText);
     const edits = () => app.requests.filter(r => r.method === 'agent.queue' && r.params.action === 'edit');
     expect(edits()).toHaveLength(1);
     // The editor is still usable while the composer waits for the save.
@@ -83,12 +84,12 @@ for (const outcome of ['accepted', 'rpc-error']) {
     await expect(added.locator('.mention-remove')).toBeEnabled();
     if (outcome === 'accepted') {
       await expect(composer).toHaveValue('');
-      await expect(queued).toContainText('Edited queued message');
+      await expect(queued).toContainText(editedText);
       await expect(mention).toHaveCount(0);
       await added.locator('.mention-remove').click();
       await expect(added).toHaveCount(0);
     } else {
-      await expect(composer).toHaveValue('Edited queued message');
+      await expect(composer).toHaveValue(editedText);
       await expect(queued).toContainText('Original queued message');
       await expect(save).toBeEnabled();
       await expect(mention.locator('.mention-remove')).toBeEnabled();

@@ -227,7 +227,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // transcript.
     run: conv.run_heartbeat(),
     goal: conv.controls.input(),
-    slash_commands: self.openseek_commands(),
+    slash_commands: self.openseek_commands(
+      editing_queue=conv.queue_edit is Some(_),
+    ),
     // Editing a queued message rewrites that message; it never runs one.
     shell_available: conv.queue_edit is None,
     history: conv.sent_prompts(shell=conv.queue_edit is None),
@@ -490,8 +492,11 @@ const SimplifyPrompt : String =
   #|Focus:
 
 ///|
-fn Model::openseek_commands(self : Model) -> Array[@composer.SlashCommand] {
-  [
+fn Model::openseek_commands(
+  self : Model,
+  editing_queue~ : Bool,
+) -> Array[@composer.SlashCommand] {
+  let commands : Array[@composer.SlashCommand] = [
     {
       label: "/compact",
       detail: shell_text(self.locale, CompactContext),
@@ -516,11 +521,14 @@ fn Model::openseek_commands(self : Model) -> Array[@composer.SlashCommand] {
       command: "simplify",
       prompt: Some(SimplifyPrompt),
     },
-    {
+  ]
+  if !editing_queue {
+    commands.push({
       label: "/feedback",
       detail: shell_text(self.locale, SubmitFeedback),
       command: "feedback",
       prompt: None,
-    },
-  ]
+    })
+  }
+  commands
 }
