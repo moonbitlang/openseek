@@ -13,6 +13,7 @@ pub async fn ApiState::start_services(
   group : @async.TaskGroup,
 ) -> Unit {
   prepare_workspaces()
+  self.connectors.attach(group)
   group.spawn_bg(allow_failure=true, () => {
     self.host.sync_builtin_skills(() => self.publish(SkillsChanged))
   })

@@ -1,11 +1,26 @@
 ///|
-/// Public client configuration for OAuth 2.0 Device Authorization Grant.
-/// Tokens and client secrets never belong in this configuration.
+/// Public client configuration for device authorization or browser authorization.
 #derive(Eq, Debug)
-pub(all) struct OAuthConfig {
+pub(all) enum OAuthConfig {
+  DeviceCode(DeviceOAuthConfig)
+  AuthorizationCode(AuthorizationCodeConfig)
+}
+
+///|
+/// Public client and explicit endpoints for the Device Authorization Grant.
+#derive(Eq, Debug)
+pub(all) struct DeviceOAuthConfig {
   client_id : String
   device_authorization_endpoint : String
   token_endpoint : String
+  scopes : String
+}
+
+///|
+/// Pinned issuer and scopes for a public client registered through discovery.
+#derive(Eq, Debug)
+pub(all) struct AuthorizationCodeConfig {
+  issuer : String
   scopes : String
 }
 
@@ -15,6 +30,24 @@ fn decode_oauth(
   name : String,
   env : Map[String, String],
 ) -> OAuthConfig raise {
+  let scopes = match value {
+    { "scopes": String(scopes), .. } => expand_env(name, scopes, env)
+    Object(fields) if !fields.contains("scopes") => ""
+    _ => raise Invalid("oauth.scopes must be a space-separated string")
+  }
+  if value is { "grantType": "authorization_code", .. } {
+    guard value is { "issuer": String(issuer), .. } else {
+      raise Invalid("oauth.grantType=authorization_code requires issuer")
+    }
+    let issuer = expand_env(name, issuer, env)
+    guard issuer.strip_prefix("https://") is Some(authority) &&
+      !authority.is_empty() &&
+      !authority.contains_any(chars="/?#@\\") &&
+      !authority.any(ch => ch.is_whitespace() || ch.is_control()) else {
+      raise Invalid("oauth.issuer must be an HTTPS origin")
+    }
+    return AuthorizationCode({ issuer, scopes, })
+  }
   guard value
     is {
       "grantType": "device_code",
@@ -38,12 +71,12 @@ fn decode_oauth(
       raise Invalid("OAuth endpoints must use HTTPS")
     }
   }
-  let scopes = match value {
-    { "scopes": String(scopes), .. } => expand_env(name, scopes, env)
-    Object(fields) if !fields.contains("scopes") => ""
-    _ => raise Invalid("oauth.scopes must be a space-separated string")
-  }
-  { client_id, device_authorization_endpoint, token_endpoint, scopes, }
+  DeviceCode({
+    client_id,
+    device_authorization_endpoint,
+    token_endpoint,
+    scopes,
+  })
 }
 
 ///|
@@ -51,3 +84,15 @@ pub extend OAuthConfig with Eq::{equal, not_equal}
 
 ///|
 pub extend OAuthConfig with Debug::{to_repr}
+
+///|
+pub extend DeviceOAuthConfig with Eq::{equal, not_equal}
+
+///|
+pub extend DeviceOAuthConfig with Debug::{to_repr}
+
+///|
+pub extend AuthorizationCodeConfig with Eq::{equal, not_equal}
+
+///|
+pub extend AuthorizationCodeConfig with Debug::{to_repr}

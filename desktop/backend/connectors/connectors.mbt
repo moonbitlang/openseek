@@ -8,21 +8,71 @@ priv struct Entry {
 ///|
 priv struct Attempt {
   id : String
-  pending : @oauth.Pending
+  pending : Authorization
   entry : Entry
 }
 
 ///|
-/// Owns device authorization attempts for a host; credentials stay on that host.
+/// Owns MCP authorization attempts and their host-local credentials.
 struct Service {
   bundled : @pathx.Path?
   attempts : Map[String, Attempt]
   lock : @async.Mutex
+  mut group : @async.TaskGroup?
 }
 
 ///|
 pub fn Service::Service(bundled : @pathx.Path?) -> Service {
-  { bundled, attempts: Map([]), lock: Mutex(), }
+  { bundled, attempts: Map([]), lock: Mutex(), group: None, }
+}
+
+///|
+/// Tie browser callback listeners to the lifetime of the host.
+pub fn Service::attach(self : Service, group : @async.TaskGroup) -> Unit {
+  self.group = Some(group)
+}
+
+///|
+priv enum Authorization {
+  Device(@oauth.Pending)
+  Browser(BrowserAttempt)
+}
+
+///|
+async fn Authorization::cancel(self : Authorization) -> Unit {
+  match self {
+    Device(pending) => pending.cancel()
+    Browser(pending) => pending.cancel()
+  }
+}
+
+///|
+fn Attempt::authorization(self : Attempt) -> @protocol.ConnectorAuthorization {
+  match self.pending {
+    Device(pending) =>
+      {
+        attempt: self.id,
+        url: pending.authorization_url(),
+        code: Some(pending.user_code()),
+      }
+    Browser(pending) =>
+      { attempt: self.id, url: pending.authorization.url(), code: None, }
+  }
+}
+
+///|
+async fn Authorization::poll(
+  self : Authorization,
+  resource : String,
+  config : @config.OAuthConfig,
+) -> Bool {
+  match (self, config) {
+    (Device(pending), DeviceCode(config)) =>
+      @oauth.poll(pending, resource, config) is Authorized
+    (Browser(pending), AuthorizationCode(_)) =>
+      pending.task.try_wait() is Some(_)
+    _ => fail("Connector configuration changed; connect again")
+  }
 }
 
 ///|
@@ -101,7 +151,7 @@ async fn Service::entries(self : Service) -> Array[Entry] {
         }
       }
       guard parsed is [Http(url~, oauth=Some(oauth), ..)] else { continue }
-      let connected = (@oauth.token(url, oauth) is Some(_)) catch {
+      let connected = @oauth.authorized(url, oauth) catch {
         error => {
           result.push({
             info: { ..info, error: Some("Cannot read credentials: \{error}"), },
@@ -187,6 +237,13 @@ pub async fn Service::action(
   self.lock.acquire()
   defer self.lock.release()
   try {
+    if operation == "connect" || operation == "disconnect" {
+      // A second request may have published an attempt while this one waited.
+      if self.attempts.get(request.id) is Some(attempt) {
+        attempt.pending.cancel()
+        self.attempts.remove(request.id)
+      }
+    }
     let entries = self.entries()
     guard entries.iter().find_first(e => e.info.id == request.id) is Some(entry) &&
       entry.oauth is Some(config) else {
@@ -196,17 +253,21 @@ pub async fn Service::action(
     }
     match operation {
       "connect" => {
-        self.attempts.remove(request.id)
-        let pending = @oauth.begin(config)
         guard @entropy.random_hex(16) is Some(id) else {
           fail("Cannot create authorization attempt")
         }
-        self.attempts[request.id] = { id, pending, entry, }
-        reply(entries, authorization={
-          attempt: id,
-          url: pending.authorization_url(),
-          code: pending.user_code(),
-        })
+        let pending = match config {
+          DeviceCode(config) => Device(@oauth.begin(config))
+          AuthorizationCode(config) => {
+            guard self.group is Some(group) else {
+              fail("Browser authorization requires a running Desktop host")
+            }
+            Browser(begin_browser(group, entry.resource, config))
+          }
+        }
+        let attempt = { id, pending, entry, }
+        self.attempts[request.id] = attempt
+        reply(entries, authorization=attempt.authorization())
       }
       "poll" => {
         guard self.attempts.get(request.id) is Some(attempt) &&
@@ -215,26 +276,19 @@ pub async fn Service::action(
         }
         guard attempt.entry.oauth == entry.oauth &&
           attempt.entry.resource == entry.resource else {
+          attempt.pending.cancel()
           self.attempts.remove(request.id)
           fail("Connector configuration changed; connect again")
         }
         errdefer self.attempts.remove(request.id)
-        let result = @oauth.poll(attempt.pending, entry.resource, config)
-        match result {
-          Waiting =>
-            reply(entries, authorization={
-              attempt: attempt.id,
-              url: attempt.pending.authorization_url(),
-              code: attempt.pending.user_code(),
-            })
-          Authorized => {
-            self.attempts.remove(request.id)
-            reply(self.entries())
-          }
+        if attempt.pending.poll(entry.resource, config) {
+          self.attempts.remove(request.id)
+          reply(self.entries())
+        } else {
+          reply(entries, authorization=attempt.authorization())
         }
       }
       "disconnect" => {
-        self.attempts.remove(request.id)
         @oauth.disconnect(entry.resource, config)
         reply(self.entries())
       }

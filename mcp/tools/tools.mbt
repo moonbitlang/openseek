@@ -415,7 +415,7 @@ async fn connect_server(
         }
         if oauth is Some(oauth) {
           guard @oauth.token(url, oauth) is Some(token) else {
-            fail("Connect this server in Settings > Connectors before using it")
+            fail("Connect this server in Settings > MCP before using it")
           }
           resolved["authorization"] = "Bearer \{token}"
         }

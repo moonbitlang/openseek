@@ -27,7 +27,7 @@ test "cancel fences a late successful OAuth poll and permits another login" {
       authorization: Some({
         attempt: "attempt-1",
         url: "https://github.com/login/device",
-        code: "ABCD",
+        code: Some("ABCD"),
       }),
     }),
   )
@@ -137,7 +137,7 @@ test "the authorization page opens once when connect returns not on polls" {
     authorization: Some({
       attempt: "login",
       url: "https://github.com/login/device",
-      code: "ABCD",
+      code: Some("ABCD"),
     }),
   }
   let (_, waiting) = @connectors.update(

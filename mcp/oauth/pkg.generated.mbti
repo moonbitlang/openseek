@@ -6,19 +6,31 @@ import {
 }
 
 // Values
-pub async fn begin(@config.OAuthConfig) -> Pending
+pub const CallbackPath : String = "/oauth/callback"
+
+pub async fn authorized(String, @config.OAuthConfig) -> Bool
+
+pub async fn begin(@config.DeviceOAuthConfig) -> Pending
+
+pub async fn begin_browser(String, @config.AuthorizationCodeConfig, Int32, state~ : String, challenge~ : String) -> BrowserAuthorization
 
 pub async fn disconnect(String, @config.OAuthConfig) -> Unit
 
 pub fn key(String, @config.OAuthConfig) -> String
 
-pub async fn poll(Pending, String, @config.OAuthConfig) -> PollResult
+pub async fn poll(Pending, String, @config.DeviceOAuthConfig) -> PollResult
 
 pub async fn token(String, @config.OAuthConfig) -> String?
 
 // Errors
 
 // Types and methods
+type BrowserAuthorization
+pub fn BrowserAuthorization::accepts_issuer(Self, String?) -> Bool
+pub async fn BrowserAuthorization::cancel(Self) -> Unit
+pub async fn BrowserAuthorization::finish(Self, code~ : String, verifier~ : String) -> Unit
+pub fn BrowserAuthorization::url(Self) -> String
+
 type Pending
 pub fn Pending::authorization_url(Self) -> String
 pub async fn Pending::cancel(Self) -> Unit

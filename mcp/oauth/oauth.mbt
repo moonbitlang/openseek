@@ -7,8 +7,7 @@ struct Pending {
   expires_at : Int64
   mut next_poll : Int64
   mut interval_ms : Int64
-  commit_lock : @async.Mutex
-  mut cancelled : Bool
+  commit : Commit
 }
 
 ///|
@@ -70,7 +69,7 @@ fn seconds(json : Json, name : String, default~ : Int32) -> Int32 raise {
 
 ///|
 /// Start a user-initiated device authorization.
-pub async fn begin(config : @config.OAuthConfig) -> Pending {
+pub async fn begin(config : @config.DeviceOAuthConfig) -> Pending {
   let json = post(config.device_authorization_endpoint, [
     ("client_id", config.client_id),
     ("scope", config.scopes),
@@ -98,8 +97,7 @@ pub async fn begin(config : @config.OAuthConfig) -> Pending {
     device_code,
     verification_uri,
     user_code,
-    commit_lock: Mutex(),
-    cancelled: false,
+    commit: Commit(),
     expires_at: @env.now().reinterpret_as_int64() + expires.to_int64() * 1000,
     next_poll: @async.now() + interval_ms,
     interval_ms,
@@ -109,59 +107,19 @@ pub async fn begin(config : @config.OAuthConfig) -> Pending {
 ///|
 /// Scope credentials to the complete MCP resource and OAuth client configuration.
 pub fn key(resource : String, config : @config.OAuthConfig) -> String {
-  let text : Json = [
-    resource,
-    config.client_id,
-    config.device_authorization_endpoint,
-    config.token_endpoint,
-    config.scopes,
-  ]
-  @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(text.stringify())))
-}
-
-///|
-fn directory() -> String raise {
-  if @env.get_env_var("OPENSEEK_OAUTH_DIR") is Some(dir) && !dir.is_empty() {
-    return dir
+  let identity : Json = match config {
+    DeviceCode(config) =>
+      [
+        resource,
+        config.client_id,
+        config.device_authorization_endpoint,
+        config.token_endpoint,
+        config.scopes,
+      ]
+    AuthorizationCode(config) =>
+      ["authorization_code", resource, config.issuer, config.scopes]
   }
-  let home = if @async.platform is Windows {
-    match @env.get_env_var("USERPROFILE") {
-      Some(home) => Some(home)
-      None => @env.get_env_var("HOME")
-    }
-  } else {
-    @env.get_env_var("HOME")
-  }
-  guard home is Some(home) else {
-    fail("Cannot locate OAuth credential directory")
-  }
-  "\{home}/.openseek/oauth"
-}
-
-///|
-async fn save(
-  pending : Pending,
-  resource : String,
-  config : @config.OAuthConfig,
-  json : Json,
-) -> Unit {
-  let dir = directory()
-  @fs.mkdir(dir, permission=0o700, recursive=true, allow_existing=true)
-  guard @env.rand(16) is Some(random) else {
-    fail("Cannot obtain randomness for credential storage")
-  }
-  let temp = "\{dir}/.\{@crypto.bytes_to_hex_string(random)}.tmp"
-  defer (@fs.remove(temp, allow_missing=true) catch { _ => () })
-  @fs.write_text(
-    temp,
-    json.stringify(),
-    create_mode=CreateNew,
-    permission=0o600,
-  )
-  pending.commit_lock.acquire()
-  defer pending.commit_lock.release()
-  guard !pending.cancelled else { fail("Authorization cancelled") }
-  @fs.rename(temp, "\{dir}/\{key(resource, config)}.json", replace=true)
+  hash_identity(identity)
 }
 
 ///|
@@ -169,9 +127,9 @@ async fn save(
 pub async fn poll(
   pending : Pending,
   resource : String,
-  config : @config.OAuthConfig,
+  config : @config.DeviceOAuthConfig,
 ) -> PollResult {
-  guard !pending.cancelled else { fail("Authorization cancelled") }
+  guard !pending.commit.cancelled else { fail("Authorization cancelled") }
   guard @env.now().reinterpret_as_int64() < pending.expires_at else {
     fail("Authorization expired; connect again")
   }
@@ -185,7 +143,7 @@ pub async fn poll(
     ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
   ]) catch {
     @async.TimeoutError => {
-      guard !pending.cancelled else { fail("Authorization cancelled") }
+      guard !pending.commit.cancelled else { fail("Authorization cancelled") }
       let remaining = pending.expires_at - @env.now().reinterpret_as_int64()
       guard remaining > 0 else { fail("Authorization expired; connect again") }
       // RFC 8628: a connection timeout backs off instead of ending the grant.
@@ -195,7 +153,7 @@ pub async fn poll(
     }
     error => raise error
   }
-  guard !pending.cancelled else { fail("Authorization cancelled") }
+  guard !pending.commit.cancelled else { fail("Authorization cancelled") }
   match json {
     { "error": "authorization_pending", .. } => Waiting
     { "error": "slow_down", .. } => {
@@ -208,63 +166,19 @@ pub async fn poll(
       fail("Authorization expired; connect again")
     { "error": String(_), .. } =>
       fail("OAuth authorization failed; connect again")
-    { "access_token": String(token), "token_type": String(kind), .. } if !token.is_empty() &&
-      kind.to_lower() == "bearer" => {
-      let expires = seconds(json, "expires_in", default=0)
-      save(pending, resource, config, {
-        "access_token": token,
-        "expires_at": if expires > 0 {
-          Json(
-            (@env.now().reinterpret_as_int64() + expires.to_int64() * 1000).to_double(),
-          )
-        } else {
-          Json::null()
-        },
-      })
+    _ => {
+      let path = credential_path(resource, DeviceCode(config))
+      pending.commit.save(path, token_record(json))
       Authorized
     }
-    _ => fail("OAuth server did not return a bearer token")
   }
-}
-
-///|
-/// Read an unexpired credential. Expired or revoked grants require explicit reconnect.
-pub async fn token(resource : String, config : @config.OAuthConfig) -> String? {
-  let text = @fs.read_text("\{directory()}/\{key(resource, config)}.json") catch {
-    @os_error.OsError(NotFound, ..) => return None
-    error => raise error
-  }
-  let json = @json.parse(text) catch {
-    _ => fail("Invalid OAuth credential file")
-  }
-  guard json is { "access_token": String(token), "expires_at": expires, .. } else {
-    fail("Invalid OAuth credential file")
-  }
-  guard !token.is_empty() else { fail("Invalid OAuth credential file") }
-  match expires {
-    Null => ()
-    Number(n, ..) if n > 0 => if n <= @env.now().to_double() { return None }
-    _ => fail("Invalid OAuth credential expiry")
-  }
-  Some(token)
-}
-
-///|
-/// Remove this resource's local credential; does not revoke upstream authorization.
-pub async fn disconnect(
-  resource : String,
-  config : @config.OAuthConfig,
-) -> Unit {
-  @fs.remove("\{directory()}/\{key(resource, config)}.json", allow_missing=true)
 }
 
 ///|
 /// Fence an in-flight token response, or await a credential commit that already
 /// acquired the lock. Once this returns, this attempt cannot publish later.
 pub async fn Pending::cancel(self : Pending) -> Unit {
-  self.commit_lock.acquire()
-  defer self.commit_lock.release()
-  self.cancelled = true
+  self.commit.cancel()
 }
 
 ///|

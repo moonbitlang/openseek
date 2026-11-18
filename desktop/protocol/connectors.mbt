@@ -52,7 +52,7 @@ pub extend ConnectorRequest with FromJson::{from_json}
 pub(all) struct ConnectorAuthorization {
   attempt : String
   url : String
-  code : String
+  code : String?
 }
 
 ///|
@@ -60,7 +60,11 @@ pub impl ToJson for ConnectorAuthorization with fn to_json(self) {
   {
     "attempt": Json(self.attempt),
     "url": Json(self.url),
-    "code": Json(self.code),
+    "code": if self.code is Some(code) {
+      Json(code)
+    } else {
+      Json::null()
+    },
   }
 }
 
@@ -73,10 +77,13 @@ pub impl FromJson for ConnectorAuthorization with fn from_json(json, path) {
       path=path.add_key("attempt"),
     ),
     url: @json.from_json(object.required_json("url"), path=path.add_key("url")),
-    code: @json.from_json(
-      object.required_json("code"),
-      path=path.add_key("code"),
-    ),
+    code: if object.required_json("code") is Null {
+      None
+    } else {
+      Some(
+        @json.from_json(object.required_json("code"), path=path.add_key("code")),
+      )
+    },
   }
 }
 

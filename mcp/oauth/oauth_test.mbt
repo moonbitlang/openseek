@@ -2,7 +2,7 @@
 let credential_env_lock : @async.Mutex = Mutex()
 
 ///|
-fn config(endpoint : String) -> @config.OAuthConfig {
+fn config(endpoint : String) -> @config.DeviceOAuthConfig {
   {
     client_id: "test app&client",
     device_authorization_endpoint: endpoint,
@@ -14,7 +14,7 @@ fn config(endpoint : String) -> @config.OAuthConfig {
 ///|
 test "credential identities separate resources clients endpoints and scopes" {
   let c = config("https://example.com/token")
-  let identity = @oauth.key("https://example.com/mcp", c)
+  let identity = @oauth.key("https://example.com/mcp", DeviceCode(c))
   for
     (resource, other) in [
       ("https://other.com/mcp", c),
@@ -25,7 +25,7 @@ test "credential identities separate resources clients endpoints and scopes" {
       ),
       ("https://example.com/mcp", { ..c, scopes: "admin", }),
     ] {
-    assert_false(identity == @oauth.key(resource, other))
+    assert_false(identity == @oauth.key(resource, DeviceCode(other)))
   }
 }
 
@@ -109,16 +109,16 @@ async test "device flow waits persists scoped credentials expires and disconnect
     assert_true(@oauth.poll(pending, resource, c) is Waiting)
     @async.sleep(1050)
     assert_true(@oauth.poll(pending, resource, c) is Authorized)
-    assert_eq(@oauth.token(resource, c), Some("test-token"))
+    assert_eq(@oauth.token(resource, DeviceCode(c)), Some("test-token"))
     // A completed commit wins over a late cancel; cancel is not disconnect.
     pending.cancel()
-    assert_eq(@oauth.token(resource, c), Some("test-token"))
-    assert_eq(@oauth.token("https://other.com/mcp", c), None)
+    assert_eq(@oauth.token(resource, DeviceCode(c)), Some("test-token"))
+    assert_eq(@oauth.token("https://other.com/mcp", DeviceCode(c)), None)
     @async.sleep(1050)
-    assert_eq(@oauth.token(resource, c), None)
-    @oauth.disconnect(resource, c)
-    assert_eq(@oauth.token(resource, c), None)
-    @oauth.disconnect(resource, c)
+    assert_eq(@oauth.token(resource, DeviceCode(c)), None)
+    @oauth.disconnect(resource, DeviceCode(c))
+    assert_eq(@oauth.token(resource, DeviceCode(c)), None)
+    @oauth.disconnect(resource, DeviceCode(c))
     let expired = @oauth.begin(c)
     @async.sleep(1050)
     try @oauth.poll(expired, resource, c) catch {
@@ -141,10 +141,10 @@ async test "device flow waits persists scoped credentials expires and disconnect
     })
     requested.get()
     cancelled.cancel()
-    let credential_after_cancel = @oauth.token(resource, c)
+    let credential_after_cancel = @oauth.token(resource, DeviceCode(c))
     respond.put(())
     task.wait()
-    assert_eq(@oauth.token(resource, c), credential_after_cancel)
+    assert_eq(@oauth.token(resource, DeviceCode(c)), credential_after_cancel)
     assert_eq(credential_after_cancel, None)
     let slow = @oauth.begin(c)
     @async.sleep(1050)
@@ -207,6 +207,9 @@ async test "a timed out token request preserves authorization and retries after 
     assert_true(
       @oauth.poll(pending, "https://example.com/mcp", c) is Authorized,
     )
-    assert_eq(@oauth.token("https://example.com/mcp", c), Some("recovered"))
+    assert_eq(
+      @oauth.token("https://example.com/mcp", DeviceCode(c)),
+      Some("recovered"),
+    )
   }
 }
