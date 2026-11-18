@@ -183,32 +183,28 @@ async test "a structured result reaches scripts as data beside its text" {
       fail("expected a respond action")
     }
     assert_eq(output.data, Some(structured))
-    assert_true(output.content.contains("status: ok"))
-    assert_true(output.content.contains(structured.stringify()))
+    assert_eq(output.content, "status: ok")
   })
 }
 
 ///|
-async test "a large structured result keeps the text whole and leaves data out" {
+async test "a large structured result fits beside the server text" {
   @async.with_task_group(group => {
     let transport = new_transport()
     let rpc = @jsonrpc.Client(transport)
     wire(group, transport, rpc)
     let exec = args => @tools.call_tool(McpClient(rpc), "echo", args)
-    // Text and data both fit alone, not together: the text, which a direct
-    // call's model reads, wins.
     let structured : Json = { "blob": "x".repeat(40000) }
     guard exec({ "structured": structured }) is Respond(output) else {
       fail("expected a respond action")
     }
-    assert_true(output.data is None)
-    assert_true(output.content.contains(structured.stringify()))
-    assert_false(output.content.contains("truncated=true"))
+    assert_eq(output.data, Some(structured))
+    assert_eq(output.content, "status: ok")
   })
 }
 
 ///|
-async test "a structured result over the reply budget stays text only" {
+async test "a structured result over the reply budget keeps the server text" {
   @async.with_task_group(group => {
     let transport = new_transport()
     let rpc = @jsonrpc.Client(transport)
@@ -219,8 +215,7 @@ async test "a structured result over the reply budget stays text only" {
       fail("expected a respond action")
     }
     assert_true(output.data is None)
-    assert_true(output.content.contains("truncated=true"))
-    assert_true(Json(output.content).stringify().length() < 65536)
+    assert_eq(output.content, "status: ok")
   })
 }
 

@@ -371,7 +371,7 @@ fn renderings(entry : Entry) -> Array[String] {
 
 ///|
 /// How a page with tools closes: the call form.
-const FooterNote : String = "\n\nCall one from the same script with `@mcp.call(server, tool, arguments)`, where `arguments` matches its arguments schema. `result.data` is `Json?`: match it."
+const FooterNote : String = "\n\nChoose the tool and arguments using these descriptions and schemas. Return this page to the model when that choice needs its judgment. Call with `@mcp.call(server, tool, arguments)`. `result.data` is `Json?`: match it."
 
 ///|
 /// The page of `matches` starting at `offset`: at most `limit` whole entries
