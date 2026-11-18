@@ -1,20 +1,12 @@
 ///|
 /// One device authorization. Device codes remain in the host, never in UI replies.
-struct Pending {
+struct DeviceAuthResponse {
   device_code : String
   verification_uri : String
   user_code : String
   expires_at : Int64
-  mut next_poll : Int64
-  mut interval_ms : Int64
-  commit : Commit
-}
-
-///|
-/// The result of one device-token poll.
-pub enum PollResult {
-  Waiting
-  Authorized
+  first_poll_at : Int64
+  interval_ms : Int64
 }
 
 ///|
@@ -45,8 +37,9 @@ async fn post(
   endpoint : String,
   fields : Array[(String, String)],
   accept_invalid_client~ : Bool = false,
+  timeout_ms~ : Int32 = 30000,
 ) -> Json {
-  @async.with_timeout(30000, () => {
+  @async.with_timeout(timeout_ms, () => {
     let (response, body) = @http.post_text(endpoint, form(fields), headers={
       "Accept": "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
@@ -79,7 +72,9 @@ fn seconds(json : Json, name : String, default~ : Int32) -> Int32 raise {
 
 ///|
 /// Start a user-initiated device authorization.
-pub async fn begin(config : @config.DeviceOAuthConfig) -> Pending {
+pub async fn device_auth(
+  config : @config.DeviceOAuthConfig,
+) -> DeviceAuthResponse {
   let json = post(config.device_authorization_endpoint, [
     ("client_id", config.client_id),
     ("scope", config.scopes),
@@ -103,13 +98,13 @@ pub async fn begin(config : @config.DeviceOAuthConfig) -> Pending {
   let interval_ms = seconds(json, "interval", default=5).to_int64() * 1000
   let expires = seconds(json, "expires_in", default=0)
   guard expires > 0 else { fail("OAuth response is missing expires_in") }
+  let now = @async.now()
   {
     device_code,
     verification_uri,
     user_code,
-    commit: Commit(),
-    expires_at: @env.now().reinterpret_as_int64() + expires.to_int64() * 1000,
-    next_poll: @async.now() + interval_ms,
+    expires_at: now + expires.to_int64() * 1000,
+    first_poll_at: now + interval_ms,
     interval_ms,
   }
 }
@@ -133,72 +128,67 @@ pub fn key(resource : String, config : @config.OAuthConfig) -> String {
 }
 
 ///|
-/// Poll at the provider's interval. The caller serializes polling and cancellation.
-pub async fn poll(
-  pending : Pending,
-  resource : String,
+/// Poll at the provider's interval until a token is issued or the flow ends.
+pub async fn device_access_token(
   config : @config.DeviceOAuthConfig,
-) -> PollResult {
-  guard !pending.commit.cancelled else { fail("Authorization cancelled") }
-  guard @env.now().reinterpret_as_int64() < pending.expires_at else {
-    fail("Authorization expired; connect again")
-  }
-  if @async.now() < pending.next_poll {
-    return Waiting
-  }
-  pending.next_poll = @async.now() + pending.interval_ms
-  let json = post(config.token_endpoint, [
+  device : DeviceAuthResponse,
+) -> Token {
+  let fields = [
     ("client_id", config.client_id),
-    ("device_code", pending.device_code),
+    ("device_code", device.device_code),
     ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-  ]) catch {
-    @async.TimeoutError => {
-      guard !pending.commit.cancelled else { fail("Authorization cancelled") }
-      let remaining = pending.expires_at - @env.now().reinterpret_as_int64()
-      guard remaining > 0 else { fail("Authorization expired; connect again") }
-      // RFC 8628: a connection timeout backs off instead of ending the grant.
-      pending.interval_ms = (pending.interval_ms * 2).min(remaining)
-      pending.next_poll = @async.now() + pending.interval_ms
-      return Waiting
+  ]
+  let mut interval_ms = device.interval_ms
+  let mut next_poll = device.first_poll_at
+  for ;; {
+    let now = @async.now()
+    let remaining = device.expires_at - now
+    guard remaining > 0 else { fail("Authorization expired; connect again") }
+    if next_poll > now {
+      let delay = (next_poll - now).min(remaining).min(2147483647)
+      @async.sleep(delay.to_int())
+      continue
     }
-    error => raise error
+    next_poll = now + interval_ms
+    let json = post(
+      config.token_endpoint,
+      fields,
+      timeout_ms=remaining.min(30000).to_int(),
+    ) catch {
+      @async.TimeoutError => {
+        // RFC 8628: back off after a connection timeout.
+        interval_ms *= 2
+        next_poll = @async.now() + interval_ms
+        continue
+      }
+      error => raise error
+    }
+    match json {
+      { "error": "authorization_pending", .. } => continue
+      { "error": "slow_down", .. } => {
+        interval_ms += 5000
+        next_poll = @async.now() + interval_ms
+      }
+      { "error": "access_denied", .. } => fail("Authorization was denied")
+      { "error": "expired_token", .. } =>
+        fail("Authorization expired; connect again")
+      { "error": String(_), .. } =>
+        fail("OAuth authorization failed; connect again")
+      _ => return { record: build_token_record(json), browser: None, }
+    }
   }
-  guard !pending.commit.cancelled else { fail("Authorization cancelled") }
-  match json {
-    { "error": "authorization_pending", .. } => Waiting
-    { "error": "slow_down", .. } => {
-      pending.interval_ms += 5000
-      pending.next_poll = @async.now() + pending.interval_ms
-      Waiting
-    }
-    { "error": "access_denied", .. } => fail("Authorization was denied")
-    { "error": "expired_token", .. } =>
-      fail("Authorization expired; connect again")
-    { "error": String(_), .. } =>
-      fail("OAuth authorization failed; connect again")
-    _ => {
-      let path = credential_path(resource, DeviceCode(config))
-      pending.commit.save(path, build_token_record(json))
-      Authorized
-    }
-  }
-}
-
-///|
-/// Fence an in-flight token response, or await a credential commit that already
-/// acquired the lock. Once this returns, this attempt cannot publish later.
-pub async fn Pending::cancel(self : Pending) -> Unit {
-  self.commit.cancel()
 }
 
 ///|
 /// The provider page where the user approves this request.
-pub fn Pending::authorization_url(self : Pending) -> String {
+pub fn DeviceAuthResponse::verification_uri(
+  self : DeviceAuthResponse,
+) -> String {
   self.verification_uri
 }
 
 ///|
 /// The short code the user enters on the provider page.
-pub fn Pending::user_code(self : Pending) -> String {
+pub fn DeviceAuthResponse::user_code(self : DeviceAuthResponse) -> String {
   self.user_code
 }

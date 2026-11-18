@@ -69,32 +69,61 @@ async fn write_credential(
 }
 
 ///|
-/// An attempt may finish in parallel with a user action cancelling it.
-priv struct Commit {
+/// A token returned by the provider, ready to use or save as a credential.
+struct Token {
+  record : StoredToken
+  browser : BrowserGrant?
+}
+
+///|
+/// The bearer token issued by the provider.
+pub fn Token::access_token(self : Token) -> String {
+  self.record.access_token
+}
+
+///|
+/// Publishes the credential for one authorization attempt and coordinates cancellation.
+struct CredentialCommit {
+  resource : String
+  config : @config.OAuthConfig
   lock : @async.Mutex
   mut cancelled : Bool
 }
 
 ///|
-fn Commit::Commit() -> Commit {
-  { lock: Mutex(), cancelled: false, }
+/// Prepare a credential save for the given resource and OAuth configuration.
+pub fn CredentialCommit::CredentialCommit(
+  config : @config.OAuthConfig,
+  resource~ : String,
+) -> CredentialCommit {
+  { resource, config, lock: Mutex(), cancelled: false, }
 }
 
 ///|
-async fn Commit::cancel(self : Commit) -> Unit {
+/// Prevent a future save and wait for any atomic replacement already in progress.
+pub async fn CredentialCommit::cancel(self : CredentialCommit) -> Unit {
   self.cancelled = true
   self.lock.acquire()
   self.lock.release()
 }
 
 ///|
-async fn Commit::save(
-  self : Commit,
-  path : String,
-  token : StoredToken,
-  browser? : BrowserGrant,
+/// Store the token from this attempt unless the attempt was cancelled.
+pub async fn CredentialCommit::save(
+  self : CredentialCommit,
+  token : Token,
 ) -> Unit {
-  write_credential(path, token.encode(browser?), commit=(temp, path) => {
+  let path = credential_path(self.resource, self.config)
+  // A browser grant shares its file with refreshes from other engine processes.
+  let refresh_lock = match self.config {
+    DeviceCode(_) => None
+    AuthorizationCode(_) => Some(lock_credential(path))
+  }
+  defer (if refresh_lock is Some(lock) { lock.close() })
+  write_credential(path, token.record.encode(browser?=token.browser), commit=(
+    temp,
+    path,
+  ) => {
     self.lock.acquire()
     defer self.lock.release()
     guard !self.cancelled else { fail("Authorization cancelled") }

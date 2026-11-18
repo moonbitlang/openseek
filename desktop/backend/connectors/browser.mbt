@@ -1,45 +1,40 @@
 ///|
-priv struct BrowserAttempt {
-  authorization : @oauth.BrowserAuthorization
-  task : @async.Task[Unit]
-}
-
-///|
-async fn BrowserAttempt::cancel(self : BrowserAttempt) -> Unit {
-  self.authorization.cancel()
-  self.task.cancel()
-}
+const CallbackPath : String = "/oauth/callback"
 
 ///|
 async fn begin_browser(
   group : @async.TaskGroup,
   resource : String,
   config : @config.AuthorizationCodeConfig,
-) -> BrowserAttempt {
+  credential : @oauth.CredentialCommit,
+) -> Authorization {
   guard @entropy.random_hex(32) is Some(verifier) &&
     @entropy.random_hex(32) is Some(state) else {
     fail("Cannot obtain randomness for OAuth authorization")
   }
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   errdefer server.close()
-  let port = server.addr.port.to_int()
-  let auth = @oauth.begin_browser(
-    resource,
+  // The registered loopback path is stable. RFC 8252 permits an ephemeral port.
+  let redirect_uri = "http://127.0.0.1:\{server.addr.port}\{CallbackPath}"
+  let client = @oauth.discover_authorization_code(
     config,
-    port,
+    resource~,
+    redirect_uri~,
+  )
+  let url = client.auth_code_url(
     state~,
     challenge=@browser_signin.pkce_challenge(verifier),
   )
   let task = group.spawn(no_wait=true, allow_failure=true, () => {
     defer server.close()
     guard @async.with_timeout_opt(300000, () => {
-        wait_for_callback(server, auth, state~, verifier~)
+        wait_for_callback(server, client, credential, state~, verifier~)
       })
       is Some(_) else {
       fail("Authorization expired; connect again")
     }
   })
-  { authorization: auth, task, }
+  { url, code: None, credential, task, }
 }
 
 ///|
@@ -52,14 +47,14 @@ priv enum Callback {
 ///|
 fn callback(
   request : @http.RequestHeader,
-  auth : @oauth.BrowserAuthorization,
+  client : @oauth.AuthorizationCodeClient,
   state : String,
   host : String,
 ) -> Callback {
   guard request.meth is Get &&
     request.headers.get("Host") == Some(host) &&
     request.path.split_once("?") is Some((path, query)) &&
-    path == @oauth.CallbackPath else {
+    path == CallbackPath else {
     return Unrelated
   }
   let params = Map([])
@@ -73,7 +68,7 @@ fn callback(
     }
   }
   guard params.get("state") == Some(state) &&
-    auth.accepts_issuer(params.get("iss")) else {
+    client.accepts_issuer(params.get("iss")) else {
     return Unrelated
   }
   if !params.contains("error") &&
@@ -109,7 +104,8 @@ async fn respond(
 ///|
 async fn wait_for_callback(
   server : @http.Server,
-  auth : @oauth.BrowserAuthorization,
+  client : @oauth.AuthorizationCodeClient,
+  credential : @oauth.CredentialCommit,
   state~ : String,
   verifier~ : String,
 ) -> Unit {
@@ -120,7 +116,7 @@ async fn wait_for_callback(
     let request = @async.with_timeout(2000, () => conn.read_request()) catch {
       _ => continue
     }
-    match callback(request, auth, state, host) {
+    match callback(request, client, state, host) {
       Unrelated => respond(conn, 404, "Not Found", "Not found")
       Denied => {
         respond(
@@ -134,7 +130,7 @@ async fn wait_for_callback(
             conn, 400, "Bad Request", "Authorization failed. Return to SeekMoon.",
           )
         })
-        auth.finish(code~, verifier~)
+        credential.save(client.exchange(code~, verifier~))
         respond(
           conn, 200, "OK", "Connected. Return to SeekMoon to use this connector.",
         )

@@ -27,51 +27,45 @@ pub fn Service::Service(bundled : @pathx.Path?) -> Service {
 }
 
 ///|
-/// Tie browser callback listeners to the lifetime of the host.
+/// Tie authorization tasks to the lifetime of the host.
 pub fn Service::attach(self : Service, group : @async.TaskGroup) -> Unit {
   self.group = Some(group)
 }
 
 ///|
-priv enum Authorization {
-  Device(@oauth.Pending)
-  Browser(BrowserAttempt)
+priv struct Authorization {
+  url : String
+  code : String?
+  credential : @oauth.CredentialCommit
+  task : @async.Task[Unit]
 }
 
 ///|
 async fn Authorization::cancel(self : Authorization) -> Unit {
-  match self {
-    Device(pending) => pending.cancel()
-    Browser(pending) => pending.cancel()
-  }
+  self.credential.cancel()
+  self.task.cancel()
 }
 
 ///|
 fn Attempt::authorization(self : Attempt) -> @protocol.ConnectorAuthorization {
-  match self.pending {
-    Device(pending) =>
-      {
-        attempt: self.id,
-        url: pending.authorization_url(),
-        code: Some(pending.user_code()),
-      }
-    Browser(pending) =>
-      { attempt: self.id, url: pending.authorization.url(), code: None, }
-  }
+  { attempt: self.id, url: self.pending.url, code: self.pending.code, }
 }
 
 ///|
-async fn Authorization::poll(
-  self : Authorization,
-  resource : String,
-  config : @config.OAuthConfig,
-) -> Bool {
-  match (self, config) {
-    (Device(pending), DeviceCode(config)) =>
-      @oauth.poll(pending, resource, config) is Authorized
-    (Browser(pending), AuthorizationCode(_)) =>
-      pending.task.try_wait() is Some(_)
-    _ => fail("Connector configuration changed; connect again")
+async fn begin_device(
+  group : @async.TaskGroup,
+  config : @config.DeviceOAuthConfig,
+  credential : @oauth.CredentialCommit,
+) -> Authorization {
+  let device = @oauth.device_auth(config)
+  let task = group.spawn(no_wait=true, allow_failure=true, () => {
+    credential.save(@oauth.device_access_token(config, device))
+  })
+  {
+    url: device.verification_uri(),
+    code: Some(device.user_code()),
+    credential,
+    task,
   }
 }
 
@@ -225,13 +219,12 @@ async fn Service::cancel_requested_attempt(
 }
 
 ///|
-/// Each short RPC polls at most once; navigation/cancel never starts a hidden login.
+/// Start, observe, or cancel a user-initiated authorization.
 pub async fn Service::action(
   self : Service,
   operation : String,
   request : @protocol.ConnectorRequest,
 ) -> @protocol.ConnectorReply {
-  // Cancellation must fence an outstanding HTTP poll before waiting on its lock.
   if operation == "cancel" {
     self.cancel_requested_attempt(request)
     return self.list()
@@ -266,14 +259,17 @@ pub async fn Service::action(
         guard @entropy.random_hex(16) is Some(id) else {
           fail("Cannot create authorization attempt")
         }
+        guard self.group is Some(group) else {
+          fail("Authorization requires a running Desktop host")
+        }
+        let credential = @oauth.CredentialCommit(
+          config,
+          resource=entry.resource,
+        )
         let pending = match config {
-          DeviceCode(config) => Device(@oauth.begin(config))
-          AuthorizationCode(config) => {
-            guard self.group is Some(group) else {
-              fail("Browser authorization requires a running Desktop host")
-            }
-            Browser(begin_browser(group, entry.resource, config))
-          }
+          DeviceCode(config) => begin_device(group, config, credential)
+          AuthorizationCode(config) =>
+            begin_browser(group, entry.resource, config, credential)
         }
         let attempt = { id, pending, entry, }
         self.attempts[request.id] = attempt
@@ -290,7 +286,7 @@ pub async fn Service::action(
           fail("Connector configuration changed; connect again")
         }
         errdefer self.attempts.remove(request.id)
-        if attempt.pending.poll(entry.resource, config) {
+        if attempt.pending.task.try_wait() is Some(_) {
           self.attempts.remove(request.id)
           reply(self.entries())
         } else {

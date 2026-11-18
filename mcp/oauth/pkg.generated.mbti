@@ -6,40 +6,39 @@ import {
 }
 
 // Values
-pub const CallbackPath : String = "/oauth/callback"
-
 pub async fn authorized(String, @config.OAuthConfig) -> Bool
 
-pub async fn begin(@config.DeviceOAuthConfig) -> Pending
+pub async fn device_access_token(@config.DeviceOAuthConfig, DeviceAuthResponse) -> Token
 
-pub async fn begin_browser(String, @config.AuthorizationCodeConfig, Int32, state~ : String, challenge~ : String) -> BrowserAuthorization
+pub async fn device_auth(@config.DeviceOAuthConfig) -> DeviceAuthResponse
 
 pub async fn disconnect(String, @config.OAuthConfig) -> Unit
 
-pub fn key(String, @config.OAuthConfig) -> String
+pub async fn discover_authorization_code(@config.AuthorizationCodeConfig, resource~ : String, redirect_uri~ : String) -> AuthorizationCodeClient
 
-pub async fn poll(Pending, String, @config.DeviceOAuthConfig) -> PollResult
+pub fn key(String, @config.OAuthConfig) -> String
 
 pub async fn token(String, @config.OAuthConfig) -> String?
 
 // Errors
 
 // Types and methods
-type BrowserAuthorization
-pub fn BrowserAuthorization::accepts_issuer(Self, String?) -> Bool
-pub async fn BrowserAuthorization::cancel(Self) -> Unit
-pub async fn BrowserAuthorization::finish(Self, code~ : String, verifier~ : String) -> Unit
-pub fn BrowserAuthorization::url(Self) -> String
+type AuthorizationCodeClient
+pub fn AuthorizationCodeClient::accepts_issuer(Self, String?) -> Bool
+pub fn AuthorizationCodeClient::auth_code_url(Self, state~ : String, challenge~ : String) -> String
+pub async fn AuthorizationCodeClient::exchange(Self, code~ : String, verifier~ : String) -> Token
 
-type Pending
-pub fn Pending::authorization_url(Self) -> String
-pub async fn Pending::cancel(Self) -> Unit
-pub fn Pending::user_code(Self) -> String
+type CredentialCommit
+pub fn CredentialCommit::CredentialCommit(@config.OAuthConfig, resource~ : String) -> Self
+pub async fn CredentialCommit::cancel(Self) -> Unit
+pub async fn CredentialCommit::save(Self, Token) -> Unit
 
-pub enum PollResult {
-  Waiting
-  Authorized
-}
+type DeviceAuthResponse
+pub fn DeviceAuthResponse::user_code(Self) -> String
+pub fn DeviceAuthResponse::verification_uri(Self) -> String
+
+type Token
+pub fn Token::access_token(Self) -> String
 
 // Type aliases
 

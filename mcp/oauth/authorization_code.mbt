@@ -139,66 +139,52 @@ async fn register(
 }
 
 ///|
-/// Public browser authorization bound to one resource and callback.
-struct BrowserAuthorization {
-  url : String
+/// A public OAuth client configured for one MCP resource and redirect URI.
+struct AuthorizationCodeClient {
   resource : String
   config : @config.AuthorizationCodeConfig
   provider : Provider
   client_id : String
   redirect_uri : String
-  commit : Commit
 }
 
 ///|
-/// Path of the browser redirect served by the loopback listener.
-pub const CallbackPath : String = "/oauth/callback"
+/// Discover the issuer and obtain a dynamically registered public client.
+pub async fn discover_authorization_code(
+  config : @config.AuthorizationCodeConfig,
+  resource~ : String,
+  redirect_uri~ : String,
+) -> AuthorizationCodeClient {
+  let provider = discover(resource, config.issuer)
+  let client_id = register(config.issuer, provider, redirect_uri)
+  { resource, config, provider, client_id, redirect_uri, }
+}
 
 ///|
-/// Discover the issuer, register a public client, and build the S256 authorization URL.
-pub async fn begin_browser(
-  resource : String,
-  config : @config.AuthorizationCodeConfig,
-  port : Int32,
+/// Build the URL to open in the browser with an S256 PKCE challenge.
+pub fn AuthorizationCodeClient::auth_code_url(
+  self : AuthorizationCodeClient,
   state~ : String,
   challenge~ : String,
-) -> BrowserAuthorization {
-  let provider = discover(resource, config.issuer)
-  // The registered loopback path is stable. RFC 8252 permits an ephemeral port.
-  let redirect_uri = "http://127.0.0.1:\{port}\{CallbackPath}"
-  let client_id = register(config.issuer, provider, redirect_uri)
+) -> String {
   let query = form([
     ("response_type", "code"),
-    ("client_id", client_id),
-    ("redirect_uri", redirect_uri),
-    ("resource", resource),
-    ("scope", config.scopes),
+    ("client_id", self.client_id),
+    ("redirect_uri", self.redirect_uri),
+    ("resource", self.resource),
+    ("scope", self.config.scopes),
     ("prompt", "consent"),
     ("state", state),
     ("code_challenge", challenge),
     ("code_challenge_method", "S256"),
   ])
-  {
-    url: "\{provider.authorization_endpoint}?\{query}",
-    resource,
-    config,
-    provider,
-    client_id,
-    redirect_uri,
-    commit: Commit(),
-  }
-}
-
-///|
-/// The URL to open in the system browser.
-pub fn BrowserAuthorization::url(self : BrowserAuthorization) -> String {
-  self.url
+  "\{self.provider.authorization_endpoint}?\{query}"
 }
 
 ///|
 /// Check the callback issuer, requiring it when advertised by the provider.
-pub fn BrowserAuthorization::accepts_issuer(
-  self : BrowserAuthorization,
+pub fn AuthorizationCodeClient::accepts_issuer(
+  self : AuthorizationCodeClient,
   issuer : String?,
 ) -> Bool {
   match issuer {
@@ -252,13 +238,12 @@ fn build_browser_record(
 }
 
 ///|
-/// Exchange and store the code only after Desktop verifies the callback.
-pub async fn BrowserAuthorization::finish(
-  self : BrowserAuthorization,
+/// Exchange the authorization code after the caller verifies the callback.
+pub async fn AuthorizationCodeClient::exchange(
+  self : AuthorizationCodeClient,
   code~ : String,
   verifier~ : String,
-) -> Unit {
-  guard !self.commit.cancelled else { fail("Authorization cancelled") }
+) -> Token {
   let json = post(
     self.provider.token_endpoint,
     [
@@ -277,21 +262,12 @@ pub async fn BrowserAuthorization::finish(
   if json is { "error": String(_), .. } {
     fail("OAuth code exchange failed; connect again")
   }
-  let (token, browser) = build_browser_record(json, {
+  let (record, browser) = build_browser_record(json, {
     client_id: self.client_id,
     endpoint: self.provider.token_endpoint,
     refresh_token: None,
   })
-  let path = credential_path(self.resource, AuthorizationCode(self.config))
-  let lock = lock_credential(path)
-  defer lock.close()
-  self.commit.save(path, token, browser~)
-}
-
-///|
-/// Fence credential publication from an outstanding browser exchange.
-pub async fn BrowserAuthorization::cancel(self : BrowserAuthorization) -> Unit {
-  self.commit.cancel()
+  { record, browser: Some(browser), }
 }
 
 ///|
