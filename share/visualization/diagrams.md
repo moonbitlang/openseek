@@ -13,7 +13,7 @@ appropriate plotting tool for quantitative charts.
 ## Basic syntax
 
 Diago uses D2-style syntax. The examples below are verified against the
-SeekMoon renderer's current dependency, `moonbit-community/diago@0.4.0`.
+SeekMoon renderer's current dependency, `moonbit-community/diago@0.4.4`.
 Use these forms as a starting point rather than assuming all D2 features are
 available. Mermaid syntax belongs in a separate `mermaid` fence.
 
