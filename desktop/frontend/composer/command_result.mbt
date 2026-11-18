@@ -1,7 +1,7 @@
 ///|
-/// A terminal result is a standalone message, independent of editable text,
-/// images and attachments. Delivery updates are correlated by the command id.
+/// Command outcomes delivered to the composer entry that submitted them.
 pub(all) enum CommandResult {
+  FeedbackSettled(Identity, accepted~ : Bool)
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)
@@ -42,6 +42,26 @@ fn Model::command_result(
   action_emit : @cmd.Emit[Action],
 ) -> (Model, @cmd.Cmd) {
   match message {
+    FeedbackSettled(identity, accepted~) => {
+      guard self.entries
+        .iter()
+        .find_first(entry => entry.identity() == identity)
+        is Some(entry) &&
+        entry.pending_feedback is Some(submitted) else {
+        return (self, @cmd.none)
+      }
+      let draft = if accepted && entry.draft.task == submitted {
+        { ..entry.draft, task: "", }
+      } else {
+        entry.draft
+      }
+      self.commit_entry_change(
+        entry,
+        { ..entry, pending_feedback: None, draft, },
+        @cmd.none,
+        action_emit,
+      )
+    }
     Ready(input, id, text) => {
       let entry = self.active(input)
       if entry.results.any(result => result.id == id) {

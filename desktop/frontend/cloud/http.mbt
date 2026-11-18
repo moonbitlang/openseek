@@ -281,3 +281,17 @@ async fn deliver_question_input(
   // replay an ambiguous submission after reconnect.
   result
 }
+
+///|
+pub async fn submit_feedback(
+  token : String,
+  session : String,
+  metadata : @protocol.FeedbackMetadata,
+) -> @protocol.FeedbackReceipt {
+  @feedback.submit(
+    CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/feedback",
+    token,
+    ToJson::to_json(metadata),
+  )
+}

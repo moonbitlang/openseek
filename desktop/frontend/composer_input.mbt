@@ -516,5 +516,11 @@ fn Model::openseek_commands(self : Model) -> Array[@composer.SlashCommand] {
       command: "simplify",
       prompt: Some(SimplifyPrompt),
     },
+    {
+      label: "/feedback",
+      detail: shell_text(self.locale, SubmitFeedback),
+      command: "feedback",
+      prompt: None,
+    },
   ]
 }

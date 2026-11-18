@@ -1693,6 +1693,10 @@ priv enum Msg {
   OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
   ComposerReply(@composer.QuoteReply)
+  FeedbackFinished(
+    @composer.Identity,
+    Result[@protocol.FeedbackReceipt, String],
+  )
   ComposerCommandResult(@composer.CommandResult)
   TranscriptArtifactContextRequested(
     slot~ : String,

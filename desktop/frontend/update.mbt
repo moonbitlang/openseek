@@ -2677,6 +2677,31 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
+    FeedbackFinished(identity, result) => {
+      let message = match result {
+        Ok(receipt) => {
+          let text = shell_text(model.locale, FeedbackSent(receipt.id))
+          receipt.transcript_error.map_or(text, reason => {
+            text + " " + shell_text(model.locale, TranscriptMissing(reason))
+          })
+        }
+        Err(error) => error
+      }
+      let (notice, next) = model.notify(dispatch, Raw(message))
+      (
+        @cmd.batch([
+          notice,
+          dispatch(
+            ComposerCommandResult(
+              @composer.FeedbackSettled(identity, accepted=result is Ok(_)),
+            ),
+          ),
+        ]),
+        next,
+      )
+    }
+    ComposerAction(@composer.FeedbackSubmitted(identity~, message~)) =>
+      model.submit_feedback(dispatch, identity, message)
     ComposerAction(action) => {
       if action is @composer.CommandResultRecovered(identity~) {
         return recover_command_result(model, identity)
@@ -2848,7 +2873,8 @@ fn update_msg(
         }
       }
       match action {
-        @composer.DraftAttachmentsSubmitted(..)
+        @composer.FeedbackSubmitted(..)
+        | @composer.DraftAttachmentsSubmitted(..)
         | @composer.CommandResultSubmitted(..)
         | @composer.CommandResultRecovered(..)
         | @composer.ReviewContextChanged(..) => (@cmd.none, model)

@@ -80,6 +80,9 @@ priv enum ShellMessage {
   NoGlmKey
   NoOpenRouterKey
   NoDeepSeekKey
+  SubmitFeedback
+  FeedbackSent(String)
+  TranscriptMissing(String)
   CompactContext
   ShellTerminalUnavailable
   ShellWorktreeFailed
@@ -602,6 +605,29 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尚未設定 DeepSeek API 金鑰，無法傳送。"
     (Japanese, NoDeepSeekKey) =>
       "DeepSeek API キーが未設定のため送信できません。"
+    (English, SubmitFeedback) => "Submit feedback about this session"
+    (Spanish, SubmitFeedback) => "Enviar comentarios sobre esta sesión"
+    (SimplifiedChinese, SubmitFeedback) => "提交此会话的反馈"
+    (TraditionalChinese, SubmitFeedback) => "提交此對話的意見"
+    (Japanese, SubmitFeedback) =>
+      "このセッションのフィードバックを送信"
+    (English, FeedbackSent(id)) => "Feedback submitted (ID: \{id})."
+    (Spanish, FeedbackSent(id)) => "Comentarios enviados (ID: \{id})."
+    (SimplifiedChinese, FeedbackSent(id)) =>
+      "反馈已提交（编号：\{id}）。"
+    (TraditionalChinese, FeedbackSent(id)) =>
+      "意見已提交（編號：\{id}）。"
+    (Japanese, FeedbackSent(id)) =>
+      "フィードバックを送信しました（ID: \{id}）。"
+    (English, TranscriptMissing(reason)) => "Transcript not attached: \{reason}"
+    (Spanish, TranscriptMissing(reason)) =>
+      "No se adjuntó la transcripción: \{reason}"
+    (SimplifiedChinese, TranscriptMissing(reason)) =>
+      "未附上会话记录：\{reason}"
+    (TraditionalChinese, TranscriptMissing(reason)) =>
+      "未附上對話記錄：\{reason}"
+    (Japanese, TranscriptMissing(reason)) =>
+      "会話記録は添付されていません：\{reason}"
     (English, CompactContext) =>
       "Summarize and shrink this conversation's context"
     (Spanish, CompactContext) =>

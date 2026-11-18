@@ -47,6 +47,7 @@ pub(all) enum Action {
   ReviewChangesRemoved(identity~ : Identity, selections~ : Array[@mention_context.ReviewChanges])
   ReviewChangesOpened(identity~ : Identity, selection~ : @mention_context.ReviewChanges)
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
+  FeedbackSubmitted(identity~ : Identity, message~ : String)
   SlashCommand(identity~ : Identity, command~ : String)
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
   CommandResultRecovered(identity~ : Identity)
@@ -126,6 +127,7 @@ pub(all) struct CodexRequestInput {
 }
 
 pub(all) enum CommandResult {
+  FeedbackSettled(Identity, accepted~ : Bool)
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)

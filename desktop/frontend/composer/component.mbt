@@ -98,6 +98,7 @@ priv struct Entry {
   attachment_sequence : Int32
   images_enabled : Bool
   pending_submission : PendingSubmission?
+  pending_feedback : String?
   results : Array[ResultSubmission]
   // How far back in `Input::history` the draft was recalled from (1 is the
   // latest prompt), or `None` while the draft is the user's own.
@@ -140,6 +141,7 @@ fn Entry::Entry(input : Input) -> Entry {
     attachment_sequence: input.staged_attachments.length(),
     images_enabled: input.presentation.images_enabled,
     pending_submission: None,
+    pending_feedback: None,
     results: [],
     history_back: None,
   }
@@ -649,7 +651,7 @@ fn Entry::accept_completion(
     return ({ ..self, completion: None, }, @cmd.none)
   }
   let mention : Mention? = match completion.kind {
-    SlashCommands if item.prompt is Some(_) =>
+    SlashCommands if item.prompt is Some(_) || item.command == "feedback" =>
       return (
         {
           ..self,
@@ -1176,6 +1178,21 @@ fn Model::update(
       )
     // A shell command is acknowledged like a prompt: the root clears the
     // draft and advances the submission sequence once it accepts the command.
+    SubmitRequested if input.feedback_message(entry.draft) is Some(message) => {
+      guard !input.presentation.disabled &&
+        !message.is_blank() &&
+        entry.pending_feedback is None else {
+        return (self, @cmd.none)
+      }
+      (
+        self.with_entry({
+          ..entry,
+          pending_feedback: Some(entry.draft.task),
+          completion: None,
+        }),
+        action_emit(FeedbackSubmitted(identity=entry.identity(), message~)),
+      )
+    }
     SubmitRequested if input.shell_command(entry.draft) is Some(command) => {
       let command = command.trim()
       guard !command.is_empty() && entry.can_send(input) else {

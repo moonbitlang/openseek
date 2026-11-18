@@ -234,8 +234,23 @@ fn Entry::action_buttons(
       },
     ]
   }
+  let feedback_button : ActionButton? = input
+    .feedback_message(self.draft)
+    .map(message => {
+      id: "send",
+      class_name: "icon-button send-button",
+      title: ui(locale, SendLabel),
+      disabled: input.presentation.disabled ||
+      message.is_blank() ||
+      self.pending_feedback is Some(_),
+      command: emit(SubmitRequested),
+      content: @icons.icon(@icons.icon_newline),
+    })
   match input.presentation.primary_action {
     Send(available~) | SaveQueuedInput(available~) => {
+      if feedback_button is Some(button) {
+        return [button]
+      }
       guard !self.draft.is_blank() || !self.attachment_requests.is_empty() else {
         return []
       }
@@ -275,6 +290,10 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_stop_circle),
         },
       ]
+      if feedback_button is Some(button) {
+        actions.push(button)
+        return actions
+      }
       // A draft keeps its submit action at the end, where Send was, even
       // while the run cannot take a follow-up yet; it stays disabled until it
       // can. Leaving the slot to Stop would turn a press aimed at Send into a
@@ -475,7 +494,8 @@ fn Entry::view(
     trailing,
     actions,
     // A command is not a follow-up: it never steers or queues behind the turn.
-    followup_menu: if shell_command is Some(_) {
+    followup_menu: if shell_command is Some(_) ||
+      input.feedback_message(self.draft) is Some(_) {
       None
     } else {
       self.followup_menu(locale~, input, emit)
