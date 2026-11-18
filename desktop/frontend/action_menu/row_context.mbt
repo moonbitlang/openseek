@@ -15,11 +15,25 @@ pub impl Eq for RowContext with fn equal(a, b) {
 pub extend RowContext with Eq::{equal, not_equal}
 
 ///|
+priv enum ContextTrigger {
+  SidebarRow
+  InlineLink
+  SourceCard
+}
+
+///|
 /// The visible content is the native trigger. A changed content revision
 /// replaces the menu instance; unrelated trailing status and child rows do not.
 pub fn row_context(
   input : @rabbita.Val[RowContext],
-  inline~ : Bool = false,
+) -> @rabbita.Val[@html.Html] {
+  context_surface(input, SidebarRow)
+}
+
+///|
+fn context_surface(
+  input : @rabbita.Val[RowContext],
+  trigger : ContextTrigger,
 ) -> @rabbita.Val[@html.Html] {
   input.switch_by(
     input => {
@@ -28,7 +42,7 @@ pub fn row_context(
       }
       let (_, emit) = @rabbita.create_state_with_init(
         init=_ => {
-          let close = if inline {
+          let close = if !(trigger is SidebarRow) {
             // A reparsed message can reuse the trigger and popover DOM after
             // the previous component scope is disposed.
             @rui.popover_close(input.target + ":context-content")
@@ -53,13 +67,17 @@ pub fn row_context(
           @rui.context_menu_trigger(
             scope,
             tabindex=-1,
-            class=if inline {
-              "inline-context-trigger"
-            } else {
-              "sidebar-context-trigger"
+            class=match trigger {
+              SidebarRow => "sidebar-context-trigger"
+              InlineLink => "inline-context-trigger"
+              SourceCard => "citation-source-trigger"
             },
-            style=if inline { ["display:inline"] } else { [] },
-            attrs?=if inline { Some(inline_trigger_attrs()) } else { None },
+            style=if trigger is InlineLink { ["display:inline"] } else { [] },
+            attrs?=if trigger is SidebarRow {
+              None
+            } else {
+              Some(link_trigger_attrs(trigger))
+            },
             input.content,
           ),
           @rui.context_menu_content(
@@ -106,33 +124,73 @@ pub fn link_target(href : String) -> ContextTarget {
 }
 
 ///|
-fn inline_trigger_attrs() -> @html.Attrs {
-  @html.Attrs::build().on_focus(event => {
+fn link_trigger_attrs(trigger : ContextTrigger) -> @html.Attrs {
+  let focus_target = if trigger is SourceCard {
+    "[data-citation-source-title]"
+  } else {
+    "a[href], button"
+  }
+  let attrs = @html.Attrs::build().on_focus(event => {
     if event.current_target().to_option() is Some(target) &&
       target.to_element() is Some(trigger) &&
-      trigger.query_selector("a[href], button") is Some(link) &&
+      trigger.query_selector(focus_target) is Some(link) &&
       link.to_html_element() is Some(link) {
       link.focus_with_options(prevent_scroll=true)
     }
     @cmd.none
   })
+  if trigger is SourceCard {
+    // The title link owns the card's stretched hit area. A secondary link
+    // handles its own event before it reaches the card trigger.
+    let on_title = event => {
+      event_element(event).bind(element => element.closest(focus_target))
+      is Some(_)
+    }
+    ignore(
+      attrs
+      .on_contextmenu(event => {
+        if !on_title(event.as_event()) {
+          event.stop_immediate_propagation()
+        }
+        @cmd.none
+      })
+      .on_keydown(event => {
+        if (
+            event.key() == "ContextMenu" ||
+            (event.key() == "F10" && event.shift_key())
+          ) &&
+          !on_title(event.as_event()) {
+          event.stop_immediate_propagation()
+        }
+        @cmd.none
+      }),
+    )
+  }
+  attrs
 }
 
 ///|
-/// Bind the RUI trigger to the inline element whose destination was resolved
-/// by the renderer. Its enclosing Markdown block never owns keyboard input.
-pub fn inline_context(
+pub fn link_context(
   id : String,
   locale : @i18n.Locale,
   input : ContextInput,
   target : ContextTarget,
   actions : ContextActions,
   content : @rabbita.Val[@html.Html],
+  inline~ : Bool = true,
 ) -> @rabbita.Val[@html.Html] {
   let definition = context_definition(locale~, input, target, actions)
   guard definition is Some(_) else { return content }
-  row_context(
-    content.map(content => { target: id, revision: id, content, definition, }),
-    inline=true,
+  let revision = Ref(0)
+  context_surface(
+    content.map(content => {
+      revision.val += 1
+      { target: id, revision: revision.val.to_string(), content, definition, }
+    }),
+    if inline {
+      InlineLink
+    } else {
+      SourceCard
+    },
   )
 }

@@ -929,6 +929,10 @@
 }
 .msg-content.markdown li.citation-source {
   position: relative;
+  margin: 0;
+  border-radius: 12px;
+}
+.msg-content.markdown .citation-source-card {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: start;
@@ -964,12 +968,7 @@
   position: relative;
   z-index: 1;
 }
-/* Keep the title link's stretched hit area relative to the source card. */
-.msg-content.markdown .citation-source-copy > p:first-child > [data-slot="context-menu"]:first-child .inline-context-trigger {
-  position: static !important;
-}
-.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child,
-.msg-content.markdown .citation-source-copy > p:first-child > [data-slot="context-menu"]:first-child .inline-context-trigger :is(a, button.file-link) {
+.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child {
   position: static;
   z-index: auto;
   display: block;
@@ -980,8 +979,7 @@
   font-weight: 600;
   text-decoration: none;
 }
-.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child::after,
-.msg-content.markdown .citation-source-copy > p:first-child > [data-slot="context-menu"]:first-child .inline-context-trigger :is(a, button.file-link)::after {
+.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child::after {
   position: absolute;
   inset: 0;
   border-radius: 12px;
@@ -991,8 +989,7 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
-.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child:hover,
-.msg-content.markdown .citation-source-copy > p:first-child > [data-slot="context-menu"]:first-child .inline-context-trigger :is(a, button.file-link):hover {
+.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child:hover {
   color: var(--color-accent);
   text-decoration: underline;
 }
