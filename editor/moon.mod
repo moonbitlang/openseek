@@ -24,7 +24,7 @@ import {
   "moonbit-community/moondiff@0.1.4",
   "moonbit-community/prettyprinter@0.4.12",
   "moonbit-community/casefold@0.1.6",
-  "moonbit-community/diago@0.4.0",
+  "moonbit-community/diago@0.4.4",
   "moonbitlang/async@0.22.7",
   "moonbit-community/rabbita@0.16.4",
   "moonbitlang/x@0.5.5",
