@@ -1,30 +1,4 @@
 ///|
-/// Where the conversation runs, as the root knows it.
-pub(all) struct Environment {
-  /// The device's name, or `None` for the computer this window runs on.
-  device : String?
-  /// The project's display name and its directory.
-  project : String
-  path : String
-  /// The checked-out branch; `None` when the checkout is not a repository or
-  /// the host has not reported it yet.
-  branch : String?
-  /// The worktree the conversation runs in, when it has one of its own.
-  worktree : String?
-}
-
-///|
-/// What the conversation's engine is connected to: a one-line summary for
-/// the folded card and the rows for the unfolded one, drawn by the package
-/// that owns the MCP status. The rows are drawn only while the card is open.
-pub(all) struct Connectors {
-  summary : String
-  rows : () -> Array[@html.Html]
-  /// Ask again; `None` while a question is already out.
-  refresh : @cmd.Cmd?
-}
-
-///|
 /// The pull requests and branches the conversation works on: a one-line
 /// summary for the folded card and the rows for the unfolded one, drawn by
 /// the package that owns the attached list. The rows are drawn only while the
@@ -88,9 +62,7 @@ pub fn toggle(
 pub fn view(
   locale~ : @i18n.Locale = English,
   state : State,
-  environment~ : Environment,
   changes~ : Changes?,
-  connectors~ : Connectors,
   background? : Background,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -98,9 +70,6 @@ pub fn view(
     class="conv-overview",
     attrs=@html.Attrs::build().aria_label(text(locale, Overview)),
     [
-      card(locale, Environment, state, emit, () => {
-        environment_rows(locale, environment)
-      }),
       // With no checkout to describe and nothing attached, there is no card.
       if changes is Some(changes) {
         card(
@@ -114,21 +83,6 @@ pub fn view(
       } else {
         @html.nothing
       },
-      card(
-        locale,
-        Connectors,
-        state,
-        emit,
-        // Unfolded, the rows say it all and the summary gives way to asking
-        // again.
-        summary=connectors.summary,
-        aside=if state.is_open(Connectors) {
-          [refresh_button(locale, connectors.refresh)]
-        } else {
-          []
-        },
-        connectors.rows,
-      ),
       // Last, so the card coming and going never moves the others.
       if background is Some(background) {
         background_card(locale, state, background, emit)
@@ -232,9 +186,7 @@ fn card(
 ) -> @html.Html {
   let open = state.is_open(section)
   let title = match section {
-    Environment => text(locale, EnvironmentTitle)
     Changes => text(locale, ChangesTitle)
-    Connectors => text(locale, ConnectorsTitle)
     BackgroundTasks => text(locale, BackgroundTasksTitle)
   }
   @html.div(class="conv-overview-card", [
@@ -268,58 +220,6 @@ fn card(
       @html.nothing
     },
   ])
-}
-
-///|
-fn refresh_button(locale : @i18n.Locale, refresh : @cmd.Cmd?) -> @html.Html {
-  let label = text(locale, Refresh)
-  @html.button(
-    class="conv-overview-mini",
-    type_="button",
-    title=label,
-    disabled=refresh is None,
-    attrs=@html.Attrs::build().aria_label(label),
-    on_click=refresh.unwrap_or(@cmd.none),
-    @icons.icon(@icons.icon_sync),
-  )
-}
-
-///|
-/// The environment's rows.
-fn environment_rows(
-  locale : @i18n.Locale,
-  environment : Environment,
-) -> Array[@html.Html] {
-  [
-    row(@icons.icon_vm, [
-      @html.span(
-        class="conv-overview-row-text",
-        environment.device.unwrap_or(text(locale, ThisComputer)),
-      ),
-    ]),
-    row(@icons.icon_folder, title=environment.path, [
-      @html.span(class="conv-overview-row-text", [
-        @html.span(environment.project),
-        @html.span(class="conv-overview-row-sub", " · " + environment.path),
-      ]),
-    ]),
-    if environment.branch is Some(branch) {
-      row(@icons.icon_git_branch, title=branch, [
-        @html.span(class="conv-overview-row-text", branch),
-        if environment.worktree is Some(name) {
-          @html.span(
-            class="conv-overview-tag",
-            title=name,
-            text(locale, WorktreeTag),
-          )
-        } else {
-          @html.nothing
-        },
-      ])
-    } else {
-      @html.nothing
-    },
-  ]
 }
 
 ///|
