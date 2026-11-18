@@ -37,7 +37,7 @@ fn assistant_view(
   subrun? : SubrunLink,
   fork? : @html.Html,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @rabbita.Val[@html.Html] {
+) -> @markdown.View {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
   // as a table. The instant belongs beside the ordinal rather than out at the
@@ -62,7 +62,7 @@ fn assistant_view(
   // reasoning, keeping the common step's one-line "#2 · Thought" lead. A step
   // that goes straight to tools gets a plain heading line instead: a call
   // row's summary belongs to that call alone. Prose alone carries no heading.
-  let lead : Array[@rabbita.Val[@html.Html]] = []
+  let lead : Array[@markdown.View] = []
   if reasoning is Some(text) {
     let thinking = live && !reasoning_complete
     let label = if thinking {
@@ -82,35 +82,34 @@ fn assistant_view(
     let body = if thinking {
       // Do not parse an unfinished Markdown document on every provider token.
       // Newlines are preserved by CSS while fragments are still arriving.
-      @rabbita.Val::constant(
+      @markdown.View::from_html(
         @html.div(
           class="msg-content activity-thinking activity-thinking-live",
           @html.text(text),
         ),
       )
     } else {
-      @markdown.collect_components(
-        @markdown.markdown_components(locale~, text, open_file=on_open, links~),
-      ).map(nodes => {
-        @html.div(
-          class="msg-content markdown moonbit-viewer-markdown-content activity-thinking",
-          nodes,
-        )
-      })
+      @markdown.markdown_view(
+        locale~,
+        text,
+        open_file=on_open,
+        links~,
+        class="msg-content markdown moonbit-viewer-markdown-content activity-thinking",
+      )
     }
     lead.push(
-      body.map(body => {
+      @markdown.View::compose([body], nodes => {
         @html.details(class="activity", open=live, [
           @html.summary(class="activity-summary", [
             @html.span(class="activity-text", summary),
           ]),
-          @html.div(class="activity-body", [body]),
+          @html.div(class="activity-body", nodes),
         ])
       }),
     )
   } else if !header.is_empty() && !calls.is_empty() {
     lead.push(
-      @rabbita.Val::constant(@html.div(class="activity-heading", header)),
+      @markdown.View::from_html(@html.div(class="activity-heading", header)),
     )
   }
   let work = if calls.is_empty() {
@@ -125,11 +124,11 @@ fn assistant_view(
   }
   // The prose bubble separates the thought from the work it announced; a
   // response without prose keeps both under one quiet guide line.
-  let parts : Array[@rabbita.Val[@html.Html]] = []
+  let parts : Array[@markdown.View] = []
   if prose is Some(text) {
     if !lead.is_empty() {
       parts.push(
-        @markdown.collect_components(lead).map(nodes => {
+        @markdown.View::compose(lead, nodes => {
           @html.div(class="activity-row", nodes)
         }),
       )
@@ -151,24 +150,22 @@ fn assistant_view(
     )
     if work is Some(work) {
       parts.push(
-        @rabbita.Val::constant(@html.div(class="activity-row", [work])),
+        @markdown.View::from_html(@html.div(class="activity-row", [work])),
       )
     }
   } else {
     if work is Some(work) {
-      lead.push(@rabbita.Val::constant(work))
+      lead.push(@markdown.View::from_html(work))
     }
     if !lead.is_empty() {
       parts.push(
-        @markdown.collect_components(lead).map(nodes => {
+        @markdown.View::compose(lead, nodes => {
           @html.div(class="activity-row", nodes)
         }),
       )
     }
   }
-  @markdown.collect_components(parts).map(nodes => {
-    @html.div(class="step", nodes)
-  })
+  @markdown.View::compose(parts, nodes => @html.div(class="step", nodes))
 }
 
 ///|
@@ -1134,10 +1131,10 @@ fn transcript_item_view(
   edit? : @html.Html,
   editor? : @html.Html,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @rabbita.Val[@html.Html] {
+) -> @markdown.View {
   match item.kind {
     User(content~) =>
-      @rabbita.Val::constant(
+      @markdown.View::from_html(
         user_message_view(
           locale~,
           content,
@@ -1191,7 +1188,7 @@ fn transcript_item_view(
         is_danger=true,
       )
     Notice(label~, brief~, is_error~, body~) =>
-      @rabbita.Val::constant(
+      @markdown.View::from_html(
         notice_view(
           locale~,
           label,
@@ -1203,7 +1200,7 @@ fn transcript_item_view(
         ),
       )
     Summary(text) => summary_card_view(locale~, text, on_open, links)
-    TurnEnd => @rabbita.Val::constant(@html.nothing)
+    TurnEnd => @markdown.View::from_html(@html.nothing)
   }
 }
 
@@ -1224,13 +1221,13 @@ fn assistant_message_view(
   fork? : @html.Html,
   streaming~ : Bool = false,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @rabbita.Val[@html.Html] {
+) -> @markdown.View {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
   // row; only real assistant replies use markdown. Finished-terminal answers
   // share the ordinary assistant presentation.
   let body = if is_danger {
-    @rabbita.Val::constant(
+    @markdown.View::from_html(
       @html.div(class="transcript-error-row", [
         @html.span(
           class="transcript-error-icon",
@@ -1243,25 +1240,19 @@ fn assistant_message_view(
       ]),
     )
   } else {
-    @markdown.collect_components(
-      @markdown.markdown_components(
-        locale~,
-        content,
-        open_file=on_open,
-        links~,
-        artifact_view?=if show_actions && !streaming {
-          artifact_view
-        } else {
-          None
-        },
-        defer_artifacts=!show_actions || streaming,
-      ),
-    ).map(nodes => {
-      @html.div(
-        class="msg-content markdown moonbit-viewer-markdown-content",
-        nodes,
-      )
-    })
+    @markdown.markdown_view(
+      locale~,
+      content,
+      open_file=on_open,
+      links~,
+      class="msg-content markdown moonbit-viewer-markdown-content",
+      artifact_view?=if show_actions && !streaming {
+        artifact_view
+      } else {
+        None
+      },
+      defer_artifacts=!show_actions || streaming,
+    )
   }
   let actions_row = if show_actions {
     // Only an answer confirmed by the durable Finished terminal gets this row.
@@ -1305,8 +1296,8 @@ fn assistant_message_view(
     "msg"
   }
   let label = speaker_label(assistant_name)
-  body.map(body => {
-    let children = [label, body]
+  @markdown.View::compose([body], nodes => {
+    let children = [label, ..nodes]
     if actions_row is Some(actions) {
       children.push(actions)
     }
@@ -1325,21 +1316,26 @@ fn summary_card_view(
   content : String,
   on_open : (String) -> @cmd.Cmd,
   links : @markdown.LinkMenus,
-) -> @rabbita.Val[@html.Html] {
-  @markdown.collect_components(
-    @markdown.markdown_components(locale~, content, open_file=on_open, links~),
-  ).map(nodes => {
+) -> @markdown.View {
+  let body = @markdown.markdown_view(
+    locale~,
+    content,
+    open_file=on_open,
+    links~,
+    class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",
+  )
+  @markdown.View::compose([body], children => {
     @html.div(class="activity-row", [
-      @html.details(class="summary-card", [
-        @html.summary(class="summary-card-label", [
-          @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
-          @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
-        ]),
-        @html.div(
-          class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",
-          nodes,
-        ),
-      ]),
+      @html.details(
+        class="summary-card",
+        [
+          @html.summary(class="summary-card-label", [
+            @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
+            @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
+          ]),
+          ..children,
+        ],
+      ),
     ])
   })
 }

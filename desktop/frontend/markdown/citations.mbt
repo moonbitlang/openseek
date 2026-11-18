@@ -180,7 +180,10 @@ fn[Node : MarkdownNode] MarkdownRender::citation_node(
       )
     })
   }
-  self.link(target, node)
+  let revision = markdown_revision(
+    (title, if full { Some(link.text) } else { None }, number),
+  )
+  self.link(target, node, revision~)
 }
 
 ///|
@@ -219,7 +222,9 @@ fn[Node : MarkdownNode] MarkdownRender::sources_node(
     let glyph = self.source_glyph(citation)
     let number = citation.number
     let id = self.source_note_id(number)
-    let card = Node::compose(render.block_nodes(citation.block), children => {
+    let first_link = self.links.map_or(0, links => links.items.length())
+    let body = render.block_nodes(citation.block)
+    let card = Node::compose(body, children => {
       @html.div(class="citation-source-card", [
         glyph,
         @html.div(class="citation-source-content", [
@@ -230,7 +235,18 @@ fn[Node : MarkdownNode] MarkdownRender::sources_node(
       ])
     })
     let card = match source_title.val {
-      Some(target) => self.link(target, card, inline=false)
+      Some(target) => {
+        let children = self.links.map_or([], links => {
+          links.items[first_link:].map(menu => menu.key)
+        })
+        self.link(
+          target,
+          card,
+          revision=markdown_revision((number, citation.block)),
+          children~,
+          inline=false,
+        )
+      }
       None => card
     }
     rows.push(

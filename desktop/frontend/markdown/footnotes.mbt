@@ -19,9 +19,12 @@ priv struct RenderedFootnote {
 let next_footnote_scope : Ref[Int32] = Ref(0)
 
 ///|
-fn Footnotes::new() -> Footnotes {
-  next_footnote_scope.val += 1
-  { prefix: "markdown-note-\{next_footnote_scope.val}", notes: [], }
+fn Footnotes::new(prefix? : String) -> Footnotes {
+  let prefix = prefix.unwrap_or_else(() => {
+    next_footnote_scope.val += 1
+    "markdown-note-\{next_footnote_scope.val}"
+  })
+  { prefix, notes: [], }
 }
 
 ///|

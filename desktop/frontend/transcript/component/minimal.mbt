@@ -725,7 +725,7 @@ fn MinimalContent::render(
   links~ : @markdown.LinkMenus,
   active~ : Bool = false,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @rabbita.Val[@html.Html] {
+) -> @markdown.View {
   match self {
     Messages(parts, active_group~) => {
       // Preserve each child's identity while tool outcomes and live prose
@@ -739,7 +739,7 @@ fn MinimalContent::render(
           active=active_group is Some(identity) && identity == part.identity,
         )
       })
-      @markdown.collect_components(children).map(nodes => {
+      @markdown.View::compose(children, nodes => {
         let children : Map[String, @html.Html] = Map([])
         for index, node in nodes {
           children[parts[index].identity] = node
@@ -747,23 +747,21 @@ fn MinimalContent::render(
         @html.div(class="minimal-messages minimal-rows", children)
       })
     }
-    ContextSummary(text) =>
-      @markdown.collect_components(
-        @markdown.markdown_components(
-          locale~,
-          text,
-          open_file=path => (actions.open)(path),
-          links~,
-        ),
-      ).map(nodes => {
-        @html.details(class="minimal-context-summary", [
-          self.summary_view(locale~),
-          @html.div(
-            class="minimal-process-body msg-content markdown moonbit-viewer-markdown-content",
-            nodes,
-          ),
-        ])
+    ContextSummary(text) => {
+      let body = @markdown.markdown_view(
+        locale~,
+        text,
+        open_file=path => (actions.open)(path),
+        links~,
+        class="minimal-process-body msg-content markdown moonbit-viewer-markdown-content",
+      )
+      @markdown.View::compose([body], children => {
+        @html.details(
+          class="minimal-context-summary",
+          [self.summary_view(locale~), ..children],
+        )
       })
+    }
     Prose(text~, assistant~, finished~, live~, completed_at~, fork~) =>
       assistant_message_view(
         artifact_view?,
@@ -779,7 +777,7 @@ fn MinimalContent::render(
         streaming=live,
       )
     Note(text~, error~) =>
-      @rabbita.Val::constant(
+      @markdown.View::from_html(
         @html.div(
           class=if error {
             "minimal-note transcript-error-message"
@@ -793,12 +791,12 @@ fn MinimalContent::render(
       // A single call has nothing to summarize separately. Render its caption
       // once, including its running status and image previews.
       if entries is [Call(call)] {
-        return @rabbita.Val::constant(
+        return @markdown.View::from_html(
           MinimalActivity::Call(call).render(locale~, single=true),
         )
       }
       if active {
-        return @rabbita.Val::constant(
+        return @markdown.View::from_html(
           @html.div(
             class="minimal-tools-live minimal-rows",
             // Give the keyed list its own element when a single call becomes a
@@ -812,7 +810,7 @@ fn MinimalContent::render(
         )
       }
       // Earlier groups start folded once a new assistant message arrives.
-      @rabbita.Val::constant(
+      @markdown.View::from_html(
         @html.details(class="minimal-tools", [
           self.summary_view(locale~),
           @html.div(

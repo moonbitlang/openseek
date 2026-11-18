@@ -30,19 +30,20 @@ pub fn markdown_nodes(
     defer_artifacts,
     render_math,
     None,
-  )
+  ).nodes()
 }
 
 ///|
-pub fn markdown_components(
+pub fn markdown_view(
   locale~ : @i18n.Locale,
   source : String,
   open_file~ : (String) -> @cmd.Cmd,
   links~ : LinkMenus,
+  class~ : String,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
-) -> Array[@rabbita.Val[@html.Html]] {
-  render_markdown(
+) -> View {
+  let document : MarkdownDocument[View] = render_markdown(
     locale,
     source,
     Some(open_file),
@@ -51,6 +52,20 @@ pub fn markdown_components(
     math_node,
     Some(links),
   )
+  let keys = document.blocks.mapi((index, _) => index.to_string())
+  if document.sources is Some(_) {
+    keys.push("sources")
+  }
+  if document.footnotes is Some(_) {
+    keys.push("footnotes")
+  }
+  View::compose(document.nodes(), nodes => {
+    let children = Map([])
+    for index, node in nodes {
+      children[keys[index]] = node
+    }
+    @html.div(class~, children)
+  })
 }
 
 ///|
@@ -62,7 +77,7 @@ fn[Node : MarkdownNode] render_markdown(
   defer_artifacts : Bool,
   render_math : (String, Bool) -> @html.Html,
   links : LinkMenus?,
-) -> Array[Node] {
+) -> MarkdownDocument[Node] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
     let render : MarkdownRender = {
@@ -75,33 +90,60 @@ fn[Node : MarkdownNode] render_markdown(
       defer_artifacts,
       render_math,
       citations: [],
-      footnotes: Footnotes::new(),
+      footnotes: Footnotes::new(
+        prefix?=links.map(menus => menus.next_document()),
+      ),
       in_sources: false,
     }
-    let nodes : Array[Node] = render.block_nodes(doc.block)
-    if !render.citations.is_empty() {
-      nodes.push(render.sources_node())
+    let blocks : Array[Node] = render.block_nodes(doc.block)
+    let document : MarkdownDocument[Node] = {
+      blocks,
+      sources: if render.citations.is_empty() {
+        None
+      } else {
+        Some(render.sources_node())
+      },
+      footnotes: if render.footnotes.notes.is_empty() {
+        None
+      } else {
+        Some(render.footnotes_node())
+      },
     }
-    if !render.footnotes.notes.is_empty() {
-      nodes.push(render.footnotes_node())
-    }
-    @js.Value::cast_from(nodes)
+    @js.Value::cast_from(document)
   }) catch {
-    _ => [Node::from_html(@html.pre(class="markdown-fallback", source))]
+    _ =>
+      {
+        blocks: [Node::from_html(@html.pre(class="markdown-fallback", source))],
+        sources: None,
+        footnotes: None,
+      }
   }
+}
+
+///|
+priv struct MarkdownDocument[Node] {
+  blocks : Array[Node]
+  sources : Node?
+  footnotes : Node?
+}
+
+///|
+fn[Node] MarkdownDocument::nodes(self : MarkdownDocument[Node]) -> Array[Node] {
+  let nodes = self.blocks.copy()
+  if self.sources is Some(sources) {
+    nodes.push(sources)
+  }
+  if self.footnotes is Some(footnotes) {
+    nodes.push(footnotes)
+  }
+  nodes
 }
 
 ///|
 priv trait MarkdownNode {
   fn from_html(@html.Html) -> Self
   fn compose(Array[Self], (Array[@html.Html]) -> @html.Html) -> Self
-  fn with_link_menu(
-    Self,
-    LinkMenus,
-    @i18n.Locale,
-    @action_menu.ContextTarget,
-    Bool,
-  ) -> Self
+  fn with_link_menu(Self, LinkMenus, @i18n.Locale, LinkPresentation) -> Self
 }
 
 ///|
@@ -115,43 +157,8 @@ impl MarkdownNode for @html.Html with fn compose(children, render) {
 }
 
 ///|
-impl MarkdownNode for @html.Html with fn with_link_menu(html, _, _, _, _) {
+impl MarkdownNode for @html.Html with fn with_link_menu(html, _, _, _) {
   html
-}
-
-///|
-impl MarkdownNode for @rabbita.Val[@html.Html] with fn from_html(html) {
-  @rabbita.Val::constant(html)
-}
-
-///|
-impl MarkdownNode for @rabbita.Val[@html.Html] with fn compose(children, render) {
-  collect_components(children).map(render)
-}
-
-///|
-impl MarkdownNode for @rabbita.Val[@html.Html] with fn with_link_menu(
-  content,
-  links,
-  locale,
-  target,
-  inline,
-) {
-  links.wrap(locale, target, content, inline~)
-}
-
-///|
-pub fn collect_components(
-  children : Array[@rabbita.Val[@html.Html]],
-) -> @rabbita.Val[Array[@html.Html]] {
-  // Accumulate a persistent vector so adding a child does not copy its prefix.
-  let mut nodes : @rabbita.Val[@vector.Vector[@html.Html]] = @rabbita.Val::constant(
-    @vector.Vector::new(),
-  )
-  for child in children {
-    nodes = nodes.map2(child, (nodes, node) => nodes.push(node))
-  }
-  nodes.map(nodes => nodes.to_array())
 }
 
 ///|
@@ -179,10 +186,17 @@ fn[Node : MarkdownNode] MarkdownRender::link(
   self : MarkdownRender,
   target : @action_menu.ContextTarget,
   content : Node,
+  revision~ : String,
+  children~ : Array[String] = [],
   inline~ : Bool = true,
 ) -> Node {
   if target != NoTarget && self.links is Some(links) {
-    content.with_link_menu(links, self.locale, target, inline)
+    content.with_link_menu(links, self.locale, {
+      target,
+      revision,
+      children,
+      inline,
+    })
   } else {
     content
   }
@@ -207,6 +221,7 @@ fn[Node : MarkdownNode] MarkdownRender::web_link(
   self : MarkdownRender,
   href : String,
   title? : String,
+  label~ : String = "",
   children : Array[Node],
 ) -> Node {
   let target = @action_menu.link_target(href)
@@ -217,7 +232,7 @@ fn[Node : MarkdownNode] MarkdownRender::web_link(
   if source_title {
     node
   } else {
-    self.link(target, node)
+    self.link(target, node, revision=Repr::Repr((title, label)).to_string())
   }
 }
 
@@ -227,6 +242,7 @@ fn[Node : MarkdownNode] MarkdownRender::file_link(
   open : (String) -> @cmd.Cmd,
   path : String,
   title? : String,
+  label~ : String = "",
   children : Array[Node],
 ) -> Node {
   let locale = self.locale
@@ -241,7 +257,7 @@ fn[Node : MarkdownNode] MarkdownRender::file_link(
   if source_title {
     node
   } else {
-    self.link(target, node)
+    self.link(target, node, revision=Repr::Repr((title, label)).to_string())
   }
 }
 
@@ -824,16 +840,21 @@ fn[Node : MarkdownNode] MarkdownRender::push_inline(
       // The label is already inside an anchor. Leaving bare-URL detection on
       // here would turn `[https://label](https://target)` into nested anchors.
       let children = self.inline_nodes(node.v.text, linkify_urls=false)
+      let label = if self.links is Some(_) {
+        markdown_revision(node.v.text)
+      } else {
+        ""
+      }
       // The destination is authoritative Markdown data; the label is only
       // presentation and may deliberately describe another location.
       // `file://` is deliberately handled as an app action before cmark's
       // unsafe-scheme filter. It never becomes a browser anchor.
       if self.open_file is Some(open) &&
         self.file_destination(node.v) is Some(path) {
-        out.push(self.file_link(open, path, title?, children))
+        out.push(self.file_link(open, path, title?, label~, children))
       } else {
         match self.link_destination(node.v) {
-          Some(url) => out.push(self.web_link(url, title?, children))
+          Some(url) => out.push(self.web_link(url, title?, label~, children))
           None =>
             out.push(
               Node::compose(children, children => @html.span(title?, children)),
@@ -1500,41 +1521,3 @@ fn tights_text(tights : @cmark.Seq[@cmark.Tight]) -> String {
 // must contain the panic and fall back to plain text, because view re-parses
 // the accumulated text on every delta — one escaping panic freezes the
 // transcript permanently.
-
-///|
-struct LinkMenus {
-  prefix : String
-  next : Ref[Int32]
-  input : @action_menu.ContextInput
-  actions : @action_menu.ContextActions
-}
-
-///|
-pub fn LinkMenus::LinkMenus(
-  prefix : String,
-  input : @action_menu.ContextInput,
-  actions : @action_menu.ContextActions,
-) -> LinkMenus {
-  { prefix, next: Ref(0), input, actions, }
-}
-
-///|
-fn LinkMenus::wrap(
-  self : LinkMenus,
-  locale : @i18n.Locale,
-  target : @action_menu.ContextTarget,
-  content : @rabbita.Val[@html.Html],
-  inline~ : Bool,
-) -> @rabbita.Val[@html.Html] {
-  let id = self.prefix + "-" + self.next.val.to_string()
-  self.next.val += 1
-  @action_menu.link_context(
-    id,
-    locale,
-    self.input,
-    target,
-    self.actions,
-    content,
-    inline~,
-  )
-}
