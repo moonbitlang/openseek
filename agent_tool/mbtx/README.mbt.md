@@ -63,7 +63,7 @@ call takes. A definition with neither a job directory nor a lab keeps the
 per-call cold build.
 
 With the agent's background runtime, every call's RUN waits inline for up to
-30 seconds — build time deliberately does not count against that allowance.
+10 seconds — build time deliberately does not count against that allowance.
 A still-running program is then adopted as the same background execution: the
 call returns its job id, completion is pushed later, and its compiler inputs
 and build artifacts are reclaimed when the job becomes terminal. An adopted

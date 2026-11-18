@@ -382,7 +382,7 @@ async test "binary output does not escape the deadline" {
 /// tool waits out the real exit and says the rendering was lossy.
 async test "binary output waits for the real exit instead of abandoning it" {
   @async.with_task_group(group => {
-    // This test is about waiting for the real exit, not the production 30s
+    // This test is about waiting for the real exit, not the production 10s
     // handoff threshold. Keep cold dependency builds safely inside its premise.
     let (_, _, mbtx) = mbtx_fixture(
       group,

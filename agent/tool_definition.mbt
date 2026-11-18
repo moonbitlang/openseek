@@ -344,14 +344,14 @@ async test "a finished background job queues a notice and wakes the controller" 
       woke = true
     })
     guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
-    // Outlast the production 30-second foreground wait to exercise the handoff.
+    // Outlast the production 10-second foreground wait to exercise the handoff.
     let source =
       #|---
       #|import { "moonbitlang/async" }
       #|---
       #|
       #|async fn main {
-      #|  @async.sleep(30_500)
+      #|  @async.sleep(10_500)
       #|  println(1)
       #|}
     let action = run_async_tool(mbtx, { "source": source })

@@ -1,8 +1,8 @@
 ///|
 /// How long a runtime-backed run stays inline before it is adopted as a job.
-/// Thirty seconds keeps quick probes inline while moving builds, suites, and
+/// Ten seconds keeps quick probes inline while moving builds, suites, and
 /// watchers out of the turn without asking the model to predict their duration.
-const AutoBackgroundAfterMs : Int32 = 30_000
+const AutoBackgroundAfterMs : Int32 = 10_000
 
 ///|
 /// Runtime-less foreground work is bounded to this wall-clock so a runaway loop

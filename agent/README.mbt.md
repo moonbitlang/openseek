@@ -107,7 +107,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
   scripting surface (transform files, parse JSON, compute, probe the language)
   and the command runner, since processes are spawned from the program through
   the shell-free `moonbitlang/async/shell` API. Calls return inline for up to
-  30 seconds, then automatically hand the same execution to the background
+  10 seconds, then automatically hand the same execution to the background
   runtime;
 - `job_output` / `job_stop`: read or stop a background job;
 - `job_wait`: wait for selected jobs or user input in the same turn;
