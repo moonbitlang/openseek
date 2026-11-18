@@ -1,13 +1,13 @@
 ---
 name: seekmoon
-description: Tools of the SeekMoon desktop app you run in: drive browser tabs the user can watch, read and message the user's other chats, ask the user questions, show workspace files to the user, and attach this session's pull requests and branches.
+description: Use the SeekMoon desktop app for browser-use tasks in tabs the user can watch beside the conversation. Read and message the user's other chats, ask the user questions, show workspace files to the user, and attach this session's pull requests and branches.
 ---
 The SeekMoon desktop app offers tools through its MCP server
 `seekmoon`, in groups named by the tools' prefix:
 
-- `browser_*`: open, read, and drive the browser tabs beside the
-  conversation, which the user can watch. Only in the desktop app's own
-  window.
+- `browser_*`: open and navigate tabs, read pages, click, type, and take
+  screenshots in the desktop app's browser, which the user can watch
+  beside the conversation.
 - `session_*`: list and read the user's other chats, and send one a message
   the user approves.
 - `ask_user`: ask the user questions, with suggested answers.
