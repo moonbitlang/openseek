@@ -189,7 +189,7 @@
   width: min(360px, 44cqw);
   padding: 10px 12px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   pointer-events: none;
   z-index: 7;
@@ -259,7 +259,7 @@
   place-items: center;
   width: 52px;
   height: 52px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-inline);
   background: var(--color-control-surface);
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
@@ -300,7 +300,7 @@
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -363,7 +363,7 @@
   margin-bottom: 6px;
   padding: 0 9px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--color-text-muted);
 }
 .empty-project-search input {
@@ -396,7 +396,7 @@
   margin: 0;
   padding: 8px 9px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
@@ -443,7 +443,7 @@
   padding: 9px;
   border: 0;
   border-top: 1px solid var(--color-border);
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-radius: 0 0 var(--radius-surface) var(--radius-surface);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
@@ -472,7 +472,7 @@
   min-width: 0;
   max-width: 85%;
   padding: 13px 17px;
-  border-radius: 20px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-content);
 }
 .session-message-source {
@@ -542,7 +542,7 @@
   height: 28px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -625,13 +625,13 @@
   --markdown-quote-color: var(--color-text-secondary);
   --markdown-code-padding: 10px 13px;
   --markdown-code-border: 1px solid var(--color-border);
-  --markdown-code-radius: var(--radius-sm);
+  --markdown-code-radius: 6px;
   --markdown-code-background: var(--color-bg-surface);
   --markdown-code-font: var(--font-family-mono);
   --markdown-code-size: var(--font-size-sm);
   --markdown-code-line-height: var(--line-height-relaxed);
   --markdown-inline-code-size: 0.92em;
-  --markdown-inline-code-radius: var(--radius-xs);
+  --markdown-inline-code-radius: var(--radius-inline);
   --markdown-inline-code-background: var(--color-bg-content);
   --markdown-inline-code-color: var(--color-text-inline-code);
   --markdown-border: var(--color-border);
@@ -690,7 +690,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--markdown-code-radius, 6px);
   background: var(--color-bg-surface);
 }
 .msg-content.markdown .chat-code-block:has(> pre) > .chat-code-toolbar {
@@ -756,7 +756,7 @@
   padding: 12px;
   overflow: auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--markdown-code-radius, 6px);
   background: var(--color-bg-surface);
 }
 .msg-content.markdown
@@ -824,7 +824,7 @@
   margin: 0 0.15em;
   padding: 0 0.35em;
   border: 1px solid var(--color-border);
-  border-radius: 5px;
+  border-radius: var(--radius-inline);
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
   font-size: 0.75em;
@@ -852,7 +852,7 @@
   min-height: 34px;
   padding: var(--space-2) var(--space-5) var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font-weight: 500;
@@ -877,7 +877,7 @@
 .msg-content.markdown .citation-sources-count {
   min-width: 18px;
   padding: var(--space-1) var(--space-2);
-  border-radius: 6px;
+  border-radius: var(--radius-inline);
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
   font-size: var(--font-size-caption);
@@ -898,7 +898,7 @@
 .msg-content.markdown .citation-source-glyph {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-inline);
   background: var(--color-bg-subtle);
 }
 .msg-content.markdown .citation-source-glyph svg {
@@ -936,7 +936,7 @@
   margin: 0;
   padding: var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
 }
 .msg-content.markdown .citation-source-number {
@@ -978,7 +978,7 @@
 .msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child::after {
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   content: "";
 }
 .msg-content.markdown .citation-source:has(:focus-visible) {
@@ -1011,7 +1011,7 @@
 
 
 .inline-code {
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-inline);
   background: var(--color-bg-content);
   color: var(--color-text-inline-code);
   box-decoration-break: clone;
@@ -1054,7 +1054,7 @@
   margin: 0.35em 0 0.8em;
   padding: 5px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-surface, 9px);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
@@ -1074,7 +1074,7 @@
   margin: 0.65em 0;
   padding: 7px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-surface, 9px);
   background: var(--color-bg-surface);
   color: inherit;
   text-align: left;
@@ -1459,7 +1459,7 @@
 .tool-result pre {
   margin: 6px 0 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
@@ -1537,7 +1537,7 @@
 .tool-call-arguments-friendly {
   margin: 6px 0 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
@@ -1598,7 +1598,7 @@
 .tool-card-chip {
   padding: 0 6px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-inline);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   overflow-wrap: anywhere;
@@ -1661,7 +1661,7 @@
 .tool-diff {
   margin: 6px 0 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
@@ -1720,7 +1720,7 @@
   flex: none;
   padding: 0 5px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-inline);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
 }
@@ -1844,7 +1844,7 @@
 .minimal-activity-summary:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 }
 .minimal-call-list,
 .minimal-process-body {
@@ -2002,7 +2002,7 @@
   max-width: min(100%, 320px);
   max-height: 240px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
 }
 
 .user-shell-command {
@@ -2036,7 +2036,7 @@
   max-height: 320px;
   overflow: auto;
   padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--color-bg-canvas) 70%, transparent);
   font: var(--font-size-sm) / 1.5 var(--font-family-mono);
   white-space: pre-wrap;

@@ -234,7 +234,7 @@ const SignInPageStyle : String =
   #|    --font-size-lg: 17px;
   #|    --font-weight-regular: 450;
   #|    --line-height-relaxed: 1.6;
-  #|    --radius-md: 9px;
+  #|    --radius-surface: 9px;
   #|  }
   #|  @media (prefers-color-scheme: dark) {
   #|    :root {
@@ -252,7 +252,7 @@ const SignInPageStyle : String =
   #|    margin: 6rem auto;
   #|    padding: 2rem;
   #|    border: 1px solid var(--color-border);
-  #|    border-radius: var(--radius-md);
+  #|    border-radius: var(--radius-surface);
   #|    background: var(--color-bg-surface);
   #|    color: var(--color-text-primary);
   #|    font-family: var(--font-family-sans);

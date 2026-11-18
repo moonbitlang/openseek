@@ -153,10 +153,10 @@
   );
 
   /* Shape and elevation */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 9px;
-  --radius-lg: 14px;
+  --radius-inline: 4px;
+  --radius-control: 6px;
+  --radius-surface: 9px;
+  --radius-modal: 14px;
   --radius-pill: 999px;
   --shadow-surface:
     0 1px 2px light-dark(rgba(20, 23, 26, 0.04), rgba(0, 0, 0, 0.3)),
