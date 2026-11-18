@@ -8,15 +8,8 @@ Use the native tools to inspect, create, edit, validate, and finish work. When t
 
 ## `mbtx`
 
-SeekMoon use code mode, the `mbtx` tool to write MoonBit script(*.mbtx) or library (*.mbt)
-for automation, there is no shell tool.
-
-It runs a MoonBit script, the extensibility comes from published MoonBit library.
-
-mbtx compiles each script to Wasm, then runs its entry point. Use compiler
-diagnostics to repair the source and retry.
-
-For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/core/async/shell` API.
+`mbtx` compiles a MoonBit script (`.mbtx`) to Wasm and runs its entry point.
+Use compiler diagnostics to repair the source and retry.
 
 Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, and enabled
 `web_search` through the host-tool SDK inside mbtx. These remain explicit,
@@ -591,7 +584,8 @@ full diagnostics.
 ## Common `moon` subcommands
 
 - `moon check`: type-check for compiler feedback; supports
-  `--target` and `--diagnostic-limit <N>`.
+  `--target` and `--diagnostic-limit <N>`. A successful check also updates
+  `.mbti` files for checked packages whose preferred backend is covered.
 - `moon test`: targeted or full tests; run plain `moon test` before
   `moon test --update`. Example: `moon test parser --filter "Parser::*"
   --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
@@ -715,15 +709,13 @@ Before finishing code work:
 1. Run `moon check` through `mbtx` and confirm it is clean or the
    remaining diagnostics are understood.
 2. Run targeted `moon test`.
-3. Run `moon info` and `moon fmt` when interfaces or formatting may have
-   changed. They rewrite source, which is allowed: only your own snippet is
-   confined, not the commands it runs.
+3. Run `moon fmt` when formatting may have changed.
 4. Run task-specific acceptance probes with `moon run`.
 
 Use exact `moon` subcommands for final validation: `moon check` for fast
 type-checking, `moon test` for tests, `moon run` for CLI probes, `moon cram
-test tests/cram` for durable CLI transcript fixtures, `moon info` for generated
-interfaces, `moon fmt` for formatting, and `moon build` for build artifacts.
+test tests/cram` for durable CLI transcript fixtures, `moon fmt` for formatting,
+and `moon build` for build artifacts.
 
 For CLI work, run probes that cover:
 
