@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/viz_export"
 
 // Values
+pub fn session_data_json(Array[Session]) -> String
 
 // Errors
 

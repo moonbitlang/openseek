@@ -1,6 +1,6 @@
 ///|
 #cfg(not(platform="windows"))
-async test "feedback requires both full persisted exports before contacting the API" {
+async test "feedback uploads only metadata and the full persisted JSON without visualizer assets" {
   let root = @pathx.Path(@fs.realpath(@fs.tmpdir(prefix="seekmoon-feedback-"))).resolve()
   defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
@@ -37,13 +37,6 @@ async test "feedback requires both full persisted exports before contacting the 
     dir: root.to_path(),
     packaged: true,
   })
-  let viz = root.join("seekmoon/web/viz")
-  @fs.mkdir(viz.to_string(), recursive=true)
-  @fs.write_text(
-    viz.join("index.html").to_string(),
-    "<html><script src=\"/viz_app.js\"></script></html>",
-  )
-  @fs.write_text(viz.join("viz_app.js").to_string(), "/* bundled visualizer */")
   let state = ApiState(engine="unused", resources~)
   let payload : @protocol.SessionFeedbackPayload = {
     user_id: "123",
@@ -80,7 +73,8 @@ async test "feedback requires both full persisted exports before contacting the 
       let parts = @utf8.decode(connection.read_all())
         .split("--" + boundary.to_owned())
         .to_array()
-      assert_eq(parts.length(), 5)
+      assert_eq(parts.length(), 4)
+      assert_true(parts[1].contains("name=\"metadata\""))
       let metadata = @json.parse(parts[1].split_once("\r\n\r\n").unwrap().1)
       assert_true(
         metadata
@@ -98,19 +92,14 @@ async test "feedback requires both full persisted exports before contacting the 
         "<html><script src=\"/viz_app.js\"></script></html>",
         "/* bundled visualizer */",
       )
-      for
-        (index, name, content) in [
-          (2, "html", expected.html),
-          (3, "json", expected.json),
-        ] {
-        let (headers, body) = parts[index].split_once("\r\n\r\n").unwrap()
-        assert_true(
-          headers.contains("name=\"\{name}\"; filename=\"transcript.\{name}\""),
-        )
-        assert_eq(body.strip_suffix("\r\n").unwrap().to_owned(), content)
-        for turn in 1..<=80 {
-          assert_true(body.contains("Persisted question (\{turn})"))
-        }
+      let (headers, body) = parts[2].split_once("\r\n\r\n").unwrap()
+      assert_true(
+        headers.contains("name=\"json\"; filename=\"conversation.json\""),
+      )
+      assert_true(headers.contains("application/json"))
+      assert_eq(body.strip_suffix("\r\n").unwrap().to_owned(), expected.json)
+      for turn in 1..<=80 {
+        assert_true(body.contains("Persisted question (\{turn})"))
       }
       connection.send_response(201, "Created")
       connection.write_string("{\"id\":\"fb_test\"}")
@@ -120,7 +109,10 @@ async test "feedback requires both full persisted exports before contacting the 
     receiver.wait()
     assert_eq(receipt.id, "fb_test")
   })
-  @fs.remove(viz.join("viz_app.js").to_string())
+  let missing = {
+    ..payload,
+    source: { ..payload.source, session: "missing", },
+  }
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => {
       let (connection, _) = server.accept()
@@ -128,11 +120,11 @@ async test "feedback requires both full persisted exports before contacting the 
       fail("An export failure must not contact the feedback endpoint")
     })
     let result = Ok(
-      state.submit_feedback(payload, origin~, token="test-account"),
+      state.submit_feedback(missing, origin~, token="test-account"),
     ) catch {
       error => Err(error.to_string())
     }
-    assert_true(result is Err(error) && error.contains("visualizer"))
+    assert_true(result is Err(error) && error.contains("no durable record"))
   })
 }
 

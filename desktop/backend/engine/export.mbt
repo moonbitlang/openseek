@@ -159,3 +159,13 @@ pub async fn ConversationExport::capture(
   let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
   ConversationExport(exporter, sessions)
 }
+
+///|
+/// Export the persisted conversation and its direct subruns as standalone JSON.
+pub async fn EngineManager::export_conversation_json(
+  self : EngineManager,
+  payload : @protocol.SessionExportPayload,
+) -> String {
+  let request = SessionExport::SessionExport(self, payload)
+  @viz_export.session_data_json(request.sessions())
+}

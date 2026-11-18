@@ -64,7 +64,7 @@ test('Local feedback targets the selected host session and displays its receipt'
   const app = new CloudHarness(page, { desktop: true });
   await app.install();
   const original = app.device.replyFor.bind(app.device);
-  let reply = { Err: 'Session export failed: visualizer unavailable' };
+  let reply = { Err: 'no durable record for this conversation' };
   app.device.replyFor = request => request.method === 'session.feedback' ? reply : original(request);
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
   await app.device.openSession();

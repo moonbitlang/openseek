@@ -16,7 +16,7 @@ pub async fn submit(
   path : String,
   token : String,
   metadata : Json,
-  files? : @protocol.SessionSnapshot,
+  conversation? : String,
 ) -> @protocol.FeedbackReceipt {
   let client = @http.Client(origin)
   defer client.close()
@@ -26,20 +26,14 @@ pub async fn submit(
     "Content-Type": form.content_type(),
   })
   form.write_json("metadata", metadata)
-  if files is Some(files) {
-    for
-      (name, content_type, text) in [
-        ("html", "text/html", files.html),
-        ("json", "application/json", files.json),
-      ] {
-      form.write_part(
-        headers={
-          "Content-Disposition": "form-data; name=\"\{name}\"; filename=\"transcript.\{name}\"",
-          "Content-Type": content_type,
-        },
-        writer => writer.write(text),
-      )
-    }
+  if conversation is Some(json) {
+    form.write_part(
+      headers={
+        "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
+        "Content-Type": "application/json",
+      },
+      writer => writer.write(json),
+    )
   }
   form.finish()
   let response = client.end_request()
