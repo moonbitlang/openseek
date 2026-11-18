@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/feedback",
   "openseek_desktop/backend/connectors",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/auth",
@@ -25,6 +26,8 @@ import {
 }
 
 import {
+  "moonbitlang/core/env" @sys,
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/http",

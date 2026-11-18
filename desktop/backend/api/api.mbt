@@ -394,6 +394,7 @@ pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
   local_share~ : Bool = false,
+  local_feedback~ : Bool = false,
   on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
@@ -874,6 +875,25 @@ pub fn endpoints(
       state.publish(SkillsChanged)
     }) {
     endpoints.push(endpoint)
+  }
+  if local_feedback {
+    endpoints.push(
+      Endpoint(@commands.session_feedback, payload => {
+        let store = state.auth_store()
+        guard store.account() is Some(account) &&
+          store.session_server() is Some(origin) else {
+          return Err("Sign in to submit feedback.")
+        }
+        guard account.user.user_id == payload.user_id else {
+          return Err(
+            "Sign in with the same account on this host to submit feedback.",
+          )
+        }
+        Ok(state.submit_feedback(payload, origin~, token=account.token)) catch {
+          error => Err(error.to_string())
+        }
+      }),
+    )
   }
   endpoints
 }
