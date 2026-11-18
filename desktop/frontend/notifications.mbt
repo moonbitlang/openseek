@@ -20,7 +20,6 @@ priv struct Notification {
 #derive(Eq)
 priv enum NotificationMessage {
   Raw(String)
-  FeedbackLink(id~ : String, url~ : String)
   FileFailure(@fileeditor.Failure)
   Notice(NoticeMessage)
   CloudFailure(@cloud_client.Failure)
@@ -34,7 +33,6 @@ fn NotificationMessage::text(
 ) -> String {
   match self {
     Raw(message) => message
-    FeedbackLink(id~, ..) => shell_text(locale, FeedbackSent(id))
     FileFailure(failure) => failure.text(locale)
     Notice(message) => notice_text(locale, message)
     CloudFailure(failure) => failure.text(locale)
@@ -122,14 +120,7 @@ fn Model::notify(
   let notifications = self.notifications.copy()
   notifications.push(toast)
   (
-    if message is FeedbackLink(..) {
-      @cmd.none
-    } else {
-      @cmd.delay(
-        dispatch(NotificationExpired(toast.id)),
-        NotificationLifetimeMs,
-      )
-    },
+    @cmd.delay(dispatch(NotificationExpired(toast.id)), NotificationLifetimeMs),
     { ..self, notification_seq: toast.id + 1, notifications, },
   )
 }

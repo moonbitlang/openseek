@@ -199,6 +199,8 @@ pub fn Model::view(
               locale,
               if file {
                 FileShareDescription
+              } else if content.feedback is Some(_) {
+                FeedbackDescription
               } else {
                 ExportDescription
               },

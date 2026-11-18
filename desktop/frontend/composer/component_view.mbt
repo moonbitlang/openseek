@@ -240,9 +240,7 @@ fn Entry::action_buttons(
       id: "send",
       class_name: "icon-button send-button",
       title: ui(locale, SendLabel),
-      disabled: input.presentation.disabled ||
-      message.is_blank() ||
-      self.pending_feedback is Some(_),
+      disabled: input.presentation.disabled || message.is_blank(),
       command: emit(SubmitRequested),
       content: @icons.icon(@icons.icon_newline),
     })

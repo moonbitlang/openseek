@@ -1,5 +1,4 @@
 import {
-  "openseek_desktop/feedback",
   "openseek_desktop/backend/connectors",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/auth",

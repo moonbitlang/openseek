@@ -2677,24 +2677,6 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
-    FeedbackFinished(identity, auth_epoch~, result) => {
-      let current = model.cloud.epoch == auth_epoch
-      let settle = dispatch(
-        ComposerCommandResult(
-          @composer.FeedbackSettled(
-            identity,
-            accepted=current && result is Ok(_),
-          ),
-        ),
-      )
-      guard current else { return (settle, model) }
-      let message : NotificationMessage = match result {
-        Ok(receipt) => FeedbackLink(id=receipt.id, url=receipt.url)
-        Err(error) => Raw(error)
-      }
-      let (notice, next) = model.notify(dispatch, message)
-      (@cmd.batch([notice, settle]), next)
-    }
     ComposerAction(@composer.FeedbackSubmitted(identity~, message~)) =>
       model.submit_feedback(dispatch, identity, message)
     ComposerAction(action) => {
@@ -7663,6 +7645,18 @@ fn update_msg(
       } else {
         model.export_dialog
       }
+      let clear = dialog
+        .published_feedback(message)
+        .map_or(@cmd.none, feedback => {
+          dispatch(
+            ComposerCommandResult(
+              @composer.FeedbackPublished(
+                feedback.identity,
+                feedback.metadata.message,
+              ),
+            ),
+          )
+        })
       let expired = dialog.account_expired(message)
       let (cmd, dialog) = dialog.update(
         dispatch.map(next => {
@@ -7686,7 +7680,7 @@ fn update_msg(
         let (logout, next) = expire_account(dispatch, next)
         return (@cmd.batch([cmd, logout]), next)
       }
-      (cmd, next)
+      (@cmd.batch([cmd, clear]), next)
     }
     ExternalLinkClicked(url) => open_user_link(dispatch, model, url)
     FromDevice(channel, msg) => update_device_msg(dispatch, channel, msg, model)

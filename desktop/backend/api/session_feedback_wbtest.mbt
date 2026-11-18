@@ -44,23 +44,31 @@ async test "feedback uploads metadata and both complete files from one conversat
     "<html><script src=\"/viz_app.js\"></script></html>",
   )
   @fs.write_text(viz.join("viz_app.js").to_string(), "/* bundled visualizer */")
-  let state = ApiState(engine="unused", resources~)
-  let payload : @protocol.SessionFeedbackPayload = {
-    user_id: "123",
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer server.close()
+  let origin = "http://127.0.0.1:\{server.addr.port}"
+  @fs.write_text(root.join("auth.json").to_string(), share_account_fixture())
+  let state = ApiState(
+    engine="unused",
+    resources~,
+    auth=@auth.AuthStore::load(runtime_dir=root.to_path()),
+  )
+  let metadata : @protocol.FeedbackMetadata = {
+    message: "  界面闪烁\nagain  ",
+    environment: { "client": "desktop" },
+  }
+  let payload : @protocol.SessionSharePayload = {
+    generation: 1,
+    idempotency_key: "f".repeat(64),
+    authorization: LocalAccount(user_id="123"),
     source: {
       session: "session-1",
       workspace: workspace.resource_path(),
       title: "Review",
       archived: false,
     },
-    metadata: {
-      message: "  界面闪烁\nagain  ",
-      environment: { "client": "desktop" },
-    },
   }
-  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-  defer server.close()
-  let origin = "http://127.0.0.1:\{server.addr.port}"
+  let share = SessionShare::{ state, payload, }
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let (connection, _) = server.accept()
@@ -68,10 +76,7 @@ async test "feedback uploads metadata and both complete files from one conversat
       let request = connection.read_request()
       assert_true(request.meth is Post)
       assert_eq(request.path, "/v1/feedback")
-      assert_eq(
-        request.headers.get("Authorization"),
-        Some("Bearer test-account"),
-      )
+      assert_eq(request.headers.get("Authorization"), Some("Bearer ts_current"))
       let boundary = request.headers
         .get("Content-Type")
         .unwrap()
@@ -80,18 +85,27 @@ async test "feedback uploads metadata and both complete files from one conversat
       let parts = @utf8.decode(connection.read_all())
         .split("--" + boundary.to_owned())
         .to_array()
-      assert_eq(parts.length(), 5)
-      assert_true(parts[1].contains("name=\"metadata\""))
-      let metadata = @json.parse(parts[1].split_once("\r\n\r\n").unwrap().1)
+      assert_eq(
+        request.headers.get("Idempotency-Key"),
+        Some(payload.idempotency_key),
+      )
+      assert_eq(parts.length(), 6)
+      assert_true(parts[1].contains("name=\"title\""))
+      assert_eq(
+        parts[1].split_once("\r\n\r\n").unwrap().1.trim().to_owned(),
+        payload.source.title,
+      )
+      assert_true(parts[4].contains("name=\"metadata\""))
+      let record = @json.parse(parts[4].split_once("\r\n\r\n").unwrap().1)
       assert_true(
-        metadata
+        record
         is {
           "message": String(message),
           "environment": { "client": "desktop", .. },
           "source": { "mode": "local", "session_id": "session-1", .. },
           ..
         } &&
-        message == payload.metadata.message,
+        message == metadata.message,
       )
       let expected = @engine.ConversationExport::capture(
         state.manager(),
@@ -118,63 +132,17 @@ async test "feedback uploads metadata and both complete files from one conversat
       }
       connection.send_response(201, "Created")
       connection.write_string(
-        (
-          {
-            "id": "fb_test",
-            "url": "https://feedback.test/v1/feedback/fb_test",
-          } : Json).stringify(),
+        "{\"id\":\"fb_test\",\"url\":\"https://shares.test/v1/feedback/fb_test\"}",
       )
       connection.end_response()
     })
-    let receipt = state.submit_feedback(payload, origin~, token="test-account")
+    let reply = share.publish(
+      Account(state.auth_store().account().unwrap()),
+      server_url=origin,
+      feedback=metadata,
+      on_progress=_ => (),
+    )
     receiver.wait()
-    assert_eq(receipt.id, "fb_test")
-    assert_eq(receipt.url, "https://feedback.test/v1/feedback/fb_test")
+    assert_true(reply is Shared(url="https://shares.test/v1/feedback/fb_test"))
   })
-  let missing = {
-    ..payload,
-    source: { ..payload.source, session: "missing", },
-  }
-  @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, () => {
-      let (connection, _) = server.accept()
-      defer connection.close()
-      fail("An export failure must not contact the feedback endpoint")
-    })
-    let result = Ok(
-      state.submit_feedback(missing, origin~, token="test-account"),
-    ) catch {
-      error => Err(error.to_string())
-    }
-    assert_true(result is Err(error) && error.contains("no durable record"))
-  })
-}
-
-///|
-async test "feedback only uses the matching local account" {
-  let dir : @pathx.Path = Path(@fs.tmpdir(prefix="seekmoon-feedback-account-"))
-  defer @fs.remove(dir.to_string(), recursive=true)
-  @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
-  let state = ApiState(
-    engine="unused",
-    auth=@auth.AuthStore::load(runtime_dir=dir),
-  )
-  assert_false(
-    endpoints(state, HostConnection()).any(endpoint => {
-      endpoint.name() == "session.feedback"
-    }),
-  )
-  let endpoint = endpoints(state, HostConnection(), local_feedback=true)
-    .iter()
-    .find_first(endpoint => endpoint.name() == "session.feedback")
-    .unwrap()
-  let request : @protocol.SessionFeedbackPayload = {
-    user_id: "different-account",
-    source: { session: "test", title: "Test", workspace: ".", archived: false, },
-    metadata: { message: "Hello", environment: {}, },
-  }
-  let result : Result[@protocol.FeedbackReceipt, String] = @json.from_json(
-    endpoint.invoke(ToJson::to_json(request)),
-  )
-  assert_true(result is Err(reason) && reason.contains("same account"))
 }

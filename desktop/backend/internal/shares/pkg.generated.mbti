@@ -2,6 +2,7 @@
 package "openseek_desktop/backend/internal/shares"
 
 import {
+  "moonbitlang/core/json",
   "openseek_desktop/protocol",
 }
 
@@ -19,7 +20,7 @@ pub impl Show for ShareError
 
 // Types and methods
 type Snapshot
-pub fn Snapshot::Snapshot(title~ : String, html~ : String, json~ : String, key~ : String) -> Self raise ShareError
+pub fn Snapshot::Snapshot(title~ : String, html~ : String, json~ : String, key~ : String, feedback? : @json.Json) -> Self raise ShareError
 pub fn Snapshot::file(name~ : String, bytes~ : Bytes, key~ : String) -> Self raise ShareError
 pub async fn Snapshot::publish(Self, server_url~ : String, token~ : String, timeout_ms? : Int32, on_progress? : async (@protocol.ShareProgress) -> Unit) -> @protocol.SessionShareReply
 

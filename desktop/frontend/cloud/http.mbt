@@ -288,10 +288,41 @@ pub async fn submit_feedback(
   session : String,
   metadata : @protocol.FeedbackMetadata,
 ) -> @protocol.FeedbackReceipt {
-  @feedback.submit(
-    CloudOrigin,
-    "/v1/sessions/\{@uri.encode_component(session)}/feedback",
-    token,
-    ToJson::to_json(metadata),
-  )
+  @async.with_timeout(
+    240_000,
+    error=@cloud_client.RequestError(
+      RemoteMessage(
+        "The feedback request timed out. Delivery could not be confirmed.",
+      ),
+    ),
+  ) <| () => {
+    let (response, data) = @http.post(
+      CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/feedback",
+      ToJson::to_json(metadata).stringify(),
+      headers={
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+    )
+    if response.code == 401 {
+      raise @cloud_client.RequestError(Unauthorized)
+    }
+    guard response.code == 201 else {
+      let text = data.text()
+      let json = @json.parse(text) catch { _ => null }
+      let message = match json {
+        { "error": String(detail), .. } => detail
+        _ if response.headers.get("Content-Type") is Some(mime) &&
+          mime.has_prefix("text/plain") => text
+        _ => ""
+      }
+      if !message.is_blank() {
+        raise @cloud_client.RequestError(RemoteMessage(message))
+      }
+      raise @cloud_client.RequestError(Http(response.code))
+    }
+    @json.from_json(data.json()) catch {
+      _ => raise @cloud_client.RequestError(Malformed)
+    }
+  }
 }

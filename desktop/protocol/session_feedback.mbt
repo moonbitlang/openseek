@@ -1,4 +1,5 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct FeedbackMetadata {
   message : String
   environment : Map[String, Json]
@@ -29,28 +30,22 @@ pub impl FromJson for FeedbackMetadata with fn from_json(json, path) {
 
 ///|
 pub(all) struct SessionFeedbackPayload {
-  user_id : String
-  source : SessionExportPayload
+  share : SessionSharePayload
   metadata : FeedbackMetadata
 }
 
 ///|
 pub impl ToJson for SessionFeedbackPayload with fn to_json(self) {
-  {
-    "user_id": self.user_id,
-    "source": self.source.to_json(),
-    "metadata": ToJson::to_json(self.metadata),
-  }
+  { "share": self.share.to_json(), "metadata": ToJson::to_json(self.metadata) }
 }
 
 ///|
 pub impl FromJson for SessionFeedbackPayload with fn from_json(json, path) {
   let obj = JsonObject::decode(json, path, "session feedback")
   {
-    user_id: obj.required_string("user_id"),
-    source: @json.from_json(
-      obj.required_json("source"),
-      path=path.add_key("source"),
+    share: @json.from_json(
+      obj.required_json("share"),
+      path=path.add_key("share"),
     ),
     metadata: @json.from_json(
       obj.required_json("metadata"),

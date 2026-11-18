@@ -18,10 +18,12 @@ impl Show for ExportError with fn output(self, logger) {
 fn Model::share(
   self : Model,
   emit : @cmd.Emit[Msg],
-  source : Source,
+  content : Content,
   account : @protocol.AccountSession,
   desktop~ : Bool,
 ) -> @cmd.Cmd {
+  let source = content.source
+  let feedback = content.feedback.map(f => f.metadata)
   let generation = self.generation
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -42,20 +44,31 @@ fn Model::share(
         }
         Ok(
           match source {
-            Host(channel, payload) => {
-              let authorization = share_authorization(
-                channel,
-                idempotency_key,
-                account,
-                desktop~,
-              )
-              @interop.bridge_request(channel, @commands.session_share, {
-                generation,
-                source: payload,
-                idempotency_key,
-                authorization,
-              })
-            }
+            Host(channel, payload) =>
+              if feedback is Some(metadata) {
+                @interop.bridge_request(channel, @commands.session_feedback, {
+                  share: {
+                    generation,
+                    source: payload,
+                    idempotency_key,
+                    authorization: LocalAccount(user_id=account.user.user_id),
+                  },
+                  metadata,
+                })
+              } else {
+                let authorization = share_authorization(
+                  channel,
+                  idempotency_key,
+                  account,
+                  desktop~,
+                )
+                @interop.bridge_request(channel, @commands.session_share, {
+                  generation,
+                  source: payload,
+                  idempotency_key,
+                  authorization,
+                })
+              }
             File(HostFile(channel, payload)) => {
               let authorization = share_authorization(
                 channel,
@@ -73,15 +86,21 @@ fn Model::share(
               scheduler.add(
                 emit(Progress({ generation, progress: Waiting(attempt=1), })),
               )
-              let url = @cloud.share(
-                account.token,
-                session,
-                idempotency_key,
-                path?=match source {
-                  File(CloudFile(path~, ..)) => Some(path)
-                  _ => None
-                },
-              ) catch {
+              let url = try {
+                if feedback is Some(metadata) {
+                  @cloud.submit_feedback(account.token, session, metadata).url
+                } else {
+                  @cloud.share(
+                    account.token,
+                    session,
+                    idempotency_key,
+                    path?=match source {
+                      File(CloudFile(path~, ..)) => Some(path)
+                      _ => None
+                    },
+                  )
+                }
+              } catch {
                 @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
                   raise AccountUnauthorized
                 @cloud.RequestError::RequestError(error) =>

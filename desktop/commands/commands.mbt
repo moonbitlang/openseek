@@ -123,7 +123,7 @@ pub let session_share : Command[
 ///|
 pub let session_feedback : Command[
   @protocol.SessionFeedbackPayload,
-  Result[@protocol.FeedbackReceipt, String],
+  @protocol.SessionShareReply,
 ] = Command("session.feedback")
 
 ///|

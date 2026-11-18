@@ -423,11 +423,11 @@ pub fn endpoints(
       state.share_file(payload, local_account=local_share)
     }),
     Endpoint(@commands.session_share, payload => {
-      SessionShare::{ state, payload, local_account: local_share, }.publish(on_progress=progress => {
-        on_share_progress({ generation: payload.generation, progress, }) catch {
-          _ => ()
-        }
-      })
+      state.share_conversation(
+        payload,
+        local_account=local_share,
+        on_share_progress~,
+      )
     }),
     @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(
@@ -879,19 +879,16 @@ pub fn endpoints(
   if local_feedback {
     endpoints.push(
       Endpoint(@commands.session_feedback, payload => {
-        let store = state.auth_store()
-        guard store.account() is Some(account) &&
-          store.session_server() is Some(origin) else {
-          return Err("Sign in to submit feedback.")
+        let share = payload.share
+        guard share.authorization is LocalAccount(_) else {
+          return Failed(message="Feedback requires the signed-in host account.")
         }
-        guard account.user.user_id == payload.user_id else {
-          return Err(
-            "Sign in with the same account on this host to submit feedback.",
-          )
-        }
-        Ok(state.submit_feedback(payload, origin~, token=account.token)) catch {
-          error => Err(error.to_string())
-        }
+        state.share_conversation(
+          share,
+          local_account=true,
+          feedback=payload.metadata,
+          on_share_progress~,
+        )
       }),
     )
   }

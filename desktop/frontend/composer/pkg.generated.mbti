@@ -127,7 +127,7 @@ pub(all) struct CodexRequestInput {
 }
 
 pub(all) enum CommandResult {
-  FeedbackSettled(Identity, accepted~ : Bool)
+  FeedbackPublished(Identity, String)
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)

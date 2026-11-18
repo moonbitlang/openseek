@@ -81,7 +81,6 @@ priv enum ShellMessage {
   NoOpenRouterKey
   NoDeepSeekKey
   SubmitFeedback
-  FeedbackSent(String)
   CompactContext
   ShellTerminalUnavailable
   ShellWorktreeFailed
@@ -605,23 +604,15 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, NoDeepSeekKey) =>
       "DeepSeek API キーが未設定のため送信できません。"
     (English, SubmitFeedback) =>
-      "Include runtime environment details. Anyone with the link can read your feedback and the full conversation."
+      "Include runtime environment details. Anyone with the link can read the full conversation."
     (Spanish, SubmitFeedback) =>
-      "Adjunta los datos del entorno de ejecución. Cualquiera con el enlace puede leer tus comentarios y la conversación completa."
+      "Adjunta los datos del entorno de ejecución. Cualquiera con el enlace puede leer la conversación completa."
     (SimplifiedChinese, SubmitFeedback) =>
-      "附上运行环境。持链接者可查看反馈文字和完整对话。"
+      "附上运行环境。持链接者可查看完整对话。"
     (TraditionalChinese, SubmitFeedback) =>
-      "附上執行環境。持連結者可查看意見內容和完整對話。"
+      "附上執行環境。持連結者可查看完整對話。"
     (Japanese, SubmitFeedback) =>
-      "実行環境の情報を添付します。リンクを知っている人は誰でもフィードバックの本文と会話の全履歴を閲覧できます。"
-    (English, FeedbackSent(id)) => "Feedback submitted (ID: \{id})."
-    (Spanish, FeedbackSent(id)) => "Comentarios enviados (ID: \{id})."
-    (SimplifiedChinese, FeedbackSent(id)) =>
-      "反馈已提交（编号：\{id}）。"
-    (TraditionalChinese, FeedbackSent(id)) =>
-      "意見已提交（編號：\{id}）。"
-    (Japanese, FeedbackSent(id)) =>
-      "フィードバックを送信しました（ID: \{id}）。"
+      "実行環境の情報を添付します。リンクを知っている人は誰でも会話の全履歴を閲覧できます。"
     (English, CompactContext) =>
       "Summarize and shrink this conversation's context"
     (Spanish, CompactContext) =>

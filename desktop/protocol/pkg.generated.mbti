@@ -1314,6 +1314,7 @@ pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ExternalLinkPayload
 pub impl @json.ToJson for ExternalLinkPayload
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FeedbackMetadata {
   message : String
   environment : Map[String, @json.Json]
@@ -3889,8 +3890,7 @@ pub impl @json.FromJson for SessionExportReply
 pub impl @json.ToJson for SessionExportReply
 
 pub(all) struct SessionFeedbackPayload {
-  user_id : String
-  source : SessionExportPayload
+  share : SessionSharePayload
   metadata : FeedbackMetadata
 }
 pub impl @json.FromJson for SessionFeedbackPayload

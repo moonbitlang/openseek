@@ -2,7 +2,6 @@
 priv struct SessionShare {
   state : ApiState
   payload : @protocol.SessionSharePayload
-  local_account : Bool
 }
 
 ///|
@@ -12,15 +11,38 @@ priv enum ShareCredential {
 }
 
 ///|
-async fn SessionShare::publish(
-  self : SessionShare,
-  on_progress~ : async (@protocol.ShareProgress) -> Unit,
+async fn ApiState::share_conversation(
+  self : ApiState,
+  payload : @protocol.SessionSharePayload,
+  local_account~ : Bool,
+  feedback? : @protocol.FeedbackMetadata,
+  on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   let (credential, server_url) = match
-    self.state.share_access(self.payload.authorization, self.local_account) {
+    self.share_access(payload.authorization, local_account) {
     Ok(access) => access
     Err(reply) => return reply
   }
+  SessionShare::{ state: self, payload, }.publish(
+    credential,
+    server_url~,
+    feedback?,
+    on_progress=progress => {
+      on_share_progress({ generation: payload.generation, progress, }) catch {
+        _ => ()
+      }
+    },
+  )
+}
+
+///|
+async fn SessionShare::publish(
+  self : SessionShare,
+  credential : ShareCredential,
+  server_url~ : String,
+  feedback? : @protocol.FeedbackMetadata,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit,
+) -> @protocol.SessionShareReply {
   try {
     on_progress(Preparing)
     let (shell, bundle) = self.state.host_state().viz_assets().read()
@@ -30,7 +52,7 @@ async fn SessionShare::publish(
       shell,
       bundle,
     )
-    self.upload(files, credential, server_url~, on_progress~)
+    self.upload(files, credential, server_url~, feedback?, on_progress~)
   } catch {
     @shares.EmptyTitle | @shares.Oversized as refusal =>
       Failed(message="\{refusal}")
@@ -48,6 +70,7 @@ async fn SessionShare::upload(
   files : @engine.ConversationExport,
   credential : ShareCredential,
   server_url~ : String,
+  feedback? : @protocol.FeedbackMetadata,
   on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
 ) -> @protocol.SessionShareReply {
   let token = match credential {
@@ -59,6 +82,11 @@ async fn SessionShare::upload(
     html=files.html,
     json=files.json,
     key=self.payload.idempotency_key,
+    feedback?=feedback.map(metadata => {
+      "message": metadata.message,
+      "environment": Json::object(metadata.environment),
+      "source": { "mode": "local", "session_id": self.payload.source.session },
+    }),
   ).publish(server_url~, token~, on_progress~)
   credential.settle(self.state, reply)
 }

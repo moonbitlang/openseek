@@ -147,10 +147,15 @@ fn Input::shell_command(self : Input, draft : Draft) -> String? {
 /// Consume one separator, preserving every character of the user's message.
 fn Input::feedback_message(self : Input, draft : Draft) -> String? {
   guard self.goal.draft is None &&
-    self.slash_commands.any(command => command.command == "feedback") &&
-    draft.task.strip_prefix("/feedback") is Some(rest) else {
+    self.slash_commands.any(command => command.command == "feedback") else {
     return None
   }
+  feedback_body(draft.task)
+}
+
+///|
+fn feedback_body(task : String) -> String? {
+  guard task.strip_prefix("/feedback") is Some(rest) else { return None }
   match rest {
     "" => Some("")
     [' ' | '\t' | '\n' | '\r', .. message] => Some(message.to_owned())
