@@ -81,10 +81,10 @@ struct Server {
   config : @config.McpServer
   group : @async.TaskGroup
   on_change : (() -> Unit)?
-  mut credential : Result[String?, String]
+  mut credential : Result[String?, Error]
   mut checking : @async.Task[Unit]?
   mut connecting : @async.Task[ServerEntry]?
-  connect : (Result[String?, String]) -> @async.Task[ServerEntry]
+  connect : (Result[String?, Error]) -> @async.Task[ServerEntry]
 }
 
 ///|
@@ -403,7 +403,7 @@ fn cut(text : String, limit : Int32, marked~ : Bool) -> String {
 async fn connect_server(
   scope : @agent_runtime.AgentTaskScope,
   server : @config.McpServer,
-  credential : Result[String?, String],
+  credential : Result[String?, Error],
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
@@ -451,7 +451,7 @@ async fn connect_server(
             Ok(Some(token)) => token
             Ok(None) =>
               fail("Connect this server in Settings > MCP before using it")
-            Err(error) => fail(error)
+            Err(error) => raise error
           }
           resolved["authorization"] = "Bearer \{token}"
         }
@@ -625,21 +625,24 @@ fn cap_chars(text : String, limit : Int32) -> (String, Bool) {
 /// A login/logout changes the credential without requiring an engine restart.
 async fn Server::check_credential(self : Server) -> Unit {
   guard self.config is Http(url~, oauth=Some(oauth), ..) else { return }
-  // The connection uses this snapshot. Retain errors so recovery also
-  // invalidates a cached failure.
+  // The connection uses this snapshot. Compare usable credentials and pass
+  // each lookup failure through to the connection's error report.
   let credential = try @oauth.token(url, oauth) catch {
-    error => Err("\{error}")
+    error => Err(error)
   } noraise {
     token => Ok(token)
   }
-  if credential != self.credential {
-    if self.try_wait() is Some({ connection: Live(client), .. }) {
-      client.close()
-    }
-    if self.connecting is Some(task) {
-      task.cancel()
-    }
-    self.connecting = None
-    self.credential = credential
+  if credential is Ok(token) &&
+    self.credential is Ok(previous) &&
+    token == previous {
+    return
   }
+  if self.try_wait() is Some({ connection: Live(client), .. }) {
+    client.close()
+  }
+  if self.connecting is Some(task) {
+    task.cancel()
+  }
+  self.connecting = None
+  self.credential = credential
 }
