@@ -2677,23 +2677,23 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
-    FeedbackFinished(identity, result) => {
+    FeedbackFinished(identity, auth_epoch~, result) => {
+      let current = model.cloud.epoch == auth_epoch
+      let settle = dispatch(
+        ComposerCommandResult(
+          @composer.FeedbackSettled(
+            identity,
+            accepted=current && result is Ok(_),
+          ),
+        ),
+      )
+      guard current else { return (settle, model) }
       let message : NotificationMessage = match result {
         Ok(receipt) => FeedbackLink(id=receipt.id, url=receipt.url)
         Err(error) => Raw(error)
       }
       let (notice, next) = model.notify(dispatch, message)
-      (
-        @cmd.batch([
-          notice,
-          dispatch(
-            ComposerCommandResult(
-              @composer.FeedbackSettled(identity, accepted=result is Ok(_)),
-            ),
-          ),
-        ]),
-        next,
-      )
+      (@cmd.batch([notice, settle]), next)
     }
     ComposerAction(@composer.FeedbackSubmitted(identity~, message~)) =>
       model.submit_feedback(dispatch, identity, message)

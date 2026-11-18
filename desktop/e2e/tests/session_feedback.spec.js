@@ -73,6 +73,10 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
   }
   expect(app.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(1);
   expect(app.requests.filter(request => request.path.endsWith('/commands') || request.path.endsWith('/export'))).toHaveLength(0);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
+  await page.getByRole('region', { name: 'Account', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.locator('.feedback-receipt')).toHaveCount(0);
   expect(app.device.pageErrors).toEqual([]);
 });
 
@@ -139,4 +143,42 @@ test('Cloud feedback releases a stalled submission and retries only on request',
   await expect(link).toHaveCount(0);
   await expect(task).toHaveValue('');
   expect(attempts).toBe(2);
+});
+
+test('switching accounts removes feedback links and settles a late Local receipt', async ({ page }) => {
+  const app = new CloudHarness(page, { desktop: true });
+  await app.install();
+  const original = app.device.replyFor.bind(app.device);
+  let attempts = 0;
+  let finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  app.device.replyFor = request => {
+    if (request.method !== 'session.feedback') return original(request);
+    attempts++;
+    if (attempts === 2) return pending;
+    return { Ok: receipt('fb_' + request.params.user_id) };
+  };
+  await page.goto(`${authOrigin}/console/index.html?device=device-a`);
+  await app.device.openSession();
+  const task = page.locator('#task');
+  const send = page.locator('#send');
+  await task.fill('/feedback first');
+  await send.click();
+  const oldLink = page.getByRole('link', { name: /Feedback submitted.*fb_123/ });
+  await expect(oldLink).toBeVisible();
+
+  await task.fill('/feedback pending');
+  await send.click();
+  await expect.poll(() => attempts).toBe(2);
+  await expect(send).toBeDisabled();
+  app.userId = '456';
+  await page.evaluate(origin => window.desktopEvent('openseek.auth.changed', { connected: false, server_url: origin }), authOrigin);
+  await expect(oldLink).toHaveCount(0);
+  finish({ Ok: receipt('fb_late') });
+  await expect(send).toBeEnabled();
+  await expect(page.locator('.feedback-receipt')).toHaveCount(0);
+  await expect(task).toHaveValue('/feedback pending');
+  await send.click();
+  await expect(page.getByRole('link', { name: /Feedback submitted.*fb_456/ })).toBeVisible();
+  expect(attempts).toBe(3);
 });

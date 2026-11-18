@@ -2858,8 +2858,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// The floating toast stack, fixed to the configured window corner. Each
-/// toast dismisses on click; its timer handles the rest.
+/// The floating notification stack in the configured window corner.
 fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let toasts : Array[@html.Html] = [
     @github.checkout_notification(

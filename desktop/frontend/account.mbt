@@ -272,6 +272,11 @@ fn account_loaded(
   let next = {
     ..model,
     account,
+    notifications: if changed {
+      model.notifications.filter(toast => !(toast.message is FeedbackLink(..)))
+    } else {
+      model.notifications
+    },
     cloud_questions: if changed {
       @user_questions.Model()
     } else {

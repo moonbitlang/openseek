@@ -1695,6 +1695,7 @@ priv enum Msg {
   ComposerReply(@composer.QuoteReply)
   FeedbackFinished(
     @composer.Identity,
+    auth_epoch~ : Int32,
     Result[@protocol.FeedbackReceipt, String],
   )
   ComposerCommandResult(@composer.CommandResult)

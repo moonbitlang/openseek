@@ -42,7 +42,9 @@ fn Model::submit_feedback(
     metadata.environment["user_agent"] = Json(agent)
   }
   let command = @cmd.perform(
-    result => dispatch(FeedbackFinished(identity, result)),
+    result => {
+      dispatch(FeedbackFinished(identity, auth_epoch=self.cloud.epoch, result))
+    },
     () => {
       guard self.account is Some(credentials) else {
         return Err("Sign in to submit feedback.")
