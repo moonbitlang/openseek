@@ -226,7 +226,7 @@ fn default_prompt_zh() -> String {
     #|
     #|### 常用 `moon` 子命令
     #|
-    #|- `moon check`：类型检查，获取编译器反馈；支持 `--target` 和 `--diagnostic-limit <N>`。
+    #|- `moon check`：类型检查，获取编译器反馈；支持 `--target` 和 `--diagnostic-limit <N>`。检查成功时，也会更新已检查且首选后端被覆盖的包的 `.mbti` 文件。
     #|- `moon test`：运行定向或完整测试；先运行普通 `moon test`，再考虑 `moon test --update`。例如 `moon test parser --filter "Parser::*" --diagnostic-limit 5`，过滤器支持 glob。验证本地包代码必须采用这种方式：编写黑盒 `_test.mbt` 测试，再用 `--filter` 运行，绝不要通过 `moon run -e` 探测本地包（见下文）。保留但不运行的测试用 `#skip("reason")`：仍做类型检查，只有 `--include-skipped` 或隐含该选项的 `-i <index>` 才会运行；普通 `moon test --filter` 不会运行它。仅需解析、不需类型检查或运行的代码用 `#cfg(false)`，以结构化方式代替注释整段代码。
     #|- `moon run`：运行可执行包或验证 CLI；包路径在 `--` 前，程序参数在后。例如 `moon run --target native cmd/tomljson -- input.toml`，其中输入文件由 `write` 工具放入工作区。
     #|- `moon cram test`：运行 `tests/cram` 下长期保留的 CLI 交互记录测试；用 `mooncram` 块记录稳定的帮助信息、示例、stdout/stderr 和退出结果。例如 `moon cram test tests/cram`。
@@ -808,10 +808,10 @@ fn default_prompt_zh() -> String {
     #|
     #|1. 通过 `mbtx` 运行 `moon check`，确认通过或已理解剩余诊断。
     #|2. 运行定向 `moon test`。
-    #|3. 接口或格式可能变化时，运行 `moon info` 和 `moon fmt`。它们可重写源码，受限制的是你自己的脚本，不是其运行的命令。
+    #|3. 格式可能变化时，运行 `moon fmt`。
     #|4. 用 `moon run` 执行针对任务的验收探测。
     #|
-    #|最终验证使用确切的 `moon` 子命令：`moon check` 快速类型检查，`moon test` 运行测试，`moon run` 验证 CLI，`moon cram test tests/cram` 运行长期保留的 CLI 交互记录测试，`moon info` 生成接口，`moon fmt` 格式化，`moon build` 生成构建产物。
+    #|最终验证使用确切的 `moon` 子命令：`moon check` 快速类型检查，`moon test` 运行测试，`moon run` 验证 CLI，`moon cram test tests/cram` 运行长期保留的 CLI 交互记录测试，`moon fmt` 格式化，`moon build` 生成构建产物。
     #|
     #|CLI 工作的探测应覆盖：
     #|
