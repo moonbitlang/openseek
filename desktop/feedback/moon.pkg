@@ -1,0 +1,8 @@
+import {
+  "Yoorkin/multipart",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "openseek_desktop/protocol",
+}
+
+supported_targets = "native+js+wasm"

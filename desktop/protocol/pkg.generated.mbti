@@ -1314,6 +1314,20 @@ pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ExternalLinkPayload
 pub impl @json.ToJson for ExternalLinkPayload
 
+pub(all) struct FeedbackMetadata {
+  message : String
+  environment : Map[String, @json.Json]
+}
+pub impl @json.FromJson for FeedbackMetadata
+pub impl @json.ToJson for FeedbackMetadata
+
+pub(all) struct FeedbackReceipt {
+  id : String
+  transcript_error : String?
+}
+pub impl @json.FromJson for FeedbackReceipt
+pub impl @json.ToJson for FeedbackReceipt
+
 #derive(Eq, @debug.Debug)
 pub(all) struct FileSharePayload {
   source : ReadFilePayload
@@ -3873,6 +3887,14 @@ pub fn SessionExportReply::to_json(Self) -> @json.Json
 pub fn SessionExportReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionExportReply
 pub impl @json.ToJson for SessionExportReply
+
+pub(all) struct SessionFeedbackPayload {
+  user_id : String
+  source : SessionExportPayload
+  metadata : FeedbackMetadata
+}
+pub impl @json.FromJson for SessionFeedbackPayload
+pub impl @json.ToJson for SessionFeedbackPayload
 
 #derive(Eq, @debug.Debug)
 pub(all) struct SessionForkPayload {

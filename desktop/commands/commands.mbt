@@ -121,6 +121,12 @@ pub let session_share : Command[
 ] = Command("session.share")
 
 ///|
+pub let session_feedback : Command[
+  @protocol.SessionFeedbackPayload,
+  Result[@protocol.FeedbackReceipt, String],
+] = Command("session.feedback")
+
+///|
 pub let session_list_archived : Command[
   @protocol.EmptyPayload,
   @protocol.SessionsReply,
