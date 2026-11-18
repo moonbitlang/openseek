@@ -19,19 +19,36 @@ rule when its Markdown input changes.
 
 ## Prompt Sources
 
-- `default_prompt.mbt.md`: agent working instructions, tool contracts,
-  development workflows, validation, and reference-document navigation.
+- `default_prompt.mbt.md`: short always-on working rules and a trigger-based
+  guide index. Detailed workflows live in `share/agent-guides/`; presentation,
+  artifact, diagram, and slide guidance lives in `share/visualization/`.
+  Framework and search guides stay in their own `share/` directories. Only the core and index become system-prompt text;
+  linked Markdown guides are not expanded or appended.
 - `moonbit_syntax_and_api.mbt.md`: MoonBit syntax and library API teaching,
   manifest examples, and complete programs illustrating the language and APIs.
   Verified examples live under `share/examples/`: a whole-line markdown link
   to a `.mbtx` file is expanded into a fenced block by `md_to_mbt_string`, so
   the prompt shows code that CI type-checks and runs.
 
-Each source has its own dev-build rule and generated MoonBit string function.
-The built-in prompt includes the working instructions first and, by default,
-the language guide second. The guide can be omitted for a new session while
-retaining the working instructions and tools. `just prompt`, `just check-prompt`, CI, and the
+Each prompt source has its own dev-build rule and generated MoonBit string
+function. The built-in prompt includes the core and index first and, by default,
+the language guide second. The language guide can be omitted for a new session while
+retaining the core and index. `just prompt`, `just check-prompt`, CI, and the
 documentation updater generate or check both outputs.
+
+The agent reads indexed guides before the matching work with the existing
+`mbtx` tool and `@builtin/read.mbtx`. The index paths are relative to the
+installation's `Bundled resources`, never the workspace. Both CLI and Desktop
+packaging copy the `share/` tree, including these guides; no separate loader or
+startup read of every guide is involved. Changes to guide contents need no prompt
+regeneration unless the core or index also changes. Raw builds without installed
+resources retain the core and tool contracts but cannot read the external guides.
+
+When maintaining instructions, put cross-task rules in the core, detailed
+procedures in the owning guide, and new task triggers in the index. Keep tool
+argument contracts in their tool definitions rather than duplicating them in
+the core. Validate that indexed paths survive resource staging; exercise model
+routing and task quality with `eval/prompt_task` rather than assertions on prose.
 
 ## API Shape
 

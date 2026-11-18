@@ -43,11 +43,12 @@ Reopening a page restores its authored initial state.
 
 ### Author, check, build, reference
 
-The starter files are `moon.mod`, `moon.pkg`, `model.mbt`, `main.mbt`,
-`model_wbtest.mbt`, `bridge.mbt` and `index.html`. Read these files directly.
+The starter files under `<bundled-resources>/artifact/rabbita/` are `moon.mod`,
+`moon.pkg`, `model.mbt`, `main.mbt`, `model_wbtest.mbt`, `bridge.mbt` and
+`index.html`. Read these files directly.
 
-Run installed helpers by setting `filename` and `args`. The mbtx tool's `source`
-field is for authoring a new script.
+Run installed helpers from `<bundled-resources>/artifact/` by setting `filename`
+and `args`. The mbtx tool's `source` field is for authoring a new script.
 
 For a fresh project, call `init.mbtx` with
 `args=["<session scratch>", "<bundled-resources>/artifact/rabbita", "linear"]`.
