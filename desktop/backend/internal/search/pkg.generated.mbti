@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.5"
+pub const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.12"
 
 pub async fn cancel_search_files(FileSearchService, @protocol.CancelSearchFilesPayload) -> @protocol.EmptyReply
 
