@@ -466,3 +466,53 @@ test "switching accounts retires hidden feedback and its draft acknowledgement" 
   let (_, next) = settled.open_cloud(session="chat")
   assert_true(next.content is Some({ feedback: None, publication: None, .. }))
 }
+
+///|
+test "another conversation can share while a hidden feedback receipt belongs to its original session" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let feedback : Feedback = {
+    identity: {
+      owner: Cloud(account="123", session="a"),
+      archive_generation: 0,
+    },
+    metadata: { message: "report", environment: {}, },
+  }
+  let (_, first) = Model().open_cloud(session="a", feedback~)
+  let (_, pending) = first.advance(emit, Share)
+  let (_, hidden) = pending.advance(emit, Close)
+  let (_, other) = hidden.open_cloud(session="b")
+  assert_true(
+    other.content is Some({ source: Cloud(session="b"), feedback: None, .. }),
+  )
+  let (_, sharing) = other.advance(emit, Share)
+  let reply = Published(
+    generation=pending.generation,
+    Ok(Shared(url="https://shares.test/report")),
+  )
+  assert_true(sharing.published_feedback(reply) == Some(feedback))
+  let (_, delivered) = sharing.advance(emit, reply)
+  assert_true(delivered.content == sharing.content)
+  let (_, ordinary) = delivered.advance(
+    emit,
+    Published(
+      generation=sharing.generation,
+      Ok(Shared(url="https://shares.test/ordinary")),
+    ),
+  )
+  assert_true(
+    ordinary.content
+    is Some(
+      { publication: Some({ url: "https://shares.test/ordinary", .. }), .. },
+    ),
+  )
+  let (_, closed) = ordinary.advance(emit, Close)
+  let (_, restored) = closed.open_cloud(session="a")
+  assert_true(
+    restored.content
+    is Some(
+      { publication: Some({ url: "https://shares.test/report", .. }), .. },
+    ),
+  )
+  let (_, switched) = sharing.account_changed(Ok(()))
+  assert_true(switched.published_feedback(reply) is None)
+}
