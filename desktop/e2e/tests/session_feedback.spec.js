@@ -84,3 +84,36 @@ for (const mode of ['Cloud', 'Local']) {
     expect(app.device.pageErrors).toEqual([]);
   });
 }
+
+test('a dismissed feedback submission can be reopened before and after its receipt', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const app = new CloudHarness(page);
+  await app.install();
+  let finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  let posts = 0;
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
+    posts++;
+    await pending;
+    await route.fulfill({ status: 201, json: { id: 'fb_test', url } });
+  });
+  await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
+  const task = page.locator('#task');
+  const dialog = page.getByRole('dialog', { name: 'Export conversation' });
+  await task.fill('/feedback ' + message);
+  await task.press('Enter');
+  await expect.poll(() => posts).toBe(1);
+  await dialog.press('Escape');
+  await expect(dialog).toBeHidden();
+  await task.press('Enter');
+  await expect(dialog).toBeVisible();
+  await dialog.press('Escape');
+  finish();
+  await expect(task).toHaveValue('');
+  await expect(dialog).toBeHidden();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(url);
+  await dialog.getByRole('button', { name: 'Copy share link' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+  expect(posts).toBe(1);
+});

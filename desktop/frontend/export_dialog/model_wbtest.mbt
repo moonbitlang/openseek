@@ -442,3 +442,27 @@ async test "local share authorization uses the account captured by the operation
     is LocalAccount(user_id="account-b"),
   )
 }
+
+///|
+test "switching accounts retires hidden feedback and its draft acknowledgement" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let feedback : Feedback = {
+    identity: {
+      owner: Cloud(account="123", session="chat"),
+      archive_generation: 0,
+    },
+    metadata: { message: "feedback", environment: {}, },
+  }
+  let (_, opened) = Model().open_cloud(session="chat", feedback~)
+  let (_, pending) = opened.advance(emit, Share)
+  let (_, hidden) = pending.advance(emit, Close)
+  let (_, changed) = hidden.account_changed(Ok(()))
+  let late = Published(
+    generation=pending.generation,
+    Ok(Shared(url="https://shares.test/old")),
+  )
+  assert_true(changed.published_feedback(late) is None)
+  let (_, settled) = changed.advance(emit, late)
+  let (_, next) = settled.open_cloud(session="chat")
+  assert_true(next.content is Some({ feedback: None, publication: None, .. }))
+}

@@ -108,18 +108,35 @@ pub fn Model::open(
   channel~ : @interop.ChannelId = Local,
   feedback? : Feedback,
 ) -> (@cmd.Cmd, Model) {
+  self.open_conversation(Host(channel, source), feedback)
+}
+
+///|
+fn Model::open_conversation(
+  self : Model,
+  source : Source,
+  feedback : Feedback?,
+) -> (@cmd.Cmd, Model) {
+  if !self.visible &&
+    self.content is Some({ feedback: Some(previous), .. } as content) {
+    let same_session = match (content.source, source) {
+      (Host(a, first), Host(b, second)) =>
+        a == b && first.session == second.session
+      (Cloud(session=a), Cloud(session=b)) => a == b
+      _ => false
+    }
+    if content.operation is Sharing(_) ||
+      (same_session && (feedback is None || feedback == Some(previous))) {
+      return self.reopen()
+    }
+  }
   (
     @dialog.show(self.id_prefix + "-dialog"),
     {
       ..self,
       generation: self.generation + 1,
       visible: true,
-      content: Some({
-        source: Host(channel, source),
-        feedback,
-        operation: Ready,
-        publication: None,
-      }),
+      content: Some({ source, feedback, operation: Ready, publication: None, }),
     },
   )
 }
@@ -158,6 +175,7 @@ pub fn Model::update(
   let busy = content.operation.busy()
   match msg {
     Close => {
+      guard self.visible else { return (@cmd.none, self) }
       // A browser sign-in this dialog started must not outlive it: the host
       // refuses a second auth.connect while one is still waiting.
       let close = @dialog.close(self.id_prefix + "-dialog")
@@ -171,7 +189,8 @@ pub fn Model::update(
         {
           ..self,
           visible: false,
-          content: if self.file_pending() {
+          content: if self.file_pending() ||
+            (content.feedback is Some(_) && content.operation is Sharing(_)) {
             self.content
           } else {
             None
@@ -281,20 +300,7 @@ pub fn Model::open_cloud(
   session~ : String,
   feedback? : Feedback,
 ) -> (@cmd.Cmd, Model) {
-  (
-    @dialog.show(self.id_prefix + "-dialog"),
-    {
-      ..self,
-      generation: self.generation + 1,
-      visible: true,
-      content: Some({
-        source: Cloud(session~),
-        feedback,
-        operation: Ready,
-        publication: None,
-      }),
-    },
-  )
+  self.open_conversation(Cloud(session~), feedback)
 }
 
 ///|
