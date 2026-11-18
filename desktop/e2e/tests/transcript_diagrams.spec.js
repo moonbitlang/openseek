@@ -3,7 +3,7 @@ import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('bundled diagram examples render as SVG in the transcript', async ({ page }) => {
-  const examples = ['../../../prompt/default_prompt.mbt.md', '../../../share/diagrams/README.md']
+  const examples = ['../../../share/visualization/presentation.md', '../../../share/visualization/diagrams.md']
     .flatMap(path => {
       const markdown = readFileSync(new URL(path, import.meta.url), 'utf8');
       const blocks = [...markdown.matchAll(/^```diago\n[\s\S]*?^```$/gm)].map(match => match[0]);

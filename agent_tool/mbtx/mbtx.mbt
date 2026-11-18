@@ -1726,7 +1726,7 @@ fn description(
   // File artifacts live under the session scratch directory, so the
   // instructions for producing them exist only where that directory does.
   let artifacts = if scratch_dir is Some(_) {
-    "File artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
+    "File artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/visualization/artifacts.md."
   } else {
     ""
   }
