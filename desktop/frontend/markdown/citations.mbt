@@ -121,7 +121,7 @@ fn[Node : MarkdownNode] MarkdownRender::citation_node(
     "\{label}: \{citation.summary}"
   }
   let full = link.reference is Ref(Full, _, _)
-  let attrs = () => @html.Attrs::build().aria_label(title)
+  let attrs = @html.Attrs::build().aria_label(title)
   let children = if full {
     self.inline_nodes(link.text, linkify_urls=false)
   } else {
@@ -131,25 +131,21 @@ fn[Node : MarkdownNode] MarkdownRender::citation_node(
     self.open_file is Some(open) &&
     self.file_destination(link) is Some(path) {
     let path = @office_location.citation_destination(path, citation.summary)
+    let workspace_file = FileReference(path).path()
+    let attrs = attrs
+      .data_set("context-file", path)
+      .data_set("context-workspace-file", workspace_file)
     let node = Node::compose(children, children => {
       @html.button(
         class="citation-link file-link",
         type_="button",
         title~,
-        attrs=attrs()
-          .data_set("context-file", path)
-          .data_set("context-workspace-file", FileReference(path).path()),
+        attrs~,
         on_click=open(path),
         children,
       )
     })
-    (
-      @action_menu.FileLink(
-        path,
-        workspace_file=Some(FileReference(path).path()),
-      ),
-      node,
-    )
+    (@action_menu.FileLink(path, workspace_file=Some(workspace_file)), node)
   } else if citation.link is Some(link) &&
     self.link_destination(link) is Some(href) {
     let node = Node::compose(children, children => {
@@ -159,7 +155,7 @@ fn[Node : MarkdownNode] MarkdownRender::citation_node(
         target=Blank,
         rel="noopener noreferrer",
         title~,
-        attrs=attrs(),
+        attrs~,
         children,
       )
     })
@@ -168,12 +164,7 @@ fn[Node : MarkdownNode] MarkdownRender::citation_node(
     // A textual footnote or an incomplete streamed source has no made-up
     // destination. Its contents remain readable in the Sources list.
     let node = Node::compose(children, children => {
-      @html.span(
-        class="citation-link citation-note",
-        title~,
-        attrs=attrs(),
-        children,
-      )
+      @html.span(class="citation-link citation-note", title~, attrs~, children)
     })
     (@action_menu.NoTarget, node)
   }
