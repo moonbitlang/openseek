@@ -1353,9 +1353,6 @@ priv struct Model {
   // view and root layout. The root owns the opaque state once so neither side
   // reports a second visibility copy back to the other.
   jobs : @jobs.State
-  // The overview's connectors card data: what a conversation's engine last
-  // said it holds of its MCP servers.
-  mcp : @mcp.State
   // The overview's changes card data: the pull requests and branches the
   // agent attached to a conversation.
   changes : @session_changes.State
@@ -2143,7 +2140,6 @@ priv enum Msg {
   GithubRequested
   Github(@github.Msg)
   Jobs(@jobs.Msg)
-  Mcp(@mcp.Msg)
   Changes(@session_changes.Msg)
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
@@ -2559,8 +2555,6 @@ priv enum DeviceMsg {
   // by it, because a conversation compacted before its first prompt of this
   // app-lifetime has no run id to match.
   JobsChanged(String)
-  // The engine of this session reported what it holds of its MCP servers.
-  McpChanged(String)
   // The host saved a new list of this session's attached pull requests and
   // branches.
   ArtifactsChanged(String)
@@ -2797,7 +2791,6 @@ fn initial_model(
     dock_tab_menu_open: false,
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
-    mcp: @mcp.State::initial(),
     changes: @session_changes.State::initial(),
     overview_open: false,
     overview: @conversation_overview.State::initial(),
@@ -2984,19 +2977,6 @@ fn Model::focused_device_name(self : Model) -> String {
     }
   }
   "SeekMoon"
-}
-
-///|
-/// A remote device's roster name, or its id until the roster lists it.
-/// `None` for the computer this window runs on.
-fn Model::device_name(self : Model, channel : @interop.ChannelId) -> String? {
-  guard channel is Remote(id) else { return None }
-  for meta in self.console.roster {
-    if meta.id == id {
-      return Some(meta.name)
-    }
-  }
-  Some(id)
 }
 
 ///|
