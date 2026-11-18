@@ -15,7 +15,6 @@ async fn begin_browser(
   group : @async.TaskGroup,
   resource : String,
   config : @config.AuthorizationCodeConfig,
-  validate~ : async () -> Unit,
 ) -> BrowserAttempt {
   guard @entropy.random_hex(32) is Some(verifier) &&
     @entropy.random_hex(32) is Some(state) else {
@@ -34,7 +33,7 @@ async fn begin_browser(
   let task = group.spawn(no_wait=true, allow_failure=true, () => {
     defer server.close()
     guard @async.with_timeout_opt(300000, () => {
-        wait_for_callback(server, auth, state~, verifier~, validate~)
+        wait_for_callback(server, auth, state~, verifier~)
       })
       is Some(_) else {
       fail("Authorization expired; connect again")
@@ -113,7 +112,6 @@ async fn wait_for_callback(
   auth : @oauth.BrowserAuthorization,
   state~ : String,
   verifier~ : String,
-  validate~ : async () -> Unit,
 ) -> Unit {
   let host = "127.0.0.1:\{server.addr.port}"
   for ;; {
@@ -136,7 +134,7 @@ async fn wait_for_callback(
             conn, 400, "Bad Request", "Authorization failed. Return to SeekMoon.",
           )
         })
-        auth.finish(code~, verifier~, validate~)
+        auth.finish(code~, verifier~)
         respond(
           conn, 200, "OK", "Connected. Return to SeekMoon to use this connector.",
         )

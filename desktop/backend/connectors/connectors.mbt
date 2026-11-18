@@ -6,13 +6,6 @@ priv struct Entry {
 }
 
 ///|
-fn Entry::same_configuration(self : Entry, other : Entry) -> Bool {
-  self.info.id == other.info.id &&
-  self.resource == other.resource &&
-  self.oauth == other.oauth
-}
-
-///|
 priv struct Attempt {
   id : String
   pending : Authorization
@@ -232,26 +225,6 @@ async fn Service::cancel_requested_attempt(
 }
 
 ///|
-async fn Service::validate_browser_attempt(
-  self : Service,
-  entry : Entry,
-  attempt_id : String,
-) -> Unit {
-  guard self.attempts.get(entry.info.id) is Some(attempt) &&
-    attempt.id == attempt_id else {
-    fail("Authorization was cancelled or replaced; connect again")
-  }
-  // The callback can commit before the next UI poll. Read the current skill
-  // configuration here without taking the service mutex that poll holds.
-  guard self
-    .entries()
-    .iter()
-    .any(candidate => entry.same_configuration(candidate)) else {
-    fail("Connector configuration changed; connect again")
-  }
-}
-
-///|
 /// Each short RPC polls at most once; navigation/cancel never starts a hidden login.
 pub async fn Service::action(
   self : Service,
@@ -299,11 +272,7 @@ pub async fn Service::action(
             guard self.group is Some(group) else {
               fail("Browser authorization requires a running Desktop host")
             }
-            Browser(
-              begin_browser(group, entry.resource, config, validate=() => {
-                self.validate_browser_attempt(entry, id)
-              }),
-            )
+            Browser(begin_browser(group, entry.resource, config))
           }
         }
         let attempt = { id, pending, entry, }
@@ -315,7 +284,8 @@ pub async fn Service::action(
           request.attempt == Some(attempt.id) else {
           fail("Authorization was cancelled or replaced; connect again")
         }
-        guard attempt.entry.same_configuration(entry) else {
+        guard attempt.entry.oauth == entry.oauth &&
+          attempt.entry.resource == entry.resource else {
           self.cancel_requested_attempt(request)
           fail("Connector configuration changed; connect again")
         }

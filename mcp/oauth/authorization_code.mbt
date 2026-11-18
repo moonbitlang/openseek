@@ -239,7 +239,7 @@ fn browser_grant(
 
 ///|
 fn browser_record(json : Json, grant : BrowserGrant) -> Json raise {
-  guard token_record(json, proactive_refresh=true) is Object(record) else {
+  guard build_token_record(json, save_refresh_at=true) is Object(record) else {
     fail("Invalid OAuth token")
   }
   let refresh_token = match json {
@@ -263,7 +263,6 @@ pub async fn BrowserAuthorization::finish(
   self : BrowserAuthorization,
   code~ : String,
   verifier~ : String,
-  validate~ : async () -> Unit,
 ) -> Unit {
   guard !self.commit.cancelled else { fail("Authorization cancelled") }
   let json = post(
@@ -292,7 +291,7 @@ pub async fn BrowserAuthorization::finish(
   let path = credential_path(self.resource, AuthorizationCode(self.config))
   let lock = lock_credential(path)
   defer lock.close()
-  self.commit.save(path, tokens, validate~)
+  self.commit.save(path, tokens)
 }
 
 ///|

@@ -178,7 +178,7 @@ pub async fn poll(
       fail("OAuth authorization failed; connect again")
     _ => {
       let path = credential_path(resource, DeviceCode(config))
-      pending.commit.save(path, token_record(json))
+      pending.commit.save(path, build_token_record(json))
       Authorized
     }
   }

@@ -88,16 +88,10 @@ async fn Commit::cancel(self : Commit) -> Unit {
 }
 
 ///|
-async fn Commit::save(
-  self : Commit,
-  path : String,
-  record : Json,
-  validate~ : async () -> Unit = () => (),
-) -> Unit {
+async fn Commit::save(self : Commit, path : String, record : Json) -> Unit {
   write_credential(path, record, commit=(temp, path) => {
     self.lock.acquire()
     defer self.lock.release()
-    validate()
     guard !self.cancelled else { fail("Authorization cancelled") }
     @fs.rename(temp, path, replace=true)
   })
@@ -116,7 +110,10 @@ async fn read_credential(path : String) -> Json? {
 }
 
 ///|
-fn token_record(json : Json, proactive_refresh~ : Bool = false) -> Json raise {
+fn build_token_record(
+  json : Json,
+  save_refresh_at~ : Bool = false,
+) -> Json raise {
   guard json
     is { "access_token": String(token), "token_type": String(kind), .. } &&
     !token.is_empty() &&
@@ -133,7 +130,7 @@ fn token_record(json : Json, proactive_refresh~ : Bool = false) -> Json raise {
       Json::null()
     },
   }
-  if proactive_refresh && lifetime_ms > 0 {
+  if save_refresh_at && lifetime_ms > 0 {
     // Leave most of the lifetime usable, even when an issuer returns a
     // token with a lifetime shorter than the maximum refresh window.
     let window = (lifetime_ms * 0.1).min(300000)
