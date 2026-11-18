@@ -54,6 +54,8 @@ async fn SessionShare::publish(
     )
     self.upload(files, credential, server_url~, feedback?, on_progress~)
   } catch {
+    @shares.Oversized if feedback is Some(_) =>
+      Failed(message="This feedback exceeds the 20 MiB upload limit.")
     @shares.EmptyTitle | @shares.Oversized as refusal =>
       Failed(message="\{refusal}")
     error => {

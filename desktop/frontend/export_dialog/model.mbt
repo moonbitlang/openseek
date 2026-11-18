@@ -134,7 +134,8 @@ fn Model::open_conversation(
   } else {
     self.hidden_feedback
   }
-  if hidden_feedback
+  if feedback is Some(feedback) &&
+    hidden_feedback
     .iter()
     .find_first(entry => entry.1.matches_feedback(source, feedback))
     is Some((generation, content)) {
@@ -160,14 +161,11 @@ fn Model::open_conversation(
 fn Content::matches_feedback(
   self : Content,
   source : Source,
-  feedback : Feedback?,
+  feedback : Feedback,
 ) -> Bool {
-  guard self.feedback is Some(previous) else { return false }
-  if feedback is Some(next) &&
-    (
-      next.identity != previous.identity ||
-      next.metadata.message != previous.metadata.message
-    ) {
+  guard self.feedback is Some(previous) &&
+    feedback.identity == previous.identity &&
+    feedback.metadata.message == previous.metadata.message else {
     return false
   }
   match (self.source, source) {
@@ -456,6 +454,10 @@ fn Model::publication_content(self : Model, generation : Int32) -> Content? {
 
 ///|
 pub fn Model::published_feedback(self : Model, msg : Msg) -> Feedback? {
+  if msg is Share &&
+    self.content is Some({ publication: Some(_), feedback, .. }) {
+    return feedback
+  }
   guard msg is Published(generation~, Ok(Shared(..))) &&
     self.publication_content(generation)
     is Some({ operation: Sharing(_), feedback, .. }) else {

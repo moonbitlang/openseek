@@ -254,7 +254,7 @@ test "file and conversation commands keep concurrent publications in their own d
   assert_true(file.export_dialog == hidden.export_dialog)
   let (_, hidden_file) = update(emit, FileShareDialog(Close), file)
   let (_, reopened) = update(emit, OpenCloudExport, hidden_file)
-  assert_true(reopened.export_dialog == feedback.export_dialog)
+  assert_false(reopened.export_dialog == feedback.export_dialog)
   assert_true(reopened.file_share_dialog == hidden_file.file_share_dialog)
   let message = @export_dialog.Published(
     generation=2,

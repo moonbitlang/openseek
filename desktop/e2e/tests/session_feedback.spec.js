@@ -112,7 +112,14 @@ test('a dismissed feedback submission can be reopened before and after its recei
   await expect(task).toHaveValue('');
   await expect(dialog).toBeHidden();
   await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(dialog).toContainText('7 days');
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(/\/v1\/shares\//);
+  await dialog.press('Escape');
+  await task.fill('/feedback ' + message);
+  await task.press('Enter');
   await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(url);
+  await expect(task).toHaveValue('');
   await dialog.getByRole('button', { name: 'Copy share link' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(url);
   expect(posts).toBe(1);

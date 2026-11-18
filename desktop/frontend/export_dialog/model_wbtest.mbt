@@ -506,7 +506,7 @@ test "another conversation can share while a hidden feedback receipt belongs to 
     ),
   )
   let (_, closed) = ordinary.advance(emit, Close)
-  let (_, restored) = closed.open_cloud(session="a")
+  let (_, restored) = closed.open_cloud(session="a", feedback~)
   assert_true(
     restored.content
     is Some(
@@ -515,4 +515,31 @@ test "another conversation can share while a hidden feedback receipt belongs to 
   )
   let (_, switched) = sharing.account_changed(Ok(()))
   assert_true(switched.published_feedback(reply) is None)
+}
+
+///|
+test "ordinary Share after a hidden feedback failure omits the feedback metadata" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let feedback : Feedback = {
+    identity: {
+      owner: Cloud(account="123", session="a"),
+      archive_generation: 0,
+    },
+    metadata: { message: "private report", environment: {}, },
+  }
+  let (_, opened) = Model().open_cloud(session="a", feedback~)
+  let (_, pending) = opened.advance(emit, Share)
+  let (_, hidden) = pending.advance(emit, Close)
+  let (_, failed) = hidden.advance(
+    emit,
+    Published(
+      generation=pending.generation,
+      Ok(@protocol.Failed(message="upload failed")),
+    ),
+  )
+  let (_, ordinary) = failed.open_cloud(session="a")
+  let (_, publishing) = ordinary.advance(emit, Share)
+  assert_true(
+    publishing.content is Some({ feedback: None, operation: Sharing(_), .. }),
+  )
 }

@@ -145,4 +145,14 @@ async test "feedback uploads metadata and both complete files from one conversat
     receiver.wait()
     assert_true(reply is Shared(url="https://shares.test/v1/feedback/fb_test"))
   })
+  let oversized = share.publish(
+    Account(state.auth_store().account().unwrap()),
+    server_url=origin,
+    feedback={ ..metadata, message: "x".repeat(20 * 1024 * 1024), },
+    on_progress=_ => (),
+  )
+  assert_true(
+    oversized
+    is Failed(message="This feedback exceeds the 20 MiB upload limit."),
+  )
 }
