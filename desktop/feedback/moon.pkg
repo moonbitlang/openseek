@@ -1,5 +1,6 @@
 import {
   "Yoorkin/multipart",
+  "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/json",
   "openseek_desktop/protocol",

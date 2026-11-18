@@ -85,3 +85,30 @@ test('Local feedback targets the selected host session and displays its receipt'
   expect(app.hostRequests.some(request => ['agent.start', 'session.snapshot'].includes(request.method))).toBe(false);
   expect(app.device.pageErrors).toEqual([]);
 });
+
+test('Cloud feedback releases a stalled submission and retries only on request', async ({ page }) => {
+  const app = new CloudHarness(page);
+  await app.install();
+  await page.clock.install();
+  let attempts = 0;
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
+    attempts++;
+    if (attempts > 1) await route.fulfill({ status: 201, json: { id: 'fb_retry' } });
+  });
+  await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
+  const task = page.locator('#task');
+  const send = page.locator('#send');
+  await task.fill('/feedback ' + message);
+  await send.click();
+  await expect.poll(() => attempts).toBe(1);
+  await expect(send).toBeDisabled();
+  await page.clock.fastForward(240_000);
+  await expect(page.getByText('The feedback request timed out. Delivery could not be confirmed.')).toBeVisible();
+  await expect(task).toHaveValue('/feedback ' + message);
+  await expect(send).toBeEnabled();
+  expect(attempts).toBe(1);
+  await send.click();
+  await expect(page.getByText(/Feedback submitted.*fb_retry/)).toBeVisible();
+  await expect(task).toHaveValue('');
+  expect(attempts).toBe(2);
+});
