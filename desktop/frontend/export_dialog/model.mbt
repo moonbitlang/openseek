@@ -5,10 +5,6 @@
 struct Model {
   id_prefix : String
   generation : Int32
-  // Restoring an older request must not reuse a later request's generation.
-  last_generation : Int32
-  // Dismissed submissions displaced by opening a different conversation.
-  hidden_feedback : Array[(Int32, Content)]
   visible : Bool
   content : Content?
 }
@@ -102,14 +98,7 @@ fn Msg::generation(self : Msg) -> Int32? {
 
 ///|
 pub fn Model::Model(id_prefix~ : String = "conversation-export") -> Model {
-  {
-    id_prefix,
-    generation: 0,
-    last_generation: 0,
-    hidden_feedback: [],
-    visible: false,
-    content: None,
-  }
+  { id_prefix, generation: 0, visible: false, content: None, }
 }
 
 ///|
@@ -119,67 +108,20 @@ pub fn Model::open(
   channel~ : @interop.ChannelId = Local,
   feedback? : Feedback,
 ) -> (@cmd.Cmd, Model) {
-  self.open_conversation(Host(channel, source), feedback)
-}
-
-///|
-fn Model::open_conversation(
-  self : Model,
-  source : Source,
-  feedback : Feedback?,
-) -> (@cmd.Cmd, Model) {
-  let hidden_feedback = if !self.visible &&
-    self.content is Some({ feedback: Some(_), .. } as content) {
-    [(self.generation, content), ..self.hidden_feedback]
-  } else {
-    self.hidden_feedback
-  }
-  if feedback is Some(feedback) &&
-    hidden_feedback
-    .iter()
-    .find_first(entry => entry.1.matches_feedback(source, feedback))
-    is Some((generation, content)) {
-    return {
-      ..self,
-      generation,
-      content: Some(content),
-      hidden_feedback: hidden_feedback.filter(entry => entry.0 != generation),
-    }.reopen()
-  }
   (
     @dialog.show(self.id_prefix + "-dialog"),
     {
-      ..self.next_generation(),
-      hidden_feedback,
+      ..self,
+      generation: self.generation + 1,
       visible: true,
-      content: Some({ source, feedback, operation: Ready, publication: None, }),
+      content: Some({
+        source: Host(channel, source),
+        feedback,
+        operation: Ready,
+        publication: None,
+      }),
     },
   )
-}
-
-///|
-fn Content::matches_feedback(
-  self : Content,
-  source : Source,
-  feedback : Feedback,
-) -> Bool {
-  guard self.feedback is Some(previous) &&
-    feedback.identity == previous.identity &&
-    feedback.metadata.message == previous.metadata.message else {
-    return false
-  }
-  match (self.source, source) {
-    (Host(a, first), Host(b, second)) =>
-      a == b && first.session == second.session
-    (Cloud(session=a), Cloud(session=b)) => a == b
-    _ => false
-  }
-}
-
-///|
-fn Model::next_generation(self : Model) -> Model {
-  let generation = self.last_generation + 1
-  { ..self, generation, last_generation: generation, }
 }
 
 ///|
@@ -201,21 +143,6 @@ pub fn Model::update(
   desktop~ : Bool = true,
   sign_in~ : @cmd.Cmd = @cmd.none,
 ) -> (@cmd.Cmd, Model) {
-  if msg is Published(generation~, reply) && generation != self.generation {
-    return (
-      @cmd.none,
-      {
-        ..self,
-        hidden_feedback: self.hidden_feedback.map(entry => {
-          if entry.0 == generation && entry.1.operation is Sharing(_) {
-            (generation, entry.1.published(reply))
-          } else {
-            entry
-          }
-        }),
-      },
-    )
-  }
   guard self.content is Some(content) else { return (@cmd.none, self) }
   if msg.generation() is Some(generation) && generation != self.generation {
     return (@cmd.none, self)
@@ -231,7 +158,6 @@ pub fn Model::update(
   let busy = content.operation.busy()
   match msg {
     Close => {
-      guard self.visible else { return (@cmd.none, self) }
       // A browser sign-in this dialog started must not outlive it: the host
       // refuses a second auth.connect while one is still waiting.
       let close = @dialog.close(self.id_prefix + "-dialog")
@@ -245,8 +171,7 @@ pub fn Model::update(
         {
           ..self,
           visible: false,
-          content: if self.file_pending() ||
-            (content.feedback is Some(_) && content.operation is Sharing(_)) {
+          content: if self.file_pending() {
             self.content
           } else {
             None
@@ -279,7 +204,7 @@ pub fn Model::update(
       } else {
         match account {
           Some(account) => {
-            let next = self.next_generation()
+            let next = { ..self, generation: self.generation + 1, }
             (
               next.share(emit, content, account, desktop~),
               next.showing({ ..content, operation: Sharing(Preparing), }),
@@ -304,8 +229,21 @@ pub fn Model::update(
         @cmd.none,
         self.showing({ ..content, operation: Sharing(payload.progress), }),
       )
-    Published(reply, ..) if content.operation is Sharing(_) =>
-      (@cmd.none, self.showing(content.published(reply)))
+    Published(reply, ..) if content.operation is Sharing(_) => {
+      let content = match reply {
+        Ok(Shared(url~)) =>
+          {
+            ..content,
+            operation: Ready,
+            publication: Some({ url, copy: Available, }),
+          }
+        Ok(SignInRequired) => { ..content, operation: SignInRequired, }
+        Ok(@protocol.Failed(message~)) =>
+          { ..content, operation: Failed(Diagnostic(message)), }
+        Err(failure) => { ..content, operation: Failed(failure), }
+      }
+      (@cmd.none, self.showing(content))
+    }
     SignedIn(result, ..) if content.operation is SigningIn => {
       let operation = match result {
         Ok(_) => Ready
@@ -329,25 +267,6 @@ pub fn Model::update(
 }
 
 ///|
-fn Content::published(
-  self : Content,
-  reply : Result[@protocol.SessionShareReply, Failure],
-) -> Content {
-  match reply {
-    Ok(Shared(url~)) =>
-      {
-        ..self,
-        operation: Ready,
-        publication: Some({ url, copy: Available, }),
-      }
-    Ok(SignInRequired) => { ..self, operation: SignInRequired, }
-    Ok(@protocol.Failed(message~)) =>
-      { ..self, operation: Failed(Diagnostic(message)), }
-    Err(failure) => { ..self, operation: Failed(failure), }
-  }
-}
-
-///|
 pub extend Model with Eq::{equal, not_equal}
 
 ///|
@@ -362,7 +281,20 @@ pub fn Model::open_cloud(
   session~ : String,
   feedback? : Feedback,
 ) -> (@cmd.Cmd, Model) {
-  self.open_conversation(Cloud(session~), feedback)
+  (
+    @dialog.show(self.id_prefix + "-dialog"),
+    {
+      ..self,
+      generation: self.generation + 1,
+      visible: true,
+      content: Some({
+        source: Cloud(session~),
+        feedback,
+        operation: Ready,
+        publication: None,
+      }),
+    },
+  )
 }
 
 ///|
@@ -372,20 +304,20 @@ pub fn Model::account_changed(
   self : Model,
   result : Result[Unit, @account_failure.Failure],
 ) -> (@cmd.Cmd, Model) {
-  let self = if result is Ok(_) {
-    { ..self, hidden_feedback: [], }
-  } else {
-    self
-  }
   if self.content is Some({ operation: SigningIn, .. }) {
     self.update(_ => @cmd.none, SignedIn(generation=self.generation, result))
   } else if result is Ok(_) &&
     self.content is Some({ source: Host(_, _), operation: SignInRequired, .. }) {
-    (@cmd.none, self.next_generation())
+    (@cmd.none, { ..self, generation: self.generation + 1, })
   } else if result is Ok(_) {
     (
       @dialog.close(self.id_prefix + "-dialog"),
-      { ..self.next_generation(), visible: false, content: None, },
+      {
+        ..self,
+        generation: self.generation + 1,
+        visible: false,
+        content: None,
+      },
     )
   } else {
     (@cmd.none, self)
@@ -394,9 +326,9 @@ pub fn Model::account_changed(
 
 ///|
 pub fn Model::account_expired(self : Model, msg : Msg) -> Bool {
+  self.content is Some({ operation: Sharing(_) | Downloading, .. }) &&
   msg is Published(generation~, Ok(@protocol.SignInRequired)) &&
-  self.publication_content(generation)
-  is Some({ operation: Sharing(_) | Downloading, .. })
+  generation == self.generation
 }
 
 ///|
@@ -422,7 +354,8 @@ pub fn Model::open_file(self : Model, source : FileSource) -> (@cmd.Cmd, Model) 
   (
     @dialog.show(self.id_prefix + "-dialog"),
     {
-      ..self.next_generation(),
+      ..self,
+      generation: self.generation + 1,
       visible: true,
       content: Some({
         source: File(source),
@@ -441,26 +374,10 @@ pub extend FileSource with Eq::{equal, not_equal}
 pub extend FileSource with Debug::{to_repr}
 
 ///|
-fn Model::publication_content(self : Model, generation : Int32) -> Content? {
-  if generation == self.generation {
-    self.content
-  } else {
-    self.hidden_feedback
-    .iter()
-    .find_first(entry => entry.0 == generation)
-    .map(entry => entry.1)
-  }
-}
-
-///|
 pub fn Model::published_feedback(self : Model, msg : Msg) -> Feedback? {
-  if msg is Share &&
-    self.content is Some({ publication: Some(_), feedback, .. }) {
-    return feedback
-  }
   guard msg is Published(generation~, Ok(Shared(..))) &&
-    self.publication_content(generation)
-    is Some({ operation: Sharing(_), feedback, .. }) else {
+    generation == self.generation &&
+    self.content is Some({ operation: Sharing(_), feedback, .. }) else {
     return None
   }
   feedback

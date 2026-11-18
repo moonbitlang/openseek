@@ -7648,7 +7648,7 @@ fn update_msg(
       let clear = dialog
         .published_feedback(message)
         .map_or(@cmd.none, feedback => {
-          let clear_draft = dispatch(
+          dispatch(
             ComposerCommandResult(
               @composer.FeedbackPublished(
                 feedback.identity,
@@ -7656,11 +7656,6 @@ fn update_msg(
               ),
             ),
           )
-          // A restored receipt can complete in the same frame as newly typed
-          // input. Render that draft before acknowledging it in the composer.
-          @cmd.custom_cmd(kind=@cmd.after_render, scheduler => {
-            scheduler.add(clear_draft)
-          })
         })
       let expired = dialog.account_expired(message)
       let (cmd, dialog) = dialog.update(

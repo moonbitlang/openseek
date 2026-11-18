@@ -444,31 +444,7 @@ async test "local share authorization uses the account captured by the operation
 }
 
 ///|
-test "switching accounts retires hidden feedback and its draft acknowledgement" {
-  let emit : @cmd.Emit[Msg] = _ => @cmd.none
-  let feedback : Feedback = {
-    identity: {
-      owner: Cloud(account="123", session="chat"),
-      archive_generation: 0,
-    },
-    metadata: { message: "feedback", environment: {}, },
-  }
-  let (_, opened) = Model().open_cloud(session="chat", feedback~)
-  let (_, pending) = opened.advance(emit, Share)
-  let (_, hidden) = pending.advance(emit, Close)
-  let (_, changed) = hidden.account_changed(Ok(()))
-  let late = Published(
-    generation=pending.generation,
-    Ok(Shared(url="https://shares.test/old")),
-  )
-  assert_true(changed.published_feedback(late) is None)
-  let (_, settled) = changed.advance(emit, late)
-  let (_, next) = settled.open_cloud(session="chat")
-  assert_true(next.content is Some({ feedback: None, publication: None, .. }))
-}
-
-///|
-test "another conversation can share while a hidden feedback receipt belongs to its original session" {
+test "a late feedback receipt cannot acknowledge the draft or update another session's Share dialog" {
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
   let feedback : Feedback = {
     identity: {
@@ -479,67 +455,16 @@ test "another conversation can share while a hidden feedback receipt belongs to 
   }
   let (_, first) = Model().open_cloud(session="a", feedback~)
   let (_, pending) = first.advance(emit, Share)
-  let (_, hidden) = pending.advance(emit, Close)
-  let (_, other) = hidden.open_cloud(session="b")
-  assert_true(
-    other.content is Some({ source: Cloud(session="b"), feedback: None, .. }),
-  )
+  let (_, closed) = pending.advance(emit, Close)
+  let (_, other) = closed.open_cloud(session="b")
   let (_, sharing) = other.advance(emit, Share)
   let reply = Published(
     generation=pending.generation,
-    Ok(Shared(url="https://shares.test/report")),
+    Ok(Shared(url="https://shares.test/old")),
   )
-  assert_true(sharing.published_feedback(reply) == Some(feedback))
-  let (_, delivered) = sharing.advance(emit, reply)
-  assert_true(delivered.content == sharing.content)
-  let (_, ordinary) = delivered.advance(
-    emit,
-    Published(
-      generation=sharing.generation,
-      Ok(Shared(url="https://shares.test/ordinary")),
-    ),
-  )
-  assert_true(
-    ordinary.content
-    is Some(
-      { publication: Some({ url: "https://shares.test/ordinary", .. }), .. },
-    ),
-  )
-  let (_, closed) = ordinary.advance(emit, Close)
-  let (_, restored) = closed.open_cloud(session="a", feedback~)
-  assert_true(
-    restored.content
-    is Some(
-      { publication: Some({ url: "https://shares.test/report", .. }), .. },
-    ),
-  )
-  let (_, switched) = sharing.account_changed(Ok(()))
-  assert_true(switched.published_feedback(reply) is None)
-}
-
-///|
-test "ordinary Share after a hidden feedback failure omits the feedback metadata" {
-  let emit : @cmd.Emit[Msg] = _ => @cmd.none
-  let feedback : Feedback = {
-    identity: {
-      owner: Cloud(account="123", session="a"),
-      archive_generation: 0,
-    },
-    metadata: { message: "private report", environment: {}, },
+  for dialog in [closed, sharing] {
+    assert_true(dialog.published_feedback(reply) is None)
+    let (_, settled) = dialog.advance(emit, reply)
+    assert_true(settled == dialog)
   }
-  let (_, opened) = Model().open_cloud(session="a", feedback~)
-  let (_, pending) = opened.advance(emit, Share)
-  let (_, hidden) = pending.advance(emit, Close)
-  let (_, failed) = hidden.advance(
-    emit,
-    Published(
-      generation=pending.generation,
-      Ok(@protocol.Failed(message="upload failed")),
-    ),
-  )
-  let (_, ordinary) = failed.open_cloud(session="a")
-  let (_, publishing) = ordinary.advance(emit, Share)
-  assert_true(
-    publishing.content is Some({ feedback: None, operation: Sharing(_), .. }),
-  )
 }

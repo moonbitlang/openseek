@@ -85,17 +85,17 @@ for (const mode of ['Cloud', 'Local']) {
   });
 }
 
-test('a dismissed feedback submission can be reopened before and after its receipt', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('resubmitting dismissed feedback sends a new request and displays its link', async ({ page }) => {
   const app = new CloudHarness(page);
   await app.install();
-  let finish;
-  const pending = new Promise(resolve => { finish = resolve; });
+  const endpoint = `${cloudOrigin}/v1/sessions/${sessionA}/feedback`;
+  let finishFirst;
+  const pending = new Promise(resolve => { finishFirst = resolve; });
   let posts = 0;
-  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
-    posts++;
-    await pending;
-    await route.fulfill({ status: 201, json: { id: 'fb_test', url } });
+  await page.route(endpoint, async route => {
+    const id = `fb_${++posts}`;
+    if (id === 'fb_1') await pending;
+    await route.fulfill({ status: 201, json: { id, url: `${authOrigin}/v1/feedback/${id}` } });
   });
   await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
   const task = page.locator('#task');
@@ -105,24 +105,15 @@ test('a dismissed feedback submission can be reopened before and after its recei
   await expect.poll(() => posts).toBe(1);
   await dialog.press('Escape');
   await expect(dialog).toBeHidden();
+  await expect(task).toHaveValue('/feedback ' + message);
   await task.press('Enter');
-  await expect(dialog).toBeVisible();
-  await dialog.press('Escape');
-  await expect(dialog).toBeHidden();
-  finish();
+  const link = dialog.getByRole('textbox', { name: 'Share link' });
+  const secondUrl = `${authOrigin}/v1/feedback/fb_2`;
+  await expect(link).toHaveValue(secondUrl);
+  const lateResponse = page.waitForResponse(endpoint);
+  finishFirst();
+  await (await lateResponse).finished();
+  await expect(link).toHaveValue(secondUrl);
   await expect(task).toHaveValue('');
-  await expect(dialog).toBeHidden();
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
-  await expect(dialog).toContainText('7 days');
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(/\/v1\/shares\//);
-  await dialog.press('Escape');
-  await expect(dialog).toBeHidden();
-  await task.fill('/feedback ' + message);
-  await task.press('Enter');
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(url);
-  await expect(task).toHaveValue('');
-  await dialog.getByRole('button', { name: 'Copy share link' }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(url);
-  expect(posts).toBe(1);
+  expect(posts).toBe(2);
 });
