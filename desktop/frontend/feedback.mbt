@@ -1,4 +1,8 @@
 ///|
+extern "js" fn browser_build_version() -> String =
+  #| () => globalThis.__SEEKMOON_BROWSER_RELEASE__ ?? "unknown"
+
+///|
 fn Model::submit_feedback(
   self : Model,
   dispatch : @cmd.Emit[Msg],
@@ -9,7 +13,13 @@ fn Model::submit_feedback(
   let metadata : @protocol.FeedbackMetadata = {
     message,
     environment: {
-      "app_version": Json(self.app_version),
+      "app_version": Json(
+        if self.is_desktop {
+          self.app_version
+        } else {
+          browser_build_version()
+        },
+      ),
       "client": Json(
         if self.is_desktop {
           "desktop"

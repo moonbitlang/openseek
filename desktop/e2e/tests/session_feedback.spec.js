@@ -52,7 +52,7 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
   expect(posts).toHaveLength(4);
   for (const post of posts) {
     expect(post).toEqual({ method: 'POST', auth: 'Bearer ts_fixture-123', parts: ['metadata'], metadata: {
-      message, environment: { client: 'browser', app_version: expect.any(String), platform: expect.any(String), locale: expect.any(String), user_agent: expect.any(String) },
+      message, environment: { client: 'browser', app_version: process.env.SEEKMOON_BROWSER_RELEASE || 'unknown', platform: expect.any(String), locale: expect.any(String), user_agent: expect.any(String) },
     } });
   }
   expect(app.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(1);
