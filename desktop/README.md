@@ -171,10 +171,12 @@ the composer.
 ## Conversation overview
 
 The titlebar's overview control shows or hides a column of cards about the
-OpenSeek conversation on screen: its **Environment** — the device it runs
-on, its project, the checked-out branch and whether the conversation has a
-worktree of its own — and its **Connectors** (see MCP servers).
+OpenSeek conversation on screen. **Changes** lists the current checkout and
+attached pull requests and branches. **Background tasks** shows the
+conversation's background jobs and subagents.
 Showing it is a window preference kept across conversations and launches.
+When neither card has content, the overview takes no space. Cards appear
+automatically as content becomes available while the overview is enabled.
 Where the main pane has room for a 600px conversation beside it, the
 overview is a rail to the right of the transcript and the composer; where it
 does not — a narrow window, a wide sidebar, an open file panel — the same

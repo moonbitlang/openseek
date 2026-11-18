@@ -385,6 +385,7 @@ for (const browser of [false, true]) {
 
 test('Back keeps a dialog above a panel that only covers the page after a resize', async ({ page }) => {
   const app = new ExportHarness(page);
+  app.gitBranch = { branch: 'feature/export-dialog' };
   await app.openDesktop();
   // A wide window shows the overview as a rail beside the conversation; a
   // phone-narrow one turns it into a panel over the transcript.

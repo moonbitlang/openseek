@@ -66,6 +66,9 @@ pub fn view(
   background? : Background,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
+  guard changes is Some(_) || background is Some(_) else {
+    return @html.nothing
+  }
   @html.aside(
     class="conv-overview",
     attrs=@html.Attrs::build().aria_label(text(locale, Overview)),
