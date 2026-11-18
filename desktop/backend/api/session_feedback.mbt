@@ -5,37 +5,22 @@ async fn ApiState::submit_feedback(
   origin~ : String,
   token~ : String,
 ) -> @protocol.FeedbackReceipt {
-  let metadata : Map[String, Json] = {
-    "message": Json(payload.metadata.message),
-    "environment": Json::object(payload.metadata.environment),
-    "source": { "mode": "local", "session_id": payload.source.session },
-  }
-  let (files, transcript_error) = try {
-    let (shell, bundle) = self.host_state().viz_assets().read()
-    let files = @engine.ConversationExport::capture(
-      self.manager(),
-      payload.source,
-      shell,
-      bundle,
-    )
-    (
-      Some(@protocol.SessionSnapshot::{ html: files.html, json: files.json, }),
-      None,
-    )
-  } catch {
-    error if @async.is_being_cancelled() => raise error
-    error => {
-      let reason = error.to_string()
-      metadata["transcript_error"] = Json(reason)
-      (None, Some(reason))
-    }
-  }
-  let receipt = @feedback.submit(
+  let (shell, bundle) = self.host_state().viz_assets().read()
+  let files = @engine.ConversationExport::capture(
+    self.manager(),
+    payload.source,
+    shell,
+    bundle,
+  )
+  @feedback.submit(
     origin,
     "/v1/feedback",
     token,
-    Json::object(metadata),
-    files?,
+    {
+      "message": payload.metadata.message,
+      "environment": Json::object(payload.metadata.environment),
+      "source": { "mode": "local", "session_id": payload.source.session },
+    },
+    files={ html: files.html, json: files.json, },
   )
-  { ..receipt, transcript_error, }
 }

@@ -62,16 +62,11 @@ pub impl FromJson for SessionFeedbackPayload with fn from_json(json, path) {
 ///|
 pub(all) struct FeedbackReceipt {
   id : String
-  transcript_error : String?
 }
 
 ///|
 pub impl ToJson for FeedbackReceipt with fn to_json(self) {
-  let fields : Map[String, Json] = { "id": Json(self.id) }
-  if self.transcript_error is Some(reason) {
-    fields["transcript_error"] = Json(reason)
-  }
-  Json::object(fields)
+  { "id": self.id }
 }
 
 ///|
@@ -81,5 +76,5 @@ pub impl FromJson for FeedbackReceipt with fn from_json(json, path) {
   guard !id.is_blank() else {
     raise JsonDecodeError((path.add_key("id"), "missing feedback id"))
   }
-  { id, transcript_error: obj.optional_string("transcript_error"), }
+  { id, }
 }

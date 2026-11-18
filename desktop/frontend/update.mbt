@@ -2679,12 +2679,7 @@ fn update_msg(
       }
     FeedbackFinished(identity, result) => {
       let message = match result {
-        Ok(receipt) => {
-          let text = shell_text(model.locale, FeedbackSent(receipt.id))
-          receipt.transcript_error.map_or(text, reason => {
-            text + " " + shell_text(model.locale, TranscriptMissing(reason))
-          })
-        }
+        Ok(receipt) => shell_text(model.locale, FeedbackSent(receipt.id))
         Err(error) => error
       }
       let (notice, next) = model.notify(dispatch, Raw(message))

@@ -1,6 +1,6 @@
 ///|
 #cfg(not(platform="windows"))
-async test "feedback uploads both persisted exports or reports the missing transcript" {
+async test "feedback requires both full persisted exports before contacting the API" {
   let root = @pathx.Path(@fs.realpath(@fs.tmpdir(prefix="seekmoon-feedback-"))).resolve()
   defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
@@ -61,85 +61,79 @@ async test "feedback uploads both persisted exports or reports the missing trans
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
   let origin = "http://127.0.0.1:\{server.addr.port}"
-  for attached in [true, false] {
-    if !attached {
-      @fs.remove(viz.join("viz_app.js").to_string())
-    }
-    @async.with_task_group(group => {
-      let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
-        defer connection.close()
-        let request = connection.read_request()
-        assert_true(request.meth is Post)
-        assert_eq(request.path, "/v1/feedback")
-        assert_eq(
-          request.headers.get("Authorization"),
-          Some("Bearer test-account"),
-        )
-        let boundary = request.headers
-          .get("Content-Type")
-          .unwrap()
-          .split_once("boundary=")
-          .unwrap().1
-        let parts = @utf8.decode(connection.read_all())
-          .split("--" + boundary.to_owned())
-          .to_array()
-        assert_eq(parts.length(), if attached { 5 } else { 3 })
-        let metadata = @json.parse(parts[1].split_once("\r\n\r\n").unwrap().1)
-        assert_true(
-          metadata
-          is {
-            "message": String(message),
-            "environment": { "client": "desktop", .. },
-            "source": { "mode": "local", "session_id": "session-1", .. },
-            ..
-          } &&
-          message == payload.metadata.message,
-        )
-        if attached {
-          assert_false(metadata is { "transcript_error": _, .. })
-          let expected = @engine.ConversationExport::capture(
-            state.manager(),
-            payload.source,
-            "<html><script src=\"/viz_app.js\"></script></html>",
-            "/* bundled visualizer */",
-          )
-          for
-            (index, name, content) in [
-              (2, "html", expected.html),
-              (3, "json", expected.json),
-            ] {
-            let (headers, body) = parts[index].split_once("\r\n\r\n").unwrap()
-            assert_true(
-              headers.contains(
-                "name=\"\{name}\"; filename=\"transcript.\{name}\"",
-              ),
-            )
-            assert_eq(body.strip_suffix("\r\n").unwrap().to_owned(), content)
-            for turn in 1..<=80 {
-              assert_true(body.contains("Persisted question (\{turn})"))
-            }
-          }
-        } else {
-          assert_true(
-            metadata is { "transcript_error": String(reason), .. } &&
-            reason.contains("visualizer"),
-          )
-        }
-        connection.send_response(201, "Created")
-        connection.write_string("{\"id\":\"fb_test\"}")
-        connection.end_response()
-      })
-      let receipt = state.submit_feedback(
-        payload,
-        origin~,
-        token="test-account",
+  @async.with_task_group(group => {
+    let receiver = group.spawn(() => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      let request = connection.read_request()
+      assert_true(request.meth is Post)
+      assert_eq(request.path, "/v1/feedback")
+      assert_eq(
+        request.headers.get("Authorization"),
+        Some("Bearer test-account"),
       )
-      receiver.wait()
-      assert_eq(receipt.id, "fb_test")
-      assert_eq(receipt.transcript_error is None, attached)
+      let boundary = request.headers
+        .get("Content-Type")
+        .unwrap()
+        .split_once("boundary=")
+        .unwrap().1
+      let parts = @utf8.decode(connection.read_all())
+        .split("--" + boundary.to_owned())
+        .to_array()
+      assert_eq(parts.length(), 5)
+      let metadata = @json.parse(parts[1].split_once("\r\n\r\n").unwrap().1)
+      assert_true(
+        metadata
+        is {
+          "message": String(message),
+          "environment": { "client": "desktop", .. },
+          "source": { "mode": "local", "session_id": "session-1", .. },
+          ..
+        } &&
+        message == payload.metadata.message,
+      )
+      let expected = @engine.ConversationExport::capture(
+        state.manager(),
+        payload.source,
+        "<html><script src=\"/viz_app.js\"></script></html>",
+        "/* bundled visualizer */",
+      )
+      for
+        (index, name, content) in [
+          (2, "html", expected.html),
+          (3, "json", expected.json),
+        ] {
+        let (headers, body) = parts[index].split_once("\r\n\r\n").unwrap()
+        assert_true(
+          headers.contains("name=\"\{name}\"; filename=\"transcript.\{name}\""),
+        )
+        assert_eq(body.strip_suffix("\r\n").unwrap().to_owned(), content)
+        for turn in 1..<=80 {
+          assert_true(body.contains("Persisted question (\{turn})"))
+        }
+      }
+      connection.send_response(201, "Created")
+      connection.write_string("{\"id\":\"fb_test\"}")
+      connection.end_response()
     })
-  }
+    let receipt = state.submit_feedback(payload, origin~, token="test-account")
+    receiver.wait()
+    assert_eq(receipt.id, "fb_test")
+  })
+  @fs.remove(viz.join("viz_app.js").to_string())
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      fail("An export failure must not contact the feedback endpoint")
+    })
+    let result = Ok(
+      state.submit_feedback(payload, origin~, token="test-account"),
+    ) catch {
+      error => Err(error.to_string())
+    }
+    assert_true(result is Err(error) && error.contains("visualizer"))
+  })
 }
 
 ///|

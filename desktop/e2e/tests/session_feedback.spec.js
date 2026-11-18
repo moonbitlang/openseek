@@ -17,8 +17,8 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
   }));
   await app.install();
   const posts = [];
-  let status = 502;
-  let response = { error: 'storage unavailable' };
+  let status;
+  let response;
   await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
     const request = route.request();
     const form = await new Response(request.postDataBuffer(), { headers: {
@@ -31,19 +31,25 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
   await expect(page.locator('#transcript .msg.user .msg-content')).toHaveText(['Persisted question (80)']);
   const task = page.locator('#task');
   await task.fill('/feed');
-  await page.locator('.completion-item').filter({ hasText: '/feedback' }).click();
+  const completion = page.locator('.completion-item').filter({ hasText: '/feedback' });
+  await expect(completion).toContainText('full conversation and runtime environment');
+  await completion.click();
   await expect(task).toHaveValue('/feedback ');
   await expect(page.locator('#send')).toBeDisabled();
   await task.fill('/feedback ' + message);
-  await task.press('Enter');
-  await expect(page.getByText(/HTTP 502.*storage unavailable/)).toBeVisible();
-  await expect(task).toHaveValue('/feedback ' + message);
+  for (const [code, reason] of [[500, 'session export unavailable'], [413, 'transcript too large'], [502, 'storage unavailable']]) {
+    status = code;
+    response = { error: reason };
+    await task.press('Enter');
+    await expect(page.getByText(`Feedback failed (HTTP ${code}): ${reason}`)).toBeVisible();
+    await expect(task).toHaveValue('/feedback ' + message);
+  }
   status = 201;
-  response = { id: 'fb_cloud', transcript_error: 'session export unavailable' };
+  response = { id: 'fb_cloud' };
   await page.locator('#send').click();
-  await expect(page.getByText(/fb_cloud.*Transcript not attached.*session export unavailable/)).toBeVisible();
+  await expect(page.getByText(/Feedback submitted.*fb_cloud/)).toBeVisible();
   await expect(task).toHaveValue('');
-  expect(posts).toHaveLength(2);
+  expect(posts).toHaveLength(4);
   for (const post of posts) {
     expect(post).toEqual({ method: 'POST', auth: 'Bearer ts_fixture-123', parts: ['metadata'], metadata: {
       message, environment: { client: 'browser', app_version: expect.any(String), platform: expect.any(String), locale: expect.any(String), user_agent: expect.any(String) },
@@ -58,16 +64,22 @@ test('Local feedback targets the selected host session and displays its receipt'
   const app = new CloudHarness(page, { desktop: true });
   await app.install();
   const original = app.device.replyFor.bind(app.device);
-  app.device.replyFor = request => request.method === 'session.feedback' ? { Ok: { id: 'fb_local' } } : original(request);
+  let reply = { Err: 'Session export failed: visualizer unavailable' };
+  app.device.replyFor = request => request.method === 'session.feedback' ? reply : original(request);
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
   await app.device.openSession();
   const task = page.locator('#task');
   await task.fill('/feedback ' + message);
   await task.press('Enter');
+  await expect(page.getByText(reply.Err)).toBeVisible();
+  await expect(task).toHaveValue('/feedback ' + message);
+  reply = { Ok: { id: 'fb_local' } };
+  await task.press('Enter');
   await expect(page.getByText(/Feedback submitted.*fb_local/)).toBeVisible();
   await expect(task).toHaveValue('');
   const requests = app.hostRequests.filter(request => request.method === 'session.feedback');
-  expect(requests).toHaveLength(1);
+  expect(requests).toHaveLength(2);
+  expect(requests[1].params).toEqual(requests[0].params);
   expect(requests[0].params.source).toMatchObject({ session: 'session-1', workspace: '/workspace', archived: false });
   expect(requests[0].params.metadata).toMatchObject({ message, environment: { client: 'desktop' } });
   expect(app.hostRequests.some(request => ['agent.start', 'session.snapshot'].includes(request.method))).toBe(false);
