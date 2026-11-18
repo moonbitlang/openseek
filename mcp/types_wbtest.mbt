@@ -197,17 +197,17 @@ test "decode_call_result keeps structuredContent" {
 }
 
 ///|
-test "render_text renders structuredContent when content is empty" {
+test "render_text stays empty when only structuredContent is present" {
   let result : CallToolResult = {
     content: [],
     structured_content: Some({ "value": 42 }),
     is_error: false,
   }
-  assert_eq(result.render_text(), "{\"value\":42}")
+  assert_eq(result.render_text(), "")
 }
 
 ///|
-test "render_text does not duplicate structuredContent already in content" {
+test "render_text preserves JSON text sent in content" {
   let serialized = ({ "value": 42 } : Json).stringify()
   let result : CallToolResult = {
     content: [Text(serialized)],
@@ -218,11 +218,11 @@ test "render_text does not duplicate structuredContent already in content" {
 }
 
 ///|
-test "render_text appends structuredContent distinct from a status message" {
+test "render_text keeps a status message separate from structuredContent" {
   let result : CallToolResult = {
     content: [Text("done")],
     structured_content: Some({ "value": 42 }),
     is_error: false,
   }
-  assert_eq(result.render_text(), "done\n{\"value\":42}")
+  assert_eq(result.render_text(), "done")
 }

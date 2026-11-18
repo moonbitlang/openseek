@@ -183,16 +183,41 @@ async fn main {
 }
 ```
 
-Call a tool with `@mcp.call(server, tool, arguments)`, using the names the
-page shows and arguments matching its schema. Its result has `content`,
-`is_error`, and `data`, a structured result shaped as the page shows. Images
-a tool returns are saved as files listed in `images`; to look at one, pass
-its path to `@openseek_tools.call("read_image", { "path": path })`. When
-which tools to call depends on the catalog itself (the same check on every
-server, one query to every search tool), work through `page.tools`, records
-with `server`, `name`, `description`, `input_schema`, and `output_schema`, in
-the same script. A page holds a limited number of tools; its `next_offset`
-continues the listing.
+After the search script returns, read the tool descriptions and schemas,
+select a tool for the task, and construct its arguments in the next script.
+Call it with `@mcp.call(server, tool, arguments)`. Check `is_error` first,
+then match `data : Json?` against the discovered output schema and print only
+the fields or summary needed. For example, if discovery showed a `tracker`
+server with `list_issues`, a `repo` argument, and an `issues` result array:
+
+```mbtx
+---
+import {
+  "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
+  "moonbitlang/core/async",
+}
+---
+
+async fn main {
+  let result = @mcp.call("tracker", "list_issues", { "repo": "alpha" })
+  if result.is_error { fail(result.content) }
+  guard result.data is Some({ "issues": Array(issues), .. }) else {
+    fail("Expected structured issues. Tool text: \{result.content}")
+  }
+  println("Issues on this page: \{issues.length()}")
+}
+```
+
+`data` comes from the server's `structuredContent`; `content` renders its
+content blocks as text. A tool can return either or both. `data` is absent
+when the server supplies no structured result or it exceeds the reply budget.
+Use `content` for text results. For a read that needs structured data, narrow
+an oversized query or reduce its page size. Images are saved as files listed
+in `images`; pass a path to `@openseek_tools.call("read_image", { "path": path })`
+to view one. To apply a known operation across catalog entries, such as the
+same check on every server, iterate over `page.tools` in one script. Each
+record has `server`, `name`, `description`, `input_schema`, and `output_schema`.
+A page holds a limited number of tools; its `next_offset` continues the listing.
 
 An MCP call that changes something (posts, creates, updates, deletes) acts
 on real systems: make each intended change once and treat its successful

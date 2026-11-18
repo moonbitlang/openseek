@@ -171,10 +171,9 @@ pub struct RenderedResult {
 /// Render the result for the model in content order: text blocks verbatim,
 /// images the shared validator accepts as attached images, and every other
 /// block (including a rejected image) as a compact placeholder in the text.
-/// Text parts are joined by newlines, plus any `structuredContent` the content
-/// array does not already carry (so structured output is never lost). The
-/// caller applies any size budget and metadata footer. Empty content and no
-/// structured output yields "" and no images.
+/// Text parts are joined by newlines. Structured output stays in
+/// `structured_content`. The caller applies any size budget and metadata
+/// footer. Empty content yields "" and no images.
 pub fn CallToolResult::render(self : CallToolResult) -> RenderedResult {
   let parts = []
   let images = []
@@ -199,24 +198,7 @@ pub fn CallToolResult::render(self : CallToolResult) -> RenderedResult {
       Other(kind~) => parts.push("[unsupported content: \{kind}]")
     }
   }
-  let text = parts.join("\n")
-  // Preserve structured output. A conformant server mirrors it into a text
-  // block (then `text` already contains it — don't duplicate); when it does not
-  // (empty content, or a bare status) append the serialized structure.
-  let text = match self.structured_content {
-    Some(structured) => {
-      let serialized = structured.stringify()
-      if text == "" {
-        serialized
-      } else if text.contains(serialized) {
-        text
-      } else {
-        "\{text}\n\{serialized}"
-      }
-    }
-    None => text
-  }
-  { text, images, }
+  { text: parts.join("\n"), images, }
 }
 
 ///|

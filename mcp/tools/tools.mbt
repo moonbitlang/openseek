@@ -520,10 +520,8 @@ pub async fn call_tool(
     )
     return @agent_tool.respond(message, is_error=true)
   }
-  // The text is what a script prints for the model, so it keeps the budget. A
-  // structured result also rides along as `data`, but only whole and beside
-  // the text: the text renders it too, so leaving it out loses nothing a
-  // reader could not find.
+  // Render the server's content blocks as text and images. Structured output
+  // travels separately as `data` when it fits whole beside the text.
   let rendered = result.render()
   let (content, truncated) = cap_serialized(rendered.text, MaxToolOutputChars)
   let text = if truncated {
