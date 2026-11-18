@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
@@ -15,7 +16,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], Actions, context_input~ : @rabbita.Val[@action_menu.ContextInput], context_actions~ : @action_menu.ContextActions) -> @rabbita.Val[@html.Html]
 
 pub fn preserve_prepend_scroll() -> @cmd.Cmd
 

@@ -355,6 +355,8 @@ fn Model::update(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  context_input~ : @rabbita.Val[@action_menu.ContextInput],
+  context_actions~ : @action_menu.ContextActions,
 ) -> @rabbita.Val[@html.Html] {
   let localization = @localization.Localization()
   let (state, emit) = @rabbita.create_state_with_input(
@@ -423,32 +425,44 @@ pub fn component(
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
+      let revisions = Ref(0)
+      let prefix = "transcript-link-" + @uuid.mint()
       let (changes, changes_emit) = message_changes_state(
         row.map(row => row.1),
         actions,
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
-      changes.map2(row, (changes, row) => {
-        let (locale, block, editor, owner) = row
-        renders.val += 1
-        let html = @html.memo_by(
-          block,
-          block => {
-            block.render(
-              locale~,
-              actions,
-              artifact_view=reference => {
-                artifact_file_view(reference, locale, actions.open, owner)
-              },
-              changes?=changes.control(block, changes_emit),
-              editor?=editor.view(block, locale~, editor_emit),
-              begin_edit=editor_emit(BeginEdit),
-            )
-          },
-          by=_ => renders.val,
-        )
-        (block.key.wire(), html)
+      changes
+      .map3(row, context_input, (changes, row, context) => {
+        revisions.val += 1
+        (revisions.val, changes, row, context)
       })
+      .switch_by(
+        value => {
+          let (_, changes, (locale, block, editor, owner), context) = value
+          let links = @markdown.LinkMenus(prefix, context, context_actions)
+          block
+          .render(
+            locale~,
+            actions,
+            links~,
+            artifact_view=reference => {
+              artifact_file_view(reference, locale, actions.open, owner)
+            },
+            changes?=changes.control(block, changes_emit),
+            editor?=editor.view(block, locale~, editor_emit),
+            begin_edit=editor_emit(BeginEdit),
+          )
+          .map(html => {
+            renders.val += 1
+            (
+              block.key.wire(),
+              @html.memo_by(html, html => html, by=_ => renders.val),
+            )
+          })
+        },
+        by=value => value.0.to_string(),
+      )
     },
     by=pair => pair.1.branch_key(),
   )

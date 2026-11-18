@@ -2,17 +2,23 @@
 package "openseek_desktop/frontend/markdown"
 
 import {
+  "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbitlang/openseek/workspace_file_ref",
+  "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/i18n",
 }
 
 // Values
+pub fn collect_components(Array[@rabbita.Val[@html.Html]]) -> @rabbita.Val[Array[@html.Html]]
+
 pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : String, label~ : String) -> @html.Html
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
+
+pub fn markdown_components(locale~ : @i18n.Locale, String, open_file~ : (String) -> @cmd.Cmd, links~ : LinkMenus, artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html, defer_artifacts? : Bool) -> Array[@rabbita.Val[@html.Html]]
 
 pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html, defer_artifacts? : Bool, render_math? : (String, Bool) -> @html.Html) -> Array[@html.Html]
 
@@ -27,6 +33,9 @@ pub struct DiagramRenderers {
 pub fn DiagramRenderers::DiagramRenderers(() -> Unit) -> Self
 pub fn DiagramRenderers::dispose(Self) -> Unit
 pub fn DiagramRenderers::refresh(Self, @dom.Element, dark_mode~ : Bool) -> Unit
+
+type LinkMenus
+pub fn LinkMenus::LinkMenus(String, @action_menu.ContextInput, @action_menu.ContextActions) -> Self
 
 // Type aliases
 

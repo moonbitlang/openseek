@@ -22,10 +22,52 @@ pub fn markdown_nodes(
   defer_artifacts~ : Bool = false,
   render_math~ : (String, Bool) -> @html.Html = math_node,
 ) -> Array[@html.Html] {
+  render_markdown(
+    locale,
+    source,
+    open_file,
+    artifact_view,
+    defer_artifacts,
+    render_math,
+    None,
+  )
+}
+
+///|
+pub fn markdown_components(
+  locale~ : @i18n.Locale,
+  source : String,
+  open_file~ : (String) -> @cmd.Cmd,
+  links~ : LinkMenus,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  defer_artifacts~ : Bool = false,
+) -> Array[@rabbita.Val[@html.Html]] {
+  render_markdown(
+    locale,
+    source,
+    Some(open_file),
+    artifact_view,
+    defer_artifacts,
+    math_node,
+    Some(links),
+  )
+}
+
+///|
+fn[Node : MarkdownNode] render_markdown(
+  locale : @i18n.Locale,
+  source : String,
+  open_file : ((String) -> @cmd.Cmd)?,
+  artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?,
+  defer_artifacts : Bool,
+  render_math : (String, Bool) -> @html.Html,
+  links : LinkMenus?,
+) -> Array[Node] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
-    let render = MarkdownRender::{
+    let render : MarkdownRender = {
       locale,
+      links,
       defs: doc.defs,
       open_file,
       artifact_view,
@@ -35,7 +77,7 @@ pub fn markdown_nodes(
       footnotes: Footnotes::new(),
       in_sources: false,
     }
-    let nodes = render.block_nodes(doc.block)
+    let nodes : Array[Node] = render.block_nodes(doc.block)
     if !render.citations.is_empty() {
       nodes.push(render.sources_node())
     }
@@ -44,12 +86,69 @@ pub fn markdown_nodes(
     }
     @js.Value::cast_from(nodes)
   }) catch {
-    _ => [@html.pre(class="markdown-fallback", source)]
+    _ => [Node::from_html(@html.pre(class="markdown-fallback", source))]
   }
 }
 
 ///|
+priv trait MarkdownNode {
+  fn from_html(@html.Html) -> Self
+  fn compose(Array[Self], (Array[@html.Html]) -> @html.Html) -> Self
+  fn with_link_menu(Self, LinkMenus, @i18n.Locale, @action_menu.ContextTarget) -> Self
+}
+
+///|
+impl MarkdownNode for @html.Html with fn from_html(html) {
+  html
+}
+
+///|
+impl MarkdownNode for @html.Html with fn compose(children, render) {
+  render(children)
+}
+
+///|
+impl MarkdownNode for @html.Html with fn with_link_menu(html, _, _, _) {
+  html
+}
+
+///|
+impl MarkdownNode for @rabbita.Val[@html.Html] with fn from_html(html) {
+  @rabbita.Val::constant(html)
+}
+
+///|
+impl MarkdownNode for @rabbita.Val[@html.Html] with fn compose(children, render) {
+  collect_components(children).map(render)
+}
+
+///|
+impl MarkdownNode for @rabbita.Val[@html.Html] with fn with_link_menu(
+  content,
+  links,
+  locale,
+  target,
+) {
+  links.wrap(locale, target, content)
+}
+
+///|
+pub fn collect_components(
+  children : Array[@rabbita.Val[@html.Html]],
+) -> @rabbita.Val[Array[@html.Html]] {
+  // Accumulate a persistent vector so adding a child does not copy its prefix.
+  let mut nodes : @rabbita.Val[@vector.Vector[@html.Html]] = @rabbita.Val::constant(
+    @vector.Vector::new(),
+  )
+  for child in children {
+    nodes = nodes.map2(child, (nodes, node) => nodes.push(node))
+  }
+  nodes.map(nodes => nodes.to_array())
+}
+
+///|
 priv struct MarkdownRender {
+  links : LinkMenus?
   locale : @i18n.Locale
   // Link-reference and footnote definitions collected by the parser, used to
   // resolve `[text][label]` style references to their destinations.
@@ -67,19 +166,63 @@ priv struct MarkdownRender {
 }
 
 ///|
-fn MarkdownRender::block_nodes(
+fn[Node : MarkdownNode] MarkdownRender::link(
+  self : MarkdownRender,
+  target : @action_menu.ContextTarget,
+  content : Node,
+) -> Node {
+  if target != NoTarget && self.links is Some(links) {
+    content.with_link_menu(links, self.locale, target)
+  } else {
+    content
+  }
+}
+
+///|
+fn[Node : MarkdownNode] MarkdownRender::web_link(
+  self : MarkdownRender,
+  href : String,
+  title? : String,
+  children : Array[Node],
+) -> Node {
+  let node = Node::compose(children, children => {
+    link_node(href, title?, children)
+  })
+  self.link(@action_menu.link_target(href), node)
+}
+
+///|
+fn[Node : MarkdownNode] MarkdownRender::file_link(
+  self : MarkdownRender,
+  open : (String) -> @cmd.Cmd,
+  path : String,
+  title? : String,
+  children : Array[Node],
+) -> Node {
+  let locale = self.locale
+  let node = Node::compose(children, children => {
+    file_link_node(locale~, open, path, title?, children)
+  })
+  self.link(
+    FileLink(path, workspace_file=Some(FileReference(path).path())),
+    node,
+  )
+}
+
+///|
+fn[Node : MarkdownNode] MarkdownRender::block_nodes(
   self : MarkdownRender,
   block : @cmark.Block,
-) -> Array[@html.Html] {
-  let out : Array[@html.Html] = []
+) -> Array[Node] {
+  let out : Array[Node] = []
   self.push_block(out, block)
   out
 }
 
 ///|
-fn MarkdownRender::push_block(
+fn[Node : MarkdownNode] MarkdownRender::push_block(
   self : MarkdownRender,
-  out : Array[@html.Html],
+  out : Array[Node],
   block : @cmark.Block,
 ) -> Unit {
   match block {
@@ -88,49 +231,67 @@ fn MarkdownRender::push_block(
       for child in node.v.iter() {
         self.push_block(out, child)
       }
-    Paragraph(node) => out.push(@html.p(self.inline_nodes(node.v.inline)))
+    Paragraph(node) =>
+      out.push(
+        Node::compose(self.inline_nodes(node.v.inline), children => {
+          @html.p(children)
+        }),
+      )
     Heading(node) => out.push(self.heading(node.v))
     BlockQuote(node) =>
-      out.push(@html.blockquote(self.block_nodes(node.v.block)))
+      out.push(
+        Node::compose(self.block_nodes(node.v.block), children => {
+          @html.blockquote(children)
+        }),
+      )
     ExtMathBlock(node) =>
-      out.push((self.render_math)(lines_text(node.v.code), true))
+      out.push(
+        Node::from_html((self.render_math)(lines_text(node.v.code), true)),
+      )
     CodeBlock(node) =>
       out.push(
-        code_block(
-          locale=self.locale,
-          node.v,
-          self.open_file,
-          artifact_view?=self.artifact_view,
-          defer_artifacts=self.defer_artifacts,
+        Node::from_html(
+          code_block(
+            locale=self.locale,
+            node.v,
+            self.open_file,
+            artifact_view?=self.artifact_view,
+            defer_artifacts=self.defer_artifacts,
+          ),
         ),
       )
     HtmlBlock(node) =>
-      out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
+      out.push(
+        Node::from_html(@html.pre(class="raw-html", lines_text(node.v.0))),
+      )
     List(node) => out.push(self.list(node.v))
-    ThematicBreak(_) => out.push(@html.hr())
+    ThematicBreak(_) => out.push(Node::from_html(@html.hr()))
     ExtTable(node) => out.push(self.table(node.v))
   }
 }
 
 ///|
-fn MarkdownRender::heading(
+fn[Node : MarkdownNode] MarkdownRender::heading(
   self : MarkdownRender,
   heading : @cmark.BlockHeading,
-) -> @html.Html {
+) -> Node {
   let children = self.inline_nodes(heading.inline)
   let id = heading.id.map(id => {
     match id {
       Auto(id) | Id(id) => id
     }
   })
-  match heading.level {
-    1 => @html.h1(id?, children)
-    2 => @html.h2(id?, children)
-    3 => @html.h3(id?, children)
-    4 => @html.h4(id?, children)
-    5 => @html.h5(id?, children)
-    _ => @html.h6(id?, children)
-  }
+  let level = heading.level
+  Node::compose(children, children => {
+    match level {
+      1 => @html.h1(id?, children)
+      2 => @html.h2(id?, children)
+      3 => @html.h3(id?, children)
+      4 => @html.h4(id?, children)
+      5 => @html.h5(id?, children)
+      _ => @html.h6(id?, children)
+    }
+  })
 }
 
 ///|
@@ -394,11 +555,11 @@ fn is_moonbit_fence(language : String) -> Bool {
 }
 
 ///|
-fn MarkdownRender::list(
+fn[Node : MarkdownNode] MarkdownRender::list(
   self : MarkdownRender,
   list : @cmark.BlockList,
-) -> @html.Html {
-  let items : Array[@html.Html] = []
+) -> Node {
+  let items : Array[Node] = []
   for item_node in list.items.iter() {
     let item = item_node.v
     let content = self.list_item_nodes(item.block, tight=list.tight)
@@ -407,43 +568,46 @@ fn MarkdownRender::list(
       Some(marker) => {
         let status = @cmark.ListTaskStatus::from_marker(marker.v)
         let children = [
-          @html.input(
-            input_type=Checkbox,
-            class="task-marker",
-            checked=status is (Checked | Other(_)),
-            attrs=@html.Attrs::build()
-              .disabled(true)
-              .data_set("task-marker", marker.v.to_string()),
+          Node::from_html(
+            @html.input(
+              input_type=Checkbox,
+              class="task-marker",
+              checked=status is (Checked | Other(_)),
+              attrs=@html.Attrs::build()
+                .disabled(true)
+                .data_set("task-marker", marker.v.to_string()),
+            ),
           ),
-          @html.text(" "),
+          Node::from_html(@html.text(" ")),
         ]
         if status is Cancelled {
-          children.push(@html.del(content))
+          children.push(Node::compose(content, nodes => @html.del(nodes)))
         } else {
           children.append(content)
         }
         children
       }
     }
-    items.push(@html.li(children))
+    items.push(Node::compose(children, nodes => @html.li(nodes)))
   }
   let class = if list.tight { "tight" } else { "" }
   match list.ty {
-    Ordered(start, _) => @html.ol(class~, start~, items)
-    Unordered(_) => @html.ul(class~, items)
+    Ordered(start, _) =>
+      Node::compose(items, nodes => @html.ol(class~, start~, nodes))
+    Unordered(_) => Node::compose(items, nodes => @html.ul(class~, nodes))
   }
 }
 
 ///|
-fn MarkdownRender::list_item_nodes(
+fn[Node : MarkdownNode] MarkdownRender::list_item_nodes(
   self : MarkdownRender,
   block : @cmark.Block,
   tight~ : Bool,
-) -> Array[@html.Html] {
+) -> Array[Node] {
   match (block, tight) {
     (Paragraph(node), true) => self.inline_nodes(node.v.inline)
     (Blocks(node), true) => {
-      let children : Array[@html.Html] = []
+      let children : Array[Node] = []
       for block in node.v {
         children.append(self.list_item_nodes(block, tight~))
       }
@@ -454,13 +618,13 @@ fn MarkdownRender::list_item_nodes(
 }
 
 ///|
-fn MarkdownRender::table(
+fn[Node : MarkdownNode] MarkdownRender::table(
   self : MarkdownRender,
   table : @cmark.Table,
-) -> @html.Html {
+) -> Node {
   let rows = table.rows.to_array()
-  let groups : Array[@html.Html] = []
-  let mut group : Array[@html.Html] = []
+  let groups : Array[Node] = []
+  let mut group : Array[Node] = []
   let mut header_group = false
   let mut alignment : Array[@cmark.Node[@cmark.TableSep]] = []
   for index, (row, _) in rows {
@@ -477,15 +641,15 @@ fn MarkdownRender::table(
         if header != header_group && !group.is_empty() {
           groups.push(
             if header_group {
-              @html.thead(group)
+              Node::compose(group, nodes => @html.thead(nodes))
             } else {
-              @html.tbody(group)
+              Node::compose(group, nodes => @html.tbody(nodes))
             },
           )
           group = []
         }
         header_group = header
-        let cell_nodes : Array[@html.Html] = []
+        let cell_nodes : Array[Node] = []
         let cells = cells.to_array()
         for column in 0..<table.col_count {
           let children = match cells.get(column) {
@@ -498,53 +662,57 @@ fn MarkdownRender::table(
             Some({ v: TableSep((Some(Right), _)), .. }) => Some("right")
             _ => None
           }
-          let attrs = match align {
-            Some(align) => @html.Attrs::build().style("text-align", align)
-            None => @html.Attrs::build()
-          }
           cell_nodes.push(
-            if header {
-              @html.th(class?=align, scope=Col, attrs~, children)
-            } else {
-              @html.td(class?=align, attrs~, children)
-            },
+            Node::compose(children, children => {
+              let attrs = match align {
+                Some(align) => @html.Attrs::build().style("text-align", align)
+                None => @html.Attrs::build()
+              }
+              if header {
+                @html.th(class?=align, scope=Col, attrs~, children)
+              } else {
+                @html.td(class?=align, attrs~, children)
+              }
+            }),
           )
         }
-        group.push(@html.tr(cell_nodes))
+        group.push(Node::compose(cell_nodes, nodes => @html.tr(nodes)))
       }
     }
   }
   if !group.is_empty() {
     groups.push(
       if header_group {
-        @html.thead(group)
+        Node::compose(group, nodes => @html.thead(nodes))
       } else {
-        @html.tbody(group)
+        Node::compose(group, nodes => @html.tbody(nodes))
       },
     )
   }
-  @html.div(
-    class="chat-table-scroll",
-    attrs=@html.Attrs::build().role("region"),
-    [@html.table(groups)],
-  )
+  Node::compose(groups, nodes => {
+    @html.div(
+      class="chat-table-scroll",
+      attrs=@html.Attrs::build().role("region"),
+      [@html.table(nodes)],
+    )
+  })
 }
 
 ///|
-fn MarkdownRender::inline_nodes(
+fn[Node : MarkdownNode] MarkdownRender::inline_nodes(
   self : MarkdownRender,
   inline : @cmark.Inline,
   linkify_urls~ : Bool = true,
-) -> Array[@html.Html] {
-  let out : Array[@html.Html] = []
+) -> Array[Node] {
+  let out : Array[Node] = []
   self.push_inline(out, inline, linkify_urls~)
   out
 }
 
 ///|
-fn MarkdownRender::push_inline(
+fn[Node : MarkdownNode] MarkdownRender::push_inline(
   self : MarkdownRender,
-  out : Array[@html.Html],
+  out : Array[Node],
   inline : @cmark.Inline,
   linkify_urls~ : Bool,
 ) -> Unit {
@@ -555,7 +723,7 @@ fn MarkdownRender::push_inline(
           out.push(child)
         }
       } else {
-        out.push(@html.text(node.v))
+        out.push(Node::from_html(@html.text(node.v)))
       }
     Inlines(node) =>
       for child in node.v.iter() {
@@ -563,30 +731,47 @@ fn MarkdownRender::push_inline(
       }
     Break(node) =>
       match node.v.ty {
-        Hard => out.push(@html.br())
-        Soft => out.push(@html.text(" "))
+        Hard => out.push(Node::from_html(@html.br()))
+        Soft => out.push(Node::from_html(@html.text(" ")))
       }
     // Inline code stays plain code even when it names a file. Positioned file
     // references are recognized only in prose or an explicit link below.
-    CodeSpan(node) => out.push(@html.code(class="inline-code", node.v.code()))
+    CodeSpan(node) =>
+      out.push(Node::from_html(@html.code(class="inline-code", node.v.code())))
     Emphasis(node) =>
-      out.push(@html.em(self.inline_nodes(node.v.inline, linkify_urls~)))
+      out.push(
+        Node::compose(self.inline_nodes(node.v.inline, linkify_urls~), children => {
+          @html.em(children)
+        }),
+      )
     StrongEmphasis(node) =>
-      out.push(@html.strong(self.inline_nodes(node.v.inline, linkify_urls~)))
+      out.push(
+        Node::compose(self.inline_nodes(node.v.inline, linkify_urls~), children => {
+          @html.strong(children)
+        }),
+      )
     ExtStrikethrough(node) =>
-      out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
-    ExtMathSpan({ v, .. }) => out.push((self.render_math)(v.tex(), v.display))
+      out.push(
+        Node::compose(self.inline_nodes(node.v.0, linkify_urls~), children => {
+          @html.del(children)
+        }),
+      )
+    ExtMathSpan({ v, .. }) =>
+      out.push(Node::from_html((self.render_math)(v.tex(), v.display)))
     Autolink(node) => {
       let url = node.v.link.v
       // Email autolinks resolve to a safe `mailto:`; a URI autolink like
       // <javascript:alert(1)> must pass the same unsafe-scheme filter as
       // regular links and images, otherwise it renders as inert text.
       if node.v.is_email {
-        out.push(link_node("mailto:" + url, [@html.text(url)]))
+        out.push(
+          self.web_link("mailto:" + url, [Node::from_html(@html.text(url))]),
+        )
       } else {
         match safe_destination(url) {
-          Some(href) => out.push(link_node(href, [@html.text(url)]))
-          None => out.push(@html.text(url))
+          Some(href) =>
+            out.push(self.web_link(href, [Node::from_html(@html.text(url))]))
+          None => out.push(Node::from_html(@html.text(url)))
         }
       }
     }
@@ -609,13 +794,14 @@ fn MarkdownRender::push_inline(
       // unsafe-scheme filter. It never becomes a browser anchor.
       if self.open_file is Some(open) &&
         self.file_destination(node.v) is Some(path) {
-        out.push(
-          file_link_node(locale=self.locale, open, path, title?, children),
-        )
+        out.push(self.file_link(open, path, title?, children))
       } else {
         match self.link_destination(node.v) {
-          Some(url) => out.push(link_node(url, title?, children))
-          None => out.push(@html.span(title?, children))
+          Some(url) => out.push(self.web_link(url, title?, children))
+          None =>
+            out.push(
+              Node::compose(children, children => @html.span(title?, children)),
+            )
         }
       }
     }
@@ -629,24 +815,29 @@ fn MarkdownRender::push_inline(
         // origin. Leave `src` empty and let the transcript's viewport observer
         // read bounded bytes from the owning host only when this node is seen.
         out.push(
-          @html.img(
-            class="transcript-image pending",
-            alt~,
-            title=title.unwrap_or(path),
-            loading="lazy",
-            decoding="async",
-            attrs=@html.Attrs::build().data_set("transcript-image", path),
+          Node::from_html(
+            @html.img(
+              class="transcript-image pending",
+              alt~,
+              title=title.unwrap_or(path),
+              loading="lazy",
+              decoding="async",
+              attrs=@html.Attrs::build().data_set("transcript-image", path),
+            ),
           ),
         )
       } else {
         match self.link_destination(node.v) {
           Some(url) =>
-            out.push(@html.img(src=url, alt~, title?, loading="lazy"))
-          None => out.push(@html.span(title?, alt))
+            out.push(
+              Node::from_html(@html.img(src=url, alt~, title?, loading="lazy")),
+            )
+          None => out.push(Node::from_html(@html.span(title?, alt)))
         }
       }
     }
-    RawHtml(node) => out.push(@html.text(tights_text(node.v.0)))
+    RawHtml(node) =>
+      out.push(Node::from_html(@html.text(tights_text(node.v.0))))
   }
 }
 
@@ -761,19 +952,19 @@ pub fn linkified_text_nodes(source : String) -> Array[@html.Html] {
 /// Render ordinary transcript prose. URL behavior stays identical to the
 /// public URL-only renderer, while a configured file opener additionally
 /// turns location-bearing path tokens into file buttons.
-fn MarkdownRender::prose_nodes(
+fn[Node : MarkdownNode] MarkdownRender::prose_nodes(
   self : MarkdownRender,
   source : String,
-) -> Array[@html.Html] {
+) -> Array[Node] {
   guard self.open_file is Some(open) else {
-    return linkified_text_nodes(source)
+    return linkified_text_nodes(source).map(node => Node::from_html(node))
   }
-  let out : Array[@html.Html] = []
+  let out : Array[Node] = []
   let mut rest = source.clamped_view()
   while bare_interactive_pattern.execute(rest) is Some(matched) {
     let before = matched.before()
     if !before.is_empty() {
-      out.push(@html.text(before.to_owned()))
+      out.push(Node::from_html(@html.text(before.to_owned())))
     }
     let candidate = matched.content().to_owned()
     if candidate.clamped_view() =~ re"(?i:^https?://)" {
@@ -782,12 +973,12 @@ fn MarkdownRender::prose_nodes(
       // HTTP(S) anchor when the destination has a non-empty authority. In
       // particular, a file-shaped custom scheme must stay inert text.
       if has_web_authority(url) {
-        out.push(link_node(url, [@html.text(url)]))
+        out.push(self.web_link(url, [Node::from_html(@html.text(url))]))
       } else {
-        out.push(@html.text(url))
+        out.push(Node::from_html(@html.text(url)))
       }
       if !suffix.is_empty() {
-        out.push(@html.text(suffix))
+        out.push(Node::from_html(@html.text(suffix)))
       }
     } else if is_file_path(candidate) &&
       // The regex cannot use look-around, so validate both sides here. A
@@ -801,17 +992,15 @@ fn MarkdownRender::prose_nodes(
         matched.after() =~ re"^\.(?:$|[[:space:]<>,;!?\"'(){}\[\]])"
       ) {
       out.push(
-        file_link_node(locale=self.locale, open, candidate, [
-          @html.text(candidate),
-        ]),
+        self.file_link(open, candidate, [Node::from_html(@html.text(candidate))]),
       )
     } else {
-      out.push(@html.text(candidate))
+      out.push(Node::from_html(@html.text(candidate)))
     }
     rest = matched.after()
   }
   if !rest.is_empty() {
-    out.push(@html.text(rest.to_owned()))
+    out.push(Node::from_html(@html.text(rest.to_owned())))
   }
   out
 }
@@ -1257,3 +1446,39 @@ fn tights_text(tights : @cmark.Seq[@cmark.Tight]) -> String {
 // must contain the panic and fall back to plain text, because view re-parses
 // the accumulated text on every delta — one escaping panic freezes the
 // transcript permanently.
+
+///|
+struct LinkMenus {
+  prefix : String
+  next : Ref[Int32]
+  input : @action_menu.ContextInput
+  actions : @action_menu.ContextActions
+}
+
+///|
+pub fn LinkMenus::LinkMenus(
+  prefix : String,
+  input : @action_menu.ContextInput,
+  actions : @action_menu.ContextActions,
+) -> LinkMenus {
+  { prefix, next: Ref(0), input, actions, }
+}
+
+///|
+fn LinkMenus::wrap(
+  self : LinkMenus,
+  locale : @i18n.Locale,
+  target : @action_menu.ContextTarget,
+  content : @rabbita.Val[@html.Html],
+) -> @rabbita.Val[@html.Html] {
+  let id = self.prefix + "-" + self.next.val.to_string()
+  self.next.val += 1
+  @action_menu.inline_context(
+    id,
+    locale,
+    self.input,
+    target,
+    self.actions,
+    content,
+  )
+}

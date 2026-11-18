@@ -33,10 +33,10 @@ fn MarkdownRender::source_note_id(
 }
 
 ///|
-fn MarkdownRender::footnote_reference(
+fn[Node : MarkdownNode] MarkdownRender::footnote_reference(
   self : MarkdownRender,
   link : @cmark.InlineLink,
-) -> @html.Html? {
+) -> Node? {
   guard link.reference_definition(self.defs) is Some(FootnoteDef(definition)) else {
     return None
   }
@@ -48,15 +48,24 @@ fn MarkdownRender::footnote_reference(
         let children = if full {
           self.inline_nodes(link.text, linkify_urls=false)
         } else {
-          [@html.text("[\{number}]")]
+          [Node::from_html(@html.text("[\{number}]"))]
         }
-        let anchor = @html.a(
-          href="#" + self.source_note_id(number),
-          attrs=@html.Attrs::build().role("doc-noteref"),
-          escape=true,
-          children,
+        let href = "#" + self.source_note_id(number)
+        let anchor = Node::compose(children, children => {
+          @html.a(
+            href~,
+            attrs=@html.Attrs::build().role("doc-noteref"),
+            escape=true,
+            children,
+          )
+        })
+        return Some(
+          if full {
+            anchor
+          } else {
+            Node::compose([anchor], nodes => @html.sup(nodes))
+          },
         )
-        return Some(if full { anchor } else { @html.sup([anchor]) })
       }
     }
   }
@@ -80,21 +89,33 @@ fn MarkdownRender::footnote_reference(
   let children = if full {
     self.inline_nodes(link.text, linkify_urls=false)
   } else {
-    [@html.text("[\{note.number}]")]
+    [Node::from_html(@html.text("[\{note.number}]"))]
   }
-  let anchor = @html.a(
-    id="\{note.id}-ref-\{note.references}",
-    href="#" + note.id,
-    attrs=@html.Attrs::build().role("doc-noteref"),
-    escape=true,
-    children,
+  let id = "\{note.id}-ref-\{note.references}"
+  let href = "#" + note.id
+  let anchor = Node::compose(children, children => {
+    @html.a(
+      id~,
+      href~,
+      attrs=@html.Attrs::build().role("doc-noteref"),
+      escape=true,
+      children,
+    )
+  })
+  Some(
+    if full {
+      anchor
+    } else {
+      Node::compose([anchor], nodes => @html.sup(nodes))
+    },
   )
-  Some(if full { anchor } else { @html.sup([anchor]) })
 }
 
 ///|
-fn MarkdownRender::footnotes_node(self : MarkdownRender) -> @html.Html {
-  let rendered : Array[(RenderedFootnote, Array[@html.Html])] = []
+fn[Node : MarkdownNode] MarkdownRender::footnotes_node(
+  self : MarkdownRender,
+) -> Node {
+  let rendered : Array[(RenderedFootnote, Array[Node])] = []
   let render = { ..self, in_sources: true, }
   // A note may reference another note, including itself. Register references
   // before rendering bodies, visit each note once, then build backlinks after
@@ -103,7 +124,7 @@ fn MarkdownRender::footnotes_node(self : MarkdownRender) -> @html.Html {
     let note = self.footnotes.notes[index]
     rendered.push((note, render.block_nodes(note.block)))
   }
-  let items : Array[@html.Html] = []
+  let items : Array[Node] = []
   for (note, children) in rendered {
     let backlinks : Array[@html.Html] = []
     for reference in 1..<=note.references {
@@ -116,20 +137,24 @@ fn MarkdownRender::footnotes_node(self : MarkdownRender) -> @html.Html {
         ),
       )
     }
-    children.push(@html.span(backlinks))
+    children.push(Node::from_html(@html.span(backlinks)))
     items.push(
-      @html.li(
-        id=note.id,
-        attrs=@html.Attrs::build()
-          .role("doc-footnote")
-          .data_set("footnote", note.key),
-        children,
-      ),
+      Node::compose(children, children => {
+        @html.li(
+          id=note.id,
+          attrs=@html.Attrs::build()
+            .role("doc-footnote")
+            .data_set("footnote", note.key),
+          children,
+        )
+      }),
     )
   }
-  @html.section(
-    class="footnote",
-    attrs=@html.Attrs::build().role("doc-endnotes"),
-    [@html.ol(items)],
-  )
+  Node::compose(items, items => {
+    @html.section(
+      class="footnote",
+      attrs=@html.Attrs::build().role("doc-endnotes"),
+      [@html.ol(items)],
+    )
+  })
 }
