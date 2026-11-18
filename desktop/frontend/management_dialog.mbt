@@ -42,8 +42,11 @@ fn management_dialog_view(
         @rui.dialog_title(id="management-dialog-title", title),
       ]),
       @html.div(
-        class=if model.management_dialog is Some(Settings(_)) &&
-          !model.host_incompatible() {
+        class=if model.management_dialog is Some(Skills) ||
+          (
+            model.management_dialog is Some(Settings(_)) &&
+            !model.host_incompatible()
+          ) {
           "dialog-scroll-body dialog-pane-container"
         } else {
           "dialog-scroll-body dialog-content"

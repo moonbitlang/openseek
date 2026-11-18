@@ -22,15 +22,17 @@ priv enum UiMessage {
   Copy
   Loading
   Library
-  Description
+  Results(Int32)
+  Clear
+  Status
+  AllStatuses
   Search
   EmptyInstalled
-  NoInstalledMatch
+  NoMatch
   InstalledLabel
   LoadingCatalog
   EmptyRegistry
-  NoRegistryMatch
-  Registry
+  DiscoverLabel
   Refreshing
   Refresh
   LibraryUnavailable
@@ -161,16 +163,26 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Library) => "技能库"
     (TraditionalChinese, Library) => "技能庫"
     (Japanese, Library) => "スキルライブラリ"
-    (English, Description) =>
-      "Playbooks the agent reads when a task matches. Skills apply to new chats."
-    (Spanish, Description) =>
-      "Guías que el agente lee cuando una tarea coincide. Las habilidades se aplican a las nuevas conversaciones."
-    (SimplifiedChinese, Description) =>
-      "智能体在任务匹配时读取的操作指南。技能对新建对话生效。"
-    (TraditionalChinese, Description) =>
-      "代理程式在任務匹配時讀取的操作指南。技能對新建對話生效。"
-    (Japanese, Description) =>
-      "タスクに応じてエージェントが参照する手順です。スキルは新しいチャットに適用されます。"
+    (English, Results(n)) => "Results: \{n}"
+    (Spanish, Results(n)) => "Resultados: \{n}"
+    (SimplifiedChinese, Results(n)) => "\{n} 个结果"
+    (TraditionalChinese, Results(n)) => "\{n} 個結果"
+    (Japanese, Results(n)) => "\{n} 件"
+    (English, Clear) => "Clear filters"
+    (Spanish, Clear) => "Borrar filtros"
+    (SimplifiedChinese, Clear) => "清除筛选"
+    (TraditionalChinese, Clear) => "清除篩選"
+    (Japanese, Clear) => "絞り込みを解除"
+    (English, Status) => "Skill status"
+    (Spanish, Status) => "Estado de la habilidad"
+    (SimplifiedChinese, Status) => "技能状态"
+    (TraditionalChinese, Status) => "技能狀態"
+    (Japanese, Status) => "スキルの状態"
+    (English, AllStatuses) => "All statuses"
+    (Spanish, AllStatuses) => "Todos los estados"
+    (SimplifiedChinese, AllStatuses) => "全部状态"
+    (TraditionalChinese, AllStatuses) => "全部狀態"
+    (Japanese, AllStatuses) => "すべての状態"
     (English, ThisDevice) => "This device"
     (Spanish, ThisDevice) => "Este dispositivo"
     (SimplifiedChinese, ThisDevice) => "此设备"
@@ -207,15 +219,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, EmptyInstalled) => "尚未安裝技能。"
     (Japanese, EmptyInstalled) =>
       "インストール済みのスキルはありません。"
-    (English, NoInstalledMatch) => "No installed skill matches the search."
-    (Spanish, NoInstalledMatch) =>
-      "Ninguna habilidad instalada coincide con la búsqueda."
-    (SimplifiedChinese, NoInstalledMatch) =>
-      "未找到匹配的已安装技能。"
-    (TraditionalChinese, NoInstalledMatch) =>
-      "未找到匹配的已安裝技能。"
-    (Japanese, NoInstalledMatch) =>
-      "一致するインストール済みスキルがありません。"
+    (English, NoMatch) => "No matching skills."
+    (Spanish, NoMatch) => "No hay habilidades que coincidan."
+    (SimplifiedChinese, NoMatch) => "没有匹配的技能。"
+    (TraditionalChinese, NoMatch) => "沒有符合條件的技能。"
+    (Japanese, NoMatch) => "一致するスキルがありません。"
     (English, InstalledLabel) => "Installed"
     (Spanish, InstalledLabel) => "Instaladas"
     (SimplifiedChinese, InstalledLabel) => "已安装"
@@ -232,20 +240,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, EmptyRegistry) => "暫無可安裝的技能。"
     (Japanese, EmptyRegistry) =>
       "インストール可能なスキルはありません。"
-    (English, NoRegistryMatch) => "No available skill matches the search."
-    (Spanish, NoRegistryMatch) =>
-      "Ninguna habilidad disponible coincide con la búsqueda."
-    (SimplifiedChinese, NoRegistryMatch) =>
-      "未找到匹配的可安装技能。"
-    (TraditionalChinese, NoRegistryMatch) =>
-      "未找到匹配的可安裝技能。"
-    (Japanese, NoRegistryMatch) =>
-      "一致するインストール可能なスキルがありません。"
-    (English, Registry) => "Available"
-    (Spanish, Registry) => "Disponibles"
-    (SimplifiedChinese, Registry) => "可安装"
-    (TraditionalChinese, Registry) => "可安裝"
-    (Japanese, Registry) => "インストール可能"
+    (English, DiscoverLabel) => "Discover"
+    (Spanish, DiscoverLabel) => "Descubrir"
+    (SimplifiedChinese, DiscoverLabel) => "发现"
+    (TraditionalChinese, DiscoverLabel) => "探索"
+    (Japanese, DiscoverLabel) => "見つける"
     (English, Refreshing) => "Refreshing…"
     (Spanish, Refreshing) => "Actualizando…"
     (SimplifiedChinese, Refreshing) => "正在刷新…"
