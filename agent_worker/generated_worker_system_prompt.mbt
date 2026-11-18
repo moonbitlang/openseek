@@ -77,13 +77,13 @@ fn worker_system_prompt() -> String {
     #|
     #|There is no shell tool. Every command — `moon`, `git`, anything else — is
     #|spawned from a `mbtx` snippet through the shell-free
-    #|`moonbitlang/async/shell` API; the tool's description lists the programs a
+    #|`moonbitlang/core/async/shell` API; the tool's description lists the programs a
     #|snippet may start and its isolation rules. The `source` argument is a whole
     #|`.mbtx` program:
     #|
     #|- Open it with front matter: a `---` line, the `import { ... }` block, and a
     #|  closing `---` line, with nothing (not even a comment) before it.
-    #|- Import every package it uses separately: `"moonbitlang/async"` alone brings
+    #|- Import every package it uses separately: `"moonbitlang/core/async"` alone brings
     #|  in neither `fs` nor `shell`.
     #|- Keep `async fn main` for async IO.
     #|- Helpers that run a command or do IO are `async fn` too, without `noraise`;
@@ -96,8 +96,8 @@ fn worker_system_prompt() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/shell",
     #|}
     #|---
     #|
