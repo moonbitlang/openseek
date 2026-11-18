@@ -124,12 +124,6 @@ pub fn StandaloneExport::json(
   _self : StandaloneExport,
   sessions : Array[Session],
 ) -> String {
-  session_data_json(sessions)
-}
-
-///|
-/// Serialize the full standalone conversation dataset.
-pub fn session_data_json(sessions : Array[Session]) -> String {
   let listing = Json(sessions.map(session => session.listing_json()))
   let data : Map[String, Json] = Map([])
   data["/api/sessions"] = Json(listing.stringify())

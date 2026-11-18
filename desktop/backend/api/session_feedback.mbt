@@ -5,7 +5,13 @@ async fn ApiState::submit_feedback(
   origin~ : String,
   token~ : String,
 ) -> @protocol.FeedbackReceipt {
-  let conversation = self.manager().export_conversation_json(payload.source)
+  let (shell, bundle) = self.host_state().viz_assets().read()
+  let files = @engine.ConversationExport::capture(
+    self.manager(),
+    payload.source,
+    shell,
+    bundle,
+  )
   @feedback.submit(
     origin,
     "/v1/feedback",
@@ -15,6 +21,6 @@ async fn ApiState::submit_feedback(
       "environment": Json::object(payload.metadata.environment),
       "source": { "mode": "local", "session_id": payload.source.session },
     },
-    conversation~,
+    conversation=files.json,
   )
 }

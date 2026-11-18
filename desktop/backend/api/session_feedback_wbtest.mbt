@@ -1,6 +1,6 @@
 ///|
 #cfg(not(platform="windows"))
-async test "feedback uploads only metadata and the full persisted JSON without visualizer assets" {
+async test "feedback uploads only metadata and the complete JSON from the standard export" {
   let root = @pathx.Path(@fs.realpath(@fs.tmpdir(prefix="seekmoon-feedback-"))).resolve()
   defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
@@ -37,6 +37,13 @@ async test "feedback uploads only metadata and the full persisted JSON without v
     dir: root.to_path(),
     packaged: true,
   })
+  let viz = root.join("seekmoon/web/viz")
+  @fs.mkdir(viz.to_string(), recursive=true)
+  @fs.write_text(
+    viz.join("index.html").to_string(),
+    "<html><script src=\"/viz_app.js\"></script></html>",
+  )
+  @fs.write_text(viz.join("viz_app.js").to_string(), "/* bundled visualizer */")
   let state = ApiState(engine="unused", resources~)
   let payload : @protocol.SessionFeedbackPayload = {
     user_id: "123",
