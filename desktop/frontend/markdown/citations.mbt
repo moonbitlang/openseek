@@ -109,11 +109,11 @@ fn MarkdownRender::citation_label(
 }
 
 ///|
-fn MarkdownRender::citation_node(
+fn[Node : MarkdownNode] MarkdownRender::citation_node(
   self : MarkdownRender,
   citation : Citation,
   link : @cmark.InlineLink,
-) -> @html.Html {
+) -> Node {
   let label = self.citation_label(citation.number)
   let title = if citation.summary.is_empty() {
     label
@@ -121,55 +121,82 @@ fn MarkdownRender::citation_node(
     "\{label}: \{citation.summary}"
   }
   let full = link.reference is Ref(Full, _, _)
-  let attrs = @html.Attrs::build().aria_label(title)
+  let attrs = () => @html.Attrs::build().aria_label(title)
   let children = if full {
     self.inline_nodes(link.text, linkify_urls=false)
   } else {
-    [@html.text(citation.number)]
+    [Node::from_html(@html.text(citation.number))]
   }
-  let node = if citation.link is Some(link) &&
+  let (target, node) = if citation.link is Some(link) &&
     self.open_file is Some(open) &&
     self.file_destination(link) is Some(path) {
     let path = @office_location.citation_destination(path, citation.summary)
-    @html.button(
-      class="citation-link file-link",
-      type_="button",
-      title~,
-      attrs=attrs
-        .data_set("context-file", path)
-        .data_set("context-workspace-file", FileReference(path).path()),
-      on_click=open(path),
-      children,
+    let node = Node::compose(children, children => {
+      @html.button(
+        class="citation-link file-link",
+        type_="button",
+        title~,
+        attrs=attrs()
+          .data_set("context-file", path)
+          .data_set("context-workspace-file", FileReference(path).path()),
+        on_click=open(path),
+        children,
+      )
+    })
+    (
+      @action_menu.FileLink(
+        path,
+        workspace_file=Some(FileReference(path).path()),
+      ),
+      node,
     )
   } else if citation.link is Some(link) &&
     self.link_destination(link) is Some(href) {
-    @html.a(
-      class="citation-link",
-      href~,
-      target=Blank,
-      rel="noopener noreferrer",
-      title~,
-      attrs~,
-      children,
-    )
+    let node = Node::compose(children, children => {
+      @html.a(
+        class="citation-link",
+        href~,
+        target=Blank,
+        rel="noopener noreferrer",
+        title~,
+        attrs=attrs(),
+        children,
+      )
+    })
+    (@action_menu.link_target(href), node)
   } else {
     // A textual footnote or an incomplete streamed source has no made-up
     // destination. Its contents remain readable in the Sources list.
-    @html.span(class="citation-link citation-note", title~, attrs~, children)
+    let node = Node::compose(children, children => {
+      @html.span(
+        class="citation-link citation-note",
+        title~,
+        attrs=attrs(),
+        children,
+      )
+    })
+    (@action_menu.NoTarget, node)
   }
-  if full {
-    return node
+  let number = citation.number
+  let node = if full {
+    node
+  } else {
+    Node::compose([node], children => {
+      @html.sup(
+        class="citation",
+        attrs=@html.Attrs::build().data_set("citation", number),
+        children,
+      )
+    })
   }
-  @html.sup(
-    class="citation",
-    attrs=@html.Attrs::build().data_set("citation", citation.number),
-    [node],
-  )
+  self.link(target, node)
 }
 
 ///|
-fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
-  let rows : Array[@html.Html] = []
+fn[Node : MarkdownNode] MarkdownRender::sources_node(
+  self : MarkdownRender,
+) -> Node {
+  let rows : Array[Node] = []
   let previews : Array[@html.Html] = []
   for citation in self.citations {
     let source_path = citation.link.bind(link => self.file_destination(link))
@@ -191,48 +218,48 @@ fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
     if previews.length() < 3 {
       previews.push(self.source_glyph(citation))
     }
+    let origin = self.source_origin(citation)
+    let glyph = self.source_glyph(citation)
+    let number = citation.number
+    let id = self.source_note_id(number)
     rows.push(
-      @html.li(
-        id=self.source_note_id(citation.number),
-        class="citation-source",
-        attrs=@html.Attrs::build()
-          .role("doc-footnote")
-          .data_set("source", citation.number),
-        [
-          self.source_glyph(citation),
-          @html.div(class="citation-source-content", [
-            @html.div(
-              class="citation-source-origin",
-              self.source_origin(citation),
-            ),
-            @html.div(
-              class="citation-source-copy",
-              render.block_nodes(citation.block),
-            ),
-          ]),
-          @html.span(class="citation-source-number", citation.number),
-        ],
-      ),
+      Node::compose(render.block_nodes(citation.block), children => {
+        @html.li(
+          id~,
+          class="citation-source",
+          attrs=@html.Attrs::build()
+            .role("doc-footnote")
+            .data_set("source", number),
+          [
+            glyph,
+            @html.div(class="citation-source-content", [
+              @html.div(class="citation-source-origin", origin),
+              @html.div(class="citation-source-copy", children),
+            ]),
+            @html.span(class="citation-source-number", number),
+          ],
+        )
+      }),
     )
   }
-  @html.details(
-    class="citation-sources",
-    attrs=@html.Attrs::build().role("group").aria_label(self.sources_label()),
-    [
-      @html.summary(class="citation-sources-heading", [
-        @html.span(class="citation-source-previews", previews),
-        @html.text(self.sources_label()),
-        @html.span(
-          class="citation-sources-count",
-          self.citations.length().to_string(),
-        ),
-        @html.span(class="citation-sources-chevron", [
-          @icons.icon(@icons.icon_chevron_down),
+  let count = self.citations.length().to_string()
+  Node::compose(rows, rows => {
+    @html.details(
+      class="citation-sources",
+      attrs=@html.Attrs::build().role("group").aria_label(self.sources_label()),
+      [
+        @html.summary(class="citation-sources-heading", [
+          @html.span(class="citation-source-previews", previews),
+          @html.text(self.sources_label()),
+          @html.span(class="citation-sources-count", count),
+          @html.span(class="citation-sources-chevron", [
+            @icons.icon(@icons.icon_chevron_down),
+          ]),
         ]),
-      ]),
-      @html.ol(class="citation-source-list", rows),
-    ],
-  )
+        @html.ol(class="citation-source-list", rows),
+      ],
+    )
+  })
 }
 
 ///|

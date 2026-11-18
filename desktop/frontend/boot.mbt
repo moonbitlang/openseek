@@ -851,6 +851,16 @@ fn main {
       terminal_state,
       terminal_emit,
     )
+    let context_input = state.map(model => model.context_menu_input())
+    let context_actions : @action_menu.ContextActions = {
+      open_link: url => emit(ExternalLinkClicked(url)),
+      open_external_link: url => open_external_link(emit, url),
+      open_file: path => emit(OpenFile(path)),
+      reveal_file: path => emit(RevealFile(path)),
+      share_file: path => emit(ShareFile(path)),
+      download_file: path => emit(DownloadFile(path)),
+      preview_file: path => emit(PreviewFile(path)),
+    }
     let transcript_actions = (slot : String) => {
       (
         {
@@ -900,6 +910,8 @@ fn main {
               @transcript_component.component(
                 state.map(model => model.transcript_input()),
                 transcript_actions(slot.key()),
+                context_input~,
+                context_actions~,
               )
           }
         },
@@ -1229,16 +1241,8 @@ fn main {
     )
     let context_menu = @action_menu.context_component(
       state.map(model => model.locale),
-      state.map(model => model.context_menu_input()),
-      {
-        open_link: url => emit(ExternalLinkClicked(url)),
-        open_external_link: url => open_external_link(emit, url),
-        open_file: path => emit(OpenFile(path)),
-        reveal_file: path => emit(RevealFile(path)),
-        share_file: path => emit(ShareFile(path)),
-        download_file: path => emit(DownloadFile(path)),
-        preview_file: path => emit(PreviewFile(path)),
-      },
+      context_input,
+      context_actions,
     )
     shell.map2(context_menu, (shell, menu) => {
       @rui.theme(style=["display:contents"], @html.fragment([shell, menu]))

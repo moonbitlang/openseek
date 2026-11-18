@@ -1,7 +1,8 @@
 ///|
 fn answer_citations(source : String) -> Array[Citation] {
   let doc = @cmark.Doc::from_string(source, strict=false)
-  let render = MarkdownRender::{
+  let render : MarkdownRender = {
+    links: None,
     locale: English,
     defs: doc.defs,
     open_file: None,
@@ -13,7 +14,8 @@ fn answer_citations(source : String) -> Array[Citation] {
     in_sources: false,
     user_preview: false,
   }
-  ignore(render.block_nodes(doc.block))
+  let nodes : Array[@html.Html] = render.block_nodes(doc.block)
+  ignore(nodes)
   render.citations
 }
 

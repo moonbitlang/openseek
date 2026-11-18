@@ -547,16 +547,17 @@ fn Block::render(
   locale~ : @i18n.Locale = English,
   self : Block,
   actions : Actions,
+  links~ : @markdown.LinkMenus,
   changes? : @review_changes.Control,
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
   user_markdown~ : UserMarkdown,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @html.Html {
+) -> @rabbita.Val[@html.Html] {
   let on_open = path => (actions.open)(path)
   match self.content {
-    Empty(empty) => empty.render(locale~, actions)
-    Minimal(content) => content.render(locale~, actions, artifact_view?)
+    Empty(empty) => @rabbita.Val::constant(empty.render(locale~, actions))
+    Minimal(content) => content.render(locale~, actions, links~, artifact_view?)
     Item(
       item~,
       anchor~,
@@ -572,6 +573,7 @@ fn Block::render(
         locale~,
         item,
         on_open,
+        links~,
         wait_labels~,
         fork?=fork.map(value => value.render(locale~, actions.fork)),
         edit?=edit.map(value => value.render(locale~, begin_edit)),
@@ -592,6 +594,7 @@ fn Block::render(
         artifact_view?,
         locale~,
         on_open,
+        links~,
         prose?,
         reasoning?,
         step_label?,
