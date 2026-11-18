@@ -34,8 +34,7 @@ test('Cloud feedback sends the verbatim command body from the latest history pag
   const task = page.locator('#task');
   await task.fill('/feed');
   const completion = page.locator('.completion-item').filter({ hasText: '/feedback' });
-  await expect(completion).toContainText('full conversation and runtime environment');
-  await expect(completion).toContainText('Anyone with the link can view');
+  await expect(completion).toContainText('Include runtime environment details. Anyone with the link can read your feedback and the full conversation.');
   await completion.click();
   await expect(task).toHaveValue('/feedback ');
   await expect(page.locator('#send')).toBeDisabled();
