@@ -16,7 +16,7 @@ pub async fn submit(
   path : String,
   token : String,
   metadata : Json,
-  conversation? : String,
+  files? : @protocol.SessionSnapshot,
 ) -> @protocol.FeedbackReceipt {
   @async.with_timeout(
     240_000,
@@ -32,14 +32,20 @@ pub async fn submit(
       "Content-Type": form.content_type(),
     })
     form.write_json("metadata", metadata)
-    if conversation is Some(json) {
-      form.write_part(
-        headers={
-          "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
-          "Content-Type": "application/json",
-        },
-        writer => writer.write(json),
-      )
+    if files is Some(files) {
+      for
+        (part, mime, text) in [
+          ("html", "text/html", files.html),
+          ("json", "application/json", files.json),
+        ] {
+        form.write_part(
+          headers={
+            "Content-Disposition": "form-data; name=\"\{part}\"; filename=\"conversation.\{part}\"",
+            "Content-Type": mime,
+          },
+          writer => writer.write(text),
+        )
+      }
     }
     form.finish()
     let response = client.end_request()

@@ -1323,6 +1323,7 @@ pub impl @json.ToJson for FeedbackMetadata
 
 pub(all) struct FeedbackReceipt {
   id : String
+  url : String
 }
 pub impl @json.FromJson for FeedbackReceipt
 pub impl @json.ToJson for FeedbackReceipt

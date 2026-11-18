@@ -1,6 +1,6 @@
 ///|
 #cfg(not(platform="windows"))
-async test "feedback uploads only metadata and the complete JSON from the standard export" {
+async test "feedback uploads metadata and both complete files from one conversation snapshot" {
   let root = @pathx.Path(@fs.realpath(@fs.tmpdir(prefix="seekmoon-feedback-"))).resolve()
   defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
@@ -80,7 +80,7 @@ async test "feedback uploads only metadata and the complete JSON from the standa
       let parts = @utf8.decode(connection.read_all())
         .split("--" + boundary.to_owned())
         .to_array()
-      assert_eq(parts.length(), 4)
+      assert_eq(parts.length(), 5)
       assert_true(parts[1].contains("name=\"metadata\""))
       let metadata = @json.parse(parts[1].split_once("\r\n\r\n").unwrap().1)
       assert_true(
@@ -99,22 +99,37 @@ async test "feedback uploads only metadata and the complete JSON from the standa
         "<html><script src=\"/viz_app.js\"></script></html>",
         "/* bundled visualizer */",
       )
-      let (headers, body) = parts[2].split_once("\r\n\r\n").unwrap()
-      assert_true(
-        headers.contains("name=\"json\"; filename=\"conversation.json\""),
-      )
-      assert_true(headers.contains("application/json"))
-      assert_eq(body.strip_suffix("\r\n").unwrap().to_owned(), expected.json)
-      for turn in 1..<=80 {
-        assert_true(body.contains("Persisted question (\{turn})"))
+      for
+        (index, name, mime, content) in [
+          (2, "html", "text/html", expected.html),
+          (3, "json", "application/json", expected.json),
+        ] {
+        let (headers, body) = parts[index].split_once("\r\n\r\n").unwrap()
+        assert_true(
+          headers.contains(
+            "name=\"\{name}\"; filename=\"conversation.\{name}\"",
+          ),
+        )
+        assert_true(headers.contains(mime))
+        assert_eq(body.strip_suffix("\r\n").unwrap().to_owned(), content)
+        for turn in 1..<=80 {
+          assert_true(body.contains("Persisted question (\{turn})"))
+        }
       }
       connection.send_response(201, "Created")
-      connection.write_string("{\"id\":\"fb_test\"}")
+      connection.write_string(
+        (
+          {
+            "id": "fb_test",
+            "url": "https://feedback.test/v1/feedback/fb_test",
+          } : Json).stringify(),
+      )
       connection.end_response()
     })
     let receipt = state.submit_feedback(payload, origin~, token="test-account")
     receiver.wait()
     assert_eq(receipt.id, "fb_test")
+    assert_eq(receipt.url, "https://feedback.test/v1/feedback/fb_test")
   })
   let missing = {
     ..payload,

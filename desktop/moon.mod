@@ -4,6 +4,7 @@ version = "0.1.5"
 
 import {
   "Yoorkin/multipart@0.1.3",
+  "tonyfettes/url@0.3.5",
   "moonbitlang/async@0.22.7",
   "moonbitlang/openseek_protocol@0.4.2",
   "moonbit-community/fuzzy_match@0.2.6",

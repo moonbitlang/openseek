@@ -21,6 +21,6 @@ async fn ApiState::submit_feedback(
       "environment": Json::object(payload.metadata.environment),
       "source": { "mode": "local", "session_id": payload.source.session },
     },
-    conversation=files.json,
+    files={ html: files.html, json: files.json, },
   )
 }

@@ -62,11 +62,12 @@ pub impl FromJson for SessionFeedbackPayload with fn from_json(json, path) {
 ///|
 pub(all) struct FeedbackReceipt {
   id : String
+  url : String
 }
 
 ///|
 pub impl ToJson for FeedbackReceipt with fn to_json(self) {
-  { "id": self.id }
+  { "id": self.id, "url": self.url }
 }
 
 ///|
@@ -76,5 +77,11 @@ pub impl FromJson for FeedbackReceipt with fn from_json(json, path) {
   guard !id.is_blank() else {
     raise JsonDecodeError((path.add_key("id"), "missing feedback id"))
   }
-  { id, }
+  let url = obj.required_string("url")
+  guard @url.Url::try_parse(url) is Some(link) && link.protocol() == "https:" else {
+    raise JsonDecodeError(
+      (path.add_key("url"), "expected an HTTPS feedback URL"),
+    )
+  }
+  { id, url: link.href(), }
 }
