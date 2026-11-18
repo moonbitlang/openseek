@@ -79,6 +79,7 @@ fn[Node : MarkdownNode] render_markdown(
     let render : MarkdownRender = {
       locale,
       links,
+      source_title: None,
       defs: doc.defs,
       open_file,
       artifact_view,
@@ -106,7 +107,13 @@ fn[Node : MarkdownNode] render_markdown(
 priv trait MarkdownNode {
   fn from_html(@html.Html) -> Self
   fn compose(Array[Self], (Array[@html.Html]) -> @html.Html) -> Self
-  fn with_link_menu(Self, LinkMenus, @i18n.Locale, @action_menu.ContextTarget) -> Self
+  fn with_link_menu(
+    Self,
+    LinkMenus,
+    @i18n.Locale,
+    @action_menu.ContextTarget,
+    Bool,
+  ) -> Self
 }
 
 ///|
@@ -120,7 +127,7 @@ impl MarkdownNode for @html.Html with fn compose(children, render) {
 }
 
 ///|
-impl MarkdownNode for @html.Html with fn with_link_menu(html, _, _, _) {
+impl MarkdownNode for @html.Html with fn with_link_menu(html, _, _, _, _) {
   html
 }
 
@@ -140,8 +147,9 @@ impl MarkdownNode for @rabbita.Val[@html.Html] with fn with_link_menu(
   links,
   locale,
   target,
+  inline,
 ) {
-  links.wrap(locale, target, content)
+  links.wrap(locale, target, content, inline~)
 }
 
 ///|
@@ -161,6 +169,7 @@ pub fn collect_components(
 ///|
 priv struct MarkdownRender {
   links : LinkMenus?
+  source_title : Ref[@action_menu.ContextTarget?]?
   locale : @i18n.Locale
   // Link-reference and footnote definitions collected by the parser, used to
   // resolve `[text][label]` style references to their destinations.
@@ -183,12 +192,27 @@ fn[Node : MarkdownNode] MarkdownRender::link(
   self : MarkdownRender,
   target : @action_menu.ContextTarget,
   content : Node,
+  inline~ : Bool = true,
 ) -> Node {
   if target != NoTarget && self.links is Some(links) {
-    content.with_link_menu(links, self.locale, target)
+    content.with_link_menu(links, self.locale, target, inline)
   } else {
     content
   }
+}
+
+///|
+fn MarkdownRender::take_source_title(
+  self : MarkdownRender,
+  target : @action_menu.ContextTarget,
+) -> Bool {
+  guard target != NoTarget &&
+    self.source_title is Some(title) &&
+    title.val is None else {
+    return false
+  }
+  title.val = Some(target)
+  true
 }
 
 ///|
@@ -198,10 +222,16 @@ fn[Node : MarkdownNode] MarkdownRender::web_link(
   title? : String,
   children : Array[Node],
 ) -> Node {
+  let target = @action_menu.link_target(href)
+  let source_title = self.take_source_title(target)
   let node = Node::compose(children, children => {
-    link_node(href, title?, children)
+    link_node(href, title?, source_title~, children)
   })
-  self.link(@action_menu.link_target(href), node)
+  if source_title {
+    node
+  } else {
+    self.link(target, node)
+  }
 }
 
 ///|
@@ -213,13 +243,19 @@ fn[Node : MarkdownNode] MarkdownRender::file_link(
   children : Array[Node],
 ) -> Node {
   let locale = self.locale
-  let node = Node::compose(children, children => {
-    file_link_node(locale~, open, path, title?, children)
-  })
-  self.link(
-    FileLink(path, workspace_file=Some(FileReference(path).path())),
-    node,
+  let target : @action_menu.ContextTarget = FileLink(
+    path,
+    workspace_file=Some(FileReference(path).path()),
   )
+  let source_title = self.take_source_title(target)
+  let node = Node::compose(children, children => {
+    file_link_node(locale~, open, path, title?, source_title~, children)
+  })
+  if source_title {
+    node
+  } else {
+    self.link(target, node)
+  }
 }
 
 ///|
@@ -1184,9 +1220,22 @@ fn LocalImagePath::has_raster_extension(self : LocalImagePath) -> Bool {
 fn link_node(
   href : String,
   title? : String,
+  source_title~ : Bool = false,
   children : Array[@html.Html],
 ) -> @html.Html {
-  @html.a(href~, title?, target=Blank, rel="noopener noreferrer", children)
+  let attrs = if source_title {
+    Some(@html.Attrs::build().data_set("citation-source-title", ""))
+  } else {
+    None
+  }
+  @html.a(
+    href~,
+    title?,
+    target=Blank,
+    rel="noopener noreferrer",
+    attrs?,
+    children,
+  )
 }
 
 ///|
@@ -1199,8 +1248,15 @@ fn file_link_node(
   open : (String) -> @cmd.Cmd,
   path : String,
   title? : String,
+  source_title~ : Bool,
   children : Array[@html.Html],
 ) -> @html.Html {
+  let attrs = @html.Attrs::build()
+    .data_set("context-file", path)
+    .data_set("context-workspace-file", FileReference(path).path())
+  if source_title {
+    ignore(attrs.data_set("citation-source-title", ""))
+  }
   @html.button(
     class="file-link",
     type_="button",
@@ -1213,9 +1269,7 @@ fn file_link_node(
         Spanish => "Abrir \{path}"
       }
     }),
-    attrs=@html.Attrs::build()
-      .data_set("context-file", path)
-      .data_set("context-workspace-file", FileReference(path).path()),
+    attrs~,
     on_click=open(path),
     children,
   )
@@ -1495,15 +1549,17 @@ fn LinkMenus::wrap(
   locale : @i18n.Locale,
   target : @action_menu.ContextTarget,
   content : @rabbita.Val[@html.Html],
+  inline~ : Bool,
 ) -> @rabbita.Val[@html.Html] {
   let id = self.prefix + "-" + self.next.val.to_string()
   self.next.val += 1
-  @action_menu.inline_context(
+  @action_menu.link_context(
     id,
     locale,
     self.input,
     target,
     self.actions,
     content,
+    inline~,
   )
 }

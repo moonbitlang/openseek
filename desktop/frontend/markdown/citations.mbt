@@ -191,9 +191,15 @@ fn[Node : MarkdownNode] MarkdownRender::sources_node(
   let previews : Array[@html.Html] = []
   for citation in self.citations {
     let source_path = citation.link.bind(link => self.file_destination(link))
+    let source_title : Ref[@action_menu.ContextTarget?] = Ref(None)
     let render = {
       ..self,
       in_sources: true,
+      source_title: if self.links is Some(_) {
+        Some(source_title)
+      } else {
+        None
+      },
       open_file: self.open_file.map(open => {
         path => {
           open(
@@ -213,22 +219,29 @@ fn[Node : MarkdownNode] MarkdownRender::sources_node(
     let glyph = self.source_glyph(citation)
     let number = citation.number
     let id = self.source_note_id(number)
+    let card = Node::compose(render.block_nodes(citation.block), children => {
+      @html.div(class="citation-source-card", [
+        glyph,
+        @html.div(class="citation-source-content", [
+          @html.div(class="citation-source-origin", origin),
+          @html.div(class="citation-source-copy", children),
+        ]),
+        @html.span(class="citation-source-number", number),
+      ])
+    })
+    let card = match source_title.val {
+      Some(target) => self.link(target, card, inline=false)
+      None => card
+    }
     rows.push(
-      Node::compose(render.block_nodes(citation.block), children => {
+      Node::compose([card], children => {
         @html.li(
           id~,
           class="citation-source",
           attrs=@html.Attrs::build()
             .role("doc-footnote")
             .data_set("source", number),
-          [
-            glyph,
-            @html.div(class="citation-source-content", [
-              @html.div(class="citation-source-origin", origin),
-              @html.div(class="citation-source-copy", children),
-            ]),
-            @html.span(class="citation-source-number", number),
-          ],
+          children,
         )
       }),
     )

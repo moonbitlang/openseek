@@ -24,11 +24,11 @@ pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput],
 
 pub fn dropdown(String, Definition, class~ : String, @html.Html) -> @rabbita.Val[@html.Html]
 
-pub fn inline_context(String, @i18n.Locale, ContextInput, ContextTarget, ContextActions, @rabbita.Val[@html.Html]) -> @rabbita.Val[@html.Html]
+pub fn link_context(String, @i18n.Locale, ContextInput, ContextTarget, ContextActions, @rabbita.Val[@html.Html], inline? : Bool) -> @rabbita.Val[@html.Html]
 
 pub fn link_target(String) -> ContextTarget
 
-pub fn row_context(@rabbita.Val[RowContext], inline? : Bool) -> @rabbita.Val[@html.Html]
+pub fn row_context(@rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html]
 
 pub fn[T : Eq] selection_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[T?], (QuoteReply[T]) -> @cmd.Cmd) -> @rabbita.Val[@html.Html]
 
