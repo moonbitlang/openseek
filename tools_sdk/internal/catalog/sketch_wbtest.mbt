@@ -39,6 +39,13 @@ test "sketch follows local references and stops at cycles" {
 test "a sketch too long to read falls back to the schema" {
   let schema : Json = { "enum": ["x".repeat(3000)] }
   assert_eq(sketch_line(schema), schema.stringify())
+  guard result_patterns({ "oneOf": [schema, { "type": "null" }] })
+    is Some(patterns) else {
+    fail("expected bounded result patterns")
+  }
+  assert_true(patterns.length() <= MaxSketchChars)
+  assert_true(patterns.contains("2 more schema branches; see output_schema."))
+  assert_false(patterns.contains("x".repeat(3000)))
 }
 
 ///|
@@ -132,6 +139,70 @@ test "alternatives beside an object's own fields are shown as the schema" {
     "oneOf": [{ "required": ["query"] }, { "required": ["id"] }],
   }
   assert_eq(sketch_line(schema), schema.stringify())
+  // Inputs keep the complete schema. Outputs project each alternative into
+  // a reading pattern without requiring a shared discriminator field.
+  guard result_patterns(schema) is Some(patterns) else {
+    fail("expected one result pattern per alternative")
+  }
+  assert_true(patterns.contains("{ \"query\": String(query_), .. } =>"))
+  assert_true(patterns.contains("{ \"id\": Number(id_, ..), .. } =>"))
+  let tagged : Json = {
+    "type": "object",
+    "properties": {
+      "method": { "enum": ["get_comments", "get_sub_issues"] },
+      "comments": { "type": ["array", "null"] },
+      "sub_issues": { "type": "array" },
+    },
+    "required": ["method"],
+    "oneOf": [
+      {
+        "properties": {
+          "method": { "enum": ["get_comments"] },
+          "sub_issues": { "not": { "description": "Any value." } },
+        },
+        "required": ["comments"],
+      },
+      {
+        "properties": {
+          "method": { "const": "get_sub_issues" },
+          "comments": false,
+        },
+        "required": ["sub_issues"],
+      },
+    ],
+  }
+  guard result_patterns(tagged) is Some(patterns) else {
+    fail("expected combined root and branch fields")
+  }
+  assert_true(
+    patterns.contains(
+      "{ \"method\": \"get_comments\", \"comments\": comments_, .. } =>",
+    ),
+  )
+  assert_true(
+    patterns.contains(
+      "{ \"method\": \"get_sub_issues\", \"sub_issues\": Array(sub_issues_), .. } =>",
+    ),
+  )
+  assert_false(patterns.contains("\"not\""))
+  assert_false(patterns.contains("Any value."))
+  guard result_patterns({
+      "type": ["object", "null"],
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Comment" }],
+      "$defs": {
+        "Comment": {
+          "type": "object",
+          "properties": { "id": { "type": "string" } },
+          "required": ["id"],
+        },
+      },
+    })
+    is Some(patterns) else {
+    fail("expected nullable and referenced result alternatives")
+  }
+  assert_true(patterns.contains("Null =>"))
+  assert_true(patterns.contains("{ \"id\": String(id_), .. } =>"))
+  assert_true(result_patterns({ "type": "object" }) is None)
   // Alternatives that each describe a value still sketch.
   assert_eq(
     sketch_line({ "anyOf": [{ "type": "string" }, { "type": "null" }] }),
@@ -153,6 +224,18 @@ test "validation constraints are shown beside their type" {
     sketch_line(schema),
     "{ \"limit\": Number (integer, minimum 1, maximum 100), \"name\"?: String (pattern \"^[a-z]+$\") }",
   )
+  // Numeric constraints remain excluded from generated branch conditions.
+  guard result_patterns({
+      "oneOf": [
+        { "type": "number", "maximum": 0 },
+        { "type": "number", "minimum": 1 },
+      ],
+    })
+    is Some(patterns) else {
+    fail("expected patterns for numeric alternatives")
+  }
+  assert_eq(patterns.split("Number(value_, ..) =>").to_array().length(), 3)
+  assert_false(patterns.contains(" if "))
 }
 
 ///|

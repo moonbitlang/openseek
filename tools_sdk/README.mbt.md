@@ -137,6 +137,14 @@ The returned `SearchPage` has the same tools twice:
   and `output_schema : Json?` (the raw JSON Schemas) for the script to select
   from.
 
+Results with a top-level `oneOf` show one MoonBit matching pattern per branch.
+Each pattern combines required fields and literal tags from the root and the
+branch; a common tag is not required. These are structural reading examples:
+numeric constraints and forbidden extra fields are not checked, and nullable
+or nested objects may be bound as whole JSON values. Matching takes the first
+applicable branch, so the examples do not validate `oneOf` exclusivity. The
+complete constraints remain in `output_schema`.
+
 `total` counts every match, `next_offset` continues the listing, and
 `instructions` holds the named server's instructions on a first page. No match
 is a page with no tools. A search naming an unavailable server is a page with

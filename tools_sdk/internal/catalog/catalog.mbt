@@ -361,7 +361,10 @@ fn render_entry(
   let input = entry.tool.input_schema
   let output = entry.tool.output_schema
   let result = match output {
-    Some(output) => "\nResult `data`: \{sketch_line(output)}"
+    Some(output) =>
+      result_patterns(output).unwrap_or_else(() => {
+        "\nResult `data`: \{sketch_line(output)}"
+      })
     None => ""
   }
   let example = if with_example {
