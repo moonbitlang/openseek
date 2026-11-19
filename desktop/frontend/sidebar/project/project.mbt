@@ -393,19 +393,17 @@ pub fn component(
       )
     }
     trailing.push(@html.div(class="workspace-actions", controls))
-    let context : @action_menu.RowContext = {
+    let context = @action_menu.RowContext::{
       target: input.id.key(),
-      revision: Repr::Repr(
-        (
-          input.id,
-          input.label,
-          input.title,
-          collapsed,
-          input.managed,
-          input.host,
-          locale,
-        ),
-      ).to_string(),
+      revision: (
+        input.id,
+        input.label,
+        input.title,
+        collapsed,
+        input.managed,
+        input.host,
+        locale,
+      ),
       class: Some(class),
       title: Some(input.title),
       content: @html.fragment(

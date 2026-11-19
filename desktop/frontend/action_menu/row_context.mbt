@@ -1,7 +1,7 @@
 ///|
-pub(all) struct RowContext {
+pub(all) struct RowContext[Revision] {
   target : String
-  revision : String
+  revision : Revision
   class : String?
   title : String?
   content : @html.Html
@@ -9,7 +9,7 @@ pub(all) struct RowContext {
 }
 
 ///|
-pub impl Eq for RowContext with fn equal(a, b) {
+pub impl[Revision] Eq for RowContext[Revision] with fn equal(a, b) {
   physical_equal(a, b)
 }
 
@@ -19,9 +19,22 @@ pub extend RowContext with Eq::{equal, not_equal}
 ///|
 /// Use the supplied row as the right-click trigger. The row HTML can update
 /// independently of the menu instance selected by the revision.
-pub fn row_context(row : @rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html] {
-  row.switch_by(
-    input => {
+pub fn[Revision : Eq] row_context(
+  row : @rabbita.Val[RowContext[Revision]],
+) -> @rabbita.Val[@html.Html] {
+  let next_revision = Ref(0)
+  // Compare the typed revision before assigning a string key for switch_by.
+  let key = row
+    .map(row => row.revision)
+    .map(_ => {
+      next_revision.val += 1
+      next_revision.val.to_string()
+    })
+  row
+  .map2(key, (row, key) => (row, key))
+  .switch_by(
+    pair => {
+      let (input, _) = pair
       guard input.definition is Some(definition) else {
         return row.map(row => {
           @html.div(class?=row.class, title?=row.title, row.content)
@@ -54,7 +67,7 @@ pub fn row_context(row : @rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html] {
         }
       })
     },
-    by=input => input.revision,
+    by=pair => pair.1,
   )
 }
 
