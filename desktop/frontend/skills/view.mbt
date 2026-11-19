@@ -332,14 +332,20 @@ fn library_select(
     }),
     render=scope => {
       @html.fragment([
-        @rui.select_trigger(scope~, aria_label=label),
+        @rui.select_trigger(
+          scope~,
+          aria_label=label,
+          class="setting-select-button field-surface",
+        ),
         @rui.select_content(
           scope~,
+          class="menu-surface",
           input.choices.map(choice => {
             @rui.select_item(
               scope~,
               value=choice.library.key(),
               disabled=!choice.available,
+              class="menu-option",
               choice.label(locale),
             )
           }),

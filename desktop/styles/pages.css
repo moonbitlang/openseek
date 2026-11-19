@@ -286,22 +286,26 @@ button.archived-chat-open:hover .archived-chat-title {
   width: 100%;
 }
 
+/* Setting triggers use the same geometry even when RUI supplies inline defaults. */
 .setting-select-button {
-  display: grid;
+  display: grid !important;
   grid-template-columns: minmax(0, 1fr) 18px;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-4) !important;
   width: 100%;
   min-width: 0;
+  height: auto !important;
   border-radius: var(--radius-control);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
-  font-size: var(--font-size-md);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5) !important;
+  font: inherit !important;
+  font-size: var(--font-size-md) !important;
   letter-spacing: -0.01em;
   text-align: left;
 }
 
 .setting-select-button:hover:not(:disabled),
-.setting-select-button.open {
+.setting-select-button:is(.open, [data-state="open"]) {
+  --rui-control-bg: var(--color-control-surface);
   background: var(--color-control-surface);
 }
 
@@ -312,10 +316,11 @@ button.archived-chat-open:hover .archived-chat-title {
   white-space: nowrap;
 }
 
-.setting-select-chevron {
+.setting-select-chevron,
+.setting-select-button[data-slot="select-trigger"] > [aria-hidden="true"] {
   display: inline-flex;
   justify-self: end;
-  color: var(--color-text-primary);
+  color: var(--color-text-primary) !important;
   pointer-events: none;
 }
 
@@ -368,12 +373,9 @@ button.archived-chat-open:hover .archived-chat-title {
   align-items: start;
   gap: var(--space-3);
   padding: var(--space-5);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-surface);
-  background: var(--color-bg-surface);
 }
 
-.skill-row:hover { border-color: var(--color-text-muted); }
 .skill-footer { justify-content: space-between; align-self: end; }
 .skill-footer > .skill-actions, .skill-footer > .skill-action { position: relative; }
 .skill-footer > .skill-actions { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }

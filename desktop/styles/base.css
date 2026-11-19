@@ -178,7 +178,8 @@ samp,
 /* Action menus and selects share visual treatment, not value-selection state. */
 .menu-surface,
 [id="conversation-transfer:actions"] {
-  padding: 5px;
+  --menu-surface-padding: 5px;
+  padding: var(--menu-surface-padding);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
@@ -190,7 +191,8 @@ samp,
 }
 
 .custom-select-menu:popover-open,
-.custom-select-group {
+.custom-select-group,
+.menu-surface[data-slot="select-content"] > [data-slot="select-viewport"] {
   display: grid;
   gap: var(--space-2);
 }
@@ -229,8 +231,9 @@ samp,
 }
 
 .menu-option {
+  --menu-option-padding: 0.7em 9px;
   grid-template-columns: minmax(0, 1fr) 16px;
-  padding-block: 0.7em;
+  padding: var(--menu-option-padding);
 }
 
 [id="conversation-transfer:actions"] .action-menu-item {
