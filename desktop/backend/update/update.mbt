@@ -203,39 +203,24 @@ fn normalized_sha256(text : String) -> String? {
 }
 
 ///|
-/// Whether `candidate` is a strictly newer semantic version than `than`:
-/// numeric `major.minor.patch` compare, tolerant of a leading `v` and a
-/// trailing pre-release or build suffix (which is otherwise ignored).
-/// Malformed versions are never newer.
+/// Whether `candidate` is a strictly newer semantic version than `than`,
+/// tolerant of a leading `v`. Pre-releases order below their release and
+/// build metadata is ignored, per semver. Malformed versions are never newer.
 fn is_newer(candidate : String, than~ : String) -> Bool {
   guard parse_version(candidate) is Some(candidate) else { return false }
   guard parse_version(than) is Some(current) else { return false }
-  candidate > current
+  candidate.compare(current) > 0
 }
 
 ///|
-/// The numeric `(major, minor, patch)` of a version string, or None when it
-/// does not look like semver.
-fn parse_version(text : String) -> (Int32, Int32, Int32)? {
-  let mut view = text.trim()
-  if view.strip_prefix("v") is Some(rest) {
-    view = rest
+/// The semantic version in `text`, tolerating surrounding whitespace and a
+/// leading `v`; None when it is not semver.
+fn parse_version(text : String) -> @semver.SemVer? {
+  let text = text.trim()
+  let text = text.strip_prefix("v").unwrap_or(text)
+  Some(@semver.parse(text.to_owned())) catch {
+    _ => None
   }
-  // `1.2.3-beta.1+build` compares by its numeric triple.
-  for stop in ["-", "+"] {
-    if view.split_once(stop) is Some((before, _)) {
-      view = before
-    }
-  }
-  let parts = [..view.split(".")]
-  guard parts.length() == 3 else { return None }
-  let numbers = []
-  for part in parts {
-    let number = @string.parse_int(part) catch { _ => return None }
-    guard number >= 0 else { return None }
-    numbers.push(number)
-  }
-  Some((numbers[0], numbers[1], numbers[2]))
 }
 
 ///|
