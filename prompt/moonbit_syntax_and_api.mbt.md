@@ -37,7 +37,7 @@ Below is a complete example of CLI parsing using argparse:
 
 [share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
 
-For a nonzero exit,import `"moonbitlang/x/sys"`, and call `@sys.exit(1)`.
+For a nonzero exit, import `"moonbitlang/core/env"` and call `@env.exit(1)`.
 
 ## Shell EDSL with moonbitlang/core/async/shell
 
