@@ -44,7 +44,7 @@ fn Model::targets_list(
                       @html.text(target.label),
                     ]),
                     @html.span(class="downloads-action", [
-                      if target.size_bytes is Some(size) {
+                      if target.size is Some(size) {
                         @html.text(format_download_size(size))
                       } else {
                         @html.nothing

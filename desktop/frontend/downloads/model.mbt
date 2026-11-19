@@ -49,7 +49,7 @@ pub struct Target {
   os : Os
   label : String
   url : String
-  size_bytes : Int64?
+  size : Int64?
 }
 
 ///|
@@ -137,15 +137,15 @@ fn manifest_target(entry : Json?, os : Os, label : String) -> Target? {
   guard entry is Some(Object(fields)) && fields.get("url") is Some(String(url)) else {
     return None
   }
-  let size_bytes = if fields.get("size_bytes") is Some(Number(size, ..)) &&
-    size >= 0.0 &&
-    size <= 9_007_199_254_740_991.0 &&
-    size == size.floor() {
-    Some(size.to_int64())
+  let size = if fields.get("size") is Some(Number(bytes, ..)) &&
+    bytes >= 0.0 &&
+    bytes <= 9_007_199_254_740_991.0 &&
+    bytes == bytes.floor() {
+    Some(bytes.to_int64())
   } else {
     None
   }
-  Some({ os, label, url, size_bytes, })
+  Some({ os, label, url, size, })
 }
 
 ///|

@@ -105,8 +105,8 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
       version: '0.3.1',
       url: 'https://example.com/releases/0.3.1',
       platforms: {
-        'macos-arm64': { url: 'https://example.com/mac.tar.gz', size_bytes: 154000000 },
-        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg', size_bytes: 139500000 },
+        'macos-arm64': { url: 'https://example.com/mac.tar.gz', size: 154000000 },
+        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg', size: 139500000 },
         'windows-x64': { url: 'https://example.com/win-setup.exe' },
         browser: { url: 'https://example.com/console.tar.gz' },
       },

@@ -348,7 +348,7 @@ export class Release {
     for (const artifact of Artifacts) {
       const local = fromCheckout ? await this.localArtifact(artifact) : undefined;
       const served = this.githubAsset(release, artifact, local);
-      platforms[artifact.platform] = { file: artifact.file, sha256: served.sha256, size_bytes: served.size };
+      platforms[artifact.platform] = { file: artifact.file, sha256: served.sha256, size: served.size };
     }
 
     // The manifest sends clients to these assets, which anonymous clients can
@@ -375,11 +375,11 @@ export class Release {
     const published = Object.keys(manifest.platforms ?? {}).sort().join(" ");
     const requested = Object.keys(platforms).sort().join(" ");
     if (published !== requested) throw new Error(`manifest platforms "${published}" are not "${requested}"`);
-    for (const [platform, { file, sha256, size_bytes }] of Object.entries(platforms)) {
+    for (const [platform, { file, sha256, size }] of Object.entries(platforms)) {
       const entry = manifest.platforms[platform];
       if (entry.sha256 !== sha256) throw new Error(`manifest digest for ${platform} is not ${sha256}`);
-      if (entry.size_bytes !== undefined && entry.size_bytes !== size_bytes) {
-        throw new Error(`manifest size for ${platform} is not ${size_bytes} bytes`);
+      if (entry.size !== undefined && entry.size !== size) {
+        throw new Error(`manifest size for ${platform} is not ${size} bytes`);
       }
       if (!entry.url.endsWith(`/${version}/${file}`)) throw new Error(`manifest URL for ${platform} is not ${file}: ${entry.url}`);
     }
@@ -394,7 +394,7 @@ export class Release {
     const platforms = {};
     for (const artifact of Artifacts) {
       const local = await this.localArtifact(artifact);
-      platforms[artifact.platform] = { file: artifact.file, sha256: local.sha256, size_bytes: local.size };
+      platforms[artifact.platform] = { file: artifact.file, sha256: local.sha256, size: local.size };
     }
     this.verifyManifest(manifest, version, platforms);
 
