@@ -346,7 +346,12 @@
   overflow-x: auto;
 }
 .office-viewer-surface .office-context-excel > .office-context-document {
-  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.office-viewer-surface .office-context-excel > .office-context-rail {
+  overflow: auto;
 }
 .office-viewer-surface .office-context-rail {
   position: relative;
@@ -602,6 +607,10 @@
 
 /* The file panel already owns the document title and context actions. Keep
    the standalone spreadsheet's instructions and inspector out of this host. */
+.office-viewer-surface.sheet-mode {
+  display: flex;
+  padding: 0;
+}
 .office-viewer-surface .excel-view-toolbar,
 .office-viewer-surface .excel-formula-bar,
 .office-viewer-surface .excel-tabs-label,
@@ -613,19 +622,31 @@
 .office-viewer-surface .excel-workspace {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 .office-viewer-surface .sheet-document.office-excel-workbook {
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   padding: 0;
   background: transparent;
   box-shadow: none;
 }
 .office-viewer-surface .office-excel-workbook section[data-sheet] {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   margin: 0;
 }
 .office-viewer-surface .office-excel-workbook section[data-sheet][hidden] {
   display: none;
+}
+.office-viewer-surface .office-sheet-viewport {
+  flex: 1 1 auto;
+  /* The viewer sets an inline 65vh cap; this host owns the available height. */
+  max-height: none !important;
 }
 .office-viewer-surface .office-grid-column-headings th,
 .office-viewer-surface .office-row-heading {
@@ -646,9 +667,9 @@
 .office-viewer-surface .excel-sheet-tabs {
   display: flex;
   align-items: stretch;
+  flex: 0 0 auto;
   gap: var(--space-2);
   min-width: 0;
-  margin-top: var(--space-5);
   padding: var(--space-2);
   overflow-x: auto;
   background: var(--color-bg-surface);
@@ -751,7 +772,6 @@
 
 @media (max-width: 760px) {
   .office-viewer-surface.word-mode { padding: 18px 8px 34px; }
-  .office-viewer-surface.sheet-mode { padding: 10px 8px 28px; }
 }
 
 .pdf-region-capture {
