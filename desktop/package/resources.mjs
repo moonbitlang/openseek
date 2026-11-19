@@ -4,6 +4,10 @@ import { join } from "node:path";
 
 // Validate and copy the installation resource tree. The returned content hash
 // identifies the copied snapshot independently of the MoonBit toolchain.
+//
+// A `_build` directory under the tree is a local build's leftover, not a
+// resource: shipping it would both change the hash for no reason and let a
+// later step write into the signed bundle, breaking its seal.
 export async function stageResources(source, destination) {
   for (const entry of ["doc/moonbit/index.md", "doc/moonbit/language", "doc/moonbit/toolchain", "workflow"]) {
     await stat(join(source, entry));
@@ -16,6 +20,7 @@ export async function stageResources(source, destination) {
       const name = `${prefix}${entry.name}`;
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
+        if (entry.name === "_build") continue;
         await visit(path, `${name}/`);
       } else if (entry.isFile()) {
         hash.update(name).update("\0").update(await readFile(path)).update("\0");
@@ -25,6 +30,9 @@ export async function stageResources(source, destination) {
     }
   }
   await visit(source);
-  await cp(source, destination, { recursive: true });
+  await cp(source, destination, {
+    recursive: true,
+    filter: path => !path.split(/[\\/]/).includes("_build"),
+  });
   return hash.digest("hex");
 }
