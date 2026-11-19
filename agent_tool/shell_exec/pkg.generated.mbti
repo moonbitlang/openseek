@@ -13,6 +13,11 @@ pub let default_hard_cap : Int32
 // Errors
 
 // Types and methods
+pub struct DisplayTail {
+  // private fields
+}
+pub fn DisplayTail::snapshot(Self) -> (String, Bool)
+
 #derive(Eq, @debug.Debug)
 pub enum ExecStatus {
   Running
@@ -50,6 +55,7 @@ pub fn ShellExecution::started_at_ms(Self) -> Int64
 pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool
 pub fn ShellExecution::stop_cause(Self) -> StopCause?
+pub async fn ShellExecution::track_display_tail(Self, Array[(String, String)], Int32) -> DisplayTail
 pub async fn ShellExecution::wait(Self) -> Unit
 
 pub enum StopCause {
