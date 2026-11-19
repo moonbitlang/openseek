@@ -1,15 +1,18 @@
 import {
   "moonbitlang/core/async",
-  "openseek_desktop/backend/pathx",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/http",
   "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
   "moonbitlang/core/string",
+  "moonbitlang/openseek/httpx",
   "moonbitlang/x/crypto",
+  "openseek_desktop/backend/pathx",
 }
 
 import {
+  "moonbitlang/core/async/http",
   "moonbitlang/core/async/socket",
 } for "wbtest"
 

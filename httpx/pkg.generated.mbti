@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/httpx"
+
+import {
+  "moonbitlang/core/async/http",
+}
+
+// Values
+pub async fn get(StringView, headers? : Map[@http.CaseInsensitiveString, String], redirect? : Bool) -> (@http.ResponseHeader, Bytes)
+
+pub async fn get_stream(StringView, headers? : Map[@http.CaseInsensitiveString, String], redirect? : Bool) -> (@http.ResponseHeader, @http.ClientConnection)
+
+// Errors
+pub suberror RedirectError {
+  TooManyRedirects
+  MissingLocation
+  InvalidLocation
+  InsecureRedirect
+}
+
+// Types and methods
+
+// Type aliases
+
+// Traits
