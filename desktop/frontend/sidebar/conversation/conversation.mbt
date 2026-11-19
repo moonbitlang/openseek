@@ -754,19 +754,6 @@ pub fn component(
     )
     let context = @action_menu.RowContext::{
       target: input.id.key(),
-      revision: (
-        input.id,
-        input.label,
-        input.title,
-        input.rename,
-        input.openable,
-        input.active,
-        input.children.length(),
-        children_open,
-        input.trailing,
-        locale,
-        search.query,
-      ),
       class: Some(class),
       title: Some(input.title),
       content: @html.fragment([content, ..trailing_slot]),

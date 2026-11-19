@@ -1,7 +1,6 @@
 ///|
-pub(all) struct RowContext[Revision] {
+pub(all) struct RowContext {
   target : String
-  revision : Revision
   class : String?
   title : String?
   content : @html.Html
@@ -9,7 +8,7 @@ pub(all) struct RowContext[Revision] {
 }
 
 ///|
-pub impl[Revision] Eq for RowContext[Revision] with fn equal(a, b) {
+pub impl Eq for RowContext with fn equal(a, b) {
   physical_equal(a, b)
 }
 
@@ -17,35 +16,63 @@ pub impl[Revision] Eq for RowContext[Revision] with fn equal(a, b) {
 pub extend RowContext with Eq::{equal, not_equal}
 
 ///|
-/// Use the supplied row as the right-click trigger. The row HTML can update
-/// independently of the menu instance selected by the revision.
-pub fn[Revision : Eq] row_context(
-  row : @rabbita.Val[RowContext[Revision]],
-) -> @rabbita.Val[@html.Html] {
-  let next_revision = Ref(0)
-  // Compare the typed revision before assigning a string key for switch_by.
-  let key = row
-    .map(row => row.revision)
-    .map(_ => {
-      next_revision.val += 1
-      next_revision.val.to_string()
-    })
-  row
-  .map2(key, (row, key) => (row, key))
-  .switch_by(
+fn RowContext::menu_key(self : RowContext) -> String {
+  guard self.definition is Some(definition) else { return "" }
+  let entries = definition.entries.map(entry => {
+    match entry {
+      Separator => Json::null()
+      Action(item) =>
+        Json::array([
+          Json::string(item.label),
+          Json::string(item.title),
+          Json::boolean(item.enabled),
+          Json::boolean(item.destructive),
+        ])
+    }
+  })
+  Json::array([
+    Json::string(self.target),
+    Json::string(definition.label),
+    Json::array(entries),
+  ]).stringify()
+}
+
+///|
+/// Use the supplied row as the right-click trigger. The row HTML and the
+/// commands behind visible menu items can update independently of the menu.
+pub fn row_context(row : @rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html] {
+  let keyed = row.map(row => (row.menu_key(), row))
+  keyed.switch_by(
     pair => {
-      let (input, _) = pair
+      let (key, input) = pair
       guard input.definition is Some(definition) else {
         return row.map(row => {
           @html.div(class?=row.class, title?=row.title, row.content)
         })
       }
+      let (_, select) = @rabbita.create_state_with_input(
+        input=keyed,
+        init=(_, _) => ((), @cmd.none),
+        update=(_, current, index : Int32, _) => {
+          if current.0 == key &&
+            current.1.definition is Some(definition) &&
+            definition.entries.get(index) is Some(Action(item)) &&
+            item.enabled {
+            ((), item.command)
+          } else {
+            ((), @cmd.none)
+          }
+        },
+      )
       let id = input.target + ":context"
-      let on_open_change = context_open_change(id)
+      let on_open_change = context_open_change(
+        id,
+        on_mount=@rui.popover_close(id + "-content"),
+      )
       let row_scope : Ref[@rui.ContextMenuScope?] = Ref(None)
       let menu = @rui.context_menu(id~, on_open_change~, scope => {
         row_scope.val = Some(scope)
-        context_popup(scope, definition)
+        context_popup(scope, definition, select~)
       })
       // The trigger and popup share RUI's scope and are bound by ID. Keep
       // the row outside the popup root so its own dropdown has independent
@@ -67,7 +94,7 @@ pub fn[Revision : Eq] row_context(
         }
       })
     },
-    by=pair => pair.1,
+    by=pair => pair.0,
   )
 }
 
@@ -96,12 +123,13 @@ fn context_open_change(
 fn context_popup(
   scope : @rui.ContextMenuScope,
   definition : Definition,
+  select? : @cmd.Emit[Int32],
 ) -> @html.Html {
   @rui.context_menu_content(
     scope,
     aria_label=definition.label,
     class="action-menu",
-    definition.entries.map(entry => {
+    definition.entries.mapi((index, entry) => {
       match entry {
         Separator => @rui.context_menu_separator()
         Action(item) =>
@@ -109,7 +137,7 @@ fn context_popup(
             scope,
             disabled=!item.enabled,
             destructive=item.destructive,
-            on_select=item.command,
+            on_select=select.map_or(item.command, emit => emit(index)),
             class="action-menu-item",
             title=item.title,
             item_children(item),
