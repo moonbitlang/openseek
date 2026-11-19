@@ -15,7 +15,6 @@ import {
   "Yoorkin/multipart@0.2.2",
   "moonbit-community/yaml@0.0.10",
   "kokic/katex-parser@0.7.3",
-  "tonyfettes/url@0.3.5",
 }
 
 readme = "README.md"

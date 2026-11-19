@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/openseek/httpx"
+package "openseek_desktop/backend/internal/httpx"
 
 import {
   "moonbitlang/core/async/http",

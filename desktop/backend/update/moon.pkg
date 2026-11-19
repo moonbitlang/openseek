@@ -6,8 +6,8 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
-  "moonbitlang/openseek/httpx",
   "moonbitlang/x/crypto",
+  "openseek_desktop/backend/internal/httpx",
   "openseek_desktop/backend/pathx",
 }
 
