@@ -53,6 +53,7 @@ pub struct Target {
   os : Os
   label : String
   url : String
+  size : Int64?
 }
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool

@@ -170,6 +170,11 @@
   margin-top: var(--space-6);
   text-align: left;
 }
+.downloads-version {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
 .downloads-list {
   display: grid;
   gap: var(--space-2);
@@ -203,6 +208,7 @@
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
+.downloads-action > svg { flex: none; }
 .downloads-note { margin: var(--space-5) 0 0; font-size: var(--font-size-sm); }
 .downloads-note a {
   display: inline-flex;
