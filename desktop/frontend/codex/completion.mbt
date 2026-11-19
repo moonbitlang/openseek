@@ -622,6 +622,7 @@ fn State::apply_composer_action(
     | @composer.GoalSubmitted(..)
     | @composer.CommandResultRecovered(..)
     | @composer.CommandResultSubmitted(..)
+    | @composer.FeedbackSignIn(..)
     | @composer.FeedbackSubmitted(..)
     | @composer.ShellCommandSubmitted(..)
     | @composer.ShellTerminalRequested(..)

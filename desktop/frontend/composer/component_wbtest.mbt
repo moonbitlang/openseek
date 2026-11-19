@@ -1375,7 +1375,10 @@ test "a feedback receipt from the previous account cannot settle a retry" {
     feedback: Some(Sending("first", input.draft.task)),
   })
   let emit = Action::test_emit()
-  let (reset, _) = sending.command_result(FeedbackAccountChanged, emit)
+  let (reset, _) = sending.command_result(
+    FeedbackAccountUpdated(signed_in=true, changed=true),
+    emit,
+  )
   assert_true(reset.active(input).feedback is None)
   let retry = reset.with_entry({
     ..reset.active(input),

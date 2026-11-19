@@ -109,3 +109,77 @@ for (const mode of ['Cloud', 'Local']) {
     expect(app.device.pageErrors).toEqual([]);
   });
 }
+
+for (const mode of ['Local', 'Cloud']) {
+  test(`${mode} feedback offers sign-in and preserves the draft for an explicit retry`, async ({ page }) => {
+    const local = mode === 'Local';
+    const app = new CloudHarness(page, { desktop: true, cached: !local });
+    await app.install();
+    let uploads = 0;
+    if (local) {
+      const original = app.device.replyFor.bind(app.device);
+      app.device.replyFor = request => {
+        if (request.method !== 'session.feedback') return original(request);
+        uploads++;
+        return { status: 'shared', url };
+      };
+      await page.goto(`${authOrigin}/console/index.html?device=device-a`);
+      await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+    } else {
+      await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, route => {
+        uploads++;
+        return route.fulfill(uploads === 1
+          ? { status: 401, json: { error: 'unauthorized' } }
+          : { status: 201, json: { id: 'fb_test', url } });
+      });
+      await app.goto();
+      await app.open(sessionA);
+    }
+    const task = page.locator('#task');
+    const command = '/feedback ' + message;
+    await task.fill(command);
+    await task.press('Enter');
+    const status = page.locator('.composer-feedback-status');
+    const login = status.getByRole('button', { name: 'Sign in', exact: true });
+    await expect(login).toBeVisible();
+    await expect(task).toHaveValue(command);
+    await login.click();
+    await expect.poll(() => app.hostRequests.filter(r => r.method === 'auth.connect').length).toBe(1);
+    await expect(login).toBeHidden();
+    expect(uploads).toBe(local ? 0 : 1);
+    await expect(task).toHaveValue(command);
+    await task.press('Enter');
+    await expect(status).toHaveText('Feedback submitted');
+    await expect(task).toHaveValue('');
+    expect(uploads).toBe(local ? 1 : 2);
+  });
+}
+
+test('browser feedback restores its draft after the account sign-in redirect', async ({ page }) => {
+  const app = new CloudHarness(page, { cached: false });
+  app.accountSignedIn = true;
+  await app.install();
+  let uploads = 0;
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, route => {
+    uploads++;
+    expect(route.request().postDataJSON().message).toBe(message);
+    return route.fulfill(uploads === 1
+      ? { status: 401, json: { error: 'unauthorized' } }
+      : { status: 201, json: { id: 'fb_test', url } });
+  });
+  await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
+  const task = page.locator('#task');
+  const command = '/feedback ' + message;
+  const status = page.locator('.composer-feedback-status');
+  await task.fill(command);
+  await task.press('Enter');
+  const navigation = page.waitForRequest(request => new URL(request.url()).pathname === '/v2/auth/login');
+  await status.getByRole('button', { name: 'Sign in' }).click();
+  expect(new URL((await navigation).url()).searchParams.get('return_to')).toBe('/cloud/session/' + sessionA);
+  await expect(task).toHaveValue(command);
+  await expect(status).toBeHidden();
+  expect(uploads).toBe(1);
+  await task.press('Enter');
+  await expect(status).toHaveText('Feedback submitted');
+  expect(uploads).toBe(2);
+});

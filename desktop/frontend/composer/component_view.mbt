@@ -420,12 +420,27 @@ fn Entry::view(
     let (role, message) = match status {
       Sending(_, _) => ("status", ui(locale, SubmittingFeedback))
       Submitted => ("status", ui(locale, FeedbackSubmittedLabel))
-      Failed(reason) => ("alert", reason)
+      Failed(SignInRequired) => ("alert", ui(locale, FeedbackNeedsSignIn))
+      Failed(Diagnostic(reason)) => ("alert", reason)
     }
     context["feedback"] = @html.div(
       class="composer-context-row composer-feedback-status",
       attrs=@html.Attrs::build().role(role),
-      message,
+      if status is Failed(SignInRequired) {
+        [
+          @html.span(message),
+          @html.button(
+            type_="button",
+            class="button composer-context-action",
+            on_click=action_emit(
+              FeedbackSignIn(identity=self.identity(), draft=self.draft.task),
+            ),
+            ui(locale, FeedbackLoginLabel),
+          ),
+        ]
+      } else {
+        [@html.span(message)]
+      },
     )
   }
   if self.image_reads > 0 {

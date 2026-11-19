@@ -52,16 +52,18 @@ fn Model::submit_feedback(
     },
     () => {
       guard self.account is Some(credentials) else {
-        return Err("Sign in to submit feedback.")
+        return Err(@composer.SignInRequired)
       }
       match identity.owner {
         Host(key) => {
           guard key.channel is Local ||
             (key.channel is Remote("host") && self.is_local_console()) else {
-            return Err("Open this session on its host to submit feedback.")
+            return Err(
+              Diagnostic("Open this session on its host to submit feedback."),
+            )
           }
           guard self.conversation_for_composer_action(identity) is Some(conv) else {
-            return Err("The conversation is unavailable.")
+            return Err(Diagnostic("The conversation is unavailable."))
           }
           let title = self
             .activate(key.channel, key.session, conv.project())
@@ -80,25 +82,31 @@ fn Model::submit_feedback(
               metadata,
             },
           ) catch {
-            error => return Err(@interop.bridge_error_text(error))
+            error => return Err(Diagnostic(@interop.bridge_error_text(error)))
           }
           match reply {
             Shared(..) => Ok(())
-            Failed(message~) => Err(message)
-            SignInRequired => Err("Sign in to submit feedback.")
+            Failed(message~) => Err(Diagnostic(message))
+            SignInRequired => Err(@composer.SignInRequired)
           }
         }
         Cloud(account~, session~) => {
           guard credentials.user.user_id == account else {
-            return Err("Sign in to submit feedback.")
+            return Err(
+              Diagnostic("This conversation belongs to a different account."),
+            )
           }
           guard self.cloud.draft_identity() != Some(identity.owner) else {
-            return Err("Open an existing Cloud session to submit feedback.")
+            return Err(
+              Diagnostic("Open an existing Cloud session to submit feedback."),
+            )
           }
           let _ = @cloud.submit_feedback(credentials.token, session, metadata) catch {
+            @cloud.RequestError::RequestError(Unauthorized) =>
+              return Err(@composer.SignInRequired)
             @cloud.RequestError::RequestError(failure) =>
-              return Err(failure.text(self.locale))
-            error => return Err(error.to_string())
+              return Err(Diagnostic(failure.text(self.locale)))
+            error => return Err(Diagnostic(error.to_string()))
           }
           Ok(())
         }
@@ -106,4 +114,34 @@ fn Model::submit_feedback(
     },
   )
   (command, self)
+}
+
+///|
+/// Browser sign-in navigates this tab away. Keep only the explicitly retried
+/// draft in this tab, and consume it once on return to its conversation.
+extern "js" fn remember_feedback_login(record : String) -> Bool =
+  #| record => {
+  #|   try { sessionStorage.setItem("seekmoon.feedback.login", record); return true; }
+  #|   catch { return false; }
+  #| }
+
+///|
+extern "js" fn take_feedback_login() -> @js.Nullable[String] =
+  #| () => {
+  #|   try {
+  #|     const value = sessionStorage.getItem("seekmoon.feedback.login");
+  #|     sessionStorage.removeItem("seekmoon.feedback.login");
+  #|     return value;
+  #|   } catch { return null; }
+  #| }
+
+///|
+fn feedback_login_draft() -> (String, String)? {
+  guard take_feedback_login().to_option() is Some(record) else { return None }
+  let json = @json.parse(record) catch { _ => return None }
+  match json {
+    { "owner": String(owner), "draft": String(draft), .. } =>
+      Some((owner, draft))
+    _ => None
+  }
 }

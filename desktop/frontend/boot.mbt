@@ -581,6 +581,7 @@ fn main {
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
+    let login_draft = Ref(if desktop { None } else { feedback_login_draft() })
     let composer_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
       @cmd.Emit(_ => @cmd.none),
     )
@@ -641,6 +642,19 @@ fn main {
               None => (@cmd.none, model)
             }
           _ => update(emit, msg, model)
+        }
+        if login_draft.val is Some((owner, draft)) && next.screen is Chat {
+          let input = next.composer_input()
+          if input.identity.owner.key() == owner {
+            login_draft.val = None
+            return (
+              next,
+              @cmd.batch([
+                cmd,
+                emit(ComposerCommandResult(@composer.Restore(input, draft))),
+              ]),
+            )
+          }
         }
         (next, cmd)
       },

@@ -1,16 +1,23 @@
 ///|
 #derive(Eq)
+pub(all) enum FeedbackFailure {
+  SignInRequired
+  Diagnostic(String)
+}
+
+///|
+#derive(Eq)
 priv enum FeedbackStatus {
   Sending(String, String)
   Submitted
-  Failed(String)
+  Failed(FeedbackFailure)
 }
 
 ///|
 /// Command outcomes delivered to the composer entry that submitted them.
 pub(all) enum CommandResult {
-  FeedbackSettled(Identity, String, Result[Unit, String])
-  FeedbackAccountChanged
+  FeedbackSettled(Identity, String, Result[Unit, FeedbackFailure])
+  FeedbackAccountUpdated(signed_in~ : Bool, changed~ : Bool)
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)
@@ -51,11 +58,21 @@ fn Model::command_result(
   action_emit : @cmd.Emit[Action],
 ) -> (Model, @cmd.Cmd) {
   match message {
-    FeedbackAccountChanged =>
+    FeedbackAccountUpdated(signed_in~, changed~) =>
       (
         {
           ..self,
-          entries: self.entries.map(entry => { ..entry, feedback: None, }),
+          entries: self.entries.map(entry => {
+            let feedback = if !signed_in &&
+              entry.feedback is Some(Sending(_, _) | Failed(SignInRequired)) {
+              Some(Failed(SignInRequired))
+            } else if changed || entry.feedback is Some(Failed(SignInRequired)) {
+              None
+            } else {
+              entry.feedback
+            }
+            { ..entry, feedback, }
+          }),
         },
         @cmd.none,
       )

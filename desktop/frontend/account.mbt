@@ -78,13 +78,21 @@ fn fetch_account(
 fn begin_account_login(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  rejected_token? : String,
 ) -> (@cmd.Cmd, Model) {
   guard !model.remote_connecting else { return (@cmd.none, model) }
   let epoch = model.account_epoch + 1
   let command = if model.is_desktop {
-    connect_remote(dispatch, epoch)
+    connect_remote(dispatch, epoch, rejected_token?)
   } else {
-    @cmd.custom_cmd(_ => @dom.window().load_url(model.console.login_url()))
+    @cmd.custom_cmd(_ => {
+      if rejected_token is Some(token) &&
+        load_browser_account() is Ok(Some(cached)) &&
+        cached.token == token {
+        @base_browser.local_storage_remove("seekmoon.account.v1") |> ignore
+      }
+      @dom.window().load_url(model.console.login_url())
+    })
   }
   (
     command,
@@ -259,8 +267,13 @@ fn account_loaded(
   }
   let changed = model.account.map(account => account.token) !=
     account.map(account => account.token)
-  let feedback_command = if changed {
-    dispatch(ComposerCommandResult(@composer.FeedbackAccountChanged))
+  let feedback_command = if changed ||
+    (model.account_login is Some(Waiting) && account is Some(_)) {
+    dispatch(
+      ComposerCommandResult(
+        @composer.FeedbackAccountUpdated(signed_in=account is Some(_), changed~),
+      ),
+    )
   } else {
     @cmd.none
   }

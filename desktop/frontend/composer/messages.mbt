@@ -29,6 +29,8 @@ priv enum UiMessage {
   ReadingImages
   SubmittingFeedback
   FeedbackSubmittedLabel
+  FeedbackNeedsSignIn
+  FeedbackLoginLabel
   UploadAttachment
   UploadAttachmentQuestion
   CancelAttachment
@@ -263,6 +265,8 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AttachImages) => "添加附件"
     (TraditionalChinese, AttachImages) => "新增附件"
     (Japanese, AttachImages) => "ファイルを添付"
+    (English, FeedbackNeedsSignIn) => "Sign in to submit feedback."
+    (English, FeedbackLoginLabel) => "Sign in"
     (English, SubmittingFeedback) => "Submitting feedback…"
     (English, FeedbackSubmittedLabel) => "Feedback submitted"
     (English, ReadingImages) => "Reading attachments…"
@@ -271,6 +275,8 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (English, UploadAttachmentQuestion) =>
       "Upload this file to the current workspace? The original file will be kept."
     (English, UploadAttachment) => "Upload to workspace"
+    (Spanish, FeedbackNeedsSignIn) => "Inicia sesión para enviar comentarios."
+    (Spanish, FeedbackLoginLabel) => "Iniciar sesión"
     (Spanish, SubmittingFeedback) => "Enviando comentarios…"
     (Spanish, FeedbackSubmittedLabel) => "Comentarios enviados"
     (Spanish, ReadingImages) => "Leyendo archivos adjuntos…"
@@ -279,6 +285,9 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Spanish, UploadAttachmentQuestion) =>
       "¿Subir este archivo al espacio de trabajo actual? Se conservará el original."
     (Spanish, UploadAttachment) => "Subir al espacio de trabajo"
+    (SimplifiedChinese, FeedbackNeedsSignIn) =>
+      "请先登录，再提交反馈。"
+    (SimplifiedChinese, FeedbackLoginLabel) => "登录"
     (SimplifiedChinese, SubmittingFeedback) => "正在提交反馈…"
     (SimplifiedChinese, FeedbackSubmittedLabel) => "反馈已提交"
     (SimplifiedChinese, ReadingImages) => "正在读取附件…"
@@ -287,6 +296,9 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, UploadAttachmentQuestion) =>
       "将此文件上传到当前工作区？原文件会保留。"
     (SimplifiedChinese, UploadAttachment) => "上传到工作区"
+    (TraditionalChinese, FeedbackNeedsSignIn) =>
+      "請先登入，再提交意見回饋。"
+    (TraditionalChinese, FeedbackLoginLabel) => "登入"
     (TraditionalChinese, SubmittingFeedback) => "正在提交意見回饋…"
     (TraditionalChinese, FeedbackSubmittedLabel) => "意見回饋已提交"
     (TraditionalChinese, ReadingImages) => "正在讀取附件…"
@@ -295,6 +307,9 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, UploadAttachmentQuestion) =>
       "將此文件上傳到目前工作區？原文件會保留。"
     (TraditionalChinese, UploadAttachment) => "上傳到工作區"
+    (Japanese, FeedbackNeedsSignIn) =>
+      "フィードバックを送信するにはログインしてください。"
+    (Japanese, FeedbackLoginLabel) => "ログイン"
     (Japanese, SubmittingFeedback) => "フィードバックを送信中…"
     (Japanese, FeedbackSubmittedLabel) =>
       "フィードバックを送信しました"
