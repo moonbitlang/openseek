@@ -16,63 +16,22 @@ pub impl Eq for RowContext with fn equal(a, b) {
 pub extend RowContext with Eq::{equal, not_equal}
 
 ///|
-fn RowContext::menu_key(self : RowContext) -> String {
-  guard self.definition is Some(definition) else { return "" }
-  let entries = definition.entries.map(entry => {
-    match entry {
-      Separator => Json::null()
-      Action(item) =>
-        Json::array([
-          Json::string(item.label),
-          Json::string(item.title),
-          Json::boolean(item.enabled),
-          Json::boolean(item.destructive),
-        ])
-    }
-  })
-  Json::array([
-    Json::string(self.target),
-    Json::string(definition.label),
-    Json::array(entries),
-  ]).stringify()
-}
-
-///|
-/// Use the supplied row as the right-click trigger. The row HTML and the
-/// commands behind visible menu items can update independently of the menu.
+/// Use the supplied row as the right-click trigger. The menu instance keeps
+/// its initial definition while the same row has contextual actions.
 pub fn row_context(row : @rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html] {
-  let keyed = row.map(row => (row.menu_key(), row))
-  keyed.switch_by(
-    pair => {
-      let (key, input) = pair
+  row.switch_by(
+    input => {
       guard input.definition is Some(definition) else {
         return row.map(row => {
           @html.div(class?=row.class, title?=row.title, row.content)
         })
       }
-      let (_, select) = @rabbita.create_state_with_input(
-        input=keyed,
-        init=(_, _) => ((), @cmd.none),
-        update=(_, current, index : Int32, _) => {
-          if current.0 == key &&
-            current.1.definition is Some(definition) &&
-            definition.entries.get(index) is Some(Action(item)) &&
-            item.enabled {
-            ((), item.command)
-          } else {
-            ((), @cmd.none)
-          }
-        },
-      )
       let id = input.target + ":context"
-      let on_open_change = context_open_change(
-        id,
-        on_mount=@rui.popover_close(id + "-content"),
-      )
+      let on_open_change = context_open_change(id)
       let row_scope : Ref[@rui.ContextMenuScope?] = Ref(None)
       let menu = @rui.context_menu(id~, on_open_change~, scope => {
         row_scope.val = Some(scope)
-        context_popup(scope, definition, select~)
+        context_popup(scope, definition)
       })
       // The trigger and popup share RUI's scope and are bound by ID. Keep
       // the row outside the popup root so its own dropdown has independent
@@ -94,7 +53,13 @@ pub fn row_context(row : @rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html] {
         }
       })
     },
-    by=pair => pair.0,
+    by=row => {
+      if row.definition is Some(_) {
+        row.target + ":context"
+      } else {
+        ""
+      }
+    },
   )
 }
 
@@ -123,13 +88,12 @@ fn context_open_change(
 fn context_popup(
   scope : @rui.ContextMenuScope,
   definition : Definition,
-  select? : @cmd.Emit[Int32],
 ) -> @html.Html {
   @rui.context_menu_content(
     scope,
     aria_label=definition.label,
     class="action-menu",
-    definition.entries.mapi((index, entry) => {
+    definition.entries.map(entry => {
       match entry {
         Separator => @rui.context_menu_separator()
         Action(item) =>
@@ -137,7 +101,7 @@ fn context_popup(
             scope,
             disabled=!item.enabled,
             destructive=item.destructive,
-            on_select=select.map_or(item.command, emit => emit(index)),
+            on_select=item.command,
             class="action-menu-item",
             title=item.title,
             item_children(item),
