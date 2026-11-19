@@ -108,6 +108,8 @@ pub(all) struct QuoteReply[T] {
 pub(all) struct RowContext {
   target : String
   revision : String
+  class : String?
+  title : String?
   content : @html.Html
   definition : Definition?
 }

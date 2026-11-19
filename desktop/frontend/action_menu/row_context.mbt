@@ -2,6 +2,8 @@
 pub(all) struct RowContext {
   target : String
   revision : String
+  class : String?
+  title : String?
   content : @html.Html
   definition : Definition?
 }
@@ -22,8 +24,8 @@ priv enum ContextTrigger {
 }
 
 ///|
-/// The visible content is the native trigger. A changed content revision
-/// replaces the menu instance; unrelated trailing status and child rows do not.
+/// Use the supplied row as the right-click trigger. The row HTML can update
+/// independently of the menu instance selected by the revision.
 pub fn row_context(
   input : @rabbita.Val[RowContext],
 ) -> @rabbita.Val[@html.Html] {
@@ -32,13 +34,19 @@ pub fn row_context(
 
 ///|
 fn context_surface(
-  input : @rabbita.Val[RowContext],
+  row : @rabbita.Val[RowContext],
   trigger : ContextTrigger,
 ) -> @rabbita.Val[@html.Html] {
-  input.switch_by(
+  row.switch_by(
     input => {
       guard input.definition is Some(definition) else {
-        return @rabbita.Val::constant(input.content)
+        return row.map(row => {
+          if trigger is SidebarRow {
+            @html.div(class?=row.class, title?=row.title, row.content)
+          } else {
+            row.content
+          }
+        })
       }
       let (_, emit) = @rabbita.create_state_with_init(
         init=_ => {
@@ -62,48 +70,90 @@ fn context_surface(
           }
         },
       )
-      @rui.context_menu(id=input.target + ":context", on_open_change=emit, scope => {
-        @html.fragment([
-          @rui.context_menu_trigger(
-            scope,
-            tabindex=-1,
-            class=match trigger {
-              SidebarRow => "sidebar-context-trigger"
-              InlineLink => "inline-context-trigger"
-              SourceCard => "citation-source-trigger"
-            },
-            style=if trigger is InlineLink { ["display:inline"] } else { [] },
-            attrs?=if trigger is SidebarRow {
-              None
-            } else {
-              Some(link_trigger_attrs(trigger))
-            },
-            input.content,
-          ),
-          @rui.context_menu_content(
-            scope,
-            aria_label=definition.label,
-            class="action-menu",
-            definition.entries.map(entry => {
-              match entry {
-                Separator => @rui.context_menu_separator()
-                Action(item) =>
-                  @rui.context_menu_item(
-                    scope,
-                    disabled=!item.enabled,
-                    destructive=item.destructive,
-                    on_select=item.command,
-                    class="action-menu-item",
-                    title=item.title,
-                    item_children(item),
-                  )
-              }
-            }),
-          ),
-        ])
-      })
+      let row_scope : Ref[@rui.ContextMenuScope?] = Ref(None)
+      let menu = @rui.context_menu(
+        id=input.target + ":context",
+        on_open_change=emit,
+        scope => {
+          let popup = context_popup(scope, definition)
+          if trigger is SidebarRow {
+            row_scope.val = Some(scope)
+            popup
+          } else {
+            @html.fragment([
+              @rui.context_menu_trigger(
+                scope,
+                tabindex=-1,
+                class=if trigger is InlineLink {
+                  "inline-context-trigger"
+                } else {
+                  "citation-source-trigger"
+                },
+                style=if trigger is InlineLink {
+                  ["display:inline"]
+                } else {
+                  []
+                },
+                attrs=link_trigger_attrs(trigger),
+                input.content,
+              ),
+              popup,
+            ])
+          }
+        },
+      )
+      if trigger is SidebarRow {
+        // The trigger and popup share RUI's scope and are bound by ID. Keep
+        // the row outside the popup root so its own dropdown has independent
+        // keyboard handling and row updates preserve the context menu.
+        row.view2(menu, (row, menu) => {
+          match row_scope.val {
+            Some(scope) =>
+              @html.fragment([
+                @rui.context_menu_trigger(
+                  scope,
+                  tabindex=-1,
+                  class?=row.class,
+                  title?=row.title,
+                  row.content,
+                ),
+                menu,
+              ])
+            None => @html.div(class?=row.class, title?=row.title, row.content)
+          }
+        })
+      } else {
+        menu
+      }
     },
     by=input => input.revision,
+  )
+}
+
+///|
+fn context_popup(
+  scope : @rui.ContextMenuScope,
+  definition : Definition,
+) -> @html.Html {
+  @rui.context_menu_content(
+    scope,
+    aria_label=definition.label,
+    class="action-menu",
+    definition.entries.map(entry => {
+      match entry {
+        Separator => @rui.context_menu_separator()
+        Action(item) =>
+          @rui.context_menu_item(
+            scope,
+            disabled=!item.enabled,
+            destructive=item.destructive,
+            on_select=item.command,
+            class="action-menu-item",
+            title=item.title,
+            item_children(item),
+          )
+      }
+    }),
   )
 }
 
@@ -185,7 +235,14 @@ pub fn link_context(
   context_surface(
     content.map(content => {
       revision.val += 1
-      { target: id, revision: revision.val.to_string(), content, definition, }
+      {
+        target: id,
+        revision: revision.val.to_string(),
+        class: None,
+        title: None,
+        content,
+        definition,
+      }
     }),
     if inline {
       InlineLink

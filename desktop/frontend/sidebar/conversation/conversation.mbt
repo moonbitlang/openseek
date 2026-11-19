@@ -769,7 +769,9 @@ pub fn component(
           search.query,
         ),
       ).to_string(),
-      content,
+      class: Some(class),
+      title: Some(input.title),
+      content: @html.fragment([content, ..trailing_slot]),
       definition: if renaming {
         None
       } else {
@@ -790,10 +792,7 @@ pub fn component(
     let collapsed = !children_open || input.children.is_empty()
     (
       input.id.key(),
-      class,
-      input.title,
       context,
-      trailing_slot,
       @html.div(
         id=input.id.key() + ":children",
         class="conversation-children sidebar-branch-content",
@@ -805,9 +804,9 @@ pub fn component(
       collapsed,
     )
   })
-  let context = @action_menu.row_context(rendered.map(row => row.3))
+  let context = @action_menu.row_context(rendered.map(row => row.1))
   rendered.map2(context, (row, context) => {
-    let (id, class, title, _, trailing, children, collapsed) = row
+    let (id, _, children, collapsed) = row
     [
       (
         id,
@@ -817,7 +816,7 @@ pub fn component(
           } else {
             "sidebar-conversation sidebar-branch"
           },
-          [@html.div(class~, title~, [context, ..trailing]), children],
+          [context, children],
         ),
       ),
     ]

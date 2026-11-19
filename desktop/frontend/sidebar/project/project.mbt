@@ -417,7 +417,11 @@ pub fn component(
           locale,
         ),
       ).to_string(),
-      content: @html.fragment(row_children),
+      class: Some(class),
+      title: Some(input.title),
+      content: @html.fragment(
+        [..row_children, @html.div(class="workspace-trailing", trailing)],
+      ),
       definition: if input.managed {
         Some({
           label: @messages.text(locale, WorkspaceActions),
@@ -452,10 +456,7 @@ pub fn component(
     }
     (
       input.id.key(),
-      class,
-      input.title,
       context,
-      @html.div(class="workspace-trailing", trailing),
       @html.div(
         id=input.id.key() + ":content",
         class="project-conversations sidebar-branch-content",
@@ -467,9 +468,9 @@ pub fn component(
       collapsed,
     )
   })
-  let context = @action_menu.row_context(rendered.map(row => row.3))
+  let context = @action_menu.row_context(rendered.map(row => row.1))
   rendered.map2(context, (row, context) => {
-    let (id, class, title, _, trailing, children, collapsed) = row
+    let (id, _, children, collapsed) = row
     [
       (
         id,
@@ -479,7 +480,7 @@ pub fn component(
           } else {
             "sidebar-project sidebar-branch"
           },
-          [@html.div(class~, title~, [context, trailing]), children],
+          [context, children],
         ),
       ),
     ]
