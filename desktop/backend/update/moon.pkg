@@ -3,8 +3,6 @@ import {
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
-  "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/x/crypto",
   "openseek_desktop/backend/internal/httpx",

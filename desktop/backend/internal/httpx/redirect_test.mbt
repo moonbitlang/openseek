@@ -48,7 +48,7 @@ async test "GET follows redirects on request and drops credentials across origin
 
       let (response, body) = @httpx.get(start, headers~, redirect=true)
       assert_eq(response.code, 200)
-      assert_eq(body, b"zip")
+      assert_eq(body.binary(), b"zip")
       guard same_origin_headers is Some(same_origin_headers) &&
         asset_headers is Some(asset_headers) else {
         fail("expected the redirect requests to reach both origins")

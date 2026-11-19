@@ -82,7 +82,7 @@ pub async fn check_for_update(current~ : String) -> UpdateInfo? {
   guard response.code == 200 else {
     raise Unreachable(reason="the update server answered HTTP \{response.code}")
   }
-  let json = @json.parse(@utf8.decode(body)) catch {
+  let json = body.json() catch {
     _ => raise MalformedManifest(reason="the manifest is not valid JSON")
   }
   newer_update(json, current~, platform_key=manifest_platform_key())
