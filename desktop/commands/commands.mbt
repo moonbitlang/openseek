@@ -175,6 +175,14 @@ pub let settings_set : Command[
 ] = Command("settings.set")
 
 ///|
+/// `settings.test` probes the endpoint a settings form holds, without saving
+/// anything — the only way to learn an address or key is wrong before a run.
+pub let settings_test : Command[
+  @protocol.ModelProbePayload,
+  @protocol.ModelProbeReply,
+] = Command("settings.test")
+
+///|
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply] = Command(
   "app.info",
 )

@@ -1445,6 +1445,12 @@ async fn engine_process_env(
   // exports inherit untouched: the engine reads only its model's variable
   // for chat, and `web_search` may legitimately use an ambient `DEEPSEEK`.
   env[config.key_env] = config.api_key
+  // A custom model's credential travels in the generic variable the CLI's
+  // `--api-key` reads. A built-in run must not inherit an ambient one: it
+  // would silently outrank the provider's own key.
+  if config.key_env != @deepseek.CustomApiKeyEnv {
+    env.remove(@deepseek.CustomApiKeyEnv)
+  }
   env["OPENSEEK_MODEL"] = config.model
   env["OPENSEEK_THINKING"] = config.thinking.wire()
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
@@ -3033,6 +3039,7 @@ async test "native engine env has one authoritative bundled moon path" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "m",
+    images: false,
     thinking: ThinkingHigh,
     approval: ApprovalAsk,
     max_steps: 1,
@@ -3235,6 +3242,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "test",
+    images: false,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1,
@@ -3353,6 +3361,7 @@ fn pump_test_config(session : String) -> RunConfig {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "test",
+    images: false,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1,

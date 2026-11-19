@@ -7,6 +7,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/agent_session/log" @session_log,
   "moonbitlang/openseek/workspace_file_ref",
   "moonbitlang/openseek/agent_session/store",
@@ -36,6 +37,7 @@ import {
   "openseek_desktop/backend/resources",
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/env" @sys,
@@ -57,6 +59,7 @@ options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/http",
     "moonbitlang/core/async/os_error",
     "moonbitlang/core/async/process",
   ],

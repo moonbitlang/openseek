@@ -18,7 +18,7 @@ fn @deepseek.Model::label(self : @deepseek.Model) -> String {
     Deepseek(V4Flash) => "DeepSeek Flash"
     Glm(G53) => "GLM 5.3"
     Glm(G53Flash) => "GLM 5.3 Flash"
-    Kimi(_) => self.to_string()
+    Kimi(_) | Custom(_) => self.to_string()
   }
 }
 
@@ -27,7 +27,9 @@ fn @deepseek.Model::label(self : @deepseek.Model) -> String {
 fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
   match self {
     Deepseek(_) | Glm(_) => true
-    Kimi(_) => false
+    // A user entry's own flag decides whether its reasoning control shows;
+    // the model alone cannot answer for an endpoint this build never saw.
+    Kimi(_) | Custom(_) => false
   }
 }
 
@@ -124,7 +126,13 @@ test "engine models round-trip their wire names" {
   assert_true(parse_engine_model("glm-5.3") is Some(Glm(G53)))
   assert_true(@deepseek.Model::Glm(G53Flash).supports_reasoning())
   assert_true(@deepseek.Model::Deepseek(V4Flash).supports_reasoning())
-  assert_true(parse_engine_model(" custom-model ") is None)
+  // A name this build does not know is a user's own model, not a bad value:
+  // the id survives the round trip so the run can send it.
+  assert_true(
+    parse_engine_model(" custom-model ")
+    is Some(@deepseek.Custom("custom-model")),
+  )
+  // A blank name has no endpoint that could serve it.
   assert_true(parse_engine_model("  ") is None)
 }
 
@@ -388,7 +396,8 @@ fn @deepseek.Model::matches_provider(
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
-    (Custom, _) | (_, Kimi(_)) => true
+    // A user entry names its own endpoint, so no provider slot owns it.
+    (Custom, _) | (_, Kimi(_)) | (_, Custom(_)) => true
     (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
   }
@@ -1270,6 +1279,11 @@ priv struct Model {
   // saved through `settings.set`. The host settings themselves live on each
   // `DeviceState`.
   setup_api_key : String
+  // The custom-model editor, open while `Some`. Its draft lives here rather
+  // than in the settings page so navigating cannot lose typed fields.
+  custom_model : CustomModelDraft?
+  // The entry a delete confirmation is open for; `None` when none is.
+  custom_model_delete : String?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1616,6 +1630,32 @@ priv struct ProviderConfig {
 }
 
 ///|
+/// One saved model entry as a client may see it: its credential reduced to
+/// presence, like every other status field.
+#derive(Eq)
+priv struct CustomModel {
+  id : String
+  // The name the list shows; absent means show the id.
+  label : String?
+  api_url : String?
+  // Whether the stored URL already ends at the endpoint, so the edit form
+  // re-opens with the switch it was saved with.
+  full_url : Bool
+  has_api_key : Bool
+  images : Bool
+}
+
+///|
+/// The name a model list shows for this entry: the name the user gave it, or
+/// the model id when they gave none.
+fn CustomModel::display_name(self : CustomModel) -> String {
+  match self.label {
+    Some(label) => label
+    None => self.id
+  }
+}
+
+///|
 /// A host's engine endpoint settings, with key material reduced to presence:
 /// the key text never reaches a client — the Settings page only needs
 /// presence (placeholder wording, the ready gate).
@@ -1634,6 +1674,8 @@ priv struct HostEndpoint {
 priv struct HostSettings {
   revision : Int32
   endpoint : HostEndpoint
+  // The models the user saved, in the order the host stores them.
+  models : Array[CustomModel]
   // The default prompt for new chats: `builtin_moonbit_guide` or `custom`,
   // with the host's saved custom text either way.
   prompt_source : String
@@ -1876,6 +1918,19 @@ priv enum Msg {
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
   SaveApiKey
+  // The custom endpoint's models. The endpoint and its key are the API
+  // section's, so an entry holds only what is specific to the model.
+  CustomModelAdd
+  CustomModelEdit(String)
+  CustomModelIdChanged(String)
+  CustomModelLabelChanged(String)
+  CustomModelProbed(ok~ : Bool, detail~ : String)
+  CustomModelProbeFailed(String)
+  CustomModelSubmit
+  CustomModelCancel
+  CustomModelDeleteRequest(String)
+  CustomModelDeleteCancelled
+  CustomModelDelete(String)
   OpenSchedules
   SchedulePage(SchedulePageMsg)
   OpenSkills
@@ -2757,6 +2812,9 @@ fn initial_model(
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
+    custom_model: None,
+    // The entry a delete confirmation is open for; `None` when none is.
+    custom_model_delete: None,
     is_desktop: desktop,
     is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),
@@ -3274,7 +3332,7 @@ fn Model::reasoning_for(
 ) -> @protocol.Thinking {
   match engine_model {
     Glm(_) => self.glm_reasoning
-    Deepseek(_) | Kimi(_) => self.openseek_reasoning
+    Deepseek(_) | Kimi(_) | Custom(_) => self.openseek_reasoning
   }
 }
 

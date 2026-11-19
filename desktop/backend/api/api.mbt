@@ -697,6 +697,21 @@ pub fn endpoints(
       state.schedules.action(payload)
     }),
     Endpoint(@commands.settings_get, _ => @engine.settings_status(state.manager)),
+    Endpoint(@commands.settings_test, payload => {
+      // A probe is a read of the remote endpoint: it never touches the store,
+      // so a mistyped URL or key costs a request and nothing else. A blank key
+      // means "use the saved one" — the page cannot read it back.
+      let key = match payload.api_key {
+        Some(key) if !key.is_blank() => Some(key)
+        _ => @engine.saved_custom_key(state.manager)
+      }
+      @engine.probe_model(
+        api_url=payload.api_url,
+        model=payload.id,
+        full_url=payload.full_url,
+        api_key?=key,
+      )
+    }),
     @endpoint.Endpoint::sync(@commands.app_info, _ => {
       version: state.app_version,
       console_url: state.console_url,
@@ -713,6 +728,8 @@ pub fn endpoints(
           followup_behavior?=payload.followup_behavior,
           prompt_source?=payload.prompt_source,
           custom_prompt?=payload.custom_prompt,
+          models?=payload.models,
+          removed_models?=payload.removed_models,
           // Every client renders these settings; clients that did not ask
           // must learn about the committed revision too.
           on_committed=status => state.hub.publish(SettingsChanged(status)),

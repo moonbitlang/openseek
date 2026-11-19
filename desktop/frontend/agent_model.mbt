@@ -130,6 +130,7 @@ test "agent choices round-trip their wire names" {
 fn openseek_model_group(
   provider : ApiProvider,
   selected : @deepseek.Model,
+  saved : Array[CustomModel],
 ) -> @composer.ModelGroup {
   let listed : Array[@deepseek.Model] = match provider {
     Deepseek => [Deepseek(V4Pro), Deepseek(V4Flash)]
@@ -141,7 +142,17 @@ fn openseek_model_group(
     value: ModelChoice::OpenSeekModel(model).wire(),
     label: model.label(),
   })
-  if !listed.contains(selected) {
+  // The user's own entries follow the built-ins, under the names they chose.
+  // A saved id that also names a built-in tier is rejected when it is saved,
+  // so this cannot shadow one.
+  for entry in saved {
+    options.push({
+      value: ModelChoice::OpenSeekModel(@deepseek.Custom(entry.id)).wire(),
+      label: entry.display_name(),
+    })
+  }
+  if !listed.contains(selected) &&
+    !saved.any(entry => @deepseek.Custom(entry.id) == selected) {
     options.push({
       value: ModelChoice::OpenSeekModel(selected).wire(),
       label: selected.label(),
@@ -180,7 +191,11 @@ fn Model::openseek_model_chip(
   conv : Conversation,
 ) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = [
-    openseek_model_group(self.api_provider(), conv.engine_model),
+    openseek_model_group(
+      self.api_provider(),
+      conv.engine_model,
+      self.host_settings().map(settings => settings.models).unwrap_or([]),
+    ),
   ]
   if self.composing_new_chat() {
     groups.push(self.codex_model_group())
@@ -200,7 +215,22 @@ fn Model::openseek_model_chip(
       English => "Model: "
       Spanish => "Modelo: "
     }) +
-    conv.engine_model.label(),
+    self.selected_model_name(conv.engine_model),
+  }
+}
+
+///|
+/// The name a conversation's model goes by: the entry's own name when the user
+/// gave it one, the built-in's product name otherwise.
+fn Model::selected_model_name(self : Model, model : @deepseek.Model) -> String {
+  match self.host_settings() {
+    Some(settings) =>
+      match
+        settings.models.search_by(entry => @deepseek.Custom(entry.id) == model) {
+        Some(index) => settings.models[index].display_name()
+        None => model.label()
+      }
+    None => model.label()
   }
 }
 
@@ -273,7 +303,13 @@ fn openseek_reasoning_control(
 fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = []
   if self.codex.composing_draft() {
-    groups.push(openseek_model_group(self.api_provider(), self.default_model))
+    groups.push(
+      openseek_model_group(
+        self.api_provider(),
+        self.default_model,
+        self.host_settings().map(settings => settings.models).unwrap_or([]),
+      ),
+    )
   }
   groups.push(self.codex_model_group())
   let selected = match self.codex.model_listing(locale=self.locale) {
@@ -293,5 +329,59 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
       English => "Codex model"
       Spanish => "Modelo de Codex"
     },
+  }
+}
+
+///|
+test "the model menu lists saved entries under their own names" {
+  let saved : Array[CustomModel] = [
+    {
+      id: "gemini-4-carbon",
+      label: Some("Gemini 4 Carbon"),
+      api_url: Some("https://gw.example/v1/chat/completions"),
+      full_url: false,
+      has_api_key: true,
+      images: false,
+    },
+    {
+      id: "o3-mini",
+      label: None,
+      api_url: Some("https://gw.example/v1/chat/completions"),
+      full_url: false,
+      has_api_key: true,
+      images: false,
+    },
+  ]
+  let group = openseek_model_group(Deepseek, Deepseek(V4Flash), saved)
+  assert_eq(group.options.map(option => option.label), [
+    "DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Carbon", "o3-mini",
+  ])
+  // The selected model is already listed, so it is not appended twice.
+  assert_eq(group.options.length(), 4)
+  // A conversation running a model nobody lists keeps it visible, so a
+  // deleted entry does not silently switch the user to another model.
+  let stale = openseek_model_group(
+    Deepseek,
+    @deepseek.Custom("gone-model"),
+    saved,
+  )
+  assert_eq(stale.options.length(), 5)
+  assert_eq(stale.options[4].label, "gone-model")
+}
+
+///|
+/// Whether this host can run the model: a built-in tier always can, a custom
+/// id only while its saved entry still exists.
+fn Model::conversation_model_ready(
+  self : Model,
+  model : @deepseek.Model,
+) -> Bool {
+  match model {
+    @deepseek.Custom(id) =>
+      self
+      .host_settings()
+      .map(settings => settings.models.any(entry => entry.id == id))
+      .unwrap_or(false)
+    _ => true
   }
 }

@@ -94,7 +94,6 @@ pub(all) enum Message {
   DeepseekApiKey
   GlmApiKey
   OpenRouterApiKey
-  CustomApiKey
   SavedKey
   ApiKey
   SaveApiKey
@@ -153,6 +152,28 @@ pub(all) enum Message {
   CustomEndpoint
   CurrentVersion(String)
   LanguageStorageFailed(String)
+  CustomModels
+  CustomModelsDescription
+  NoCustomModels
+  ModelId
+  ModelIdHint
+  ModelName
+  ModelNameHint
+  ModelFullUrl
+  ModelFullUrlHint
+  AddModel
+  SaveModel
+  ResetForm
+  TestingConnection
+  ProbeHint
+  EditModel
+  DeleteModel
+  DeleteModelTitle
+  DeleteModelUnused
+  DeleteModelInUse(Int32)
+  CustomModelInUse(Int32)
+  CustomModelUnused
+  ModelDeletedNotice
 }
 
 ///|
@@ -844,11 +865,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, OpenRouterApiKey) => "OpenRouter API 密钥"
     (TraditionalChinese, OpenRouterApiKey) => "OpenRouter API 金鑰"
     (Japanese, OpenRouterApiKey) => "OpenRouter API キー"
-    (English, CustomApiKey) => "Custom API key"
-    (Spanish, CustomApiKey) => "Clave de API personalizada"
-    (SimplifiedChinese, CustomApiKey) => "自定义 API 密钥"
-    (TraditionalChinese, CustomApiKey) => "自定義 API 金鑰"
-    (Japanese, CustomApiKey) => "カスタム API キー"
     (English, SavedKey) => "saved — enter to replace"
     (Spanish, SavedKey) => "guardada — introduce otra para reemplazarla"
     (SimplifiedChinese, SavedKey) => "已保存，输入新密钥可替换"
@@ -1186,5 +1202,150 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "無法訪問語言偏好設定：\{detail}"
     (Japanese, LanguageStorageFailed(detail)) =>
       "言語設定にアクセスできません：\{detail}"
+    (English, CustomModels) => "Custom models"
+    (Spanish, CustomModels) => "Modelos personalizados"
+    (SimplifiedChinese, CustomModels) => "自定义模型"
+    (TraditionalChinese, CustomModels) => "自訂模型"
+    (Japanese, CustomModels) => "カスタムモデル"
+    (English, CustomModelsDescription) =>
+      "Models you added appear in the model menu next to the built-in tiers."
+    (Spanish, CustomModelsDescription) =>
+      "Los modelos que añadas aparecen en el menú junto a los integrados."
+    (SimplifiedChinese, CustomModelsDescription) =>
+      "你添加的模型会出现在模型菜单里，与内置模型并列。"
+    (TraditionalChinese, CustomModelsDescription) =>
+      "你新增的模型會出現在模型選單裡，與內建模型並列。"
+    (Japanese, CustomModelsDescription) =>
+      "追加したモデルは組み込みモデルと並んでモデルメニューに表示されます。"
+    (English, NoCustomModels) => "No custom models yet."
+    (Spanish, NoCustomModels) => "Aún no hay modelos personalizados."
+    (SimplifiedChinese, NoCustomModels) => "还没有自定义模型。"
+    (TraditionalChinese, NoCustomModels) => "還沒有自訂模型。"
+    (Japanese, NoCustomModels) =>
+      "カスタムモデルはまだありません。"
+    (English, ModelId) => "Model ID"
+    (Spanish, ModelId) => "ID del modelo"
+    (SimplifiedChinese, ModelId) => "模型 ID"
+    (TraditionalChinese, ModelId) => "模型 ID"
+    (Japanese, ModelId) => "モデル ID"
+    (English, ModelIdHint) =>
+      "Sent as the request's model name. It cannot reuse a built-in tier's name."
+    (Spanish, ModelIdHint) =>
+      "Se envía como nombre del modelo. No puede repetir el de un modelo integrado."
+    (SimplifiedChinese, ModelIdHint) =>
+      "作为请求中的模型名发送；不能与内置模型重名。"
+    (TraditionalChinese, ModelIdHint) =>
+      "作為請求中的模型名傳送；不能與內建模型重名。"
+    (Japanese, ModelIdHint) =>
+      "リクエストのモデル名として送信されます。組み込みモデルと同じ名前は使えません。"
+    (English, ModelName) => "Model display name"
+    (Spanish, ModelName) => "Nombre visible del modelo"
+    (SimplifiedChinese, ModelName) => "模型展示名称"
+    (TraditionalChinese, ModelName) => "模型顯示名稱"
+    (Japanese, ModelName) => "モデル表示名"
+    (English, ModelNameHint) =>
+      "The name shown in the model list; falls back to the model ID when unset."
+    (Spanish, ModelNameHint) =>
+      "El nombre que se muestra en la lista de modelos; si no se define, se muestra el ID del modelo."
+    (SimplifiedChinese, ModelNameHint) =>
+      "在模型列表中展示的名称，未设置时默认显示 Model ID。"
+    (TraditionalChinese, ModelNameHint) =>
+      "在模型列表中顯示的名稱，未設定時預設顯示 Model ID。"
+    (Japanese, ModelNameHint) =>
+      "モデル一覧に表示される名前です。未設定の場合は Model ID を表示します。"
+    (English, ModelFullUrl) => "Complete URL"
+    (Spanish, ModelFullUrl) => "URL completa"
+    (SimplifiedChinese, ModelFullUrl) => "完整 URL"
+    (TraditionalChinese, ModelFullUrl) => "完整 URL"
+    (Japanese, ModelFullUrl) => "完全な URL"
+    (English, ModelFullUrlHint) =>
+      "Off appends /chat/completions; on uses the address exactly as typed."
+    (Spanish, ModelFullUrlHint) =>
+      "Desactivado añade /chat/completions; activado usa la dirección tal cual."
+    (SimplifiedChinese, ModelFullUrlHint) =>
+      "关闭时会补上 /chat/completions；开启时按原样使用。"
+    (TraditionalChinese, ModelFullUrlHint) =>
+      "關閉時會補上 /chat/completions；開啟時按原樣使用。"
+    (Japanese, ModelFullUrlHint) =>
+      "オフなら /chat/completions を補い、オンなら入力どおりに使います。"
+    (English, AddModel) => "Add model"
+    (Spanish, AddModel) => "Añadir modelo"
+    (SimplifiedChinese, AddModel) => "添加模型"
+    (TraditionalChinese, AddModel) => "新增模型"
+    (Japanese, AddModel) => "モデルを追加"
+    (English, SaveModel) => "Save"
+    (Spanish, SaveModel) => "Guardar"
+    (SimplifiedChinese, SaveModel) => "保存"
+    (TraditionalChinese, SaveModel) => "儲存"
+    (Japanese, SaveModel) => "保存"
+    (English, ResetForm) => "Reset"
+    (Spanish, ResetForm) => "Restablecer"
+    (SimplifiedChinese, ResetForm) => "重置"
+    (TraditionalChinese, ResetForm) => "重設"
+    (Japanese, ResetForm) => "リセット"
+    (English, TestingConnection) => "Testing connection"
+    (Spanish, TestingConnection) => "Probando conexión"
+    (SimplifiedChinese, TestingConnection) => "正在测试连接"
+    (TraditionalChinese, TestingConnection) => "正在測試連線"
+    (Japanese, TestingConnection) => "接続をテストしています"
+    (English, ProbeHint) => "Saving will automatically test the connection."
+    (Spanish, ProbeHint) =>
+      "Al guardar se probará la conexión automáticamente."
+    (SimplifiedChinese, ProbeHint) => "保存后会自动测试连接。"
+    (TraditionalChinese, ProbeHint) => "儲存後會自動測試連線。"
+    (Japanese, ProbeHint) => "保存後に接続を自動テストします。"
+    (English, EditModel) => "Edit"
+    (Spanish, EditModel) => "Editar"
+    (SimplifiedChinese, EditModel) => "编辑"
+    (TraditionalChinese, EditModel) => "編輯"
+    (Japanese, EditModel) => "編集"
+    (English, DeleteModel) => "Delete"
+    (Spanish, DeleteModel) => "Eliminar"
+    (SimplifiedChinese, DeleteModel) => "删除"
+    (TraditionalChinese, DeleteModel) => "刪除"
+    (Japanese, DeleteModel) => "削除"
+    (English, DeleteModelTitle) => "Delete model?"
+    (Spanish, DeleteModelTitle) => "¿Eliminar el modelo?"
+    (SimplifiedChinese, DeleteModelTitle) => "删除模型？"
+    (TraditionalChinese, DeleteModelTitle) => "刪除模型？"
+    (Japanese, DeleteModelTitle) => "モデルを削除しますか？"
+    (English, DeleteModelUnused) => "No chat uses this model."
+    (Spanish, DeleteModelUnused) => "Ningún chat usa este modelo."
+    (SimplifiedChinese, DeleteModelUnused) =>
+      "没有会话在使用这个模型。"
+    (TraditionalChinese, DeleteModelUnused) =>
+      "沒有會話在使用這個模型。"
+    (Japanese, DeleteModelUnused) =>
+      "このモデルを使っている会話はありません。"
+    (English, DeleteModelInUse(count)) =>
+      "\{count} chat(s) use this model. Deleting it leaves them needing it re-added or another model picked."
+    (Spanish, DeleteModelInUse(count)) =>
+      "\{count} chat(s) usan este modelo. Al eliminarlo tendrán que volver a añadirlo o cambiar de modelo."
+    (SimplifiedChinese, DeleteModelInUse(count)) =>
+      "有 \{count} 个会话正在使用这个模型。删除后这些会话需要重新添加该模型，或换一个模型。"
+    (TraditionalChinese, DeleteModelInUse(count)) =>
+      "有 \{count} 個會話正在使用這個模型。刪除後這些會話需要重新新增該模型，或換一個模型。"
+    (Japanese, DeleteModelInUse(count)) =>
+      "\{count} 件の会話がこのモデルを使っています。削除すると、それらの会話は再追加するか別のモデルを選ぶ必要があります。"
+    (English, CustomModelInUse(count)) => "\{count} chat(s)"
+    (Spanish, CustomModelInUse(count)) => "\{count} chat(s)"
+    (SimplifiedChinese, CustomModelInUse(count)) => "\{count} 个会话"
+    (TraditionalChinese, CustomModelInUse(count)) => "\{count} 個會話"
+    (Japanese, CustomModelInUse(count)) => "\{count} 件の会話"
+    (English, CustomModelUnused) => "Unused"
+    (Spanish, CustomModelUnused) => "Sin usar"
+    (SimplifiedChinese, CustomModelUnused) => "未使用"
+    (TraditionalChinese, CustomModelUnused) => "未使用"
+    (Japanese, CustomModelUnused) => "未使用"
+    (English, ModelDeletedNotice) =>
+      "This conversation's model was deleted. Add it again in Settings, or pick another model."
+    (Spanish, ModelDeletedNotice) =>
+      "El modelo de esta conversación se eliminó. Añádelo de nuevo en Ajustes o elige otro."
+    (SimplifiedChinese, ModelDeletedNotice) =>
+      "本会话使用的模型已被删除。请在设置中重新添加，或换一个模型。"
+    (TraditionalChinese, ModelDeletedNotice) =>
+      "本會話使用的模型已被刪除。請在設定中重新新增，或換一個模型。"
+    (Japanese, ModelDeletedNotice) =>
+      "この会話のモデルは削除されました。設定で再追加するか、別のモデルを選んでください。"
   }
 }

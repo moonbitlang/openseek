@@ -2328,6 +2328,19 @@ fn update_msg(
     return (@cmd.batch([focus, connect]), model)
   }
   match msg {
+    // The custom endpoint's model owns its own state; one arm keeps its
+    // messages out of the rest of this dispatch.
+    CustomModelAdd
+    | CustomModelEdit(_)
+    | CustomModelIdChanged(_)
+    | CustomModelLabelChanged(_)
+    | CustomModelCancel
+    | CustomModelProbed(..)
+    | CustomModelProbeFailed(_)
+    | CustomModelSubmit
+    | CustomModelDeleteRequest(_)
+    | CustomModelDeleteCancelled
+    | CustomModelDelete(_) => model.update_custom_model(dispatch, msg)
     Init => {
       // Both pages boot the same console; they differ only in where its
       // device comes from. A browser console asks the relay who is signed
@@ -4391,6 +4404,8 @@ fn update_msg(
         followup_behavior: None,
         prompt_source: source,
         custom_prompt: text,
+        models: None,
+        removed_models: None,
       }
       (
         push_host_settings(
@@ -17073,6 +17088,7 @@ fn host_settings(
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
+    models: [],
   })
 }
 

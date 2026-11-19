@@ -19,7 +19,7 @@
 // - Saves are atomic: temp file + rename, 0600.
 
 ///|
-const EngineSettingsVersion = 3
+const EngineSettingsVersion = 4
 
 ///|
 const EngineSettingsFileName = "engine-settings.json"
@@ -82,6 +82,8 @@ priv struct EngineSettings {
   version : Int32
   provider : ApiProvider
   providers : Map[String, Provider]
+  // The user's own model entries; this build's built-in catalog is not stored.
+  models : Array[ModelEntry]
   followup_behavior : String
 }
 
@@ -143,6 +145,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
       }
       _ => Map([])
     },
+    models: decode_model_entries(raw),
     followup_behavior: match settings_text(raw, "followup_behavior") {
       Some("queue") => "queue"
       _ => "steer"
@@ -178,10 +181,21 @@ fn settings_status_payload(
       })
     providers[provider.wire()] = { api_url: config.api_url, has_api_key, }
   }
+  // The user's own entries, in saved order. The built-in catalog belongs to
+  // the build rather than the file, so it is not reported here.
+  let models = settings.models.map(entry => @protocol.ModelStatus::{
+    id: entry.id,
+    label: entry.label,
+    api_url: entry.api_url,
+    full_url: entry.full_url,
+    has_api_key: entry.api_key is Some(_),
+    images: entry.images,
+  })
   {
     revision,
     provider: settings.provider.wire(),
     providers,
+    models,
     followup_behavior: settings.followup_behavior,
     prompt_source: match settings.raw.get("prompt_source") {
       Some(String("custom")) => "custom"
@@ -242,6 +256,11 @@ pub async fn update_settings(
   followup_behavior? : String,
   prompt_source? : String,
   custom_prompt? : String,
+  // The model entries this request adds or edits, and the ids it drops. They
+  // travel as parameters rather than in `patch` because a model edit is not a
+  // provider edit: the provider slot keeps its own credential.
+  models? : Array[@protocol.ModelPatch],
+  removed_models? : Array[String],
   on_committed? : (@protocol.SettingsStatusPayload) -> Unit,
 ) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
@@ -257,6 +276,8 @@ pub async fn update_settings(
   }
   let edits_json = patch.provider is Some(_) ||
     patch.providers is Some(_) ||
+    models is Some(_) ||
+    removed_models is Some(_) ||
     followup_behavior is Some(_) ||
     prompt_source is Some(_)
   guard !(custom_prompt is Some(_) && edits_json) else {
@@ -309,6 +330,23 @@ pub async fn update_settings(
       providers[name] = Json(fields)
     }
     raw["providers"] = Json(providers)
+  }
+  if models is Some(_) || removed_models is Some(_) {
+    let stored : Array[Json] = match raw.get("models") {
+      Some(Array(items)) => items
+      _ => []
+    }
+    let entries = apply_model_patches(
+      stored,
+      models.unwrap_or([]),
+      removed_models.unwrap_or([]),
+    )
+    // An empty list is removed rather than stored: absence is the default.
+    if entries.is_empty() {
+      raw.remove("models")
+    } else {
+      raw["models"] = Json(entries)
+    }
   }
   if followup_behavior is Some(value) {
     guard value == "steer" || value == "queue" else {
@@ -368,6 +406,15 @@ async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
   @fsx.write_text_atomic(settings_file(runtime_dir), text, permission=0o600) catch {
     error => raise EngineError("could not save engine settings: \{error}")
   }
+}
+
+///|
+/// The custom endpoint's stored key, for `settings.test` when the form holds
+/// no freshly typed one: the page never receives key text, so a saved key is
+/// the only way to probe an endpoint whose key was entered earlier.
+pub async fn saved_custom_key(manager : EngineManager) -> String? {
+  let settings = manager.settings_snapshot() catch { _ => return None }
+  settings.provider_config(Custom).api_key
 }
 
 ///|
@@ -445,12 +492,12 @@ pub async fn pattern_repair_environment(
   model~ : String,
 ) -> PatternRepairEnvironment {
   let settings = manager.settings_snapshot() catch { _ => return Unavailable }
-  let endpoint = resolved_endpoint(settings) catch {
+  let (route, key_env, _) = resolve_model_route(settings, model) catch {
     EngineError(message) => return Configuration(message)
   }
   let env = @sys.get_env_vars()
-  env[key_env_for(settings.provider, model)] = endpoint.api_key
-  match endpoint.api_url {
+  env[key_env] = route.api_key
+  match route.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
   }

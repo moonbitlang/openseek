@@ -103,7 +103,6 @@ pub(all) enum Message {
   DeepseekApiKey
   GlmApiKey
   OpenRouterApiKey
-  CustomApiKey
   SavedKey
   ApiKey
   SaveApiKey
@@ -162,6 +161,28 @@ pub(all) enum Message {
   CustomEndpoint
   CurrentVersion(String)
   LanguageStorageFailed(String)
+  CustomModels
+  CustomModelsDescription
+  NoCustomModels
+  ModelId
+  ModelIdHint
+  ModelName
+  ModelNameHint
+  ModelFullUrl
+  ModelFullUrlHint
+  AddModel
+  SaveModel
+  ResetForm
+  TestingConnection
+  ProbeHint
+  EditModel
+  DeleteModel
+  DeleteModelTitle
+  DeleteModelUnused
+  DeleteModelInUse(Int32)
+  CustomModelInUse(Int32)
+  CustomModelUnused
+  ModelDeletedNotice
 }
 
 // Type aliases

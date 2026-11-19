@@ -2562,6 +2562,49 @@ pub impl @json.FromJson for McpStatusReply
 pub impl @json.ToJson for McpStatusReply
 
 #derive(Eq, @debug.Debug)
+pub(all) struct ModelPatch {
+  id : String
+  label : String?
+  api_url : String?
+  full_url : Bool?
+  api_key : String?
+  images : Bool?
+  context_window : Int32?
+}
+pub impl @json.FromJson for ModelPatch
+pub impl @json.ToJson for ModelPatch
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ModelProbePayload {
+  id : String
+  api_url : String
+  full_url : Bool
+  api_key : String?
+}
+pub impl @json.FromJson for ModelProbePayload
+pub impl @json.ToJson for ModelProbePayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ModelProbeReply {
+  ok : Bool
+  detail : String
+}
+pub impl @json.FromJson for ModelProbeReply
+pub impl @json.ToJson for ModelProbeReply
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ModelStatus {
+  id : String
+  label : String?
+  api_url : String?
+  full_url : Bool
+  has_api_key : Bool
+  images : Bool
+}
+pub impl @json.FromJson for ModelStatus
+pub impl @json.ToJson for ModelStatus
+
+#derive(Eq, @debug.Debug)
 pub(all) struct MoonIdeCodeLens {
   range : LspRange
   title : String
@@ -4259,6 +4302,8 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
+  models : Array[ModelPatch]?
+  removed_models : Array[String]?
 }
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
@@ -4276,6 +4321,7 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
+  models : Array[ModelStatus]
 }
 pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError

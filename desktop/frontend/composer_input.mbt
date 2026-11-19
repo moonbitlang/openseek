@@ -45,6 +45,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   let root_ready = conv.prompt_ready() &&
     self.bridge_state() is Connected &&
     self.api_ready() &&
+    self.conversation_model_ready(conv.engine_model) &&
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
     @composer.Running(
@@ -112,6 +113,16 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         text=self
           .host_settings_error()
           .unwrap_or(@settings.text(self.locale, LoadingSettings)),
+      ),
+    )
+  }
+  // A model whose saved entry is gone cannot run, and must not be swapped for
+  // another one behind the user's back: Send stays out of reach until the
+  // entry is re-added or another model is picked.
+  if !self.conversation_model_ready(conv.engine_model) {
+    context.push(
+      @composer.ApiSetupNotice(
+        text=@settings.text(self.locale, ModelDeletedNotice),
       ),
     )
   }
@@ -279,8 +290,13 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      images_enabled: conv.engine_model is Deepseek(V4Flash) &&
-      self.api_provider() is (Deepseek | Custom),
+      // A custom entry always accepts images; a built-in tier only on the
+      // route that carries them.
+      images_enabled: match conv.engine_model {
+        Custom(_) => true
+        Deepseek(V4Flash) => self.api_provider() is (Deepseek | Custom)
+        _ => false
+      },
       context,
       status,
       placeholder: if conv.controls.edit is Some(_) {

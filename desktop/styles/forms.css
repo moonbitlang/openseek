@@ -81,6 +81,13 @@
   align-items: stretch;
 }
 
+/* The custom endpoint's save row: the hint sits directly left of the compact
+   save button, and the probe verdict follows it. */
+.form-row.custom-model-save-row {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .switch-control {
   display: inline-flex;
   align-items: center;
@@ -172,6 +179,10 @@
 
 .form-row-status.success {
   color: var(--color-success);
+}
+
+.form-row-status.danger {
+  color: var(--color-danger);
 }
 
 .form-row[hidden],
