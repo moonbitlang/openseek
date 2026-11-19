@@ -34,6 +34,8 @@ pub fn definition(
             #|captured output, instead of the most recent window. Use it to page through
             #|output larger than one window: the footer's total_chars says how much there
             #|is, so offsets 0, 12000, 24000, … cover all of it.
+            #|On an offset page, shown_chars counts raw characters consumed. When rewrites
+            #|change that length, displayed_chars gives the number actually displayed.
           ),
         },
       },
@@ -59,7 +61,7 @@ async fn execute(
   if bg_runtime.snapshot(job_id) is Some({ subagent: Some(info), status, .. }) {
     return subagent_output(job_id, info, status is Running, subagent_report)
   }
-  guard bg_runtime.snapshot(job_id) is Some(_) else {
+  guard bg_runtime.snapshot(job_id) is Some(initial) else {
     return @agent_tool.respond(
       "error: no background job with id \{job_id}",
       is_error=true,
@@ -69,7 +71,7 @@ async fn execute(
   // with a large job's full log. For output over the window, show the *tail*
   // (recent progress).
   let page = input.offset
-  let window = 12000
+  let window = @bgjobs.JobOutputWindow
   // A page reads the retained log from the start — the spill file for a large
   // job — so a result bigger than one window (a workflow's several reports)
   // is reachable in full; the default stays the tail, which is what a poll on
@@ -78,7 +80,21 @@ async fn execute(
     match page {
       Some(offset) =>
         page_of(bg_runtime.read_output(job_id).unwrap_or(""), offset~, window~)
-      None => bg_runtime.read_output_tail(job_id, window).unwrap_or("")
+      None =>
+        // The live view already owns the rewritten body. Only read the raw
+        // tail when it is the body or an active running classifier needs it.
+        if initial.output_rewrites.is_empty() ||
+          (
+            initial.status is Running &&
+            (
+              initial.moonrun_policy_active ||
+              initial.sandboxed_command is Some(_)
+            )
+          ) {
+          bg_runtime.read_output_tail(job_id, window).unwrap_or("")
+        } else {
+          ""
+        }
     }
   } catch {
     error =>
@@ -97,7 +113,21 @@ async fn execute(
       is_error=true,
     )
   }
-  let output = apply_output_rewrites(raw_output, snapshot.output_rewrites)
+  // Explicit offsets address the raw retained log, as does total_chars.
+  // Default polls report truncation in the rewritten display instead.
+  let (output, clipped) = match page {
+    None =>
+      bg_runtime
+      .rewritten_output_tail(job_id)
+      .unwrap_or_else(() => {
+        (raw_output, raw_output.char_length() < snapshot.size)
+      })
+    Some(_) =>
+      (
+        apply_output_rewrites(raw_output, snapshot.output_rewrites),
+        raw_output.char_length() < snapshot.size,
+      )
+  }
   let (status_label, exit_error) = match snapshot.status {
     Running => ("running", false)
     Exited(code) => ("exit=\{code}", code != 0)
@@ -147,14 +177,19 @@ async fn execute(
   // covers the window (large output), a memory-only runtime that dropped output
   // past the budget, and a hard-cap drop — so a prefix is never presented as the
   // complete output.
-  let shown = raw_output.char_length()
-  let truncation = if shown < snapshot.size || snapshot.output_truncated {
+  let displayed = output.char_length()
+  let shown = if page is Some(_) { raw_output.char_length() } else { displayed }
+  let truncation = if clipped || snapshot.output_truncated {
     let cap = if snapshot.output_truncated {
       " output_dropped_at_cap=true"
     } else {
       ""
     }
     " truncated=true total_chars=\{snapshot.size} shown_chars=\{shown}\{cap}"
+  } else if page is None && snapshot.size > window {
+    // A long raw log can shrink to a complete display. Its size still
+    // tells raw-offset callers how to page it.
+    " total_chars=\{snapshot.size} shown_chars=\{shown}"
   } else {
     ""
   }
@@ -163,7 +198,13 @@ async fn execute(
   } else {
     ""
   }
-  let paging = page.map_or("", offset => " window_offset=\{offset}")
+  let paging = page.map_or("", offset => {
+    if displayed == shown {
+      " window_offset=\{offset}"
+    } else {
+      " window_offset=\{offset} displayed_chars=\{displayed}"
+    }
+  })
   let file_hint = snapshot.output_file.map_or("", path => {
     " output_file=\{Json(path).stringify()} output_persistent=\{snapshot.output_persistent}"
   })

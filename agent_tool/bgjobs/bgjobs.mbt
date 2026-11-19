@@ -167,6 +167,7 @@ priv struct BgJob {
   // Display-only rewrites carried by the launching tool (for example, mapping
   // a throwaway compiler path back to the submitted source name).
   output_rewrites : Array[(String, String)]
+  display_tail : @shell_exec.DisplayTail?
   // True only when the launching tool enabled moonrun's policy, so ordinary
   // job output resembling a refusal cannot be misclassified as one.
   moonrun_policy_active : Bool
@@ -468,6 +469,12 @@ async fn BgJobRuntime::register(
   reaped~ : Bool,
   pinned? : () -> Bool,
 ) -> Unit {
+  let output_rewrites = output_rewrites.copy()
+  let display_tail = if output_rewrites.is_empty() {
+    None
+  } else {
+    Some(exec.track_display_tail(output_rewrites, JobOutputWindow))
+  }
   self.jobs[id] = {
     id,
     revision: 1,
@@ -481,7 +488,8 @@ async fn BgJobRuntime::register(
     exec,
     sandboxed_command,
     read_only_review,
-    output_rewrites: output_rewrites.copy(),
+    output_rewrites,
+    display_tail,
     moonrun_policy_active,
     on_terminal,
     on_published,
@@ -659,6 +667,29 @@ pub async fn BgJobRuntime::read_output_tail(
     Some(job) => Some(job.exec.read_tail(n))
     None => None
   }
+}
+
+///|
+/// Character budget shared by the background display and job_output paging.
+pub const JobOutputWindow : Int32 = 12000
+
+///|
+/// Rewritten tail and whether retained text was clipped or dropped from a
+/// memory-only job. Absent for unknown jobs and jobs with no display rules.
+pub fn BgJobRuntime::rewritten_output_tail(
+  self : BgJobRuntime,
+  id : String,
+) -> (String, Bool)? {
+  guard self.jobs.get(id) is Some(job) && job.display_tail is Some(view) else {
+    return None
+  }
+  let (text, clipped) = view.snapshot()
+  Some(
+    (
+      text,
+      clipped || (job.exec.spill_path() is None && job.exec.over_inline_cap()),
+    ),
+  )
 }
 
 ///|
@@ -859,6 +890,44 @@ async test "job snapshots do not alias launcher rewrite arrays" {
     first.output_rewrites.push(("snapshot", "mutation"))
     let second = rt.snapshot(id).unwrap()
     assert_eq(second.output_rewrites, [("temporary", "source")])
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "failed display replay stops the process before publishing an adoption" {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group(group => {
+      let dir = @fs.tmpdir(prefix="openseek-failed-display-")
+      defer @fs.remove(dir, recursive=true)
+      let rt = BgJobRuntime(AgentTaskScope(group), spill_dir=dir)
+      let (input, release) = @process.write_to_process()
+      defer input.close()
+      defer release.close()
+      let path = dir + "/early"
+      let exec = @shell_exec.ShellExecution::start(
+        AgentTaskScope(group),
+        program="/bin/sh",
+        args=["-c", "printf ready; exec cat"],
+        stdin=Shared(input),
+        inline_cap=1,
+        spill_path=path,
+      )
+      while exec.size() < 5 {
+        @async.sleep(10)
+      }
+      @fs.remove(path)
+      try
+        rt.adopt(exec, command="gate", output_rewrites=[("ready", "ok")])
+      catch {
+        _ => assert_true(rt.list().is_empty())
+      } noraise {
+        _ => fail("expected missing spill file to fail the adoption")
+      }
+      // The gate is still held open: only the failed adoption could stop it.
+      exec.wait()
+      assert_true(exec.stop_cause() is Some(Requested))
+    })
   })
 }
 

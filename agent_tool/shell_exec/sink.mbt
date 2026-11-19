@@ -32,6 +32,8 @@ priv struct ShellOutputSink {
   mut failure : String?
   mut last_output_at_ms : Int64?
   head : StringBuilder
+  // Each adoption can supply its own display rules for the same execution.
+  display_tails : Array[DisplayTail]
   mut head_chars : Int32
   // Total decoded characters of full output (across memory + file), ≤ hard_cap.
   mut total_chars : Int32
@@ -71,6 +73,7 @@ fn ShellOutputSink::ShellOutputSink(
     failure: None,
     last_output_at_ms: None,
     head: StringBuilder(),
+    display_tails: [],
     head_chars: 0,
     total_chars: 0,
     pending: b"",
@@ -163,6 +166,13 @@ async fn ShellOutputSink::append_locked(
       self.file_bytes += bytes.length().to_int64()
     }
   }
+  // Observe only committed, retained text. A memory-only sink drops the
+  // suffix beyond its head; the display must not resurrect it.
+  if self.file is Some(_) {
+    for view in self.display_tails {
+      view.feed(text)
+    }
+  }
   // Head: keep the first inline_cap characters.
   let room_head = self.inline_cap - self.head_chars
   if room_head > 0 {
@@ -173,6 +183,11 @@ async fn ShellOutputSink::append_locked(
     }
     self.head.write_string(piece)
     self.head_chars += piece.char_length()
+    if self.file is None {
+      for view in self.display_tails {
+        view.feed(piece)
+      }
+    }
   }
   self.total_chars += text.char_length()
   self.seq += 1
@@ -250,6 +265,38 @@ async fn ShellOutputSink::discard(self : ShellOutputSink) -> Unit {
 /// Total full-output length in characters (≤ hard_cap).
 fn ShellOutputSink::size(self : ShellOutputSink) -> Int32 {
   self.total_chars
+}
+
+///|
+/// Foreground handoff can supply rules after output has already spilled.
+/// Replay the committed prefix once and subscribe under the append mutex so
+/// no chunk can be skipped or counted twice.
+async fn ShellOutputSink::track_display_tail(
+  self : ShellOutputSink,
+  rules : Array[(String, String)],
+  window : Int32,
+) -> DisplayTail {
+  let view = DisplayTail::new(rules, window.max(1))
+  self.lock.acquire()
+  defer self.lock.release()
+  if self.total_chars <= self.head_chars || self.spill_path() is None {
+    view.feed(self.head.to_string())
+  } else if self.spill_path() is Some(path) {
+    let file = @fs.open(path, mode=ReadOnly)
+    defer file.close()
+    let mut offset = 0L
+    let mut carry = b""
+    while offset < self.file_bytes {
+      let length = (self.file_bytes - offset).min(65536L).to_int()
+      let bytes = file.at(offset).read_exactly(length)
+      let (text, rest, _) = split_valid_utf8(carry + bytes)
+      view.feed(text)
+      carry = rest
+      offset += length.to_int64()
+    }
+  }
+  self.display_tails.push(view)
+  view
 }
 
 ///|
