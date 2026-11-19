@@ -66,6 +66,15 @@ jobs:
         run: |
           moon version --all
 
+      - name: Cache MoonBit package archives
+        # Matrix jobs can download different packages during their checks and tests.
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon/registry/cache
+          key: moon-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}-${{ hashFiles('desktop/.moonbit-version', '**/moon.work', '**/moon.mod', '**/moon.mod.json') }}
+          restore-keys: |
+            moon-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}-
+
       - name: Update MoonBit package registry
         run: moon update
 
