@@ -94,6 +94,7 @@ priv struct Entry {
   followup_menu_open : Bool
   image_reads : Int32
   image_error : AttachmentFailure?
+  feedback : FeedbackStatus?
   attachment_requests : Array[AttachmentRequest]
   attachment_sequence : Int32
   images_enabled : Bool
@@ -130,6 +131,7 @@ fn Entry::Entry(input : Input) -> Entry {
     followup_menu_open: false,
     image_reads: 0,
     image_error: None,
+    feedback: None,
     attachment_requests: input.staged_attachments.mapi((index, source) => {
       id: index + 1,
       source,
@@ -422,7 +424,13 @@ fn Model::with_entry_changes_applied(self : Model, input : Input) -> Model {
       Move(from~, to~) =>
         entries = entries.map(entry => {
           if entry.owner == from {
-            { ..entry, owner: to, action_generation: index + 1, moved: true, }
+            {
+              ..entry,
+              owner: to,
+              action_generation: index + 1,
+              moved: true,
+              feedback: None,
+            }
           } else {
             entry
           }
@@ -1033,6 +1041,11 @@ fn Model::update(
     }
     TextChanged(value) => {
       let (next, command) = entry.edited(input, value, action_emit)
+      let next = if entry.feedback is Some(Submitted | Failed(_)) {
+        { ..next, feedback: None, }
+      } else {
+        next
+      }
       self.commit_entry_change(entry, next, command, action_emit)
     }
     HistoryMoved(delta) =>
@@ -1175,12 +1188,21 @@ fn Model::update(
         action_emit,
       )
     SubmitRequested if input.feedback_message(entry.draft) is Some(message) => {
-      guard !input.presentation.disabled && !message.is_blank() else {
+      guard !input.presentation.disabled &&
+        !message.is_blank() &&
+        !(entry.feedback is Some(Sending(_, _))) else {
         return (self, @cmd.none)
       }
+      let request = (@uuid.mint() + @uuid.mint()).replace_all(old="-", new="")
       (
-        self.with_entry({ ..entry, completion: None, }),
-        action_emit(FeedbackSubmitted(identity=entry.identity(), message~)),
+        self.with_entry({
+          ..entry,
+          completion: None,
+          feedback: Some(Sending(request, entry.draft.task)),
+        }),
+        action_emit(
+          FeedbackSubmitted(identity=entry.identity(), request~, message~),
+        ),
       )
     }
     // A shell command is acknowledged like a prompt: the root clears the

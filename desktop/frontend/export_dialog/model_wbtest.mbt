@@ -442,29 +442,3 @@ async test "local share authorization uses the account captured by the operation
     is LocalAccount(user_id="account-b"),
   )
 }
-
-///|
-test "a late feedback receipt cannot acknowledge the draft or update another session's Share dialog" {
-  let emit : @cmd.Emit[Msg] = _ => @cmd.none
-  let feedback : Feedback = {
-    identity: {
-      owner: Cloud(account="123", session="a"),
-      archive_generation: 0,
-    },
-    metadata: { message: "report", environment: {}, },
-  }
-  let (_, first) = Model().open_cloud(session="a", feedback~)
-  let (_, pending) = first.advance(emit, Share)
-  let (_, closed) = pending.advance(emit, Close)
-  let (_, other) = closed.open_cloud(session="b")
-  let (_, sharing) = other.advance(emit, Share)
-  let reply = Published(
-    generation=pending.generation,
-    Ok(Shared(url="https://shares.test/old")),
-  )
-  for dialog in [closed, sharing] {
-    assert_true(dialog.published_feedback(reply) is None)
-    let (_, settled) = dialog.advance(emit, reply)
-    assert_true(settled == dialog)
-  }
-}

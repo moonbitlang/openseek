@@ -2677,8 +2677,8 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
-    ComposerAction(@composer.FeedbackSubmitted(identity~, message~)) =>
-      model.submit_feedback(dispatch, identity, message)
+    ComposerAction(@composer.FeedbackSubmitted(identity~, request~, message~)) =>
+      model.submit_feedback(dispatch, identity, request, message)
     ComposerAction(action) => {
       if action is @composer.CommandResultRecovered(identity~) {
         return recover_command_result(model, identity)
@@ -7645,18 +7645,6 @@ fn update_msg(
       } else {
         model.export_dialog
       }
-      let clear = dialog
-        .published_feedback(message)
-        .map_or(@cmd.none, feedback => {
-          dispatch(
-            ComposerCommandResult(
-              @composer.FeedbackPublished(
-                feedback.identity,
-                feedback.metadata.message,
-              ),
-            ),
-          )
-        })
       let expired = dialog.account_expired(message)
       let (cmd, dialog) = dialog.update(
         dispatch.map(next => {
@@ -7680,7 +7668,7 @@ fn update_msg(
         let (logout, next) = expire_account(dispatch, next)
         return (@cmd.batch([cmd, logout]), next)
       }
-      (@cmd.batch([cmd, clear]), next)
+      (cmd, next)
     }
     ExternalLinkClicked(url) => open_user_link(dispatch, model, url)
     FromDevice(channel, msg) => update_device_msg(dispatch, channel, msg, model)

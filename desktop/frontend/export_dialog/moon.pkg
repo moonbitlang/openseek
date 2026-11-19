@@ -1,5 +1,4 @@
 import {
-  "openseek_desktop/frontend/composer",
   "moonbit-community/rui",
   "openseek_desktop/frontend/cloud",
   "moonbitlang/editor/base/browser" @base_browser,

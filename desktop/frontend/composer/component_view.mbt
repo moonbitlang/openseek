@@ -240,7 +240,9 @@ fn Entry::action_buttons(
       id: "send",
       class_name: "icon-button send-button",
       title: ui(locale, SendLabel),
-      disabled: input.presentation.disabled || message.is_blank(),
+      disabled: input.presentation.disabled ||
+      message.is_blank() ||
+      self.feedback is Some(Sending(_, _)),
       command: emit(SubmitRequested),
       content: @icons.icon(@icons.icon_newline),
     })
@@ -413,6 +415,18 @@ fn Entry::view(
       ModelStatus(_) | ReasoningStatus(_) => trailing.push(rendered)
       _ => leading.push(rendered)
     }
+  }
+  if self.feedback is Some(status) {
+    let (role, message) = match status {
+      Sending(_, _) => ("status", ui(locale, SubmittingFeedback))
+      Submitted => ("status", ui(locale, FeedbackSubmittedLabel))
+      Failed(reason) => ("alert", reason)
+    }
+    context["feedback"] = @html.div(
+      class="composer-context-row composer-feedback-status",
+      attrs=@html.Attrs::build().role(role),
+      message,
+    )
   }
   if self.image_reads > 0 {
     context["image-reading"] = @html.div(

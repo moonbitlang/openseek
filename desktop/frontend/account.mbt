@@ -259,6 +259,11 @@ fn account_loaded(
   }
   let changed = model.account.map(account => account.token) !=
     account.map(account => account.token)
+  let feedback_command = if changed {
+    dispatch(ComposerCommandResult(@composer.FeedbackAccountChanged))
+  } else {
+    @cmd.none
+  }
   let (export_command, export_dialog) = if changed {
     model.export_dialog.account_changed(Ok(()))
   } else {
@@ -363,8 +368,8 @@ fn account_loaded(
     next
   }
   let command = @cmd.batch([
-    export_command, file_command, retire_command, command, persistence, console_command,
-    remote_status, skills_command, push_command,
+    feedback_command, export_command, file_command, retire_command, command, persistence,
+    console_command, remote_status, skills_command, push_command,
   ])
   (command, next)
 }

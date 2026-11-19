@@ -368,7 +368,7 @@ pub(all) enum Action {
     selection~ : @mention_context.ReviewChanges,
   )
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
-  FeedbackSubmitted(identity~ : Identity, message~ : String)
+  FeedbackSubmitted(identity~ : Identity, request~ : String, message~ : String)
   SlashCommand(identity~ : Identity, command~ : String)
   // A `!` draft was submitted: run `command` (the text after `!`, trimmed and
   // non-empty) and hand its output to the conversation.

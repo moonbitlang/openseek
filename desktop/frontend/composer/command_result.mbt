@@ -1,7 +1,16 @@
 ///|
+#derive(Eq)
+priv enum FeedbackStatus {
+  Sending(String, String)
+  Submitted
+  Failed(String)
+}
+
+///|
 /// Command outcomes delivered to the composer entry that submitted them.
 pub(all) enum CommandResult {
-  FeedbackPublished(Identity, String)
+  FeedbackSettled(Identity, String, Result[Unit, String])
+  FeedbackAccountChanged
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)
@@ -42,20 +51,37 @@ fn Model::command_result(
   action_emit : @cmd.Emit[Action],
 ) -> (Model, @cmd.Cmd) {
   match message {
-    FeedbackPublished(identity, message) => {
+    FeedbackAccountChanged =>
+      (
+        {
+          ..self,
+          entries: self.entries.map(entry => { ..entry, feedback: None, }),
+        },
+        @cmd.none,
+      )
+    FeedbackSettled(identity, request, result) => {
       guard self.entries
         .iter()
         .find_first(entry => entry.identity() == identity)
         is Some(entry) &&
-        feedback_body(entry.draft.task) == Some(message) else {
+        entry.feedback is Some(Sending(active, submitted)) &&
+        active == request else {
         return (self, @cmd.none)
       }
-      self.commit_entry_change(
-        entry,
-        { ..entry, draft: { ..entry.draft, task: "", }, },
-        @cmd.none,
-        action_emit,
-      )
+      let next = match result {
+        Ok(_) =>
+          {
+            ..entry,
+            feedback: Some(Submitted),
+            draft: if entry.draft.task == submitted {
+              { ..entry.draft, task: "", }
+            } else {
+              entry.draft
+            },
+          }
+        Err(reason) => { ..entry, feedback: Some(Failed(reason)), }
+      }
+      self.commit_entry_change(entry, next, @cmd.none, action_emit)
     }
     Ready(input, id, text) => {
       let entry = self.active(input)

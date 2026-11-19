@@ -10,7 +10,6 @@ priv enum UiMessage {
   CloseLabel
   CloseDialog
   ExportDescription
-  FeedbackDescription
   SavingLabel
   DownloadLabel
   SharingLabel
@@ -113,16 +112,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "下載會儲存 HTML 檔案。分享會上傳 HTML 和 JSON，包括工具的輸入和輸出。任何獲得連結的人都可以在 7 天內檢視、預覽 HTML 並下載這兩個檔案。分享前請檢查是否包含隱私資訊。"
     (Japanese, ExportDescription) =>
       "ダウンロードすると HTML ファイルが保存されます。共有するとツールの入出力を含む HTML と JSON がアップロードされます。リンクを知っている人は 7 日間、内容の閲覧、HTML のプレビュー、両ファイルのダウンロードが可能です。共有前に個人情報が含まれていないか確認してください。"
-    (English, FeedbackDescription) =>
-      "Feedback is kept until manually deleted. Anyone with the link can preview or download the full conversation, including tool inputs and outputs."
-    (Spanish, FeedbackDescription) =>
-      "Los comentarios se conservan hasta que se eliminen manualmente. Cualquier persona con el enlace puede previsualizar o descargar la conversación completa, incluidas las entradas y salidas de las herramientas."
-    (SimplifiedChinese, FeedbackDescription) =>
-      "反馈将一直保留，直到手动删除。持链接者可预览或下载完整对话，包括工具的输入和输出。"
-    (TraditionalChinese, FeedbackDescription) =>
-      "意見將持續保留，直到手動刪除。持連結者可預覽或下載完整對話，包括工具的輸入和輸出。"
-    (Japanese, FeedbackDescription) =>
-      "フィードバックは手動で削除するまで保存されます。リンクを知っている人は誰でも、ツールの入出力を含む会話の全履歴をプレビューまたはダウンロードできます。"
     (English, SavingLabel) => "Saving…"
     (Spanish, SavingLabel) => "Guardando…"
     (SimplifiedChinese, SavingLabel) => "正在保存…"

@@ -26,15 +26,7 @@ pub(all) enum FileSource {
 
 ///|
 #derive(Eq)
-pub(all) struct Feedback {
-  identity : @composer.Identity
-  metadata : @protocol.FeedbackMetadata
-}
-
-///|
-#derive(Eq)
 priv struct Content {
-  feedback : Feedback?
   source : Source
   operation : Operation
   // A completed link survives subsequent downloads and their errors.
@@ -106,7 +98,6 @@ pub fn Model::open(
   self : Model,
   source : @protocol.SessionExportPayload,
   channel~ : @interop.ChannelId = Local,
-  feedback? : Feedback,
 ) -> (@cmd.Cmd, Model) {
   (
     @dialog.show(self.id_prefix + "-dialog"),
@@ -116,7 +107,6 @@ pub fn Model::open(
       visible: true,
       content: Some({
         source: Host(channel, source),
-        feedback,
         operation: Ready,
         publication: None,
       }),
@@ -185,8 +175,7 @@ pub fn Model::update(
         self.showing({ ..content, operation: Downloading, }),
       )
     Share if !busy && content.publication is None =>
-      if content.feedback is None &&
-        content.source
+      if content.source
         is (Host(Remote("host"), _) | File(HostFile(Remote("host"), _))) {
         (
           @cmd.none,
@@ -206,7 +195,7 @@ pub fn Model::update(
           Some(account) => {
             let next = { ..self, generation: self.generation + 1, }
             (
-              next.share(emit, content, account, desktop~),
+              next.share(emit, content.source, account, desktop~),
               next.showing({ ..content, operation: Sharing(Preparing), }),
             )
           }
@@ -276,11 +265,7 @@ pub fn Model::is_open(self : Model) -> Bool {
 }
 
 ///|
-pub fn Model::open_cloud(
-  self : Model,
-  session~ : String,
-  feedback? : Feedback,
-) -> (@cmd.Cmd, Model) {
+pub fn Model::open_cloud(self : Model, session~ : String) -> (@cmd.Cmd, Model) {
   (
     @dialog.show(self.id_prefix + "-dialog"),
     {
@@ -289,7 +274,6 @@ pub fn Model::open_cloud(
       visible: true,
       content: Some({
         source: Cloud(session~),
-        feedback,
         operation: Ready,
         publication: None,
       }),
@@ -359,7 +343,6 @@ pub fn Model::open_file(self : Model, source : FileSource) -> (@cmd.Cmd, Model) 
       visible: true,
       content: Some({
         source: File(source),
-        feedback: None,
         operation: Ready,
         publication: None,
       }),
@@ -372,13 +355,3 @@ pub extend FileSource with Eq::{equal, not_equal}
 
 ///|
 pub extend FileSource with Debug::{to_repr}
-
-///|
-pub fn Model::published_feedback(self : Model, msg : Msg) -> Feedback? {
-  guard msg is Published(generation~, Ok(Shared(..))) &&
-    generation == self.generation &&
-    self.content is Some({ operation: Sharing(_), feedback, .. }) else {
-    return None
-  }
-  feedback
-}
