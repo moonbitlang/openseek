@@ -2867,7 +2867,8 @@ fn update_msg(
         | @composer.QueuedInputDeleteRequested(..)
         | @composer.WorktreePlacementRetried(..)
         | @composer.MissingWorktreeRebuildRequested(..)
-        | @composer.MissingWorktreeArchiveRequested(..) => {
+        | @composer.MissingWorktreeArchiveRequested(..)
+        | @composer.ContextContinueRequested(..) => {
           let identity = action.identity()
           guard model.screen is Chat &&
             model.conversation_for_composer_action(identity) is Some(conv) &&
@@ -2876,6 +2877,21 @@ fn update_msg(
             return (@cmd.none, model)
           }
           match action {
+            // Continuing after a context yield is an ordinary submission of a
+            // prompt the composer wrote, so it takes the same path the Send
+            // button does rather than a second way to start a turn.
+            @composer.ContextContinueRequested(identity~) =>
+              update_msg(
+                dispatch,
+                ComposerAction(
+                  @composer.DraftSubmitted(identity~, draft={
+                    task: shell_text(model.locale, ContinuePrompt),
+                    mentions: [],
+                    images: [],
+                  }),
+                ),
+                model,
+              )
             @composer.ModelMenuToggled(..) =>
               update_msg(dispatch, ToggleSelectMenu(OpenSeekModelMenu), model)
             @composer.ReasoningMenuToggled(..) =>
