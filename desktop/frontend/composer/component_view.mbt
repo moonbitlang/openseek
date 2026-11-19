@@ -417,30 +417,61 @@ fn Entry::view(
     }
   }
   if self.feedback is Some(status) {
-    let (role, message) = match status {
-      Sending(_, _) => ("status", ui(locale, SubmittingFeedback))
-      Submitted => ("status", ui(locale, FeedbackSubmittedLabel))
-      Failed(SignInRequired) => ("alert", ui(locale, FeedbackNeedsSignIn))
-      Failed(Diagnostic(reason)) => ("alert", reason)
+    let content : Array[@html.Html] = []
+    let (label, command) = match status {
+      Sending(_, command) =>
+        (Some(ui(locale, SubmittingFeedback)), Some(command))
+      Submitted => (Some(ui(locale, FeedbackSubmittedLabel)), None)
+      Failed(SignInRequired, held~) =>
+        (Some(ui(locale, FeedbackNeedsSignIn)), held)
+      Failed(Diagnostic(reason), held~) => (Some(reason), held)
+      RetryReady(command) => (None, Some(command))
     }
-    context["feedback"] = @html.div(
-      class="composer-context-row composer-feedback-status",
-      attrs=@html.Attrs::build().role(role),
-      if status is Failed(SignInRequired) {
-        [
-          @html.span(message),
+    if label is Some(label) {
+      content.push(@html.span(label))
+    }
+    if command.bind(feedback_body) is Some(body) {
+      content.push(@html.span(class="composer-feedback-message", body))
+    }
+    match status {
+      Failed(SignInRequired, held~) =>
+        content.push(
           @html.button(
             type_="button",
             class="button composer-context-action",
             on_click=action_emit(
-              FeedbackSignIn(identity=self.identity(), draft=self.draft.task),
+              FeedbackSignIn(
+                identity=self.identity(),
+                draft=self.draft.task,
+                held~,
+              ),
             ),
             ui(locale, FeedbackLoginLabel),
           ),
-        ]
-      } else {
-        [@html.span(message)]
-      },
+        )
+      Failed(Diagnostic(_), held=Some(retry)) | RetryReady(retry) =>
+        content.push(
+          @html.button(
+            type_="button",
+            class="button composer-context-action",
+            disabled=input.presentation.disabled ||
+              input.feedback_message({ ..self.draft, task: retry, }) is None,
+            on_click=emit(RetryFeedback),
+            ui(locale, RetryLabel),
+          ),
+        )
+      _ => ()
+    }
+    context["feedback"] = @html.div(
+      class="composer-context-row composer-feedback-status",
+      attrs=@html.Attrs::build().role(
+        if status is Failed(_, ..) {
+          "alert"
+        } else {
+          "status"
+        },
+      ),
+      content,
     )
   }
   if self.image_reads > 0 {

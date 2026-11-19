@@ -66,6 +66,14 @@
   overflow-wrap: anywhere;
 }
 
+.composer-feedback-message {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
 .composer-context .composer-context-row:is(.error, .blocked) {
   background: var(--color-danger-soft);
   color: var(--color-danger);

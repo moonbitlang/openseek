@@ -531,6 +531,7 @@ priv enum Msg {
   MentionJumped(Int32)
   GoalCancelled
   SubmitRequested
+  RetryFeedback
   QuoteReplied(QuoteReply)
   CommandResultReceived(CommandResult)
   FollowupMenuToggled
@@ -784,6 +785,39 @@ fn Model::commit_entry_change(
     @cmd.none
   }
   (self.with_entry(entry), @cmd.batch([command, presence]))
+}
+
+///|
+fn Model::send_feedback(
+  self : Model,
+  entry : Entry,
+  command : String,
+  message : String,
+  clear~ : Bool,
+  action_emit : @cmd.Emit[Action],
+) -> (Model, @cmd.Cmd) {
+  let request = (@uuid.mint() + @uuid.mint()).replace_all(old="-", new="")
+  self.commit_entry_change(
+    entry,
+    {
+      ..entry,
+      draft: if clear {
+        { ..entry.draft, task: "", }
+      } else {
+        entry.draft
+      },
+      completion: if clear {
+        None
+      } else {
+        entry.completion
+      },
+      feedback: Some(Sending(request, command)),
+    },
+    action_emit(
+      FeedbackSubmitted(identity=entry.identity(), request~, message~),
+    ),
+    action_emit,
+  )
 }
 
 ///|
@@ -1041,7 +1075,7 @@ fn Model::update(
     }
     TextChanged(value) => {
       let (next, command) = entry.edited(input, value, action_emit)
-      let next = if entry.feedback is Some(Submitted | Failed(_)) {
+      let next = if entry.feedback is Some(Submitted | Failed(_, held=None)) {
         { ..next, feedback: None, }
       } else {
         next
@@ -1187,22 +1221,31 @@ fn Model::update(
         action_emit(GoalCancelled(identity=entry.identity())),
         action_emit,
       )
+    RetryFeedback => {
+      let command = match entry.feedback {
+        Some(Failed(Diagnostic(_), held=Some(command)) | RetryReady(command)) =>
+          command
+        _ => return (self, @cmd.none)
+      }
+      guard !input.presentation.disabled &&
+        input.feedback_message({ ..entry.draft, task: command, })
+        is Some(message) else {
+        return (self, @cmd.none)
+      }
+      self.send_feedback(entry, command, message, clear=false, action_emit)
+    }
     SubmitRequested if input.feedback_message(entry.draft) is Some(message) => {
       guard !input.presentation.disabled &&
         !message.is_blank() &&
         !(entry.feedback is Some(Sending(_, _))) else {
         return (self, @cmd.none)
       }
-      let request = (@uuid.mint() + @uuid.mint()).replace_all(old="-", new="")
-      (
-        self.with_entry({
-          ..entry,
-          completion: None,
-          feedback: Some(Sending(request, entry.draft.task)),
-        }),
-        action_emit(
-          FeedbackSubmitted(identity=entry.identity(), request~, message~),
-        ),
+      self.send_feedback(
+        entry,
+        entry.draft.task,
+        message,
+        clear=true,
+        action_emit,
       )
     }
     // A shell command is acknowledged like a prompt: the root clears the

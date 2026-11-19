@@ -643,7 +643,7 @@ fn main {
             }
           _ => update(emit, msg, model)
         }
-        if login_draft.val is Some((owner, draft)) && next.screen is Chat {
+        if login_draft.val is Some((owner, draft, held)) && next.screen is Chat {
           let input = next.composer_input()
           if input.identity.owner.key() == owner {
             login_draft.val = None
@@ -651,7 +651,11 @@ fn main {
               next,
               @cmd.batch([
                 cmd,
-                emit(ComposerCommandResult(@composer.Restore(input, draft))),
+                emit(
+                  ComposerCommandResult(
+                    @composer.RestoreFeedback(input, draft, held),
+                  ),
+                ),
               ]),
             )
           }

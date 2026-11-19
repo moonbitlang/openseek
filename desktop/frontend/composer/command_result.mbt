@@ -10,13 +10,15 @@ pub(all) enum FeedbackFailure {
 priv enum FeedbackStatus {
   Sending(String, String)
   Submitted
-  Failed(FeedbackFailure)
+  Failed(FeedbackFailure, held~ : String?)
+  RetryReady(String)
 }
 
 ///|
 /// Command outcomes delivered to the composer entry that submitted them.
 pub(all) enum CommandResult {
   FeedbackSettled(Identity, String, Result[Unit, FeedbackFailure])
+  RestoreFeedback(Input, String, String?)
   FeedbackAccountUpdated(signed_in~ : Bool, changed~ : Bool)
   Ready(Input, String, String)
   Restore(Input, String)
@@ -52,6 +54,23 @@ fn Entry::hold_result(self : Entry, text : String) -> Entry {
 }
 
 ///|
+fn Entry::feedback_failed(
+  self : Entry,
+  command : String,
+  reason : FeedbackFailure,
+) -> Entry {
+  if !self.draft.task.is_empty() || self.holds_draft() {
+    { ..self, feedback: Some(Failed(reason, held=Some(command))), }
+  } else {
+    {
+      ..self,
+      draft: { ..self.draft, task: command, },
+      feedback: Some(Failed(reason, held=None)),
+    }
+  }
+}
+
+///|
 fn Model::command_result(
   self : Model,
   message : CommandResult,
@@ -63,15 +82,19 @@ fn Model::command_result(
         {
           ..self,
           entries: self.entries.map(entry => {
-            let feedback = if !signed_in &&
-              entry.feedback is Some(Sending(_, _) | Failed(SignInRequired)) {
-              Some(Failed(SignInRequired))
-            } else if changed || entry.feedback is Some(Failed(SignInRequired)) {
-              None
-            } else {
-              entry.feedback
+            match entry.feedback {
+              Some(Sending(_, command)) if !signed_in =>
+                {
+                  ..entry,
+                  feedback: Some(Failed(SignInRequired, held=Some(command))),
+                }
+              Some(Failed(SignInRequired, held=Some(command))) if signed_in =>
+                { ..entry, feedback: Some(RetryReady(command)), }
+              Some(Failed(SignInRequired, ..)) if !signed_in => entry
+              Some(Failed(SignInRequired, ..)) => { ..entry, feedback: None, }
+              _ if changed => { ..entry, feedback: None, }
+              _ => entry
             }
-            { ..entry, feedback, }
           }),
         },
         @cmd.none,
@@ -86,19 +109,24 @@ fn Model::command_result(
         return (self, @cmd.none)
       }
       let next = match result {
-        Ok(_) =>
-          {
-            ..entry,
-            feedback: Some(Submitted),
-            draft: if entry.draft.task == submitted {
-              { ..entry.draft, task: "", }
-            } else {
-              entry.draft
-            },
-          }
-        Err(reason) => { ..entry, feedback: Some(Failed(reason)), }
+        Ok(_) => { ..entry, feedback: Some(Submitted), }
+        Err(reason) => entry.feedback_failed(submitted, reason)
       }
       self.commit_entry_change(entry, next, @cmd.none, action_emit)
+    }
+    RestoreFeedback(input, draft, held) => {
+      let entry = self.active(input)
+      let next = if entry.holds_draft() {
+        entry
+      } else {
+        entry.hold_result(draft)
+      }
+      self.commit_entry_change(
+        entry,
+        { ..next, feedback: held.map(command => RetryReady(command)), },
+        @cmd.none,
+        action_emit,
+      )
     }
     Ready(input, id, text) => {
       let entry = self.active(input)

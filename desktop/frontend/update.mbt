@@ -2677,12 +2677,19 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
-    ComposerAction(@composer.FeedbackSignIn(identity~, draft~)) => {
+    ComposerAction(@composer.FeedbackSignIn(identity~, draft~, held~)) => {
       guard model.accepts_composer_action(identity) && !model.remote_connecting else {
         return (@cmd.none, model)
       }
       if !model.is_desktop {
-        let saved : Json = { "owner": identity.owner.key(), "draft": draft }
+        let saved : Json = {
+          "owner": identity.owner.key(),
+          "draft": draft,
+          "held": match held {
+            Some(command) => Json::string(command)
+            None => Json::null()
+          },
+        }
         guard remember_feedback_login(saved.stringify()) else {
           return model.notify_error(
             dispatch, "Could not save the feedback draft for sign-in.",

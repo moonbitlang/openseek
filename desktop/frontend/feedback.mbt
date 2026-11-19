@@ -136,12 +136,16 @@ extern "js" fn take_feedback_login() -> @js.Nullable[String] =
   #| }
 
 ///|
-fn feedback_login_draft() -> (String, String)? {
+fn feedback_login_draft() -> (String, String, String?)? {
   guard take_feedback_login().to_option() is Some(record) else { return None }
   let json = @json.parse(record) catch { _ => return None }
-  match json {
-    { "owner": String(owner), "draft": String(draft), .. } =>
-      Some((owner, draft))
-    _ => None
+  guard json is { "owner": String(owner), "draft": String(draft), .. } else {
+    return None
   }
+  let held = if json is { "held": String(command), .. } {
+    Some(command)
+  } else {
+    None
+  }
+  Some((owner, draft, held))
 }

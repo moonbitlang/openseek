@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, cloudOrigin, sessionA } from './support/cloud_harness.js';
 
-const message = '  窗口闪烁\nsecond line  ';
+const message = '  窗口闪烁\n<em>second line</em>  ';
 const url = `${authOrigin}/v1/feedback/fb_test`;
 
 for (const mode of ['Cloud', 'Local']) {
@@ -21,7 +21,7 @@ for (const mode of ['Cloud', 'Local']) {
     }));
     await app.install();
     const posts = [];
-    const gates = Array.from({ length: 3 }, () => {
+    const gates = Array.from({ length: 5 }, () => {
       let finish;
       const pending = new Promise(resolve => { finish = resolve; });
       return { pending, finish };
@@ -35,7 +35,7 @@ for (const mode of ['Cloud', 'Local']) {
         posts.push(request.params);
         const attempt = posts.length;
         await gates[attempt - 1].pending;
-        if (attempt === 1) throw new Error('Unknown command: session.feedback');
+        if (attempt === 1 || attempt === 4) throw new Error('Unknown command: session.feedback');
         return { status: 'shared', url };
       };
       await page.goto(`${authOrigin}/console/index.html?device=device-a`);
@@ -47,7 +47,7 @@ for (const mode of ['Cloud', 'Local']) {
         posts.push(route.request().postDataJSON());
         const attempt = posts.length;
         await gates[attempt - 1].pending;
-        return route.fulfill(attempt > 1 ? { status: 201, json: { id: 'fb_test', url } } : { status: 502, json: { error: 'storage unavailable' } });
+        return route.fulfill(attempt !== 1 && attempt !== 4 ? { status: 201, json: { id: 'fb_test', url } } : { status: 502, json: { error: 'storage unavailable' } });
       });
       await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
     }
@@ -65,9 +65,11 @@ for (const mode of ['Cloud', 'Local']) {
     await page.evaluate(() => navigator.clipboard.writeText('original clipboard'));
     await task.fill(command);
     await task.press('Enter');
-    await expect(status).toHaveText('Submitting feedback…');
+    await expect(status).toContainText('Submitting feedback…');
+    await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+    await expect(task).toHaveValue('');
+    await expect(task).toBeFocused();
     await expect(dialog).toBeHidden();
-    await expect(page.locator('#send')).toBeDisabled();
     await task.press('Enter');
     await expect.poll(() => posts.length).toBe(1);
     gates[0].finish();
@@ -75,7 +77,8 @@ for (const mode of ['Cloud', 'Local']) {
     await expect(task).toHaveValue(command);
     await task.fill('/feedback ' + retry);
     await task.press('Enter');
-    await expect(status).toHaveText('Submitting feedback…');
+    await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', retry);
+    await expect(task).toHaveValue('');
     await expect.poll(() => posts.length).toBe(2);
     gates[1].finish();
     await expect(status).toHaveText('Feedback submitted');
@@ -83,12 +86,28 @@ for (const mode of ['Cloud', 'Local']) {
     await task.fill(command);
     await task.press('Enter');
     await expect.poll(() => posts.length).toBe(3);
-    await task.fill('my next question');
+    await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+    await task.fill(command);
     gates[2].finish();
     await expect(status).toHaveText('Feedback submitted');
-    await expect(task).toHaveValue('my next question');
+    await expect(task).toHaveValue(command);
     await expect(dialog).toBeHidden();
     await expect(page.getByText(url, { exact: true })).toHaveCount(0);
+    await task.press('Enter');
+    await expect.poll(() => posts.length).toBe(4);
+    await task.fill('my next question');
+    gates[3].finish();
+    await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+    await expect(task).toHaveValue('my next question');
+    const retryButton = status.getByRole('button', { name: 'Retry', exact: true });
+    await task.fill('my next question, edited');
+    await retryButton.click();
+    await expect.poll(() => posts.length).toBe(5);
+    await expect(status).toContainText('Submitting feedback…');
+    await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+    gates[4].finish();
+    await expect(status).toHaveText('Feedback submitted');
+    await expect(task).toHaveValue('my next question, edited');
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('original clipboard');
     expect(app.hostRequests.filter(r => r.method === 'session.share')).toHaveLength(0);
     for (const [index, body] of posts.entries()) {
@@ -105,7 +124,7 @@ for (const mode of ['Cloud', 'Local']) {
     await expect(dialog).toContainText('7 days');
     await dialog.getByRole('button', { name: 'Share', exact: true }).click();
     await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(/\/v1\/shares\//);
-    expect(posts).toHaveLength(3);
+    expect(posts).toHaveLength(5);
     expect(app.device.pageErrors).toEqual([]);
   });
 }
@@ -155,13 +174,16 @@ for (const mode of ['Local', 'Cloud']) {
   });
 }
 
-test('browser feedback restores its draft after the account sign-in redirect', async ({ page }) => {
+test('browser sign-in restores newer typing and the separate feedback retry', async ({ page }) => {
   const app = new CloudHarness(page, { cached: false });
   app.accountSignedIn = true;
   await app.install();
   let uploads = 0;
-  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, route => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
     uploads++;
+    if (uploads === 1) await pending;
     expect(route.request().postDataJSON().message).toBe(message);
     return route.fulfill(uploads === 1
       ? { status: 401, json: { error: 'unauthorized' } }
@@ -173,13 +195,43 @@ test('browser feedback restores its draft after the account sign-in redirect', a
   const status = page.locator('.composer-feedback-status');
   await task.fill(command);
   await task.press('Enter');
+  await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+  await task.fill('draft for my next message');
+  release();
   const navigation = page.waitForRequest(request => new URL(request.url()).pathname === '/v2/auth/login');
   await status.getByRole('button', { name: 'Sign in' }).click();
   expect(new URL((await navigation).url()).searchParams.get('return_to')).toBe('/cloud/session/' + sessionA);
-  await expect(task).toHaveValue(command);
-  await expect(status).toBeHidden();
+  await expect(status.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(task).toHaveValue('draft for my next message');
   expect(uploads).toBe(1);
-  await task.press('Enter');
+  await status.getByRole('button', { name: 'Retry' }).click();
   await expect(status).toHaveText('Feedback submitted');
+  await expect(task).toHaveValue('draft for my next message');
   expect(uploads).toBe(2);
+});
+
+test('a Cloud conversation can send the next chat message before feedback finishes', async ({ page }) => {
+  const app = new CloudHarness(page);
+  await app.install();
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/feedback`, async route => {
+    await pending;
+    await route.fulfill({ status: 201, json: { id: 'fb_test', url } });
+  });
+  await app.goto();
+  await app.open();
+  const task = page.locator('#task');
+  const status = page.locator('.composer-feedback-status');
+  await task.fill('/feedback ' + message);
+  await task.press('Enter');
+  await expect(task).toHaveValue('');
+  await task.fill('next chat message');
+  await task.press('Enter');
+  await expect.poll(() => app.requests.some(r =>
+    r.path.endsWith('/commands') && JSON.parse(r.body).command?.content === 'next chat message'
+  )).toBe(true);
+  await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+  release();
+  await expect(status).toHaveText('Feedback submitted');
 });
