@@ -944,21 +944,6 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   for action in self.actions {
     actions[action.id] = action.render(locale~)
   }
-  if self.keyboard.prediction is Some(accept) {
-    actions["prediction"] = @html.button(
-      class="button secondary composer-prediction-accept",
-      type_="button",
-      title=ui(locale, UsePredictionHint),
-      on_click=@cmd.batch([accept, focus_message_end()]),
-      attrs=@html.Attrs::build()
-        .aria_label(ui(locale, UsePredictionHint))
-        .on_mousedown(event => {
-          event.prevent_default()
-          @cmd.none
-        }),
-      ui(locale, UsePrediction),
-    )
-  }
   let inner : Array[@html.Html] = [
     self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita

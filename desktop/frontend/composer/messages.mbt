@@ -18,8 +18,6 @@ priv enum UiMessage {
   ClearGoal
   SetGoal
   SendLabel
-  UsePrediction
-  UsePredictionHint
   StopLabel
   SteerTask
   QueueNextTurn
@@ -216,16 +214,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, SendLabel) => "发送"
     (TraditionalChinese, SendLabel) => "傳送"
     (Japanese, SendLabel) => "送信"
-    (English, UsePrediction) => "Use"
-    (Spanish, UsePrediction) => "Usar"
-    (SimplifiedChinese, UsePrediction) => "采用"
-    (TraditionalChinese, UsePrediction) => "採用"
-    (Japanese, UsePrediction) => "採用"
-    (English, UsePredictionHint) => "Use suggestion"
-    (Spanish, UsePredictionHint) => "Usar sugerencia"
-    (SimplifiedChinese, UsePredictionHint) => "采用建议"
-    (TraditionalChinese, UsePredictionHint) => "採用建議"
-    (Japanese, UsePredictionHint) => "候補を入力"
     (English, StopLabel) => "Stop"
     (Spanish, StopLabel) => "Detener"
     (SimplifiedChinese, StopLabel) => "停止"
