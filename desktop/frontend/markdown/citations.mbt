@@ -2,6 +2,7 @@
 // Sources remain ordinary Markdown links, using the existing URL/file routes.
 
 ///|
+#derive(Debug)
 priv struct Citation {
   number : String
   block : @cmark.Block
@@ -109,11 +110,11 @@ fn MarkdownRender::citation_label(
 }
 
 ///|
-fn[Node : MarkdownNode] MarkdownRender::citation_node(
+fn MarkdownRender::citation_node(
   self : MarkdownRender,
   citation : Citation,
   link : @cmark.InlineLink,
-) -> Node {
+) -> @html.Html {
   let label = self.citation_label(citation.number)
   let title = if citation.summary.is_empty() {
     label
@@ -125,84 +126,55 @@ fn[Node : MarkdownNode] MarkdownRender::citation_node(
   let children = if full {
     self.inline_nodes(link.text, linkify_urls=false)
   } else {
-    [Node::from_html(@html.text(citation.number))]
+    [@html.text(citation.number)]
   }
-  let (target, node) = if citation.link is Some(link) &&
+  let node = if citation.link is Some(link) &&
     self.open_file is Some(open) &&
     self.file_destination(link) is Some(path) {
     let path = @office_location.citation_destination(path, citation.summary)
-    let workspace_file = FileReference(path).path()
-    let attrs = attrs
-      .data_set("context-file", path)
-      .data_set("context-workspace-file", workspace_file)
-    let node = Node::compose(children, children => {
-      @html.button(
-        class="citation-link file-link",
-        type_="button",
-        title~,
-        attrs~,
-        on_click=open(path),
-        children,
-      )
-    })
-    (@action_menu.FileLink(path, workspace_file=Some(workspace_file)), node)
+    @html.button(
+      class="citation-link file-link",
+      type_="button",
+      title~,
+      attrs=attrs
+        .data_set("context-file", path)
+        .data_set("context-workspace-file", FileReference(path).path()),
+      on_click=open(path),
+      children,
+    )
   } else if citation.link is Some(link) &&
     self.link_destination(link) is Some(href) {
-    let node = Node::compose(children, children => {
-      @html.a(
-        class="citation-link",
-        href~,
-        target=Blank,
-        rel="noopener noreferrer",
-        title~,
-        attrs~,
-        children,
-      )
-    })
-    (@action_menu.link_target(href), node)
+    @html.a(
+      class="citation-link",
+      href~,
+      target=Blank,
+      rel="noopener noreferrer",
+      title~,
+      attrs~,
+      children,
+    )
   } else {
     // A textual footnote or an incomplete streamed source has no made-up
     // destination. Its contents remain readable in the Sources list.
-    let node = Node::compose(children, children => {
-      @html.span(class="citation-link citation-note", title~, attrs~, children)
-    })
-    (@action_menu.NoTarget, node)
+    @html.span(class="citation-link citation-note", title~, attrs~, children)
   }
-  let number = citation.number
-  let node = if full {
-    node
-  } else {
-    Node::compose([node], children => {
-      @html.sup(
-        class="citation",
-        attrs=@html.Attrs::build().data_set("citation", number),
-        children,
-      )
-    })
+  if full {
+    return node
   }
-  let revision = markdown_revision(
-    (title, if full { Some(link.text) } else { None }, number),
+  @html.sup(
+    class="citation",
+    attrs=@html.Attrs::build().data_set("citation", citation.number),
+    [node],
   )
-  self.link(target, node, revision~)
 }
 
 ///|
-fn[Node : MarkdownNode] MarkdownRender::sources_node(
-  self : MarkdownRender,
-) -> Node {
-  let rows : Array[Node] = []
-  let previews : Array[@html.Html] = []
-  for citation in self.citations {
+fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
+  let rows = self.citations.map(citation => {
     let source_path = citation.link.bind(link => self.file_destination(link))
-    let source_title : Ref[@action_menu.ContextTarget?] = Ref(None)
     let render = {
       ..self,
       in_sources: true,
-      source_title: if self.links is Some(_) {
-        Some(source_title)
-      } else {
-        None
-      },
       open_file: self.open_file.map(open => {
         path => {
           open(
@@ -215,71 +187,71 @@ fn[Node : MarkdownNode] MarkdownRender::sources_node(
         }
       }),
     }
-    if previews.length() < 3 {
-      previews.push(self.source_glyph(citation))
-    }
-    let origin = self.source_origin(citation)
-    let glyph = self.source_glyph(citation)
-    let number = citation.number
-    let id = self.source_note_id(number)
-    let first_link = self.links.map_or(0, links => links.items.length())
-    let body = render.block_nodes(citation.block)
-    let card = Node::compose(body, children => {
-      @html.div(class="citation-source-card", [
-        glyph,
-        @html.div(class="citation-source-content", [
-          @html.div(class="citation-source-origin", origin),
-          @html.div(class="citation-source-copy", children),
-        ]),
-        @html.span(class="citation-source-number", number),
-      ])
-    })
-    let card = match source_title.val {
-      Some(target) => {
-        let children = self.links.map_or([], links => {
-          links.items[first_link:].map(menu => menu.key)
-        })
-        self.link(
-          target,
-          card,
-          revision=markdown_revision((number, citation.block)),
-          children~,
-          inline=false,
-        )
-      }
-      None => card
-    }
-    rows.push(
-      Node::compose([card], children => {
-        @html.li(
-          id~,
-          class="citation-source",
-          attrs=@html.Attrs::build()
-            .role("doc-footnote")
-            .data_set("source", number),
-          children,
-        )
-      }),
+    let card = self.source_card_html(
+      citation,
+      render.block_nodes(citation.block),
     )
-  }
-  let count = self.citations.length().to_string()
-  Node::compose(rows, rows => {
-    @html.details(
-      class="citation-sources",
-      attrs=@html.Attrs::build().role("group").aria_label(self.sources_label()),
-      [
-        @html.summary(class="citation-sources-heading", [
-          @html.span(class="citation-source-previews", previews),
-          @html.text(self.sources_label()),
-          @html.span(class="citation-sources-count", count),
-          @html.span(class="citation-sources-chevron", [
-            @icons.icon(@icons.icon_chevron_down),
-          ]),
-        ]),
-        @html.ol(class="citation-source-list", rows),
-      ],
-    )
+    self.source_row_html(citation, card)
   })
+  self.sources_html(rows)
+}
+
+///|
+fn MarkdownRender::source_card_html(
+  self : MarkdownRender,
+  citation : Citation,
+  children : Array[@html.Html],
+) -> @html.Html {
+  @html.div(class="citation-source-card", [
+    self.source_glyph(citation),
+    @html.div(class="citation-source-content", [
+      @html.div(class="citation-source-origin", self.source_origin(citation)),
+      @html.div(class="citation-source-copy", children),
+    ]),
+    @html.span(class="citation-source-number", citation.number),
+  ])
+}
+
+///|
+fn MarkdownRender::source_row_html(
+  self : MarkdownRender,
+  citation : Citation,
+  card : @html.Html,
+) -> @html.Html {
+  @html.li(
+    id=self.source_note_id(citation.number),
+    class="citation-source",
+    attrs=@html.Attrs::build()
+      .role("doc-footnote")
+      .data_set("source", citation.number),
+    [card],
+  )
+}
+
+///|
+fn MarkdownRender::sources_html(
+  self : MarkdownRender,
+  rows : Array[@html.Html],
+) -> @html.Html {
+  let previews = self.citations[:self.citations.length().min(3)].map(citation => {
+    self.source_glyph(citation)
+  })
+  let count = self.citations.length().to_string()
+  @html.details(
+    class="citation-sources",
+    attrs=@html.Attrs::build().role("group").aria_label(self.sources_label()),
+    [
+      @html.summary(class="citation-sources-heading", [
+        @html.span(class="citation-source-previews", previews),
+        @html.text(self.sources_label()),
+        @html.span(class="citation-sources-count", count),
+        @html.span(class="citation-sources-chevron", [
+          @icons.icon(@icons.icon_chevron_down),
+        ]),
+      ]),
+      @html.ol(class="citation-source-list", rows),
+    ],
+  )
 }
 
 ///|

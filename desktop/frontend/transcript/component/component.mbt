@@ -426,6 +426,10 @@ pub fn component(
   let rows = rows.map2(input.map(input => input.artifact_owner()), (rows, owner) => {
     rows.map(row => (row.0, row.1, row.2, owner))
   })
+  let menus : TranscriptMarkdown = {
+    input: context_input,
+    actions: context_actions,
+  }
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
@@ -440,33 +444,65 @@ pub fn component(
         _,
         _,
       ) => (!previewing, @cmd.none))
-      let prepared = changes.map3(row, markdown, (changes, row, previewing) => {
-        let (locale, block, editor, owner) = row
-        let links = @markdown.LinkMenus(prefix)
-        let view = block.render(
+      let open_file = path => (actions.open)(path)
+      let prose = menus.body(
+        row.map(row => row.1.prose_markdown(row.0, row.3, actions)),
+        open_file,
+        prefix + "-prose",
+      )
+      let thought = menus.body(
+        row.map(row => row.1.thought_markdown(row.0)),
+        open_file,
+        prefix + "-thought",
+      )
+      let minimal = row.switch_by(
+        value => {
+          guard value.1.content is Minimal(initial) else {
+            return @rabbita.Val::constant(@html.nothing)
+          }
+          let input = row.map(row => {
+            let (locale, block, _, owner) = row
+            let content = if block.content is Minimal(content) {
+              content
+            } else {
+              initial
+            }
+            (locale, content, owner, false)
+          })
+          minimal_component(input, actions, menus, prefix + "-minimal")
+        },
+        by=value => {
+          if value.1.content is Minimal(_) {
+            "minimal"
+          } else {
+            "detailed"
+          }
+        },
+      )
+      let view_input = row.map2(markdown, (row, previewing) => (row, previewing))
+      view_input.map5(changes, prose, thought, minimal, (
+        row,
+        changes,
+        prose,
+        thought,
+        minimal,
+      ) => {
+        let ((locale, block, editor, _), previewing) = row
+        let html = block.render(
           locale~,
           actions,
-          links~,
-          artifact_view=reference => {
-            artifact_file_view(reference, locale, actions.open, owner)
-          },
+          prose_body=if block.content is Minimal(_) { minimal } else { prose },
+          thought_body=thought,
           changes?=changes.control(block, changes_emit),
           editor?=editor.view(block, locale~, editor_emit),
           begin_edit=editor_emit(BeginEdit),
+          user_markdown={ previewing, toggle: markdown_emit(()), },
         )
-        (block.key.wire(), view, links)
-      })
-      let menus = @markdown.LinkMenus::component(
-        prepared.map(row => row.2),
-        prefix,
-        context_input,
-        context_actions,
-      )
-      prepared.map2(menus, (row, menus) => {
-        let (key, view, _) = row
-        let html = view.render(menus)
         renders.val += 1
-        (key, @html.memo_by(html, html => html, by=_ => renders.val))
+        (
+          block.key.wire(),
+          @html.memo_by(html, html => html, by=_ => renders.val),
+        )
       })
     },
     by=pair => pair.1.branch_key(),

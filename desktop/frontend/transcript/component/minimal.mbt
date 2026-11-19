@@ -724,53 +724,21 @@ fn MinimalContent::render(
   locale~ : @i18n.Locale = English,
   self : MinimalContent,
   actions : Actions,
-  links~ : @markdown.LinkMenus,
+  body : @html.Html,
   active~ : Bool = false,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @markdown.View {
+) -> @html.Html {
   match self {
-    Messages(parts, active_group~) => {
-      // Preserve each child's identity while tool outcomes and live prose
-      // update. Grouping must not recreate an already-open tool disclosure.
-      let children = parts.map(part => {
-        part.content.render(
-          locale~,
-          actions,
-          links~,
-          artifact_view?,
-          active=active_group is Some(identity) && identity == part.identity,
-        )
-      })
-      @markdown.View::compose(children, nodes => {
-        let children : Map[String, @html.Html] = Map([])
-        for index, node in nodes {
-          children[parts[index].identity] = node
-        }
-        @html.div(class="minimal-messages minimal-rows", children)
-      })
-    }
-    ContextSummary(text) => {
-      let body = @markdown.markdown_view(
-        locale~,
-        text,
-        open_file=path => (actions.open)(path),
-        links~,
-        class="minimal-process-body msg-content markdown moonbit-viewer-markdown-content",
-      )
-      @markdown.View::compose([body], children => {
-        @html.details(
-          class="minimal-context-summary",
-          [self.summary_view(locale~), ..children],
-        )
-      })
-    }
+    Messages(_) => body
+    ContextSummary(_) =>
+      @html.details(class="minimal-context-summary", [
+        self.summary_view(locale~),
+        body,
+      ])
     Prose(text~, assistant~, finished~, live~, completed_at~, fork~) =>
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        path => (actions.open)(path),
-        links~,
+        body,
         assistant,
         is_danger=false,
         completed_at?,
@@ -779,48 +747,40 @@ fn MinimalContent::render(
         streaming=live,
       )
     Note(text~, error~) =>
-      @markdown.View::from_html(
-        @html.div(
-          class=if error {
-            "minimal-note transcript-error-message"
-          } else {
-            "minimal-note"
-          },
-          text,
-        ),
+      @html.div(
+        class=if error {
+          "minimal-note transcript-error-message"
+        } else {
+          "minimal-note"
+        },
+        text,
       )
     Activity(entries) => {
       // A single call has nothing to summarize separately. Render its caption
       // once, including its running status and image previews.
       if entries is [Call(call)] {
-        return @markdown.View::from_html(
-          MinimalActivity::Call(call).render(locale~, single=true),
-        )
+        return MinimalActivity::Call(call).render(locale~, single=true)
       }
       if active {
-        return @markdown.View::from_html(
+        return @html.div(
+          class="minimal-tools-live minimal-rows",
+          // Give the keyed list its own element when a single call becomes a
+          // group. Switching that call's unkeyed children directly to a Map
+          // makes Rabbita insert rows in Map::map's reverse traversal order.
           @html.div(
-            class="minimal-tools-live minimal-rows",
-            // Give the keyed list its own element when a single call becomes a
-            // group. Switching that call's unkeyed children directly to a Map
-            // makes Rabbita insert rows in Map::map's reverse traversal order.
-            @html.div(
-              class="minimal-rows",
-              minimal_activity_views(locale~, entries),
-            ),
+            class="minimal-rows",
+            minimal_activity_views(locale~, entries),
           ),
         )
       }
       // Earlier groups start folded once a new assistant message arrives.
-      @markdown.View::from_html(
-        @html.details(class="minimal-tools", [
-          self.summary_view(locale~),
-          @html.div(
-            class="minimal-call-list",
-            minimal_activity_views(locale~, entries),
-          ),
-        ]),
-      )
+      @html.details(class="minimal-tools", [
+        self.summary_view(locale~),
+        @html.div(
+          class="minimal-call-list",
+          minimal_activity_views(locale~, entries),
+        ),
+      ])
     }
   }
 }

@@ -36,10 +36,10 @@ fn MarkdownRender::source_note_id(
 }
 
 ///|
-fn[Node : MarkdownNode] MarkdownRender::footnote_reference(
+fn MarkdownRender::footnote_reference(
   self : MarkdownRender,
   link : @cmark.InlineLink,
-) -> Node? {
+) -> @html.Html? {
   guard link.reference_definition(self.defs) is Some(FootnoteDef(definition)) else {
     return None
   }
@@ -51,24 +51,15 @@ fn[Node : MarkdownNode] MarkdownRender::footnote_reference(
         let children = if full {
           self.inline_nodes(link.text, linkify_urls=false)
         } else {
-          [Node::from_html(@html.text("[\{number}]"))]
+          [@html.text("[\{number}]")]
         }
-        let href = "#" + self.source_note_id(number)
-        let anchor = Node::compose(children, children => {
-          @html.a(
-            href~,
-            attrs=@html.Attrs::build().role("doc-noteref"),
-            escape=true,
-            children,
-          )
-        })
-        return Some(
-          if full {
-            anchor
-          } else {
-            Node::compose([anchor], nodes => @html.sup(nodes))
-          },
+        let anchor = @html.a(
+          href="#" + self.source_note_id(number),
+          attrs=@html.Attrs::build().role("doc-noteref"),
+          escape=true,
+          children,
         )
+        return Some(if full { anchor } else { @html.sup([anchor]) })
       }
     }
   }
@@ -92,33 +83,21 @@ fn[Node : MarkdownNode] MarkdownRender::footnote_reference(
   let children = if full {
     self.inline_nodes(link.text, linkify_urls=false)
   } else {
-    [Node::from_html(@html.text("[\{note.number}]"))]
+    [@html.text("[\{note.number}]")]
   }
-  let id = "\{note.id}-ref-\{note.references}"
-  let href = "#" + note.id
-  let anchor = Node::compose(children, children => {
-    @html.a(
-      id~,
-      href~,
-      attrs=@html.Attrs::build().role("doc-noteref"),
-      escape=true,
-      children,
-    )
-  })
-  Some(
-    if full {
-      anchor
-    } else {
-      Node::compose([anchor], nodes => @html.sup(nodes))
-    },
+  let anchor = @html.a(
+    id="\{note.id}-ref-\{note.references}",
+    href="#" + note.id,
+    attrs=@html.Attrs::build().role("doc-noteref"),
+    escape=true,
+    children,
   )
+  Some(if full { anchor } else { @html.sup([anchor]) })
 }
 
 ///|
-fn[Node : MarkdownNode] MarkdownRender::footnotes_node(
-  self : MarkdownRender,
-) -> Node {
-  let rendered : Array[(RenderedFootnote, Array[Node])] = []
+fn MarkdownRender::footnotes_node(self : MarkdownRender) -> @html.Html {
+  let rendered : Array[(RenderedFootnote, Array[@html.Html])] = []
   let render = { ..self, in_sources: true, }
   // A note may reference another note, including itself. Register references
   // before rendering bodies, visit each note once, then build backlinks after
@@ -127,37 +106,39 @@ fn[Node : MarkdownNode] MarkdownRender::footnotes_node(
     let note = self.footnotes.notes[index]
     rendered.push((note, render.block_nodes(note.block)))
   }
-  let items : Array[Node] = []
-  for (note, children) in rendered {
-    let backlinks : Array[@html.Html] = []
-    for reference in 1..<=note.references {
-      backlinks.push(
-        @html.a(
-          href="#\{note.id}-ref-\{reference}",
-          attrs=@html.Attrs::build().role("doc-backlink"),
-          escape=true,
-          [@html.text(if reference == 1 { "↩" } else { "↩\{reference}" })],
-        ),
-      )
-    }
-    children.push(Node::from_html(@html.span(backlinks)))
-    items.push(
-      Node::compose(children, children => {
-        @html.li(
-          id=note.id,
-          attrs=@html.Attrs::build()
-            .role("doc-footnote")
-            .data_set("footnote", note.key),
-          children,
-        )
-      }),
+  footnotes_html(rendered.map(item => footnote_html(item.0, item.1)))
+}
+
+///|
+fn footnote_html(
+  note : RenderedFootnote,
+  children : Array[@html.Html],
+) -> @html.Html {
+  let backlinks : Array[@html.Html] = []
+  for reference in 1..<=note.references {
+    backlinks.push(
+      @html.a(
+        href="#\{note.id}-ref-\{reference}",
+        attrs=@html.Attrs::build().role("doc-backlink"),
+        escape=true,
+        [@html.text(if reference == 1 { "↩" } else { "↩\{reference}" })],
+      ),
     )
   }
-  Node::compose(items, items => {
-    @html.section(
-      class="footnote",
-      attrs=@html.Attrs::build().role("doc-endnotes"),
-      [@html.ol(items)],
-    )
-  })
+  @html.li(
+    id=note.id,
+    attrs=@html.Attrs::build()
+      .role("doc-footnote")
+      .data_set("footnote", note.key),
+    [..children, @html.span(backlinks)],
+  )
+}
+
+///|
+fn footnotes_html(items : Array[@html.Html]) -> @html.Html {
+  @html.section(
+    class="footnote",
+    attrs=@html.Attrs::build().role("doc-endnotes"),
+    [@html.ol(items)],
+  )
 }

@@ -16,11 +16,11 @@ pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : Str
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 
+pub fn markdown_component(@rabbita.Val[MarkdownInput], String, open_file~ : (String) -> @cmd.Cmd, @rabbita.Val[@action_menu.ContextInput], @action_menu.ContextActions) -> @rabbita.Val[@html.Html]
+
 pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html, defer_artifacts? : Bool, render_math? : (String, Bool) -> @html.Html) -> Array[@html.Html]
 
 pub fn user_markdown_nodes(locale? : @i18n.Locale, String) -> Array[@html.Html]
-
-pub fn markdown_view(locale~ : @i18n.Locale, String, open_file~ : (String) -> @cmd.Cmd, links~ : LinkMenus, class~ : String, artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html, defer_artifacts? : Bool) -> View
 
 pub fn workspace_file_card(@i18n.Locale, @workspace_file_ref.WorkspaceFileRef, ((String) -> @cmd.Cmd)?) -> @html.Html
 
@@ -34,16 +34,14 @@ pub fn DiagramRenderers::DiagramRenderers(() -> Unit) -> Self
 pub fn DiagramRenderers::dispose(Self) -> Unit
 pub fn DiagramRenderers::refresh(Self, @dom.Element, dark_mode~ : Bool) -> Unit
 
-type LinkMenus
-pub fn LinkMenus::LinkMenus(String) -> Self
-pub fn LinkMenus::component(@rabbita.Val[Self], String, @rabbita.Val[@action_menu.ContextInput], @action_menu.ContextActions) -> @rabbita.Val[Map[String, @html.Html]]
-pub impl Eq for LinkMenus
-
-type View
-pub fn View::compose(Array[Self], (Array[@html.Html]) -> @html.Html) -> Self
-pub fn View::from_html(@html.Html) -> Self
-pub fn View::render(Self, Map[String, @html.Html]) -> @html.Html
-pub impl Eq for View
+pub(all) struct MarkdownInput {
+  source : String
+  locale : @i18n.Locale
+  class : String
+  defer_artifacts : Bool
+  artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
+}
+pub impl Eq for MarkdownInput
 
 // Type aliases
 
