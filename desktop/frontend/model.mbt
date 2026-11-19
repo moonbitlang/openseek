@@ -389,17 +389,42 @@ fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
 }
 
 ///|
-/// Whether a model belongs to the selected provider. Custom endpoints accept
-/// every model; Kimi retains its existing endpoint selection.
+/// Whether a model belongs to the selected provider's family — the rule a fresh
+/// chat is aligned by, not the rule that says a model can run (see
+/// `Model::model_availability`). An entry names its own endpoint, so it belongs
+/// to the custom provider alone; a tier this build ships belongs to the family
+/// that serves it. Kimi retains its existing endpoint selection.
 fn @deepseek.Model::matches_provider(
   self : @deepseek.Model,
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
-    // A user entry names its own endpoint, so no provider slot owns it.
-    (Custom, _) | (_, Kimi(_)) | (_, Custom(_)) => true
+    (Custom, Custom(_)) => true
+    (_, Kimi(_)) => true
     (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
+  }
+}
+
+///|
+/// The model a fresh conversation starts from on `provider`: the first entry
+/// the custom provider saved, because that endpoint serves the models its
+/// section named, or the provider's own default when it names none.
+fn Model::provider_default_model(
+  self : Model,
+  provider : ApiProvider,
+) -> @deepseek.Model {
+  match provider {
+    Custom =>
+      match self.host_settings() {
+        Some(settings) =>
+          match settings.models {
+            [first, ..] => @deepseek.Custom(first.id)
+            [] => provider.default_model()
+          }
+        None => provider.default_model()
+      }
+    _ => provider.default_model()
   }
 }
 
@@ -3301,14 +3326,14 @@ fn Model::align_new_chats_with_provider(
   }
   let next = if channel == self.focused &&
     !self.default_model.matches_provider(provider) {
-    { ..self, default_model: provider.default_model(), }
+    { ..self, default_model: self.provider_default_model(provider), }
   } else {
     self
   }
   let new_chat_model = if next.default_model.matches_provider(provider) {
     next.default_model
   } else {
-    provider.default_model()
+    next.provider_default_model(provider)
   }
   let conversations = next.conversations.map(conv => {
     if conv.device == channel &&

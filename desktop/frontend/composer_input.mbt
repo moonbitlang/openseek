@@ -116,15 +116,29 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       ),
     )
   }
-  // A model whose saved entry is gone cannot run, and must not be swapped for
-  // another one behind the user's back: Send stays out of reach until the
-  // entry is re-added or another model is picked.
-  if !self.conversation_model_ready(conv.engine_model) {
-    context.push(
-      @composer.ApiSetupNotice(
-        text=@settings.text(self.locale, ModelDeletedNotice),
-      ),
-    )
+  // A model this host cannot run is not swapped for another one behind the
+  // user's back: Send stays out of reach until the entry is re-added, one of
+  // the endpoint's own models is picked, or the provider changes back.
+  match self.model_availability(conv.engine_model) {
+    ModelEntryDeleted =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, ModelDeletedNotice),
+        ),
+      )
+    ModelNotOnEndpoint =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, ModelNotOnEndpointNotice),
+        ),
+      )
+    ModelNoneSaved =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, CustomModelsMissingNotice),
+        ),
+      )
+    ModelReady => ()
   }
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {

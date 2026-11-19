@@ -178,6 +178,9 @@ pub(all) enum Message {
   CustomModelInUse(Int32)
   CustomModelUnused
   ModelDeletedNotice
+  ModelNotOnEndpointNotice
+  ModelNotOnEndpointLabel
+  CustomModelsMissingNotice
 }
 
 ///|
@@ -1321,8 +1324,10 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "Saving tests the connection; the result shows on its row."
     (Spanish, ProbeHint) =>
       "Al guardar se prueba la conexión; el resultado aparece en su fila."
-    (SimplifiedChinese, ProbeHint) => "保存后会自动测试连接，结果显示在列表里。"
-    (TraditionalChinese, ProbeHint) => "儲存後會自動測試連線，結果顯示在列表裡。"
+    (SimplifiedChinese, ProbeHint) =>
+      "保存后会自动测试连接，结果显示在列表里。"
+    (TraditionalChinese, ProbeHint) =>
+      "儲存後會自動測試連線，結果顯示在列表裡。"
     (Japanese, ProbeHint) =>
       "保存後に接続をテストし、結果は一覧の行に表示されます。"
     (English, ConnectionOk) => "Connected"
@@ -1383,5 +1388,31 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "本會話使用的模型已被刪除。請在設定中重新新增，或換一個模型。"
     (Japanese, ModelDeletedNotice) =>
       "この会話のモデルは削除されました。設定で再追加するか、別のモデルを選んでください。"
+    (English, ModelNotOnEndpointNotice) =>
+      "This chat runs a model the custom endpoint does not serve. Pick one of your saved models, or add one in Settings."
+    (Spanish, ModelNotOnEndpointNotice) =>
+      "Esta conversación usa un modelo que este endpoint personalizado no sirve. Elige uno de tus modelos guardados o añade uno en Ajustes."
+    (SimplifiedChinese, ModelNotOnEndpointNotice) =>
+      "本对话使用的模型不在此自定义端点上。请选择一个已保存的模型，或先在设置中添加。"
+    (TraditionalChinese, ModelNotOnEndpointNotice) =>
+      "本對話使用的模型不在此自訂端點上。請選擇一個已儲存的模型，或先在設定中新增。"
+    (Japanese, ModelNotOnEndpointNotice) =>
+      "この会話のモデルはこのカスタムエンドポイントでは提供されません。保存済みのモデルを選ぶか、設定で追加してください。"
+    (English, ModelNotOnEndpointLabel) => "(not served here)"
+    (Spanish, ModelNotOnEndpointLabel) => "(no disponible aquí)"
+    (SimplifiedChinese, ModelNotOnEndpointLabel) => "（此端点不提供）"
+    (TraditionalChinese, ModelNotOnEndpointLabel) => "（此端點未提供）"
+    (Japanese, ModelNotOnEndpointLabel) =>
+      "（このエンドポイントでは未対応）"
+    (English, CustomModelsMissingNotice) =>
+      "The custom endpoint has no model yet. Add one in Settings to start a chat here."
+    (Spanish, CustomModelsMissingNotice) =>
+      "El endpoint personalizado aún no tiene ningún modelo. Añade uno en Ajustes para iniciar un chat aquí."
+    (SimplifiedChinese, CustomModelsMissingNotice) =>
+      "自定义端点还没有任何模型。请先在设置里添加一个，然后开始对话。"
+    (TraditionalChinese, CustomModelsMissingNotice) =>
+      "自訂端點還沒有任何模型。請先在設定中新增一個，然後開始對話。"
+    (Japanese, CustomModelsMissingNotice) =>
+      "カスタムエンドポイントにはまだモデルがありません。設定で追加してから会話を始めてください。"
   }
 }

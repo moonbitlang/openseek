@@ -17338,6 +17338,176 @@ test "the GLM provider aligns only a fresh chat to its model family" {
 }
 
 ///|
+/// A model whose host carries two saved custom entries, with the DeepSeek
+/// provider still selected — the state the app is in before a switch.
+fn model_with_custom_entries() -> Model {
+  let entries : Array[CustomModel] = [
+    {
+      id: "gemini-4-hydrogen",
+      label: Some("Gemini 4 Hydrogen"),
+      api_url: None,
+      full_url: false,
+      has_api_key: false,
+      images: true,
+      context_window: 1_000_000,
+    },
+    {
+      id: "gemini-4-neon",
+      label: None,
+      api_url: None,
+      full_url: false,
+      has_api_key: false,
+      images: true,
+      context_window: 1_000_000,
+    },
+  ]
+  test_model().with_host_settings(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
+    { ..mirror, current: Some({ ..current, models: entries, }), }
+  })
+}
+
+///|
+/// A custom endpoint serves the models its section named: switching to it
+/// starts a fresh chat on the first saved entry, and the menu offers those
+/// entries instead of the tiers this build ships — a tier would run there with
+/// no entry saying what window the endpoint serves.
+test "switching to the custom provider starts a fresh chat on a saved entry" {
+  let dispatch = test_dispatch()
+  let model = model_with_custom_entries()
+  assert_true(model.api_provider() is Deepseek)
+  assert_true(model.active().engine_model is Deepseek(V4Pro))
+  let (_, switched) = update(
+    dispatch,
+    ProviderChanged("custom"),
+    model.with_host_endpoint(
+      custom_api_url="https://openrouter.ai/api/v1",
+      custom_key_saved=true,
+    ),
+  )
+  assert_true(switched.api_provider() is Custom)
+  assert_true(switched.default_model is Custom("gemini-4-hydrogen"))
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen"))
+  let chip = switched.openseek_model_chip(switched.active())
+  assert_eq(chip.groups[0].options.map(option => option.label), [
+    "Gemini 4 Hydrogen", "gemini-4-neon",
+  ])
+}
+
+///|
+/// A chat that already has a transcript keeps the model it ran on — a provider
+/// switch never rewrites what a conversation is — and the menu keeps that row
+/// visible beside the entries, so the chip never names a model it cannot show.
+test "switching to the custom provider leaves a begun chat's model alone" {
+  let dispatch = test_dispatch()
+  let model = model_with_custom_entries().replace_conversation(
+    running_conversation(),
+  )
+  let (_, switched) = update(
+    dispatch,
+    ProviderChanged("custom"),
+    model.with_host_endpoint(
+      custom_api_url="https://openrouter.ai/api/v1",
+      custom_key_saved=true,
+    ),
+  )
+  assert_true(switched.api_provider() is Custom)
+  assert_true(switched.active().engine_model is Deepseek(V4Pro))
+  let chip = switched.openseek_model_chip(switched.active())
+  assert_eq(chip.groups[0].options.map(option => option.label), [
+    "Gemini 4 Hydrogen", "gemini-4-neon", "DeepSeek Pro (not served here)",
+  ])
+}
+
+///|
+/// Keeping a model the endpoint does not serve visible is not an offer to run
+/// it: the composer says so, and Send stays out of reach until an entry is
+/// picked or the provider changes back.
+test "a model the custom endpoint does not serve cannot be sent with" {
+  let stale = model_with_custom_entries()
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://openrouter.ai/api/v1",
+      custom_key_saved=true,
+    )
+    .replace_conversation({
+      ..test_conversation(),
+      engine_model: Deepseek(V4Pro),
+    })
+  let input = stale.composer_input()
+  guard input.presentation.primary_action is Send(available~) else {
+    fail("an idle conversation offers Send")
+  }
+  assert_false(available)
+  assert_true(
+    input.presentation.context.any(component => {
+      component is @composer.ApiSetupNotice(text~) &&
+      text.contains("does not serve")
+    }),
+  )
+}
+
+///|
+/// The other direction of the same rule: an entry rides the custom endpoint's
+/// URL, so on a provider family it stays visible for the chat that ran it and
+/// stops being runnable — while a fresh chat moves to that provider's own model.
+test "switching away from the custom provider stops an entry from running" {
+  let dispatch = test_dispatch()
+  let on_entry = model_with_custom_entries()
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://openrouter.ai/api/v1",
+      custom_key_saved=true,
+    )
+    .replace_conversation({
+      ..running_conversation(),
+      engine_model: Custom("gemini-4-hydrogen"),
+    })
+  let (_, switched) = update(dispatch, ProviderChanged("deepseek"), on_entry)
+  assert_true(switched.api_provider() is Deepseek)
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen"))
+  let chip = switched.openseek_model_chip(switched.active())
+  assert_eq(chip.groups[0].options.map(option => option.label), [
+    "DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Hydrogen (not served here)",
+  ])
+  // A fresh chat has no history to protect, so it moves to the family's model
+  // instead of starting on one the provider cannot run.
+  let (_, aligned) = update(
+    dispatch,
+    ProviderChanged("deepseek"),
+    model_with_custom_entries().replace_conversation({
+      ..test_conversation(),
+      engine_model: Custom("gemini-4-hydrogen"),
+    }),
+  )
+  assert_true(aligned.active().engine_model is Deepseek(V4Flash))
+}
+
+///|
+/// A custom endpoint with no entry has nothing to run, and must not fall back to
+/// a tier this build ships: the composer says to add one, and offers neither a
+/// model menu nor Send.
+test "a custom endpoint with no saved model asks for one" {
+  let empty = test_model().with_host_endpoint(
+    provider=Custom,
+    custom_api_url="https://openrouter.ai/api/v1",
+    custom_key_saved=true,
+  )
+  let input = empty.composer_input()
+  guard input.presentation.primary_action is Send(available~) else {
+    fail("an idle conversation offers Send")
+  }
+  assert_false(available)
+  assert_true(
+    input.presentation.context.any(component => {
+      component is @composer.ApiSetupNotice(text~) &&
+      text.contains("no model yet")
+    }),
+  )
+  assert_true(empty.openseek_model_chip(empty.active()).disabled)
+}
+
+///|
 test "a dismissal survives the mirror reset a reconnect performs" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(

@@ -34,7 +34,6 @@ import {
 
 import {
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/env",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/agent_tool/job_wait",

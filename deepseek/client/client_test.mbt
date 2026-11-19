@@ -32,10 +32,7 @@ test "client context window follows the launcher, then the model table" {
   // A model this build does not ship, as the desktop host saves it: the entry's
   // own window travels with the run and wins over the table.
   assert_eq(
-    @client.Client(
-      api_key="test-key",
-      model=Custom("gemini-4-hydrogen"),
-    ).context_window(),
+    @client.Client(api_key="test-key", model=Custom("gemini-4-hydrogen")).context_window(),
     1_000_000,
   )
   assert_eq(

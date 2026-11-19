@@ -1,26 +1,20 @@
 ///|
-/// The launcher's window arrives as an environment variable, so the one place a
-/// run builds its clients reads it without every caller threading it through.
-/// Only a positive integer counts: anything else leaves the build's table for
-/// the model in charge rather than making the run plan against nonsense.
-test "the launcher's context window is read from the environment" {
-  let previous = @env.get_env_var("OPENSEEK_CONTEXT_WINDOW")
-  defer (match previous {
-    Some(value) => @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", value)
-    None => @env.unset_env_var("OPENSEEK_CONTEXT_WINDOW")
-  })
-  @env.unset_env_var("OPENSEEK_CONTEXT_WINDOW")
-  assert_true(configured_context_window() is None)
-  @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", " 1000000 ")
-  assert_eq(configured_context_window(), Some(1_000_000))
-  @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", "131072")
-  assert_eq(configured_context_window(), Some(131_072))
-  @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", "")
-  assert_true(configured_context_window() is None)
-  @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", "0")
-  assert_true(configured_context_window() is None)
-  @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", "-4096")
-  assert_true(configured_context_window() is None)
-  @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", "plenty")
-  assert_true(configured_context_window() is None)
+/// The launcher's window arrives as the raw `OPENSEEK_CONTEXT_WINDOW` value, and
+/// the parse is a pure function of it: only a positive integer counts, so
+/// anything else leaves the build's table for the model in charge rather than
+/// making the run plan against nonsense.
+///
+/// The variable itself is deliberately not set here. Async tests in one package
+/// run concurrently, so a test that exported a window would decide what every
+/// other test's turn plans against: the oversized-result test stopped executing
+/// its tool call that way, because 100,000 tokens plus the batch's reserve no
+/// longer fitted the window its neighbour had set.
+test "the launcher's context window is parsed from its raw value" {
+  assert_true(parse_context_window(None) is None)
+  assert_eq(parse_context_window(Some(" 1000000 ")), Some(1_000_000))
+  assert_eq(parse_context_window(Some("131072")), Some(131_072))
+  assert_true(parse_context_window(Some("")) is None)
+  assert_true(parse_context_window(Some("0")) is None)
+  assert_true(parse_context_window(Some("-4096")) is None)
+  assert_true(parse_context_window(Some("plenty")) is None)
 }

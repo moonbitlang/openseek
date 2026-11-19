@@ -1613,6 +1613,10 @@ async test "an oversized tool result is clamped at the loop" {
       scope=AgentTaskScope(group),
       api_key="test-key",
       model=Deepseek(V4Flash),
+      // This test asserts the tool call RUNS and is clamped, so it states the
+      // window it plans against instead of letting the ambient environment
+      // decide whether the call fits.
+      context_window=1_000_000,
       session~,
       content=Content([Text("flood me")]),
       append_item=(session, item) => session.append(item),
@@ -1637,17 +1641,17 @@ async test "an oversized tool result is clamped at the loop" {
 ///|
 /// The window the turn plans against is the launcher's, not the build's table:
 /// a model this build does not ship is saved with the endpoint's own number,
-/// and the host exports it for the run. 120_000 tokens is 12% of the 1M this
-/// build assumes for an unknown id — no pressure at all — and 92% of the 128K
-/// the launcher says, which must yield.
-async test "the launcher's context window decides the ceiling" {
+/// and the host states that number for the run. 120_000 tokens is 12% of the 1M
+/// this build assumes for an unknown id — no pressure at all — and 92% of the
+/// 128K the launcher states, which must yield.
+///
+/// The window is stated here rather than exported as `OPENSEEK_CONTEXT_WINDOW`:
+/// async tests in one package run concurrently, so a test that set the process
+/// variable would decide what every other test's turn plans against. The
+/// desktop engine's own test covers the host exporting it, and the parse of the
+/// variable is covered on its own in `context_window_wbtest.mbt`.
+async test "a stated context window decides the ceiling" {
   @async.with_task_group() <| group => {
-    let previous = @env.get_env_var("OPENSEEK_CONTEXT_WINDOW")
-    defer (match previous {
-      Some(value) => @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", value)
-      None => @env.unset_env_var("OPENSEEK_CONTEXT_WINDOW")
-    })
-    @env.set_env_var("OPENSEEK_CONTEXT_WINDOW", "131072")
     let checkpoint_requests : Array[Json] = []
     let mut main_step = 0
     let handle = request => {
@@ -1671,6 +1675,7 @@ async test "the launcher's context window decides the ceiling" {
       scope=AgentTaskScope(group),
       api_key="test-key",
       model=Custom("gemini-4-hydrogen"),
+      context_window=131_072,
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
