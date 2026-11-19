@@ -12,12 +12,11 @@ calls remain available when needed. MCP servers' tools are reachable only
 from scripts, through the SDK's `mcp` package. `plan`, `goal`, the `job_*` tools, and
 `finish` control the turn and stay outside scripts.
 
-Everything else is a script, in one of three forms:
+Run a custom script in one of three forms:
 
 - `source` only :  one-shot , run once; nothing is saved.
 - `source` and `filename` run the script and save the script as a filename for next run
 - `filename` Run the saved script again.
-- `filename="@builtin/..."` builtin script for convenience, for example, `@builtin/read.mbtx` for file reading
 
 Save task-specific helper scripts in the session scratch directory shown in
 Environment; substitute its absolute path for `<session-scratch-directory>` below.
@@ -32,27 +31,43 @@ Ordinary paths resolve from the workspace root; `cwd` controls execution only.
 Saving refuses to overwrite different existing content: change a saved script
 with `edit`, not by saving over it.
 
-`mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
-built into OpenSeek; its source is readable under
-`<bundled-resources>/workflow/` when installed. Namespaced
-scripts are read-only: never supply `source` with `@builtin/`. Only
-`@builtin/` is supported today; other namespaces are reserved. Use
-`./path/check.mbtx` for a literal workspace path.
+### Bundled scripts
 
-### Reading files: `@builtin/read.mbtx`
+Set `filename="@builtin/<name>.mbtx"` to run a workflow built into OpenSeek.
+Supply its arguments in `args` and omit `source`. `cwd` defaults to the
+workspace. Read `<bundled-resources>/workflow/README.md` for the
+[workflow reference](../workflow/README.md). The script sources are in the
+same directory.
 
-The builtin call you will make most. Read known files together immediately;
-`path:start:end` selects inclusive, 1-based lines, and its tool description
-gives the arguments. One call takes any number of selectors and returns them
-in order, each under its own heading, so batch every path you already know
-instead of calling once per file:
+#### Read files
 
-mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])
+```text
+mbtx(description="Read the module and entry point", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200"])
+```
 
-Use the returned text and file-status footers directly
-to do the task, including empty/missing-file checks. List directories only to
-discover unknown paths. Reread only when needed content is missing,
-truncated, or changed.
+Results appear in the order requested. Successful reads have a status footer
+that indicates empty files or truncated output. A file error appears under
+that file's heading and marks the call as failed. The other files still return.
+
+#### Search text or list files
+
+`@builtin/rg.mbtx` passes `args` to `cli/rg` unchanged. Use ripgrep flags and
+regex syntax. Include an explicit search path. For `--files`, pass the flag
+followed by the path.
+
+```text
+mbtx(description="Find parser definitions", filename="@builtin/rg.mbtx", args=["fn parse", "-g", "*.mbt", "."])
+mbtx(description="List workspace files", filename="@builtin/rg.mbtx", args=["--files", "."])
+```
+
+#### Check a MoonBit project
+
+`@builtin/check.mbtx` runs `moon check`. Supply only options and package paths
+in `args`. Set `cwd` to check a module in a subdirectory.
+
+```text
+mbtx(description="Check the workspace", filename="@builtin/check.mbtx", args=["--diagnostic-limit", "30"])
+```
 
 ### Command execution
 

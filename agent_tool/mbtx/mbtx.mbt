@@ -1774,34 +1774,6 @@ fn description(
     #|Missing parent directories are created. A saved script is never overwritten
     #|with different content; change it with the edit tool. Scripts compile to
     #|wasm and run under moonrun.
-    #|
-    #|## Bundled scripts
-    #|
-    #|Filenames under `@builtin/` run read-only scripts built into OpenSeek: pass
-    #|`filename` and `args`, never `source`. Every other filename is a workspace
-    #|path, so `./@builtin/check.mbtx` is a workspace file. Args `["--help"]`
-    #|print a script's usage.
-    #|
-    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g. args
-    #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
-    #|  `path:start` or `path:start:end` (inclusive, 1-based). Each line prints as
-    #|  `N |text`: the line, indentation included, starts right after `|`, with
-    #|  no separator space. Output is bounded: follow truncated or skipped files
-    #|  with narrower reads. A failing file fails the call; the others still return.
-    #|- `@builtin/rg.mbtx` searches text. `args` go to cli/rg (ripgrep ported to
-    #|  MoonBit) unchanged, so they are rg flags and regex, not POSIX grep (`-E`
-    #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
-    #|  `["fn parse", "-g", "*.mbt", "."]`. Output is `path:line:text`; no match
-    #|  exits 0 with a note.
-    #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
-    #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
-    #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
-    #|  `@builtin/check-json.mbtx` (moon check --output-json).
-    #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
-    #|  args `["PR", "--repo", "OWNER/REPO", "--once"]` take one snapshot.
-    #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
-    #|  deprecation warning whose message names a bare replacement, one guarded
-    #|  edit per site, and lists the rest; `--dry-run` only plans.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.
