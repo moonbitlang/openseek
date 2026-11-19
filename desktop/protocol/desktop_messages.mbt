@@ -1609,6 +1609,9 @@ pub(all) struct ModelStatus {
   full_url : Bool
   has_api_key : Bool
   images : Bool
+  // The window the run plans against; the edit form re-opens with it, and an
+  // endpoint that serves less than the default is lowered here.
+  context_window : Int32
 }
 
 ///|
@@ -1621,6 +1624,7 @@ pub impl FromJson for ModelStatus with fn from_json(json, path) {
     full_url: object.required_bool("full_url"),
     has_api_key: object.required_bool("has_api_key"),
     images: object.required_bool("images"),
+    context_window: object.required_int("context_window"),
   }
 }
 
@@ -1631,6 +1635,7 @@ pub impl ToJson for ModelStatus with fn to_json(self) {
     "full_url": Json(self.full_url),
     "has_api_key": Json(self.has_api_key),
     "images": Json(self.images),
+    "context_window": Json(self.context_window),
   }
   if self.label is Some(value) {
     fields["label"] = Json(value)

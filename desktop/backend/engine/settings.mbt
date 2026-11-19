@@ -190,6 +190,7 @@ fn settings_status_payload(
     full_url: entry.full_url,
     has_api_key: entry.api_key is Some(_),
     images: entry.images,
+    context_window: entry.context_window,
   })
   {
     revision,
@@ -492,11 +493,17 @@ pub async fn pattern_repair_environment(
   model~ : String,
 ) -> PatternRepairEnvironment {
   let settings = manager.settings_snapshot() catch { _ => return Unavailable }
-  let (route, key_env, _) = resolve_model_route(settings, model) catch {
+  let (route, key_env, _, context_window) = resolve_model_route(settings, model) catch {
     EngineError(message) => return Configuration(message)
   }
   let env = @sys.get_env_vars()
   env[key_env] = route.api_key
+  // A repair child runs the same model as the run that asked for it, so it
+  // plans against the same window: a user entry's own, or the engine's table.
+  match context_window {
+    Some(window) => env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
+    None => env.remove("OPENSEEK_CONTEXT_WINDOW")
+  }
   match route.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
@@ -1127,10 +1134,9 @@ async test "pattern repair uses provider credentials and leaves run options to a
         },
       }),
     })
-    let previous = ["OPENSEEK_MODEL", "OPENSEEK_THINKING", "OPENSEEK_MAX_STEPS"].map(name => {
-        (name, @sys.get_env_var(name))
-      },
-    )
+    let previous = [
+      "OPENSEEK_MODEL", "OPENSEEK_THINKING", "OPENSEEK_MAX_STEPS", "OPENSEEK_CONTEXT_WINDOW",
+    ].map(name => (name, @sys.get_env_var(name)))
     defer (for (name, value) in previous {
       match value {
         Some(value) => @sys.set_env_var(name, value)
@@ -1140,6 +1146,7 @@ async test "pattern repair uses provider credentials and leaves run options to a
     @sys.set_env_var("OPENSEEK_MODEL", "deepseek-v4-pro")
     @sys.set_env_var("OPENSEEK_THINKING", "no")
     @sys.set_env_var("OPENSEEK_MAX_STEPS", "4")
+    @sys.set_env_var("OPENSEEK_CONTEXT_WINDOW", "4096")
     let env = pattern_repair_environment(manager, model="glm-5.3")
     match env {
       Ready(env) => {
@@ -1151,8 +1158,51 @@ async test "pattern repair uses provider credentials and leaves run options to a
         assert_eq(env.get("OPENSEEK_MODEL"), None)
         assert_eq(env.get("OPENSEEK_THINKING"), None)
         assert_eq(env.get("OPENSEEK_MAX_STEPS"), None)
+        // A built-in model keeps the engine's table: a window the parent
+        // shell exported must not leak into its run.
+        assert_eq(env.get("OPENSEEK_CONTEXT_WINDOW"), None)
       }
       _ => ()
+    }
+  })
+}
+
+///|
+/// A user entry's own window reaches the child a short-lived host operation
+/// spawns, so a repair run plans against the same window as the run that asked
+/// for it — not the engine's fallback for a model it does not ship.
+async test "pattern repair carries a user entry's context window" {
+  with_settings_dir((_dir, manager) => {
+    let _ = update_settings(
+      manager,
+      {
+        provider: Some("custom"),
+        providers: Some({
+          "custom": {
+            api_url: Some("https://proxy.example/chat/completions"),
+            api_key: Some("repair-key"),
+          },
+        }),
+      },
+      models=[
+        {
+          id: "gemini-4-hydrogen",
+          label: None,
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: None,
+          context_window: Some(131_072),
+        },
+      ],
+    )
+    let env = pattern_repair_environment(manager, model="gemini-4-hydrogen")
+    match env {
+      Ready(env) => {
+        assert_eq(env.get("OPENSEEK_CONTEXT_WINDOW"), Some("131072"))
+        assert_eq(env.get(@deepseek.CustomApiKeyEnv), Some("repair-key"))
+      }
+      _ => fail("expected a ready pattern-repair environment")
     }
   })
 }

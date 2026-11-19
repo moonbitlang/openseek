@@ -28,6 +28,9 @@ priv struct RunConfig {
   // Whether this endpoint accepts image parts, resolved from the model entry
   // (or the built-in tier's own rule) when the config is built.
   images : Bool
+  // The window the run plans against when the model is a user entry that names
+  // its own; None leaves the engine's table for the model in charge.
+  context_window : Int32?
   thinking : @protocol.Thinking
   // Complete base system prompt used only when creating a new session.
   system_prompt : String?
@@ -92,7 +95,7 @@ fn configured_api_key(
 fn resolve_model_route(
   settings : EngineSettings,
   model : String,
-) -> (ResolvedEndpoint, String, Bool) raise EngineError {
+) -> (ResolvedEndpoint, String, Bool, Int32?) raise EngineError {
   match settings.models.search_by(entry => entry.id == model) {
     Some(index) => {
       let entry = settings.models[index]
@@ -114,6 +117,8 @@ fn resolve_model_route(
         @deepseek.CustomApiKeyEnv,
         // A user entry always accepts images; the stored flag is legacy.
         true,
+        // The entry's own window, which the engine's table cannot know.
+        Some(entry.context_window),
       )
     }
     None => {
@@ -122,6 +127,7 @@ fn resolve_model_route(
         slot,
         key_env_for(settings.provider, model),
         builtin_supports_images(model, slot.api_url),
+        None,
       )
     }
   }
@@ -296,7 +302,9 @@ async fn serve_config(
   // that entry's key; a built-in keeps its provider slot. Resolved before the
   // workspace so a misconfigured endpoint reports itself first, as it always
   // has.
-  let (route, key_env, images) = resolve_model_route(settings, model)
+  let (route, key_env, images, context_window) = resolve_model_route(
+    settings, model,
+  )
   // A workspace run happens in the project directory itself, with the
   // session's durable record in the in-project store. Only registered
   // workspaces qualify — the registry, not the payload, decides which
@@ -331,6 +339,7 @@ async fn serve_config(
     api_url: route.api_url,
     model,
     images,
+    context_window,
     thinking: RunConfig::configured_thinking(thinking),
     system_prompt,
     // Absent is ask: what every request meant before the field existed.
@@ -385,6 +394,7 @@ test "a different endpoint cannot reuse a live engine process" {
     api_url: None,
     model: "deepseek-v4-pro",
     images: false,
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1000,

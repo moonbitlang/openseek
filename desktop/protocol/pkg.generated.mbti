@@ -2600,6 +2600,7 @@ pub(all) struct ModelStatus {
   full_url : Bool
   has_api_key : Bool
   images : Bool
+  context_window : Int32
 }
 pub impl @json.FromJson for ModelStatus
 pub impl @json.ToJson for ModelStatus

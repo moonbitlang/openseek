@@ -111,6 +111,10 @@ pub struct Client {
   retry_attempts : Int32
   retry_backoff_ms : Int32
   idle_timeout_ms : Int32
+  // The window this endpoint actually serves, when the launcher knows it better
+  // than the build's table for `model` (a model the user configured carries its
+  // own). `None` means the table answers.
+  context_window : Int32?
 }
 
 ///|
@@ -148,6 +152,7 @@ pub fn Client::Client(
   retry_attempts~ : Int32 = 5,
   retry_backoff_ms~ : Int32 = 500,
   idle_timeout_ms~ : Int32 = 120_000,
+  context_window? : Int32,
 ) -> Client {
   {
     api_key,
@@ -157,7 +162,20 @@ pub fn Client::Client(
     retry_attempts,
     retry_backoff_ms,
     idle_timeout_ms,
+    context_window,
   }
+}
+
+///|
+/// The context window a run on this client should plan against: the launcher's
+/// number when it has one, otherwise the build's table for `model`.
+///
+/// The agent loop's ceilings are percentages of this value, so it decides when
+/// a turn yields to a checkpoint summary. A number that is too small compacts
+/// early (a user-configured model whose endpoint serves more than the build
+/// assumes); too large lets a request overflow the endpoint's real window.
+pub fn Client::context_window(self : Client) -> Int32 {
+  self.context_window.unwrap_or(self.model.context_window())
 }
 
 ///|

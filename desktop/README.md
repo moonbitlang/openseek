@@ -393,6 +393,26 @@ without changing the selected `provider`. Replies and broadcasts return
 `providers[name]` with `api_url` and `has_api_key`; credentials are never
 returned. `has_api_key` includes the official provider's environment fallback.
 
+`settings.set` also carries the user's own model entries: `models` upserts the
+entries it names (keyed by id) and `removed_models` drops the ids it names, so
+editing one entry never touches another. `settings.status` returns the stored
+entries in saved order, each with its id, display name, endpoint, full-URL
+flag, image answer, key presence, and context window.
+
+A custom entry names its own context window, because no table in the host can
+know an arbitrary endpoint's: leaving the field blank uses the 1,000,000-token
+default and the field can lower it (1,024 to 10,000,000). The agent plans its
+context ceilings against that number, so an endpoint serving less compacts at
+the right point instead of being driven past its limit. The host exports the
+entry's window to every run it spawns for that model, and a built-in model
+keeps the engine's own table for its family.
+
+Saving a custom model writes it and closes the editor first; the connection test
+runs afterwards, so its verdict lands on the entry's row: `Testing connection`,
+then `Connected` or the endpoint's own reason. A failed test never undoes the
+save, because the endpoint may sit behind a proxy the probe cannot use, and the
+reason stays on the row where editing it is one click away.
+
 Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
 ending in `/v<number>` (with an optional trailing slash) receive
 `/chat/completions`; other paths remain complete endpoints. Query parameters

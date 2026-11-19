@@ -58,9 +58,37 @@ fn custom_model_entry_row(
     0 => @settings.text(locale, CustomModelUnused)
     used => @settings.text(locale, CustomModelInUse(used))
   }
+  // The connection test runs after the save, so its verdict is the row's: a user
+  // who looked away still sees whether the endpoint answered.
+  let probe : Array[@html.Html] = match model.custom_model_probe.get(entry.id) {
+    Some(Probing) =>
+      [
+        @html.span(
+          class="form-row-status",
+          @settings.text(locale, TestingConnection) + "…",
+        ),
+      ]
+    Some(Probed(ok~, detail~)) =>
+      [
+        @html.span(
+          class=if ok {
+            "form-row-status success"
+          } else {
+            "form-row-status danger"
+          },
+          if ok {
+            "✓ " + @settings.text(locale, ConnectionOk)
+          } else {
+            "✗ \{detail}"
+          },
+        ),
+      ]
+    None => []
+  }
   @ui.form_row(
     entry.display_name(),
     [
+      ..probe,
       @html.button(
         class="button secondary compact",
         type_="button",
@@ -156,31 +184,6 @@ fn custom_model_editor_rows(
         .data_set("focus-owner", ""),
     )
   }
-  let probe_line : Array[@html.Html] = match draft.probe {
-    NotProbed => []
-    Probing =>
-      [
-        @html.span(
-          class="form-row-status",
-          @settings.text(locale, TestingConnection) + "…",
-        ),
-      ]
-    Probed(ok~, detail~) =>
-      [
-        @html.span(
-          class=if ok {
-            "form-row-status success"
-          } else {
-            "form-row-status danger"
-          },
-          if ok {
-            "✓ \{detail}"
-          } else {
-            "✗ \{detail}"
-          },
-        ),
-      ]
-  }
   [
     @ui.form_row(
       @settings.text(locale, ModelId),
@@ -207,29 +210,43 @@ fn custom_model_editor_rows(
       ],
       desc=@settings.text(locale, ModelNameHint),
     ),
-    // The hint sits directly left of the compact save button; the probe verdict
-    // follows the buttons, so one press reports the endpoint and writes the
-    // entry.
-    @html.div(
-      class="form-row custom-model-save-row",
+    // The window the run plans against. The form states it because no table
+    // here can know an arbitrary endpoint's, and the hint doubles as the error
+    // text for a value the host would not store.
+    @ui.form_row(
+      @settings.text(locale, ModelContextWindow),
       [
-        @html.span(class="form-row-status", @settings.text(locale, ProbeHint)),
-        @html.button(
-          class="button primary compact",
-          type_="button",
-          disabled=!draft.can_submit() || draft.probe is Probing,
-          on_click=dispatch(CustomModelSubmit),
-          @settings.text(locale, SaveModel),
+        field(
+          draft.window,
+          "1000000",
+          ModelContextWindow,
+          dispatch.map(value => CustomModelWindowChanged(value)),
         ),
-        @html.button(
-          class="button secondary compact",
-          type_="button",
-          disabled=draft.probe is Probing,
-          on_click=dispatch(CustomModelCancel),
-          @settings.text(locale, Cancel),
-        ),
-        ..probe_line,
       ],
+      desc=if draft.window_ok() {
+        @settings.text(locale, ModelContextWindowHint)
+      } else {
+        @settings.text(locale, ModelContextWindowInvalid)
+      },
     ),
+    // The hint sits directly left of the compact save button. Saving writes the
+    // entry and closes the editor; the connection test runs after it, and its
+    // verdict appears on the row.
+    @html.div(class="form-row custom-model-save-row", [
+      @html.span(class="form-row-status", @settings.text(locale, ProbeHint)),
+      @html.button(
+        class="button primary compact",
+        type_="button",
+        disabled=!draft.can_submit(),
+        on_click=dispatch(CustomModelSubmit),
+        @settings.text(locale, SaveModel),
+      ),
+      @html.button(
+        class="button secondary compact",
+        type_="button",
+        on_click=dispatch(CustomModelCancel),
+        @settings.text(locale, Cancel),
+      ),
+    ]),
   ]
 }

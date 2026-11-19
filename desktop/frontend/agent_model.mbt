@@ -342,6 +342,7 @@ test "the model menu lists saved entries under their own names" {
       full_url: false,
       has_api_key: true,
       images: false,
+      context_window: 1_000_000,
     },
     {
       id: "o3-mini",
@@ -350,6 +351,7 @@ test "the model menu lists saved entries under their own names" {
       full_url: false,
       has_api_key: true,
       images: false,
+      context_window: 1_000_000,
     },
   ]
   let group = openseek_model_group(Deepseek, Deepseek(V4Flash), saved)

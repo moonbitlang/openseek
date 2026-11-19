@@ -159,12 +159,16 @@ pub(all) enum Message {
   ModelIdHint
   ModelName
   ModelNameHint
+  ModelContextWindow
+  ModelContextWindowHint
+  ModelContextWindowInvalid
   ModelFullUrl
   ModelFullUrlHint
   AddModel
   SaveModel
   ResetForm
   TestingConnection
+  ConnectionOk
   ProbeHint
   EditModel
   DeleteModel
@@ -1253,6 +1257,31 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "在模型列表中顯示的名稱，未設定時預設顯示 Model ID。"
     (Japanese, ModelNameHint) =>
       "モデル一覧に表示される名前です。未設定の場合は Model ID を表示します。"
+    (English, ModelContextWindow) => "Context window"
+    (Spanish, ModelContextWindow) => "Ventana de contexto"
+    (SimplifiedChinese, ModelContextWindow) => "上下文窗口"
+    (TraditionalChinese, ModelContextWindow) => "上下文視窗"
+    (Japanese, ModelContextWindow) => "コンテキストウィンドウ"
+    (English, ModelContextWindowHint) =>
+      "Tokens the model accepts in one request. Leave it blank for the default of 1,000,000; lower it for an endpoint that serves less."
+    (Spanish, ModelContextWindowHint) =>
+      "Tokens que el modelo acepta en una solicitud. Déjalo vacío para el valor predeterminado de 1.000.000; redúcelo si el endpoint admite menos."
+    (SimplifiedChinese, ModelContextWindowHint) =>
+      "模型单次请求可接受的 token 数。留空则用默认 1,000,000；端点更小就调低。"
+    (TraditionalChinese, ModelContextWindowHint) =>
+      "模型單次請求可接受的 token 數。留空則用預設 1,000,000；端點更小就調低。"
+    (Japanese, ModelContextWindowHint) =>
+      "モデルが1回のリクエストで受け付けるトークン数。空欄なら既定の 1,000,000。エンドポイントが小さい場合は下げてください。"
+    (English, ModelContextWindowInvalid) =>
+      "Enter a whole number of tokens between 1,024 and 10,000,000."
+    (Spanish, ModelContextWindowInvalid) =>
+      "Introduce un número entero de tokens entre 1.024 y 10.000.000."
+    (SimplifiedChinese, ModelContextWindowInvalid) =>
+      "请输入 1,024 到 10,000,000 之间的整数 token 数。"
+    (TraditionalChinese, ModelContextWindowInvalid) =>
+      "請輸入 1,024 到 10,000,000 之間的整數 token 數。"
+    (Japanese, ModelContextWindowInvalid) =>
+      "1,024〜10,000,000 の整数を入力してください。"
     (English, ModelFullUrl) => "Complete URL"
     (Spanish, ModelFullUrl) => "URL completa"
     (SimplifiedChinese, ModelFullUrl) => "完整 URL"
@@ -1288,12 +1317,19 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, TestingConnection) => "正在测试连接"
     (TraditionalChinese, TestingConnection) => "正在測試連線"
     (Japanese, TestingConnection) => "接続をテストしています"
-    (English, ProbeHint) => "Saving will automatically test the connection."
+    (English, ProbeHint) =>
+      "Saving tests the connection; the result shows on its row."
     (Spanish, ProbeHint) =>
-      "Al guardar se probará la conexión automáticamente."
-    (SimplifiedChinese, ProbeHint) => "保存后会自动测试连接。"
-    (TraditionalChinese, ProbeHint) => "儲存後會自動測試連線。"
-    (Japanese, ProbeHint) => "保存後に接続を自動テストします。"
+      "Al guardar se prueba la conexión; el resultado aparece en su fila."
+    (SimplifiedChinese, ProbeHint) => "保存后会自动测试连接，结果显示在列表里。"
+    (TraditionalChinese, ProbeHint) => "儲存後會自動測試連線，結果顯示在列表裡。"
+    (Japanese, ProbeHint) =>
+      "保存後に接続をテストし、結果は一覧の行に表示されます。"
+    (English, ConnectionOk) => "Connected"
+    (Spanish, ConnectionOk) => "Conectado"
+    (SimplifiedChinese, ConnectionOk) => "连接正常"
+    (TraditionalChinese, ConnectionOk) => "連線正常"
+    (Japanese, ConnectionOk) => "接続済み"
     (English, EditModel) => "Edit"
     (Spanish, EditModel) => "Editar"
     (SimplifiedChinese, EditModel) => "编辑"

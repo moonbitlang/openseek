@@ -101,11 +101,12 @@ pub fn Model::parse(input : String) -> Model raise {
 }
 
 ///|
-/// The context window assumed for a `Custom` model. The host files the same
-/// number as the default for a user entry it was not told one for, so the two
-/// agree; an entry that names its own window is not yet forwarded to the
-/// engine.
-const CustomModelContextWindow : Int32 = 131_072
+/// The context window assumed for a model this build does not ship. The
+/// current generation of frontier models serves 1M (Gemini 4, DeepSeek, GLM),
+/// so that is what an unknown id gets; an endpoint that serves less is lowered
+/// per entry in Settings, and the host exports the entry's number so this
+/// value is only the fallback for a caller that has nothing better.
+const CustomModelContextWindow : Int32 = 1_000_000
 
 ///|
 /// The environment variable that carries a custom model's API key. A custom
@@ -140,8 +141,8 @@ pub fn Model::context_window(self : Model) -> Int32 {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
     Glm(G53 | G53Flash) => 1_000_000
-    // A user entry's own window is not forwarded yet; this is the same
-    // conservative default the host records for one.
+    // A model this build does not ship: the current generation's 1M, unless
+    // the launcher knows the endpoint's own window and passes it in.
     Custom(_) => CustomModelContextWindow
   }
 }

@@ -1454,6 +1454,14 @@ async fn engine_process_env(
   env["OPENSEEK_MODEL"] = config.model
   env["OPENSEEK_THINKING"] = config.thinking.wire()
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
+  // A user entry's own window travels with the run: no table in the engine can
+  // know an arbitrary endpoint's, and a value the parent shell exported must
+  // not leak into a built-in run (whose table is right).
+  if config.context_window is Some(window) {
+    env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
+  } else {
+    env.remove("OPENSEEK_CONTEXT_WINDOW")
+  }
   // The desktop host owns the Skills panel's library writes, so every serve
   // engine gets the same resolved global library instead of falling back to
   // whatever HOME means inside that engine host.
@@ -3040,6 +3048,7 @@ async test "native engine env has one authoritative bundled moon path" {
     api_url: None,
     model: "m",
     images: false,
+    context_window: None,
     thinking: ThinkingHigh,
     approval: ApprovalAsk,
     max_steps: 1,
@@ -3060,6 +3069,14 @@ async test "native engine env has one authoritative bundled moon path" {
     source~,
   )
   assert_eq(glm_env["GLM"], "k")
+  // A user entry's own window travels with the run; a built-in keeps the
+  // engine's table, so a value the parent shell exported must not reach it.
+  let windowed = engine_process_env(
+    { ..config, model: "gemini-4-hydrogen", context_window: Some(131_072), },
+    Some(runtime),
+    source~,
+  )
+  assert_eq(windowed["OPENSEEK_CONTEXT_WINDOW"], "131072")
   // A host with tools grants each conversation's engine its own way in; a
   // host without them grants nothing, and does not pass on a grant this
   // process inherited from the agent of another host.
@@ -3088,6 +3105,10 @@ async test "native engine env has one authoritative bundled moon path" {
   let ungranted = engine_process_env(config, Some(runtime), source~)
   assert_true(ungranted.get(@mcp.UrlEnv) is None)
   assert_true(ungranted.get(@mcp.TokenEnv) is None)
+  @sys.set_env_var("OPENSEEK_CONTEXT_WINDOW", "4096")
+  defer @sys.unset_env_var("OPENSEEK_CONTEXT_WINDOW")
+  let builtin = engine_process_env(config, Some(runtime), source~)
+  assert_true(builtin.get("OPENSEEK_CONTEXT_WINDOW") is None)
   @debug.assert_eq(engine_process_args(config), [
     "serve", "--session=s-env", "--dir", ".", "--approval", "ask",
   ])
@@ -3243,6 +3264,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     api_url: None,
     model: "test",
     images: false,
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1,
@@ -3362,6 +3384,7 @@ fn pump_test_config(session : String) -> RunConfig {
     api_url: None,
     model: "test",
     images: false,
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1,

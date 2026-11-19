@@ -11,11 +11,21 @@
 // when a patch edits it, so a field a newer build added survives a save.
 
 ///|
-/// The context window assumed for a user entry that names none. Deliberately
-/// the conservative end of current models: an over-estimate overflows the
-/// endpoint's real window (a 400 mid-conversation), while an under-estimate
-/// only compacts earlier.
-const DefaultModelContextWindow : Int32 = 131_072
+/// The context window assumed for a user entry that names none: the current
+/// generation of frontier models serves 1M, so that is what a new entry starts
+/// from. An endpoint that serves less is lowered per entry, because an
+/// over-estimate overflows the endpoint's real window (a 400 mid-conversation)
+/// while an under-estimate only compacts earlier.
+const DefaultModelContextWindow : Int32 = 1_000_000
+
+///|
+/// The range a saved entry may name. A typo must not make a run plan against a
+/// window no endpoint serves: far too small compacts on the first turn, far too
+/// large lets a request overflow.
+const MinModelContextWindow : Int32 = 1_024
+
+///|
+const MaxModelContextWindow : Int32 = 10_000_000
 
 ///|
 /// The family of a user entry: an OpenAI-compatible endpoint that carries no
@@ -404,8 +414,10 @@ fn apply_model_patch(
     fields["images"] = Json(value)
   }
   if patch.context_window is Some(value) {
-    guard value > 0 else {
-      raise EngineError("a model's context window must be positive")
+    guard value >= MinModelContextWindow && value <= MaxModelContextWindow else {
+      raise EngineError(
+        "a model's context window must be between \{MinModelContextWindow} and \{MaxModelContextWindow} tokens",
+      )
     }
     fields["context_window"] = Json(value)
   }
@@ -689,4 +701,43 @@ async test "a run on a user entry rides the custom endpoint" {
     assert_true(config.images)
     assert_true(config.supports_images())
   })
+}
+
+///|
+/// One patch naming `window`, for the tests that care only about it.
+fn window_patch(window : Int32) -> @protocol.ModelPatch {
+  {
+    id: "gemini-4-hydrogen",
+    label: None,
+    api_url: None,
+    full_url: None,
+    api_key: None,
+    images: None,
+    context_window: Some(window),
+  }
+}
+
+///|
+/// The window a saved entry may name is bounded: a typo must not make a run
+/// plan against a number no endpoint serves, while anything a real endpoint
+/// serves — and the default — passes.
+test "a model's context window is bounded" {
+  match model_patch_error([], [window_patch(MinModelContextWindow - 1)], []) {
+    Some(message) => assert_true(message.contains("between"))
+    None => fail("a window below the minimum must be refused")
+  }
+  match model_patch_error([], [window_patch(MaxModelContextWindow + 1)], []) {
+    Some(message) => assert_true(message.contains("between"))
+    None => fail("a window above the maximum must be refused")
+  }
+  let at_max = apply_model_patches([], [window_patch(MaxModelContextWindow)], [])
+  assert_eq(
+    decode_model_entry(at_max[0]).unwrap().context_window,
+    MaxModelContextWindow,
+  )
+  let at_min = apply_model_patches([], [window_patch(MinModelContextWindow)], [])
+  assert_eq(
+    decode_model_entry(at_min[0]).unwrap().context_window,
+    MinModelContextWindow,
+  )
 }

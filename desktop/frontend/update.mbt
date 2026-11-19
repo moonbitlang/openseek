@@ -2334,6 +2334,7 @@ fn update_msg(
     | CustomModelEdit(_)
     | CustomModelIdChanged(_)
     | CustomModelLabelChanged(_)
+    | CustomModelWindowChanged(_)
     | CustomModelCancel
     | CustomModelProbed(..)
     | CustomModelProbeFailed(_)

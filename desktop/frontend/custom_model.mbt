@@ -13,11 +13,23 @@
 // form offers no switch and always records `images: true`.
 
 ///|
-/// What the last connection test said. `Probing` is what the form shows while
-/// the request is in flight, so a slow endpoint cannot look like a dead form.
+/// The context window a new entry starts from, and the range the form accepts.
+/// The host stores and enforces the same numbers; the form states them here so
+/// a field is checked before it is sent.
+const DefaultContextWindow : Int32 = 1_000_000
+
+///|
+const MinContextWindow : Int32 = 1_024
+
+///|
+const MaxContextWindow : Int32 = 10_000_000
+
+///|
+/// What the last connection test said about one saved entry. `Probing` shows on
+/// the row while the request is in flight, so a slow endpoint cannot look like a
+/// dead page.
 #derive(Eq)
 priv enum ProbeState {
-  NotProbed
   Probing
   Probed(ok~ : Bool, detail~ : String)
 }
@@ -31,21 +43,14 @@ priv struct CustomModelDraft {
   original : String?
   id : String
   label : String
-  probe : ProbeState
-  // Set when the Save button was pressed before the probe finished: the reply
-  // saves it, so one press both reports the endpoint and writes the entry.
-  save_after_probe : Bool
+  // The window the entry names, as typed. No table here can know an arbitrary
+  // endpoint's, so the user states it and the run plans against it.
+  window : String
 }
 
 ///|
 fn CustomModelDraft::empty() -> CustomModelDraft {
-  {
-    original: None,
-    id: "",
-    label: "",
-    probe: NotProbed,
-    save_after_probe: false,
-  }
+  { original: None, id: "", label: "", window: "", }
 }
 
 ///|
@@ -56,15 +61,39 @@ fn CustomModelDraft::of(entry : CustomModel) -> CustomModelDraft {
     original: Some(entry.id),
     id: entry.id,
     label: entry.label.unwrap_or(""),
-    probe: NotProbed,
-    save_after_probe: false,
+    window: entry.context_window.to_string(),
   }
 }
 
 ///|
-/// Whether the Save button may be pressed: a model needs a name.
+/// The window the field names, or `None` when it names no value of its own:
+/// blank, which means the default, or a number the host would not store.
+fn CustomModelDraft::window_value(self : CustomModelDraft) -> Int32? {
+  let text = self.window.trim()
+  if text.is_empty() {
+    return None
+  }
+  let value : Int32 = @string.from_str(text) catch { _ => return None }
+  if value >= MinContextWindow && value <= MaxContextWindow {
+    Some(value)
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether the field holds something the host will store: blank, which means
+/// the default, or a number in range. A field the user filled in with anything
+/// else blocks Save, so the host never has to refuse it.
+fn CustomModelDraft::window_ok(self : CustomModelDraft) -> Bool {
+  self.window.trim().is_empty() || self.window_value() is Some(_)
+}
+
+///|
+/// Whether the Save button may be pressed: a model needs a name, and its window
+/// has to be either blank or a number the host will store.
 fn CustomModelDraft::can_submit(self : CustomModelDraft) -> Bool {
-  !self.id.trim().is_empty()
+  !self.id.trim().is_empty() && self.window_ok()
 }
 
 ///|
@@ -80,7 +109,9 @@ fn CustomModelDraft::patch(self : CustomModelDraft) -> @protocol.ModelPatch {
     api_key: None,
     // A custom entry always accepts images; the form offers no switch.
     images: Some(true),
-    context_window: None,
+    // The window the user stated, or the default when the field is blank. The
+    // stored entry always names a number, so a run never has to guess.
+    context_window: Some(self.window_value().unwrap_or(DefaultContextWindow)),
   }
 }
 
@@ -131,12 +162,15 @@ fn Model::custom_model_session_count(self : Model, id : String) -> Int32 {
 }
 
 ///|
-/// Send one draft to `settings.test` and report the verdict back as a message.
+/// Send one entry's endpoint to `settings.test` and report the verdict back,
+/// tagged with the entry it is about: the verdict shows on that entry's row,
+/// because the save that started the probe has already closed the editor.
 fn probe_custom_model(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   payload : @protocol.ModelProbePayload,
 ) -> @cmd.Cmd {
+  let id = payload.id
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
@@ -144,13 +178,18 @@ fn probe_custom_model(
       ) catch {
         error => {
           scheduler.add(
-            dispatch(CustomModelProbeFailed(@interop.bridge_error_text(error))),
+            dispatch(
+              CustomModelProbeFailed(
+                id~,
+                message=@interop.bridge_error_text(error),
+              ),
+            ),
           )
           return
         }
       }
       scheduler.add(
-        dispatch(CustomModelProbed(ok=reply.ok, detail=reply.detail)),
+        dispatch(CustomModelProbed(id~, ok=reply.ok, detail=reply.detail)),
       )
     })
     |> ignore
@@ -213,112 +252,73 @@ fn Model::update_custom_model(
           .custom_model_entry(id)
           .map(entry => CustomModelDraft::of(entry)),
           custom_model_delete: None,
+          // The badge answered "does the endpoint work", which the form the
+          // user just opened is about to re-test.
+          custom_model_probe: self.custom_model_probe.remove(id),
         },
       )
     (CustomModelIdChanged(value), Some(draft)) =>
-      (
-        @cmd.none,
-        {
-          ..self,
-          custom_model: Some({ ..draft, id: value, probe: NotProbed, }),
-        },
-      )
+      (@cmd.none, { ..self, custom_model: Some({ ..draft, id: value, }), })
     (CustomModelLabelChanged(value), Some(draft)) =>
       (@cmd.none, { ..self, custom_model: Some({ ..draft, label: value, }), })
+    (CustomModelWindowChanged(value), Some(draft)) =>
+      (@cmd.none, { ..self, custom_model: Some({ ..draft, window: value, }), })
     (CustomModelCancel, _) => (@cmd.none, { ..self, custom_model: None, })
     (CustomModelSubmit, Some(draft)) =>
       if draft.can_submit() {
+        let id = draft.id.trim().to_owned()
         let (url, key) = self.endpoint_inputs()
         (
-          probe_custom_model(dispatch, self.focused, {
-            id: draft.id.trim().to_owned(),
-            api_url: url,
-            full_url: false,
-            api_key: key,
-          }),
+          // Write first, then report: saving is the durable act, and the verdict
+          // lands on the row that the save creates. A probe that never answers
+          // therefore cannot hold the entry back.
+          @cmd.batch([
+            save_custom_model(
+              dispatch,
+              self.focused,
+              draft,
+              self.focused_connection_generation(),
+            ),
+            probe_custom_model(dispatch, self.focused, {
+              id,
+              api_url: url,
+              full_url: false,
+              api_key: key,
+            }),
+          ]),
           {
             ..self,
-            custom_model: Some({
-              ..draft,
-              probe: Probing,
-              save_after_probe: true,
-            }),
+            custom_model: None,
+            custom_model_probe: self.custom_model_probe.add(id, Probing),
           },
         )
       } else {
         (@cmd.none, self)
       }
-    (CustomModelProbed(ok~, detail~), Some(draft)) =>
-      if draft.save_after_probe {
-        (
-          save_custom_model(
-            dispatch,
-            self.focused,
-            draft,
-            self.focused_connection_generation(),
+    (CustomModelProbed(id~, ok~, detail~), _) =>
+      (
+        @cmd.none,
+        {
+          ..self,
+          custom_model_probe: self.custom_model_probe.add(
+            id,
+            Probed(ok~, detail~),
           ),
-          {
-            ..self,
-            // A passing probe closes the editor: the entry is in the list now.
-            // A failed one keeps it open so the verdict stays readable.
-            custom_model: if ok {
-              None
-            } else {
-              Some({
-                ..draft,
-                probe: Probed(ok~, detail~),
-                save_after_probe: false,
-              })
-            },
-          },
-        )
-      } else {
-        (
-          @cmd.none,
-          {
-            ..self,
-            custom_model: Some({
-              ..draft,
-              probe: Probed(ok~, detail~),
-              save_after_probe: false,
-            }),
-          },
-        )
-      }
-    (CustomModelProbeFailed(message), Some(draft)) =>
-      // An unreachable endpoint does not block the write: the user may be
-      // behind a proxy that the probe cannot use, and refusing to save would
-      // strand the form.
-      if draft.save_after_probe {
-        (
-          save_custom_model(
-            dispatch,
-            self.focused,
-            draft,
-            self.focused_connection_generation(),
+        },
+      )
+    (CustomModelProbeFailed(id~, message~), _) =>
+      // An unreachable endpoint does not undo the save: the user may sit behind
+      // a proxy the probe cannot use. The row says so, and stays editable.
+      (
+        @cmd.none,
+        {
+          ..self,
+          custom_model_probe: self.custom_model_probe.add(
+            id,
+            Probed(ok=false, detail=message),
           ),
-          {
-            ..self,
-            custom_model: Some({
-              ..draft,
-              probe: Probed(ok=false, detail=message),
-              save_after_probe: false,
-            }),
-          },
-        )
-      } else {
-        (
-          @cmd.none,
-          {
-            ..self,
-            custom_model: Some({
-              ..draft,
-              probe: Probed(ok=false, detail=message),
-              save_after_probe: false,
-            }),
-          },
-        )
-      }
+        },
+      )
     (CustomModelDeleteRequest(id), _) =>
       (@cmd.none, { ..self, custom_model_delete: Some(id), })
     (CustomModelDeleteCancelled, _) =>
@@ -347,6 +347,8 @@ fn Model::update_custom_model(
             Some({ original: Some(original), .. }) if original == id => None
             other => other
           },
+          // A deleted entry has no row left to carry its verdict.
+          custom_model_probe: self.custom_model_probe.remove(id),
         },
       )
     }
@@ -359,6 +361,10 @@ test "a draft starts as a new entry and needs an id" {
   let empty = CustomModelDraft::empty()
   assert_eq(empty.original, None)
   assert_false(empty.can_submit())
+  // A blank window means the default, so the field is optional.
+  assert_eq(empty.window, "")
+  assert_true(empty.window_ok())
+  assert_eq(empty.window_value(), None)
   let named = { ..empty, id: "gemini-4-hydrogen", }
   assert_true(named.can_submit())
   let patch = named.patch()
@@ -369,6 +375,32 @@ test "a draft starts as a new entry and needs an id" {
   // Every custom entry accepts images; the form offers nothing to choose.
   assert_eq(patch.images, Some(true))
   assert_eq(patch.id, "gemini-4-hydrogen")
+  // A blank field stores the default rather than leaving the run to guess.
+  assert_eq(patch.context_window, Some(1_000_000))
+}
+
+///|
+/// The window is the endpoint's real one, so the form accepts a blank field
+/// (the default) or a number the host would store. Anything else blocks Save
+/// rather than being sent for the host to refuse.
+test "a window the host would not store blocks saving" {
+  let draft = { ..CustomModelDraft::empty(), id: "gemini-4-hydrogen", }
+  assert_true(draft.can_submit())
+  for window in ["0", "many", "999", "10000001", "-5"] {
+    let invalid = { ..draft, window, }
+    assert_false(invalid.window_ok())
+    assert_false(invalid.can_submit())
+    assert_true(invalid.window_value() is None)
+  }
+  // An endpoint serving less than the default is the case the field exists for.
+  let lowered = { ..draft, window: "131072", }
+  assert_eq(lowered.window_value(), Some(131_072))
+  assert_true(lowered.can_submit())
+  assert_eq(lowered.patch().context_window, Some(131_072))
+  // Clearing the field again goes back to the default.
+  let cleared = { ..lowered, window: "", }
+  assert_true(cleared.can_submit())
+  assert_eq(cleared.patch().context_window, Some(1_000_000))
 }
 
 ///|
@@ -380,11 +412,14 @@ test "editing a stored entry remembers which id it came from" {
     full_url: false,
     has_api_key: true,
     images: true,
+    context_window: 131_072,
   }
   let draft = CustomModelDraft::of(entry)
   assert_eq(draft.original, Some("gemini-4-hydrogen"))
   assert_eq(draft.id, "gemini-4-hydrogen")
   assert_eq(draft.label, "Gemini 4 Hydrogen")
+  // The window re-opens as the entry stored it, not as the default.
+  assert_eq(draft.window, "131072")
   // The name falls back to the id when the user never set one.
   assert_eq(CustomModelDraft::of({ ..entry, label: None, }).label, "")
 }

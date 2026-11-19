@@ -34,6 +34,7 @@ fn HostSettings::from_status(
       full_url: status.full_url,
       has_api_key: status.has_api_key,
       images: status.images,
+      context_window: status.context_window,
     }),
     prompt_source: payload.prompt_source,
     custom_prompt: payload.custom_prompt,

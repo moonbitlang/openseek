@@ -653,6 +653,7 @@ fn follower_test_config(
     api_url: None,
     model: "test",
     images: false,
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1,

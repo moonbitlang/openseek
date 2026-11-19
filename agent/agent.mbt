@@ -195,6 +195,29 @@ async test "run_turn_with_append closes failed persisted turns" {
 }
 
 ///|
+/// The context window the launcher says this run's endpoint serves, read from
+/// `OPENSEEK_CONTEXT_WINDOW`. `None` — unset, blank, or not a positive integer —
+/// leaves the build's table for the model in charge.
+///
+/// The desktop host exports this for a model the build does not ship: the entry
+/// the user saved carries its own window, and no table here can know an
+/// arbitrary endpoint's. Read at the one place a run builds its clients, so the
+/// turn, its summary client and every in-process child agree, and so a parent's
+/// value reaches its children through the environment they inherit instead of
+/// through another parameter on every call.
+fn configured_context_window() -> Int32? {
+  guard @env.get_env_var("OPENSEEK_CONTEXT_WINDOW") is Some(value) else {
+    return None
+  }
+  let window : Int32 = @string.from_str(value.trim()) catch { _ => return None }
+  if window > 0 {
+    Some(window)
+  } else {
+    None
+  }
+}
+
+///|
 /// Runs one user turn inside a caller-owned runtime and task scope.
 ///
 /// This is the building block for callers that keep an engine alive across
@@ -264,6 +287,7 @@ pub async fn run_turn_in_scope(
   tools? : @agent_tool.Tools,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {
+  let context_window = configured_context_window()
   let client = @client.Client(
     api_key~,
     model~,
@@ -271,6 +295,7 @@ pub async fn run_turn_in_scope(
     api_url?,
     retry_attempts?,
     retry_backoff_ms?,
+    context_window?,
   )
   let summary_client = @client.Client(
     api_key~,
@@ -279,6 +304,7 @@ pub async fn run_turn_in_scope(
     thinking=No,
     retry_attempts?,
     retry_backoff_ms?,
+    context_window?,
   )
   let session = session
     |> append_item(User(UserMessage(content, submission_id?)))

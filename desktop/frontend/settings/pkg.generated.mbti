@@ -168,12 +168,16 @@ pub(all) enum Message {
   ModelIdHint
   ModelName
   ModelNameHint
+  ModelContextWindow
+  ModelContextWindowHint
+  ModelContextWindowInvalid
   ModelFullUrl
   ModelFullUrlHint
   AddModel
   SaveModel
   ResetForm
   TestingConnection
+  ConnectionOk
   ProbeHint
   EditModel
   DeleteModel
