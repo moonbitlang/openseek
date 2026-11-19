@@ -21,8 +21,8 @@
 /// and output stay folded by default, like every other call.
 fn assistant_view(
   locale~ : @i18n.Locale = English,
-  on_open : (String) -> @cmd.Cmd,
-  links~ : @markdown.LinkMenus,
+  prose_body~ : @html.Html,
+  thought_body~ : @html.Html,
   wait_labels~ : Map[Int32, String] = Map([]),
   prose? : String,
   reasoning? : String,
@@ -36,8 +36,7 @@ fn assistant_view(
   reasoning_complete~ : Bool = true,
   subrun? : SubrunLink,
   fork? : @html.Html,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @markdown.View {
+) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
   // as a table. The instant belongs beside the ordinal rather than out at the
@@ -62,7 +61,7 @@ fn assistant_view(
   // reasoning, keeping the common step's one-line "#2 · Thought" lead. A step
   // that goes straight to tools gets a plain heading line instead: a call
   // row's summary belongs to that call alone. Prose alone carries no heading.
-  let lead : Array[@markdown.View] = []
+  let lead : Array[@html.Html] = []
   if reasoning is Some(text) {
     let thinking = live && !reasoning_complete
     let label = if thinking {
@@ -82,35 +81,23 @@ fn assistant_view(
     let body = if thinking {
       // Do not parse an unfinished Markdown document on every provider token.
       // Newlines are preserved by CSS while fragments are still arriving.
-      @markdown.View::from_html(
-        @html.div(
-          class="msg-content activity-thinking activity-thinking-live",
-          @html.text(text),
-        ),
+      @html.div(
+        class="msg-content activity-thinking activity-thinking-live",
+        @html.text(text),
       )
     } else {
-      @markdown.markdown_view(
-        locale~,
-        text,
-        open_file=on_open,
-        links~,
-        class="msg-content markdown moonbit-viewer-markdown-content activity-thinking",
-      )
+      thought_body
     }
     lead.push(
-      @markdown.View::compose([body], nodes => {
-        @html.details(class="activity", open=live, [
-          @html.summary(class="activity-summary", [
-            @html.span(class="activity-text", summary),
-          ]),
-          @html.div(class="activity-body", nodes),
-        ])
-      }),
+      @html.details(class="activity", open=live, [
+        @html.summary(class="activity-summary", [
+          @html.span(class="activity-text", summary),
+        ]),
+        @html.div(class="activity-body", [body]),
+      ]),
     )
   } else if !header.is_empty() && !calls.is_empty() {
-    lead.push(
-      @markdown.View::from_html(@html.div(class="activity-heading", header)),
-    )
+    lead.push(@html.div(class="activity-heading", header))
   }
   let work = if calls.is_empty() {
     None
@@ -124,22 +111,16 @@ fn assistant_view(
   }
   // The prose bubble separates the thought from the work it announced; a
   // response without prose keeps both under one quiet guide line.
-  let parts : Array[@markdown.View] = []
+  let parts : Array[@html.Html] = []
   if prose is Some(text) {
     if !lead.is_empty() {
-      parts.push(
-        @markdown.View::compose(lead, nodes => {
-          @html.div(class="activity-row", nodes)
-        }),
-      )
+      parts.push(@html.div(class="activity-row", lead))
     }
     parts.push(
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        on_open,
-        links~,
+        prose_body,
         assistant_name,
         is_danger=false,
         completed_at?=if finished { ts } else { None },
@@ -149,23 +130,17 @@ fn assistant_view(
       ),
     )
     if work is Some(work) {
-      parts.push(
-        @markdown.View::from_html(@html.div(class="activity-row", [work])),
-      )
+      parts.push(@html.div(class="activity-row", [work]))
     }
   } else {
     if work is Some(work) {
-      lead.push(@markdown.View::from_html(work))
+      lead.push(work)
     }
     if !lead.is_empty() {
-      parts.push(
-        @markdown.View::compose(lead, nodes => {
-          @html.div(class="activity-row", nodes)
-        }),
-      )
+      parts.push(@html.div(class="activity-row", lead))
     }
   }
-  @markdown.View::compose(parts, nodes => @html.div(class="step", nodes))
+  @html.div(class="step", parts)
 }
 
 ///|
@@ -1118,8 +1093,8 @@ fn step_time_label(
 fn transcript_item_view(
   locale~ : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
-  on_open : (String) -> @cmd.Cmd,
-  links~ : @markdown.LinkMenus,
+  prose_body~ : @html.Html,
+  thought_body~ : @html.Html,
   wait_labels~ : Map[Int32, String] = Map([]),
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
@@ -1130,28 +1105,24 @@ fn transcript_item_view(
   fork? : @html.Html,
   edit? : @html.Html,
   editor? : @html.Html,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @markdown.View {
+) -> @html.Html {
   match item.kind {
     User(content~) =>
-      @markdown.View::from_html(
-        user_message_view(
-          locale~,
-          content,
-          sent_at?=item.ts,
-          edit?,
-          editor?,
-          anchor?,
-          on_jump?,
-          changes?,
-        ),
+      user_message_view(
+        locale~,
+        content,
+        sent_at?=item.ts,
+        edit?,
+        editor?,
+        anchor?,
+        on_jump?,
+        changes?,
       )
     Assistant(reasoning~, prose~, calls~, replay=_, finished~, end_sequence=_) =>
       assistant_view(
-        artifact_view?,
         locale~,
-        on_open,
-        links~,
+        prose_body~,
+        thought_body~,
         prose?,
         reasoning?,
         calls~,
@@ -1166,11 +1137,9 @@ fn transcript_item_view(
       )
     Answer(text) =>
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        on_open,
-        links~,
+        prose_body,
         assistant_name,
         is_danger=false,
         completed_at?=item.ts,
@@ -1179,28 +1148,24 @@ fn transcript_item_view(
       )
     Failure(text) | Stopped(text) =>
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        on_open,
-        links~,
+        prose_body,
         assistant_name,
         is_danger=true,
       )
     Notice(label~, brief~, is_error~, body~) =>
-      @markdown.View::from_html(
-        notice_view(
-          locale~,
-          label,
-          brief,
-          is_error,
-          body,
-          ts?=item.ts,
-          sequence?=item.sequence,
-        ),
+      notice_view(
+        locale~,
+        label,
+        brief,
+        is_error,
+        body,
+        ts?=item.ts,
+        sequence?=item.sequence,
       )
-    Summary(text) => summary_card_view(locale~, text, on_open, links)
-    TurnEnd => @markdown.View::from_html(@html.nothing)
+    Summary(_) => summary_card_view(locale~, prose_body)
+    TurnEnd => @html.nothing
   }
 }
 
@@ -1212,52 +1177,34 @@ fn transcript_item_view(
 fn assistant_message_view(
   locale~ : @i18n.Locale = English,
   content : String,
-  on_open : (String) -> @cmd.Cmd,
-  links~ : @markdown.LinkMenus,
+  prose_body : @html.Html,
   assistant_name : String,
   is_danger~ : Bool,
   completed_at? : Double,
   show_actions~ : Bool = false,
   fork? : @html.Html,
   streaming~ : Bool = false,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
-) -> @markdown.View {
+) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
   // row; only real assistant replies use markdown. Finished-terminal answers
   // share the ordinary assistant presentation.
   let body = if is_danger {
-    @markdown.View::from_html(
-      @html.div(class="transcript-error-row", [
-        @html.span(
-          class="transcript-error-icon",
-          @icons.icon(@icons.icon_close),
-        ),
-        @html.div(
-          class="msg-content transcript-error-message",
-          inline_code_nodes(content),
-        ),
-      ]),
-    )
+    @html.div(class="transcript-error-row", [
+      @html.span(class="transcript-error-icon", @icons.icon(@icons.icon_close)),
+      @html.div(
+        class="msg-content transcript-error-message",
+        inline_code_nodes(content),
+      ),
+    ])
   } else {
-    @markdown.markdown_view(
-      locale~,
-      content,
-      open_file=on_open,
-      links~,
-      class="msg-content markdown moonbit-viewer-markdown-content",
-      artifact_view?=if show_actions && !streaming {
-        artifact_view
-      } else {
-        None
-      },
-      defer_artifacts=!show_actions || streaming,
-    )
+    prose_body
   }
-  let actions_row = if show_actions {
-    // Only an answer confirmed by the durable Finished terminal gets this row.
-    // Tool-prefacing Assistant prose, checkpoint replays, danger notices, and
-    // the separate streaming view are not turn-ending answers.
+  let children = [speaker_label(assistant_name), body]
+  // Only an answer confirmed by the durable Finished terminal gets this row.
+  // Tool-prefacing Assistant prose, checkpoint replays, danger notices, and
+  // the separate streaming view are not turn-ending answers.
+  if show_actions {
     let actions = [
       @markdown.copy_button(
         locale~,
@@ -1284,9 +1231,7 @@ fn assistant_message_view(
         )
       }
     }
-    Some(@html.div(class="assistant-message-actions", actions))
-  } else {
-    None
+    children.push(@html.div(class="assistant-message-actions", actions))
   }
   let class = if is_danger {
     "msg transcript-error"
@@ -1295,14 +1240,7 @@ fn assistant_message_view(
   } else {
     "msg"
   }
-  let label = speaker_label(assistant_name)
-  @markdown.View::compose([body], nodes => {
-    let children = [label, ..nodes]
-    if actions_row is Some(actions) {
-      children.push(actions)
-    }
-    @html.div(class~, [@html.div(class="msg-body", children)])
-  })
+  @html.div(class~, [@html.div(class="msg-body", children)])
 }
 
 ///|
@@ -1313,31 +1251,17 @@ fn assistant_message_view(
 /// behind the fold.
 fn summary_card_view(
   locale~ : @i18n.Locale = English,
-  content : String,
-  on_open : (String) -> @cmd.Cmd,
-  links : @markdown.LinkMenus,
-) -> @markdown.View {
-  let body = @markdown.markdown_view(
-    locale~,
-    content,
-    open_file=on_open,
-    links~,
-    class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",
-  )
-  @markdown.View::compose([body], children => {
-    @html.div(class="activity-row", [
-      @html.details(
-        class="summary-card",
-        [
-          @html.summary(class="summary-card-label", [
-            @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
-            @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
-          ]),
-          ..children,
-        ],
-      ),
-    ])
-  })
+  body : @html.Html,
+) -> @html.Html {
+  @html.div(class="activity-row", [
+    @html.details(class="summary-card", [
+      @html.summary(class="summary-card-label", [
+        @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
+        @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
+      ]),
+      body,
+    ]),
+  ])
 }
 
 ///|
