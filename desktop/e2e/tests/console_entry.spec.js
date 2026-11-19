@@ -105,8 +105,8 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
       version: '0.3.1',
       url: 'https://example.com/releases/0.3.1',
       platforms: {
-        'macos-arm64': { url: 'https://example.com/mac.tar.gz' },
-        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg' },
+        'macos-arm64': { url: 'https://example.com/mac.tar.gz', size_bytes: 154000000 },
+        'macos-arm64-dmg': { url: 'https://example.com/mac.dmg', size_bytes: 139500000 },
         'windows-x64': { url: 'https://example.com/win-setup.exe' },
         browser: { url: 'https://example.com/console.tar.gz' },
       },
@@ -114,9 +114,10 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
   });
   await page.goto('/cloud');
   const inline = page.getByRole('main').getByRole('region', { name: 'Download apps' });
-  await expect(inline.getByRole('link', { name: /macOS · Apple Silicon/ }))
+  await expect(inline.getByText('Download v0.3.1', { exact: true })).toHaveCount(1);
+  await expect(inline.getByRole('link', { name: 'macOS · Apple Silicon 139.5 MB', exact: true }))
     .toHaveAttribute('href', 'https://example.com/mac.dmg');
-  await expect(inline.getByRole('link', { name: /Windows · x64/ }))
+  await expect(inline.getByRole('link', { name: 'Windows · x64', exact: true }))
     .toHaveAttribute('href', 'https://example.com/win-setup.exe');
   await expect(inline.getByRole('link', { name: 'All releases on GitHub' }))
     .toHaveAttribute('href', 'https://example.com/releases/0.3.1');
@@ -126,7 +127,8 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
   await page.locator('.sidebar-toggle').click();
   await page.getByRole('button', { name: 'Download apps' }).click();
   const dialog = page.getByRole('dialog', { name: 'Download apps' });
-  await expect(dialog.getByRole('link', { name: /macOS · Apple Silicon/ }))
+  await expect(dialog.getByText('Download v0.3.1', { exact: true })).toHaveCount(1);
+  await expect(dialog.getByRole('link', { name: 'macOS · Apple Silicon 139.5 MB', exact: true }))
     .toHaveAttribute('href', 'https://example.com/mac.dmg');
   expect(manifestRequests).toBe(1);
   await page.keyboard.press('Escape');

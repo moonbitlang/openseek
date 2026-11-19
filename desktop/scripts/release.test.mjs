@@ -119,7 +119,7 @@ test("verify checks the current Browser bundle the API serves", async t => {
     }
   });
   for (const [platform, file] of Object.entries(files)) {
-    manifest.platforms[platform] = { url: `${url}/v0.1.9/${file}`, sha256 };
+    manifest.platforms[platform] = { url: `${url}/v0.1.9/${file}`, sha256, size_bytes: bytes.length };
   }
   t.mock.method(release, "apiOrigin", () => url);
   await assert.rejects(release.verify("v0.1.9"), /browser current\.json version 0\.1\.8 is not 0\.1\.9/);
@@ -375,7 +375,7 @@ test("upload adopts a public release's assets instead of replacing them with a r
   assert.equal(request.mock.callCount(), 0);
 });
 
-test("publish makes the release public and latest before the API publishes GitHub's digests", async t => {
+test("publish makes the release public and latest before the API publishes GitHub's metadata", async t => {
   const { release, releases, gh } = await githubFixture(t);
   releases.set("v0.1.9", { ...publicRelease("v0.1.9", file => Buffer.from(`built ${file}`)), draft: true });
   let published;
@@ -383,8 +383,8 @@ test("publish makes the release public and latest before the API publishes GitHu
     if (path === "/desktop/releases/v0.1.9/publish") {
       assert.equal(releases.get("v0.1.9").draft, false, "the API links only to public assets");
       const { platforms } = JSON.parse(options.body);
-      published = { version: "0.1.9", platforms: Object.fromEntries(Object.entries(platforms).map(([platform, { file, sha256 }]) =>
-        [platform, { url: `https://github.com/owner/repo/releases/download/v0.1.9/${file}`, sha256 }])) };
+      published = { version: "0.1.9", platforms: Object.fromEntries(Object.entries(platforms).map(([platform, { file, sha256, size_bytes }]) =>
+        [platform, { url: `https://github.com/owner/repo/releases/download/v0.1.9/${file}`, sha256, size_bytes }])) };
       return { published };
     }
     assert.equal(path, "/desktop/releases/latest.json");
@@ -394,6 +394,7 @@ test("publish makes the release public and latest before the API publishes GitHu
   assert.deepEqual(Object.keys(published.platforms).sort(), Object.keys(ReleaseFiles).sort());
   assert.equal(published.platforms.android.sha256,
     createHash("sha256").update("built SeekMoon-android.apk").digest("hex"));
+  assert.equal(published.platforms.android.size_bytes, Buffer.byteLength("built SeekMoon-android.apk"));
   assert.equal(ghCalls(gh, "edit").length, 1);
 });
 
@@ -413,7 +414,7 @@ for (const scenario of [
   });
 }
 
-test("rollback republishes GitHub's digests without local archives", async t => {
+test("rollback republishes GitHub's metadata without local archives", async t => {
   const { release, releases, gh } = await githubFixture(t);
   releases.set("v0.1.8", publicRelease("v0.1.8"));
   const local = t.mock.method(release, "localArtifact", async () => assert.fail("rollback reads no local archives"));
@@ -421,8 +422,8 @@ test("rollback republishes GitHub's digests without local archives", async t => 
   t.mock.method(release, "fetchJson", async (path, options) => {
     if (path === "/desktop/releases/v0.1.8/publish") {
       platforms = JSON.parse(options.body).platforms;
-      published = { version: "0.1.8", platforms: Object.fromEntries(Object.entries(platforms).map(([platform, { file, sha256 }]) =>
-        [platform, { url: `https://github.com/owner/repo/releases/download/v0.1.8/${file}`, sha256 }])) };
+      published = { version: "0.1.8", platforms: Object.fromEntries(Object.entries(platforms).map(([platform, { file, sha256, size_bytes }]) =>
+        [platform, { url: `https://github.com/owner/repo/releases/download/v0.1.8/${file}`, sha256, size_bytes }])) };
       return { published };
     }
     assert.equal(path, "/desktop/releases/latest.json");
@@ -431,6 +432,7 @@ test("rollback republishes GitHub's digests without local archives", async t => 
   await release.run("rollback", "v0.1.8");
   assert.equal(local.mock.callCount(), 0);
   assert.equal(platforms.browser.sha256, createHash("sha256").update("canonical SeekMoon.browser.tar.gz").digest("hex"));
+  assert.equal(platforms.browser.size_bytes, Buffer.byteLength("canonical SeekMoon.browser.tar.gz"));
   assert.equal(ghCalls(gh, "edit")[0][2], "v0.1.8");
 });
 

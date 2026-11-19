@@ -112,6 +112,9 @@ export class Release {
     if (!asset) throw new Error(`GitHub release ${release.tag_name} has no ${artifact.file}`);
     const sha256 = asset.digest?.match(/^sha256:([0-9a-f]{64})$/)?.[1];
     if (!sha256) throw new Error(`GitHub reports no SHA-256 digest for ${artifact.file}`);
+    if (!Number.isSafeInteger(asset.size) || asset.size < 0) {
+      throw new Error(`GitHub reports no valid size for ${artifact.file}`);
+    }
     if (local && (asset.size !== local.size || sha256 !== local.sha256)) {
       throw new Error(`GitHub asset does not match the built artifact: ${artifact.platform}`);
     }
@@ -334,8 +337,8 @@ export class Release {
   }
 
   // Publish and rollback share the same API contract. The runner supplies the
-  // filenames and the SHA-256 digests GitHub computed; the API knows only the
-  // public release base URL and owns latest.json generation.
+  // filenames, SHA-256 digests and sizes GitHub reports; the API knows only
+  // the public release base URL and owns latest.json generation.
   async publish(version, { fromCheckout }) {
     if (fromCheckout) await this.checkoutVersion(version);
     else if (!/^v[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(version)) throw new Error(`invalid rollback version: ${version}`);
@@ -345,7 +348,7 @@ export class Release {
     for (const artifact of Artifacts) {
       const local = fromCheckout ? await this.localArtifact(artifact) : undefined;
       const served = this.githubAsset(release, artifact, local);
-      platforms[artifact.platform] = { file: artifact.file, sha256: served.sha256 };
+      platforms[artifact.platform] = { file: artifact.file, sha256: served.sha256, size_bytes: served.size };
     }
 
     // The manifest sends clients to these assets, which anonymous clients can
@@ -364,7 +367,7 @@ export class Release {
   }
 
   // The API must have published exactly the requested platforms, each at its
-  // versioned file with the digest GitHub reported.
+  // versioned file with the digest GitHub reported. Older manifests omit size.
   verifyManifest(manifest, version, platforms) {
     if (manifest?.version !== version.replace(/^v/, "")) {
       throw new Error(`manifest version ${manifest?.version} is not ${version}`);
@@ -372,9 +375,12 @@ export class Release {
     const published = Object.keys(manifest.platforms ?? {}).sort().join(" ");
     const requested = Object.keys(platforms).sort().join(" ");
     if (published !== requested) throw new Error(`manifest platforms "${published}" are not "${requested}"`);
-    for (const [platform, { file, sha256 }] of Object.entries(platforms)) {
+    for (const [platform, { file, sha256, size_bytes }] of Object.entries(platforms)) {
       const entry = manifest.platforms[platform];
       if (entry.sha256 !== sha256) throw new Error(`manifest digest for ${platform} is not ${sha256}`);
+      if (entry.size_bytes !== undefined && entry.size_bytes !== size_bytes) {
+        throw new Error(`manifest size for ${platform} is not ${size_bytes} bytes`);
+      }
       if (!entry.url.endsWith(`/${version}/${file}`)) throw new Error(`manifest URL for ${platform} is not ${file}: ${entry.url}`);
     }
   }
@@ -388,7 +394,7 @@ export class Release {
     const platforms = {};
     for (const artifact of Artifacts) {
       const local = await this.localArtifact(artifact);
-      platforms[artifact.platform] = { file: artifact.file, sha256: local.sha256, size: local.size };
+      platforms[artifact.platform] = { file: artifact.file, sha256: local.sha256, size_bytes: local.size };
     }
     this.verifyManifest(manifest, version, platforms);
 

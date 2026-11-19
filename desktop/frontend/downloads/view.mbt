@@ -29,27 +29,58 @@ fn Model::targets_list(
         if targets.is_empty() {
           @html.p(class="downloads-status", text(locale, NoTargets))
         } else {
-          @html.ul(
-            class="downloads-list",
-            targets.map(target => {
-              @html.li(
-                @html.a(class="downloads-row", href=target.url, escape=true, [
-                  @html.span(class="downloads-platform", [
-                    @icons.icon(os_icon(target.os)),
-                    @html.text(target.label),
+          @html.div([
+            @html.p(
+              class="downloads-version",
+              text(locale, DownloadVersion(version)),
+            ),
+            @html.ul(
+              class="downloads-list",
+              targets.map(target => {
+                @html.li(
+                  @html.a(class="downloads-row", href=target.url, escape=true, [
+                    @html.span(class="downloads-platform", [
+                      @icons.icon(os_icon(target.os)),
+                      @html.text(target.label),
+                    ]),
+                    @html.span(class="downloads-action", [
+                      if target.size_bytes is Some(size) {
+                        @html.text(format_download_size(size))
+                      } else {
+                        @html.nothing
+                      },
+                      @icons.icon(@icons.icon_arrow_down),
+                    ]),
                   ]),
-                  @html.span(class="downloads-action", [
-                    @html.text(text(locale, DownloadVersion(version))),
-                    @icons.icon(@icons.icon_arrow_down),
-                  ]),
-                ]),
-              )
-            }),
-          )
+                )
+              }),
+            ),
+          ])
         },
         release_link(page_url, text(locale, GitHubReleases)),
       ])
     }
+  }
+}
+
+///|
+fn format_download_size(size : Int64) -> String {
+  let (divisor, unit) = if size >= 1_000_000_000L {
+    (1_000_000_000L, "GB")
+  } else if size >= 1_000_000L {
+    (1_000_000L, "MB")
+  } else if size >= 1000L {
+    (1000L, "kB")
+  } else {
+    return "\{size} B"
+  }
+  let tenths = (size * 10L + divisor / 2L) / divisor
+  let whole = tenths / 10L
+  let decimal = tenths % 10L
+  if decimal == 0L {
+    "\{whole} \{unit}"
+  } else {
+    "\{whole}.\{decimal} \{unit}"
   }
 }
 
