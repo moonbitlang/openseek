@@ -166,11 +166,7 @@ fn engine_extra_env(config : AppConfig) -> Map[String, String] {
   if config.retry_backoff_ms is Some(backoff_ms) {
     env["OPENSEEK_RETRY_BACKOFF_MS"] = backoff_ms.to_string()
   }
-  let api_key_env = match config.model {
-    Kimi(_) => "KIMI"
-    Glm(_) => "GLM"
-    Deepseek(_) => "DEEPSEEK"
-  }
+  let api_key_env = config.model.api_key_env()
   env[api_key_env] = config.api_key
   env
 }
