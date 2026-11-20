@@ -511,6 +511,27 @@ pub fn SessionStore::session_file(
 }
 
 ///|
+/// The saved base prompt, before adding the session's runtime context.
+pub fn SessionStore::base_prompt_file(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/system-prompt.md"
+}
+
+///|
+/// Older sessions may have no saved base prompt.
+pub async fn SessionStore::read_base_prompt(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String? {
+  Some(@fs.read_text(self.base_prompt_file(id))) catch {
+    @os_error.OsError(NotFound, ..) => None
+    error => raise error
+  }
+}
+
+///|
 /// Copy the session `source` into the new session `fork` and return it.
 ///
 /// The copy is `Session::fork` of the source as it is durably recorded now —
@@ -527,7 +548,8 @@ pub fn SessionStore::session_file(
 /// `system_prompt` is the fork's own. A prompt names the session's scratch
 /// directory, which is a different directory for the fork, so the source's
 /// prompt is never inherited: the caller builds the one a new session in the
-/// fork's environment would get.
+/// fork's environment would get. If supplied, `base_prompt` is saved alongside
+/// the transcript so future forks can build their own prompts from it.
 ///
 /// `notice`, when given, is appended after the copied history as a runtime
 /// notice: the model reads it before the fork's first prompt.
@@ -553,6 +575,7 @@ pub async fn SessionStore::fork(
   fork : @agent_session.SessionId,
   through? : Int32,
   system_prompt~ : String,
+  base_prompt? : String,
   notice? : String,
 ) -> @agent_session.Session {
   let copy = self.load(source).fork(fork, system_prompt~, through?)
@@ -592,6 +615,9 @@ pub async fn SessionStore::fork(
     }
     if model is Some(model) {
       write_text_atomic(self.model_path(fork), session_model_text(model), dirs~)
+    }
+    if base_prompt is Some(text) {
+      write_text_atomic(self.base_prompt_file(fork), text, dirs~)
     }
     write_text_atomic(path, session_file_text(copy), dirs~)
     record_mark(self, copy)

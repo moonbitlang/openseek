@@ -4,6 +4,7 @@
 pub async fn configured_system_prompt(
   matches : @argparse.Matches,
   model : @deepseek.Model,
+  base_prompt? : String,
   workspace_root~ : String = ".",
   session_scratch_dir? : String,
 ) -> String {
@@ -25,7 +26,9 @@ pub async fn configured_system_prompt(
   // an eval harness's N concurrent trial workspaces testing one addendum),
   // so ordering them first keeps the whole shared text cache-hittable; the
   // end position also gives the grounding instruction recency weight.
-  let base = if base_path == "" {
+  let base = if base_prompt is Some(text) {
+    text
+  } else if base_path == "" {
     @prompt.system_prompt_for_model(model)
   } else {
     @fs.read_text(@workspace_path.resolve(workspace_root, base_path))
