@@ -11,9 +11,6 @@ const GlmDefaultApiUrl : String = "https://api.z.ai/api/paas/v4/chat/completions
 const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
 
 ///|
-const DefaultChatIdleTimeoutMs : Int32 = 120_000
-
-///|
 let default_model : @deepseek.Model = Deepseek(V4Pro)
 
 ///|
@@ -140,7 +137,7 @@ pub fn Client::Client(
   thinking~ : @deepseek.ThinkingMode = No,
   retry_attempts~ : Int32 = 5,
   retry_backoff_ms~ : Int32 = 500,
-  idle_timeout_ms~ : Int32 = DefaultChatIdleTimeoutMs,
+  idle_timeout_ms~ : Int32 = 120_000,
 ) -> Client {
   {
     api_key,
@@ -324,14 +321,7 @@ pub async fn Client::chat(
         self.with_retries(
           () => {
             progress.begin_attempt()
-            chat_stream_attempt(
-              api_url=self.api_url,
-              api_key=self.api_key,
-              idle_timeout_ms=self.idle_timeout_ms,
-              body,
-              progress,
-              stream,
-            )
+            self.chat_stream_attempt(body, progress, stream)
           },
           error => {
             progress.streamed() &&
@@ -385,17 +375,15 @@ async fn Client::chat_attempt(
 }
 
 ///|
-async fn chat_stream_attempt(
-  api_url~ : String,
-  api_key~ : API_KEY,
-  idle_timeout_ms~ : Int32,
+async fn Client::chat_stream_attempt(
+  self : Client,
   body : Json,
   progress : RequestProgress,
   stream : StreamHandler,
 ) -> @deepseek.ChatResponse {
-  let client = @http.post_stream(api_url, headers={
+  let client = @http.post_stream(self.api_url, headers={
     "Content-Type": "application/json",
-    "Authorization": "Bearer \{api_key}",
+    "Authorization": "Bearer \{self.api_key}",
     // Without an explicit Accept-Encoding the HTTP client advertises gzip and
     // transparently decompresses. A gzip-compressing intermediary buffers
     // whole compression blocks, which would re-batch the SSE deltas this
@@ -410,9 +398,11 @@ async fn chat_stream_attempt(
   // status line would otherwise block here forever, before any event, with no
   // error for the retry loop to see.
   progress.phase = ResponseHeaders
-  let resp = with_idle_timeout(idle_timeout_ms, "DeepSeek response headers", () => {
-    client.end_request()
-  })
+  let resp = with_idle_timeout(
+    self.idle_timeout_ms,
+    "DeepSeek response headers",
+    () => client.end_request(),
+  )
   progress.http_status = Some(resp.code)
   guard resp.code >= 200 && resp.code < 300 else {
     progress.phase = ResponseBody
@@ -429,7 +419,7 @@ async fn chat_stream_attempt(
   read_chat_stream(
     client,
     progress,
-    idle_timeout_ms~,
+    idle_timeout_ms=self.idle_timeout_ms,
     on_content_delta=stream.on_content_delta,
     on_reasoning_delta=stream.on_reasoning_delta,
   )

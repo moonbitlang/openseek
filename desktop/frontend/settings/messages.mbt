@@ -97,7 +97,6 @@ pub(all) enum Message {
   CustomApiKey
   SavedKey
   ApiKey
-  ApiTestModelId
   TestConnection
   TestConnectionDescription
   TestingConnection
@@ -865,26 +864,21 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ApiKey) => "API 密钥"
     (TraditionalChinese, ApiKey) => "API 金鑰"
     (Japanese, ApiKey) => "API キー"
-    (English, ApiTestModelId) => "Test model ID"
-    (Spanish, ApiTestModelId) => "ID del modelo de prueba"
-    (SimplifiedChinese, ApiTestModelId) => "测试模型 ID"
-    (TraditionalChinese, ApiTestModelId) => "測試模型 ID"
-    (Japanese, ApiTestModelId) => "テストするモデル ID"
     (English, TestConnection) => "Test connection"
     (Spanish, TestConnection) => "Probar conexión"
     (SimplifiedChinese, TestConnection) => "测试连接"
     (TraditionalChinese, TestConnection) => "測試連線"
     (Japanese, TestConnection) => "接続をテスト"
     (English, TestConnectionDescription) =>
-      "Sends a short streaming request using the saved API settings."
+      "Sends a short streaming request using the saved API settings and the provider's default model."
     (Spanish, TestConnectionDescription) =>
-      "Envía una solicitud breve en streaming con los ajustes de API guardados."
+      "Envía una solicitud breve en streaming con los ajustes de API guardados y el modelo predeterminado del proveedor."
     (SimplifiedChinese, TestConnectionDescription) =>
-      "使用已保存的 API 设置发送一次简短的流式请求。"
+      "使用已保存的 API 设置和服务商的默认模型发送一次简短的流式请求。"
     (TraditionalChinese, TestConnectionDescription) =>
-      "使用已儲存的 API 設定傳送一次簡短的串流請求。"
+      "使用已儲存的 API 設定和服務供應商的預設模型傳送一次簡短的串流請求。"
     (Japanese, TestConnectionDescription) =>
-      "保存済みの API 設定で短いストリーミングリクエストを送信します。"
+      "保存済みの API 設定とプロバイダーの既定モデルを使って、短いストリーミングリクエストを送信します。"
     (English, TestingConnection) => "Testing connection…"
     (Spanish, TestingConnection) => "Probando conexión…"
     (SimplifiedChinese, TestingConnection) => "正在测试连接…"

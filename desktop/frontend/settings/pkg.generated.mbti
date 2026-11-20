@@ -106,7 +106,6 @@ pub(all) enum Message {
   CustomApiKey
   SavedKey
   ApiKey
-  ApiTestModelId
   TestConnection
   TestConnectionDescription
   TestingConnection

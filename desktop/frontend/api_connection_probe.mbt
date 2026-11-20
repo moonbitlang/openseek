@@ -19,14 +19,7 @@ fn Model::api_connection_probe_payload(
     self.api_ready() else {
     return None
   }
-  let custom_model_id = if settings.endpoint.provider is Custom {
-    let id = self.api_probe_model_id.trim()
-    guard !id.is_empty() else { return None }
-    Some(id.to_owned())
-  } else {
-    None
-  }
-  Some({ revision: settings.revision, custom_model_id, })
+  Some({ revision: settings.revision, })
 }
 
 ///|
@@ -85,11 +78,10 @@ fn Model::test_api_connection(
 }
 
 ///|
-fn api_connection_probe_rows(
+fn api_connection_probe_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  settings_loaded~ : Bool,
-) -> Array[@html.Html] {
+) -> @html.Html {
   let locale = model.locale
   let probe = model.current_api_connection_probe()
   let verdict : Array[@html.Html] = match probe {
@@ -107,37 +99,19 @@ fn api_connection_probe_rows(
     }
     None => []
   }
-  [
-    @ui.form_row(
-      @settings.text(locale, ApiTestModelId),
-      [
-        @html.input(
-          class="setting-input field-surface",
-          input_type=@html.InputType::Text,
-          value=model.api_probe_model_id,
-          on_input=dispatch.map(id => ApiProbeModelChanged(id)),
-          attrs=@html.Attrs::build()
-            .aria_label(@settings.text(locale, ApiTestModelId))
-            .data_set("focus-owner", "")
-            .disabled(!settings_loaded),
-        ),
-      ],
-      hidden=!(model.api_provider() is Custom),
-    ),
-    @ui.form_row(
-      "",
-      [
-        @html.button(
-          class="button secondary compact",
-          type_="button",
-          disabled=model.api_connection_probe_payload() is None ||
-            probe is Some({ reply: None, .. }),
-          on_click=dispatch(TestApiConnection),
-          @settings.text(locale, TestConnection),
-        ),
-        ..verdict,
-      ],
-      desc=@settings.text(locale, TestConnectionDescription),
-    ),
-  ]
+  @ui.form_row(
+    "",
+    [
+      @html.button(
+        class="button secondary compact",
+        type_="button",
+        disabled=model.api_connection_probe_payload() is None ||
+          probe is Some({ reply: None, .. }),
+        on_click=dispatch(TestApiConnection),
+        @settings.text(locale, TestConnection),
+      ),
+      ..verdict,
+    ],
+    desc=@settings.text(locale, TestConnectionDescription),
+  )
 }

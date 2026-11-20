@@ -5118,8 +5118,6 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
-    ApiProbeModelChanged(id) =>
-      (@cmd.none, { ..model, api_probe_model_id: id, })
     TestApiConnection => model.test_api_connection(dispatch)
     ApiConnectionProbed(attempt, reply) => {
       guard model.api_connection_probe is Some(probe) &&

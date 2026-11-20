@@ -1,5 +1,5 @@
 ///|
-test "built-in API providers start a probe without a temporary model ID" {
+test "built-in API providers start a connection test with saved settings" {
   let dispatch = test_dispatch()
   for provider in [Deepseek, Glm, OpenRouter] {
     let initial = test_model().with_host_endpoint(
@@ -9,11 +9,10 @@ test "built-in API providers start a probe without a temporary model ID" {
       openrouter_key_saved=true,
     )
     let (_, started) = update_msg(dispatch, TestApiConnection, initial)
-    let (_, repeated) = update_msg(dispatch, TestApiConnection, initial)
+    let (_, repeated) = update_msg(dispatch, TestApiConnection, started)
     assert_true(started == repeated)
     assert_true(
-      started.current_api_connection_probe()
-      is Some({ payload: { custom_model_id: None, .. }, reply: None, .. }),
+      started.current_api_connection_probe() is Some({ reply: None, .. }),
     )
     let (_, received) = update_msg(
       dispatch,
@@ -29,31 +28,20 @@ test "built-in API providers start a probe without a temporary model ID" {
 }
 
 ///|
-test "Custom URL tests a temporary model ID with the saved provider settings" {
+test "Custom URL uses the saved endpoint for the connection test" {
   let dispatch = test_dispatch()
-  let initial = test_model().with_host_endpoint(
+  let initial = test_model().with_host_endpoint(provider=Custom)
+  let (_, blocked) = update_msg(dispatch, TestApiConnection, initial)
+  assert_true(blocked == initial)
+  let configured = initial.with_host_endpoint(
     provider=Custom,
     custom_api_url="https://example.test/complete",
   )
-  let (_, blocked) = update_msg(dispatch, TestApiConnection, initial)
-  assert_true(blocked == initial)
-  let (_, typed) = update_msg(
-    dispatch,
-    ApiProbeModelChanged("  third-party/model  "),
-    initial,
-  )
-  let (_, started) = update_msg(dispatch, TestApiConnection, typed)
+  let (_, started) = update_msg(dispatch, TestApiConnection, configured)
   assert_true(
-    started.current_api_connection_probe()
-    is Some(
-      {
-        payload: { custom_model_id: Some("third-party/model"), .. },
-        reply: None,
-        ..
-      },
-    ),
+    started.current_api_connection_probe() is Some({ reply: None, .. }),
   )
-  assert_true(started.host_settings() == initial.host_settings())
+  assert_true(started.host_settings() == configured.host_settings())
 }
 
 ///|

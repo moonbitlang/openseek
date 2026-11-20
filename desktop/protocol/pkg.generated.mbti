@@ -110,7 +110,6 @@ pub impl @json.ToJson for AgentEventPayload
 #derive(Eq, @debug.Debug)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
-  custom_model_id : String?
 }
 pub impl @json.FromJson for ApiConnectionProbePayload
 pub impl @json.ToJson for ApiConnectionProbePayload
