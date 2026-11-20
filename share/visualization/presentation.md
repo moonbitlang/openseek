@@ -42,21 +42,8 @@ fails, provide the file reference and briefly report the limitation. The result
 
 ## Inline Diagrams in SeekMoon
 
-In SeekMoon, complete fenced `diago` code blocks render inline as diagrams
-visible to the user (`d2` is an alias). Use them when a diagram clarifies a
-workflow, architecture, dependency, or relationship. Write the diagram directly
-in your response; no image file or external rendering command is needed.
-For syntax and more examples, read `<bundled-resources>/visualization/diagrams.md`.
-
-```diago
-direction: right
-user: User
-app: SeekMoon
-api: Cloud API
-user -> app: Ask
-app -> api: Request
-api -> app: Response
-```
+When a diagram would make a workflow or relationship easier to understand,
+read `<bundled-resources>/visualization/diagrams/README.md` to choose a format.
 
 ## Generated File Artifacts
 
