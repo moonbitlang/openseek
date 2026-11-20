@@ -252,9 +252,8 @@ async fn perform_search(
   }
   let text = response_body.text()
   guard resp.code >= 200 && resp.code < 300 else {
-    raise SearchFailure(
-      "DeepSeek search API error \{resp.code}: \{error_detail(text)}",
-    )
+    let detail = redact_credential(error_detail(text), api_key)
+    raise SearchFailure("DeepSeek search API error \{resp.code}: \{detail}")
   }
   let payload = @json.parse(text) catch {
     _ => raise SearchFailure("DeepSeek search response is not JSON")
@@ -276,6 +275,18 @@ fn error_detail(text : String) -> String {
     { "error": String(message), .. } => message
     { "message": String(message), .. } => message
     _ => @agent_tool.brief_line(text, limit=200)
+  }
+}
+
+///|
+/// Remove the search key from a provider-supplied error message. A gateway or
+/// proxy can reflect the request's credential, and this message becomes a tool
+/// result the model and the session transcript both see.
+fn redact_credential(text : String, credential : String) -> String {
+  if credential.is_empty() {
+    text
+  } else {
+    text.replace_all(old=credential, new="[redacted]")
   }
 }
 

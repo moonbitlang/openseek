@@ -403,6 +403,48 @@ async test "image upload timeout closes a stalled request without retry" {
 }
 
 ///|
+/// The Files API error body follows the same rule as chat: a reflected
+/// credential must not reach the caller.
+async test "image upload redacts the request credential from an error body" {
+  @async.with_task_group() <| group => {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+    group.add_defer(() => server.close())
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (request, body, connection) => {
+          ignore(body.read_all())
+          let echoed = match request.headers.get("Authorization") {
+            Some(value) => value
+            None => "missing"
+          }
+          connection.send_response(403, "Forbidden", extra_headers={
+            "Content-Type": "application/json",
+          })
+          connection.write("{\"error\":\"forbidden \{echoed}\"}")
+        },
+        max_connections=4,
+      )
+    }
+    let client = @client.Client(
+      api_key="upload-test-key",
+      api_url="http://127.0.0.1:\{server.addr.port()}/v1/chat/completions",
+      retry_attempts=1,
+      retry_backoff_ms=1,
+    )
+    try client.upload_image(b"GIF87a", filename="image.gif") catch {
+      @client.HttpStatus(code, body) => {
+        assert_eq(code, 403)
+        assert_true(body.contains("[redacted]"))
+        assert_false(body.contains("upload-test-key"))
+      }
+      error => raise error
+    } noraise {
+      _ => fail("expected upload failure")
+    }
+  }
+}
+
+///|
 async test "chat rejects invalid content before contacting the endpoint" {
   let client = @client.Client(
     api_key="unused",

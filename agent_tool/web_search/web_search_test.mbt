@@ -135,6 +135,51 @@ async test "web_search surfaces a provider error as a recoverable tool error" {
 }
 
 ///|
+/// A provider that reflects the request key in its error body must not leak it
+/// into the model-facing tool result.
+async test "web_search redacts the request credential from a provider error body" {
+  @async.with_task_group(group => {
+    guard bind_test_server(
+        "local TCP bind unavailable; skipping web_search test",
+      )
+      is Some(server) else {
+      return
+    }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (request, conn) => {
+          let _ = conn.read_all()
+          let echoed = match request.headers.get("X-Api-Key") {
+            Some(value) => value
+            None => "missing"
+          }
+          conn.send_response(401, "Unauthorized", extra_headers={
+            "Content-Type": "application/json",
+          })
+          conn.write_string(
+            "{\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key: \{echoed}\"}}",
+          )
+        },
+        max_connections=4,
+      )
+    }
+    let tool = @web_search.definition(
+      api_key="test-key",
+      base_url="http://127.0.0.1:\{server.addr.port}/anthropic/v1",
+    )
+    guard tool.execute is Async(execute) else {
+      fail("expected async executor")
+    }
+    let action = execute({ "query": "moonbit language" })
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("401"))
+    assert_true(output.content.contains("[redacted]"))
+    assert_false(output.content.contains("test-key"))
+  })
+}
+
+///|
 async test "web_search rejects blank and oversized queries locally" {
   guard @web_search.definition(api_key="k").execute is Async(execute) else {
     fail("expected async executor")
