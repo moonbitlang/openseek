@@ -952,3 +952,66 @@ test "folding: contribution disposal clears folds before silencing listeners" {
   assert_true(controller.hidden_range_model is None)
   viewer.dispose()
 }
+
+///|
+test "folding: MoonBit outline folds brace-bodied types like function bodies" {
+  let text =
+    #|priv struct Content {
+    #|  size : Int
+    #|}
+    #|pub(all) enum Color {
+    #|  Red
+    #|} derive(Eq)
+    #|struct Pair(Int, Int)
+    #|pub(open) trait Render {
+    #|  render(Self) -> String
+    #|}
+    #|suberror Oops
+    #|fn after() -> Int {
+    #|  1
+    #|}
+  let model = test_model(text, language_id="moonbit")
+  let folds = moonbit_source_folds(model.snapshot).function_bodies
+  let spans = folds.map(fold => {
+    (
+      fold.declaration_start_line_number,
+      fold.body_start_line_number,
+      fold.body_end_line_number,
+    )
+  })
+  // `} derive(Eq)` keeps the provider fold so the derive list stays visible;
+  // the tuple struct and bodyless suberror are released at their line end, so
+  // neither claims `after`'s body.
+  assert_eq(spans, [(1, 1, 3), (8, 8, 10), (12, 12, 14)])
+}
+
+///|
+test "folding: folded MoonBit types render on one line like functions" {
+  let text =
+    #|priv struct Content {
+    #|  size : Int
+    #|  lines : Array[String]
+    #|}
+    #|pub(all) enum Color {
+    #|  Red
+    #|} derive(Eq)
+    #|tail
+  let viewer = CodeEditorWidget::CodeEditorWidget()
+  viewer.set_model(Some(test_model(text, language_id="moonbit")))
+  viewer.fold_top_level()
+  let view_model = viewer.test_view_model()
+  // The struct's closing brace folds into its header line; the derive enum
+  // keeps the provider fold, which leaves `} derive(Eq)` on its own line.
+  assert_eq(view_model.line_count(), 4)
+  assert_eq(
+    view_model.lines().get_view_line_content(1),
+    "priv struct Content {",
+  )
+  assert_eq(
+    view_model.lines().get_view_line_content(2),
+    "pub(all) enum Color {",
+  )
+  assert_eq(view_model.lines().get_view_line_content(3), "} derive(Eq)")
+  assert_eq(view_model.lines().get_view_line_content(4), "tail")
+  viewer.dispose()
+}

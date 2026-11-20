@@ -132,8 +132,13 @@ test('opens MoonBit models as a top-level outline without enforcing later folds'
   expect((await functionLine.innerText()).replaceAll('\u00a0', ' ').trim()).toBe(
     'pub fn startup_event() -> StartupEvent {',
   );
-  // The struct remains an ordinary fold with Monaco's trailing ellipsis.
-  await expect(editor.locator('.inline-folded')).toHaveCount(1);
+  // A brace-bodied struct folds like a function: its header completes the
+  // hidden body inline as `{ … }` instead of Monaco's trailing ellipsis.
+  const structLine = editor.locator('.view-line', {
+    hasText: 'pub struct StartupEvent',
+  });
+  await expect(structLine.locator('.inline-folded-body')).toHaveCount(1);
+  await expect(editor.locator('.inline-folded')).toHaveCount(0);
 
   // The policy is initial, not enforced: an ordinary chevron click leaves the
   // selected top-level declaration expanded for the rest of this model.
