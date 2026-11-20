@@ -91,7 +91,7 @@ fn api_connection_probe_row(
         Some({ error: None, }) =>
           (
             "form-row-status success",
-            @settings.text(locale, StreamingReplyReceived),
+            @settings.text(locale, ConnectionSuccessful),
           )
         Some({ error: Some(error), }) => ("form-row-status danger", error)
       }
@@ -112,6 +112,5 @@ fn api_connection_probe_row(
       ),
       ..verdict,
     ],
-    desc=@settings.text(locale, TestConnectionDescription),
   )
 }

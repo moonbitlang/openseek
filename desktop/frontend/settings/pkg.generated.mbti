@@ -107,9 +107,8 @@ pub(all) enum Message {
   SavedKey
   ApiKey
   TestConnection
-  TestConnectionDescription
   TestingConnection
-  StreamingReplyReceived
+  ConnectionSuccessful
   SaveApiKey
   KeyStorageDescription
   Language
