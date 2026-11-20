@@ -57,6 +57,9 @@ priv enum UiMessage {
   DeleteLabel
   CompactionQueued
   CompactingContext
+  ContextYieldHint
+  ContextYieldContinueHint
+  ContinueLabel
   WaitingPlacement
   RetryWorktreeList
   RetryLabel
@@ -452,6 +455,31 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, CompactingContext) => "正在压缩上下文…"
     (TraditionalChinese, CompactingContext) => "正在壓縮上下文…"
     (Japanese, CompactingContext) => "コンテキストを圧縮中…"
+    (English, ContextYieldHint) =>
+      "Context limit reached — the next turn continues from the checkpoint summary"
+    (Spanish, ContextYieldHint) =>
+      "Límite de contexto alcanzado: el siguiente turno continúa desde el resumen del punto de control"
+    (SimplifiedChinese, ContextYieldHint) =>
+      "已达上下文上限，下一轮将从检查点摘要继续"
+    (TraditionalChinese, ContextYieldHint) =>
+      "已達上下文上限，下一輪將從檢查點摘要繼續"
+    (Japanese, ContextYieldHint) =>
+      "コンテキスト上限に達しました。次のターンはチェックポイントの要約から続行します"
+    (English, ContextYieldContinueHint) =>
+      "Send the continuation prompt as a new turn"
+    (Spanish, ContextYieldContinueHint) =>
+      "Enviar el mensaje de continuación como un turno nuevo"
+    (SimplifiedChinese, ContextYieldContinueHint) =>
+      "作为新一轮发送继续指令"
+    (TraditionalChinese, ContextYieldContinueHint) =>
+      "作為新一輪傳送繼續指令"
+    (Japanese, ContextYieldContinueHint) =>
+      "継続のプロンプトを新しいターンとして送信"
+    (English, ContinueLabel) => "Continue"
+    (Spanish, ContinueLabel) => "Continuar"
+    (SimplifiedChinese, ContinueLabel) => "继续"
+    (TraditionalChinese, ContinueLabel) => "繼續"
+    (Japanese, ContinueLabel) => "続ける"
     (English, WaitingPlacement) => "Waiting for workspace placement…"
     (Spanish, WaitingPlacement) =>
       "Esperando la ubicación del espacio de trabajo…"

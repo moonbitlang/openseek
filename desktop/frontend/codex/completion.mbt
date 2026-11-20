@@ -639,7 +639,9 @@ fn State::apply_composer_action(
     | @composer.QueuedInputEditRequested(..)
     | @composer.QueuedInputSteerRequested(..)
     | @composer.QueuedInputDeleteRequested(..)
-    | @composer.WorktreePlacementRetried(..) => (@cmd.none, self)
+    | @composer.WorktreePlacementRetried(..)
+    // A Codex composer never offers the continuation after a context yield.
+    | @composer.ContextContinueRequested(..) => (@cmd.none, self)
   }
 }
 
