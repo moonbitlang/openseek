@@ -6,7 +6,7 @@ fn session_prompt_path(
   store : @store.SessionStore,
   id : @agent_session.SessionId,
 ) -> @pathx.Path raise {
-  @pathx.Path(store.session_file(id)).dirname().join("system-prompt.md")
+  Path(store.base_prompt_file(id))
 }
 
 ///|
@@ -14,7 +14,7 @@ async fn saved_session_prompt(
   store : @store.SessionStore,
   id : @agent_session.SessionId,
 ) -> String? {
-  @fsx.read_text_if_exists(session_prompt_path(store, id))
+  store.read_base_prompt(id)
 }
 
 ///|

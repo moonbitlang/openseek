@@ -216,6 +216,13 @@ pub fn root_command() -> @argparse.Command {
           Command(
             "fork",
             about="Copy <id> into a new session that continues from its last finished turn.",
+            flags=[
+              FlagArg(
+                "inherit-system-prompt",
+                long="inherit-system-prompt",
+                about="Use the source session's saved base prompt when available and keep it with the fork.",
+              ),
+            ],
             options=[
               dir_option(),
               ..prompt_options(),
