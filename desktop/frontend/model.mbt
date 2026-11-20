@@ -1309,10 +1309,6 @@ priv struct Model {
   custom_model : CustomModelDraft?
   // The entry a delete confirmation is open for; `None` when none is.
   custom_model_delete : String?
-  // The last connection test for each saved entry, keyed by its id. Saving runs
-  // the probe after the write, so the verdict has to live beside the row: the
-  // editor that started it has already closed.
-  custom_model_probe : @sorted_map.SortedMap[String, ProbeState]
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1957,8 +1953,6 @@ priv enum Msg {
   CustomModelIdChanged(String)
   CustomModelLabelChanged(String)
   CustomModelWindowChanged(String)
-  CustomModelProbed(id~ : String, ok~ : Bool, detail~ : String)
-  CustomModelProbeFailed(id~ : String, message~ : String)
   CustomModelSubmit
   CustomModelCancel
   CustomModelDeleteRequest(String)
@@ -2848,7 +2842,6 @@ fn initial_model(
     custom_model: None,
     // The entry a delete confirmation is open for; `None` when none is.
     custom_model_delete: None,
-    custom_model_probe: @sorted_map.SortedMap([]),
     is_desktop: desktop,
     is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),

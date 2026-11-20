@@ -81,8 +81,7 @@
   align-items: stretch;
 }
 
-/* The custom endpoint's save row: the hint sits directly left of the compact
-   save button, and the probe verdict follows it. */
+/* Keep the model editor actions aligned. */
 .form-row.custom-model-save-row {
   justify-content: flex-end;
   flex-wrap: wrap;

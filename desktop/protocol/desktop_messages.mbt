@@ -1734,64 +1734,6 @@ pub impl ToJson for ModelPatch with fn to_json(self) {
 }
 
 ///|
-/// `settings.test` asks whether one endpoint can serve one model, using the
-/// values the form holds right now — including a key that was never saved.
-/// Nothing is stored: the reply is a verdict about the form, not a write.
-#derive(Debug, Eq)
-pub(all) struct ModelProbePayload {
-  id : String
-  api_url : String
-  // Whether `api_url` already ends at the endpoint, so the probe resolves the
-  // address exactly as a saved entry would.
-  full_url : Bool
-  api_key : String?
-}
-
-///|
-pub impl FromJson for ModelProbePayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "model probe payload")
-  {
-    id: object.required_string("id"),
-    api_url: object.required_string("api_url"),
-    full_url: object.required_bool("full_url"),
-    api_key: object.optional_string("api_key"),
-  }
-}
-
-///|
-pub impl ToJson for ModelProbePayload with fn to_json(self) {
-  let fields : Map[String, Json] = {
-    "id": Json(self.id),
-    "api_url": Json(self.api_url),
-    "full_url": Json(self.full_url),
-  }
-  if self.api_key is Some(value) {
-    fields["api_key"] = Json(value)
-  }
-  Json(fields)
-}
-
-///|
-/// `settings.test`'s answer: whether the endpoint completed a minimal request,
-/// and when it did not, one line the form can show verbatim.
-#derive(Debug, Eq)
-pub(all) struct ModelProbeReply {
-  ok : Bool
-  detail : String
-}
-
-///|
-pub impl FromJson for ModelProbeReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "model probe reply")
-  { ok: object.required_bool("ok"), detail: object.required_string("detail"), }
-}
-
-///|
-pub impl ToJson for ModelProbeReply with fn to_json(self) {
-  { "ok": Json(self.ok), "detail": Json(self.detail) }
-}
-
-///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32

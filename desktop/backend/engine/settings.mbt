@@ -410,15 +410,6 @@ async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
 }
 
 ///|
-/// The custom endpoint's stored key, for `settings.test` when the form holds
-/// no freshly typed one: the page never receives key text, so a saved key is
-/// the only way to probe an endpoint whose key was entered earlier.
-pub async fn saved_custom_key(manager : EngineManager) -> String? {
-  let settings = manager.settings_snapshot() catch { _ => return None }
-  settings.provider_config(Custom).api_key
-}
-
-///|
 /// The endpoint a run talks to, resolved from the settings. `api_url` is
 /// `None` for the engine's built-in default (the official DeepSeek
 /// endpoint). The client no longer sends credentials — this is the one

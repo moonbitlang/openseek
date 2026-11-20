@@ -25,16 +25,6 @@ const MinContextWindow : Int32 = 1_024
 const MaxContextWindow : Int32 = 10_000_000
 
 ///|
-/// What the last connection test said about one saved entry. `Probing` shows on
-/// the row while the request is in flight, so a slow endpoint cannot look like a
-/// dead page.
-#derive(Eq)
-priv enum ProbeState {
-  Probing
-  Probed(ok~ : Bool, detail~ : String)
-}
-
-///|
 /// The entry the editor holds: a new one when `original` is `None`, or the
 /// stored entry named by `original` when it edits an existing one.
 #derive(Eq)
@@ -116,23 +106,6 @@ fn CustomModelDraft::patch(self : CustomModelDraft) -> @protocol.ModelPatch {
 }
 
 ///|
-/// The endpoint the section above the form holds: its URL and the key typed
-/// into it. A blank key means "use the stored one", which the probe resolves
-/// on the host.
-fn Model::endpoint_inputs(self : Model) -> (String, String?) {
-  let url = self
-    .host_settings()
-    .map(settings => settings.endpoint.config(Custom).api_url.unwrap_or(""))
-    .unwrap_or("")
-  let key = if self.setup_api_key.is_blank() {
-    None
-  } else {
-    Some(self.setup_api_key.trim().to_owned())
-  }
-  (url, key)
-}
-
-///|
 /// The custom entries the host reports, in stored order.
 fn Model::custom_models(self : Model) -> Array[CustomModel] {
   self.host_settings().map(settings => settings.models).unwrap_or([])
@@ -159,41 +132,6 @@ fn Model::custom_model_session_count(self : Model, id : String) -> Int32 {
     }
   }
   count
-}
-
-///|
-/// Send one entry's endpoint to `settings.test` and report the verdict back,
-/// tagged with the entry it is about: the verdict shows on that entry's row,
-/// because the save that started the probe has already closed the editor.
-fn probe_custom_model(
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  payload : @protocol.ModelProbePayload,
-) -> @cmd.Cmd {
-  let id = payload.id
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        channel, @commands.settings_test, payload,
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              CustomModelProbeFailed(
-                id~,
-                message=@interop.bridge_error_text(error),
-              ),
-            ),
-          )
-          return
-        }
-      }
-      scheduler.add(
-        dispatch(CustomModelProbed(id~, ok=reply.ok, detail=reply.detail)),
-      )
-    })
-    |> ignore
-  })
 }
 
 ///|
@@ -252,9 +190,6 @@ fn Model::update_custom_model(
           .custom_model_entry(id)
           .map(entry => CustomModelDraft::of(entry)),
           custom_model_delete: None,
-          // The badge answered "does the endpoint work", which the form the
-          // user just opened is about to re-test.
-          custom_model_probe: self.custom_model_probe.remove(id),
         },
       )
     (CustomModelIdChanged(value), Some(draft)) =>
@@ -266,59 +201,18 @@ fn Model::update_custom_model(
     (CustomModelCancel, _) => (@cmd.none, { ..self, custom_model: None, })
     (CustomModelSubmit, Some(draft)) =>
       if draft.can_submit() {
-        let id = draft.id.trim().to_owned()
-        let (url, key) = self.endpoint_inputs()
         (
-          // Write first, then report: saving is the durable act, and the verdict
-          // lands on the row that the save creates. A probe that never answers
-          // therefore cannot hold the entry back.
-          @cmd.batch([
-            save_custom_model(
-              dispatch,
-              self.focused,
-              draft,
-              self.focused_connection_generation(),
-            ),
-            probe_custom_model(dispatch, self.focused, {
-              id,
-              api_url: url,
-              full_url: false,
-              api_key: key,
-            }),
-          ]),
-          {
-            ..self,
-            custom_model: None,
-            custom_model_probe: self.custom_model_probe.add(id, Probing),
-          },
+          save_custom_model(
+            dispatch,
+            self.focused,
+            draft,
+            self.focused_connection_generation(),
+          ),
+          { ..self, custom_model: None, },
         )
       } else {
         (@cmd.none, self)
       }
-    (CustomModelProbed(id~, ok~, detail~), _) =>
-      (
-        @cmd.none,
-        {
-          ..self,
-          custom_model_probe: self.custom_model_probe.add(
-            id,
-            Probed(ok~, detail~),
-          ),
-        },
-      )
-    (CustomModelProbeFailed(id~, message~), _) =>
-      // An unreachable endpoint does not undo the save: the user may sit behind
-      // a proxy the probe cannot use. The row says so, and stays editable.
-      (
-        @cmd.none,
-        {
-          ..self,
-          custom_model_probe: self.custom_model_probe.add(
-            id,
-            Probed(ok=false, detail=message),
-          ),
-        },
-      )
     (CustomModelDeleteRequest(id), _) =>
       (@cmd.none, { ..self, custom_model_delete: Some(id), })
     (CustomModelDeleteCancelled, _) =>
@@ -347,8 +241,6 @@ fn Model::update_custom_model(
             Some({ original: Some(original), .. }) if original == id => None
             other => other
           },
-          // A deleted entry has no row left to carry its verdict.
-          custom_model_probe: self.custom_model_probe.remove(id),
         },
       )
     }

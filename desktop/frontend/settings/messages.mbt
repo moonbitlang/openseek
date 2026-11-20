@@ -167,9 +167,6 @@ pub(all) enum Message {
   AddModel
   SaveModel
   ResetForm
-  TestingConnection
-  ConnectionOk
-  ProbeHint
   EditModel
   DeleteModel
   DeleteModelTitle
@@ -1315,26 +1312,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ResetForm) => "重置"
     (TraditionalChinese, ResetForm) => "重設"
     (Japanese, ResetForm) => "リセット"
-    (English, TestingConnection) => "Testing connection"
-    (Spanish, TestingConnection) => "Probando conexión"
-    (SimplifiedChinese, TestingConnection) => "正在测试连接"
-    (TraditionalChinese, TestingConnection) => "正在測試連線"
-    (Japanese, TestingConnection) => "接続をテストしています"
-    (English, ProbeHint) =>
-      "Saving tests the connection; the result shows on its row."
-    (Spanish, ProbeHint) =>
-      "Al guardar se prueba la conexión; el resultado aparece en su fila."
-    (SimplifiedChinese, ProbeHint) =>
-      "保存后会自动测试连接，结果显示在列表里。"
-    (TraditionalChinese, ProbeHint) =>
-      "儲存後會自動測試連線，結果顯示在列表裡。"
-    (Japanese, ProbeHint) =>
-      "保存後に接続をテストし、結果は一覧の行に表示されます。"
-    (English, ConnectionOk) => "Connected"
-    (Spanish, ConnectionOk) => "Conectado"
-    (SimplifiedChinese, ConnectionOk) => "连接正常"
-    (TraditionalChinese, ConnectionOk) => "連線正常"
-    (Japanese, ConnectionOk) => "接続済み"
     (English, EditModel) => "Edit"
     (Spanish, EditModel) => "Editar"
     (SimplifiedChinese, EditModel) => "编辑"

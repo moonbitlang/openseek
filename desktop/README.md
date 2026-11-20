@@ -407,12 +407,6 @@ the right point instead of being driven past its limit. The host exports the
 entry's window to every run it spawns for that model, and a built-in model
 keeps the engine's own table for its family.
 
-Saving a custom model writes it and closes the editor first; the connection test
-runs afterwards, so its verdict lands on the entry's row: `Testing connection`,
-then `Connected` or the endpoint's own reason. A failed test never undoes the
-save, because the endpoint may sit behind a proxy the probe cannot use, and the
-reason stays on the row where editing it is one click away.
-
 Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
 ending in `/v<number>` (with an optional trailing slash) receive
 `/chat/completions`; other paths remain complete endpoints. Query parameters

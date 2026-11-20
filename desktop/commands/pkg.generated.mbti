@@ -306,8 +306,6 @@ pub let settings_get : Command[@protocol.EmptyPayload, @protocol.SettingsStatusP
 
 pub let settings_set : Command[@protocol.SettingsSetPayload, @protocol.SettingsStatusPayload]
 
-pub let settings_test : Command[@protocol.ModelProbePayload, @protocol.ModelProbeReply]
-
 pub let shell_open_external : Command[@protocol.ExternalLinkPayload, @protocol.OpenExternalReply]
 
 pub let skills_catalog : Command[@protocol.EmptyPayload, @protocol.SkillsCatalogReply]

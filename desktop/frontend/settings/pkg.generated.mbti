@@ -176,9 +176,6 @@ pub(all) enum Message {
   AddModel
   SaveModel
   ResetForm
-  TestingConnection
-  ConnectionOk
-  ProbeHint
   EditModel
   DeleteModel
   DeleteModelTitle

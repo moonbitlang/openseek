@@ -58,37 +58,9 @@ fn custom_model_entry_row(
     0 => @settings.text(locale, CustomModelUnused)
     used => @settings.text(locale, CustomModelInUse(used))
   }
-  // The connection test runs after the save, so its verdict is the row's: a user
-  // who looked away still sees whether the endpoint answered.
-  let probe : Array[@html.Html] = match model.custom_model_probe.get(entry.id) {
-    Some(Probing) =>
-      [
-        @html.span(
-          class="form-row-status",
-          @settings.text(locale, TestingConnection) + "…",
-        ),
-      ]
-    Some(Probed(ok~, detail~)) =>
-      [
-        @html.span(
-          class=if ok {
-            "form-row-status success"
-          } else {
-            "form-row-status danger"
-          },
-          if ok {
-            "✓ " + @settings.text(locale, ConnectionOk)
-          } else {
-            "✗ \{detail}"
-          },
-        ),
-      ]
-    None => []
-  }
   @ui.form_row(
     entry.display_name(),
     [
-      ..probe,
       @html.button(
         class="button secondary compact",
         type_="button",
@@ -229,11 +201,7 @@ fn custom_model_editor_rows(
         @settings.text(locale, ModelContextWindowInvalid)
       },
     ),
-    // The hint sits directly left of the compact save button. Saving writes the
-    // entry and closes the editor; the connection test runs after it, and its
-    // verdict appears on the row.
     @html.div(class="form-row custom-model-save-row", [
-      @html.span(class="form-row-status", @settings.text(locale, ProbeHint)),
       @html.button(
         class="button primary compact",
         type_="button",

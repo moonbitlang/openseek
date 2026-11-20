@@ -37,7 +37,6 @@ import {
   "openseek_desktop/backend/resources",
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/http",
   "moonbitlang/core/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/env" @sys,
@@ -59,7 +58,6 @@ options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
-    "moonbitlang/core/async/http",
     "moonbitlang/core/async/os_error",
     "moonbitlang/core/async/process",
   ],

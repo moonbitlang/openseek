@@ -2575,24 +2575,6 @@ pub impl @json.FromJson for ModelPatch
 pub impl @json.ToJson for ModelPatch
 
 #derive(Eq, @debug.Debug)
-pub(all) struct ModelProbePayload {
-  id : String
-  api_url : String
-  full_url : Bool
-  api_key : String?
-}
-pub impl @json.FromJson for ModelProbePayload
-pub impl @json.ToJson for ModelProbePayload
-
-#derive(Eq, @debug.Debug)
-pub(all) struct ModelProbeReply {
-  ok : Bool
-  detail : String
-}
-pub impl @json.FromJson for ModelProbeReply
-pub impl @json.ToJson for ModelProbeReply
-
-#derive(Eq, @debug.Debug)
 pub(all) struct ModelStatus {
   id : String
   label : String?

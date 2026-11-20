@@ -57,8 +57,6 @@ pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Ser
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 
-pub async fn probe_model(api_url~ : String, model~ : String, full_url~ : Bool, api_key? : String) -> @protocol.ModelProbeReply
-
 pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply raise EngineError
 
 pub async fn read_job(EngineManager, @protocol.JobReadPayload) -> @protocol.JobReadReply
@@ -66,8 +64,6 @@ pub async fn read_job(EngineManager, @protocol.JobReadPayload) -> @protocol.JobR
 pub fn remote_server_base() -> String
 
 pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
-
-pub async fn saved_custom_key(EngineManager) -> String?
 
 pub async fn search_sessions(@protocol.SessionSearchPayload) -> @protocol.SessionSearchReply
 
