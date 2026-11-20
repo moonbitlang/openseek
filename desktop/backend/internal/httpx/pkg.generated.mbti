@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub async fn get(StringView, headers? : Map[@http.CaseInsensitiveString, String], proxy? : @http.ClientConnection, redirect? : Bool) -> (@http.ResponseHeader, @http.MessageBody)
+pub async fn get(StringView, headers? : Map[@http.CaseInsensitiveString, String], proxy? : @http.Proxy, redirect? : Bool) -> (@http.ResponseHeader, @http.MessageBody)
 
-pub async fn get_stream(StringView, headers? : Map[@http.CaseInsensitiveString, String], proxy? : @http.ClientConnection, redirect? : Bool) -> (@http.ResponseHeader, @http.ClientConnection)
+pub async fn get_stream(StringView, headers? : Map[@http.CaseInsensitiveString, String], proxy? : @http.Proxy, redirect? : Bool) -> (@http.ResponseHeader, @http.ClientConnection)
 
 // Errors
 pub suberror RedirectError {

@@ -9,7 +9,7 @@ pub suberror RedirectError {
   InvalidLocation
   /// The Location value would downgrade the request from HTTPS to HTTP.
   InsecureRedirect
-  /// Following the redirect would require a new proxy connection.
+  /// Redirects are not followed when a proxy is supplied.
   ProxyRedirectUnsupported
 }
 
@@ -22,7 +22,7 @@ const MaxRedirects = 5
 pub async fn get(
   uri : StringView,
   headers~ : @http.Headers = Map([]),
-  proxy? : @http.ClientConnection,
+  proxy? : @http.Proxy,
   redirect~ : Bool = false,
 ) -> (@http.ResponseHeader, @http.MessageBody) {
   if !redirect {
@@ -46,12 +46,12 @@ pub async fn get(
 /// against the URL of that hop and reject HTTPS downgrades. At an origin
 /// change, keep only Accept, Accept-Encoding and Accept-Language headers.
 /// Intermediate connections are closed without reading their bodies.
-/// A supplied `proxy` is consumed by the first request, as in Core HTTP.
-/// If that request needs another hop, raise `ProxyRedirectUnsupported`.
+/// With both `redirect=true` and `proxy` supplied, raise
+/// `ProxyRedirectUnsupported` rather than following a redirect.
 pub async fn get_stream(
   uri : StringView,
   headers~ : @http.Headers = Map([]),
-  proxy? : @http.ClientConnection,
+  proxy? : @http.Proxy,
   redirect~ : Bool = false,
 ) -> (@http.ResponseHeader, @http.ClientConnection) {
   if !redirect {
@@ -70,8 +70,8 @@ pub async fn get_stream(
 async fn[Body] follow_redirects(
   uri : StringView,
   headers : @http.Headers,
-  proxy : @http.ClientConnection?,
-  send~ : async (StringView, @http.Headers, @http.ClientConnection?) -> (
+  proxy : @http.Proxy?,
+  send~ : async (StringView, @http.Headers, @http.Proxy?) -> (
     @http.ResponseHeader,
     Body,
   ),
