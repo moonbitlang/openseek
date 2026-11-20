@@ -1,0 +1,19 @@
+import {
+  "moonbitlang/core/async/http",
+  "tonyfettes/url",
+}
+
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/socket",
+} for "test"
+
+supported_targets = "+native+wasm"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)
