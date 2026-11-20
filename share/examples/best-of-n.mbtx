@@ -13,7 +13,7 @@ import {
 ---
 
 ///|
-async fn main {
+fn main {
   let task = "fix the failing test"
   let attempts = 3
   // Worktrees one at a time: concurrent `git worktree add` on one repository

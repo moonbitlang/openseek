@@ -232,7 +232,7 @@ async fn ShellExecution::monitor(
         match
           (@async.any([
             () => {
-              let read = reader.read_into(buffer) catch {
+              let read = reader.read_into(buffer.mut_view()) catch {
                 TransportError(cause, ..) => raise cause
                 error => raise error
               }

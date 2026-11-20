@@ -1,13 +1,12 @@
 ---
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/shell",
   "moonbitlang/core/json",
 }
 ---
 
 ///|
-async fn main {
+fn main {
   let mut errors = 0
   let exit_code = @shell.Cmd(
     "moon",

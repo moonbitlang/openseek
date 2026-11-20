@@ -65,9 +65,9 @@ async fn run_app_server(
           }
           let body = Buffer()
           let chunk = FixedArray::make(4096, b'\x00')
-          for read = message.read_into(chunk)
+          for read = message.read_into(chunk.mut_view())
               read > 0
-              read = message.read_into(chunk) {
+              read = message.read_into(chunk.mut_view()) {
             guard body.length() + read <= 65536 else {
               raise @host.HostError("Initialize too large")
             }

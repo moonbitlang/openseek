@@ -3,17 +3,17 @@
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
 implementation. SDK `moonbitlang/openseek_tools@0.4.2` uses
-`moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
+`moonbitlang/core/async` and speaks PTC protocol version 1. The examples use
+MoonBit 0.10.22 or later to infer async and error effects in `fn main`.
 
 ```mbtx
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2" @tools,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   let result = @tools.call("edit", {
     "path": "note.txt", "start_line": 1,
     "old_string": "before", "new_string": "after",
@@ -73,11 +73,10 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   // Print the page so the next model request sees the tools and schemas.
   let page = @mcp.search(query="list issues", server="github")
   println(page)
@@ -95,11 +94,10 @@ server with a `list_issues` tool taking `repo` and returning an `issues` array:
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   let result = @mcp.call("tracker", "list_issues", { "repo": "alpha" })
   if result.is_error { fail(result.content) }
   guard result.data is Some({ "issues": Array(issues), .. }) else {

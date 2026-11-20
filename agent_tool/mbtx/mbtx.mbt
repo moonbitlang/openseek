@@ -1544,7 +1544,9 @@ async fn denial_scan_region(
     } else {
       DenialScanChunkBytes
     }
-    let n = file.at(position).read_into(buf, max_len=want) catch { _ => break }
+    let n = file.at(position).read_into(buf.mut_view(end=want)) catch {
+        _ => break
+      }
     if n <= 0 {
       break
     }
@@ -1581,7 +1583,7 @@ async fn read_capped(path : String) -> String {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
   let buf = FixedArray::make(OutputCapBytes, b'\x00')
-  let filled = file.at(0).read_into(buf)
+  let filled = file.at(0).read_into(buf.mut_view())
   let text = @utf8.decode_lossy(Bytes::from_array(buf[:filled]))
   // If we filled the cap there may be more; note the truncation.
   if filled == OutputCapBytes {

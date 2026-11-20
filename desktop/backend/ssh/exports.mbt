@@ -307,7 +307,7 @@ pub async fn Connection::run(
       group.spawn_bg(allow_failure=true, () => {
         let chunk = FixedArray::make(4096, b'\x00')
         for ;; {
-          let count = errors.read_into(chunk)
+          let count = errors.read_into(chunk.mut_view())
           guard count > 0 else { break }
           if stderr.length() + count > 8192 {
             stderr = Buffer()

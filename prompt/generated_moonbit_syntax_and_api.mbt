@@ -19,11 +19,9 @@ fn moonbit_syntax_and_api() -> String {
     #|- Import every package it uses separately, core packages included and by
     #|  their real path: `moonbitlang/core/encoding/base64`, not
     #|  `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
-    #|- Keep `async fn main` for async IO.
-    #|- Helpers that run an async command/IO are `async fn` too;
-    #|  a plain `fn` cannot call them. (so async is contagious)
-    #|- There is no `await`: async calls are written normally, and async functions
-    #|  and tests are marked `async`.
+    #|- Use `fn main`. The entry point infers async and error effects. Import
+    #|  `moonbitlang/core/async` only when using its APIs, such as `@async.sleep`.
+    #|- Declare async helpers with `async fn` and write async calls directly.
     #|- Use `println` (no `print`).
     #|
     #|A minimal `moon check` script:
@@ -31,13 +29,12 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/env",
     #|}
     #|---
     #|
-    #|async fn main {
+    #|fn main {
     #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
     #|  if code != 0 { fail("moon check failed (exit=\{code})") }
     #|}
@@ -57,7 +54,6 @@ fn moonbit_syntax_and_api() -> String {
     #|---
     #|// Arguments: [--stdin] [<input>].
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/fs",
     #|  "moonbitlang/core/async/stdio",
     #|  "moonbitlang/core/argparse",
@@ -65,8 +61,7 @@ fn moonbit_syntax_and_api() -> String {
     #|---
     #|
     #|///|
-    #|/// Reading a path or stdin is async IO, so `main` is `async fn main`.
-    #|async fn main {
+    #|fn main {
     #|  let matches : @argparse.Matches = @argparse.parse(
     #|    Command(
     #|      "count-input",
@@ -133,13 +128,12 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|}
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  // `Cmd` takes an argv array, not a shell line: nothing expands `*.mbt`
     #|  // before rg sees it, so rg applies it as its own glob. A glob with no `/`
     #|  // matches the basename at any depth. rg ships no `moonbit` file type, so
@@ -176,14 +170,13 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/json",
     #|}
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let mut errors = 0
     #|  let exit_code = @shell.Cmd(
     #|    "moon",
@@ -226,14 +219,13 @@ fn moonbit_syntax_and_api() -> String {
     #|// a host-backed test that runs it through the real sandbox and host.
     #|import {
     #|  "moonbitlang/openseek_tools@0.4.2",
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
     #|}
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let args = @env.args()[1:]
     #|  guard args is [path, old_string, new_string, ..] else {
     #|    fail(
@@ -291,7 +283,6 @@ fn moonbit_syntax_and_api() -> String {
     #|---
     #|import {
     #|  "moonbitlang/openseek_tools@0.4.2" @tools,
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/json",
     #|}
     #|---
@@ -334,7 +325,7 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let ids = [
     #|    scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
     #|    scout(
@@ -384,7 +375,7 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|---
     #|
-    #|async fn main {
+    #|fn main {
     #|  @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
     #|  for pass in 0..<12; previous = None {
     #|    ignore(
@@ -493,7 +484,6 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|```moon.pkg
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/fs", // package
     #|  "moonbitlang/core/async/stdio",
     #|  "moonbitlang/core/argparse",
@@ -550,7 +540,7 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|
     #|///|
-    #|fn main raise {
+    #|fn main {
     #|  // A mutable local is `let mut`; there is no `var`. Mutable maps and arrays
     #|  // are updated in place without `mut`.
     #|  let mut total = 0
@@ -675,9 +665,8 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|
     #|///|
-    #|/// A sync `main` that calls raising functions is `fn main raise`; an async
-    #|/// `main` raises by default, and `noraise` marks an async helper that must not.
-    #|fn main raise {
+    #|/// The entry point infers its error effect and reports uncaught errors.
+    #|fn main {
     #|  assert_eq(parse_count(" 42 "), 42)
     #|  assert_eq(describe("7"), "count = 7")
     #|  assert_eq(describe(""), "invalid: empty input")
@@ -721,7 +710,7 @@ fn moonbit_syntax_and_api() -> String {
     #|---
     #|
     #|///|
-    #|fn main raise {
+    #|fn main {
     #|  // Interpolation is `\{expr}` and takes any `Show` value; `"n: " + n` needs
     #|  // a `String` on both sides, so with an `Int32` it is a type error.
     #|  let n = 3
