@@ -175,6 +175,13 @@ pub let settings_set : Command[
 ] = Command("settings.set")
 
 ///|
+/// Test the selected provider with a short streamed text request.
+pub let settings_test : Command[
+  @protocol.ApiConnectionProbePayload,
+  @protocol.ApiConnectionProbeReply,
+] = Command("settings.test")
+
+///|
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply] = Command(
   "app.info",
 )

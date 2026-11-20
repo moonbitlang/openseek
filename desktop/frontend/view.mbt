@@ -1482,6 +1482,7 @@ fn api_settings_rows(
       ),
     )
   }
+  rows.append(api_connection_probe_rows(dispatch, model, settings_loaded~))
   rows
 }
 

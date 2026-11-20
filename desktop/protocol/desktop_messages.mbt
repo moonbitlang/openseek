@@ -1577,6 +1577,52 @@ pub impl ToJson for ProviderStatus with fn to_json(self) {
 }
 
 ///|
+/// Save revision and temporary wire model ID for a Custom URL test.
+#derive(Debug, Eq)
+pub(all) struct ApiConnectionProbePayload {
+  revision : Int32
+  custom_model_id : String?
+}
+
+///|
+pub impl FromJson for ApiConnectionProbePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "API connection probe payload")
+  {
+    revision: object.required_int("revision"),
+    custom_model_id: object.optional_string("custom_model_id"),
+  }
+}
+
+///|
+pub impl ToJson for ApiConnectionProbePayload with fn to_json(self) {
+  let fields : Map[String, Json] = { "revision": Json(self.revision) }
+  if self.custom_model_id is Some(id) {
+    fields["custom_model_id"] = Json(id)
+  }
+  Json(fields)
+}
+
+///|
+#derive(Debug, Eq)
+pub(all) struct ApiConnectionProbeReply {
+  error : String?
+}
+
+///|
+pub impl FromJson for ApiConnectionProbeReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "API connection probe reply")
+  { error: object.optional_string("error"), }
+}
+
+///|
+pub impl ToJson for ApiConnectionProbeReply with fn to_json(self) {
+  match self.error {
+    Some(error) => { "error": Json(error) }
+    None => Json::object({})
+  }
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32

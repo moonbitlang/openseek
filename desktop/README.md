@@ -393,6 +393,11 @@ without changing the selected `provider`. Replies and broadcasts return
 `providers[name]` with `api_url` and `has_api_key`; credentials are never
 returned. `has_api_key` includes the official provider's environment fallback.
 
+**Test connection** sends one short text prompt through the selected provider's
+saved API settings and reports whether it received streamed text. DeepSeek, GLM
+and OpenRouter use their default models. For Custom URL, enter a model ID for
+the request. The ID is used for this test and is kept out of saved settings.
+
 Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
 ending in `/v<number>` (with an optional trailing slash) receive
 `/chat/completions`; other paths remain complete endpoints. Query parameters

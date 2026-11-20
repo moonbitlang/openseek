@@ -1270,6 +1270,8 @@ priv struct Model {
   // saved through `settings.set`. The host settings themselves live on each
   // `DeviceState`.
   setup_api_key : String
+  api_probe_model_id : String
+  api_connection_probe : ApiConnectionProbe?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1875,6 +1877,9 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
+  ApiProbeModelChanged(String)
+  TestApiConnection
+  ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
   OpenSchedules
   SchedulePage(SchedulePageMsg)
@@ -2756,6 +2761,8 @@ fn initial_model(
     glm_reasoning: ThinkingOff,
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
+    api_probe_model_id: "",
+    api_connection_probe: None,
     setup_api_key: "",
     is_desktop: desktop,
     is_android_app: android,
@@ -3087,6 +3094,7 @@ fn Model::reset_api_setup(self : Model) -> Model {
   {
     ..self,
     api_setup_open: false,
+    api_probe_model_id: "",
     setup_api_key: "",
     default_prompt: @prompt.Model::new(),
   }
