@@ -63,108 +63,6 @@ fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
 }
 
 ///|
-/// One local-library row: name, description, and — for registry installs
-/// only — the source tag and management menu. Hand-written skills are
-/// listed alongside registry installs, including disabled entries, but the
-/// app never offers to delete them.
-fn installed_row(
-  locale~ : @i18n.Locale = English,
-  state : State,
-  library : Library,
-  skill : InstalledItem,
-  emit : @cmd.Emit[Msg],
-  menu : @html.Html,
-) -> @html.Html {
-  let info : Array[@html.Html] = [
-    @html.div(class="skill-meta-line", [
-      @html.span(
-        class="skill-meta",
-        if skill.source.is_empty() {
-          ui(locale, HandWritten)
-        } else {
-          skill.source
-        },
-      ),
-    ]),
-  ]
-  if !skill.description.is_blank() {
-    info.push(@html.span(class="skill-desc", skill.description))
-  }
-  let header : Array[@html.Html] = [
-    @html.button(
-      class="skill-summary",
-      attrs=@html.Attrs::build().aria_label(skill.name),
-      [
-        @html.span(class="skill-avatar", icon(icon_extensions)),
-        @html.span(class="skill-title", [
-          @html.span(class="skill-name", skill.name),
-          builtin_badge(locale, skill),
-        ]),
-      ],
-    ),
-  ]
-  header.push(
-    installed_actions(locale, state, library, skill, emit, "skill-action", menu),
-  )
-  @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
-    @html.div(class="skill-header", header),
-    @html.div(class="skill-info", info),
-  ])
-}
-
-///|
-/// One uninstalled catalog row, with its install action or pending operation.
-fn market_row(
-  locale~ : @i18n.Locale = English,
-  state : State,
-  library : Library,
-  item : MarketItem,
-  emit : @cmd.Emit[Msg],
-) -> @html.Html {
-  let source = source_label(item)
-  let pending = state.pending_action(library, item.identity())
-  let info : Array[@html.Html] = [@html.span(class="skill-meta", source)]
-  if !item.description.is_blank() {
-    info.push(@html.span(class="skill-desc", item.description))
-  }
-  let action = @html.div(class="skill-actions", [
-    @html.button(
-      class="button primary skill-action",
-      disabled=pending is Some(_),
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        emit(Install(item))
-      }),
-      if pending is Some(action) {
-        ui(locale, action.label())
-      } else {
-        ui(locale, Install)
-      },
-    ),
-  ])
-  let header = [
-    @html.button(
-      class="skill-summary",
-      attrs=@html.Attrs::build().aria_label(item.name),
-      [
-        @html.span(class="skill-avatar", icon(icon_package)),
-        @html.span(class="skill-name", item.name),
-      ],
-    ),
-    action,
-  ]
-  @html.div(
-    class="skill-row",
-    title=item.repository,
-    on_click=emit(PreviewMarket(item)),
-    [
-      @html.div(class="skill-header", header),
-      @html.div(class="skill-info", info),
-    ],
-  )
-}
-
-///|
 fn detail_page(
   locale~ : @i18n.Locale = English,
   state : State,
@@ -264,6 +162,12 @@ fn detail_shell(
         detail_action(locale~, target, state, input, emit, menu),
       ]),
       @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
+      match target {
+        Market(item) =>
+          @html.div(class="skill-detail-description", item.description)
+        Installed(item) =>
+          @html.div(class="skill-detail-description", item.description)
+      },
       @html.div(notice_views(state, input, Some(target))),
     ]),
     @html.div(class="skill-file-bar", [
@@ -276,7 +180,9 @@ fn detail_shell(
             on_click=copy_content(content),
             ui(locale, Copy),
           )
-        _ => @html.span(class="skill-file-status", ui(locale, Loading))
+        Loading(..) =>
+          @html.span(class="skill-file-status", ui(locale, Loading))
+        _ => @html.nothing
       },
     ]),
     content,
@@ -335,8 +241,8 @@ fn detail_action(
         },
       )
     }
-    Installed(item) =>
-      installed_actions(
+    Installed(item) => {
+      let controls = installed_controls(
         locale,
         state,
         input.library,
@@ -345,6 +251,14 @@ fn detail_action(
         "skill-detail-action",
         menu,
       )
+      @html.div(class="skill-actions", [
+        controls.status,
+        @html.div(class="skill-actions skill-installed-actions", [
+          controls.toggle,
+          controls.menu,
+        ]),
+      ])
+    }
   }
 }
 
@@ -361,13 +275,17 @@ fn detail_action_target(
         guard installed.id == item.id else { continue }
         return Some(Installed(installed))
       }
-      // Keep the same detail page usable after uninstall, when its version
-      // still exists in the catalog. Never send an id from a removed snapshot.
+      guard item.identity() is Some(identity) else { return None }
+      for installed in input.installed {
+        if installed.identity() == Some(identity) {
+          return Some(Installed(installed))
+        }
+      }
       guard state.catalog is Ready(library~, items~) && library == input.library else {
         return None
       }
       for market in items {
-        guard source_label(market) == item.source else { continue }
+        guard market.identity() == identity else { continue }
         return Some(Market(market))
       }
       None
@@ -382,147 +300,6 @@ fn detail_action_target(
 fn matches(query : String, fields : Array[String]) -> Bool {
   let query = query.trim().to_lower()
   query.is_empty() || fields.any(field => field.to_lower().contains(query))
-}
-
-///|
-/// The library dialog retains its search, rows, and menus beneath a detail.
-fn list_page(
-  locale~ : @i18n.Locale = English,
-  state : State,
-  input : Input,
-  emit : @cmd.Emit[Msg],
-  menus : Map[String, @html.Html],
-  selector : @html.Html,
-) -> @html.Html {
-  let catalog_loading = match state.catalog {
-    Loading(library~) => library == input.library
-    _ => false
-  }
-  let sections : Array[@html.Html] = [
-    @html.div(class="page-header", [
-      @html.div(class="skills-heading", [
-        @html.div(class="page-eyebrow", ui(locale, Library)),
-        selector,
-        @html.button(
-          class="button skills-refresh",
-          disabled=catalog_loading || !input.available(),
-          on_click=emit(RefreshCatalog),
-          if catalog_loading {
-            ui(locale, Refreshing)
-          } else {
-            ui(locale, Refresh)
-          },
-        ),
-      ]),
-      @html.div(class="page-subtitle", ui(locale, Description)),
-    ]),
-    @html.div(
-      class="search-field field-surface",
-      attrs=@html.Attrs::build().data_set("focus-owner", ""),
-      [
-        icon(icon_search),
-        @html.input(
-          input_type=@html.InputType::Search,
-          value=state.query,
-          placeholder=ui(locale, Search),
-          on_input=emit.map(value => QueryChanged(value)),
-          attrs=@html.Attrs::build()
-            .data_set("focus-target", "")
-            .disabled(!input.available()),
-        ),
-      ],
-    ),
-  ]
-  if !input.available() {
-    sections.push(
-      @html.div(class="skills-empty", ui(locale, LibraryUnavailable)),
-    )
-    return @ui.dialog_page(class="skills-page", sections)
-  }
-  for notice in notice_views(state, input, None) {
-    sections.push(notice)
-  }
-  let installed_rows : Map[String, @html.Html] = Map([])
-  for skill in input.installed {
-    guard matches(state.query, [skill.name, skill.description, skill.source]) else {
-      continue
-    }
-    installed_rows["\{input.library.key()}:\{skill.id}"] = installed_row(
-      locale~,
-      state,
-      input.library,
-      skill,
-      emit,
-      menus.get(skill.id).unwrap(),
-    )
-  }
-  if installed_rows.is_empty() {
-    installed_rows["empty"] = @html.div(
-      class="skills-empty",
-      if input.installed.is_empty() {
-        ui(locale, EmptyInstalled)
-      } else {
-        ui(locale, NoInstalledMatch)
-      },
-    )
-  }
-  sections.push(
-    @ui.form_section(icon_extensions, ui(locale, InstalledLabel), [
-      // Filtering must not reuse another skill's stateful menu DOM.
-      @html.div(style=["display:contents"], installed_rows),
-    ]),
-  )
-  let market_rows : Array[@html.Html] = []
-  match state.catalog {
-    Failed(library~, message~) if library == input.library =>
-      market_rows.push(@html.div(class="skills-empty danger", message))
-    Ready(library~, items~) if library == input.library => {
-      let installed = input.installed_registry_skills()
-      let available = items.filter(item => {
-        !installed.contains((item.module_name, item.package_path))
-      })
-      for item in available {
-        guard matches(state.query, [
-          item.name,
-          item.description,
-          item.author,
-          source_label(item),
-        ]) else {
-          continue
-        }
-        market_rows.push(market_row(locale~, state, input.library, item, emit))
-      }
-      if market_rows.is_empty() {
-        market_rows.push(
-          @html.div(
-            class="skills-empty",
-            if available.is_empty() {
-              ui(locale, EmptyRegistry)
-            } else {
-              ui(locale, NoRegistryMatch)
-            },
-          ),
-        )
-      }
-    }
-    _ =>
-      market_rows.push(
-        @html.div(class="skills-empty", ui(locale, LoadingCatalog)),
-      )
-  }
-  sections.push(
-    @ui.form_section(icon_package, ui(locale, Registry), market_rows),
-  )
-  @ui.dialog_page(
-    class="skills-page",
-    attrs=@html.Attrs::build().on_scroll(event => {
-      guard event.target().to_element() is Some(element) else {
-        return @cmd.none
-      }
-      emit(SkillsScrolled(element.get_scroll_top()))
-    }),
-    sections,
-  )
 }
 
 ///|
@@ -563,14 +340,20 @@ fn library_select(
     }),
     render=scope => {
       @html.fragment([
-        @rui.select_trigger(scope~, aria_label=label),
+        @rui.select_trigger(
+          scope~,
+          aria_label=label,
+          class="setting-select-button field-surface",
+        ),
         @rui.select_content(
           scope~,
+          class="menu-surface",
           input.choices.map(choice => {
             @rui.select_item(
               scope~,
               value=choice.library.key(),
               disabled=!choice.available,
+              class="menu-option",
               choice.label(locale),
             )
           }),
@@ -581,7 +364,14 @@ fn library_select(
 }
 
 ///|
-fn installed_actions(
+priv struct InstalledControls {
+  status : @html.Html
+  toggle : @html.Html
+  menu : @html.Html
+}
+
+///|
+fn installed_controls(
   locale : @i18n.Locale,
   state : State,
   library : Library,
@@ -589,7 +379,7 @@ fn installed_actions(
   emit : @cmd.Emit[Msg],
   button_class : String,
   menu : @html.Html,
-) -> @html.Html {
+) -> InstalledControls {
   let enabled = item.enabled
   let label = ui(locale, if enabled { Enabled } else { Disabled })
   let identity = item.identity()
@@ -599,52 +389,41 @@ fn installed_actions(
   let enablement_locked = state.pending_enabled(library, item.id) ||
     pending.map_or(false, action => action.blocks_enablement())
   let locked = item.builtin && library.locks_builtins()
-  let buttons : Array[@html.Html] = []
-  if !locked {
-    buttons.push(
-      @ui.switch_control(
-        enabled~,
-        label="\{item.name}: \{label}",
-        title=label,
-        disabled=enablement_locked,
-        on_click=emit(ToggleEnabled(item.id)),
-      ),
+  let toggle = if locked {
+    @html.nothing
+  } else {
+    @ui.switch_control(
+      enabled~,
+      label="\{item.name}: \{label}",
+      title=label,
+      disabled=enablement_locked,
+      on_click=emit(ToggleEnabled(item.id)),
     )
   }
-  if identity is Some(_) &&
+  let menu = if identity is Some(_) &&
     !locked &&
     (
       !item.builtin ||
       state.update_candidate(library, item) is Some(_) ||
       pending is Some(_)
     ) {
-    buttons.push(
-      if pending is Some(action) {
-        @rui.button(
-          variant=Ghost,
-          size=IconXs,
-          class="skill-menu-trigger \{button_class}",
-          title=ui(locale, action.label()),
-          disabled=true,
-          attrs=@html.Attrs::build().aria_label(ui(locale, action.label())),
-          icon(@icons.icon_more),
-        )
-      } else {
-        menu
-      },
-    )
+    if pending is Some(action) {
+      @rui.button(
+        variant=Ghost,
+        size=IconXs,
+        class="skill-menu-trigger \{button_class}",
+        title=ui(locale, action.label()),
+        disabled=true,
+        attrs=@html.Attrs::build().aria_label(ui(locale, action.label())),
+        icon(@icons.icon_more),
+      )
+    } else {
+      menu
+    }
+  } else {
+    @html.nothing
   }
-  @html.div(
-    class="skill-actions",
-    attrs=@html.Attrs::build().on_click(event => {
-      event.stop_propagation()
-      @cmd.none
-    }),
-    [
-      installed_status(locale, state, library, item),
-      @html.div(class="skill-actions skill-installed-actions", buttons),
-    ],
-  )
+  { status: installed_status(locale, state, library, item), toggle, menu, }
 }
 
 ///|

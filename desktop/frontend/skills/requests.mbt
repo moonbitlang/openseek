@@ -11,19 +11,6 @@ fn copy_content(content : String) -> @cmd.Cmd {
 }
 
 ///|
-fn restore_list_scroll(scroll_top : Double) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      if @dom.document().query_selector(".skills-page").to_option()
-        is Some(page) {
-        page.set_scroll_top(scroll_top)
-      }
-    },
-    kind=@cmd.after_render,
-  )
-}
-
-///|
 /// The message for a request that did not produce a reply.
 fn request_error_text(error : Error, locale : @i18n.Locale) -> String {
   match error {
