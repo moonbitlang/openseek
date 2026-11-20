@@ -40,7 +40,7 @@ pub(all) struct ContextActions {
 
 ///|
 #derive(Eq, Debug)
-priv enum ContextTarget {
+pub(all) enum ContextTarget {
   NoTarget
   WebLink(String)
   EmailLink(url~ : String, address~ : String)

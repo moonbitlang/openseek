@@ -547,15 +547,15 @@ fn Block::render(
   locale~ : @i18n.Locale = English,
   self : Block,
   actions : Actions,
+  prose_body~ : @html.Html,
+  thought_body~ : @html.Html,
   changes? : @review_changes.Control,
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
-  let on_open = path => (actions.open)(path)
   match self.content {
     Empty(empty) => empty.render(locale~, actions)
-    Minimal(content) => content.render(locale~, actions, artifact_view?)
+    Minimal(_) => prose_body
     Item(
       item~,
       anchor~,
@@ -567,10 +567,10 @@ fn Block::render(
       edit~,
     ) =>
       transcript_item_view(
-        artifact_view?,
         locale~,
         item,
-        on_open,
+        prose_body~,
+        thought_body~,
         wait_labels~,
         fork?=fork.map(value => value.render(locale~, actions.fork)),
         edit?=edit.map(value => value.render(locale~, begin_edit)),
@@ -587,9 +587,9 @@ fn Block::render(
       )
     Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
       assistant_view(
-        artifact_view?,
         locale~,
-        on_open,
+        prose_body~,
+        thought_body~,
         prose?,
         reasoning?,
         step_label?,

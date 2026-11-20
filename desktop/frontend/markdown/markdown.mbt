@@ -117,7 +117,14 @@ fn MarkdownRender::heading(
   self : MarkdownRender,
   heading : @cmark.BlockHeading,
 ) -> @html.Html {
-  let children = self.inline_nodes(heading.inline)
+  heading_html(heading, self.inline_nodes(heading.inline))
+}
+
+///|
+fn heading_html(
+  heading : @cmark.BlockHeading,
+  children : Array[@html.Html],
+) -> @html.Html {
   let id = heading.id.map(id => {
     match id {
       Auto(id) | Id(id) => id
@@ -398,39 +405,45 @@ fn MarkdownRender::list(
   self : MarkdownRender,
   list : @cmark.BlockList,
 ) -> @html.Html {
-  let items : Array[@html.Html] = []
-  for item_node in list.items.iter() {
-    let item = item_node.v
-    let content = self.list_item_nodes(item.block, tight=list.tight)
-    let children = match item.ext_task_marker {
-      None => content
-      Some(marker) => {
-        let status = @cmark.ListTaskStatus::from_marker(marker.v)
-        let children = [
-          @html.input(
-            input_type=Checkbox,
-            class="task-marker",
-            checked=status is (Checked | Other(_)),
-            attrs=@html.Attrs::build()
-              .disabled(true)
-              .data_set("task-marker", marker.v.to_string()),
-          ),
-          @html.text(" "),
-        ]
-        if status is Cancelled {
-          children.push(@html.del(content))
-        } else {
-          children.append(content)
-        }
-        children
-      }
-    }
-    items.push(@html.li(children))
+  let rows = list.items
+    .to_array()
+    .map(item => {
+      list_item_html(
+        item.v,
+        self.list_item_nodes(item.v.block, tight=list.tight),
+      )
+    })
+  list_html(list, rows)
+}
+
+///|
+fn list_item_html(
+  item : @cmark.ListItem,
+  body : Array[@html.Html],
+) -> @html.Html {
+  guard item.ext_task_marker is Some(marker) else { return @html.li(body) }
+  let status = @cmark.ListTaskStatus::from_marker(marker.v)
+  let marker = @html.input(
+    input_type=Checkbox,
+    class="task-marker",
+    checked=status is (Checked | Other(_)),
+    attrs=@html.Attrs::build()
+      .disabled(true)
+      .data_set("task-marker", marker.v.to_string()),
+  )
+  if status is Cancelled {
+    @html.li([marker, @html.text(" "), @html.del(body)])
+  } else {
+    @html.li([marker, @html.text(" "), ..body])
   }
+}
+
+///|
+fn list_html(list : @cmark.BlockList, rows : Array[@html.Html]) -> @html.Html {
   let class = if list.tight { "tight" } else { "" }
   match list.ty {
-    Ordered(start, _) => @html.ol(class~, start~, items)
-    Unordered(_) => @html.ul(class~, items)
+    Ordered(start, _) => @html.ol(class~, start~, rows)
+    Unordered(_) => @html.ul(class~, rows)
   }
 }
 
@@ -458,9 +471,34 @@ fn MarkdownRender::table(
   self : MarkdownRender,
   table : @cmark.Table,
 ) -> @html.Html {
+  let groups = table_groups(table).map(group => {
+    let rows = group.map(row => {
+      @html.tr(
+        row.cells.map(cell => {
+          table_cell_html(row.header, cell.1, self.inline_nodes(cell.0))
+        }),
+      )
+    })
+    if group.get(0) is Some({ header: true, .. }) {
+      @html.thead(rows)
+    } else {
+      @html.tbody(rows)
+    }
+  })
+  table_html(groups)
+}
+
+///|
+priv struct TableCells {
+  header : Bool
+  cells : Array[(@cmark.Inline, String?)]
+}
+
+///|
+fn table_groups(table : @cmark.Table) -> Array[Array[TableCells]] {
   let rows = table.rows.to_array()
-  let groups : Array[@html.Html] = []
-  let mut group : Array[@html.Html] = []
+  let groups = []
+  let mut group = []
   let mut header_group = false
   let mut alignment : Array[@cmark.Node[@cmark.TableSep]] = []
   for index, (row, _) in rows {
@@ -468,61 +506,58 @@ fn MarkdownRender::table(
       Sep(separators) => alignment = separators.to_array()
       Header(cells) | Data(cells) => {
         let header = row.v is Header(_)
-        // A separator follows its header but governs that header as well as
-        // subsequent data rows. Later separators may start a new alignment.
         if header &&
           rows.get(index + 1) is Some(({ v: Sep(separators), .. }, _)) {
           alignment = separators.to_array()
         }
         if header != header_group && !group.is_empty() {
-          groups.push(
-            if header_group {
-              @html.thead(group)
-            } else {
-              @html.tbody(group)
-            },
-          )
+          groups.push(group)
           group = []
         }
         header_group = header
-        let cell_nodes : Array[@html.Html] = []
         let cells = cells.to_array()
+        let columns = []
         for column in 0..<table.col_count {
-          let children = match cells.get(column) {
-            Some((inline, _)) => self.inline_nodes(inline)
-            None => []
-          }
+          let inline = cells
+            .get(column)
+            .map_or_else(@cmark.Inline::empty, cell => cell.0)
           let align = match alignment.get(column) {
             Some({ v: TableSep((Some(Left), _)), .. }) => Some("left")
             Some({ v: TableSep((Some(Center), _)), .. }) => Some("center")
             Some({ v: TableSep((Some(Right), _)), .. }) => Some("right")
             _ => None
           }
-          let attrs = match align {
-            Some(align) => @html.Attrs::build().style("text-align", align)
-            None => @html.Attrs::build()
-          }
-          cell_nodes.push(
-            if header {
-              @html.th(class?=align, scope=Col, attrs~, children)
-            } else {
-              @html.td(class?=align, attrs~, children)
-            },
-          )
+          columns.push((inline, align))
         }
-        group.push(@html.tr(cell_nodes))
+        group.push({ header, cells: columns, })
       }
     }
   }
   if !group.is_empty() {
-    groups.push(
-      if header_group {
-        @html.thead(group)
-      } else {
-        @html.tbody(group)
-      },
-    )
+    groups.push(group)
   }
+  groups
+}
+
+///|
+fn table_cell_html(
+  header : Bool,
+  align : String?,
+  children : Array[@html.Html],
+) -> @html.Html {
+  let attrs = match align {
+    Some(align) => @html.Attrs::build().style("text-align", align)
+    None => @html.Attrs::build()
+  }
+  if header {
+    @html.th(class?=align, scope=Col, attrs~, children)
+  } else {
+    @html.td(class?=align, attrs~, children)
+  }
+}
+
+///|
+fn table_html(groups : Array[@html.Html]) -> @html.Html {
   @html.div(
     class="chat-table-scroll",
     attrs=@html.Attrs::build().role("region"),
@@ -768,12 +803,26 @@ fn MarkdownRender::prose_nodes(
   guard self.open_file is Some(open) else {
     return linkified_text_nodes(source)
   }
-  let out : Array[@html.Html] = []
+  prose_parts(source).map(part => {
+    let (text, target) = part
+    let label = [@html.text(text)]
+    match target {
+      WebLink(url) => link_node(url, label)
+      FileLink(path, ..) =>
+        file_link_node(locale=self.locale, open, path, label)
+      _ => @html.text(text)
+    }
+  })
+}
+
+///|
+fn prose_parts(source : String) -> Array[(String, @action_menu.ContextTarget)] {
+  let out : Array[(String, @action_menu.ContextTarget)] = []
   let mut rest = source.clamped_view()
   while bare_interactive_pattern.execute(rest) is Some(matched) {
     let before = matched.before()
     if !before.is_empty() {
-      out.push(@html.text(before.to_owned()))
+      out.push((before.to_owned(), NoTarget))
     }
     let candidate = matched.content().to_owned()
     if candidate.clamped_view() =~ re"(?i:^https?://)" {
@@ -782,12 +831,12 @@ fn MarkdownRender::prose_nodes(
       // HTTP(S) anchor when the destination has a non-empty authority. In
       // particular, a file-shaped custom scheme must stay inert text.
       if has_web_authority(url) {
-        out.push(link_node(url, [@html.text(url)]))
+        out.push((url, WebLink(url)))
       } else {
-        out.push(@html.text(url))
+        out.push((url, NoTarget))
       }
       if !suffix.is_empty() {
-        out.push(@html.text(suffix))
+        out.push((suffix, NoTarget))
       }
     } else if is_file_path(candidate) &&
       // The regex cannot use look-around, so validate both sides here. A
@@ -801,17 +850,21 @@ fn MarkdownRender::prose_nodes(
         matched.after() =~ re"^\.(?:$|[[:space:]<>,;!?\"'(){}\[\]])"
       ) {
       out.push(
-        file_link_node(locale=self.locale, open, candidate, [
-          @html.text(candidate),
-        ]),
+        (
+          candidate,
+          FileLink(
+            candidate,
+            workspace_file=Some(FileReference(candidate).path()),
+          ),
+        ),
       )
     } else {
-      out.push(@html.text(candidate))
+      out.push((candidate, NoTarget))
     }
     rest = matched.after()
   }
   if !rest.is_empty() {
-    out.push(@html.text(rest.to_owned()))
+    out.push((rest.to_owned(), NoTarget))
   }
   out
 }
@@ -970,9 +1023,22 @@ fn LocalImagePath::has_raster_extension(self : LocalImagePath) -> Bool {
 fn link_node(
   href : String,
   title? : String,
+  source_title~ : Bool = false,
   children : Array[@html.Html],
 ) -> @html.Html {
-  @html.a(href~, title?, target=Blank, rel="noopener noreferrer", children)
+  let attrs = if source_title {
+    Some(@html.Attrs::build().data_set("citation-source-title", ""))
+  } else {
+    None
+  }
+  @html.a(
+    href~,
+    title?,
+    target=Blank,
+    rel="noopener noreferrer",
+    attrs?,
+    children,
+  )
 }
 
 ///|
@@ -985,8 +1051,15 @@ fn file_link_node(
   open : (String) -> @cmd.Cmd,
   path : String,
   title? : String,
+  source_title~ : Bool = false,
   children : Array[@html.Html],
 ) -> @html.Html {
+  let attrs = @html.Attrs::build()
+    .data_set("context-file", path)
+    .data_set("context-workspace-file", FileReference(path).path())
+  if source_title {
+    ignore(attrs.data_set("citation-source-title", ""))
+  }
   @html.button(
     class="file-link",
     type_="button",
@@ -999,9 +1072,7 @@ fn file_link_node(
         Spanish => "Abrir \{path}"
       }
     }),
-    attrs=@html.Attrs::build()
-      .data_set("context-file", path)
-      .data_set("context-workspace-file", FileReference(path).path()),
+    attrs~,
     on_click=open(path),
     children,
   )

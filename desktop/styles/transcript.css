@@ -929,6 +929,10 @@
 }
 .msg-content.markdown li.citation-source {
   position: relative;
+  margin: 0;
+  border-radius: 12px;
+}
+.msg-content.markdown .citation-source-card {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: start;

@@ -2,6 +2,7 @@
 // Sources remain ordinary Markdown links, using the existing URL/file routes.
 
 ///|
+#derive(Debug)
 priv struct Citation {
   number : String
   block : @cmark.Block
@@ -169,9 +170,7 @@ fn MarkdownRender::citation_node(
 
 ///|
 fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
-  let rows : Array[@html.Html] = []
-  let previews : Array[@html.Html] = []
-  for citation in self.citations {
+  let rows = self.citations.map(citation => {
     let source_path = citation.link.bind(link => self.file_destination(link))
     let render = {
       ..self,
@@ -188,33 +187,56 @@ fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
         }
       }),
     }
-    if previews.length() < 3 {
-      previews.push(self.source_glyph(citation))
-    }
-    rows.push(
-      @html.li(
-        id=self.source_note_id(citation.number),
-        class="citation-source",
-        attrs=@html.Attrs::build()
-          .role("doc-footnote")
-          .data_set("source", citation.number),
-        [
-          self.source_glyph(citation),
-          @html.div(class="citation-source-content", [
-            @html.div(
-              class="citation-source-origin",
-              self.source_origin(citation),
-            ),
-            @html.div(
-              class="citation-source-copy",
-              render.block_nodes(citation.block),
-            ),
-          ]),
-          @html.span(class="citation-source-number", citation.number),
-        ],
-      ),
+    let card = self.source_card_html(
+      citation,
+      render.block_nodes(citation.block),
     )
-  }
+    self.source_row_html(citation, card)
+  })
+  self.sources_html(rows)
+}
+
+///|
+fn MarkdownRender::source_card_html(
+  self : MarkdownRender,
+  citation : Citation,
+  children : Array[@html.Html],
+) -> @html.Html {
+  @html.div(class="citation-source-card", [
+    self.source_glyph(citation),
+    @html.div(class="citation-source-content", [
+      @html.div(class="citation-source-origin", self.source_origin(citation)),
+      @html.div(class="citation-source-copy", children),
+    ]),
+    @html.span(class="citation-source-number", citation.number),
+  ])
+}
+
+///|
+fn MarkdownRender::source_row_html(
+  self : MarkdownRender,
+  citation : Citation,
+  card : @html.Html,
+) -> @html.Html {
+  @html.li(
+    id=self.source_note_id(citation.number),
+    class="citation-source",
+    attrs=@html.Attrs::build()
+      .role("doc-footnote")
+      .data_set("source", citation.number),
+    [card],
+  )
+}
+
+///|
+fn MarkdownRender::sources_html(
+  self : MarkdownRender,
+  rows : Array[@html.Html],
+) -> @html.Html {
+  let previews = self.citations[:self.citations.length().min(3)].map(citation => {
+    self.source_glyph(citation)
+  })
+  let count = self.citations.length().to_string()
   @html.details(
     class="citation-sources",
     attrs=@html.Attrs::build().role("group").aria_label(self.sources_label()),
@@ -222,10 +244,7 @@ fn MarkdownRender::sources_node(self : MarkdownRender) -> @html.Html {
       @html.summary(class="citation-sources-heading", [
         @html.span(class="citation-source-previews", previews),
         @html.text(self.sources_label()),
-        @html.span(
-          class="citation-sources-count",
-          self.citations.length().to_string(),
-        ),
+        @html.span(class="citation-sources-count", count),
         @html.span(class="citation-sources-chevron", [
           @icons.icon(@icons.icon_chevron_down),
         ]),

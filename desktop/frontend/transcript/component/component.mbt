@@ -355,6 +355,8 @@ fn Model::update(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  context_input~ : @rabbita.Val[@action_menu.ContextInput],
+  context_actions~ : @action_menu.ContextActions,
 ) -> @rabbita.Val[@html.Html] {
   let localization = @localization.Localization()
   let (state, emit) = @rabbita.create_state_with_input(
@@ -420,34 +422,76 @@ pub fn component(
   let rows = rows.map2(input.map(input => input.artifact_owner()), (rows, owner) => {
     rows.map(row => (row.0, row.1, row.2, owner))
   })
+  let menus : TranscriptMarkdown = {
+    input: context_input,
+    actions: context_actions,
+  }
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
+      let prefix = "transcript-link-" + @uuid.mint()
       let (changes, changes_emit) = message_changes_state(
         row.map(row => row.1),
         actions,
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
-      changes.map2(row, (changes, row) => {
-        let (locale, block, editor, owner) = row
-        renders.val += 1
-        let html = @html.memo_by(
-          block,
-          block => {
-            block.render(
-              locale~,
-              actions,
-              artifact_view=reference => {
-                artifact_file_view(reference, locale, actions.open, owner)
-              },
-              changes?=changes.control(block, changes_emit),
-              editor?=editor.view(block, locale~, editor_emit),
-              begin_edit=editor_emit(BeginEdit),
-            )
-          },
-          by=_ => renders.val,
+      let open_file = path => (actions.open)(path)
+      let prose = menus.body(
+        row.map(row => row.1.prose_markdown(row.0, row.3, actions)),
+        open_file,
+        prefix + "-prose",
+      )
+      let thought = menus.body(
+        row.map(row => row.1.thought_markdown(row.0)),
+        open_file,
+        prefix + "-thought",
+      )
+      let minimal = row.switch_by(
+        value => {
+          guard value.1.content is Minimal(initial) else {
+            return @rabbita.Val::constant(@html.nothing)
+          }
+          let input = row.map(row => {
+            let (locale, block, _, owner) = row
+            let content = if block.content is Minimal(content) {
+              content
+            } else {
+              initial
+            }
+            (locale, content, owner, false)
+          })
+          minimal_component(input, actions, menus, prefix + "-minimal")
+        },
+        by=value => {
+          if value.1.content is Minimal(_) {
+            "minimal"
+          } else {
+            "detailed"
+          }
+        },
+      )
+      row.map5(changes, prose, thought, minimal, (
+        row,
+        changes,
+        prose,
+        thought,
+        minimal,
+      ) => {
+        let (locale, block, editor, _) = row
+        let html = block.render(
+          locale~,
+          actions,
+          prose_body=if block.content is Minimal(_) { minimal } else { prose },
+          thought_body=thought,
+          changes?=changes.control(block, changes_emit),
+          editor?=editor.view(block, locale~, editor_emit),
+          begin_edit=editor_emit(BeginEdit),
         )
-        (block.key.wire(), html)
+        renders.val += 1
+        (
+          block.key.wire(),
+          @html.memo_by(html, html => html, by=_ => renders.val),
+        )
       })
     },
     by=pair => pair.1.branch_key(),

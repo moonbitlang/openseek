@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
 }
 
@@ -22,6 +23,10 @@ pub fn context_attrs(String) -> @html.Attrs
 pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
 
 pub fn dropdown(String, Definition, class~ : String, @html.Html) -> @rabbita.Val[@html.Html]
+
+pub fn link_context(String, @i18n.Locale, ContextInput, ContextTarget, ContextActions, @rabbita.Val[@html.Html], inline? : Bool) -> @rabbita.Val[@html.Html]
+
+pub fn link_target(String) -> ContextTarget
 
 pub fn row_context(@rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html]
 
@@ -64,6 +69,14 @@ pub(all) struct ContextInput {
 pub fn ContextInput::equal(Self, Self) -> Bool
 pub fn ContextInput::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
+pub(all) enum ContextTarget {
+  NoTarget
+  WebLink(String)
+  EmailLink(url~ : String, address~ : String)
+  FileLink(String, workspace_file~ : String?)
+}
+
 pub(all) struct Definition {
   label : String
   entries : Array[Entry]
@@ -94,7 +107,8 @@ pub(all) struct QuoteReply[T] {
 
 pub(all) struct RowContext {
   target : String
-  revision : String
+  class : String?
+  title : String?
   content : @html.Html
   definition : Definition?
 }
