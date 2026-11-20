@@ -66,6 +66,7 @@ async test "platform_app_data_dir uses XDG_DATA_HOME on Linux, falls back to ~/.
   }
   assert_eq(app_data.to_string(), dir + "/.local/share")
 }
+
 ///|
 test "a development bundle keeps its own state directory" {
   // The name a bundle is installed under is the only difference the runtime can
