@@ -241,8 +241,8 @@ fn detail_action(
         },
       )
     }
-    Installed(item) =>
-      installed_actions(
+    Installed(item) => {
+      let controls = installed_controls(
         locale,
         state,
         input.library,
@@ -251,6 +251,14 @@ fn detail_action(
         "skill-detail-action",
         menu,
       )
+      @html.div(class="skill-actions", [
+        controls.status,
+        @html.div(class="skill-actions skill-installed-actions", [
+          controls.toggle,
+          controls.menu,
+        ]),
+      ])
+    }
   }
 }
 
@@ -356,7 +364,14 @@ fn library_select(
 }
 
 ///|
-fn installed_actions(
+priv struct InstalledControls {
+  status : @html.Html
+  toggle : @html.Html
+  menu : @html.Html
+}
+
+///|
+fn installed_controls(
   locale : @i18n.Locale,
   state : State,
   library : Library,
@@ -364,7 +379,7 @@ fn installed_actions(
   emit : @cmd.Emit[Msg],
   button_class : String,
   menu : @html.Html,
-) -> @html.Html {
+) -> InstalledControls {
   let enabled = item.enabled
   let label = ui(locale, if enabled { Enabled } else { Disabled })
   let identity = item.identity()
@@ -374,52 +389,41 @@ fn installed_actions(
   let enablement_locked = state.pending_enabled(library, item.id) ||
     pending.map_or(false, action => action.blocks_enablement())
   let locked = item.builtin && library.locks_builtins()
-  let buttons : Array[@html.Html] = []
-  if !locked {
-    buttons.push(
-      @ui.switch_control(
-        enabled~,
-        label="\{item.name}: \{label}",
-        title=label,
-        disabled=enablement_locked,
-        on_click=emit(ToggleEnabled(item.id)),
-      ),
+  let toggle = if locked {
+    @html.nothing
+  } else {
+    @ui.switch_control(
+      enabled~,
+      label="\{item.name}: \{label}",
+      title=label,
+      disabled=enablement_locked,
+      on_click=emit(ToggleEnabled(item.id)),
     )
   }
-  if identity is Some(_) &&
+  let menu = if identity is Some(_) &&
     !locked &&
     (
       !item.builtin ||
       state.update_candidate(library, item) is Some(_) ||
       pending is Some(_)
     ) {
-    buttons.push(
-      if pending is Some(action) {
-        @rui.button(
-          variant=Ghost,
-          size=IconXs,
-          class="skill-menu-trigger \{button_class}",
-          title=ui(locale, action.label()),
-          disabled=true,
-          attrs=@html.Attrs::build().aria_label(ui(locale, action.label())),
-          icon(@icons.icon_more),
-        )
-      } else {
-        menu
-      },
-    )
+    if pending is Some(action) {
+      @rui.button(
+        variant=Ghost,
+        size=IconXs,
+        class="skill-menu-trigger \{button_class}",
+        title=ui(locale, action.label()),
+        disabled=true,
+        attrs=@html.Attrs::build().aria_label(ui(locale, action.label())),
+        icon(@icons.icon_more),
+      )
+    } else {
+      menu
+    }
+  } else {
+    @html.nothing
   }
-  @html.div(
-    class="skill-actions",
-    attrs=@html.Attrs::build().on_click(event => {
-      event.stop_propagation()
-      @cmd.none
-    }),
-    [
-      installed_status(locale, state, library, item),
-      @html.div(class="skill-actions skill-installed-actions", buttons),
-    ],
-  )
+  { status: installed_status(locale, state, library, item), toggle, menu, }
 }
 
 ///|

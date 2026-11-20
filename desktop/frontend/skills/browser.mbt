@@ -19,24 +19,28 @@ fn skill_card(
   open : @cmd.Cmd,
   action : @html.Html,
   badge~ : @html.Html = @html.nothing,
+  menu~ : @html.Html = @html.nothing,
 ) -> @html.Html {
   @html.div(class="skill-row", [
-    @html.button(
-      class="skill-summary",
-      title=name,
-      attrs=@html.Attrs::build()
-        .aria_label(name)
-        .on_click(event => {
-          // The native detail dialog restores this opener even on browsers that
-          // do not focus buttons on pointer activation.
-          if event.current_target().to_option() is Some(target) &&
-            target.to_html_element() is Some(button) {
-            button.focus()
-          }
-          open
-        }),
-      [@html.span(class="skill-name", name), badge],
-    ),
+    @html.div(class="skill-header", [
+      @html.button(
+        class="skill-summary",
+        title=name,
+        attrs=@html.Attrs::build()
+          .aria_label(name)
+          .on_click(event => {
+            // The native detail dialog restores this opener even on browsers that
+            // do not focus buttons on pointer activation.
+            if event.current_target().to_option() is Some(target) &&
+              target.to_html_element() is Some(button) {
+              button.focus()
+            }
+            open
+          }),
+        [@html.span(class="skill-name", name), badge],
+      ),
+      menu,
+    ]),
     @html.div(class="skill-desc", description),
     @html.div(class="skill-footer", [
       @html.span(class="skill-meta", title=source, source),
@@ -252,21 +256,23 @@ fn list_page(
         Some(registry) => registry.module_name
         None => preview_meta(locale~, Installed(item))
       }
+      let controls = installed_controls(
+        locale,
+        state,
+        input.library,
+        item,
+        emit,
+        "skill-action",
+        menu,
+      )
       cards["\{input.library.key()}:installed:\{item.id}"] = skill_card(
         item.name,
         item.description,
         source,
         emit(PreviewInstalled(item)),
-        installed_actions(
-          locale,
-          state,
-          input.library,
-          item,
-          emit,
-          "skill-action",
-          menu,
-        ),
+        @html.div(class="skill-actions", [controls.status, controls.toggle]),
         badge=builtin_badge(locale, item),
+        menu=controls.menu,
       )
     }
     count = Some(cards.length())
@@ -290,7 +296,7 @@ fn list_page(
     class="skills-page",
     value=tab,
     style=[
-      "display:grid;grid-template-rows:auto auto auto minmax(0,1fr);gap:var(--space-4)",
+      "display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:var(--space-4)",
     ],
     [
       @html.div(class="skills-context", [
@@ -303,34 +309,50 @@ fn list_page(
         ),
       ]),
       toolbar,
-      @html.div(class="skills-results-meta", [
-        if count is Some(n) {
-          @html.span(
-            attrs=@html.Attrs::build().role("status"),
-            ui(locale, Results(n)),
-          )
-        } else {
-          @html.nothing
-        },
-        if !state.query.is_blank() ||
-          (!discover && !(state.filter is AllSkills)) {
-          @html.button(
-            class="button",
-            on_click=emit(ClearFilters),
-            ui(locale, Clear),
-          )
-        } else {
-          @html.nothing
-        },
+      @html.div(class="skills-results-region", [
+        @html.div(class="skills-results-meta", [
+          if count is Some(n) {
+            @html.span(
+              attrs=@html.Attrs::build().role("status"),
+              ui(locale, Results(n)),
+            )
+          } else {
+            @html.nothing
+          },
+          if !state.query.is_blank() ||
+            (!discover && !(state.filter is AllSkills)) {
+            @html.button(
+              class="button",
+              on_click=emit(ClearFilters),
+              ui(locale, Clear),
+            )
+          } else {
+            @html.nothing
+          },
+        ]),
+        @rui.tabs_content(
+          id="skills-results",
+          value=tab,
+          selected=true,
+          labelledby="skills-tab-" + tab,
+          class="skills-results",
+          attrs=@html.Attrs::build().on_scroll(event => {
+            if event.current_target().to_option() is Some(target) &&
+              target.to_element() is Some(results) {
+              let scrolled = results.get_scroll_top() > 0.0
+              if scrolled != results.has_attribute("data-scrolled") {
+                if scrolled {
+                  results.set_attribute("data-scrolled", "")
+                } else {
+                  results.remove_attribute("data-scrolled")
+                }
+              }
+            }
+            @cmd.none
+          }),
+          content,
+        ),
       ]),
-      @rui.tabs_content(
-        id="skills-results",
-        value=tab,
-        selected=true,
-        labelledby="skills-tab-" + tab,
-        class="skills-results",
-        content,
-      ),
     ],
   )
 }
