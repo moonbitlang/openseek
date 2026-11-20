@@ -424,6 +424,7 @@
   white-space: nowrap;
 }
 .empty-project-option-check {
+  --icon-size: var(--icon-md);
   color: var(--color-text-secondary);
   text-align: center;
 }
@@ -1197,12 +1198,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.activity-text::before {
-  content: "▸ ";
-  display: inline-block;
+/* A real icon node keeps disclosure markers independent of caption text. */
+.transcript-disclosure {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  flex: none;
+  align-self: center;
   transition: transform var(--disclosure-duration) ease;
 }
-.activity[open] > .activity-summary .activity-text::before {
+.activity[open] > .activity-summary > .transcript-disclosure,
+.summary-card[open] > .summary-card-label > .transcript-disclosure,
+.tool-call[open] > .tool-call-summary > .transcript-disclosure,
+.tool-result[open] > .tool-result-summary > .transcript-disclosure {
   transform: rotate(90deg);
 }
 
@@ -1222,12 +1229,9 @@
 }
 /* Reserve the disclosure marker's width even when the step has no thought fold. */
 .activity-heading {
+  padding-left: calc(var(--icon-md) + 10px);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-}
-.activity-heading::before {
-  content: "▸ ";
-  visibility: hidden;
 }
 
 .activity-time {
@@ -1264,12 +1268,6 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-}
-.summary-card-text::after {
-  content: " ▸";
-}
-.summary-card[open] > .summary-card-label .summary-card-text::after {
-  content: " ▾";
 }
 .summary-card-body {
   padding: 10px 0 4px;
@@ -1316,12 +1314,28 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
-.tool-flow {
-  flex: 0 0 1em;
-  color: var(--color-text-muted);
-  text-align: center;
+.tool-caption-icon {
+  display: inline-flex;
+  vertical-align: -0.15em;
+  --icon-size: var(--icon-md);
 }
-/* Keep status at the far right, after the summary's ::after disclosure arrow.
+.tool-caption-icon > .codicon,
+.minimal-tool-icon > .codicon {
+  font-size: var(--icon-size, var(--icon-md));
+}
+.tool-caption-icon > svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+.tool-flow {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  align-self: center;
+  justify-content: center;
+  flex: 0 0 var(--icon-md);
+  color: var(--color-text-muted);
+}
+/* Keep status at the far right, after the disclosure icon.
    The arrow stays beside the caption while the auto margin separates status. */
 .tool-status {
   display: inline-flex;
@@ -1392,19 +1406,6 @@
 .tool-result-label .tool-result-text {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-/* The marker belongs to rows that own a fold; `.tool-call-label` rows have
-   nothing to disclose and stay bare. Its separate flex item follows the
-   caption but precedes status, and cannot be ellipsized with a long brief. */
-.tool-call-summary::after,
-.tool-result-summary::after {
-  content: "▸";
-  display: inline-block;
-  transition: transform var(--disclosure-duration) ease;
-}
-.tool-call[open] > .tool-call-summary::after,
-.tool-result[open] > .tool-result-summary::after {
-  transform: rotate(90deg);
 }
 .tool-call-label.error,
 .tool-call.error > .tool-call-summary,
@@ -1708,11 +1709,12 @@
   margin: 3px 0;
 }
 .plan-step .step-icon {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  align-self: center;
   flex: none;
-  width: 14px;
+  width: var(--icon-md);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  text-align: center;
 }
 .plan-step.completed .step-icon {
   color: var(--color-success);
@@ -1990,9 +1992,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-image-call)::details-content,
-  .activity-text::before,
-  .tool-call-summary::after,
-  .tool-result-summary::after,
+  .transcript-disclosure,
   .minimal-chevron {
     transition: none;
   }

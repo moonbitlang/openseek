@@ -1,4 +1,13 @@
 ///|
+fn disclosure_icon() -> @html.Html {
+  @html.span(
+    class="transcript-disclosure",
+    attrs=@html.Attrs::build().aria_hidden("true"),
+    @icons.icon(@icons.icon_chevron_right),
+  )
+}
+
+///|
 /// One provider response as the transcript shows it: its thought behind a
 /// fold, its prose as a bubble, and every tool call on display as its own
 /// one-line row (`tool_request_view`), expandable to that call's arguments and
@@ -94,6 +103,7 @@ fn assistant_view(
     lead.push(
       @html.details(class="activity", open=live, [
         @html.summary(class="activity-summary", [
+          disclosure_icon(),
           @html.span(class="activity-text", summary),
         ]),
         @html.div(class="activity-body", [body]),
@@ -337,11 +347,11 @@ fn tool_request_view(
   }
   let label = if background_job_id is Some(_) {
     match locale {
-      SimplifiedChinese => "🐇 → 后台"
-      TraditionalChinese => "🐇 → 後臺"
-      Japanese => "🐇 → バックグラウンド"
-      English => "🐇 → background"
-      Spanish => "🐇 → segundo plano"
+      SimplifiedChinese => "mbtx 后台"
+      TraditionalChinese => "mbtx 後臺"
+      Japanese => "mbtx バックグラウンド"
+      English => "mbtx background"
+      Spanish => "mbtx segundo plano"
     }
   } else if brief is Some(brief) && !brief.is_blank() {
     tool_display_label(locale~, name, brief)
@@ -371,8 +381,15 @@ fn tool_request_view(
   // mbtx uses the trailing icon for status. Other tools keep their failure
   // marker; applied plans also show their compact progress meter.
   let line : Array[@html.Html] = [
-    @html.span(class="tool-flow", "→"),
-    @html.span(class="tool-call-text", label),
+    @html.span(
+      class="tool-flow",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      @icons.icon(@icons.icon_arrow_right),
+    ),
+    @html.span(
+      class="tool-call-text",
+      tool_caption_view(name, label, background=background_job_id is Some(_)),
+    ),
   ]
   if is_error && name != "mbtx" {
     line.push(
@@ -462,6 +479,7 @@ fn tool_request_view(
   if body.is_empty() {
     @html.div(class="tool-call-label" + error_class, line)
   } else {
+    line.push(disclosure_icon())
     @html.details(
       class="tool-call" + error_class,
       [
@@ -561,8 +579,12 @@ fn result_row_view(
     failure_stage_class(name, brief, is_error)
   let pending_class = if pending { " pending" } else { "" }
   let line : Array[@html.Html] = [
-    @html.span(class="tool-flow", "←"),
-    @html.span(class="tool-result-text", label),
+    @html.span(
+      class="tool-flow",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      @icons.icon(@icons.icon_arrow_left),
+    ),
+    @html.span(class="tool-result-text", tool_caption_view(name, label)),
   ]
   if failure_marker(locale~, name, brief, is_error, arguments) is Some(marker) {
     line.push(marker)
@@ -614,6 +636,7 @@ fn result_row_view(
   let result = if body.is_empty() {
     @html.div(class="tool-result-label" + error_class + pending_class, line)
   } else {
+    line.push(disclosure_icon())
     @html.details(
       class="tool-result" + error_class + pending_class,
       [@html.summary(class="tool-result-summary", title=label, line), ..body],
@@ -1334,6 +1357,7 @@ fn summary_card_view(
       @html.summary(class="summary-card-label", [
         @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
         @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
+        disclosure_icon(),
       ]),
       @html.div(
         class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",

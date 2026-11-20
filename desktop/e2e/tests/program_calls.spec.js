@@ -99,7 +99,9 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
         await expect(nested.locator('.tool-status, .minimal-tool-status')).toHaveCount(0);
       } else {
         const outer = page.locator('#transcript details.tool-call').first();
-        await outer.locator(':scope > summary').click();
+        const summary = outer.locator(':scope > summary');
+        await expect(summary.getByRole('img', { name: 'mbtx', exact: true })).toBeVisible();
+        await summary.click();
         const nested = outer.locator('details.tool-call').first();
         await expect(nested.getByRole('img', { name: 'Recorded snapshot' })).toBeVisible();
         await expect(nested.getByRole('img', { name: 'Tool succeeded' })).toHaveCount(0);
