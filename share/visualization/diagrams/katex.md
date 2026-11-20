@@ -1,4 +1,4 @@
-# KaTeX block math: compact flowcharts
+# Drawing flowcharts with KaTeX block math
 
 KaTeX can draw a flowchart from ordinary boxes and arrows. It works well for a
 short pipeline or a small decision tree, especially when formulas belong inside

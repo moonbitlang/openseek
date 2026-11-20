@@ -8,7 +8,7 @@ project already uses one, prefer it when it fits the job and the destination.
 | What the reader needs to see | Guide |
 | --- | --- |
 | Workflows or state transitions that benefit from automatic layout | [Mermaid](mermaid.md) |
-| A compact flowchart or decision tree, especially with formulas in the steps or on the arrows | [KaTeX block math](katex.md) |
+| A flowchart with a few steps or branches, especially if the nodes or arrows contain formulas | [Draw with KaTeX block math](katex.md) |
 | Components, ownership boundaries, imports, or data flow | [Diago / D2](diago.md) |
 | Who sends what to whom and in what order, or how classes and interfaces relate | [PlantUML](plantuml.md); Mermaid also supports sequence diagrams |
 | Trends, comparisons, distributions, or correlation in numeric data | [Quantitative charts](charts.md) |
