@@ -92,7 +92,7 @@ fn default_prompt() -> String {
     #|| Creating, editing, refactoring, testing, or looking up APIs for MoonBit code | `agent-guides/moonbit-development.md` |
     #|| Presenting local files, previewing deliverables, citing inspected sources, or when interactive exploration, comparison, or input would help the user | `visualization/presentation.md` |
     #|| Creating or packaging generated artifacts, including interactive answers | `visualization/artifacts.md` |
-    #|| When a diagram would clarify a workflow, architecture, dependency, or relationship | `visualization/diagrams.md` |
+    #|| When a diagram would clarify a workflow, architecture, dependency, or relationship | `visualization/diagrams/README.md` |
     #|| Working on presentations or slides | `visualization/slides/README.md` |
     #|| Building a MoonBit native desktop app; use Proton unless the project or user selects another framework | `desktop-proton/README.md` |
     #|| Working on MoonBit browser UIs or full-stack web apps, before scaffolding or choosing Rabbita APIs | `frontend-rabbita/README.md` |
