@@ -23,7 +23,29 @@ async fn ApiState::deliver_session_input(
   session : String,
   text : String,
   id : String,
+  retry_dropped~ : Bool = false,
 ) -> Unit {
+  if self.try_deliver_session_input(session, text, id) {
+    return
+  }
+  // A steer can reach the engine just as its turn finishes. A definite drop
+  // makes it safe to try the same input again, now against the idle session.
+  if retry_dropped && self.try_deliver_session_input(session, text, id) {
+    return
+  }
+  fail("message was not delivered: the engine dropped the input")
+}
+
+///|
+/// False means the engine definitively dropped the input before committing
+/// it. An unconfirmed delivery raises so callers cannot replay it by mistake.
+async fn ApiState::try_deliver_session_input(
+  self : ApiState,
+  session : String,
+  text : String,
+  id : String,
+) -> Bool {
+  let mut delivered = true
   @async.with_task_group(group => {
     let events : @async.Queue[MessageDeliveryInput] = Queue(kind=Blocking(64))
     let subscription = self.subscribe(
@@ -62,7 +84,8 @@ async fn ApiState::deliver_session_input(
       match events.get() {
         Receipt(result) => {
           if result is Dropped {
-            fail("message was not delivered: the engine dropped the input")
+            delivered = false
+            return
           }
           let loaded = @engine.load_session(self.manager, {
             session,
@@ -85,7 +108,8 @@ async fn ApiState::deliver_session_input(
             return
           }
           if submitted.result() is Some(Dropped) {
-            fail("message was not delivered: the engine dropped the input")
+            delivered = false
+            return
           }
           // A finished turn can still have a live engine draining the
           // exact steer receipt. Its observer also reports consumer exit.
@@ -118,7 +142,8 @@ async fn ApiState::deliver_session_input(
               // Retirement can drop an unwritten prompt synchronously,
               // before its queued receipt wakeup reaches this inbox.
               if submitted.result() is Some(Dropped) {
-                fail("message was not delivered: the engine dropped the input")
+                delivered = false
+                return
               }
               if !submitted.steering {
                 fail(
@@ -143,4 +168,5 @@ async fn ApiState::deliver_session_input(
       }
     }
   })
+  delivered
 }

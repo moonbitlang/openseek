@@ -6,6 +6,7 @@ async fn github_command(
   dir : @pathx.Absolute,
   args : Array[String],
   env? : Map[String, String],
+  allow_partial_graphql~ : Bool = false,
 ) -> String {
   let result = @processx.collect_output_no_stdin(
     gh.0,
@@ -18,6 +19,15 @@ async fn github_command(
   }
   let code = result.exit_code
   guard code == 0 else {
+    // gh reports GraphQL errors with a nonzero exit even when it also
+    // returned successful fields for other aliases in the same query.
+    if allow_partial_graphql {
+      let partial = result.stdout_text() catch { _ => "" }
+      let raw = @json.parse(partial) catch { _ => Json::empty_object() }
+      if raw is { "data": Object(_), "errors": Array(_), .. } {
+        return partial
+      }
+    }
     let detail = result.stderr_text() catch {
       _ => "GitHub CLI returned unreadable error output."
     }

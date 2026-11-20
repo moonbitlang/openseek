@@ -279,6 +279,17 @@ documents frontend list/remove commands and the `session.artifacts_changed`
 notification emitted after a save. Removal targets an exact type and URL
 against the latest list, preserving unrelated concurrent additions.
 
+After attachment, the running host uses its authenticated GitHub CLI to poll
+open pull requests in batches by GitHub host. Sessions that attach the same
+PR share one lookup. The host delivers a failure or a stable passing check
+rollup to each subscribing session, steering a running turn or starting a
+new one if idle.
+New head commits are tracked separately. An empty rollup never counts as
+passing. Detaching the PR or archiving or deleting the session stops the watch.
+While GitHub CLI is unavailable, the host logs the lookup error and retries.
+Watches live for the host process. Attach the PR again to resume after a host
+restart.
+
 These tools belong to the `artifacts` group. If the configuration filters
 groups with `X-SeekMoon-Tool-Groups`, include `artifacts` (for example
 `browser,artifacts`).
