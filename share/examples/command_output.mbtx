@@ -1,12 +1,11 @@
 ---
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/shell",
 }
 ---
 
 ///|
-async fn main {
+fn main {
   // `Cmd` takes an argv array, not a shell line: nothing expands `*.mbt`
   // before rg sees it, so rg applies it as its own glob. A glob with no `/`
   // matches the basename at any depth. rg ships no `moonbit` file type, so

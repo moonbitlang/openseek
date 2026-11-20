@@ -10,11 +10,10 @@ something cannot be done, search the catalog and print the page:
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   // No arguments list every tool; `query` ranks by keywords; `server` lists
   // one server's tools after its instructions, or says why it is unavailable.
   let page = @mcp.search(query="list open issues")
@@ -33,11 +32,10 @@ server with `list_issues`, a `repo` argument, and an `issues` result array:
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   let result = @mcp.call("tracker", "list_issues", { "repo": "alpha" })
   if result.is_error { fail(result.content) }
   guard result.data is Some({ "issues": Array(issues), .. }) else {

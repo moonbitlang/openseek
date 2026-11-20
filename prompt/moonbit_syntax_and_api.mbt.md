@@ -14,11 +14,9 @@ MoonBit.
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
   `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
-- Keep `async fn main` for async IO.
-- Helpers that run an async command/IO are `async fn` too;
-  a plain `fn` cannot call them. (so async is contagious)
-- There is no `await`: async calls are written normally, and async functions
-  and tests are marked `async`.
+- Use `fn main`. The entry point infers async and error effects. Import
+  `moonbitlang/core/async` only when using its APIs, such as `@async.sleep`.
+- Declare async helpers with `async fn` and write async calls directly.
 - Use `println` (no `print`).
 
 A minimal `moon check` script:
@@ -106,7 +104,7 @@ import {
 }
 ---
 
-async fn main {
+fn main {
   @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
   for pass in 0..<12; previous = None {
     ignore(
@@ -215,7 +213,6 @@ Example native CLI package:
 
 ```moon.pkg
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/fs", // package
   "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",

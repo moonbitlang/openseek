@@ -1,7 +1,6 @@
 ---
 // Arguments: [--stdin] [<input>].
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",
@@ -9,8 +8,7 @@ import {
 ---
 
 ///|
-/// Reading a path or stdin is async IO, so `main` is `async fn main`.
-async fn main {
+fn main {
   let matches : @argparse.Matches = @argparse.parse(
     Command(
       "count-input",

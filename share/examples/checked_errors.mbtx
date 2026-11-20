@@ -63,9 +63,8 @@ fn describe(text : String) -> String {
 }
 
 ///|
-/// A sync `main` that calls raising functions is `fn main raise`; an async
-/// `main` raises by default, and `noraise` marks an async helper that must not.
-fn main raise {
+/// The entry point infers its error effect and reports uncaught errors.
+fn main {
   assert_eq(parse_count(" 42 "), 42)
   assert_eq(describe("7"), "count = 7")
   assert_eq(describe(""), "invalid: empty input")

@@ -233,13 +233,12 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/shell",
           #|  "moonbitlang/core/env",
           #|}
           #|---
           #|
-          #|async fn main {
+          #|fn main {
           #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
           #|  if code != 0 { fail("moon check failed (exit=\{code})") }
           #|}

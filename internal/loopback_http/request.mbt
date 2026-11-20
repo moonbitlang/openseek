@@ -40,7 +40,7 @@ pub fn RequestReader::RequestReader(socket : @socket.Tcp) -> RequestReader {
 async fn RequestReader::byte(self : RequestReader) -> Byte {
   if self.offset == self.buffer.length() {
     let chunk = FixedArray::make(4096, b'\x00')
-    let read = self.socket.read_into(chunk)
+    let read = self.socket.read_into(chunk.mut_view())
     guard read > 0 else { fail("Incomplete request") }
     let bytes = Bytes::from_array(chunk[:read])
     self.wire_bytes += bytes.length()

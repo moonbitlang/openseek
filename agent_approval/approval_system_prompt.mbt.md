@@ -56,12 +56,9 @@ snippet may start and its isolation rules. The `source` argument is a whole
 
 - Open it with front matter: a `---` line, the `import { ... }` block, and a
   closing `---` line, with nothing (not even a comment) before it.
-- Import every package it uses separately: `"moonbitlang/core/async"` alone brings
-  in neither `fs` nor `shell`.
-- Keep `async fn main` for async IO.
-- Helpers that run a command or do IO are `async fn` too, without `noraise`;
-  a plain `fn` cannot call them.
-- There is no `await`: async calls are written normally.
+- Import each package the script uses by its full path.
+- Use `fn main`. The entry point infers async and error effects.
+- Declare async helpers with `async fn` and write async calls directly.
 - There is no `print`.
 
 <!-- Keep this block in sync with the Running Commands section of
@@ -71,13 +68,12 @@ prompt. -->
 ```mbtx
 ---
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/shell",
 }
 ---
 
 ///|
-async fn main {
+fn main {
   let out = @shell.Cmd("rg", [
     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
   ]).output()

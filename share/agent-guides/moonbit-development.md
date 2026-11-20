@@ -100,8 +100,8 @@ example rather than guessing the flags.
 - `_test.mbt` files are black-box tests. Use `_wbtest.mbt` only when tests must
   inspect private helpers.
 
-Async IO is part of the standard library: import `moonbitlang/core/async`
-and the specific subpackages in `moon.pkg`; no `moon add` or version pin is needed.
+Async IO is part of the standard library. Import the packages you use, such
+as `moonbitlang/core/async/fs`, in `moon.pkg`. They need no registry dependency.
 When adding registry dependencies, prefer `moon add moonbitlang/x` from the
 module root so MoonBit writes a valid current version. Do not guess dependency
 versions by hand.

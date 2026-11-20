@@ -74,7 +74,7 @@ async fn read_output_prefix(
   for ;; {
     let chunk_limit = (byte_budget - bytes_read).clamp(min=1, max=1024)
     // A character left incomplete when the stream ends is dropped.
-    let count = reader.read_into(buffer, max_len=chunk_limit)
+    let count = reader.read_into(buffer.mut_view(end=chunk_limit))
     guard count > 0 else {
       return { text: text.to_string(), output_limit_reached: false, }
     }

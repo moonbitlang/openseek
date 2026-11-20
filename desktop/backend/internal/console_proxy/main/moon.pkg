@@ -1,6 +1,5 @@
 import {
   "openseek_desktop/backend/internal/console_proxy",
-  "moonbitlang/core/async",
   "moonbitlang/core/argparse",
   "moonbitlang/core/string",
 }
@@ -8,7 +7,3 @@ import {
 supported_targets = "+native"
 
 pkgtype(kind: "executable")
-
-options(
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
-)
