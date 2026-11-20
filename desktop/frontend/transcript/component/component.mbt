@@ -428,7 +428,12 @@ pub fn component(
         actions,
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
-      changes.map2(row, (changes, row) => {
+      let (markdown, markdown_emit) = @rabbita.create_state(false, update=(
+        previewing,
+        _,
+        _,
+      ) => (!previewing, @cmd.none))
+      changes.map3(row, markdown, (changes, row, previewing) => {
         let (locale, block, editor, owner) = row
         renders.val += 1
         let html = @html.memo_by(
@@ -443,6 +448,7 @@ pub fn component(
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
               begin_edit=editor_emit(BeginEdit),
+              user_markdown={ previewing, toggle: markdown_emit(()), },
             )
           },
           by=_ => renders.val,
