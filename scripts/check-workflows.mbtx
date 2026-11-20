@@ -3,7 +3,7 @@ import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/shell",
-  "moonbitlang/x/sys",
+  "moonbitlang/core/env",
 }
 ---
 
@@ -35,7 +35,7 @@ async fn main {
         relative,
       ]).status()
       if code != 0 {
-        @sys.exit(code)
+        @env.exit(code)
       }
       checked += 1
     }
@@ -57,7 +57,7 @@ async fn main {
     "-C", component, "check", "--target", "js", "--deny-warn",
   ]).status()
   if code != 0 {
-    @sys.exit(code)
+    @env.exit(code)
   }
   println("Checked \{checked} bundled scripts")
 }

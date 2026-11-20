@@ -976,7 +976,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|  "moonbitlang/core/json",
-          #|  "moonbitlang/x/sys",
           #|}
           #|---
           #|
@@ -1192,8 +1191,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  } catch {
           #|    ReadError(message) => {
           #|      println("error: read \{message}")
-          #|      @sys.exit(1)
-          #|      return
+          #|      @env.exit(1)
           #|    }
           #|  }
           #|  let mut remaining = OutputBytes - 256
@@ -1218,7 +1216,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    remaining -= header_bytes + @utf8.encode(body).length()
           #|  }
           #|  if failed {
-          #|    @sys.exit(1)
+          #|    @env.exit(1)
           #|  }
           #|}
           #|
@@ -2523,7 +2521,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/core/async/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
-          #|  "moonbitlang/x/sys",
           #|}
           #|---
           #|
@@ -2589,8 +2586,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      println(
           #|        "error: could not run moonx \{RgPackage} (\{error}); put the MoonBit toolchain on PATH",
           #|      )
-          #|      @sys.exit(2)
-          #|      return
+          #|      @env.exit(2)
           #|    }
           #|  }
           #|  if shown < total {
@@ -2602,7 +2598,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    0 => ()
           #|    // rg's "nothing matched" is an answer, not a failure.
           #|    1 if total == 0 => println("<system>no matches</system>")
-          #|    code => @sys.exit(code)
+          #|    code => @env.exit(code)
           #|  }
           #|}
           #|
