@@ -1,47 +1,12 @@
 ///|
-/// Sidecar data lives inside the session directory, so archive, restore and
-/// deletion move it together with the transcript. No engine journal rewrite.
-pub async fn session_artifacts_list(
-  manager : EngineManager,
-  session : String,
-) -> @protocol.SessionArtifacts {
-  guard @session_store.safe_session_id(session) else {
-    raise EngineError("invalid session id")
-  }
-  manager.workspace_lifecycle_lock.acquire()
-  defer manager.workspace_lifecycle_lock.release()
-  let lease = manager.begin_record_read(session)
-  defer manager.end_record_read(session, lease)
-  guard @session_store.root_of(session) is Some(root) else {
-    // A new draft has no durable session directory yet.
-    return @protocol.SessionArtifacts::empty()
-  }
-  read_session_artifacts(root, session)
-}
-
-///|
-async fn read_session_artifacts(
-  root : @pathx.Absolute,
-  session : String,
-) -> @protocol.SessionArtifacts {
-  match
-    @fsx.read_text_if_exists(
-      root.join("sessions").join(session).join("artifacts.json").to_path(),
-    ) {
-    Some(text) => @json.from_json(@json.parse(text))
-    None => @protocol.SessionArtifacts::empty()
-  }
-}
-
-///|
 /// Apply an attach or UI removal to the latest stored artifact list.
 /// Local lifecycle guards and the shared archive lock fence record moves;
 /// the sidecar lock serializes read/modify/write across host processes.
 pub async fn session_artifacts_update(
   manager : EngineManager,
   session : String,
-  update : (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts,
-  on_committed : () -> Unit,
+  update~ : (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts,
+  on_committed~ : (@protocol.SessionArtifacts) -> Unit,
 ) -> @protocol.SessionArtifacts {
   guard @session_store.safe_session_id(session) else {
     raise EngineError("invalid session id")
@@ -65,13 +30,13 @@ pub async fn session_artifacts_update(
   let directory = root.join("sessions").join(session)
   let lock = @fsx.FileLock::acquire(directory.join("artifacts.json").to_path())
   defer lock.release()
-  let next = update(read_session_artifacts(root, session))
+  let next = update(@session_store.read_artifacts(directory))
   @async.protect_from_cancel(() => {
     @openseek/atomic_file.write_text_atomic(
       directory.join("artifacts.json").to_string(),
       next.to_json().stringify(),
     )
-    on_committed()
+    on_committed(next)
   })
   next
 }

@@ -14,6 +14,11 @@ pub async fn ApiState::start_services(
 ) -> Unit {
   prepare_workspaces()
   self.connectors.attach(group)
+  group.spawn_bg(no_wait=true, allow_failure=true, () => {
+    self.actions_monitor.start(notify=notice => {
+      self.deliver_actions_notice(notice)
+    })
+  })
   group.spawn_bg(allow_failure=true, () => {
     self.host.sync_builtin_skills(() => self.publish(SkillsChanged))
   })
