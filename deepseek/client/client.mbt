@@ -197,6 +197,19 @@ fn retryable_status(code : Int32) -> Bool {
 }
 
 ///|
+/// Remove the client's own credential from a provider-supplied response body
+/// before it becomes part of an error message. A gateway or proxy can reflect
+/// the request's `Authorization` header, and these messages travel into retry
+/// notices, tool results, and session records.
+fn redact_credential(text : String, credential : String) -> String {
+  if credential.is_empty() {
+    text
+  } else {
+    text.replace_all(old=credential, new="[redacted]")
+  }
+}
+
+///|
 /// These failures may be retried before any response data is received.
 /// The public chat boundary formats them as Failure messages.
 priv suberror RetryableApiError {
@@ -358,6 +371,7 @@ async fn Client::chat_attempt(
   })
   let text = data.text()
   guard resp.code >= 200 && resp.code < 300 else {
+    let text = redact_credential(text, self.api_key)
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
@@ -367,10 +381,16 @@ async fn Client::chat_attempt(
   // transport error: the completion already ran (and billed), so retrying
   // would duplicate it for the same bad payload.
   let json = @json.parse(text) catch {
-    error => fail("DeepSeek response is not JSON: \{error}; body: \{text}")
+    error =>
+      fail(
+        "DeepSeek response is not JSON: \{error}; body: \{redact_credential(text, self.api_key)}",
+      )
   }
   @json.from_json(json) catch {
-    error => fail("DeepSeek response decode error: \{error}; body: \{text}")
+    error =>
+      fail(
+        "DeepSeek response decode error: \{error}; body: \{redact_credential(text, self.api_key)}",
+      )
   }
 }
 
@@ -406,7 +426,7 @@ async fn Client::chat_stream_attempt(
   progress.http_status = Some(resp.code)
   guard resp.code >= 200 && resp.code < 300 else {
     progress.phase = ResponseBody
-    let text = client.read_all().text()
+    let text = redact_credential(client.read_all().text(), self.api_key)
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
