@@ -11,7 +11,7 @@ import {
   "moonbit-community/rabbita@0.17.0",
   "Lampese/office-viewer@0.2.6",
   "moonbitlang/editor@0.4.6",
-  "moonbitlang/workflow@0.11.0",
+  "moonbitlang/workflow@0.11.1",
   "Yoorkin/multipart@0.2.2",
   "moonbit-community/yaml@0.0.10",
   "kokic/katex-parser@0.7.3",
