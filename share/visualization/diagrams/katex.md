@@ -1,9 +1,9 @@
 # Drawing flowcharts with KaTeX block math
 
-KaTeX can draw a flowchart from ordinary boxes and arrows. It works well for a
-short pipeline or a small decision tree, especially when formulas belong inside
-the steps or on the arrows. Use [Mermaid](mermaid.md) when the chart has many
-branches, loops, or long labels that benefit from automatic layout.
+KaTeX can draw a flowchart from ordinary boxes and arrows, with text, formulas,
+or both as labels. The same technique works for a few connected components.
+For specific diagram types and features beyond KaTeX, see the
+[selection guide](README.md).
 
 In SeekMoon, put `$$` on separate opening and closing lines, with no code fence
 around the block.
