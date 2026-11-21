@@ -60,4 +60,5 @@ options(
     "moonbitlang/core/async/os_error",
     "moonbitlang/core/async/process",
   ],
+  "native-stub": [ "file_identity_native.c" ],
 )
