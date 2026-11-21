@@ -17,6 +17,8 @@ pub async fn ensure_not_archived(String) -> Unit
 
 pub async fn family_in(@pathx.Absolute, String) -> Array[String]
 
+pub fn is_descendant(String, String) -> Bool
+
 pub async fn known_roots() -> Array[@pathx.Absolute]
 
 pub async fn live_root_of(String) -> @pathx.Absolute?

@@ -181,7 +181,7 @@ pub async fn ensure_not_archived(session : String) -> Unit {
 /// transcript or a side chat, or one of theirs. Walk the structural `-sr-N`
 /// and `-sc-N` suffixes instead of matching a textual prefix: a user-chosen
 /// id such as `chat-sr-not-an-ordinal` must remain unrelated.
-fn is_descendant(candidate : String, ancestor : String) -> Bool {
+pub fn is_descendant(candidate : String, ancestor : String) -> Bool {
   let mut current = candidate
   for ;; {
     let parent = if @wire.split_child_session_id(current) is Some((parent, _)) {

@@ -273,6 +273,42 @@ async test "single edit waits for the submitted message before deleting its sour
 }
 
 ///|
+test "an edit accepts only a stop written after its frontier" {
+  let recorded : @protocol.SessionEvent = {
+    sequence: 1,
+    ts: None,
+    item: Unknown({ "kind": "user" }),
+  }
+  let stopped : @protocol.SessionEvent = {
+    sequence: 2,
+    ts: None,
+    item: Terminal(Interrupted("stopped")),
+  }
+  let document : @protocol.SessionDocument = {
+    version: None,
+    id: None,
+    system_prompt: None,
+    events: Some([recorded, stopped]),
+  }
+  // The ending a Stop wrote after the client read its frontier moved nothing
+  // the user asked to keep.
+  assert_true(edit_matches_source(document, 1))
+  assert_true(edit_matches_source(document, 2))
+  // A record that never reached the client's frontier was rewritten under it.
+  assert_false(edit_matches_source(document, 3))
+  // Anything else written after the frontier keeps the original.
+  let answered : @protocol.SessionDocument = {
+    ..document,
+    events: Some([
+      recorded,
+      stopped,
+      { sequence: 3, ts: None, item: Unknown({ "kind": "assistant" }), },
+    ]),
+  }
+  assert_false(edit_matches_source(answered, 1))
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "a first message stopped before its record can still be edited" {
   ambient_env_test_lock.acquire()
@@ -372,4 +408,34 @@ async test "an edit deletes a source that never recorded an event" {
   assert_false(store.exists(SessionId("source")))
   assert_true(store.exists(SessionId("replacement")))
   assert_true(manager.record_guards.is_empty())
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "wait_for_stopped_source waits for a closing subagent" {
+  let manager = new_engine_manager("/bin/sh")
+  let emitted : Array[EngineEvent] = []
+  let sink = EventSink(event => emitted.push(event))
+  @async.with_task_group(group => {
+    let sessions : Map[String, SessionSlot] = Map([])
+    manager.pump = Serving(sessions~)
+    let subagent = start_fake_idle_engine(
+      group,
+      manager,
+      sessions,
+      "s-parent-sr-1",
+      sink~,
+      phase=Running(run_id="r-sub", compact_queued=false),
+    )
+    let released = Ref(false)
+    group.spawn_bg(no_wait=true, () => {
+      @async.sleep(40)
+      released.val = true
+      subagent.phase = Idle(last_run=None)
+    })
+    wait_for_stopped_source(manager, "s-parent")
+    assert_true(released.val)
+    assert_true(subagent.phase is Idle(..))
+    subagent.close_and_wait()
+  })
 }

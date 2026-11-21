@@ -579,6 +579,12 @@ pub async fn delete_session(
   on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionDeleteReply {
   let session = checked_session_id(session)
+  // An edit is prepared by stopping the message it replaces, so the source's
+  // turn may still be closing: give its engine a moment to write that turn's
+  // terminal event before the claim below reports the source as busy.
+  if edit_replacement is Some(_) {
+    wait_for_stopped_source(manager, session)
+  }
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   let family = manager.claim_session_family_move(
     session,
@@ -641,7 +647,7 @@ pub async fn delete_session(
     }
     if recorded is Some(_) {
       @session_record.with_document(family.root, session, source => {
-        guard session_max_sequence(source) == edit.source_sequence else {
+        guard edit_matches_source(source, edit.source_sequence) else {
           raise EngineError("the original conversation changed; it was kept")
         }
         commit()
@@ -1214,5 +1220,55 @@ async fn lock_archived_store(
 ) -> @fsx.FileLock raise EngineError {
   @fsx.FileLock::acquire(@session_store.archived_root(root).to_path()) catch {
     error => raise EngineError("could not lock the archived store: \{error}")
+  }
+}
+
+///|
+/// Whether the source record still holds the conversation the client edited.
+/// Stopping a message appends a `Terminal(Interrupted(_))`, and that
+/// ending can land after the client read its frontier and before this deletion
+/// runs: it moved nothing the user asked to keep, so it is not a change.
+/// Anything else past `sequence`, or a record that lost history below it, keeps
+/// the original conversation.
+fn edit_matches_source(
+  source : @protocol.SessionDocument,
+  sequence : Int32,
+) -> Bool {
+  let mut highest = 0
+  for event in source.events.unwrap_or([]) {
+    if event.sequence > highest {
+      highest = event.sequence
+    }
+    if event.sequence > sequence {
+      guard event.item is Terminal(Interrupted(_)) else { return false }
+    }
+  }
+  highest >= sequence
+}
+
+///|
+/// Give a stopped conversation's engine family a moment to close its turn. A
+/// cancel leaves the phase `Running` until the engine writes the turn's
+/// terminal event, and the family claim refuses any running member; a turn
+/// that is genuinely still working keeps running past the wait and is refused
+/// as before.
+async fn wait_for_stopped_source(
+  manager : EngineManager,
+  session : String,
+) -> Unit {
+  for _ in 0..<100 {
+    let sessions = manager.serving()
+    let mut closing = false
+    for key, slot in sessions {
+      guard key == session || @session_store.is_descendant(key, session) else {
+        continue
+      }
+      if slot.engine is Some(live) && live.phase is Running(..) {
+        closing = true
+        break
+      }
+    }
+    guard closing else { return }
+    @async.sleep(20)
   }
 }
