@@ -81,6 +81,12 @@
   align-items: stretch;
 }
 
+/* Keep the model editor actions aligned. */
+.form-row.custom-model-save-row {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .switch-control {
   display: inline-flex;
   align-items: center;
@@ -172,6 +178,10 @@
 
 .form-row-status.success {
   color: var(--color-success);
+}
+
+.form-row-status.danger {
+  color: var(--color-danger);
 }
 
 .form-row[hidden],

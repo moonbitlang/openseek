@@ -1278,6 +1278,11 @@ priv struct Model {
   // saved through `settings.set`. The host settings themselves live on each
   // `DeviceState`.
   setup_api_key : String
+  // The custom-model editor, open while `Some`. Its draft lives here rather
+  // than in the settings page so navigating cannot lose typed fields.
+  custom_model : CustomModelDraft?
+  // The entry a delete confirmation is open for; `None` when none is.
+  custom_model_delete : String?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1624,6 +1629,35 @@ priv struct ProviderConfig {
 }
 
 ///|
+/// One saved model entry as a client may see it: its credential reduced to
+/// presence, like every other status field.
+#derive(Eq)
+priv struct CustomModel {
+  id : String
+  // The name the list shows; absent means show the id.
+  label : String?
+  api_url : String?
+  // Whether the stored URL already ends at the endpoint, so the edit form
+  // re-opens with the switch it was saved with.
+  full_url : Bool
+  has_api_key : Bool
+  images : Bool
+  // The window the run plans against: the entry's own, which the edit form
+  // re-opens with so an endpoint serving less than the default can be lowered.
+  context_window : Int32
+}
+
+///|
+/// The name a model list shows for this entry: the name the user gave it, or
+/// the model id when they gave none.
+fn CustomModel::display_name(self : CustomModel) -> String {
+  match self.label {
+    Some(label) => label
+    None => self.id
+  }
+}
+
+///|
 /// A host's engine endpoint settings, with key material reduced to presence:
 /// the key text never reaches a client — the Settings page only needs
 /// presence (placeholder wording, the ready gate).
@@ -1642,6 +1676,8 @@ priv struct HostEndpoint {
 priv struct HostSettings {
   revision : Int32
   endpoint : HostEndpoint
+  // The models the user saved, in the order the host stores them.
+  models : Array[CustomModel]
   // The default prompt for new chats: `builtin_moonbit_guide` or `custom`,
   // with the host's saved custom text either way.
   prompt_source : String
@@ -1884,6 +1920,18 @@ priv enum Msg {
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
   SaveApiKey
+  // The custom endpoint's models. The endpoint and its key are the API
+  // section's, so an entry holds only what is specific to the model.
+  CustomModelAdd
+  CustomModelEdit(String)
+  CustomModelIdChanged(String)
+  CustomModelLabelChanged(String)
+  CustomModelWindowChanged(String)
+  CustomModelSubmit
+  CustomModelCancel
+  CustomModelDeleteRequest(String)
+  CustomModelDeleteCancelled
+  CustomModelDelete(String)
   OpenSchedules
   SchedulePage(SchedulePageMsg)
   OpenSkills
@@ -2765,6 +2813,9 @@ fn initial_model(
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     setup_api_key: "",
+    custom_model: None,
+    // The entry a delete confirmation is open for; `None` when none is.
+    custom_model_delete: None,
     is_desktop: desktop,
     is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),

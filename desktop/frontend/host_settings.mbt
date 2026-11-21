@@ -27,6 +27,15 @@ fn HostSettings::from_status(
       providers,
       followup_behavior: FollowupBehavior::parse(payload.followup_behavior),
     },
+    models: payload.models.map(status => CustomModel::{
+      id: status.id,
+      label: status.label,
+      api_url: status.api_url,
+      full_url: status.full_url,
+      has_api_key: status.has_api_key,
+      images: status.images,
+      context_window: status.context_window,
+    }),
     prompt_source: payload.prompt_source,
     custom_prompt: payload.custom_prompt,
   }
