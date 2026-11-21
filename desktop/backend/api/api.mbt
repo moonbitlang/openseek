@@ -713,6 +713,8 @@ pub fn endpoints(
           followup_behavior?=payload.followup_behavior,
           prompt_source?=payload.prompt_source,
           custom_prompt?=payload.custom_prompt,
+          models?=payload.models,
+          removed_models?=payload.removed_models,
           // Every client renders these settings; clients that did not ask
           // must learn about the committed revision too.
           on_committed=status => state.hub.publish(SettingsChanged(status)),

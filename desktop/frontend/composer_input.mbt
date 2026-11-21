@@ -45,6 +45,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   let root_ready = conv.prompt_ready() &&
     self.bridge_state() is Connected &&
     self.api_ready() &&
+    self.conversation_model_ready(conv.engine_model) &&
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
     @composer.Running(
@@ -114,6 +115,30 @@ fn Model::composer_input(self : Model) -> @composer.Input {
           .unwrap_or(@settings.text(self.locale, LoadingSettings)),
       ),
     )
+  }
+  // A model this host cannot run is not swapped for another one behind the
+  // user's back: Send stays out of reach until the entry is re-added, one of
+  // the endpoint's own models is picked, or the provider changes back.
+  match self.model_availability(conv.engine_model) {
+    ModelEntryDeleted =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, ModelDeletedNotice),
+        ),
+      )
+    ModelNotOnEndpoint =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, ModelNotOnEndpointNotice),
+        ),
+      )
+    ModelNoneSaved =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, CustomModelsMissingNotice),
+        ),
+      )
+    ModelReady => ()
   }
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
@@ -279,8 +304,14 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      images_enabled: conv.engine_model is Deepseek(V4Flash) &&
-      self.api_provider() is (Deepseek | Custom),
+      // A custom entry always accepts images; a built-in tier only on the
+      // route that carries them, and never when the model is unserved.
+      images_enabled: self.conversation_model_ready(conv.engine_model) &&
+      (match conv.engine_model {
+        Custom(_) => true
+        Deepseek(V4Flash) => self.api_provider() is (Deepseek | Custom)
+        _ => false
+      }),
       context,
       status,
       placeholder: if conv.controls.edit is Some(_) {
