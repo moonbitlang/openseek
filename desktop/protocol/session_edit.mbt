@@ -88,3 +88,49 @@ pub extend SessionEditPayload with FromJson::{from_json}
 
 ///|
 pub extend SessionEditPayload with ToJson::{to_json}
+
+///|
+/// The replacement conversation an edit created, or the reason the host kept
+/// the original. Success keeps the legacy `{session, title}` body; a refusal
+/// travels inside the reply because the local bridge flattens a raised
+/// handler error down to "op ext:openseek/session.edit failed".
+#derive(Debug, Eq)
+pub(all) enum SessionEditReply {
+  Edited(SessionForkReply)
+  EditError(String)
+}
+
+///|
+pub impl ToJson for SessionEditReply with fn to_json(self) {
+  match self {
+    Edited(reply) => reply.to_json()
+    EditError(message) => { "error": message }
+  }
+}
+
+///|
+pub impl FromJson for SessionEditReply with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a session edit reply"))
+  }
+  match fields.get("error") {
+    Some(String(message)) => EditError(message)
+    Some(_) =>
+      raise JsonDecodeError(
+        (path.add_key("error"), "a session edit refusal must be a string"),
+      )
+    None => Edited(@json.from_json(json, path~))
+  }
+}
+
+///|
+pub extend SessionEditReply with Debug::{to_repr}
+
+///|
+pub extend SessionEditReply with Eq::{equal, not_equal}
+
+///|
+pub extend SessionEditReply with FromJson::{from_json}
+
+///|
+pub extend SessionEditReply with ToJson::{to_json}

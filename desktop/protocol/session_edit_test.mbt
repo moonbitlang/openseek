@@ -37,3 +37,23 @@ test "single edit payload preserves the message and optional fork boundary" {
     }
   }
 }
+
+///|
+test "a session edit reply keeps the success shape and carries a refusal" {
+  let edited : @protocol.SessionEditReply = Edited({
+    session: "desktop-abc",
+    title: "Edited",
+  })
+  // The successful body is the one `session.fork` already sends.
+  assert_eq(edited.to_json(), { "session": "desktop-abc", "title": "Edited" })
+  assert_eq(@json.from_json(edited.to_json()), edited)
+  // The refusal the host can explain, in place of the bridge's
+  // "op ext:openseek/session.edit failed".
+  let refusal : @protocol.SessionEditReply = EditError(
+    "the original conversation changed; it was kept",
+  )
+  assert_eq(refusal.to_json(), {
+    "error": "the original conversation changed; it was kept",
+  })
+  assert_eq(@json.from_json(refusal.to_json()), refusal)
+}

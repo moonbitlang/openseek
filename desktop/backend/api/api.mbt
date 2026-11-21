@@ -587,32 +587,48 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_edit, payload => {
-      @engine.edit_session(
-        state.manager,
-        payload,
-        start=start => {
-          if !payload.attachment_paths.is_empty() {
-            ignore(
-              @files.stage_attachments({
-                session: start.session,
-                workspace: payload.workspace,
-                source_root: payload.workspace,
-                paths: payload.attachment_paths,
-              }),
+      // A refusal travels inside the reply: the local bridge would flatten a
+      // raised error to "op ext:openseek/session.edit failed", which is all the
+      // user would ever see of why the original conversation was kept.
+      let result : Result[@protocol.SessionForkReply, String] = Ok(
+        @engine.edit_session(
+          state.manager,
+          payload,
+          start=start => {
+            if !payload.attachment_paths.is_empty() {
+              ignore(
+                @files.stage_attachments({
+                  session: start.session,
+                  workspace: payload.workspace,
+                  source_root: payload.workspace,
+                  paths: payload.attachment_paths,
+                }),
+              )
+            }
+            ignore(@engine.start_run(state.sink(), state.manager, start))
+          },
+          on_created=created => {
+            publish_session_changed(
+              state,
+              "created",
+              created,
+              payload.workspace,
             )
-          }
-          ignore(@engine.start_run(state.sink(), state.manager, start))
-        },
-        on_created=created => {
-          publish_session_changed(state, "created", created, payload.workspace)
-        },
-        on_deleted=(deleted, workspace) => {
-          publish_session_changed(state, "deleted", deleted, workspace)
-        },
-        on_worktree_changed=(workspace, worktrees) => {
-          publish_worktree_changed(state, workspace, worktrees)
-        },
-      )
+          },
+          on_deleted=(deleted, workspace) => {
+            publish_session_changed(state, "deleted", deleted, workspace)
+          },
+          on_worktree_changed=(workspace, worktrees) => {
+            publish_worktree_changed(state, workspace, worktrees)
+          },
+        ),
+      ) catch {
+        error => Err(session_edit_refusal(error))
+      }
+      match result {
+        Ok(reply) => Edited(reply)
+        Err(message) => EditError(message)
+      }
     }),
     Endpoint(@commands.session_fork, payload => {
       @engine.fork_session(
@@ -1478,4 +1494,27 @@ async fn ApiState::capture_conversation(
 ) -> @engine.ConversationExport {
   let (shell, bundle) = self.host_state().viz_assets().read()
   @engine.ConversationExport::capture(self.manager(), source, shell, bundle)
+}
+
+///|
+/// The reason an edit was refused, in the words the user gets to read. The
+/// host's own refusals — and the receipt wait that ran out while a stopped
+/// message never reached the record — become the reply body; anything else is a
+/// defect and keeps travelling as a raised error.
+fn session_edit_refusal(error : Error) -> String raise {
+  let message = match error {
+    @engine.EngineError(message) => message
+    @session_store.StoreError(message) => message
+    @worktree.WorktreeError(message) => message
+    @session_record.RecordError::Absent(message) => message
+    @session_record.RecordError::Unreadable(message) => message
+    @files.FilesError::InvalidRequest(message) => message
+    @files.FilesError::NoHomeDirectory as refusal => "\{refusal}"
+    @pathx.UnsupportedResourcePath as refusal => "\{refusal}"
+    @async.TimeoutError =>
+      "the edited message was not saved in time; the original conversation was kept"
+    _ => raise error
+  }
+  @xlog.warn(category="session_edit") <? { "message": message }
+  message
 }

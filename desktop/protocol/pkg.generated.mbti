@@ -3846,6 +3846,19 @@ pub impl @json.FromJson for SessionEditPayload
 pub impl @json.ToJson for SessionEditPayload
 
 #derive(Eq, @debug.Debug)
+pub(all) enum SessionEditReply {
+  Edited(SessionForkReply)
+  EditError(String)
+}
+pub fn SessionEditReply::equal(Self, Self) -> Bool
+pub fn SessionEditReply::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
+pub fn SessionEditReply::not_equal(Self, Self) -> Bool
+pub fn SessionEditReply::to_json(Self) -> @json.Json
+pub fn SessionEditReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for SessionEditReply
+pub impl @json.ToJson for SessionEditReply
+
+#derive(Eq, @debug.Debug)
 pub(all) struct SessionEvent {
   sequence : Int32
   ts : Double?

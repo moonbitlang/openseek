@@ -984,7 +984,7 @@ pub let session_fork : Command[
 ///|
 pub let session_edit : Command[
   @protocol.SessionEditPayload,
-  @protocol.SessionForkReply,
+  @protocol.SessionEditReply,
 ] = Command("session.edit")
 
 ///|

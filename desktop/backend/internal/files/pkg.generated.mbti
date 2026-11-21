@@ -31,6 +31,11 @@ pub async fn stage_attachments(@protocol.StageAttachmentsPayload) -> @protocol.E
 pub async fn stat_files(@protocol.StatFilesPayload) -> @protocol.StatFilesReply
 
 // Errors
+pub(all) suberror FilesError {
+  InvalidRequest(String)
+  NoHomeDirectory
+}
+pub impl Show for FilesError
 
 // Types and methods
 type Watcher

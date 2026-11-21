@@ -209,28 +209,36 @@ fn fork_conversation(
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let result : Result[@protocol.SessionForkReply, String] = try {
-        let reply = match pending.kind {
+        match pending.kind {
+          // The host reports a refused edit in the reply body, because the
+          // bridge would flatten a raised one to "op ext:openseek/session.edit
+          // failed"; forward that reason instead of inventing one here.
           EditedMessage(payload) =>
-            @interop.bridge_request(
-              pending.source.channel,
-              @commands.session_edit,
-              payload,
-            )
+            match
+              @interop.bridge_request(
+                pending.source.channel,
+                @commands.session_edit,
+                payload,
+              ) {
+              Edited(reply) => Ok(reply)
+              EditError(message) => Err(message)
+            }
           AfterAnswer(through~) =>
-            @interop.bridge_request(
-              pending.source.channel,
-              @commands.session_fork,
-              {
-                session: pending.source.session,
-                workspace: pending.source.workspace.path,
-                through,
-                model: pending.engine_model.to_string(),
-                source_title: pending.source_title,
-                side_chat: None,
-              },
+            Ok(
+              @interop.bridge_request(
+                pending.source.channel,
+                @commands.session_fork,
+                {
+                  session: pending.source.session,
+                  workspace: pending.source.workspace.path,
+                  through,
+                  model: pending.engine_model.to_string(),
+                  source_title: pending.source_title,
+                  side_chat: None,
+                },
+              ),
             )
         }
-        Ok(reply)
       } catch {
         error => Err(@interop.bridge_error_text(error))
       }
@@ -362,6 +370,9 @@ test "fork and message editing are pure and preserve navigation" {
     )
     assert_true(
       retained.find_conversation(source.device, source.session_id) is Some(_),
+    )
+    assert_true(
+      retained.notifications.any(note => note.message == Raw("edit failed")),
     )
     let deleted = requested.with_archive_override(
       source.device,
