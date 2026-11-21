@@ -629,12 +629,26 @@ pub async fn delete_session(
     // The store lock protects the replacement from concurrent deletion. The
     // source record lock also excludes ordinary writers through the rename.
     require_edited_receipt(family.root, edit)
-    @session_record.with_document(family.root, session, source => {
-      guard session_max_sequence(source) == edit.source_sequence else {
-        raise EngineError("the original conversation changed; it was kept")
-      }
+    // A first message stopped before the engine wrote any event leaves the
+    // source with no record to compare and no lock file to take: the
+    // placeholder is all there is, and the claim above already proved it is
+    // not running.
+    let recorded : @protocol.SessionDocument? = Some(
+      @session_record.read_document(family.root, session),
+    ) catch {
+      @session_record.Absent(_) => None
+      error => raise error
+    }
+    if recorded is Some(_) {
+      @session_record.with_document(family.root, session, source => {
+        guard session_max_sequence(source) == edit.source_sequence else {
+          raise EngineError("the original conversation changed; it was kept")
+        }
+        commit()
+      })
+    } else {
       commit()
-    })
+    }
   } else {
     commit()
   }

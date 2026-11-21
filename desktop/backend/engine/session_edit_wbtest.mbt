@@ -271,3 +271,105 @@ async test "single edit waits for the submitted message before deleting its sour
     )
   })
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "a first message stopped before its record can still be edited" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  defer restore_home_env(previous)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-placeholder-"))
+  defer @fs.remove(dir, recursive=true)
+  let root = @pathx.Path(dir)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  let workspace = attach_run_workspace(root)
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  let store = @store.SessionStore(selected.root.to_string())
+  // Sent and then stopped before the engine wrote anything: the placeholder
+  // directory and its title exist, the record does not.
+  let placeholder = selected.root.join("sessions").join("stopped")
+  @fsx.ensure_dir(placeholder.to_path())
+  @fsx.write_text_atomic(placeholder.join("session-title").to_path(), "Stopped")
+  assert_false(@fs.exists(store.session_file(SessionId("stopped"))))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  let prepared = prepare_session_edit(
+    manager,
+    {
+      session: "stopped",
+      workspace,
+      through: None,
+      model: "deepseek-flash",
+      source_title: "Stopped",
+    },
+    on_created=_ => (),
+    on_worktree_changed=(_, _) => (),
+  )
+  assert_true(store.exists(SessionId(prepared.session)))
+  assert_eq(prepared.title, "Stopped")
+  // A source that is gone altogether keeps refusing, and says why.
+  let missing : Result[@protocol.SessionForkReply, String] = Ok(
+    prepare_session_edit(
+      manager,
+      {
+        session: "gone",
+        workspace,
+        through: None,
+        model: "deepseek-flash",
+        source_title: "Gone",
+      },
+      on_created=_ => (),
+      on_worktree_changed=(_, _) => (),
+    ),
+  ) catch {
+    error => Err("\{error}")
+  }
+  assert_true(missing is Err(_))
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "an edit deletes a source that never recorded an event" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  defer restore_home_env(previous)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-norecord-"))
+  defer @fs.remove(dir, recursive=true)
+  let root = @pathx.Path(dir)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  let workspace = attach_run_workspace(root)
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  let store = @store.SessionStore(selected.root.to_string())
+  let placeholder = selected.root.join("sessions").join("source")
+  @fsx.ensure_dir(placeholder.to_path())
+  @fsx.write_text_atomic(placeholder.join("session-title").to_path(), "Source")
+  store.create(
+    @agent_session.Session(SessionId("replacement"), system_prompt="test").append(
+      User(UserMessage(Content([Text("edited")]), submission_id="edit-1")),
+    ),
+  )
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  // Nothing was ever recorded to compare, so the placeholder is all there is
+  // to delete once the replacement holds the edit.
+  assert_true(
+    commit_session_edit(
+      manager,
+      {
+        session: "source",
+        workspace,
+        replacement: "replacement",
+        submission_id: "edit-1",
+        source_sequence: 1,
+      },
+      (_, _) => (),
+      on_worktree_changed=(_, _) => (),
+    )
+    is Deleted,
+  )
+  assert_false(store.exists(SessionId("source")))
+  assert_true(store.exists(SessionId("replacement")))
+  assert_true(manager.record_guards.is_empty())
+}

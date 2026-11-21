@@ -140,9 +140,13 @@ async fn prepare_session_edit(
   let lease = manager.begin_record_read(payload.session)
   defer manager.end_record_read(payload.session, lease)
   let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
-  ignore(@session_record.read_document(selected.root, payload.session))
-  let session = "desktop-" + @uuid.mint()
   let store = @store.SessionStore(selected.root.to_string())
+  require_editable_source(
+    selected.root,
+    payload.session,
+    store.exists(SessionId(payload.session)),
+  )
+  let session = "desktop-" + @uuid.mint()
   let source_prompt = saved_session_prompt(store, SessionId(payload.session))
   let id : @agent_session.SessionId = SessionId(session)
   {
@@ -220,4 +224,31 @@ async fn require_edited_receipt(
       "the edited message has not been saved; the original conversation was kept",
     )
   }
+}
+
+///|
+/// The source a first-message edit replaces, proven to still be the
+/// conversation the client named. Reading the record is that proof and
+/// nothing more: a message sent and then stopped may never have reached the
+/// record, so the placeholder directory and its title exist while the JSONL
+/// does not. That absent record is tolerated while the placeholder survives;
+/// an unreadable record, or a source that is gone altogether, keeps the
+/// refusal it had.
+async fn require_editable_source(
+  root : @pathx.Absolute,
+  session : String,
+  present : Bool,
+) -> Unit {
+  let placeholder : @protocol.SessionDocument = {
+    version: None,
+    id: None,
+    system_prompt: None,
+    events: None,
+  }
+  ignore(
+    @session_record.read_document(root, session) catch {
+      @session_record.Absent(_) if present => placeholder
+      error => raise error
+    },
+  )
 }
