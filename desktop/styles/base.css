@@ -236,6 +236,10 @@ samp,
   padding: var(--menu-option-padding);
 }
 
+.custom-select-option {
+  padding-block: 0.45em;
+}
+
 [id="conversation-transfer:actions"] .action-menu-item {
   grid-template-columns: 16px minmax(0, 1fr);
 }

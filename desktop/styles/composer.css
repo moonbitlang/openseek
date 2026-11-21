@@ -98,8 +98,9 @@
 .composer-inner {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
+  border-radius: var(--radius-composer);
   gap: 0 var(--space-2);
-  padding: var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-4);
 }
 
 /* Fixed columns: the attachment slot collapses when attaching is unavailable,
