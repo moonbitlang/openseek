@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn canonical_pull_request_url(String) -> String?
+
 pub async fn checkout(@protocol.GithubCheckoutPayload) -> @protocol.GithubCheckoutReply
 
 pub async fn checkout_status(@protocol.GithubWorkspacePayload) -> @protocol.GithubCheckoutStatus
@@ -17,6 +19,8 @@ pub async fn list(@protocol.GithubListPayload) -> @protocol.GithubListReply
 pub async fn mutate_review(@protocol.GithubReviewMutationPayload) -> @protocol.GithubReviewMutationReply
 
 pub async fn pull_request(@protocol.GithubPullRequestPayload) -> @protocol.GithubPullRequestDetail
+
+pub async fn pull_request_checks_batch(Array[String]) -> Map[String, PullRequestCheckSnapshot]
 
 pub async fn pull_request_summary(@protocol.GithubPullRequestSummaryPayload) -> @protocol.GithubPullRequestSummaryReply
 
@@ -42,6 +46,17 @@ pub fn GithubError::to_string(Self) -> String
 pub impl Show for GithubError
 
 // Types and methods
+pub(all) enum PullRequestCheckSnapshot {
+  ChecksOpen(head~ : String, checks~ : PullRequestChecks)
+  ChecksClosed
+  ChecksUnavailable(String)
+}
+
+pub enum PullRequestChecks {
+  ChecksWaiting(retrying~ : Bool)
+  ChecksFailed
+  ChecksPassed(Array[String])
+}
 
 // Type aliases
 
