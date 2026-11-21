@@ -282,7 +282,7 @@ html {
 
 /* scrollbar-width is not inherited. Apply it to every scroller, including
    the probe that measures --scrollbar-lane, without overriding local hides. */
-:where(*) {
+* {
   scrollbar-width: thin;
 }
 
