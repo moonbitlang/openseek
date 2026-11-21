@@ -195,6 +195,36 @@ async test "run_turn_with_append closes failed persisted turns" {
 }
 
 ///|
+/// The context window a launcher states, parsed from the raw
+/// `OPENSEEK_CONTEXT_WINDOW` value. `None` — unset, blank, or not a positive
+/// integer — leaves the build's table for the model in charge.
+fn parse_context_window(raw : String?) -> Int32? {
+  guard raw is Some(value) else { return None }
+  let window : Int32 = @string.from_str(value.trim()) catch { _ => return None }
+  if window > 0 {
+    Some(window)
+  } else {
+    None
+  }
+}
+
+///|
+/// The context window the launcher says this run's endpoint serves, read from
+/// `OPENSEEK_CONTEXT_WINDOW`.
+///
+/// The desktop host exports this for a model the build does not ship: the entry
+/// the user saved carries its own window, and no table here can know an
+/// arbitrary endpoint's. Read at the one place a run builds its clients, so the
+/// turn, its summary client and every in-process child agree, and so a parent's
+/// value reaches its children through the environment they inherit instead of
+/// through another parameter on every call. A caller that already holds the
+/// number states it on `run_turn_in_scope` instead, which reads this variable
+/// only when it was told nothing.
+fn configured_context_window() -> Int32? {
+  parse_context_window(@env.get_env_var("OPENSEEK_CONTEXT_WINDOW"))
+}
+
+///|
 /// Runs one user turn inside a caller-owned runtime and task scope.
 ///
 /// This is the building block for callers that keep an engine alive across
@@ -259,11 +289,20 @@ pub async fn run_turn_in_scope(
   max_steps~ : Int32 = unbounded_max_steps,
   thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  // The window to plan against, when the caller already holds it. The host
+  // states a user entry's window in the environment instead of passing it, so
+  // every child inherits it; a caller that resolved the number itself states it
+  // here, and the environment is not consulted at all.
+  context_window? : Int32,
   retry_attempts? : Int32,
   retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {
+  let window = match context_window {
+    Some(value) => Some(value)
+    None => configured_context_window()
+  }
   let client = @client.Client(
     api_key~,
     model~,
@@ -271,6 +310,7 @@ pub async fn run_turn_in_scope(
     api_url?,
     retry_attempts?,
     retry_backoff_ms?,
+    context_window?=window,
   )
   let summary_client = @client.Client(
     api_key~,
@@ -279,6 +319,7 @@ pub async fn run_turn_in_scope(
     thinking=No,
     retry_attempts?,
     retry_backoff_ms?,
+    context_window?=window,
   )
   let session = session
     |> append_item(User(UserMessage(content, submission_id?)))
