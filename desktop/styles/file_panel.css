@@ -3074,7 +3074,7 @@ button.git-history-file.selected {
 }
 .github-detail-placeholder { align-items: center; justify-content: center; gap: var(--space-5); padding: var(--space-7); color: var(--gh-muted); text-align: center; }
 .github-detail-placeholder p { max-width: 280px; line-height: 1.6; }
-.github-detail-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.github-detail-scroll { flex: 1; min-height: 0; overflow: auto; }
 .github-detail-content { max-width: 1360px; margin: 0 auto; padding: 2rem 2.25rem 3.5rem; overflow-wrap: anywhere; }
 .github-pr-header { margin-bottom: var(--space-3); }
 .github-detail-title { flex: 1; min-width: 0; margin: 0 0 var(--space-6); font-size: clamp(1.75rem, 3.8cqw, 2.5rem); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
@@ -3145,7 +3145,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checks-summary:hover .github-check-toggle { border-color: var(--gh-muted); }
 .github-check-hide, .github-checks-details[open] .github-check-show { display: none; }
 .github-checks-details[open] .github-check-hide { display: inline; }
-.github-checks { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.github-checks { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
 .github-checks:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
 .github-check { display: flex; align-items: center; gap: var(--space-5); min-height: 3.5em; padding: var(--space-5) var(--space-6); font-size: var(--font-size-md); line-height: 1.5; }
 .github-check + .github-check { border-top: 1px solid var(--gh-border); }
@@ -3183,7 +3183,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-divider); }
 .github-pulls.expanded { flex: 2 1 0; }
 .github-issues.expanded { flex: 1 1 0; }
-.github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); scrollbar-width: thin; }
+.github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); }
 .github-heading, .github-group-heading { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.5rem; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .github-heading { flex: none; font-weight: 600; }
 .github-group-heading { padding-left: var(--space-6); }
@@ -3231,7 +3231,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-summary-active { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); }
 .jobs-summary-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
 .jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-divider); }
-.jobs-list { display: flex; flex-direction: column; gap: var(--space-6); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
+.jobs-list { display: flex; flex-direction: column; gap: var(--space-6); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); }
 .jobs-group { flex-shrink: 0; min-width: 0; }
 .jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 var(--space-5); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
 .jobs-history-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit; transition: margin-bottom var(--disclosure-duration) ease; }

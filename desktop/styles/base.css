@@ -275,12 +275,15 @@ samp,
   background: var(--color-text-selection);
 }
 
-/* Preserve native scrollbar geometry; dom_helpers.mbt measures its occupied
-   width as --scrollbar-lane. Chromium ignores ::-webkit-scrollbar styling
-   where the inherited scrollbar-color is non-auto. */
 html {
   font-size: var(--font-size-base);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+/* scrollbar-width is not inherited. Apply it to every scroller, including
+   the probe that measures --scrollbar-lane, without overriding local hides. */
+:where(*) {
+  scrollbar-width: thin;
 }
 
 /* Controls set --icon-size on the wrapper; SVG and font icons share it. */
