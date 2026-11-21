@@ -15,7 +15,6 @@ async fn ApiState::share_conversation(
   self : ApiState,
   payload : @protocol.SessionSharePayload,
   local_account~ : Bool,
-  feedback? : @protocol.FeedbackMetadata,
   on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   let (credential, server_url) = match
@@ -23,16 +22,11 @@ async fn ApiState::share_conversation(
     Ok(access) => access
     Err(reply) => return reply
   }
-  SessionShare::{ state: self, payload, }.publish(
-    credential,
-    server_url~,
-    feedback?,
-    on_progress=progress => {
-      on_share_progress({ generation: payload.generation, progress, }) catch {
-        _ => ()
-      }
-    },
-  )
+  SessionShare::{ state: self, payload, }.publish(credential, server_url~, on_progress=progress => {
+    on_share_progress({ generation: payload.generation, progress, }) catch {
+      _ => ()
+    }
+  })
 }
 
 ///|
@@ -40,22 +34,13 @@ async fn SessionShare::publish(
   self : SessionShare,
   credential : ShareCredential,
   server_url~ : String,
-  feedback? : @protocol.FeedbackMetadata,
   on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   try {
     on_progress(Preparing)
-    let (shell, bundle) = self.state.host_state().viz_assets().read()
-    let files = @engine.ConversationExport::capture(
-      self.state.manager(),
-      self.payload.source,
-      shell,
-      bundle,
-    )
-    self.upload(files, credential, server_url~, feedback?, on_progress~)
+    let files = self.state.capture_conversation(self.payload.source)
+    self.upload(files, credential, server_url~, on_progress~)
   } catch {
-    @shares.Oversized if feedback is Some(_) =>
-      Failed(message="This feedback exceeds the 20 MiB upload limit.")
     @shares.EmptyTitle | @shares.Oversized as refusal =>
       Failed(message="\{refusal}")
     error => {
@@ -72,7 +57,6 @@ async fn SessionShare::upload(
   files : @engine.ConversationExport,
   credential : ShareCredential,
   server_url~ : String,
-  feedback? : @protocol.FeedbackMetadata,
   on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
 ) -> @protocol.SessionShareReply {
   let token = match credential {
@@ -84,11 +68,6 @@ async fn SessionShare::upload(
     html=files.html,
     json=files.json,
     key=self.payload.idempotency_key,
-    feedback?=feedback.map(metadata => {
-      "message": metadata.message,
-      "environment": Json::object(metadata.environment),
-      "source": { "mode": "local", "session_id": self.payload.source.session },
-    }),
   ).publish(server_url~, token~, on_progress~)
   credential.settle(self.state, reply)
 }
@@ -133,21 +112,28 @@ async fn ShareCredential::settle(
       message="The share upload permission was rejected. Try sharing again.",
     )
   }
+  match state.expire_upload_account(account) {
+    Ok(_) => SignInRequired
+    Err(message) => Failed(message~)
+  }
+}
+
+///|
+async fn ApiState::expire_upload_account(
+  self : ApiState,
+  account : @protocol.AccountSession,
+) -> Result[Unit, String] {
   @async.protect_from_cancel(() => {
-    let store = state.auth_store()
+    let store = self.auth_store()
     if store.account() is Some(current) && current.token != account.token {
-      return Failed(
-        message="Sign-in changed during the upload. Try sharing again.",
-      )
+      return Err("Sign-in changed during the upload. Please try again.")
     }
-    defer state.publish(AuthChanged(store.status()))
+    defer self.publish(AuthChanged(store.status()))
     store.expire_account(account.token) catch {
       @auth.AuthError(message) =>
-        return Failed(
-          message="Could not clear the rejected sign-in: \{message}",
-        )
+        return Err("Could not clear the rejected sign-in: \{message}")
       error => raise error
     }
-    SignInRequired
+    Ok(())
   })
 }

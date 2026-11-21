@@ -30,22 +30,31 @@ pub impl FromJson for FeedbackMetadata with fn from_json(json, path) {
 
 ///|
 pub(all) struct SessionFeedbackPayload {
-  share : SessionSharePayload
+  source : SessionExportPayload
+  user_id : String
+  idempotency_key : String
   metadata : FeedbackMetadata
 }
 
 ///|
 pub impl ToJson for SessionFeedbackPayload with fn to_json(self) {
-  { "share": self.share.to_json(), "metadata": ToJson::to_json(self.metadata) }
+  {
+    "source": self.source.to_json(),
+    "user_id": self.user_id,
+    "idempotency_key": self.idempotency_key,
+    "metadata": ToJson::to_json(self.metadata),
+  }
 }
 
 ///|
 pub impl FromJson for SessionFeedbackPayload with fn from_json(json, path) {
   let obj = JsonObject::decode(json, path, "session feedback")
   {
-    share: @json.from_json(
-      obj.required_json("share"),
-      path=path.add_key("share"),
+    user_id: obj.required_string("user_id"),
+    idempotency_key: obj.required_string("idempotency_key"),
+    source: @json.from_json(
+      obj.required_json("source"),
+      path=path.add_key("source"),
     ),
     metadata: @json.from_json(
       obj.required_json("metadata"),
@@ -57,12 +66,6 @@ pub impl FromJson for SessionFeedbackPayload with fn from_json(json, path) {
 ///|
 pub(all) struct FeedbackReceipt {
   id : String
-  url : String
-}
-
-///|
-pub impl ToJson for FeedbackReceipt with fn to_json(self) {
-  { "id": self.id, "url": self.url }
 }
 
 ///|
@@ -72,11 +75,36 @@ pub impl FromJson for FeedbackReceipt with fn from_json(json, path) {
   guard !id.is_blank() else {
     raise JsonDecodeError((path.add_key("id"), "missing feedback id"))
   }
-  let url = obj.required_string("url")
-  guard @url.Url::try_parse(url) is Some(link) && link.protocol() == "https:" else {
-    raise JsonDecodeError(
-      (path.add_key("url"), "expected an HTTPS feedback URL"),
-    )
+  { id, }
+}
+
+///|
+#derive(Eq, Debug)
+pub(all) enum SessionFeedbackReply {
+  Submitted(id~ : String)
+  SignInRequired
+  Failed(message~ : String)
+}
+
+///|
+pub impl FromJson for SessionFeedbackReply with fn from_json(json, path) {
+  let obj = JsonObject::decode(json, path, "session feedback reply")
+  match obj.required_string("status") {
+    "submitted" => {
+      let receipt : FeedbackReceipt = @json.from_json(json, path~)
+      Submitted(id=receipt.id)
+    }
+    "sign_in_required" => SignInRequired
+    "failed" => Failed(message=obj.required_string("message"))
+    _ => raise JsonDecodeError((path, "invalid session feedback status"))
   }
-  { id, url: link.href(), }
+}
+
+///|
+pub impl ToJson for SessionFeedbackReply with fn to_json(self) {
+  match self {
+    Submitted(id~) => { "status": "submitted", "id": id }
+    SignInRequired => { "status": "sign_in_required" }
+    Failed(message~) => { "status": "failed", "message": message }
+  }
 }

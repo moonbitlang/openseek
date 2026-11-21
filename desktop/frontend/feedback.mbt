@@ -72,20 +72,16 @@ fn Model::submit_feedback(
             key.channel,
             @commands.session_feedback,
             {
-              share: {
-                // Feedback progress belongs to the composer, outside Share's generations.
-                generation: -1,
-                source: conv.export_source(title),
-                idempotency_key: request,
-                authorization: LocalAccount(user_id=credentials.user.user_id),
-              },
+              source: conv.export_source(title),
+              idempotency_key: request,
+              user_id: credentials.user.user_id,
               metadata,
             },
           ) catch {
             error => return Err(Diagnostic(@interop.bridge_error_text(error)))
           }
           match reply {
-            Shared(..) => Ok(())
+            Submitted(..) => Ok(())
             Failed(message~) => Err(Diagnostic(message))
             SignInRequired => Err(@composer.SignInRequired)
           }

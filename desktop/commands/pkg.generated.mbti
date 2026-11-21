@@ -278,7 +278,7 @@ pub let session_edit : Command[@protocol.SessionEditPayload, @protocol.SessionFo
 
 pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]
 
-pub let session_feedback : Command[@protocol.SessionFeedbackPayload, @protocol.SessionShareReply]
+pub let session_feedback : Command[@protocol.SessionFeedbackPayload, @protocol.SessionFeedbackReply]
 
 pub let session_fork : Command[@protocol.SessionForkPayload, @protocol.SessionForkReply]
 

@@ -35,8 +35,9 @@ for (const mode of ['Cloud', 'Local']) {
         posts.push(request.params);
         const attempt = posts.length;
         await gates[attempt - 1].pending;
-        if (attempt === 1 || attempt === 4) throw new Error('Unknown command: session.feedback');
-        return { status: 'shared', url };
+        if (attempt === 1) return { status: 'failed', message: 'storage unavailable' };
+        if (attempt === 4) throw new Error('Unknown command: session.feedback');
+        return { status: 'submitted', id: 'fb_test' };
       };
       await page.goto(`${authOrigin}/console/index.html?device=device-a`);
       await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
@@ -47,7 +48,7 @@ for (const mode of ['Cloud', 'Local']) {
         posts.push(route.request().postDataJSON());
         const attempt = posts.length;
         await gates[attempt - 1].pending;
-        return route.fulfill(attempt !== 1 && attempt !== 4 ? { status: 201, json: { id: 'fb_test', url } } : { status: 502, json: { error: 'storage unavailable' } });
+        return route.fulfill(attempt !== 1 && attempt !== 4 ? { status: 201, json: { id: 'fb_test' } } : { status: 502, json: { error: 'storage unavailable' } });
       });
       await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
     }
@@ -76,7 +77,7 @@ for (const mode of ['Cloud', 'Local']) {
     await task.press('Enter');
     await expect.poll(() => posts.length).toBe(1);
     gates[0].finish();
-    await expect(status).toContainText(local ? 'Unknown command: session.feedback' : 'storage unavailable');
+    await expect(status).toContainText('storage unavailable');
     await expect(task).toHaveValue(command);
     await task.fill('/feedback ' + retry);
     await task.press('Enter');
@@ -122,8 +123,8 @@ for (const mode of ['Cloud', 'Local']) {
         platform: expect.any(String), locale: expect.any(String), user_agent: expect.any(String),
       } });
       if (local) {
-        expect(body.share.source).toMatchObject({ session: 'session-1', workspace: '/workspace' });
-        expect(body.share.authorization).toEqual({ kind: 'local_account', user_id: '123' });
+        expect(body.source).toMatchObject({ session: 'session-1', workspace: '/workspace' });
+        expect(body.user_id).toBe('123');
       }
     }
     await page.getByRole('button', { name: 'Export', exact: true }).click();
@@ -146,7 +147,7 @@ for (const mode of ['Local', 'Cloud']) {
       app.device.replyFor = request => {
         if (request.method !== 'session.feedback') return original(request);
         uploads++;
-        return { status: 'shared', url };
+        return { status: 'submitted', id: 'fb_test' };
       };
       await page.goto(`${authOrigin}/console/index.html?device=device-a`);
       await page.getByText('Rabbita browser fixture', { exact: true }).first().click();

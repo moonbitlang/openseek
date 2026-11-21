@@ -57,10 +57,10 @@ async test "feedback uploads metadata and both complete files from one conversat
     message: "  界面闪烁\nagain  ",
     environment: { "client": "desktop" },
   }
-  let payload : @protocol.SessionSharePayload = {
-    generation: 1,
+  let payload : @protocol.SessionFeedbackPayload = {
+    metadata,
     idempotency_key: "f".repeat(64),
-    authorization: LocalAccount(user_id="123"),
+    user_id: "123",
     source: {
       session: "session-1",
       workspace: workspace.resource_path(),
@@ -68,7 +68,14 @@ async test "feedback uploads metadata and both complete files from one conversat
       archived: false,
     },
   }
-  let share = SessionShare::{ state, payload, }
+  let account = state.auth_store().account().unwrap()
+  let mismatch = state.submit_feedback({
+    ..payload,
+    user_id: "another-account",
+  })
+  assert_true(
+    mismatch is Failed(message~) && message.contains("Sign-in changed"),
+  )
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let (connection, _) = server.accept()
@@ -131,28 +138,57 @@ async test "feedback uploads metadata and both complete files from one conversat
         }
       }
       connection.send_response(201, "Created")
-      connection.write_string(
-        "{\"id\":\"fb_test\",\"url\":\"https://shares.test/v1/feedback/fb_test\"}",
-      )
+      connection.write_string("{\"id\":\"fb_test\"}")
       connection.end_response()
     })
-    let reply = share.publish(
-      Account(state.auth_store().account().unwrap()),
-      server_url=origin,
-      feedback=metadata,
-      on_progress=_ => (),
-    )
+    let reply = state.publish_feedback(payload, account, server_url=origin)
     receiver.wait()
-    assert_true(reply is Shared(url="https://shares.test/v1/feedback/fb_test"))
+    assert_true(reply is Submitted(id="fb_test"))
   })
-  let oversized = share.publish(
-    Account(state.auth_store().account().unwrap()),
+  let oversized = state.publish_feedback(
+    {
+      ..payload,
+      metadata: { ..metadata, message: "x".repeat(20 * 1024 * 1024), },
+    },
+    account,
     server_url=origin,
-    feedback={ ..metadata, message: "x".repeat(20 * 1024 * 1024), },
-    on_progress=_ => (),
   )
   assert_true(
     oversized
     is Failed(message="This feedback exceeds the 20 MiB upload limit."),
   )
+  for
+    (code, body, expected) in (
+      [
+        (
+          200,
+          "{\"id\":\"fb_test\"}",
+          Failed(message="Feedback failed (HTTP 200)."),
+        ),
+        (
+          201,
+          "{\"url\":\"https://shares.test/f\"}",
+          Failed(message="Invalid feedback receipt."),
+        ),
+        (401, "{}", SignInRequired),
+      ] : Array[(Int32, String, @protocol.SessionFeedbackReply)]) {
+    @async.with_task_group(group => {
+      let receiver = group.spawn(() => {
+        let (connection, _) = server.accept()
+        defer connection.close()
+        ignore(connection.read_request())
+        connection.skip_request_body()
+        connection.send_response(code, "Fixture")
+        connection.write_string(body)
+        connection.end_response()
+      })
+      assert_eq(
+        state.publish_feedback(payload, account, server_url=origin),
+        expected,
+      )
+      receiver.wait()
+    })
+  }
+  assert_false(state.auth_store().signed_in())
+  assert_true(state.submit_feedback(payload) is SignInRequired)
 }

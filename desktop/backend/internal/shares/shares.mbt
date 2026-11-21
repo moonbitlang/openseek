@@ -2,7 +2,6 @@
 /// Capture the share content and multipart boundary before upload. Conversation
 /// retries reuse that snapshot; file snapshots retain their original bytes.
 struct Snapshot {
-  feedback : Bool
   key : String
   parts : Array[(@http.Headers, String)]
   file : (String, Bytes)?
@@ -40,7 +39,17 @@ pub fn Snapshot::Snapshot(
   html~ : String,
   json~ : String,
   key~ : String,
-  feedback? : Json,
+) -> Snapshot raise ShareError {
+  Snapshot::conversation(title~, html~, json~, key~, feedback=None)
+}
+
+///|
+fn Snapshot::conversation(
+  title~ : String,
+  html~ : String,
+  json~ : String,
+  key~ : String,
+  feedback~ : Json?,
 ) -> Snapshot raise ShareError {
   // The API limits the title to 1024 UTF-8 bytes, and a generated title may
   // be the entire first prompt. A UTF-16 code unit encodes to at most three
@@ -92,14 +101,14 @@ pub fn Snapshot::Snapshot(
     }
   }
   guard size <= 20 * 1024 * 1024 else { raise Oversized }
-  { key, parts, file: None, feedback: feedback is Some(_), }
+  { key, parts, file: None, }
 }
 
 ///|
 /// The caller captures its own account credential with the source snapshot.
 /// Never consult a device token or a newer login while retrying publication.
 /// Conversation exports retry a lost attempt with the same bytes and key.
-/// Files and feedback return ambiguous failures without resending the request.
+/// File uploads return ambiguous failures without resending the request.
 pub async fn Snapshot::publish(
   self : Snapshot,
   server_url~ : String,
@@ -115,7 +124,7 @@ pub async fn Snapshot::publish(
   attempt(1) catch {
     error =>
       try {
-        if self.file is None && !self.feedback {
+        if self.file is None {
           attempt(2)
         } else {
           raise error
@@ -138,10 +147,46 @@ async fn Snapshot::send(
   attempt~ : Int32,
   on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
+  let (code, body) = self.post(
+    "/v2/shares",
+    server_url~,
+    token~,
+    attempt~,
+    on_progress~,
+  )
+  if code == 401 {
+    return @protocol.SignInRequired
+  }
+  if code == 404 {
+    // The deployment may not yet expose the account-aware share endpoint.
+    return @protocol.Failed(
+      message="The signed-in server does not provide sharing at \{server_url}/v2/shares (HTTP 404). Sign in to a server with sharing enabled.",
+    )
+  }
+  guard code == 201 || code == 200 else {
+    return @protocol.Failed(message=upload_error("Sharing", code, body))
+  }
+  let invalid = "The share server did not return a valid share link."
+  try body.json() catch {
+    _ => @protocol.Failed(message=invalid)
+  } noraise {
+    { "url": String(url), .. } => @protocol.Shared(url~)
+    _ => @protocol.Failed(message=invalid)
+  }
+}
+
+///|
+async fn Snapshot::post(
+  self : Snapshot,
+  path : String,
+  server_url~ : String,
+  token~ : String,
+  attempt~ : Int32 = 1,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
+) -> (Int32, &@io.Data) {
   on_progress(Connecting(attempt~))
   let connection = @http.Client(server_url)
   defer connection.close()
-  let path = if self.feedback { "/v1/feedback" } else { "/v2/shares" }
   connection.request(Post, path, extra_headers={
     "Authorization": "Bearer \{token}",
     "Idempotency-Key": self.key,
@@ -153,42 +198,56 @@ async fn Snapshot::send(
   // Fetch may only begin sending here; this stage makes no byte-completion claim.
   on_progress(Waiting(attempt~))
   let response = connection.end_request()
-  let body = connection.read_all()
-  if response.code == 401 {
-    return @protocol.SignInRequired
+  (response.code, connection.read_all())
+}
+
+///|
+/// Only the API's error field is suitable for display. A proxy can return HTML.
+fn upload_error(action : String, code : Int32, body : &@io.Data) -> String {
+  let detail = body.json() catch { _ => null }
+  match detail {
+    { "error": String(message), .. } if !message.is_blank() =>
+      "\{action} failed (HTTP \{code}): \{message.trim()}"
+    _ => "\{action} failed (HTTP \{code})."
   }
-  if !self.feedback && response.code == 404 {
-    // The deployment may not yet expose the account-aware share endpoint.
-    return @protocol.Failed(
-      message="The signed-in server does not provide sharing at \{server_url}/v2/shares (HTTP 404). Sign in to a server with sharing enabled.",
-    )
+}
+
+///|
+pub async fn submit_feedback(
+  title~ : String,
+  html~ : String,
+  json~ : String,
+  key~ : String,
+  metadata~ : Json,
+  server_url~ : String,
+  token~ : String,
+) -> @protocol.SessionFeedbackReply {
+  let snapshot = Snapshot::conversation(
+    title~,
+    html~,
+    json~,
+    key~,
+    feedback=Some(metadata),
+  )
+  // Feedback has no implicit retry: a lost response can follow a successful write.
+  let (code, body) = @async.with_timeout(240_000, () => {
+    snapshot.post("/v1/feedback", server_url~, token~)
+  }) catch {
+    @async.TimeoutError =>
+      return Failed(
+        message="The feedback request timed out. Delivery could not be confirmed.",
+      )
+    error => return Failed(message="The feedback request failed: \{error}")
   }
-  guard response.code == 201 || (!self.feedback && response.code == 200) else {
-    // The API answers every rejection with `{ "error": message }`; only a
-    // proxy answers without one. Never display an entire HTML/proxy
-    // response as an error.
-    let fallback = "Sharing failed (HTTP \{response.code})."
-    let message = try body.json() catch {
-      _ => fallback
-    } noraise {
-      { "error": String(detail), .. } if !detail.trim().is_empty() =>
-        "Sharing failed (HTTP \{response.code}): \{detail.trim()}"
-      _ => fallback
+  match code {
+    201 => {
+      let receipt : @protocol.FeedbackReceipt = @json.from_json(body.json()) catch {
+        _ => return Failed(message="Invalid feedback receipt.")
+      }
+      Submitted(id=receipt.id)
     }
-    return @protocol.Failed(message~)
-  }
-  if self.feedback {
-    let receipt : @protocol.FeedbackReceipt = @json.from_json(body.json()) catch {
-      _ => return @protocol.Failed(message="Invalid feedback receipt.")
-    }
-    return @protocol.Shared(url=receipt.url)
-  }
-  let invalid = "The share server did not return a valid share link."
-  try body.json() catch {
-    _ => @protocol.Failed(message=invalid)
-  } noraise {
-    { "url": String(url), .. } => @protocol.Shared(url~)
-    _ => @protocol.Failed(message=invalid)
+    401 => SignInRequired
+    _ => Failed(message=upload_error("Feedback", code, body))
   }
 }
 
@@ -235,6 +294,5 @@ pub fn Snapshot::file(
     key,
     parts: [({ "Content-Disposition": "form-data; name=\"title\"" }, name)],
     file: Some((name, bytes)),
-    feedback: false,
   }
 }

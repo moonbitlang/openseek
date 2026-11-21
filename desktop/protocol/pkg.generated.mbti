@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 13
+pub const HostProtocolRevision : Int32 = 14
 
 pub const MaxImageBytes : Int32 = 20971520
 
@@ -1324,10 +1324,8 @@ pub impl @json.ToJson for FeedbackMetadata
 
 pub(all) struct FeedbackReceipt {
   id : String
-  url : String
 }
 pub impl @json.FromJson for FeedbackReceipt
-pub impl @json.ToJson for FeedbackReceipt
 
 #derive(Eq, @debug.Debug)
 pub(all) struct FileSharePayload {
@@ -3890,11 +3888,22 @@ pub impl @json.FromJson for SessionExportReply
 pub impl @json.ToJson for SessionExportReply
 
 pub(all) struct SessionFeedbackPayload {
-  share : SessionSharePayload
+  source : SessionExportPayload
+  user_id : String
+  idempotency_key : String
   metadata : FeedbackMetadata
 }
 pub impl @json.FromJson for SessionFeedbackPayload
 pub impl @json.ToJson for SessionFeedbackPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) enum SessionFeedbackReply {
+  Submitted(id~ : String)
+  SignInRequired
+  Failed(message~ : String)
+}
+pub impl @json.FromJson for SessionFeedbackReply
+pub impl @json.ToJson for SessionFeedbackReply
 
 #derive(Eq, @debug.Debug)
 pub(all) struct SessionForkPayload {

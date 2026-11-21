@@ -557,13 +557,7 @@ pub fn endpoints(
     }),
     Endpoint(@commands.session_list, _ => @engine.list_sessions()),
     Endpoint(@commands.session_snapshot, payload => {
-      let (shell, bundle) = state.host_state().viz_assets().read()
-      let files = @engine.ConversationExport::capture(
-        state.manager,
-        payload,
-        shell,
-        bundle,
-      )
+      let files = state.capture_conversation(payload)
       { html: files.html, json: files.json, }
     }),
     Endpoint(@commands.session_load, payload => {
@@ -879,16 +873,7 @@ pub fn endpoints(
   if local_feedback {
     endpoints.push(
       Endpoint(@commands.session_feedback, payload => {
-        let share = payload.share
-        guard share.authorization is LocalAccount(_) else {
-          return Failed(message="Feedback requires the signed-in host account.")
-        }
-        state.share_conversation(
-          share,
-          local_account=true,
-          feedback=payload.metadata,
-          on_share_progress~,
-        )
+        state.submit_feedback(payload)
       }),
     )
   }
@@ -1484,4 +1469,13 @@ async fn ApiState::run_schedules(self : ApiState) -> Unit {
       publish_session_changed(self, "created", run.session, run.workspace)
     },
   )
+}
+
+///|
+async fn ApiState::capture_conversation(
+  self : ApiState,
+  source : @protocol.SessionExportPayload,
+) -> @engine.ConversationExport {
+  let (shell, bundle) = self.host_state().viz_assets().read()
+  @engine.ConversationExport::capture(self.manager(), source, shell, bundle)
 }
