@@ -109,8 +109,8 @@
 
 /* RUI's inline background reads different tokens for hover and expanded states. */
 [data-slot="dropdown-menu-trigger"][data-variant="ghost"] {
-  --rui-ghost-hover-bg: #d5d5d5;
-  --rui-muted: #d5d5d5;
+  --rui-ghost-hover-bg: var(--color-hover-subtle);
+  --rui-muted: var(--color-hover-subtle);
 }
 
 [data-slot="button-group"] > [data-slot="button"][aria-pressed] {
