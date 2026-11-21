@@ -440,6 +440,17 @@ pub async fn ShellExecution::read_tail(
 }
 
 ///|
+/// Track a positive-sized window of rewritten retained output, including text
+/// captured before this call. Non-positive sizes are clamped to one.
+pub async fn ShellExecution::track_display_tail(
+  self : ShellExecution,
+  rules : Array[(String, String)],
+  window : Int32,
+) -> DisplayTail {
+  self.sink.track_display_tail(rules, window)
+}
+
+///|
 /// Whether output exceeded the inline cap (render a pointer; full output is in
 /// the spill file).
 pub fn ShellExecution::over_inline_cap(self : ShellExecution) -> Bool {
