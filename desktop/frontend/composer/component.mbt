@@ -788,6 +788,27 @@ fn Model::commit_entry_change(
 }
 
 ///|
+priv enum FeedbackSubmission {
+  Disabled
+  Ready(String)
+}
+
+///|
+fn Entry::feedback_submission(
+  self : Entry,
+  input : Input,
+) -> FeedbackSubmission? {
+  guard input.feedback_message(self.draft) is Some(message) else { return None }
+  if input.presentation.disabled ||
+    message.is_blank() ||
+    self.feedback is Some(Sending(_, _)) {
+    Some(Disabled)
+  } else {
+    Some(Ready(message))
+  }
+}
+
+///|
 fn Model::send_feedback(
   self : Model,
   entry : Entry,
@@ -1234,20 +1255,18 @@ fn Model::update(
       }
       self.send_feedback(entry, command, message, clear=false, action_emit)
     }
-    SubmitRequested if input.feedback_message(entry.draft) is Some(message) => {
-      guard !input.presentation.disabled &&
-        !message.is_blank() &&
-        !(entry.feedback is Some(Sending(_, _))) else {
-        return (self, @cmd.none)
+    SubmitRequested if entry.feedback_submission(input) is Some(submission) =>
+      match submission {
+        Disabled => (self, @cmd.none)
+        Ready(message) =>
+          self.send_feedback(
+            entry,
+            entry.draft.task,
+            message,
+            clear=true,
+            action_emit,
+          )
       }
-      self.send_feedback(
-        entry,
-        entry.draft.task,
-        message,
-        clear=true,
-        action_emit,
-      )
-    }
     // A shell command is acknowledged like a prompt: the root clears the
     // draft and advances the submission sequence once it accepts the command.
     SubmitRequested if input.shell_command(entry.draft) is Some(command) => {

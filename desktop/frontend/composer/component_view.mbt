@@ -234,15 +234,13 @@ fn Entry::action_buttons(
       },
     ]
   }
-  let feedback_button : ActionButton? = input
-    .feedback_message(self.draft)
-    .map(message => {
+  let feedback_button : ActionButton? = self
+    .feedback_submission(input)
+    .map(submission => {
       id: "send",
       class_name: "icon-button send-button",
       title: ui(locale, SendLabel),
-      disabled: input.presentation.disabled ||
-      message.is_blank() ||
-      self.feedback is Some(Sending(_, _)),
+      disabled: submission is Disabled,
       command: emit(SubmitRequested),
       content: @icons.icon(@icons.icon_newline),
     })

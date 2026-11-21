@@ -58,6 +58,9 @@ for (const mode of ['Cloud', 'Local']) {
     await expect(completion).toContainText('Anyone with the link can read the full conversation');
     await completion.click();
     await expect(page.locator('#send')).toBeDisabled();
+    const emptyCommand = await task.inputValue();
+    await task.press('Enter');
+    await expect(task).toHaveValue(emptyCommand);
     const dialog = page.getByRole('dialog', { name: 'Export conversation' });
     const status = page.locator('.composer-feedback-status');
     const command = '/feedback ' + message;
@@ -88,6 +91,9 @@ for (const mode of ['Cloud', 'Local']) {
     await expect.poll(() => posts.length).toBe(3);
     await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
     await task.fill(command);
+    await expect(page.locator('#send')).toBeDisabled();
+    await task.press('Enter');
+    await expect(task).toHaveValue(command);
     gates[2].finish();
     await expect(status).toHaveText('Feedback submitted');
     await expect(task).toHaveValue(command);
