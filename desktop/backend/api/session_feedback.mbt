@@ -44,8 +44,9 @@ async fn ApiState::publish_feedback(
     error => return Failed(message="Could not submit feedback: \{error}")
   }
   guard reply is SignInRequired else { return reply }
-  match self.expire_upload_account(account) {
-    Ok(_) => SignInRequired
-    Err(message) => Failed(message~)
+  self.expire_upload_account(account) catch {
+    @host.HostError(message) => return Failed(message~)
+    error => raise error
   }
+  SignInRequired
 }

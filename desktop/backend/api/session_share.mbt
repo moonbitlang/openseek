@@ -112,28 +112,32 @@ async fn ShareCredential::settle(
       message="The share upload permission was rejected. Try sharing again.",
     )
   }
-  match state.expire_upload_account(account) {
-    Ok(_) => SignInRequired
-    Err(message) => Failed(message~)
+  state.expire_upload_account(account) catch {
+    @host.HostError(message) => return Failed(message~)
+    error => raise error
   }
+  SignInRequired
 }
 
 ///|
 async fn ApiState::expire_upload_account(
   self : ApiState,
   account : @protocol.AccountSession,
-) -> Result[Unit, String] {
+) -> Unit {
   @async.protect_from_cancel(() => {
     let store = self.auth_store()
     if store.account() is Some(current) && current.token != account.token {
-      return Err("Sign-in changed during the upload. Please try again.")
+      raise @host.HostError(
+        "Sign-in changed during the upload. Please try again.",
+      )
     }
     defer self.publish(AuthChanged(store.status()))
     store.expire_account(account.token) catch {
       @auth.AuthError(message) =>
-        return Err("Could not clear the rejected sign-in: \{message}")
+        raise @host.HostError(
+          "Could not clear the rejected sign-in: \{message}",
+        )
       error => raise error
     }
-    Ok(())
   })
 }
