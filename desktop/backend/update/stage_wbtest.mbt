@@ -161,33 +161,3 @@ async test "package download reports redirect and final response failures" {
     }
   }
 }
-
-///|
-test "package redirect locations preserve HTTPS and reject unsupported targets" {
-  assert_eq(
-    download_redirect_target("https://download.example", "/package.zip"),
-    "https://download.example/package.zip",
-  )
-  assert_eq(
-    download_redirect_target(
-      "https://download.example/package.zip", "//cdn.example/asset.zip",
-    ),
-    "https://cdn.example/asset.zip",
-  )
-  for
-    (location, expected) in [
-      (
-        "http://cdn.example/package.zip", "update download redirected to an insecure address",
-      ),
-      ("file:///package.zip", "update download sent an unsupported redirect"),
-      ("", "update download sent an unsupported redirect"),
-    ] {
-    try
-      download_redirect_target("https://download.example/package.zip", location)
-    catch {
-      UpdateError(message) => assert_eq(message, expected)
-    } noraise {
-      _ => fail("expected the redirect to be refused")
-    }
-  }
-}

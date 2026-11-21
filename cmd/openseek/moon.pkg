@@ -1,6 +1,5 @@
 import {
   "moonbitlang/openseek/internal/openseek" @app,
-  "moonbitlang/core/async",
   "moonbitlang/core/async/stdio",
 }
 
@@ -11,8 +10,5 @@ supported_targets = "+wasm+native"
 pkgtype(kind: "executable")
 
 options(
-  "allow-experimental-packages": [
-    "moonbitlang/core/async",
-    "moonbitlang/core/async/stdio",
-  ],
+  "allow-experimental-packages": [ "moonbitlang/core/async/stdio" ],
 )

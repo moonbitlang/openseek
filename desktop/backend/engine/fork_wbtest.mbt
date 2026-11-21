@@ -99,7 +99,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 
 ///|
 /// A stand-in for the engine's `sessions fork <id> --as <fork> --through <n>
-/// --session-root <root> --dir <dir> --model <model> [--notice=<text>]
+/// --session-root <root> --dir <dir> --model <model> [--inherit-system-prompt] [--notice=<text>]
 /// [--mcp-config=<path>]...`. It
 /// copies the record, refuses an id that exists, writes what the host handed
 /// it — the directory, the model, the cut — as the fork's system prompt, the
@@ -123,11 +123,11 @@ fn worktree_fork_engine_script() -> String {
     $|source="$3"
     $|shift 3
     $|notice=""
-    $|prompt=""
+    $|inherit_prompt=false
     $|while [ "$#" -gt 0 ]; do
     $|  case "$1" in
-    $|    --system-prompt-file=*)
-    $|      prompt="${1#--system-prompt-file=}"
+    $|    --inherit-system-prompt)
+    $|      inherit_prompt=true
     $|      shift
     $|      continue
     $|      ;;
@@ -154,10 +154,14 @@ fn worktree_fork_engine_script() -> String {
     $|  exit 1
     $|fi
     $|to="$root/sessions/$fork"
-    $|mkdir -p "$to" || exit 1
+    $|mkdir -p "$root/sessions" || exit 1
+    $|mkdir "$to" || exit 1
     $|record="$to/openseek_session-$fork.jsonl"
-    $|test ! -f "$record" || exit 1
-    $|if [ -n "$prompt" ]; then cp "$prompt" "$root/base-$fork"; fi
+    $|prompt="$root/sessions/$source/system-prompt.md"
+    $|if [ "$inherit_prompt" = true ] && [ -e "$prompt" ]; then
+    $|  cp "$prompt" "$to/system-prompt.md" || exit 1
+    $|  cp "$prompt" "$root/base-$fork" || exit 1
+    $|fi
     $|printf '{"version":1,"id":"%s","system_prompt":"dir=%s model=%s through=%s"}\{newline}' "$fork" "$dir" "$model" "$through" > "$record"
     $|if [ -n "$notice" ]; then
     $|  printf '%s' "$notice" > "$root/notice-$fork"

@@ -1834,22 +1834,6 @@ fn run_indicator(
 }
 
 ///|
-/// Where `conv` runs, for the overview's environment card.
-fn Model::overview_environment(
-  self : Model,
-  conv : Conversation,
-) -> @conversation_overview.Environment {
-  let project = conv.project()
-  {
-    device: self.device_name(conv.device),
-    project: @resource.label(project),
-    path: project.path,
-    branch: conv.branch.filter(branch => !branch.is_empty()),
-    worktree: conv.worktree_name(),
-  }
-}
-
-///|
 /// What `conv` runs in the background, for the overview's card; `None` while
 /// nothing runs. The jobs listing counts only while it is `conv`'s own.
 fn Model::overview_background(
@@ -1884,9 +1868,8 @@ fn Model::overview_background(
 }
 
 ///|
-/// The overview beside `conv`: where it runs, which pull requests and branches
-/// it works on, what its engine is connected to, and what it runs in the
-/// background.
+/// The overview beside `conv`: which pull requests and branches it works
+/// on, and what it runs in the background.
 fn overview_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -1900,7 +1883,6 @@ fn overview_view(
   @conversation_overview.view(
     locale=model.locale,
     model.overview,
-    environment=model.overview_environment(conv),
     changes=@session_changes.summary(
       locale=model.locale,
       key,
@@ -1918,15 +1900,6 @@ fn overview_view(
         )
       },
     }),
-    connectors={
-      summary: @mcp.summary(locale=model.locale, key, model.mcp),
-      rows: () => @mcp.rows(locale=model.locale, key, model.mcp),
-      refresh: if @mcp.checking(key, model.mcp) {
-        None
-      } else {
-        Some(dispatch(Mcp(Refresh(key))))
-      },
-    },
     background?=model.overview_background(dispatch, conv),
     dispatch.map(msg => Overview(msg)),
   )
@@ -2012,9 +1985,6 @@ fn conversation_header(
   if !model.narrow {
     items.push(model.terminal_toggle(toggle_terminal))
   }
-  // The overview is the only place the conversation's connectors are shown,
-  // so the narrow layout keeps it: there it is always the panel over the
-  // transcript.
   items.push(
     @conversation_overview.toggle(
       locale=model.locale,

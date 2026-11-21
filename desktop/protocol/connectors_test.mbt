@@ -10,7 +10,7 @@ test "OAuth replies carry only public authorization instructions" {
     },
   }
   let reply : @protocol.ConnectorReply = @json.from_json(json)
-  assert_true(reply.authorization is Some({ code: "ABCD", .. }))
+  assert_true(reply.authorization is Some({ code: Some("ABCD"), .. }))
   assert_eq(reply.to_json(), json)
 }
 

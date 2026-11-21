@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
-import { chmod, cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { chmod, cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -45,6 +45,38 @@ const EsbuildVersion = "0.28.1";
 const DevelopmentSuffix = ".dev";
 const DevelopmentConfig = "proton.project.dev.json";
 const DevelopmentProduct = "SeekMoonDev";
+
+// Remove every `_build` directory under `root`. A packaged app must not carry
+// one: it is a local build's leftover, it perturbs the resource hash, and a
+// later step writing into it breaks the signature seal of the finished bundle.
+async function pruneBuildDirs(root) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const dir = pending.pop();
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (!entry.isDirectory()) continue;
+      if (entry.name === "_build") await removeBuildTree(path);
+      else pending.push(path);
+    }
+  }
+}
+
+// Removal is retried because these trees are large and can report ENOTEMPTY
+// while their own deletion is still settling.
+async function removeBuildTree(path) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await rm(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (error.code !== "ENOTEMPTY" && error.code !== "EBUSY") throw error;
+      await new Promise(done => setTimeout(done, 100));
+    }
+  }
+  throw new Error(`could not remove build output at ${path}`);
+}
+
 
 // Shipped from desktop/pwa/ under /assets/; sw.js goes to the root, and the
 // SVG sources, README and test stay behind.
@@ -125,6 +157,10 @@ class Build {
   parse() {
     const options = { help: { type: "boolean", short: "h" } };
     if (this.command !== "dev") options.release = { type: "boolean" };
+    // A release-quality build can still take the development identity: it then
+    // installs beside a shipped app instead of competing with it for the same
+    // bundle id and single-instance slot.
+    if (this.command !== "dev") options["dev-identity"] = { type: "boolean" };
     if (this.command === "macos" || this.command === "windows") {
       options.target = { type: "string", multiple: true };
     }
@@ -136,10 +172,10 @@ class Build {
     const { values } = parseArgs({ args: this.argv, options, strict: true });
     if (values.help) {
       const suffix = this.command === "macos"
-        ? "[--release] [--target app|dmg|zip] [--sign IDENTITY] [--notarize PROFILE] [--no-open]"
+        ? "[--release] [--dev-identity] [--target app|dmg|zip] [--sign IDENTITY] [--notarize PROFILE] [--no-open]"
         : this.command === "windows"
-          ? "[--release] [--target app|zip|installer]"
-          : this.command === "linux" || this.command === "browser" ? "[--release]" : "";
+          ? "[--release] [--dev-identity] [--target app|zip|installer]"
+          : this.command === "linux" || this.command === "browser" ? "[--release] [--dev-identity]" : "";
       console.log(`Usage: moon run ./desktop/package/${this.command} -- ${suffix}`.trim());
       return null;
     }
@@ -157,8 +193,8 @@ class Build {
     if (values.sign && !targets.some(target => target === "dmg" || target === "zip")) {
       throw new Error("--sign requires a distribution target (--target dmg or --target zip)");
     }
-    return { release: values.release ?? false, targets, sign: values.sign,
-      notarize: values.notarize, open: !values["no-open"] };
+    return { release: values.release ?? false, devIdentity: values["dev-identity"] ?? false,
+      targets, sign: values.sign, notarize: values.notarize, open: !values["no-open"] };
   }
 
   async proton(args, env = {}) {
@@ -429,6 +465,15 @@ class Build {
     // OpenSeek locates resources relative to its own executable.
     await stageResources(join(this.repo, "share"), join(root, "share"));
     await cp(vendors.seed, join(root, `toolchains/moonbit/${this.host.platform}`), { recursive: true, dereference: true });
+    // Build output anywhere in the staged tree poisons the finished bundle: a
+    // later step writes into it and the signature seal no longer matches. The
+    // copy filter above cannot be relied on for this, and removing the seeded
+    // toolchain's `_build` can fail with ENOTEMPTY, so the sweep runs last and
+    // retries; a tree that cannot be cleaned fails the build instead of
+    // shipping. The toolchain is swept here too: `package` initializes it from
+    // this clean state, so what the bundle carries is exactly that output.
+    await pruneBuildDirs(join(root, "share"));
+    await pruneBuildDirs(join(root, "toolchains"));
     if (this.command !== "windows") {
       await chmod(join(root, "bin/openseek"), 0o755);
     } else {
@@ -440,6 +485,43 @@ class Build {
       bytes.writeUInt16LE(2, pe + 24 + 68);
       await writeFile(path, bytes);
     }
+  }
+
+  // The engine runs the packaged toolchain where it sits: `MOON_HOME` names the
+  // seed and `moon` comes from the seed's own `bin`. Before it does, it asks for
+  // `.openseek-moonbit-bundle-version` and for one bundled core prelude per
+  // target, and treats a seed without them as not yet usable — it builds the
+  // core bundles on first use, into whatever `MOON_HOME` names.
+  //
+  // When that name is the bundle, the build writes `lib/core/_build` into a tree
+  // Proton has already signed, and packaging dies at "verify application
+  // signature failed" with "a sealed resource is missing or invalid", naming a
+  // `_build` file and nothing else. It is intermittent because it races whichever
+  // run touches the seed first. Shipping the seed already initialized — the same
+  // two `moon bundle` passes and the same stamp — leaves no first run to race.
+  async initializeToolchain() {
+    const toolchain = join(this.desktop, `seekmoon/toolchains/moonbit/${this.host.platform}`);
+    const binDir = join(toolchain, "bin");
+    const moon = join(binDir, this.command === "windows" ? "moon.exe" : "moon");
+    const seedStamp = join(toolchain, ".openseek-moonbit-seed-version");
+    if (!existsSync(moon) || !existsSync(seedStamp)) return;
+    const env = {
+      MOON_HOME: toolchain,
+      PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,
+    };
+    // Core is a standalone module, so both passes run offline against the seed
+    // and write only below the toolchain they were given.
+    const core = join(toolchain, "lib/core");
+    await this.commandRun(moon, ["bundle", "--warn-list", "-a", "--all"], { cwd: core, env });
+    await this.commandRun(
+      moon,
+      ["bundle", "--warn-list", "-a", "--target", "wasm-gc", "--quiet"],
+      { cwd: core, env },
+    );
+    const version = (await readFile(seedStamp, "utf8")).trim();
+    // Written last, exactly as the engine writes it: the stamp is its evidence
+    // that the bundles above are complete.
+    await writeFile(join(toolchain, ".openseek-moonbit-bundle-version"), `version=${version}`);
   }
 
   // Derive the project config a development build runs under: the checked-in
@@ -476,16 +558,27 @@ class Build {
       throw new Error(`${this.command} packaging does not support ${process.arch}`);
     }
     const profile = options.release ? "release" : "debug";
+    // A development identity is about installability, not optimizations: a
+    // release build can take it so the artifact keeps production speed while
+    // staying a separate app from the shipped one.
+    const devIdentity = !options.release || options.devIdentity;
+    const product = devIdentity ? DevelopmentProduct : "SeekMoon";
     await this.web(profile);
     const engine = await this.native(profile);
     const vendors = await this.vendors();
     await this.stage(profile, engine, vendors);
+    await this.initializeToolchain();
+    // The toolchain's bundles are the one `_build` the bundle is meant to carry,
+    // and they are the reason it carries none anywhere else: a checker that
+    // noticed the freshly staged sources can have written output under `share`
+    // while that build ran, and Proton signs whatever is there.
+    await pruneBuildDirs(join(this.desktop, "seekmoon/share"));
     const formats = this.command === "macos"
       ? ["app", ...options.targets.filter(target => target !== "app")]
       : this.command === "windows"
         ? options.targets.map(target => target === "installer" ? "nsis" : target)
         : ["appimage"];
-    const config = options.release ? "proton.project.json" : await this.developmentConfig();
+    const config = devIdentity ? await this.developmentConfig() : "proton.project.json";
     const args = ["-C", ".", "package", "--config", config];
     for (const format of [...new Set(formats)]) args.push("--format", format);
     if (options.release) args.push("--release");
@@ -496,7 +589,7 @@ class Build {
       // LLDB may attach to a running development app. Keep get-task-allow
       // out of the shipped app by selecting its entitlements separately.
       env.PROTON_MACOS_ENTITLEMENTS = join(this.desktop, "package/macos",
-        options.release ? "SeekMoon.entitlements" : "SeekMoonDev.entitlements");
+        devIdentity ? "SeekMoonDev.entitlements" : "SeekMoon.entitlements");
     }
     if (options.sign) env.PROTON_MACOS_SIGNING_IDENTITY = options.sign;
     if (options.notarize) env.PROTON_NOTARY_PROFILE = options.notarize;
@@ -509,13 +602,28 @@ class Build {
       env.APPIMAGE_EXTRACT_AND_RUN = "1";
     }
     const startedAt = new Date();
+    // Proton reuses its staging directory inside the output folder. A run that
+    // failed midway leaves build output there, and the next run then signs over
+    // files that are not part of the new app — which surfaces as
+    // "a sealed resource is missing or invalid". Clearing it first makes every
+    // package run independent of the previous one.
+    try {
+      const output = join(this.desktop, "dist");
+      for (const entry of await readdir(output, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name.startsWith(".seekmoon") && entry.name.endsWith(".staging")) {
+          await removeBuildTree(join(output, entry.name));
+        }
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
     try {
       await this.proton(args, env);
     } catch (error) {
       if (options.notarize) {
         try {
           const report = await reportNotarizationFailure({
-            artifact: join(this.desktop, "dist", `${options.release ? "SeekMoon" : DevelopmentProduct}.dmg`),
+            artifact: join(this.desktop, "dist", `${product}.dmg`),
             profile: process.env.PROTON_MACOS_NOTARY_PROFILE?.trim() || options.notarize,
             startedAt,
           });
@@ -527,7 +635,7 @@ class Build {
       }
       throw error;
     }
-    const bundle = `dist/${options.release ? "SeekMoon" : DevelopmentProduct}.app`;
+    const bundle = `dist/${product}.app`;
     if (this.command === "macos" && options.open) await this.commandRun("open", [join(this.desktop, bundle)]);
   }
 

@@ -74,10 +74,11 @@ class SkillsHarness extends DesktopBrowserHarness {
     await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
   }
 
-  async openDetails() {
+  async openDetails(section = 'Discover') {
     await this.install();
     await this.goto();
     await this.openSkills();
+    if (section === 'Installed') await library(this.page).getByRole('tab', { name: /^Installed/ }).click();
     await library(this.page).locator('.skill-summary').filter({ hasText: installed.name }).first().click();
     await expect.poll(() => this.requests.some(request =>
       request.method === 'skills.content' || request.method === 'skills.installed_content')).toBe(true);
@@ -173,11 +174,14 @@ test('skill enablement comes from the host and survives list/detail navigation a
   expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
     .toEqual([{ id: installed.id, enabled: false }]);
   await details(page).getByRole('button', { name: 'Dismiss', exact: true }).click();
+  const installedTab = library(page).getByRole('tab', { name: /^Installed/ });
+  await installedTab.click();
   const listToggle = library(page).getByRole('switch');
   await expect(listToggle).toHaveAttribute('aria-checked', 'false');
   const beforeReload = app.requests.length;
   await page.reload();
   await app.openSkills(beforeReload);
+  await installedTab.click();
   await expect(listToggle).toHaveAttribute('aria-checked', 'false');
   await listToggle.click();
   await expect(listToggle).toHaveAttribute('aria-checked', 'true');
@@ -190,7 +194,7 @@ test('a failed handwritten skill move preserves its state and can be retried', a
   const app = new SkillsHarness(page, true);
   app.installedSkills[0] = { ...installed, id: 'My notes', source: '', registry: undefined };
   app.rpcErrors.set('skills.set_enabled', 'Cannot move skill: permission denied');
-  await app.openDetails();
+  await app.openDetails('Installed');
   const toggle = details(page).getByRole('switch');
   await toggle.click();
   await expect(page.locator('.skill-detail-page .skills-notice')).toHaveText('Cannot move skill: permission denied');

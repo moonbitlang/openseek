@@ -1,8 +1,8 @@
 ///|
 /// How long a runtime-backed run stays inline before it is adopted as a job.
-/// Five seconds keeps quick probes inline while moving builds, suites, and
+/// Ten seconds keeps quick probes inline while moving builds, suites, and
 /// watchers out of the turn without asking the model to predict their duration.
-const AutoBackgroundAfterMs : Int32 = 5_000
+const AutoBackgroundAfterMs : Int32 = 10_000
 
 ///|
 /// Runtime-less foreground work is bounded to this wall-clock so a runaway loop
@@ -1544,7 +1544,9 @@ async fn denial_scan_region(
     } else {
       DenialScanChunkBytes
     }
-    let n = file.at(position).read_into(buf, max_len=want) catch { _ => break }
+    let n = file.at(position).read_into(buf.mut_view(end=want)) catch {
+        _ => break
+      }
     if n <= 0 {
       break
     }
@@ -1581,7 +1583,7 @@ async fn read_capped(path : String) -> String {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
   let buf = FixedArray::make(OutputCapBytes, b'\x00')
-  let filled = file.at(0).read_into(buf)
+  let filled = file.at(0).read_into(buf.mut_view())
   let text = @utf8.decode_lossy(Bytes::from_array(buf[:filled]))
   // If we filled the cap there may be more; note the truncation.
   if filled == OutputCapBytes {
@@ -1726,7 +1728,7 @@ fn description(
   // File artifacts live under the session scratch directory, so the
   // instructions for producing them exist only where that directory does.
   let artifacts = if scratch_dir is Some(_) {
-    "File artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
+    "File artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/visualization/artifacts.md."
   } else {
     ""
   }
@@ -1774,34 +1776,6 @@ fn description(
     #|Missing parent directories are created. A saved script is never overwritten
     #|with different content; change it with the edit tool. Scripts compile to
     #|wasm and run under moonrun.
-    #|
-    #|## Bundled scripts
-    #|
-    #|Filenames under `@builtin/` run read-only scripts built into OpenSeek: pass
-    #|`filename` and `args`, never `source`. Every other filename is a workspace
-    #|path, so `./@builtin/check.mbtx` is a workspace file. Args `["--help"]`
-    #|print a script's usage.
-    #|
-    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g. args
-    #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
-    #|  `path:start` or `path:start:end` (inclusive, 1-based). Each line prints as
-    #|  `N |text`: the line, indentation included, starts right after `|`, with
-    #|  no separator space. Output is bounded: follow truncated or skipped files
-    #|  with narrower reads. A failing file fails the call; the others still return.
-    #|- `@builtin/rg.mbtx` searches text. `args` go to cli/rg (ripgrep ported to
-    #|  MoonBit) unchanged, so they are rg flags and regex, not POSIX grep (`-E`
-    #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
-    #|  `["fn parse", "-g", "*.mbt", "."]`. Output is `path:line:text`; no match
-    #|  exits 0 with a note.
-    #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
-    #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
-    #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
-    #|  `@builtin/check-json.mbtx` (moon check --output-json).
-    #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
-    #|  args `["PR", "--repo", "OWNER/REPO", "--once"]` take one snapshot.
-    #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
-    #|  deprecation warning whose message names a bare replacement, one guarded
-    #|  edit per site, and lists the rest; `--dry-run` only plans.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.

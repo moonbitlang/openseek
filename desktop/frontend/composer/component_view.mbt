@@ -346,6 +346,7 @@ fn Entry::view(
       ShellCommandsRunning(..) => "shell-commands"
       QueuedInputPanel(..) => "queue"
       CompactionNotice(..) => "compaction"
+      ContextYieldNotice(..) => "context-yield"
       WorktreePlacementNotice => "worktree-placement"
       MissingWorktreeNoticeComponent(_) => "missing-worktree"
     }

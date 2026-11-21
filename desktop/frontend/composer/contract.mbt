@@ -198,6 +198,12 @@ pub(all) enum ContextComponent {
   ShellCommandsRunning(commands~ : Array[String])
   QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
+  // The last turn stopped at the model's context ceiling instead of
+  // answering, so the work continues in the next turn, from the checkpoint
+  // summary the engine wrote on its way out. `continue_available` is false
+  // while the draft holds something of the person's own: the offered
+  // continuation must never replace text, mentions, or images already there.
+  ContextYieldNotice(continue_available~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
 }
@@ -390,6 +396,9 @@ pub(all) enum Action {
   GoalCleared(identity~ : Identity)
   GoalSubmitted(identity~ : Identity, draft~ : String, prompt_present~ : Bool)
   StopRequested(identity~ : Identity)
+  // The person accepted the composer's offer to continue after a context
+  // yield: submit the composer's continuation prompt as an ordinary turn.
+  ContextContinueRequested(identity~ : Identity)
   FileIndexEnsured(identity~ : Identity)
   ModelMenuToggled(identity~ : Identity)
   ReasoningMenuToggled(identity~ : Identity)
@@ -459,6 +468,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | GoalCleared(identity~)
     | GoalSubmitted(identity~, ..)
     | StopRequested(identity~)
+    | ContextContinueRequested(identity~)
     | FileIndexEnsured(identity~)
     | ModelMenuToggled(identity~)
     | ReasoningMenuToggled(identity~)

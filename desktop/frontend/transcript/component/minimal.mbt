@@ -110,32 +110,31 @@ fn MinimalCall::from_tool(
 /// Tool identities stay independent of descriptions and success/failure status.
 /// Use the same monochrome Codicons as app controls; status stays on the right.
 fn MinimalCall::icon(self : MinimalCall) -> @html.Html {
+  if tool_caption_icon(self.tool_name) is Some(icon) {
+    return icon
+  }
   match self.tool_name {
     "read" => @icons.icon_book()
-    "edit" => @icons.icon_edit()
-    "multi_edit" => @icons.icon_diff_multiple()
     "write" => @icons.icon_file()
     "remove" => @icons.icon_trash()
-    "mbtx" => @icons.icon_terminal()
     "shell" => @icons.icon_terminal()
     "web_search" | "webSearch" => @icons.icon_search()
-    "read_image" | "imageView" => @icons.icon_file_media()
+    "imageView" => @icons.icon_file_media()
     "imageGeneration" => @icons.icon_sparkle()
     "enteredReviewMode" | "exitedReviewMode" | "submit_review" =>
       @icons.icon_search()
     "review" | "spawn_agent" => @icons.icon_robot()
-    "wait_agent" | "job_wait" => @icons.icon_watch()
+    "wait_agent" => @icons.icon_watch()
     "send_input" | "send_message" => @icons.icon_comment()
     "resume_agent" => @icons.icon_play()
     "followup_task" => @icons.icon_send()
-    "interrupt_agent" | "job_stop" => @icons.icon_debug_stop()
+    "interrupt_agent" => @icons.icon_debug_stop()
     "close_agent" => @icons.icon_debug_stop()
     "list_agents" => @icons.icon_organization()
     "submit_result" | "submit_answer" | "submit_pattern_repair" =>
       @icons.icon_chat_export()
     "plan" => @icons.icon_tasklist()
     "goal" => @icons.icon_target()
-    "job_output" => @icons.icon_arrow_down()
     "finish" => @icons.icon_check()
     "sleep" => @icons.icon_watch()
     _ => @icons.icon_tools()
@@ -630,14 +629,17 @@ fn MinimalActivity::render(
         [
           @html.span(
             class="minimal-tool-icon",
-            attrs=@html.Attrs::build().aria_hidden("true"),
+            attrs=@html.Attrs::build().role("img").aria_label("runtime notice"),
             if error {
               @icons.icon_error()
             } else {
-              @icons.icon_comment()
+              @icons.icon_bell()
             },
           ),
-          @html.span(class="minimal-note-text", text),
+          @html.span(
+            class="minimal-note-text",
+            tool_caption_text("runtime notice", text),
+          ),
         ],
       )
     Call(call) => {

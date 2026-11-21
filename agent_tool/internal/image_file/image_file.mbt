@@ -17,11 +17,7 @@ pub async fn read(path : String) -> @protocol.Image {
   let bytes = FixedArray::make(cap + 1, b'\x00')
   let mut filled = 0
   while filled < bytes.length() {
-    let count = file.read_into(
-      bytes,
-      offset=filled,
-      max_len=bytes.length() - filled,
-    )
+    let count = file.read_into(bytes.mut_view(start=filled))
     if count == 0 {
       break
     }

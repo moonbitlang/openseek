@@ -7,7 +7,7 @@ import {
 ---
 
 ///|
-fn main raise {
+fn main {
   // Interpolation is `\{expr}` and takes any `Show` value; `"n: " + n` needs
   // a `String` on both sides, so with an `Int32` it is a type error.
   let n = 3

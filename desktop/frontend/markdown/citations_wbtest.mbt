@@ -11,6 +11,7 @@ fn answer_citations(source : String) -> Array[Citation] {
     citations: [],
     footnotes: Footnotes::new(),
     in_sources: false,
+    user_preview: false,
   }
   ignore(render.block_nodes(doc.block))
   render.citations

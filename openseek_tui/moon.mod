@@ -3,14 +3,14 @@ name = "moonbitlang/openseek_tui"
 version = "0.7.6"
 
 import {
-  "moonbitlang/jsonl@0.2.0",
+  "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek@0.7.6",
   "moonbitlang/openseek_protocol@0.4.2",
-  "moonbit-community/displaytext@0.1.6",
+  "moonbit-community/displaytext@0.1.7",
   "moonbit-community/tty@0.6.2",
-  "moonbitlang/async@0.22.7",
-  "bobzhang/open_in_browser@0.1.0",
-  "moonbitlang/x@0.4.50",
+  "moonbitlang/async@0.22.10",
+  "bobzhang/open_in_browser@0.1.2",
+  "moonbitlang/x@0.5.7",
 }
 
 readme = "README.md"

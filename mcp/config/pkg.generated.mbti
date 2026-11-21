@@ -18,6 +18,26 @@ pub suberror ConfigError {
 
 // Types and methods
 #derive(Eq, @debug.Debug)
+pub(all) struct AuthorizationCodeConfig {
+  issuer : String
+  scopes : String
+}
+pub fn AuthorizationCodeConfig::equal(Self, Self) -> Bool
+pub fn AuthorizationCodeConfig::not_equal(Self, Self) -> Bool
+pub fn AuthorizationCodeConfig::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct DeviceOAuthConfig {
+  client_id : String
+  device_authorization_endpoint : String
+  token_endpoint : String
+  scopes : String
+}
+pub fn DeviceOAuthConfig::equal(Self, Self) -> Bool
+pub fn DeviceOAuthConfig::not_equal(Self, Self) -> Bool
+pub fn DeviceOAuthConfig::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
 pub(all) struct HeadersHelperCommand {
   command : String
   arguments : Array[String]
@@ -32,11 +52,9 @@ pub fn McpServer::name(Self) -> String
 pub fn McpServer::target(Self) -> String
 
 #derive(Eq, @debug.Debug)
-pub(all) struct OAuthConfig {
-  client_id : String
-  device_authorization_endpoint : String
-  token_endpoint : String
-  scopes : String
+pub(all) enum OAuthConfig {
+  DeviceCode(DeviceOAuthConfig)
+  AuthorizationCode(AuthorizationCodeConfig)
 }
 pub fn OAuthConfig::equal(Self, Self) -> Bool
 pub fn OAuthConfig::not_equal(Self, Self) -> Bool

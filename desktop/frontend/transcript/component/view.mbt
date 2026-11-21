@@ -1,4 +1,13 @@
 ///|
+fn disclosure_icon() -> @html.Html {
+  @html.span(
+    class="transcript-disclosure",
+    attrs=@html.Attrs::build().aria_hidden("true"),
+    @icons.icon(@icons.icon_chevron_right),
+  )
+}
+
+///|
 /// One provider response as the transcript shows it: its thought behind a
 /// fold, its prose as a bubble, and every tool call on display as its own
 /// one-line row (`tool_request_view`), expandable to that call's arguments and
@@ -94,6 +103,7 @@ fn assistant_view(
     lead.push(
       @html.details(class="activity", open=live, [
         @html.summary(class="activity-summary", [
+          disclosure_icon(),
           @html.span(class="activity-text", summary),
         ]),
         @html.div(class="activity-body", [body]),
@@ -337,11 +347,11 @@ fn tool_request_view(
   }
   let label = if background_job_id is Some(_) {
     match locale {
-      SimplifiedChinese => "🐇 → 后台"
-      TraditionalChinese => "🐇 → 後臺"
-      Japanese => "🐇 → バックグラウンド"
-      English => "🐇 → background"
-      Spanish => "🐇 → segundo plano"
+      SimplifiedChinese => "mbtx 后台"
+      TraditionalChinese => "mbtx 後臺"
+      Japanese => "mbtx バックグラウンド"
+      English => "mbtx background"
+      Spanish => "mbtx segundo plano"
     }
   } else if brief is Some(brief) && !brief.is_blank() {
     tool_display_label(locale~, name, brief)
@@ -371,8 +381,15 @@ fn tool_request_view(
   // mbtx uses the trailing icon for status. Other tools keep their failure
   // marker; applied plans also show their compact progress meter.
   let line : Array[@html.Html] = [
-    @html.span(class="tool-flow", "→"),
-    @html.span(class="tool-call-text", label),
+    @html.span(
+      class="tool-flow",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      @icons.icon(@icons.icon_arrow_right),
+    ),
+    @html.span(
+      class="tool-call-text",
+      tool_caption_view(name, label, background=background_job_id is Some(_)),
+    ),
   ]
   if is_error && name != "mbtx" {
     line.push(
@@ -462,6 +479,7 @@ fn tool_request_view(
   if body.is_empty() {
     @html.div(class="tool-call-label" + error_class, line)
   } else {
+    line.push(disclosure_icon())
     @html.details(
       class="tool-call" + error_class,
       [
@@ -561,8 +579,12 @@ fn result_row_view(
     failure_stage_class(name, brief, is_error)
   let pending_class = if pending { " pending" } else { "" }
   let line : Array[@html.Html] = [
-    @html.span(class="tool-flow", "←"),
-    @html.span(class="tool-result-text", label),
+    @html.span(
+      class="tool-flow",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      @icons.icon(@icons.icon_arrow_left),
+    ),
+    @html.span(class="tool-result-text", tool_caption_view(name, label)),
   ]
   if failure_marker(locale~, name, brief, is_error, arguments) is Some(marker) {
     line.push(marker)
@@ -614,6 +636,7 @@ fn result_row_view(
   let result = if body.is_empty() {
     @html.div(class="tool-result-label" + error_class + pending_class, line)
   } else {
+    line.push(disclosure_icon())
     @html.details(
       class="tool-result" + error_class + pending_class,
       [@html.summary(class="tool-result-summary", title=label, line), ..body],
@@ -746,29 +769,72 @@ fn speaker_label(name : String) -> @html.Html {
 }
 
 ///|
-/// A user message bubble. The bubble itself is what marks the turn as the
-/// user's — no avatar, no role label — so everything unbubbled below it reads
-/// as the agent's side of the conversation. A content that carries a
-/// `<user_mentions>` envelope (a prompt sent with chips) renders as the chips
-/// it was composed with — the same tray the composer showed, minus the remove
-/// buttons — above the typed text; anything else is plain text. A chip with a
-/// resolved location jumps the editor panel there via `on_jump`, when the
-/// caller wires one. A `<user_shell_command>` envelope (a `!` command run from
-/// the composer) renders as that command's card instead.
+priv struct UserMarkdown {
+  previewing : Bool
+  toggle : @cmd.Cmd
+}
+
+///|
+fn UserMarkdown::button(
+  self : UserMarkdown,
+  locale~ : @i18n.Locale,
+) -> @html.Html {
+  let (preview, source) = match locale {
+    English => ("Preview Markdown", "Show source")
+    SimplifiedChinese => ("预览 Markdown", "显示原文")
+    TraditionalChinese => ("預覽 Markdown", "顯示原文")
+    Japanese => ("Markdown をプレビュー", "元のテキストを表示")
+    Spanish => ("Vista previa de Markdown", "Mostrar texto original")
+  }
+  let (label, glyph) = if self.previewing {
+    (source, "codicon codicon-file-code")
+  } else {
+    (preview, "codicon codicon-markdown")
+  }
+  @html.button(
+    class="message-copy",
+    type_="button",
+    title=label,
+    attrs=@html.Attrs::build().aria_label(label),
+    on_click=self.toggle,
+    @icons.icon(() => @html.span(class=glyph, "")),
+  )
+}
+
+///|
+fn user_message_body(
+  locale~ : @i18n.Locale,
+  text : String,
+  markdown~ : Bool,
+) -> @html.Html {
+  if markdown {
+    @html.div(
+      class="msg-content markdown moonbit-viewer-markdown-content",
+      @markdown.user_markdown_nodes(locale~, text),
+    )
+  } else {
+    @html.div(class="msg-content", inline_code_nodes(text))
+  }
+}
+
+///|
+/// Only composer prose is eligible for Markdown. Keep structured envelopes,
+/// mention chips, and their annotations in their own presentation.
 fn user_text_nodes(
   locale~ : @i18n.Locale,
   content : String,
+  markdown~ : Bool,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   changes? : @review_changes.Control,
-) -> Array[@html.Html] {
+) -> (Array[@html.Html], Bool) {
   if @message_context.parse(content) is Some(context) {
-    return [message_context_view(locale~, context)]
+    return ([message_context_view(locale~, context)], false)
   }
   if @command_context.parse(content) is Some(shell) {
-    return [shell_command_view(locale~, shell)]
+    return ([shell_command_view(locale~, shell)], false)
   }
   let body : Array[@html.Html] = []
-  match @mention_context.parse(content) {
+  let task = match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
       for mention in parsed.mentions {
@@ -828,16 +894,14 @@ fn user_text_nodes(
           body.push(@html.div(class="msg-content", inline_code_nodes(comment)))
         }
       }
-      if !parsed.task.is_empty() {
-        body.push(
-          @html.div(class="msg-content", inline_code_nodes(parsed.task)),
-        )
-      }
+      parsed.task
     }
-    None =>
-      body.push(@html.div(class="msg-content", inline_code_nodes(content)))
+    None => content
   }
-  body
+  if !task.is_empty() {
+    body.push(user_message_body(locale~, task, markdown~))
+  }
+  (body, !task.is_blank())
 }
 
 ///|
@@ -914,6 +978,7 @@ fn image_content_view(locale~ : @i18n.Locale, url : String) -> @html.Html {
 fn user_message_view(
   locale~ : @i18n.Locale = English,
   content : @deepseek.Content,
+  user_markdown~ : UserMarkdown,
   sent_at? : Double,
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
@@ -934,12 +999,20 @@ fn user_message_view(
   } else {
     [speaker_label(ui(locale, YouLabel))]
   }
+  let mut has_markdown_body = false
   for part in content.0 {
     match part {
-      Text(text) =>
-        for node in user_text_nodes(locale~, text, on_jump?, changes?) {
-          body.push(node)
-        }
+      Text(text) => {
+        let (nodes, eligible) = user_text_nodes(
+          locale~,
+          text,
+          markdown=user_markdown.previewing,
+          on_jump?,
+          changes?,
+        )
+        body.append(nodes)
+        has_markdown_body = has_markdown_body || eligible
+      }
       ImageUrl(url~) => body.push(image_content_view(locale~, url))
       File(file_id~) =>
         body.push(
@@ -958,6 +1031,9 @@ fn user_message_view(
         ]),
       )
     }
+  }
+  if has_markdown_body {
+    actions.push(user_markdown.button(locale~))
   }
   let text = if context is Some(Message(text~, ..)) {
     text
@@ -1098,6 +1174,7 @@ fn transcript_item_view(
   locale~ : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
+  user_markdown~ : UserMarkdown,
   wait_labels~ : Map[Int32, String] = Map([]),
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
@@ -1115,6 +1192,7 @@ fn transcript_item_view(
       user_message_view(
         locale~,
         content,
+        user_markdown~,
         sent_at?=item.ts,
         edit?,
         editor?,
@@ -1279,6 +1357,7 @@ fn summary_card_view(
       @html.summary(class="summary-card-label", [
         @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
         @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
+        disclosure_icon(),
       ]),
       @html.div(
         class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",

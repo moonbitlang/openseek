@@ -7,13 +7,12 @@
 // stub search tool.
 import {
   "moonbitlang/openseek_tools@0.4.2" @tools,
-  "moonbitlang/core/async",
   "moonbitlang/core/env",
 }
 ---
 
 ///|
-async fn main {
+fn main {
   let args = @env.args()[1:]
   guard args is [query, ..] else {
     fail("usage: ptc_search_filter.mbtx <query> [<domain>]")

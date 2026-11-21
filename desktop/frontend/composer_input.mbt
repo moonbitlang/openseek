@@ -207,6 +207,19 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     Queued => context.push(@composer.CompactionNotice(queued=true))
     NotCompacting => ()
   }
+  // A turn that stops at the model's context ceiling ends without an answer
+  // in the transcript: the engine checkpoints instead of replying, and the
+  // next turn carries the work on from that summary. Say so where the person
+  // is about to type, next to the offer that sends the next turn.
+  if conv.run is NoRun(ended~) &&
+    ended is Some(RunFinished(ContextYield)) &&
+    conv.controls.compaction is NotCompacting {
+    context.push(
+      @composer.ContextYieldNotice(
+        continue_available=root_ready && conv.draft_empty(),
+      ),
+    )
+  }
   match checkout {
     None => context.push(@composer.WorktreePlacementNotice)
     Some(@interop.MissingWorktree(name~, ..)) =>

@@ -3272,14 +3272,16 @@ lexscan input [with first|longest] {
 ```
 
 These scanner types require a direct `moonbitlang/core/lexbuf` import. This
-runnable example also imports the official `moonbitlang/async` runtime so its
+runnable example also imports the standard library's `moonbitlang/core/async` runtime so its
 asynchronous scanner can be tested with `async test`:
 
 ```moonbit
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/lexbuf",
 }
+
+options("allow-experimental-packages": true)
 ```
 
 Every `lexscan` regex must start with `^`, because scanning always begins at the
@@ -3311,7 +3313,7 @@ manually.
 Construct a string scanner with its cursor at `0`:
 
 ```moonbit
-let scanner = @lexbuf.StringScanner::{ data: text[:], cursor: 0 }
+let scanner = @lexbuf.StringScanner(text)
 ```
 
 Both the cursor and the `StringView` indexes are measured in UTF-16 code units.
@@ -3343,7 +3345,7 @@ fn next_string_token(input : @lexbuf.StringScanner) -> Token {
 
 ///|
 test "scan an in-memory string with a maintained cursor" {
-  let input = @lexbuf.StringScanner::{ data: "hello 123!"[:], cursor: 0 }
+  let input = @lexbuf.StringScanner("hello 123!")
   guard next_string_token(input) is Word(word) else { fail("expected word") }
   assert_true(word == "hello")
   assert_eq(input.cursor, 5)
@@ -3493,7 +3495,7 @@ Similarly, we can use the spread operator to construct a string:
 ```moonbit
 test {
   let s1 : String = "Hello"
-  let s2 : StringView = "World".view()
+  let s2 : StringView = "World"
   let s3 : Array[Char] = [..s1, ' ', ..s2, '!']
   let s : String = [..s1, ' ', ..s2, '!', ..s3]
   inspect(s, content="Hello World!Hello World!")

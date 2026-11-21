@@ -76,7 +76,7 @@ fn manifest_platform_key() -> String? {
 /// `ManifestError` when it answered with something unusable — the caller
 /// chooses what each is worth showing.
 pub async fn check_for_update(current~ : String) -> UpdateInfo? {
-  let (response, body) = @http.get(ManifestUrl) catch {
+  let (response, body) = @httpx.get(ManifestUrl) catch {
     error => raise Unreachable(reason="\{error}")
   }
   guard response.code == 200 else {

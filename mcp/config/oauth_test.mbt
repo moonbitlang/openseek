@@ -19,7 +19,9 @@ test "OAuth config expands public client values and preserves scopes" {
     },
     env={ "CLIENT_ID": "app" },
   )
-  guard servers is [Http(oauth=Some(config), ..)] else { fail("missing OAuth") }
+  guard servers is [Http(oauth=Some(DeviceCode(config)), ..)] else {
+    fail("missing OAuth")
+  }
   assert_eq(config.client_id, "app")
   assert_eq(config.scopes, "repo read:org")
 }

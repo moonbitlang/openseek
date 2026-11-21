@@ -58,12 +58,13 @@ async function open(page) {
   return cloud;
 }
 
-test('Cloud accepts predictions with Tab and a button without sending', async ({ page }) => {
+test('Cloud shows native predictions and Tab fills the shared composer without sending', async ({ page }) => {
   const cloud = await open(page);
   await page.setViewportSize({ width: 393, height: 480 });
   await cloud.publish();
   const input = page.locator('#task');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
+  await expect(page.getByRole('button', { name: 'Use suggestion', exact: true })).toHaveCount(0);
   await expect(input).toHaveValue('');
   await input.focus();
   await input.press('Shift+Tab');
@@ -71,11 +72,6 @@ test('Cloud accepts predictions with Tab and a button without sending', async ({
   await input.focus(); await input.press('Tab');
   await expect(input).toHaveValue('Commit the fix');
   await expect(input).toBeFocused();
-  await input.fill('');
-  await page.getByRole('button', { name: 'Use suggestion', exact: true }).click();
-  await expect(input).toHaveValue('Commit the fix');
-  await expect(input).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Use suggestion', exact: true })).toHaveCount(0);
   expect(cloud.postCount).toBe(0);
   await input.fill('My own request');
   await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');

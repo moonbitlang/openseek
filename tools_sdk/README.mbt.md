@@ -3,17 +3,17 @@
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
 implementation. SDK `moonbitlang/openseek_tools@0.4.2` uses
-`moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
+`moonbitlang/core/async` and speaks PTC protocol version 1. The examples use
+MoonBit 0.10.22 or later to infer async and error effects in `fn main`.
 
 ```mbtx
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2" @tools,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   let result = @tools.call("edit", {
     "path": "note.txt", "start_line": 1,
     "old_string": "before", "new_string": "after",
@@ -73,20 +73,45 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ---
 import {
   "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
-  "moonbitlang/core/async",
 }
 ---
 
-async fn main {
+fn main {
   // Print the page so the next model request sees the tools and schemas.
   let page = @mcp.search(query="list issues", server="github")
   println(page)
-  guard page.tools is [tool, ..] else { return }
-  let result = @mcp.call(tool.server, tool.name, { "repo": "moonbitlang/openseek" })
-  if result.is_error { fail(result.content) }
-  println(result.content)
 }
 ```
+
+After this script returns, read the tool descriptions and schemas, select a tool
+for the task, and construct its arguments in the next script.
+
+Match `result.data` against the discovered output schema and print the fields or
+summary the task needs. For example, suppose discovery showed a `tracker`
+server with a `list_issues` tool taking `repo` and returning an `issues` array:
+
+```mbtx
+---
+import {
+  "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
+}
+---
+
+fn main {
+  let result = @mcp.call("tracker", "list_issues", { "repo": "alpha" })
+  if result.is_error { fail(result.content) }
+  guard result.data is Some({ "issues": Array(issues), .. }) else {
+    fail("Expected structured issues. Tool text: \{result.content}")
+  }
+  println("Issues on this page: \{issues.length()}")
+}
+```
+
+`data` comes from the server's `structuredContent`; `content` renders the server's
+content blocks as text. A tool can return either or both. `data` is absent when
+the server supplies no structured result or it exceeds the reply budget. Use
+`content` for text results. For a read that needs structured data, narrow an
+oversized query or reduce its page size.
 
 `search` runs in the script. The first search downloads the host's catalog of
 servers and tools, and later searches in the same script reuse it. The host

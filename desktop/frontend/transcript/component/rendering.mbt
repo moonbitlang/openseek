@@ -179,9 +179,9 @@ fn EmptyProjectControl::render(
               class="empty-project-option-check",
               attrs=@html.Attrs::build().aria_hidden("true"),
               if selected {
-                "✓"
+                @icons.icon(@icons.icon_check)
               } else {
-                ""
+                @html.nothing
               },
             ),
           ],
@@ -550,6 +550,7 @@ fn Block::render(
   changes? : @review_changes.Control,
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
+  user_markdown~ : UserMarkdown,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   let on_open = path => (actions.open)(path)
@@ -577,6 +578,7 @@ fn Block::render(
         editor?,
         anchor?,
         changes?,
+        user_markdown~,
         on_jump=target => (actions.jump)(target),
         assistant_name~,
         step_label?,

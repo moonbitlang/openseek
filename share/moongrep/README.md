@@ -23,13 +23,12 @@ string:
 ```mbtx
 ---
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/shell",
 }
 ---
 
 ///|
-async fn main {
+fn main {
   // A whole-repo scan can match more than `.output()` is able to capture, so
   // stream the records instead. `each_line` receives stdout only: the child's
   // stderr, where the skip warnings go, passes through to this program's own

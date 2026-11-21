@@ -27,7 +27,11 @@ fn ToolStatus::view(
 ) -> @html.Html {
   let (label, class, icon) = match self {
     Snapshot =>
-      (ui(locale, RecordedSnapshot), "tool-status snapshot", @html.text("·"))
+      (
+        ui(locale, RecordedSnapshot),
+        "tool-status snapshot",
+        @icons.icon(@icons.icon_circle_small_filled),
+      )
     Pending =>
       (
         ui(locale, ToolInProgress),

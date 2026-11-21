@@ -789,7 +789,7 @@ fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
     return Some(JobsChanged(payload.session))
   }
   if payload.event is @wire.McpStatus(..) {
-    return Some(McpChanged(payload.session))
+    return None
   }
   Some(Engine(payload.run_id, payload.event, session=payload.session))
 }

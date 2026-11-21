@@ -2,6 +2,7 @@
 package "openseek_desktop/backend/connectors"
 
 import {
+  "moonbitlang/core/async",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/protocol",
 }
@@ -14,6 +15,7 @@ import {
 type Service
 pub fn Service::Service(@pathx.Path?) -> Self
 pub async fn Service::action(Self, String, @protocol.ConnectorRequest) -> @protocol.ConnectorReply
+pub fn Service::attach(Self, @async.TaskGroup) -> Unit
 pub async fn Service::list(Self) -> @protocol.ConnectorReply
 
 // Type aliases

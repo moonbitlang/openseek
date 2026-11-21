@@ -46,13 +46,12 @@ fn default_prompt_zh() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/env",
     #|}
     #|---
     #|
-    #|async fn main {
+    #|fn main {
     #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
     #|  if code != 0 { fail("moon check failed (exit=\{code})") }
     #|}
@@ -67,7 +66,7 @@ fn default_prompt_zh() -> String {
     #|import { "moonbitlang/core/argparse" }
     #|---
     #|
-    #|fn main raise {
+    #|fn main {
     #|  let matches = @argparse.parse(
     #|    Command(
     #|      "greet",
@@ -89,9 +88,8 @@ fn default_prompt_zh() -> String {
     #|
     #|- 文件以 front matter 开头：一行 `---`，`moon.pkg` 语法的 `import { ... }` 块，再一行 `---`。开头的 `---` 之前不能有任何内容，注释也不行。
     #|- 每个用到的包都要单独导入，core 包也一样，并使用真实路径：例如 `moonbitlang/core/encoding/base64`，不是 `moonbitlang/core/base64`；`moon ide doc "@base64"` 会显示路径。
-    #|- 异步 IO 使用 `async fn main`。
-    #|- 调用异步命令或 IO 的辅助函数也必须是 `async fn`；普通 `fn` 不能调用它们，因此异步会沿调用链传播。
-    #|- 没有 `await`：正常书写异步调用，并用 `async` 标记异步函数和测试。
+    #|- 使用 `fn main`，编译器会推断入口的异步和抛错效应。只有直接使用 `@async.sleep` 等 API 时才导入 `moonbitlang/core/async`。
+    #|- 异步辅助函数用 `async fn` 声明，直接调用即可。
     #|- 使用 `println`，没有 `print`。
     #|
     #|无需启动进程，简短的脚本就能检查路径：
@@ -99,7 +97,6 @@ fn default_prompt_zh() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/fs",
     #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/env",
@@ -107,7 +104,7 @@ fn default_prompt_zh() -> String {
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  // `@shell.glob` expands `*`, `?`, character sets, and `**` without shell
     #|  // parsing; it is `async`, and its sorted matches are ordinary `Array[String]`
     #|  // values. A pattern that matches nothing returns an empty array. Spread them
@@ -158,13 +155,12 @@ fn default_prompt_zh() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|}
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let out = @shell.Cmd("rg", [
     #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
     #|  ]).output()
@@ -185,14 +181,13 @@ fn default_prompt_zh() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/json",
     #|}
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let mut errors = 0
     #|  let exit_code = @shell.Cmd(
     #|    "moon",
@@ -248,13 +243,12 @@ fn default_prompt_zh() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/shell",
     #|}
     #|---
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let out = @shell.Cmd("moonx", [
     #|    "moonbit-community/moongrep", "scan",
     #|    "--pattern",
@@ -324,7 +318,6 @@ fn default_prompt_zh() -> String {
     #|    ---
     #|    import {
     #|      "moonbitlang/openseek_tools@0.4.2" @tools,
-    #|      "moonbitlang/core/async",
     #|      "moonbitlang/core/json",
     #|    }
     #|    ---
@@ -362,7 +355,7 @@ fn default_prompt_zh() -> String {
     #|      }
     #|    }
     #|
-    #|    async fn main {
+    #|    fn main {
     #|      let ids = [
     #|        scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
     #|        scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
@@ -421,7 +414,7 @@ fn default_prompt_zh() -> String {
     #|    }
     #|    ---
     #|
-    #|    async fn main {
+    #|    fn main {
     #|      @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
     #|      for pass in 0..<12; previous = None {
     #|        ignore(
@@ -473,7 +466,7 @@ fn default_prompt_zh() -> String {
     #|- `_test.mbt` 是黑盒测试。只有需要检查私有辅助实现时才用 `_wbtest.mbt`。
     #|- MoonBit 顶层项以 `///|` 分隔。
     #|
-    #|异步 IO 已包含在标准库中：在 `moon.pkg` 导入 `moonbitlang/core/async` 及所需子包，无需 `moon add` 或指定版本。添加注册表依赖时，优先在模块根目录运行 `moon add moonbitlang/x`，让 MoonBit 写入有效的当前版本，不要手工猜测版本号。
+    #|异步 IO 已包含在标准库中。在 `moon.pkg` 导入实际使用的子包，无需 `moon add` 或指定版本。添加注册表依赖时，优先在模块根目录运行 `moon add moonbitlang/x`，让 MoonBit 写入有效的当前版本，不要手工猜测版本号。
     #|
     #|模块骨架示例：
     #|
@@ -494,7 +487,6 @@ fn default_prompt_zh() -> String {
     #|
     #|```moon.pkg
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/fs", // package
     #|  "moonbitlang/core/async/stdio",
     #|  "moonbitlang/core/argparse",
@@ -585,10 +577,9 @@ fn default_prompt_zh() -> String {
     #|- 成功测试直接调用抛错函数；若它抛错，测试会携带该错误失败，通常已有足够的信息。不要为成功的解析器测试额外封装错误处理。
     #|- 对 Flash，测试主要覆盖成功行为和 CLI 探测。不要仅为测试或分支判断，将抛错调用手工包进成功/失败容器。
     #|- 验证无效输入时，优先使用 CLI 验收探测或简单的公共行为检查，除非任务明确要求检查精确错误值。
-    #|- `fn main` 调用抛错函数时，写 `fn main raise { ... }`。
-    #|- `async fn` 默认可抛错，不要写 `async fn main raise`。
+    #|- `fn main` 自动推断抛错效应。异步辅助函数默认可抛错。
     #|- 异步辅助函数必须不抛错时，标记 `noraise`，例如 `async fn helper() -> Unit noraise { ... }`。
-    #|- `async fn main` 中优先直接调用抛错函数，由顶层报告错误。若为自定义用户提示而捕获错误，打印后立即返回；不要把失败编码为 `null`、`()` 或其他看似成功的哨兵值。
+    #|- `fn main` 中优先直接调用抛错函数，由顶层报告错误。若为自定义用户提示而捕获错误，打印后立即返回；不要把失败编码为 `null`、`()` 或其他看似成功的哨兵值。
     #|- 仅在需要自定义面向用户的错误文本时使用 `catch`。面向用户的 CLI 避免使用中止辅助函数，因为它们可能打印 panic 或调试堆栈。
     #|- 一次性的内部失败用 `fail("message")`；需要简洁的用户可读解析错误时，用小型 `suberror`。
     #|- 自定义错误使用 `suberror`，可以模式匹配错误构造器。匹配其他包的错误时需限定构造器名称，例如 `catch { @pkga.A => ...; @pkga.B => ... }`。如果其他包需要稳定的错误分类或展示，决定是否将构造器模式作为公共 API，或提供辅助函数。
@@ -596,10 +587,15 @@ fn default_prompt_zh() -> String {
     #|受检查错误的示例：
     #|
     #|```mbtx
+    #|---
+    #|import { "moonbitlang/core/string" }
+    #|---
+    #|
     #|///|
+    #|#derive(Debug)
     #|suberror ParseError {
     #|  InvalidInput(String)
-    #|} derive(Debug)
+    #|}
     #|
     #|///|
     #|fn parse_count(text : String) -> Int32 raise ParseError {
@@ -613,8 +609,7 @@ fn default_prompt_zh() -> String {
     #|}
     #|
     #|///|
-    #|fn main raise {
-    #|  // parse_count raise so `fn main raise`
+    #|fn main {
     #|  println(parse_count("123"))
     #|}
     #|
@@ -671,7 +666,6 @@ fn default_prompt_zh() -> String {
     #|- `FlagArg.long` 不带前导横线：写 `long="stdin"`，不要写 `long="--stdin"`。
     #|- 执行实际工作前，将 `@argparse.Matches` 转为小型配置记录或局部值，验证逻辑放在转换附近。
     #|- 普通文件/stdin IO 使用 `moonbitlang/core/async/fs` 和 `moonbitlang/core/async/stdio`，不要用 C FFI 实现。
-    #|- 从路径或 stdin 读取的原生 CLI 通常需要 `async fn main`。
     #|- 自定义 CLI 诊断用 `@stdio.stderr.text.write(...)` 写 stderr。需要非零退出码时，添加 `moonbitlang/x` 模块，在 `moon.pkg` 导入 `"moonbitlang/x/sys"`，并调用 `@sys.exit(1)`。
     #|
     #|示例：
@@ -679,7 +673,6 @@ fn default_prompt_zh() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/async/fs",
     #|  "moonbitlang/core/async/stdio",
     #|  "moonbitlang/core/argparse",
@@ -693,7 +686,7 @@ fn default_prompt_zh() -> String {
     #|}
     #|
     #|///|
-    #|async fn main {
+    #|fn main {
     #|  let config = @argparse.parse(
     #|      Command(
     #|        "count-input",

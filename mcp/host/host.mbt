@@ -111,7 +111,8 @@ pub async fn Service::start(
       let reply = @async.any([
         () => service.answer(input),
         () => {
-          ignore(socket.read_into(FixedArray::make(1, b'\x00'))) catch {
+          let probe = FixedArray::make(1, b'\x00')
+          ignore(socket.read_into(probe.mut_view())) catch {
             _ => ()
           }
           raise ScriptGone

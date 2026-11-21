@@ -87,6 +87,7 @@ priv enum ShellMessage {
   SetGoal
   UltraReview
   SimplifyProject
+  ContinuePrompt
   GoalPlaceholder
   EditQueuePlaceholder
   QueuePlaceholder
@@ -660,6 +661,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尋找安全的簡化並為每個套件建立一個提取請求（耗用大量 token）"
     (Japanese, SimplifyProject) =>
       "安全な簡略化を探し、パッケージごとにプルリクエストを作成（トークンを大量に消費）"
+    (English, ContinuePrompt) =>
+      "Continue the task from the checkpoint summary. Do not redo finished work; take the next step."
+    (Spanish, ContinuePrompt) =>
+      "Continúa la tarea desde el resumen del punto de control. No repitas el trabajo ya hecho; pasa al siguiente paso."
+    (SimplifiedChinese, ContinuePrompt) =>
+      "继续完成这个任务：从检查点摘要接着做，不要重做已完成的工作，直接进行下一步。"
+    (TraditionalChinese, ContinuePrompt) =>
+      "繼續完成這個任務：從檢查點摘要接著做，不要重做已完成的工作，直接進行下一步。"
+    (Japanese, ContinuePrompt) =>
+      "タスクを続けてください。チェックポイントの要約から再開し、完了済みの作業はやり直さず、次の手順に進んでください。"
     (English, UltraReview) =>
       "Parallel multi-lens review of your changes — uses many tokens"
     (Spanish, UltraReview) =>

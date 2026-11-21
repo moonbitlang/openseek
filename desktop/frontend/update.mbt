@@ -2119,24 +2119,16 @@ fn update(
   } else {
     model
   }
-  // The overview's connectors and changes cards ask about their conversation
-  // whenever the overview comes on screen for one: shown, or another
-  // conversation arriving under it. What the engine holds and what another
-  // client attached change on their own and asking starts nothing, so every
-  // arrival asks.
+  // The changes card reads attachments when the overview comes on screen
+  // or switches to another conversation.
   let (overview_cmd, model) = match model.overview_conversation() {
     Some(conversation) if previous.overview_conversation() != Some(conversation) => {
-      let (mcp_cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        Opened(conversation),
-        model.mcp,
-      )
       let (changes_cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
         Opened(conversation),
         model.changes,
       )
-      (@cmd.batch([mcp_cmd, changes_cmd]), { ..model, mcp, changes, })
+      (changes_cmd, { ..model, changes, })
     }
     _ => (@cmd.none, model)
   }
@@ -2910,7 +2902,8 @@ fn update_msg(
         | @composer.QueuedInputDeleteRequested(..)
         | @composer.WorktreePlacementRetried(..)
         | @composer.MissingWorktreeRebuildRequested(..)
-        | @composer.MissingWorktreeArchiveRequested(..) => {
+        | @composer.MissingWorktreeArchiveRequested(..)
+        | @composer.ContextContinueRequested(..) => {
           let identity = action.identity()
           guard model.screen is Chat &&
             model.conversation_for_composer_action(identity) is Some(conv) &&
@@ -2919,6 +2912,21 @@ fn update_msg(
             return (@cmd.none, model)
           }
           match action {
+            // Continuing after a context yield is an ordinary submission of a
+            // prompt the composer wrote, so it takes the same path the Send
+            // button does rather than a second way to start a turn.
+            @composer.ContextContinueRequested(identity~) =>
+              update_msg(
+                dispatch,
+                ComposerAction(
+                  @composer.DraftSubmitted(identity~, draft={
+                    task: shell_text(model.locale, ContinuePrompt),
+                    mentions: [],
+                    images: [],
+                  }),
+                ),
+                model,
+              )
             @composer.ModelMenuToggled(..) =>
               update_msg(dispatch, ToggleSelectMenu(OpenSeekModelMenu), model)
             @composer.ReasoningMenuToggled(..) =>
@@ -6624,8 +6632,6 @@ fn update_msg(
       )
     }
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false, })
-    // Showing the overview reads its conversation's connectors; the root
-    // transition notices the overview arriving and asks.
     ToggleOverview => {
       let overview_open = !model.overview_open
       (save_overview_open(overview_open), { ..model, overview_open, })
@@ -7228,14 +7234,6 @@ fn update_msg(
         model.jobs,
       )
       (cmd, { ..model, jobs, })
-    }
-    Mcp(msg) => {
-      let (cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        msg,
-        model.mcp,
-      )
-      (cmd, { ..model, mcp, })
     }
     Changes(msg) => {
       let (cmd, changes) = @session_changes.update(
@@ -8199,21 +8197,7 @@ fn update_device_msg(
       } else {
         model
       }
-      // MCP reports are not replayed across a connection gap either: a panel
-      // holding a conversation on this device asks about it again.
-      let model = if model.mcp.conversation is Some(conversation) &&
-        conversation.channel == channel {
-        let (cmd, mcp) = @mcp.update(
-          dispatch.map(msg => Mcp(msg)),
-          Changed(conversation),
-          model.mcp,
-        )
-        commands.push(cmd)
-        { ..model, mcp, }
-      } else {
-        model
-      }
-      // Nor are attached-list changes.
+      // Attachment changes are not replayed across a connection gap.
       let model = if model.changes.conversation is Some(conversation) &&
         conversation.channel == channel {
         let (cmd, changes) = @session_changes.update(
@@ -10314,14 +10298,6 @@ fn update_device_msg(
         conv
       })
       (@cmd.none, { ..model, conversations: settled, })
-    }
-    McpChanged(session) => {
-      let (cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        Changed({ channel, session, }),
-        model.mcp,
-      )
-      (cmd, { ..model, mcp, })
     }
     ArtifactsChanged(session) => {
       let (cmd, changes) = @session_changes.update(

@@ -60,6 +60,7 @@ pub(all) enum Action {
   GoalCleared(identity~ : Identity)
   GoalSubmitted(identity~ : Identity, draft~ : String, prompt_present~ : Bool)
   StopRequested(identity~ : Identity)
+  ContextContinueRequested(identity~ : Identity)
   FileIndexEnsured(identity~ : Identity)
   ModelMenuToggled(identity~ : Identity)
   ReasoningMenuToggled(identity~ : Identity)
@@ -147,6 +148,7 @@ pub(all) enum ContextComponent {
   ShellCommandsRunning(commands~ : Array[String])
   QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
+  ContextYieldNotice(continue_available~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
 }

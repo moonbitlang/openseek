@@ -84,7 +84,7 @@ main {
   block-size: var(--titlebar-control-size) !important;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   line-height: var(--line-height-tight);
 }
 

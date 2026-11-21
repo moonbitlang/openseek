@@ -105,7 +105,7 @@ async fn read_output_prefix(
   let chunk = FixedArray::make(1024, b'\x00')
   for ;; {
     let chunk_limit = (byte_budget - buffer.length()).clamp(min=1, max=1024)
-    let read = reader.read_into(chunk, max_len=chunk_limit)
+    let read = reader.read_into(chunk.mut_view(end=chunk_limit))
     guard read > 0 else {
       return {
         text: decode_valid_utf8_prefix(buffer.to_bytes()),

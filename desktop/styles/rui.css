@@ -1,7 +1,7 @@
 /* RUI's inline theme defaults are adapted here, not at individual call sites. */
 [data-rui-theme] {
   color-scheme: inherit !important;
-  --rui-radius: var(--radius-md) !important;
+  --rui-radius: var(--radius-surface) !important;
   --rui-background: var(--color-bg-canvas) !important;
   --rui-foreground: var(--color-text-primary) !important;
   --rui-card: var(--color-bg-canvas) !important;
@@ -43,8 +43,56 @@
   --rui-sidebar-ring: var(--color-focus-ring) !important;
 }
 
+/* These RUI slots calculate their radius inline from a single scale. Map
+   their painted edges here so native, custom and RUI controls agree. */
+[data-slot="select-trigger"],
+[data-slot="select-item"],
+[data-slot="dropdown-menu-trigger"],
+[data-slot="dropdown-menu-item"],
+[data-slot="context-menu-item"] {
+  border-radius: var(--radius-control) !important;
+}
+
+/* Opt-in to the shared menu styles without changing RUI's popup or navigation. */
+.menu-surface[data-slot="select-content"] {
+  --rui-border: var(--color-border);
+  --rui-popover: var(--color-bg-surface);
+  box-shadow: var(--shadow-surface) !important;
+}
+
+.menu-surface[data-slot="select-content"] > [data-slot="select-viewport"] {
+  padding: var(--menu-surface-padding) !important;
+}
+
+.menu-option[data-slot="select-item"] {
+  display: grid !important;
+  padding: var(--menu-option-padding) !important;
+  font-family: var(--font-family-sans) !important;
+  font-size: var(--font-size-md) !important;
+  line-height: var(--line-height-normal) !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+.menu-option[data-slot="select-item"][aria-selected="true"]:not(:disabled) {
+  --rui-menu-item-bg: var(--color-bg-subtle);
+}
+
+.menu-option[data-slot="select-item"] > [data-slot="select-item-indicator"] {
+  position: static !important;
+  color: var(--color-accent);
+}
+
+[data-slot="dialog"] {
+  border-radius: var(--radius-modal) !important;
+}
+
+[data-slot="dialog-footer"] {
+  border-radius: 0 0 var(--radius-modal) var(--radius-modal) !important;
+}
+
 :where(button, a)[data-variant][data-size] {
-  --rui-control-radius: var(--radius-sm);
+  --rui-control-radius: var(--radius-control);
 }
 
 :where(button, a)[data-variant="ghost"][data-size] {
@@ -66,10 +114,10 @@
 }
 
 [data-slot="button-group"] > [data-slot="button"][aria-pressed] {
-  --rui-control-radius-top-left: var(--radius-sm);
-  --rui-control-radius-top-right: var(--radius-sm);
-  --rui-control-radius-bottom-left: var(--radius-sm);
-  --rui-control-radius-bottom-right: var(--radius-sm);
+  --rui-control-radius-top-left: var(--radius-control);
+  --rui-control-radius-top-right: var(--radius-control);
+  --rui-control-radius-bottom-left: var(--radius-control);
+  --rui-control-radius-bottom-right: var(--radius-control);
 }
 
 [data-slot="button-group"] > [data-slot="button"][aria-pressed="true"] {
@@ -83,7 +131,7 @@
   --rui-tabs-fg: var(--color-text-secondary);
   --rui-tabs-border: transparent;
   --rui-tabs-shadow: none;
-  border-radius: var(--radius-sm) !important;
+  border-radius: var(--radius-control) !important;
 }
 
 [data-slot="tabs-trigger"][data-state="active"],

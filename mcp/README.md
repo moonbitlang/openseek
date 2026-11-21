@@ -70,7 +70,7 @@ References: [versioning](https://modelcontextprotocol.io/specification/2026-07-2
 [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
 [MRTR](https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr).
 
-## Device OAuth for HTTP servers
+## OAuth for HTTP servers
 
 A skill's `mcp.json` can declare a public OAuth client instead of a static
 Authorization header or `headersHelper`:
@@ -92,28 +92,52 @@ Authorization header or `headersHelper`:
 }
 ```
 
-Desktop Settings → Connectors lists MCP configurations in bundled and globally
-installed skills (user skills override bundled skills of the same name). Connect
-starts device authorization and displays the provider's URL and user code. The
-host retains the device code, respects polling intervals and `slow_down`, and
-saves the token after authorization. Cancel fences outstanding token responses.
-The bundled GitHub skill uses the OpenSeek OAuth App; no gh CLI is needed.
+This is the Device Authorization Grant. The bundled GitHub skill uses the
+OpenSeek OAuth App. Desktop displays the provider's URL and user code, and the
+host polls at the provider's interval.
 
-Credentials are stored under `~/.openseek/oauth` (`OPENSEEK_OAUTH_DIR` overrides
-this for isolated environments), keyed by the MCP URL, OAuth endpoints, client
-ID and scopes. Files are atomically replaced with mode 0600 on POSIX; the
-credential directory is created with mode 0700. They are local credential files,
-not OS-keychain entries. Token values are never returned to the settings UI.
-HTTP MCP servers read the credentials when used; a changed credential resets the
-existing connection on the next search or call. Disconnect deletes the local
-credential; revocation on the provider remains separate.
+For a server that supports public client registration and S256 PKCE, use the
+Authorization Code Grant in the skill's `mcp.json`:
 
-This initial implementation supports explicitly configured Device Authorization
-Grant only. It does not implement authorization-code/PKCE discovery, dynamic
-client registration, or refresh tokens. Expired credentials require reconnect.
-The resource and OAuth endpoints must use HTTPS; OAuth cannot be combined with
-an Authorization header or `headersHelper`. Environment placeholders expand as
-in other MCP configuration fields. Workspace-only skills and standalone MCP
-configurations are not listed in the Desktop settings page. Explicit MCP config
-still overrides same-named skill servers, including an existing gh-based GitHub
-entry in `~/.openseek/mcp.json`.
+```json
+{
+  "mcpServers": {
+    "example": {
+      "url": "https://mcp.example.com/mcp",
+      "oauth": {
+        "grantType": "authorization_code",
+        "issuer": "https://mcp.example.com"
+      }
+    }
+  }
+}
+```
+
+Copy the skill directory into `~/.openseek/skills/` (or the library set by
+`OPENSEEK_GLOBAL_SKILLS_DIR`), then connect the server in Desktop Settings → MCP.
+
+For `authorization_code`, the MCP URL and discovered OAuth endpoints must
+belong to the configured HTTPS issuer. OpenSeek reads protected resource and
+issuer metadata, registers and reuses a public client, and verifies the
+provider's redirect on a loopback listener with a temporary port. The browser
+must run on the same computer as the host. The host exchanges the code
+directly with the provider.
+
+Desktop Settings → MCP lists MCP configurations in bundled and globally
+installed skills. Globally installed skills override bundled skills of the
+same name. Connect opens the provider's page. Workspace-only skills and
+standalone MCP configurations are outside this settings list. An explicit MCP
+config overrides a same-named skill server.
+
+Credentials and public client registrations are stored under
+`~/.openseek/oauth` (`OPENSEEK_OAUTH_DIR` overrides this). Files are atomically
+replaced with mode 0600 on POSIX and the directory is created with mode 0700.
+The settings UI receives status only. The engine refreshes browser grants
+before expiry and serializes refreshes across processes so each rotated token
+is saved before the next refresh. Device grants require reconnect after expiry.
+The next tool search or call reloads changed credentials and resets the
+connection. Disconnect deletes the local credential. Provider-side revocation
+is separate.
+
+OAuth configuration cannot be combined with an Authorization header or
+`headersHelper`. Environment placeholders expand as in other MCP fields.

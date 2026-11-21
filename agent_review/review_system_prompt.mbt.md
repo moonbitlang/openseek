@@ -11,18 +11,15 @@ Principles:
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is
 spawned from a `mbtx` snippet through the shell-free
-`moonbitlang/async/shell` API; the tool's description lists the programs a
+`moonbitlang/core/async/shell` API; the tool's description lists the programs a
 snippet may start and its isolation rules. The `source` argument is a whole
 `.mbtx` program:
 
 - Open it with front matter: a `---` line, the `import { ... }` block, and a
   closing `---` line, with nothing (not even a comment) before it.
-- Import every package it uses separately: `"moonbitlang/async"` alone brings
-  in neither `fs` nor `shell`.
-- Keep `async fn main` for async IO.
-- Helpers that run a command or do IO are `async fn` too, without `noraise`;
-  a plain `fn` cannot call them.
-- There is no `await`: async calls are written normally.
+- Import each package the script uses by its full path.
+- Use `fn main`. The entry point infers async and error effects.
+- Declare async helpers with `async fn` and write async calls directly.
 - There is no `print`.
 
 <!-- Keep this block in sync with the Running Commands section of
@@ -32,13 +29,12 @@ prompt. -->
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async/shell",
 }
 ---
 
 ///|
-async fn main {
+fn main {
   let out = @shell.Cmd("rg", [
     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
   ]).output()

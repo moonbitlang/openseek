@@ -84,7 +84,6 @@ async fn fork_session_in(
   }
   let root = @workspaces.store_root(workspace)
   let store = @store.SessionStore(root.to_string())
-  let source_prompt = saved_session_prompt(store, SessionId(payload.session))
   // A side chat joins its conversation's family, which another host
   // attached to this project may be archiving or deleting. Those moves take
   // this lock on the store's archive and re-read the family under it, so
@@ -144,6 +143,7 @@ async fn fork_session_in(
         "sessions",
         "fork",
         payload.session,
+        "--inherit-system-prompt",
         "--as",
         session,
         "--through",
@@ -155,9 +155,6 @@ async fn fork_session_in(
         "--model",
         payload.model,
       ]
-      if capture_session_prompt(store, id, source_prompt) is Some(path) {
-        args.push("--system-prompt-file=\{path.to_string()}")
-      }
       // The `=` spelling keeps text that starts with `-` a value.
       if notice is Some(text) {
         args.push("--notice=\{text}")

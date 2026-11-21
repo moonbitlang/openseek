@@ -5,7 +5,7 @@
   width: 100%;
   padding: var(--space-2) var(--space-4);
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
@@ -46,7 +46,7 @@
   display: flex;
   padding: var(--space-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-overlay);
   white-space: nowrap;
@@ -149,7 +149,7 @@
   box-sizing: border-box;
   padding: var(--space-3) var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   color: var(--color-text-primary);
   font: inherit;
   line-height: var(--line-height-normal);
@@ -170,6 +170,11 @@
   margin-top: var(--space-6);
   text-align: left;
 }
+.downloads-version {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
 .downloads-list {
   display: grid;
   gap: var(--space-2);
@@ -184,7 +189,7 @@
   gap: var(--space-5);
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   color: var(--color-text-primary);
   text-decoration: none;
 }
@@ -203,6 +208,7 @@
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
+.downloads-action > svg { flex: none; }
 .downloads-note { margin: var(--space-5) 0 0; font-size: var(--font-size-sm); }
 .downloads-note a {
   display: inline-flex;
@@ -271,7 +277,7 @@
   cursor: pointer;
   padding: var(--space-5) 1rem;
   border: 1px solid var(--color-danger-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-danger-soft);
   color: var(--color-danger);
   box-shadow: var(--shadow-overlay);
@@ -304,7 +310,7 @@
   width: min(440px, 100%);
   padding: var(--space-7);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-overlay);
 }
@@ -414,7 +420,7 @@
 }
 .portal-card {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   padding: 2rem;
   margin-top: 8vh;
@@ -435,7 +441,7 @@
 .portal-button-link {
   display: inline-block;
   padding: var(--space-4) 1rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-accent);
   color: var(--color-on-accent);
   text-decoration: none;
@@ -488,7 +494,7 @@
   gap: var(--space-5);
   min-height: 42px;
   padding: var(--space-4) var(--space-4);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: color-mix(in srgb, var(--color-text-primary) 76%, transparent);
   cursor: default;
 }

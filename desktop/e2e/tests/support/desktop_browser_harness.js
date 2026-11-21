@@ -11,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 12;
+    this.hostProtocol = 13;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -25,9 +25,6 @@ export class DesktopBrowserHarness {
     this.rpcErrors = new Map();
     this.connectionAvailable = true;
     this.rpcDelays = new Map();
-    // What `mcp.status` answers for a conversation: by default no engine is
-    // running for it.
-    this.mcpStatus = { engine: 'stopped' };
     // The `JobView`s `jobs.list` answers for session-1, newest first; other
     // sessions have none. Specs that read output use BackgroundJobsHarness.
     this.jobs = [];
@@ -673,8 +670,6 @@ export class DesktopBrowserHarness {
         }
         return { workspaces: [...this.workspaces] };
       }
-      case 'mcp.status':
-        return this.mcpStatus;
       case 'jobs.list': {
         const jobs = request.params.scope.session === 'session-1' ? this.jobs : [];
         const { offset } = request.params;

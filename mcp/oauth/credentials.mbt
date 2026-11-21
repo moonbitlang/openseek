@@ -1,0 +1,295 @@
+///|
+fn hash_identity(identity : Json) -> String {
+  @crypto.bytes_to_hex_string(
+    @crypto.sha256(@utf8.encode(identity.stringify())),
+  )
+}
+
+///|
+fn directory() -> String raise {
+  if @env.get_env_var("OPENSEEK_OAUTH_DIR") is Some(dir) && !dir.is_empty() {
+    return dir
+  }
+  let home = if @async.platform is Windows &&
+    @env.get_env_var("USERPROFILE") is Some(home) {
+    Some(home)
+  } else {
+    @env.get_env_var("HOME")
+  }
+  guard home is Some(home) else {
+    fail("Cannot locate OAuth credential directory")
+  }
+  "\{home}/.openseek/oauth"
+}
+
+///|
+fn credential_path(
+  resource : String,
+  config : @config.OAuthConfig,
+) -> String raise {
+  "\{directory()}/\{key(resource, config)}.json"
+}
+
+///|
+async fn lock_credential(path : String) -> @fs.File {
+  @fs.mkdir(directory(), permission=0o700, recursive=true, allow_existing=true)
+  let file = @fs.open(
+    path + ".lock",
+    mode=ReadWrite,
+    create_mode=OpenOrCreate,
+    permission=0o600,
+  )
+  errdefer file.close()
+  file.lock(Exclusive)
+  file
+}
+
+///|
+async fn write_credential(
+  path : String,
+  json : Json,
+  commit~ : async (String, String) -> Unit = (temp, path) => {
+    @fs.rename(temp, path, replace=true)
+  },
+) -> Unit {
+  let dir = directory()
+  @fs.mkdir(dir, permission=0o700, recursive=true, allow_existing=true)
+  guard @env.rand(16) is Some(random) else {
+    fail("Cannot obtain randomness for credential storage")
+  }
+  let temp = "\{dir}/.\{@crypto.bytes_to_hex_string(random)}.tmp"
+  defer (@fs.remove(temp, allow_missing=true) catch { _ => () })
+  @fs.write_text(
+    temp,
+    json.stringify(),
+    create_mode=CreateNew,
+    permission=0o600,
+  )
+  commit(temp, path)
+}
+
+///|
+/// A token returned by the provider, ready to use or save as a credential.
+struct Token {
+  record : StoredToken
+  browser : BrowserGrant?
+}
+
+///|
+/// The bearer token issued by the provider.
+pub fn Token::access_token(self : Token) -> String {
+  self.record.access_token
+}
+
+///|
+/// Publishes the credential for one authorization attempt and coordinates cancellation.
+struct CredentialCommit {
+  resource : String
+  config : @config.OAuthConfig
+  lock : @async.Mutex
+  mut cancelled : Bool
+}
+
+///|
+/// Prepare a credential save for the given resource and OAuth configuration.
+pub fn CredentialCommit::CredentialCommit(
+  config : @config.OAuthConfig,
+  resource~ : String,
+) -> CredentialCommit {
+  { resource, config, lock: Mutex(), cancelled: false, }
+}
+
+///|
+/// Prevent a future save and wait for any atomic replacement already in progress.
+pub async fn CredentialCommit::cancel(self : CredentialCommit) -> Unit {
+  self.cancelled = true
+  self.lock.acquire()
+  self.lock.release()
+}
+
+///|
+/// Store the token from this attempt unless the attempt was cancelled.
+pub async fn CredentialCommit::save(
+  self : CredentialCommit,
+  token : Token,
+) -> Unit {
+  let path = credential_path(self.resource, self.config)
+  // A browser grant shares its file with refreshes from other engine processes.
+  let refresh_lock = match self.config {
+    DeviceCode(_) => None
+    AuthorizationCode(_) => Some(lock_credential(path))
+  }
+  defer (if refresh_lock is Some(lock) { lock.close() })
+  write_credential(path, token.record.encode(browser?=token.browser), commit=(
+    temp,
+    path,
+  ) => {
+    self.lock.acquire()
+    defer self.lock.release()
+    guard !self.cancelled else { fail("Authorization cancelled") }
+    @fs.rename(temp, path, replace=true)
+  })
+}
+
+///|
+async fn read_credential(path : String) -> Json? {
+  let text = @fs.read_text(path) catch {
+    @os_error.OsError(NotFound, ..) => return None
+    error => raise error
+  }
+  let json = @json.parse(text) catch {
+    _ => fail("Invalid OAuth credential file")
+  }
+  Some(json)
+}
+
+///|
+fn build_token_record(
+  json : Json,
+  save_refresh_at~ : Bool = false,
+) -> StoredToken raise {
+  guard json
+    is { "access_token": String(token), "token_type": String(kind), .. } &&
+    !token.is_empty() &&
+    kind.to_lower() == "bearer" else {
+    fail("OAuth server did not return a bearer token")
+  }
+  let lifetime_ms = seconds(json, "expires_in", default=0).to_double() * 1000
+  let expires_at = if lifetime_ms > 0 {
+    Some(@env.now().to_double() + lifetime_ms)
+  } else {
+    None
+  }
+  let refresh_at = if save_refresh_at && expires_at is Some(expiry) {
+    // Leave most of the lifetime usable, even when an issuer returns a
+    // token with a lifetime shorter than the maximum refresh window.
+    let window = (lifetime_ms * 0.1).min(300000)
+    Some(expiry - window)
+  } else {
+    None
+  }
+  { access_token: token, expires_at, refresh_at, }
+}
+
+///|
+priv struct StoredToken {
+  access_token : String
+  expires_at : Double?
+  refresh_at : Double?
+}
+
+///|
+fn StoredToken::encode(self : StoredToken, browser? : BrowserGrant) -> Json {
+  let record : Map[String, Json] = {
+    "access_token": Json(self.access_token),
+    "expires_at": if self.expires_at is Some(expiry) {
+      Json(expiry)
+    } else {
+      Json::null()
+    },
+  }
+  if self.refresh_at is Some(at) {
+    record["refresh_at"] = Json(at)
+  }
+  if browser is Some(grant) {
+    record["client_id"] = Json(grant.client_id)
+    record["token_endpoint"] = Json(grant.endpoint)
+    record["refresh_token"] = if grant.refresh_token is Some(refresh) {
+      Json(refresh)
+    } else {
+      Json::null()
+    }
+  }
+  Json::object(record)
+}
+
+///|
+fn StoredToken::decode(json : Json) -> StoredToken raise {
+  guard json
+    is { "access_token": String(access_token), "expires_at": expires, .. } &&
+    !access_token.is_empty() else {
+    fail("Invalid OAuth credential file")
+  }
+  let expires_at = match expires {
+    Null => None
+    Number(n, ..) if n > 0 => Some(n)
+    _ => fail("Invalid OAuth credential expiry")
+  }
+  let refresh_at = match (json, expires_at) {
+    ({ "refresh_at": Number(at, ..), .. }, Some(expiry)) if at > 0 &&
+      at <= expiry => Some(at)
+    // Existing credentials have no issued lifetime. Refresh them at expiry.
+    _ => expires_at
+  }
+  { access_token, expires_at, refresh_at, }
+}
+
+///|
+fn StoredToken::valid(self : StoredToken) -> Bool {
+  match self.expires_at {
+    None => true
+    Some(expires) => expires > @env.now().to_double()
+  }
+}
+
+///|
+fn StoredToken::refresh_due(self : StoredToken) -> Bool {
+  self.refresh_at is Some(at) && at <= @env.now().to_double()
+}
+
+///|
+/// Check the local grant without making a token request from the settings page.
+pub async fn authorized(
+  resource : String,
+  config : @config.OAuthConfig,
+) -> Bool {
+  guard read_credential(credential_path(resource, config)) is Some(json) else {
+    return false
+  }
+  let token = StoredToken::decode(json)
+  if config is AuthorizationCode(config) {
+    let grant = browser_grant(json, config)
+    token.valid() || grant.refresh_token is Some(_)
+  } else {
+    token.valid()
+  }
+}
+
+///|
+/// Read a usable token, refreshing browser grants before they expire.
+pub async fn token(resource : String, config : @config.OAuthConfig) -> String? {
+  let path = credential_path(resource, config)
+  guard read_credential(path) is Some(json) else { return None }
+  let token = StoredToken::decode(json)
+  match config {
+    DeviceCode(_) => if token.valid() { Some(token.access_token) } else { None }
+    AuthorizationCode(config) => {
+      let grant = browser_grant(json, config)
+      if !token.refresh_due() {
+        Some(token.access_token)
+      } else if grant.refresh_token is Some(_) {
+        refresh(path, resource, config)
+      } else if token.valid() {
+        Some(token.access_token)
+      } else {
+        None
+      }
+    }
+  }
+}
+
+///|
+/// Remove the local grant. Browser refresh and publication take the same lock.
+pub async fn disconnect(
+  resource : String,
+  config : @config.OAuthConfig,
+) -> Unit {
+  let path = credential_path(resource, config)
+  if config is AuthorizationCode(_) {
+    let lock = lock_credential(path)
+    defer lock.close()
+    @fs.remove(path, allow_missing=true)
+  } else {
+    @fs.remove(path, allow_missing=true)
+  }
+}

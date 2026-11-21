@@ -18,10 +18,10 @@ For example, pass this as `source` to mbtx:
 
 ```mbtx
 ---
-import { "moonbitlang/openseek_tools@0.4.2" @tools, "moonbitlang/core/async" }
+import { "moonbitlang/openseek_tools@0.4.2" @tools }
 ---
 
-async fn main {
+fn main {
   let result = @tools.call("edit", {
     "path": "note.txt", "start_line": 1,
     "old_string": "before", "new_string": "after",
@@ -60,10 +60,10 @@ them in favor of `call`, so new scripts should use `call` directly.
 
 ```mbtx
 ---
-import { "moonbitlang/openseek_tools@0.4.2" @tools, "moonbitlang/core/async" }
+import { "moonbitlang/openseek_tools@0.4.2" @tools }
 ---
 
-async fn main {
+fn main {
   let result = @tools.call("web_search", { "query": "MoonBit async task groups" })
   if result.is_error { fail(result.content) }
   guard result.data is Some({ "sources": Array(sources), .. }) else {

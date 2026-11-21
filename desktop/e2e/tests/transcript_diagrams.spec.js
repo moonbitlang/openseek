@@ -3,27 +3,35 @@ import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('bundled diagram examples render as SVG in the transcript', async ({ page }) => {
-  const examples = ['../../../prompt/default_prompt.mbt.md', '../../../share/diagrams/README.md']
-    .flatMap(path => {
-      const markdown = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const blocks = [...markdown.matchAll(/^```diago\n[\s\S]*?^```$/gm)].map(match => match[0]);
-      expect(blocks.length, path).toBeGreaterThan(0);
-      return blocks;
-    });
+  const selectors = {
+    mermaid: '.chat-mermaid',
+    diago: '.chat-diago',
+    plantuml: '[data-diagram-language="uml"]',
+  };
+  const examples = Object.entries(selectors).map(([language, selector]) => {
+    const guidePath = `../../../share/visualization/diagrams/${language}.md`;
+    const guide = readFileSync(new URL(guidePath, import.meta.url), 'utf8');
+    const fence = new RegExp('^```' + language + '\\n[\\s\\S]*?^```$', 'gm');
+    const blocks = [...guide.matchAll(fence)].map(match => match[0]);
+    expect(blocks.length, language).toBeGreaterThan(0);
+    return { selector, blocks };
+  });
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture diagrams from the bundled reference' } } },
-    { sequence: 2, item: { kind: 'assistant', payload: { content: examples.join('\n\n') } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: examples.flatMap(({ blocks }) => blocks).join('\n\n') } } },
   ];
   await app.install();
   await app.goto();
   await app.openSession();
 
-  const diagrams = page.locator('#transcript .chat-diago');
-  await expect(diagrams).toHaveCount(examples.length);
-  for (const diagram of await diagrams.all()) {
-    await expect(diagram.locator('svg:not(svg svg)')).toBeVisible();
-    await expect(diagram.locator('pre')).toHaveCount(0);
+  for (const { selector, blocks } of examples) {
+    const diagrams = page.locator('#transcript').locator(selector);
+    await expect(diagrams).toHaveCount(blocks.length);
+    for (const diagram of await diagrams.all()) {
+      await expect(diagram.locator('svg:not(svg svg)')).toBeVisible();
+      await expect(diagram.locator('pre')).toHaveCount(0);
+    }
   }
   expect(app.pageErrors).toEqual([]);
 });

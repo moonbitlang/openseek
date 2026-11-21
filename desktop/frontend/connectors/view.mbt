@@ -120,7 +120,11 @@ pub fn view(
               locale, "Complete authorization", "在服务提供商处授权",
             ),
             [
-              @html.code(class="form-row-status", authorization.code),
+              if authorization.code is Some(code) {
+                @html.code(class="form-row-status", code)
+              } else {
+                @html.nothing
+              },
               @html.a(
                 class="button",
                 href=authorization.url,
@@ -134,10 +138,17 @@ pub fn view(
                 text(locale, "Cancel", "取消"),
               ),
             ],
-            desc=text(
-              locale, "Enter this code on the authorization page. Waiting for your approval…",
-              "在授权页面输入设备码，等待你确认授权…",
-            ),
+            desc=if authorization.code is Some(_) {
+              text(
+                locale, "Enter this code on the authorization page. Waiting for your approval…",
+                "在授权页面输入设备码，等待你确认授权…",
+              )
+            } else {
+              text(
+                locale, "Complete authorization in a browser on the computer running SeekMoon.",
+                "请在运行 SeekMoon 的这台电脑上打开浏览器并完成授权。",
+              )
+            },
             stack=true,
           ),
         )

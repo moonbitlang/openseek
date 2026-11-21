@@ -1,4 +1,9 @@
 ///|
+fn current_key(model : Model) -> @interop.ConversationKey {
+  { channel: Local, session: model.active_session, }
+}
+
+///|
 fn attached_pull_requests(
   numbers : Array[Int32],
 ) -> Result[@protocol.SessionArtifacts, String] {
@@ -88,4 +93,35 @@ test "a reconnected device has the overview read its attached changes again" {
   let (_, reconnected) = update_dev(dispatch, BridgeReady, answered)
   assert_true(reconnected.changes.phase is Reloading([_]))
   assert_true(reconnected.changes.serial != answered.changes.serial)
+}
+
+///|
+test "the overview stays shown across conversations and while settings is open" {
+  let dispatch = test_dispatch()
+  let (_, shown) = update(dispatch, ToggleOverview, test_model())
+  let second = empty_conversation(
+    @interop.ChannelId::Local,
+    "second-session",
+    @interop.ChannelId::Local.test_project(),
+  )
+  let (_, switched) = update(dispatch, OpenSession(Local, "second-session"), {
+    ..shown,
+    conversations: [..shown.conversations, second],
+  })
+  assert_eq(switched.active_session, "second-session")
+  assert_true(switched.overview_open)
+  // The dialog preserves the underlying overview and its conversation.
+  let (_, settings) = update(dispatch, OpenSetup, switched)
+  assert_true(settings.overview_open)
+  assert_true(
+    settings.overview_conversation() == switched.overview_conversation(),
+  )
+}
+
+///|
+test "the stored overview choice is read back" {
+  let (_, shown) = update(test_dispatch(), OverviewLoaded(true), test_model())
+  assert_true(shown.overview_open)
+  let (_, hidden) = update(test_dispatch(), OverviewLoaded(false), shown)
+  assert_false(hidden.overview_open)
 }
