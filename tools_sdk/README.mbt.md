@@ -129,10 +129,19 @@ servers come on top.
 
 The returned `SearchPage` has the same tools twice:
 - `text`, rendered for the model once the script prints it: each tool's
-  description and the JSON Schemas of its arguments and result `data`;
+  arguments and result `data` shown as the `Json` patterns a script matches,
+  with a ready-to-edit `@mcp.call` for the best matches;
 - `tools`, records of `server`, `name`, `description`, `input_schema : Json`,
   and `output_schema : Json?` (the raw JSON Schemas) for the script to select
   from.
+
+Results with a top-level `oneOf` show one MoonBit matching pattern per branch.
+Each pattern combines required fields and literal tags from the root and the
+branch; a common tag is not required. These are structural reading examples:
+numeric constraints and forbidden extra fields are not checked, and nullable
+or nested objects may be bound as whole JSON values. Matching takes the first
+applicable branch, so the examples do not validate `oneOf` exclusivity. The
+complete constraints remain in `output_schema`.
 
 `total` counts every match, `next_offset` continues the listing, and
 `instructions` holds the named server's instructions on a first page. No match
