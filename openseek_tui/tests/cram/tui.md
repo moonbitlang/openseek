@@ -27,8 +27,8 @@ OpenSeek terminal UI.
 Options:
   -h, --help                                                   Show help information.
   --continue                                                   Resume the most recently active session in --session-root.
-  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
-  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-key <api-key>                                          API key for the selected chat provider. [env: OPENSEEK_API_KEY] [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings. [env: OPENSEEK_MODEL] [default: deepseek-flash]
   --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
   --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
   --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]

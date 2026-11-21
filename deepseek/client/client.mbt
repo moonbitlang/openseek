@@ -19,6 +19,9 @@ fn default_api_url_for_model(model : @deepseek.Model) -> String {
     Kimi(_) => KimiDefaultApiUrl
     Glm(_) => GlmDefaultApiUrl
     Deepseek(_) => DeepSeekDefaultApiUrl
+    // A custom model is only reachable through the endpoint its entry names,
+    // which the caller always passes; this value is never used.
+    Custom(_) => DeepSeekDefaultApiUrl
   }
 }
 
@@ -78,7 +81,14 @@ fn encode_chat_request_for_endpoint(
 
 ///|
 fn supports_image_route(model : @deepseek.Model, api_url : String) -> Bool {
-  model is Deepseek(V4Flash) && api_url != OpenRouterChatCompletionsUrl
+  match model {
+    Deepseek(V4Flash) => api_url != OpenRouterChatCompletionsUrl
+    // The host resolves a user entry's own image capability and refuses a
+    // request that carries images past it, so the client cannot add a second,
+    // contradicting guess about an endpoint it has never seen.
+    Custom(_) => true
+    _ => false
+  }
 }
 
 ///|

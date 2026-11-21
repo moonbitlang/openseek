@@ -120,9 +120,5 @@ pub fn subagents(
 /// The environment variable a child reads its provider's key from when no
 /// --api-key is given (see `@cli.agent_shared_options`).
 fn provider_key_variable(model : @deepseek.Model) -> String {
-  match model {
-    Deepseek(_) => "DEEPSEEK"
-    Kimi(_) => "KIMI"
-    Glm(_) => "GLM"
-  }
+  model.api_key_env()
 }

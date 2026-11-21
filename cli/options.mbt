@@ -22,6 +22,7 @@ pub fn agent_shared_options(
     OptionArg(
       "api-key",
       long="api-key",
+      env="OPENSEEK_API_KEY",
       default_values=[""],
       global~,
       about="API key for the selected chat provider.",
@@ -49,7 +50,7 @@ pub fn agent_shared_options(
       env="OPENSEEK_MODEL",
       default_values=[@deepseek.Deepseek(V4Flash).to_string()],
       global~,
-      about="Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash.",
+      about="Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings.",
     ),
     OptionArg(
       "api-url",
