@@ -113,7 +113,7 @@ async test "upload maps server replies without following redirects" {
   let invalid = "The share server did not return a valid share link."
   for
     (code, body, expected) in [
-      (401, "{}", @protocol.SignInRequired),
+      (401, "{}", @protocol.SessionShareReply::SignInRequired),
       (413, "{}", Failed(message="Sharing failed (HTTP 413).")),
       (302, "{}", Failed(message="Sharing failed (HTTP 302).")),
       (201, "invalid", Failed(message=invalid)),

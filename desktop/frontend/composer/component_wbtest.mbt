@@ -1365,3 +1365,29 @@ test "image reads follow an editor move but cannot outlive its retirement" {
   )
   assert_true(ignored.active(retired).draft.images.is_empty())
 }
+
+///|
+test "a feedback receipt from the previous account cannot settle a retry" {
+  let input = Input::fixture("/feedback keep this")
+  let model = Model(input)
+  let sending = model.with_entry({
+    ..model.active(input),
+    feedback: Some(Sending("first", input.draft.task)),
+  })
+  let emit = Action::test_emit()
+  let (reset, _) = sending.command_result(
+    FeedbackAccountUpdated(signed_in=true, changed=true),
+    emit,
+  )
+  assert_true(reset.active(input).feedback is None)
+  let retry = reset.with_entry({
+    ..reset.active(input),
+    feedback: Some(Sending("retry", input.draft.task)),
+  })
+  let (late, _) = retry.command_result(
+    FeedbackSettled(input.identity, "first", Ok(())),
+    emit,
+  )
+  assert_true(late.active(input).feedback is Some(Sending("retry", _)))
+  assert_eq(late.active(input).draft.task, "/feedback keep this")
+}

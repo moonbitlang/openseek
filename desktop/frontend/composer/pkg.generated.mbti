@@ -47,6 +47,8 @@ pub(all) enum Action {
   ReviewChangesRemoved(identity~ : Identity, selections~ : Array[@mention_context.ReviewChanges])
   ReviewChangesOpened(identity~ : Identity, selection~ : @mention_context.ReviewChanges)
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
+  FeedbackSignIn(identity~ : Identity, draft~ : String, held~ : String?)
+  FeedbackSubmitted(identity~ : Identity, request~ : String, message~ : String)
   SlashCommand(identity~ : Identity, command~ : String)
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
   CommandResultRecovered(identity~ : Identity)
@@ -127,6 +129,9 @@ pub(all) struct CodexRequestInput {
 }
 
 pub(all) enum CommandResult {
+  FeedbackSettled(Identity, String, Result[Unit, FeedbackFailure])
+  RestoreFeedback(Input, String, String?)
+  FeedbackAccountUpdated(signed_in~ : Bool, changed~ : Bool)
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)
@@ -176,6 +181,12 @@ pub(all) enum EntryChange {
 pub fn EntryChange::equal(Self, Self) -> Bool
 pub fn EntryChange::not_equal(Self, Self) -> Bool
 pub fn EntryChange::retires(Self, @interop.ConversationIdentity) -> Bool
+
+#derive(Eq)
+pub(all) enum FeedbackFailure {
+  SignInRequired
+  Diagnostic(String)
+}
 
 #derive(Eq, @debug.Debug)
 pub(all) enum FileIndex {

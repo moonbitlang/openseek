@@ -374,6 +374,8 @@ pub(all) enum Action {
     selection~ : @mention_context.ReviewChanges,
   )
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
+  FeedbackSignIn(identity~ : Identity, draft~ : String, held~ : String?)
+  FeedbackSubmitted(identity~ : Identity, request~ : String, message~ : String)
   SlashCommand(identity~ : Identity, command~ : String)
   // A `!` draft was submitted: run `command` (the text after `!`, trimmed and
   // non-empty) and hand its output to the conversation.
@@ -453,6 +455,8 @@ pub fn Action::identity(self : Action) -> Identity {
     | ReviewChangesRemoved(identity~, ..)
     | ReviewChangesOpened(identity~, ..)
     | RootMentionRemoved(identity~, ..)
+    | FeedbackSignIn(identity~, ..)
+    | FeedbackSubmitted(identity~, ..)
     | SlashCommand(identity~, ..)
     | ShellCommandSubmitted(identity~, ..)
     | CommandResultRecovered(identity~)

@@ -39,3 +39,31 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   expect(app.device.pageErrors).toEqual([]);
 });
 
+for (const state of ['running', 'paused']) {
+  test(`Cloud saves /feedback as queued text while ${state}`, async ({ page }) => {
+    const app = await running(page);
+    await app.publishControl(sessionA, { queue: [{ id: 'queued-1', content: 'Original message' }] });
+    if (state === 'paused') {
+      await app.finishTask(sessionA, 'cancelled');
+      await expect(page.locator('#stop')).toHaveCount(0);
+    }
+    const queued = page.locator('.queued-input-row');
+    await queued.getByTitle('Edit', { exact: true }).click();
+    const composer = page.locator('#task');
+    await expect(composer).toHaveValue('Original message');
+    const edited = '/feedback keep this in the queue';
+    await composer.fill(edited);
+    const feedback = [];
+    await page.route('**/v1/sessions/*/feedback', route => {
+      feedback.push(route.request().method());
+      return route.fulfill({ status: 201, json: { id: 'unexpected-feedback' } });
+    });
+    const send = page.locator('#send');
+    await expect(send).toHaveAttribute('title', 'Save queued message');
+    if (state === 'running') await composer.press('Enter');
+    else await send.click();
+    await expect(queued).toContainText(edited);
+    expect(controls(app, 'queue')).toMatchObject([{ action: 'edit', id: 'queued-1' }]);
+    expect(feedback).toEqual([]);
+  });
+}

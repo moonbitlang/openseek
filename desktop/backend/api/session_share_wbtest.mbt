@@ -98,7 +98,6 @@ async test "share refusal retires the captured login and preserves a newer one" 
     defer subscription.close()
     let share = SessionShare::{
       state,
-      local_account: true,
       payload: {
         generation: 1,
         idempotency_key: "a".repeat(64),
@@ -185,7 +184,6 @@ async test "remote grants never retire the host account even when the upload is 
     let original = store.account()
     let share = SessionShare::{
       state: ApiState(engine="unused-test-engine", auth=store),
-      local_account: false,
       payload: {
         generation: 1,
         idempotency_key: "b".repeat(64),

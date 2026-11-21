@@ -165,6 +165,7 @@ async fn WsClientActor::serve(
   self : WsClientActor,
   conn : @websocket.Conn,
   heartbeat_ms? : Int32,
+  local_feedback~ : Bool = false,
 ) -> Unit {
   let subscription = self.open_subscription(on_overflow=() => conn.close())
   defer subscription.notifications.close()
@@ -176,9 +177,14 @@ async fn WsClientActor::serve(
   )
   // Endpoint closures capture this connection's watch and PTY ownership once;
   // every request only performs a name lookup in the stable catalog.
-  let endpoints = @api.endpoints(self.state, self.host_connection, on_share_progress=payload => {
-    enqueue_outgoing(out, Notify(SessionShareProgress(payload)))
-  })
+  let endpoints = @api.endpoints(
+    self.state,
+    self.host_connection,
+    local_feedback~,
+    on_share_progress=payload => {
+      enqueue_outgoing(out, Notify(SessionShareProgress(payload)))
+    },
+  )
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {

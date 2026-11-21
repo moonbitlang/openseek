@@ -358,6 +358,7 @@ class Build {
       // Keep the compiler's IIFE scope; only minify, never bundle/tree-shake.
       await this.commandRun(this.esbuildBinary, [
         this.frontendBundle(profile), "--minify", "--format=iife", "--platform=browser",
+        `--define:globalThis.__SEEKMOON_BROWSER_RELEASE__=${JSON.stringify(process.env.SEEKMOON_BROWSER_RELEASE || "unknown")}`,
         `--outfile=${join(assets, "frontend.js")}`,
       ]);
     } else {

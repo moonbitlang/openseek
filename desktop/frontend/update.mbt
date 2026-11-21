@@ -2669,6 +2669,39 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
+    ComposerAction(@composer.FeedbackSignIn(identity~, draft~, held~)) => {
+      guard model.accepts_composer_action(identity) && !model.remote_connecting else {
+        return (@cmd.none, model)
+      }
+      if !model.is_desktop {
+        let saved : Json = {
+          "owner": identity.owner.key(),
+          "draft": draft,
+          "held": match held {
+            Some(command) => Json::string(command)
+            None => Json::null()
+          },
+        }
+        guard remember_feedback_login(saved.stringify()) else {
+          return model.notify_error(
+            dispatch, "Could not save the feedback draft for sign-in.",
+          )
+        }
+      }
+      begin_account_login(
+        dispatch,
+        model,
+        rejected_token?=if model.is_desktop &&
+          identity.owner is @interop.Host(_) {
+          // The local publisher already expired the rejected host credential.
+          None
+        } else {
+          model.account.map(account => account.token)
+        },
+      )
+    }
+    ComposerAction(@composer.FeedbackSubmitted(identity~, request~, message~)) =>
+      model.submit_feedback(dispatch, identity, request, message)
     ComposerAction(action) => {
       if action is @composer.CommandResultRecovered(identity~) {
         return recover_command_result(model, identity)
@@ -2840,7 +2873,9 @@ fn update_msg(
         }
       }
       match action {
-        @composer.DraftAttachmentsSubmitted(..)
+        @composer.FeedbackSignIn(..)
+        | @composer.FeedbackSubmitted(..)
+        | @composer.DraftAttachmentsSubmitted(..)
         | @composer.CommandResultSubmitted(..)
         | @composer.CommandResultRecovered(..)
         | @composer.ReviewContextChanged(..) => (@cmd.none, model)

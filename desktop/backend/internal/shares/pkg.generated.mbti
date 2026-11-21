@@ -2,10 +2,12 @@
 package "openseek_desktop/backend/internal/shares"
 
 import {
+  "moonbitlang/core/json",
   "openseek_desktop/protocol",
 }
 
 // Values
+pub async fn submit_feedback(title~ : String, html~ : String, json~ : String, key~ : String, metadata~ : @json.Json, server_url~ : String, token~ : String) -> @protocol.SessionFeedbackReply
 
 // Errors
 pub(all) suberror ShareError {

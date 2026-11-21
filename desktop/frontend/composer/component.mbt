@@ -94,6 +94,7 @@ priv struct Entry {
   followup_menu_open : Bool
   image_reads : Int32
   image_error : AttachmentFailure?
+  feedback : FeedbackStatus?
   attachment_requests : Array[AttachmentRequest]
   attachment_sequence : Int32
   images_enabled : Bool
@@ -130,6 +131,7 @@ fn Entry::Entry(input : Input) -> Entry {
     followup_menu_open: false,
     image_reads: 0,
     image_error: None,
+    feedback: None,
     attachment_requests: input.staged_attachments.mapi((index, source) => {
       id: index + 1,
       source,
@@ -422,7 +424,13 @@ fn Model::with_entry_changes_applied(self : Model, input : Input) -> Model {
       Move(from~, to~) =>
         entries = entries.map(entry => {
           if entry.owner == from {
-            { ..entry, owner: to, action_generation: index + 1, moved: true, }
+            {
+              ..entry,
+              owner: to,
+              action_generation: index + 1,
+              moved: true,
+              feedback: None,
+            }
           } else {
             entry
           }
@@ -523,6 +531,7 @@ priv enum Msg {
   MentionJumped(Int32)
   GoalCancelled
   SubmitRequested
+  RetryFeedback
   QuoteReplied(QuoteReply)
   CommandResultReceived(CommandResult)
   FollowupMenuToggled
@@ -649,7 +658,7 @@ fn Entry::accept_completion(
     return ({ ..self, completion: None, }, @cmd.none)
   }
   let mention : Mention? = match completion.kind {
-    SlashCommands if item.prompt is Some(_) =>
+    SlashCommands if item.prompt is Some(_) || item.command == "feedback" =>
       return (
         {
           ..self,
@@ -776,6 +785,60 @@ fn Model::commit_entry_change(
     @cmd.none
   }
   (self.with_entry(entry), @cmd.batch([command, presence]))
+}
+
+///|
+priv enum FeedbackSubmission {
+  Disabled
+  Ready(String)
+}
+
+///|
+fn Entry::feedback_submission(
+  self : Entry,
+  input : Input,
+) -> FeedbackSubmission? {
+  guard input.feedback_message(self.draft) is Some(message) else { return None }
+  if input.presentation.disabled ||
+    message.is_blank() ||
+    self.feedback is Some(Sending(_, _)) {
+    Some(Disabled)
+  } else {
+    Some(Ready(message))
+  }
+}
+
+///|
+fn Model::send_feedback(
+  self : Model,
+  entry : Entry,
+  command : String,
+  message : String,
+  clear~ : Bool,
+  action_emit : @cmd.Emit[Action],
+) -> (Model, @cmd.Cmd) {
+  let request = (@uuid.mint() + @uuid.mint()).replace_all(old="-", new="")
+  self.commit_entry_change(
+    entry,
+    {
+      ..entry,
+      draft: if clear {
+        { ..entry.draft, task: "", }
+      } else {
+        entry.draft
+      },
+      completion: if clear {
+        None
+      } else {
+        entry.completion
+      },
+      feedback: Some(Sending(request, command)),
+    },
+    action_emit(
+      FeedbackSubmitted(identity=entry.identity(), request~, message~),
+    ),
+    action_emit,
+  )
 }
 
 ///|
@@ -1033,6 +1096,11 @@ fn Model::update(
     }
     TextChanged(value) => {
       let (next, command) = entry.edited(input, value, action_emit)
+      let next = if entry.feedback is Some(Submitted | Failed(_, held=None)) {
+        { ..next, feedback: None, }
+      } else {
+        next
+      }
       self.commit_entry_change(entry, next, command, action_emit)
     }
     HistoryMoved(delta) =>
@@ -1174,6 +1242,31 @@ fn Model::update(
         action_emit(GoalCancelled(identity=entry.identity())),
         action_emit,
       )
+    RetryFeedback => {
+      let command = match entry.feedback {
+        Some(Failed(Diagnostic(_), held=Some(command)) | RetryReady(command)) =>
+          command
+        _ => return (self, @cmd.none)
+      }
+      guard !input.presentation.disabled &&
+        input.feedback_message({ ..entry.draft, task: command, })
+        is Some(message) else {
+        return (self, @cmd.none)
+      }
+      self.send_feedback(entry, command, message, clear=false, action_emit)
+    }
+    SubmitRequested if entry.feedback_submission(input) is Some(submission) =>
+      match submission {
+        Disabled => (self, @cmd.none)
+        Ready(message) =>
+          self.send_feedback(
+            entry,
+            entry.draft.task,
+            message,
+            clear=true,
+            action_emit,
+          )
+      }
     // A shell command is acknowledged like a prompt: the root clears the
     // draft and advances the submission sequence once it accepts the command.
     SubmitRequested if input.shell_command(entry.draft) is Some(command) => {

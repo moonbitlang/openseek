@@ -30,6 +30,7 @@ import {
   "openseek_desktop/frontend/skills",
   "openseek_desktop/frontend/subrun",
   "openseek_desktop/frontend/internal/jsonx",
+  "openseek_desktop/frontend/internal/uuid/browser" @uuid,
   "openseek_desktop/protocol",
   "openseek_desktop/commands",
 }

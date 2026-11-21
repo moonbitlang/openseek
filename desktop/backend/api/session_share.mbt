@@ -2,7 +2,6 @@
 priv struct SessionShare {
   state : ApiState
   payload : @protocol.SessionSharePayload
-  local_account : Bool
 }
 
 ///|
@@ -12,24 +11,34 @@ priv enum ShareCredential {
 }
 
 ///|
-async fn SessionShare::publish(
-  self : SessionShare,
-  on_progress~ : async (@protocol.ShareProgress) -> Unit,
+async fn ApiState::share_conversation(
+  self : ApiState,
+  payload : @protocol.SessionSharePayload,
+  local_account~ : Bool,
+  on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   let (credential, server_url) = match
-    self.state.share_access(self.payload.authorization, self.local_account) {
+    self.share_access(payload.authorization, local_account) {
     Ok(access) => access
     Err(reply) => return reply
   }
+  SessionShare::{ state: self, payload, }.publish(credential, server_url~, on_progress=progress => {
+    on_share_progress({ generation: payload.generation, progress, }) catch {
+      _ => ()
+    }
+  })
+}
+
+///|
+async fn SessionShare::publish(
+  self : SessionShare,
+  credential : ShareCredential,
+  server_url~ : String,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit,
+) -> @protocol.SessionShareReply {
   try {
     on_progress(Preparing)
-    let (shell, bundle) = self.state.host_state().viz_assets().read()
-    let files = @engine.ConversationExport::capture(
-      self.state.manager(),
-      self.payload.source,
-      shell,
-      bundle,
-    )
+    let files = self.state.capture_conversation(self.payload.source)
     self.upload(files, credential, server_url~, on_progress~)
   } catch {
     @shares.EmptyTitle | @shares.Oversized as refusal =>
@@ -103,21 +112,32 @@ async fn ShareCredential::settle(
       message="The share upload permission was rejected. Try sharing again.",
     )
   }
+  state.expire_upload_account(account) catch {
+    @host.HostError(message) => return Failed(message~)
+    error => raise error
+  }
+  SignInRequired
+}
+
+///|
+async fn ApiState::expire_upload_account(
+  self : ApiState,
+  account : @protocol.AccountSession,
+) -> Unit {
   @async.protect_from_cancel(() => {
-    let store = state.auth_store()
+    let store = self.auth_store()
     if store.account() is Some(current) && current.token != account.token {
-      return Failed(
-        message="Sign-in changed during the upload. Try sharing again.",
+      raise @host.HostError(
+        "Sign-in changed during the upload. Please try again.",
       )
     }
-    defer state.publish(AuthChanged(store.status()))
+    defer self.publish(AuthChanged(store.status()))
     store.expire_account(account.token) catch {
       @auth.AuthError(message) =>
-        return Failed(
-          message="Could not clear the rejected sign-in: \{message}",
+        raise @host.HostError(
+          "Could not clear the rejected sign-in: \{message}",
         )
       error => raise error
     }
-    SignInRequired
   })
 }

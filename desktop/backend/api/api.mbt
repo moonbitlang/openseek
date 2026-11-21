@@ -394,6 +394,7 @@ pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
   local_share~ : Bool = false,
+  local_feedback~ : Bool = false,
   on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
@@ -422,11 +423,11 @@ pub fn endpoints(
       state.share_file(payload, local_account=local_share)
     }),
     Endpoint(@commands.session_share, payload => {
-      SessionShare::{ state, payload, local_account: local_share, }.publish(on_progress=progress => {
-        on_share_progress({ generation: payload.generation, progress, }) catch {
-          _ => ()
-        }
-      })
+      state.share_conversation(
+        payload,
+        local_account=local_share,
+        on_share_progress~,
+      )
     }),
     @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(
@@ -556,13 +557,7 @@ pub fn endpoints(
     }),
     Endpoint(@commands.session_list, _ => @engine.list_sessions()),
     Endpoint(@commands.session_snapshot, payload => {
-      let (shell, bundle) = state.host_state().viz_assets().read()
-      let files = @engine.ConversationExport::capture(
-        state.manager,
-        payload,
-        shell,
-        bundle,
-      )
+      let files = state.capture_conversation(payload)
       { html: files.html, json: files.json, }
     }),
     Endpoint(@commands.session_load, payload => {
@@ -874,6 +869,13 @@ pub fn endpoints(
       state.publish(SkillsChanged)
     }) {
     endpoints.push(endpoint)
+  }
+  if local_feedback {
+    endpoints.push(
+      Endpoint(@commands.session_feedback, payload => {
+        state.submit_feedback(payload)
+      }),
+    )
   }
   endpoints
 }
@@ -1467,4 +1469,13 @@ async fn ApiState::run_schedules(self : ApiState) -> Unit {
       publish_session_changed(self, "created", run.session, run.workspace)
     },
   )
+}
+
+///|
+async fn ApiState::capture_conversation(
+  self : ApiState,
+  source : @protocol.SessionExportPayload,
+) -> @engine.ConversationExport {
+  let (shell, bundle) = self.host_state().viz_assets().read()
+  @engine.ConversationExport::capture(self.manager(), source, shell, bundle)
 }

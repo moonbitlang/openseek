@@ -551,7 +551,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     slash_commands: if !self.cloud.can_compose(owner.session()) {
       []
     } else {
-      self.openseek_commands()
+      self.openseek_commands(editing_queue=conversation.queue_edit is Some(_))
     },
     history,
     root: file_ctx(self).root(),

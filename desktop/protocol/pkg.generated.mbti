@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 13
+pub const HostProtocolRevision : Int32 = 14
 
 pub const MaxImageBytes : Int32 = 20971520
 
@@ -1313,6 +1313,19 @@ pub fn ExternalLinkPayload::to_json(Self) -> @json.Json
 pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ExternalLinkPayload
 pub impl @json.ToJson for ExternalLinkPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct FeedbackMetadata {
+  message : String
+  environment : Map[String, @json.Json]
+}
+pub impl @json.FromJson for FeedbackMetadata
+pub impl @json.ToJson for FeedbackMetadata
+
+pub(all) struct FeedbackReceipt {
+  id : String
+}
+pub impl @json.FromJson for FeedbackReceipt
 
 #derive(Eq, @debug.Debug)
 pub(all) struct FileSharePayload {
@@ -3873,6 +3886,24 @@ pub fn SessionExportReply::to_json(Self) -> @json.Json
 pub fn SessionExportReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionExportReply
 pub impl @json.ToJson for SessionExportReply
+
+pub(all) struct SessionFeedbackPayload {
+  source : SessionExportPayload
+  user_id : String
+  idempotency_key : String
+  metadata : FeedbackMetadata
+}
+pub impl @json.FromJson for SessionFeedbackPayload
+pub impl @json.ToJson for SessionFeedbackPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) enum SessionFeedbackReply {
+  Submitted(id~ : String)
+  SignInRequired
+  Failed(message~ : String)
+}
+pub impl @json.FromJson for SessionFeedbackReply
+pub impl @json.ToJson for SessionFeedbackReply
 
 #derive(Eq, @debug.Debug)
 pub(all) struct SessionForkPayload {

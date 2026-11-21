@@ -417,6 +417,7 @@ pub fn openseek_capability(
     state,
     bridge.host_connection,
     local_share=true,
+    local_feedback=true,
     on_share_progress=payload => {
       bridge.inbox.put(Deliver(Hub(SessionShareProgress(payload))))
     },

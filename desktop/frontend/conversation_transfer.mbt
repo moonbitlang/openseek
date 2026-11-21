@@ -28,6 +28,19 @@ fn Model::cloud_account(self : Model) -> String? {
 }
 
 ///|
+fn Conversation::export_source(
+  self : Conversation,
+  title : String,
+) -> @protocol.SessionExportPayload {
+  {
+    session: self.session_id,
+    workspace: self.project().path,
+    title,
+    archived: self.is_archived_read_only(),
+  }
+}
+
+///|
 fn Model::conversation_export_button(
   self : Model,
   dispatch : @cmd.Emit[Msg],
@@ -37,12 +50,10 @@ fn Model::conversation_export_button(
       !conv.messages.is_empty() =>
       Some(
         dispatch(
-          OpenExport(conv.device, {
-            session: conv.session_id,
-            workspace: conv.project().path,
-            title: self.selected_conversation_title(),
-            archived: conv.is_archived_read_only(),
-          }),
+          OpenExport(
+            conv.device,
+            conv.export_source(self.selected_conversation_title()),
+          ),
         ),
       )
     _ => None

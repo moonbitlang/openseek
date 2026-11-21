@@ -25,6 +25,8 @@ import {
 }
 
 import {
+  "moonbitlang/core/env" @sys,
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/http",

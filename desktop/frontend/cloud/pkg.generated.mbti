@@ -36,6 +36,8 @@ pub async fn read_file_index(String, String) -> Array[String]
 
 pub async fn share(String, String, String, path? : String) -> String
 
+pub async fn submit_feedback(String, String, @protocol.FeedbackMetadata) -> @protocol.FeedbackReceipt
+
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, client_tools? : Bool) -> (State, @cmd.Cmd, String?)
