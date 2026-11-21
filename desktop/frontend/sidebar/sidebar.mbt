@@ -225,7 +225,40 @@ pub fn component(
         [@html.span(class="sidebar-label sidebar-notice", title=notice, notice)],
       )
     }
-    let footer : Array[@html.Html] = []
+    let footer : Array[@html.Html] = [
+      @html.button(
+        class="sidebar-button console-account",
+        disabled=match input.account_action {
+          SignIn(disabled~) | CancelSignIn(disabled~) => disabled
+          OpenSettings => false
+        },
+        on_click=match input.account_action {
+          SignIn(..) => actions.sign_in
+          CancelSignIn(..) => actions.cancel_sign_in
+          OpenSettings => actions.open_account
+        },
+        [
+          @html.span(
+            class="sidebar-icon",
+            if input.account_action is CancelSignIn(..) {
+              @icons.icon(@icons.icon_close)
+            } else {
+              avatar
+            },
+          ),
+          @html.span(
+            class="sidebar-label console-login",
+            if input.account_action is CancelSignIn(..) {
+              @settings.text(input.locale, CancelSignIn)
+            } else if input.account is Some(account) {
+              account.login
+            } else {
+              @settings.text(input.locale, SignIn)
+            },
+          ),
+        ],
+      ),
+    ]
     if input.update_label is Some(label) {
       footer.push(
         @html.button(
@@ -280,6 +313,17 @@ pub fn component(
         ),
       )
     }
+    if input.downloads {
+      footer.push(
+        @html.button(class="sidebar-button", on_click=actions.open_downloads, [
+          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_down)),
+          @html.span(
+            class="sidebar-label",
+            @messages.text(input.locale, DownloadApps),
+          ),
+        ]),
+      )
+    }
     footer.push(
       @html.button(
         class=if input.settings_active {
@@ -296,51 +340,6 @@ pub fn component(
           @html.span(
             class="sidebar-label",
             @messages.text(input.locale, Settings),
-          ),
-        ],
-      ),
-    )
-    if input.downloads {
-      footer.push(
-        @html.button(class="sidebar-button", on_click=actions.open_downloads, [
-          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_down)),
-          @html.span(
-            class="sidebar-label",
-            @messages.text(input.locale, DownloadApps),
-          ),
-        ]),
-      )
-    }
-    footer.push(
-      @html.button(
-        class="sidebar-button console-account",
-        disabled=match input.account_action {
-          SignIn(disabled~) | CancelSignIn(disabled~) => disabled
-          OpenSettings => false
-        },
-        on_click=match input.account_action {
-          SignIn(..) => actions.sign_in
-          CancelSignIn(..) => actions.cancel_sign_in
-          OpenSettings => actions.open_account
-        },
-        [
-          @html.span(
-            class="sidebar-icon",
-            if input.account_action is CancelSignIn(..) {
-              @icons.icon(@icons.icon_close)
-            } else {
-              avatar
-            },
-          ),
-          @html.span(
-            class="sidebar-label console-login",
-            if input.account_action is CancelSignIn(..) {
-              @settings.text(input.locale, CancelSignIn)
-            } else if input.account is Some(account) {
-              account.login
-            } else {
-              @settings.text(input.locale, SignIn)
-            },
           ),
         ],
       ),
