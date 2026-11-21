@@ -27,12 +27,20 @@ pub(all) enum GlmVariant {
 }
 
 ///|
-/// Supported chat models grouped by provider.
+/// Supported chat models grouped by provider, plus `Custom` for any other
+/// OpenAI-compatible model the user configured.
+///
+/// An id is opaque: the engine forwards it as the request's `model` and never
+/// interprets it. What the engine still needs to know about a model — its
+/// context window, whether its endpoint takes images, how a thinking field is
+/// encoded — is answered per case below, so a new family is a code change and
+/// a new *model within* an existing family is data.
 #derive(Eq, Debug)
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
+  Custom(String)
 }
 
 ///|
@@ -69,20 +77,53 @@ pub impl Show for Model with fn to_string(self : Model) -> String {
     Deepseek(variant) => "\{variant}"
     Kimi(variant) => "\{variant}"
     Glm(variant) => "\{variant}"
+    Custom(id) => id
   }
 }
 
 ///|
 /// Parses a wire model name into a typed model.
+///
+/// A name this build does not know becomes `Custom`: the user configures that
+/// endpoint and this id, so a typo is the endpoint's to report rather than this
+/// parser's to reject. A blank name is still refused — no endpoint serves it.
 pub fn Model::parse(input : String) -> Model raise {
-  match input {
+  match input.trim() {
     "deepseek-flash" | "deepseek-v4-flash" => Deepseek(V4Flash)
     "deepseek-v4-pro" => Deepseek(V4Pro)
     "kimi-k2.7-code" => Kimi(K27Code)
     "kimi-k2.7-code-highspeed" => Kimi(K27CodeHighSpeed)
     "glm-5.3" => Glm(G53)
     "glm-5.3-flash" => Glm(G53Flash)
-    other => fail("unknown model: \{other}")
+    "" => fail("a model needs a name")
+    other => Custom(other.to_owned())
+  }
+}
+
+///|
+/// The context window assumed for a model this build does not ship. The
+/// current generation of frontier models serves 1M (Gemini 4, DeepSeek, GLM),
+/// so that is what an unknown id gets; an endpoint that serves less is lowered
+/// per entry in Settings, and the host exports the entry's number so this
+/// value is only the fallback for a caller that has nothing better.
+const CustomModelContextWindow : Int32 = 1_000_000
+
+///|
+/// The environment variable that carries a custom model's API key. A custom
+/// model has no provider family, so its credential travels in the generic
+/// variable the CLI's `--api-key` option reads.
+pub const CustomApiKeyEnv : String = "OPENSEEK_API_KEY"
+
+///|
+/// The environment variable that carries this model's API key to an engine.
+/// The one place the family-to-variable mapping lives, so a run cannot put a
+/// key where its child will not look for it.
+pub fn Model::api_key_env(self : Model) -> String {
+  match self {
+    Kimi(_) => "KIMI"
+    Glm(_) => "GLM"
+    Custom(_) => CustomApiKeyEnv
+    Deepseek(_) => "DEEPSEEK"
   }
 }
 
@@ -100,6 +141,9 @@ pub fn Model::context_window(self : Model) -> Int32 {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
     Glm(G53 | G53Flash) => 1_000_000
+    // A model this build does not ship: the current generation's 1M, unless
+    // the launcher knows the endpoint's own window and passes it in.
+    Custom(_) => CustomModelContextWindow
   }
 }
 
