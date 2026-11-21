@@ -181,6 +181,10 @@ pub(all) enum Message {
   DeleteModelInUse(Int32)
   CustomModelInUse(Int32)
   CustomModelUnused
+  ModelDeletedNotice
+  ModelNotOnEndpointNotice
+  ModelNotOnEndpointLabel
+  CustomModelsMissingNotice
 }
 
 // Type aliases

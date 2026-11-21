@@ -389,16 +389,35 @@ fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
 }
 
 ///|
-/// Whether a model belongs to the selected provider. Custom endpoints accept
-/// every model; Kimi retains its existing endpoint selection.
+/// Whether a model belongs to the selected provider's family — the rule a fresh
+/// chat is aligned by, not the rule that says a model can run (see
+/// `Model::model_availability`). An entry names its own endpoint, so it belongs
+/// to the custom provider alone; a tier this build ships belongs to the family
+/// that serves it. Kimi retains its existing endpoint selection.
 fn @deepseek.Model::matches_provider(
   self : @deepseek.Model,
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
-    (Custom, _) | (_, Kimi(_)) => true
+    (Custom, Custom(_)) => true
+    (_, Kimi(_)) => true
     (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
+  }
+}
+
+///|
+fn provider_default_model_for(
+  provider : ApiProvider,
+  models : Array[CustomModel],
+) -> @deepseek.Model {
+  match provider {
+    Custom =>
+      match models {
+        [first, ..] => @deepseek.Custom(first.id)
+        [] => provider.default_model()
+      }
+    _ => provider.default_model()
   }
 }
 
@@ -3288,23 +3307,32 @@ fn Model::align_new_chats_with_provider(
   channel : @interop.ChannelId,
 ) -> Model {
   guard self.device_state(channel) is Some(dev) &&
-    dev.host_settings.current is Some({ endpoint: { provider, .. }, .. }) else {
+    dev.host_settings.current
+    is Some({ endpoint: { provider, .. }, models, .. }) else {
     return self
   }
-  let next = if channel == self.focused &&
-    !self.default_model.matches_provider(provider) {
-    { ..self, default_model: provider.default_model(), }
+  let model_aligned = (model : @deepseek.Model) => {
+    match (provider, model) {
+      // On a custom endpoint, a removed or renamed entry is no longer served,
+      // so fresh chats and the default model fall forward to a saved one.
+      (Custom, @deepseek.Custom(id)) => models.any(entry => entry.id == id)
+      _ => model.matches_provider(provider)
+    }
+  }
+  let fallback = provider_default_model_for(provider, models)
+  let next = if channel == self.focused && !model_aligned(self.default_model) {
+    { ..self, default_model: fallback, }
   } else {
     self
   }
-  let new_chat_model = if next.default_model.matches_provider(provider) {
+  let new_chat_model = if model_aligned(next.default_model) {
     next.default_model
   } else {
-    provider.default_model()
+    fallback
   }
   let conversations = next.conversations.map(conv => {
     if conv.device == channel &&
-      !conv.engine_model.matches_provider(provider) &&
+      !model_aligned(conv.engine_model) &&
       next.conversation_is_new_chat(conv) {
       { ..conv, engine_model: new_chat_model, }
     } else {
