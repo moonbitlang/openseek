@@ -29,8 +29,7 @@ fn AgentLoop::at_context_share(
   tokens : Int64,
   percent : Int32,
 ) -> Bool {
-  tokens * 100 >=
-  self.client.model.context_window().to_int64() * percent.to_int64()
+  tokens * 100 >= self.client.context_window().to_int64() * percent.to_int64()
 }
 
 ///|
@@ -88,7 +87,7 @@ fn AgentLoop::next_call_fits(
   usage : @deepseek.Usage,
   spent_result_chars : Int64,
 ) -> Bool {
-  let window = self.client.model.context_window().to_int64()
+  let window = self.client.context_window().to_int64()
   usage.total_tokens.to_int64() +
   spent_result_chars +
   max_tool_result_chars.to_int64() +
