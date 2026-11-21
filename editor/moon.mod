@@ -20,7 +20,7 @@ warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_pack
 
 import {
   "moonbit-community/cmark@0.4.17",
-  "kokic/katex-parser@0.7.3",
+  "kokic/katex-parser@0.7.4",
   "moonbit-community/moondiff@0.1.4",
   "moonbit-community/prettyprinter@0.4.12",
   "moonbit-community/casefold@0.1.7",
