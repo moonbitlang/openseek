@@ -64,7 +64,8 @@ async test "host MCP offers one session tool per action" {
     let client = connection.client()
     let names = client.list_tools().map(tool => tool.name)
     assert_eq(names, [
-      "session_list", "session_read", "session_send", "session_status", "session_cancel",
+      "session_list", "session_read", "session_send", "session_start", "session_status",
+      "session_cancel",
     ])
     let call = (name : String, arguments : Json) => {
       let result = client.call_tool(name~, arguments~)

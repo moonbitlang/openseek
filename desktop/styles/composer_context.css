@@ -73,7 +73,7 @@
 
 /* Grouping containers never draw another card around individual rows. */
 .composer-context :is(.pending-steers, .queued-inputs, .subrun-dock,
-  .shell-commands-running, .codex-pending) {
+  .shell-commands-running, .codex-pending, .session-proposals) {
   display: grid;
   gap: var(--space-4);
   width: 100%;
@@ -86,7 +86,7 @@
 }
 
 .composer-context :is(.pending-steers, .queued-inputs, .subrun-dock,
-  .shell-commands-running, .codex-pending):empty {
+  .shell-commands-running, .codex-pending, .session-proposals):empty {
   display: none;
 }
 

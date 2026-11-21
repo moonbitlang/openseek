@@ -5,7 +5,9 @@
 fn Model::restore_message_approvals(self : Model) -> Model {
   if !self.devices.any(device => {
       device.approval_snapshot.map_or(false, snapshot => {
-        snapshot.approvals.any(item => item.approval.run_id is None)
+        snapshot.approvals.any(item => {
+          item.approval.run_id is None && !item.approval.is_proposal()
+        })
       })
     }) &&
     !self.conversations.any(conv => {
@@ -26,7 +28,9 @@ fn Model::restore_message_approvals(self : Model) -> Model {
       let pending = snapshot.approvals
         .iter()
         .find_first(item => {
-          item.session == conv.session_id && item.approval.run_id is None
+          item.session == conv.session_id &&
+          item.approval.run_id is None &&
+          !item.approval.is_proposal()
         })
         .map(item => {
           let answered_here = conv.pending_approval.map_or(false, previous => {

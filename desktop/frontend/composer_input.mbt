@@ -148,6 +148,12 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       }),
     )
   }
+  // Proposals wait on the person without holding up the turn, after the
+  // question that does.
+  let proposals = self.proposals(conv)
+  if !proposals.is_empty() {
+    context.push(@composer.SessionProposals(proposals~))
+  }
   let steering = conv.pending_steers.filter(input => {
     input.behavior is FollowupSteer
   })
