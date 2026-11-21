@@ -108,6 +108,20 @@ pub impl @json.FromJson for AgentEventPayload
 pub impl @json.ToJson for AgentEventPayload
 
 #derive(Eq, @debug.Debug)
+pub(all) struct ApiConnectionProbePayload {
+  revision : Int32
+}
+pub impl @json.FromJson for ApiConnectionProbePayload
+pub impl @json.ToJson for ApiConnectionProbePayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ApiConnectionProbeReply {
+  error : String?
+}
+pub impl @json.FromJson for ApiConnectionProbeReply
+pub impl @json.ToJson for ApiConnectionProbeReply
+
+#derive(Eq, @debug.Debug)
 pub(all) struct AppFocusedBrowserReply {
   id : Int32?
 }

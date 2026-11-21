@@ -5153,6 +5153,21 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
+    TestApiConnection => model.test_api_connection(dispatch)
+    ApiConnectionProbed(attempt, reply) => {
+      guard model.api_connection_probe is Some(probe) &&
+        probe.attempt == attempt &&
+        probe.reply is None else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          api_connection_probe: Some({ ..probe, reply: Some(reply), }),
+        },
+      )
+    }
     SaveApiKey => {
       guard model.host_settings() is Some({ endpoint, .. }) else {
         return (@cmd.none, model)

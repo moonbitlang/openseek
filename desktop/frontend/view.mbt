@@ -1482,6 +1482,7 @@ fn api_settings_rows(
       ),
     )
   }
+  rows.push(api_connection_probe_row(dispatch, model))
   rows
 }
 
