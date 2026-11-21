@@ -19,7 +19,7 @@
 // - Saves are atomic: temp file + rename, 0600.
 
 ///|
-const EngineSettingsVersion = 3
+const EngineSettingsVersion = 4
 
 ///|
 const EngineSettingsFileName = "engine-settings.json"
@@ -82,6 +82,8 @@ priv struct EngineSettings {
   version : Int32
   provider : ApiProvider
   providers : Map[String, Provider]
+  // The user's own model entries; this build's built-in catalog is not stored.
+  models : Array[ModelEntry]
   followup_behavior : String
 }
 
@@ -143,6 +145,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
       }
       _ => Map([])
     },
+    models: decode_model_entries(raw),
     followup_behavior: match settings_text(raw, "followup_behavior") {
       Some("queue") => "queue"
       _ => "steer"
@@ -178,10 +181,22 @@ fn settings_status_payload(
       })
     providers[provider.wire()] = { api_url: config.api_url, has_api_key, }
   }
+  // The user's own entries, in saved order. The built-in catalog belongs to
+  // the build rather than the file, so it is not reported here.
+  let models = settings.models.map(entry => @protocol.ModelStatus::{
+    id: entry.id,
+    label: entry.label,
+    api_url: entry.api_url,
+    full_url: entry.full_url,
+    has_api_key: entry.api_key is Some(_),
+    images: entry.images,
+    context_window: entry.context_window,
+  })
   {
     revision,
     provider: settings.provider.wire(),
     providers,
+    models,
     followup_behavior: settings.followup_behavior,
     prompt_source: match settings.raw.get("prompt_source") {
       Some(String("custom")) => "custom"
@@ -242,6 +257,11 @@ pub async fn update_settings(
   followup_behavior? : String,
   prompt_source? : String,
   custom_prompt? : String,
+  // The model entries this request adds or edits, and the ids it drops. They
+  // travel as parameters rather than in `patch` because a model edit is not a
+  // provider edit: the provider slot keeps its own credential.
+  models? : Array[@protocol.ModelPatch],
+  removed_models? : Array[String],
   on_committed? : (@protocol.SettingsStatusPayload) -> Unit,
 ) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
@@ -257,6 +277,8 @@ pub async fn update_settings(
   }
   let edits_json = patch.provider is Some(_) ||
     patch.providers is Some(_) ||
+    models is Some(_) ||
+    removed_models is Some(_) ||
     followup_behavior is Some(_) ||
     prompt_source is Some(_)
   guard !(custom_prompt is Some(_) && edits_json) else {
@@ -309,6 +331,23 @@ pub async fn update_settings(
       providers[name] = Json(fields)
     }
     raw["providers"] = Json(providers)
+  }
+  if models is Some(_) || removed_models is Some(_) {
+    let stored : Array[Json] = match raw.get("models") {
+      Some(Array(items)) => items
+      _ => []
+    }
+    let entries = apply_model_patches(
+      stored,
+      models.unwrap_or([]),
+      removed_models.unwrap_or([]),
+    )
+    // An empty list is removed rather than stored: absence is the default.
+    if entries.is_empty() {
+      raw.remove("models")
+    } else {
+      raw["models"] = Json(entries)
+    }
   }
   if followup_behavior is Some(value) {
     guard value == "steer" || value == "queue" else {
@@ -381,6 +420,21 @@ priv struct ResolvedEndpoint {
 }
 
 ///|
+fn resolved_custom_endpoint(
+  settings : EngineSettings,
+) -> ResolvedEndpoint raise EngineError {
+  guard settings.provider_config(Custom).api_url is Some(url) else {
+    raise EngineError("custom endpoint URL is required; set it in Settings")
+  }
+  let url = normalize_custom_api_url(url)
+  let key = configured_api_key(
+    stored_key?=settings.provider_config(Custom).api_key,
+    api_url=url,
+  )
+  { api_key: key, api_url: Some(url), }
+}
+
+///|
 fn resolved_endpoint(
   settings : EngineSettings,
 ) -> ResolvedEndpoint raise EngineError {
@@ -408,17 +462,7 @@ fn resolved_endpoint(
       )
       { api_key: key, api_url: Some(OpenRouterChatCompletionsUrl), }
     }
-    Custom => {
-      guard settings.provider_config(Custom).api_url is Some(url) else {
-        raise EngineError("custom endpoint URL is required; set it in Settings")
-      }
-      let url = normalize_custom_api_url(url)
-      let key = configured_api_key(
-        stored_key?=settings.provider_config(Custom).api_key,
-        api_url=url,
-      )
-      { api_key: key, api_url: Some(url), }
-    }
+    Custom => resolved_custom_endpoint(settings)
   }
 }
 
@@ -445,12 +489,24 @@ pub async fn pattern_repair_environment(
   model~ : String,
 ) -> PatternRepairEnvironment {
   let settings = manager.settings_snapshot() catch { _ => return Unavailable }
-  let endpoint = resolved_endpoint(settings) catch {
+  let (route, key_env, _, context_window) = resolve_model_route(settings, model) catch {
     EngineError(message) => return Configuration(message)
   }
   let env = @sys.get_env_vars()
-  env[key_env_for(settings.provider, model)] = endpoint.api_key
-  match endpoint.api_url {
+  env[key_env] = route.api_key
+  // A custom model's credential travels in the generic variable the CLI's
+  // `--api-key` reads. A built-in run must not inherit an ambient one: it
+  // would silently outrank the provider's own key.
+  if key_env != @deepseek.CustomApiKeyEnv {
+    env.remove(@deepseek.CustomApiKeyEnv)
+  }
+  // A repair child runs the same model as the run that asked for it, so it
+  // plans against the same window: a user entry's own, or the engine's table.
+  match context_window {
+    Some(window) => env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
+    None => env.remove("OPENSEEK_CONTEXT_WINDOW")
+  }
+  match route.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
   }
@@ -1080,10 +1136,13 @@ async test "pattern repair uses provider credentials and leaves run options to a
         },
       }),
     })
-    let previous = ["OPENSEEK_MODEL", "OPENSEEK_THINKING", "OPENSEEK_MAX_STEPS"].map(name => {
-        (name, @sys.get_env_var(name))
-      },
-    )
+    let previous = [
+      "OPENSEEK_MODEL",
+      "OPENSEEK_THINKING",
+      "OPENSEEK_MAX_STEPS",
+      "OPENSEEK_CONTEXT_WINDOW",
+      @deepseek.CustomApiKeyEnv,
+    ].map(name => (name, @sys.get_env_var(name)))
     defer (for (name, value) in previous {
       match value {
         Some(value) => @sys.set_env_var(name, value)
@@ -1093,10 +1152,13 @@ async test "pattern repair uses provider credentials and leaves run options to a
     @sys.set_env_var("OPENSEEK_MODEL", "deepseek-v4-pro")
     @sys.set_env_var("OPENSEEK_THINKING", "no")
     @sys.set_env_var("OPENSEEK_MAX_STEPS", "4")
+    @sys.set_env_var("OPENSEEK_CONTEXT_WINDOW", "4096")
+    @sys.set_env_var(@deepseek.CustomApiKeyEnv, "ambient-custom-key")
     let env = pattern_repair_environment(manager, model="glm-5.3")
     match env {
       Ready(env) => {
         assert_eq(env.get("GLM"), Some("repair-key"))
+        assert_eq(env.get(@deepseek.CustomApiKeyEnv), None)
         assert_eq(
           env.get("OPENSEEK_API_URL"),
           Some("https://proxy.example/chat/completions"),
@@ -1104,8 +1166,51 @@ async test "pattern repair uses provider credentials and leaves run options to a
         assert_eq(env.get("OPENSEEK_MODEL"), None)
         assert_eq(env.get("OPENSEEK_THINKING"), None)
         assert_eq(env.get("OPENSEEK_MAX_STEPS"), None)
+        // A built-in model keeps the engine's table: a window the parent
+        // shell exported must not leak into its run.
+        assert_eq(env.get("OPENSEEK_CONTEXT_WINDOW"), None)
       }
       _ => ()
+    }
+  })
+}
+
+///|
+/// A user entry's own window reaches the child a short-lived host operation
+/// spawns, so a repair run plans against the same window as the run that asked
+/// for it — not the engine's fallback for a model it does not ship.
+async test "pattern repair carries a user entry's context window" {
+  with_settings_dir((_dir, manager) => {
+    let _ = update_settings(
+      manager,
+      {
+        provider: Some("custom"),
+        providers: Some({
+          "custom": {
+            api_url: Some("https://proxy.example/chat/completions"),
+            api_key: Some("repair-key"),
+          },
+        }),
+      },
+      models=[
+        {
+          id: "gemini-4-hydrogen",
+          label: None,
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: None,
+          context_window: Some(131_072),
+        },
+      ],
+    )
+    let env = pattern_repair_environment(manager, model="gemini-4-hydrogen")
+    match env {
+      Ready(env) => {
+        assert_eq(env.get("OPENSEEK_CONTEXT_WINDOW"), Some("131072"))
+        assert_eq(env.get(@deepseek.CustomApiKeyEnv), Some("repair-key"))
+      }
+      _ => fail("expected a ready pattern-repair environment")
     }
   })
 }

@@ -219,6 +219,8 @@ fn provider_settings_patch(
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
+    models: None,
+    removed_models: None,
   }
 }
 
@@ -232,6 +234,8 @@ fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
+    models: None,
+    removed_models: None,
   }
 }
 
@@ -248,6 +252,8 @@ fn api_key_settings_patch(
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
+    models: None,
+    removed_models: None,
   }
 }
 
@@ -274,5 +280,7 @@ fn followup_behavior_patch(
     followup_behavior: Some(behavior.wire()),
     prompt_source: None,
     custom_prompt: None,
+    models: None,
+    removed_models: None,
   }
 }

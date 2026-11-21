@@ -25,6 +25,12 @@ priv struct RunConfig {
   // default for the model's provider.
   api_url : String?
   model : String
+  // Whether this endpoint accepts image parts, resolved from the model entry
+  // (or the built-in tier's own rule) when the config is built.
+  images : Bool
+  // The window the run plans against when the model is a user entry that names
+  // its own; None leaves the engine's table for the model in charge.
+  context_window : Int32?
   thinking : @protocol.Thinking
   // Complete base system prompt used only when creating a new session.
   system_prompt : String?
@@ -75,6 +81,60 @@ fn configured_api_key(
     return value
   }
   raise EngineError(missing)
+}
+
+///|
+/// The endpoint, key variable, and image capability one model runs with.
+///
+/// A user entry carries its own endpoint and credential, and always accepts
+/// images: the settings form offers no switch, so the stored `images` flag is
+/// legacy and never narrows the route. A built-in keeps the provider slot, its
+/// family's key variable, and the tier's own image rule. The slot is resolved
+/// only in the built-in case, so a run on a user entry never demands the
+/// configured provider's key.
+fn resolve_model_route(
+  settings : EngineSettings,
+  model : String,
+) -> (ResolvedEndpoint, String, Bool, Int32?) raise EngineError {
+  match settings.models.search_by(entry => entry.id == model) {
+    Some(index) => {
+      let entry = settings.models[index]
+      // An entry may name its own endpoint and key; one that names neither
+      // rides the custom provider's endpoint, which the settings page shows
+      // once for the whole section. Never read a built-in provider's slot for
+      // a user entry, and never require the custom slot when the entry names
+      // its own endpoint and key.
+      let api_url = match entry.api_url {
+        Some(url) => Some(url)
+        None => resolved_custom_endpoint(settings).api_url
+      }
+      let api_key = match entry.api_key {
+        Some(key) => key
+        None =>
+          configured_api_key(
+            stored_key?=settings.provider_config(Custom).api_key,
+            api_url?,
+          )
+      }
+      (
+        { api_key, api_url, },
+        @deepseek.CustomApiKeyEnv,
+        // A user entry always accepts images; the stored flag is legacy.
+        true,
+        // The entry's own window, which the engine's table cannot know.
+        Some(entry.context_window),
+      )
+    }
+    None => {
+      let slot = resolved_endpoint(settings)
+      (
+        slot,
+        key_env_for(settings.provider, model),
+        builtin_supports_images(model, slot.api_url),
+        None,
+      )
+    }
+  }
 }
 
 ///|
@@ -180,7 +240,7 @@ async fn run_config(
     mcp_config?,
   )
   if !payload.images.is_empty() && !config.supports_images() {
-    raise EngineError("Images require a DeepSeek image-capable endpoint")
+    raise EngineError("this model's endpoint does not accept images")
   }
   { ..config, content, }
 }
@@ -234,7 +294,21 @@ async fn serve_config(
 ) -> RunConfig {
   let engine = manager.engine
   let settings = manager.settings_snapshot()
-  let endpoint = resolved_endpoint(settings)
+  let model = match model {
+    Some(model) => model
+    // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
+    // deliberately ignored — see `serve_engine_env`), so the host's
+    // fallback must read the same variable.
+    None =>
+      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
+  }
+  // A run whose model is a user entry talks to that entry's own endpoint with
+  // that entry's key; a built-in keeps its provider slot. Resolved before the
+  // workspace so a misconfigured endpoint reports itself first, as it always
+  // has.
+  let (route, key_env, images, context_window) = resolve_model_route(
+    settings, model,
+  )
   // A workspace run happens in the project directory itself, with the
   // session's durable record in the in-project store. Only registered
   // workspaces qualify — the registry, not the payload, decides which
@@ -262,20 +336,14 @@ async fn serve_config(
       "this conversation has no workspace; attach a project first",
     )
   }
-  let model = match model {
-    Some(model) => model
-    // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
-    // deliberately ignored — see `serve_engine_env`), so the host's
-    // fallback must read the same variable.
-    None =>
-      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
-  }
   {
     content: Content([Text(task)]),
-    api_key: endpoint.api_key,
-    key_env: key_env_for(settings.provider, model),
-    api_url: endpoint.api_url,
+    api_key: route.api_key,
+    key_env,
+    api_url: route.api_url,
     model,
+    images,
+    context_window,
     thinking: RunConfig::configured_thinking(thinking),
     system_prompt,
     // Absent is ask: what every request meant before the field existed.
@@ -307,6 +375,7 @@ fn engine_fingerprint(config : RunConfig) -> String {
     config.key_env,
     config.api_url.unwrap_or(""),
     config.model,
+    config.context_window.map(w => w.to_string()).unwrap_or(""),
     config.thinking.wire(),
     // `--approval` is fixed for the process's lifetime.
     config.approval.wire(),
@@ -329,6 +398,8 @@ test "a different endpoint cannot reuse a live engine process" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "deepseek-v4-pro",
+    images: false,
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1000,
@@ -391,6 +462,16 @@ test "a different endpoint cannot reuse a live engine process" {
   assert_true(
     engine_fingerprint(base) !=
     engine_fingerprint({ ..base, cwd: Some(Path("/w/.worktrees/x")), }),
+  )
+  // context_window is exported once as OPENSEEK_CONTEXT_WINDOW when the
+  // process starts, so lowering or raising it must spawn a fresh process.
+  assert_true(
+    engine_fingerprint(base) !=
+    engine_fingerprint({ ..base, context_window: Some(131_072), }),
+  )
+  assert_true(
+    engine_fingerprint({ ..base, context_window: Some(1_000_000), }) !=
+    engine_fingerprint({ ..base, context_window: Some(131_072), }),
   )
 }
 
@@ -630,6 +711,13 @@ fn prompt_content(
 
 ///|
 fn RunConfig::supports_images(self : RunConfig) -> Bool {
-  self.model is ("deepseek-flash" | "deepseek-v4-flash") &&
-  self.api_url != Some("https://openrouter.ai/api/v1/chat/completions")
+  self.images
+}
+
+///|
+/// The built-in tiers that accept image parts: only the DeepSeek flash tier,
+/// and never through its OpenRouter route.
+fn builtin_supports_images(model : String, api_url : String?) -> Bool {
+  model is ("deepseek-flash" | "deepseek-v4-flash") &&
+  api_url != Some("https://openrouter.ai/api/v1/chat/completions")
 }

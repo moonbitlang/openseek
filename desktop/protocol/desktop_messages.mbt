@@ -309,6 +309,11 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
+  // Upserts keyed by `id`, applied after `removed_models`.
+  models : Array[ModelPatch]?
+  // Ids to drop. A conversation still naming one keeps its record; the UI
+  // shows it as needing reconfiguration rather than silently switching.
+  removed_models : Array[String]?
 }
 
 ///|
@@ -322,6 +327,12 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     followup_behavior: object.optional_string("followup_behavior"),
     prompt_source: object.optional_string("prompt_source"),
     custom_prompt: object.optional_string("custom_prompt"),
+    models: object
+    .optional_json("models")
+    .map(value => @json.from_json(value, path=path.add_key("models"))),
+    removed_models: object
+    .optional_json("removed_models")
+    .map(value => @json.from_json(value, path=path.add_key("removed_models"))),
   }
 }
 
@@ -342,6 +353,12 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.custom_prompt is Some(value) {
     fields["custom_prompt"] = Json(value)
+  }
+  if self.models is Some(value) {
+    fields["models"] = Json(value)
+  }
+  if self.removed_models is Some(value) {
+    fields["removed_models"] = Json(value)
   }
   Json(fields)
 }
@@ -1577,6 +1594,146 @@ pub impl ToJson for ProviderStatus with fn to_json(self) {
 }
 
 ///|
+/// One model the settings offer: a model this build knows, or an entry the
+/// user saved. `has_api_key` is presence only — the key itself never travels
+/// down. A built-in's credential lives in its provider slot; an entry's lives
+/// with the entry.
+#derive(Debug, Eq)
+pub(all) struct ModelStatus {
+  id : String
+  // The name the list shows; absent means show the id.
+  label : String?
+  api_url : String?
+  // Whether the stored URL already ends at the endpoint, so the edit form
+  // re-opens with the same switch it was saved with.
+  full_url : Bool
+  has_api_key : Bool
+  images : Bool
+  // The window the run plans against; the edit form re-opens with it, and an
+  // endpoint that serves less than the default is lowered here.
+  context_window : Int32
+}
+
+///|
+pub impl FromJson for ModelStatus with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "model status")
+  {
+    id: object.required_string("id"),
+    label: object.optional_string("label"),
+    api_url: object.optional_string("api_url"),
+    full_url: object.required_bool("full_url"),
+    has_api_key: object.required_bool("has_api_key"),
+    images: object.required_bool("images"),
+    context_window: object.required_int("context_window"),
+  }
+}
+
+///|
+pub impl ToJson for ModelStatus with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "id": Json(self.id),
+    "full_url": Json(self.full_url),
+    "has_api_key": Json(self.has_api_key),
+    "images": Json(self.images),
+    "context_window": Json(self.context_window),
+  }
+  if self.label is Some(value) {
+    fields["label"] = Json(value)
+  }
+  if self.api_url is Some(value) {
+    fields["api_url"] = Json(value)
+  }
+  Json(fields)
+}
+
+///|
+/// One saved model as `settings.set` supplies it: an upsert keyed by `id`.
+/// Absent (or null) fields leave the stored value alone; an empty string
+/// clears it. Creating an entry with a built-in's id is refused by the host,
+/// so one id always names one model.
+#derive(Debug, Eq)
+pub(all) struct ModelPatch {
+  id : String
+  // The name the model list shows; absent or empty falls back to the id.
+  label : String?
+  api_url : String?
+  // Whether `api_url` already ends at the endpoint, so no path is appended.
+  full_url : Bool?
+  api_key : String?
+  images : Bool?
+  context_window : Int32?
+}
+
+///|
+fn patch_string(fields : Map[String, Json], key : String) -> String? {
+  match fields.get(key) {
+    Some(String(value)) => Some(value)
+    _ => None
+  }
+}
+
+///|
+fn patch_bool(fields : Map[String, Json], key : String) -> Bool? {
+  match fields.get(key) {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => None
+  }
+}
+
+///|
+fn patch_int(fields : Map[String, Json], key : String) -> Int32? {
+  match fields.get(key) {
+    Some(Number(value, ..)) => Some(value.to_int())
+    _ => None
+  }
+}
+
+///|
+pub impl FromJson for ModelPatch with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected model patch"))
+  }
+  let id = match fields.get("id") {
+    Some(String(value)) if !value.trim().is_empty() => value.trim().to_owned()
+    _ => raise JsonDecodeError((path.add_key("id"), "expected model id"))
+  }
+  {
+    id,
+    label: patch_string(fields, "label"),
+    api_url: patch_string(fields, "api_url"),
+    full_url: patch_bool(fields, "full_url"),
+    api_key: patch_string(fields, "api_key"),
+    images: patch_bool(fields, "images"),
+    context_window: patch_int(fields, "context_window"),
+  }
+}
+
+///|
+pub impl ToJson for ModelPatch with fn to_json(self) {
+  let fields : Map[String, Json] = { "id": Json(self.id) }
+  if self.label is Some(value) {
+    fields["label"] = Json(value)
+  }
+  if self.api_url is Some(value) {
+    fields["api_url"] = Json(value)
+  }
+  if self.full_url is Some(value) {
+    fields["full_url"] = Json(value)
+  }
+  if self.api_key is Some(value) {
+    fields["api_key"] = Json(value)
+  }
+  if self.images is Some(value) {
+    fields["images"] = Json(value)
+  }
+  if self.context_window is Some(value) {
+    fields["context_window"] = Json(value)
+  }
+  Json(fields)
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32
@@ -1585,6 +1742,9 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
+  // The entries the UI may offer, built-ins first. Omitted while empty, so a
+  // host that configured nothing keeps the payload a client already knew.
+  models : Array[ModelStatus]
 }
 
 ///|
@@ -1600,19 +1760,27 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     followup_behavior: object.required_string("followup_behavior"),
     prompt_source: object.required_string("prompt_source"),
     custom_prompt: object.required_string("custom_prompt"),
+    models: match object.optional_json("models") {
+      Some(value) => @json.from_json(value, path=path.add_key("models"))
+      None => []
+    },
   }
 }
 
 ///|
 pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
-  Json::object({
+  let fields : Map[String, Json] = {
     "revision": Json(self.revision),
     "provider": Json(self.provider),
     "providers": Json(self.providers.map((_name, entry) => entry.to_json())),
     "followup_behavior": Json(self.followup_behavior),
     "prompt_source": Json(self.prompt_source),
     "custom_prompt": Json(self.custom_prompt),
-  })
+  }
+  if !self.models.is_empty() {
+    fields["models"] = Json(self.models)
+  }
+  Json(fields)
 }
 
 ///|
