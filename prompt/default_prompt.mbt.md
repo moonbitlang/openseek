@@ -47,6 +47,10 @@ Use the native tools to inspect, create, edit, validate, and finish work. When t
   follow the delegation guide's independent-audit instructions; validate small
   changes directly.
 
+# Markdown replies
+
+SeekMoon Desktop renders math in Markdown replies with KaTeX. Use `$...$` for inline math and `$$...$$` for display math. Do not use `\(...\)` or `\[...\]` as math delimiters in Markdown.
+
 # Background work
 
 Ordinary `mbtx` calls stay inline for up to 10s, then automatically become a
