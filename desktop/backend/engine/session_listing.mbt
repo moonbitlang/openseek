@@ -122,38 +122,90 @@ fn listing_prompt_title(first_prompt : String) -> String {
 priv struct CachedListingPrompt {
   mtime : (Int64, Int32)
   ctime : (Int64, Int32)
+  size : Int64
+  identity : (UInt64, UInt64)?
   text : String
 }
 
 ///|
-/// Reuse successful prompt reads only while both file timestamps match.
-/// Title sidecars are read on every call, independently of this
-/// cache. ctime also detects rewrites that preserve the original mtime.
+#borrow(path_utf8, out)
+extern "C" fn stat_device_inode_ffi(
+  path_utf8 : Bytes,
+  out : FixedArray[UInt64],
+) -> Int32 = "moonbit_openseek_desktop_engine_file_identity"
+
+///|
+/// Return `(st_dev, st_ino)` on Linux, or `None` on other platforms (macOS and
+/// Windows have sub-microsecond timestamps and skip this lookup) or when `stat`
+/// fails.
+fn file_identity(path : String) -> (UInt64, UInt64)? {
+  guard @async.platform is Linux else { return None }
+  guard !path.contains("\u{0}") else { return None }
+  let encoded = @utf8.encode(path)
+  let c_path = Bytes::makei(encoded.length() + 1, i => {
+    if i < encoded.length() {
+      encoded[i]
+    } else {
+      b'\x00'
+    }
+  })
+  let out : FixedArray[UInt64] = [0UL, 0UL]
+  if stat_device_inode_ffi(c_path, out) == 0 {
+    Some((out[0], out[1]))
+  } else {
+    None
+  }
+}
+
+///|
+/// Reuse successful prompt reads only while file timestamps, size, and (on
+/// Linux) `(dev, ino)` match. Title sidecars are read on every call,
+/// independently of this cache. `ctime` detects rewrites that preserve the
+/// original `mtime`, `size` detects different-length rewrites within the same
+/// clock tick, and `(dev, ino)` detects same-length atomic rewrites within the
+/// same coarse Linux clock tick.
 async fn cached_listing_prompt(
   cache : Map[String, CachedListingPrompt],
   path : String,
   mtime : (Int64, Int32)?,
 ) -> String? {
   let ctime = Some(file_stamp(@fs.ctime(path))) catch { _ => None }
+  let size = Some(@fs.file_size(path)) catch { _ => None }
+  let identity = file_identity(path)
+  let identity_ok = if @async.platform is Linux {
+    identity is Some(_)
+  } else {
+    true
+  }
   if mtime is Some(mtime) &&
     ctime is Some(ctime) &&
+    size is Some(size) &&
+    identity_ok &&
     cache.get(path) is Some(cached) &&
     cached.mtime == mtime &&
-    cached.ctime == ctime {
+    cached.ctime == ctime &&
+    cached.size == size &&
+    cached.identity == identity {
     return Some(cached.text)
   }
   cache.remove(path)
   let text = @session_preview.read_first_prompt(path)
   // Absence and errors are never cached. Empty text is a successful result.
-  if text is Some(text) && mtime is Some(mtime) && ctime is Some(ctime) {
+  if text is Some(text) &&
+    mtime is Some(mtime) &&
+    ctime is Some(ctime) &&
+    size is Some(size) &&
+    identity_ok {
     let unchanged = try
       file_stamp(@fs.mtime(path)) == mtime &&
-      file_stamp(@fs.ctime(path)) == ctime
+      file_stamp(@fs.ctime(path)) == ctime &&
+      @fs.file_size(path) == size &&
+      file_identity(path) == identity
     catch {
       _ => false
     }
     if unchanged {
-      cache[path] = { mtime, ctime, text, }
+      cache[path] = { mtime, ctime, size, identity, text, }
     }
   }
   text
