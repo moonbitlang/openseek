@@ -63,12 +63,12 @@ test "share login failure success and clipboard feedback transitions" {
     archived: true,
   })
   let (_, pending) = open.advance(emit, Share)
-  for
-    reply in [
-      @protocol.SignInRequired,
-      @protocol.Failed(message="Storage unavailable"),
-      @protocol.Shared(url="http://shares.test/a"),
-    ] {
+  let replies : Array[@protocol.SessionShareReply] = [
+    SignInRequired,
+    Failed(message="Storage unavailable"),
+    Shared(url="http://shares.test/a"),
+  ]
+  for reply in replies {
     let msg = Published(generation=pending.generation, Ok(reply))
     let (_, first) = pending.advance(emit, msg)
     let (_, again) = pending.advance(emit, msg)
