@@ -1,0 +1,34 @@
+import {
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/internal/auto_check",
+  "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
+  "moonbitlang/openseek/agent_tool/internal/file_content",
+  "moonbitlang/openseek/agent_tool/internal/manifest_error",
+  "moonbitlang/openseek/agent_tool/internal/manifest_path",
+  "moonbitlang/openseek/agent_tool/internal/permission",
+  "moonbitlang/openseek/agent_tool/write_scope",
+  "moonbitlang/openseek/atomic_file",
+  "moonbitlang/openseek/internal/workspace_path",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/path",
+}
+
+import {
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/core/async",
+  "moonbitlang/x/crypto",
+} for "test"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+    "moonbitlang/core/encoding/utf8",
+  ],
+)

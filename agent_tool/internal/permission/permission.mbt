@@ -14,6 +14,26 @@ priv struct Snapshot {
 }
 
 ///|
+/// The one-operation scope and the observed state of its targets.
+pub struct Authorization {
+  scope : @write_scope.WriteScope?
+  priv snapshots : Array[(String, Snapshot)]
+}
+
+///|
+/// Compare the targets with their authorized snapshots. Call this with the
+/// file gate held, after preparing any temporary data and just before mutation.
+pub async fn Authorization::recheck(self : Authorization) -> Unit {
+  for (path, before) in self.snapshots {
+    guard snapshot(path, self.scope) == before else {
+      fail(
+        "target changed while awaiting approval or preparing the operation; reconsider and retry",
+      )
+    }
+  }
+}
+
+///|
 async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
   let destination = match scope {
     Some(scope) => scope.destination(path)
@@ -23,8 +43,12 @@ async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
     Missing
   } else {
     match @fs.kind(path) {
-      Regular =>
-        File(@crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_binary(path))))
+      Regular => {
+        let file = @fs.open(path, mode=ReadOnly)
+        defer file.close()
+        let (_, digest) = @file_content.transfer(file)
+        File(digest)
+      }
       Directory => Directory(@fs.readdir(path, include_hidden=true, sort=true))
       _ => fail("unsupported filesystem target: \{path}")
     }
@@ -34,10 +58,11 @@ async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
 
 ///|
 /// Authorize one validated operation, never a session or a subtree. Called
-/// under the file gate; only the human wait releases it. All affected targets,
-/// including descendants of a removed directory, are revalidated before resuming.
+/// under the file gate; only the human wait releases it. Callers revalidate
+/// the returned authorization before mutating their targets.
 /// `target_path` names the operation's root for the approval summary.
 /// `reason` adds an operation-specific permission requirement (e.g. deletion).
+/// `track_changes` also snapshots targets that do not need human approval.
 pub async fn authorize(
   paths : Array[String],
   target_path~ : String,
@@ -47,7 +72,8 @@ pub async fn authorize(
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
   reason? : String,
-) -> @write_scope.WriteScope? {
+  track_changes~ : Bool = false,
+) -> Authorization {
   let reasons : Array[String] = []
   if reason is Some(reason) {
     reasons.push(reason)
@@ -62,17 +88,21 @@ pub async fn authorize(
     }
   }
   if reasons.is_empty() {
-    return write_scope
+    let snapshots = if track_changes {
+      [
+        for path in paths => (path, snapshot(path, write_scope))
+      ]
+    } else {
+      []
+    }
+    return { scope: write_scope, snapshots, }
   }
   guard approval is Some(channel) else {
     fail(
       "\{reasons.join("; ")}; operation requires approval, but this session has no approval channel",
     )
   }
-  let before : Array[Snapshot] = []
-  for path in paths {
-    before.push(snapshot(path, write_scope))
-  }
+  let snapshots = [ for path in paths => (path, snapshot(path, write_scope)) ]
   let outcome = file_state.without_access(() => {
     channel.ask({
       tool_name,
@@ -89,14 +119,12 @@ pub async fn authorize(
     Cancelled => fail("operation approval cancelled; no changes made")
     Unavailable => fail("operation approval unavailable; no changes made")
   }
-  for i, path in paths {
-    guard snapshot(path, write_scope) == before[i] else {
-      fail(
-        "target changed while awaiting approval; reconsider and request approval again",
-      )
-    }
-  }
-  write_scope.map(scope => {
-    scope.with_grants([ for i, path in paths => (path, before[i].destination) ])
+  let scope = write_scope.map(scope => {
+    scope.with_grants(
+      [
+        for (path, before) in snapshots => (path, before.destination)
+      ],
+    )
   })
+  { scope, snapshots, }
 }

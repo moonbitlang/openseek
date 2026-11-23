@@ -118,6 +118,22 @@ pub(all) struct ParseGate {
 }
 
 ///|
+/// Check the candidate against the requested and resolved destination kinds.
+pub async fn write_parse_error(
+  path : String,
+  target : String,
+  content : String,
+) -> ParseGate? {
+  for gate_path in gate_paths(path, target) {
+    let gate = content_parse_errors(gate_path, content) catch { _ => None }
+    if gate is Some(gate) && !gate.errors.is_empty() {
+      return Some(gate)
+    }
+  }
+  None
+}
+
+///|
 /// Parse `content` as the standalone `moonc syncheck` input named by `path`'s
 /// kind and return its lex/parse errors (empty `errors` = parses cleanly).
 /// `path` only selects the scratch-file name (its input kind) — it is never

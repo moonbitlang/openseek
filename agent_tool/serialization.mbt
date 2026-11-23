@@ -48,7 +48,7 @@ pub fn Tools::program_tools(self : Tools) -> Tools raise {
 }
 
 ///|
-/// Run human-paced IO outside the file gate, then reacquire it even on
+/// Run IO outside the file gate, then reacquire it even on
 /// cancellation so the enclosing with_access always releases its own lease.
 /// Only call from an executor currently inside this map's with_access.
 /// The caller must revalidate filesystem state after this returns.

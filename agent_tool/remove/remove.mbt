@@ -119,7 +119,7 @@ async fn execute_with_workspace(
           },
         )
     }
-    let write_scope = @permission.authorize(
+    let authorization = @permission.authorize(
       version.entries.map(entry => entry.0),
       target_path=path,
       tool_name="remove",
@@ -129,6 +129,8 @@ async fn execute_with_workspace(
       approval?,
       reason?,
     )
+    authorization.recheck()
+    let write_scope = authorization.scope
     guard inspect_target(path, workspace_root, write_scope?) == version else {
       return removal_error(
         path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",

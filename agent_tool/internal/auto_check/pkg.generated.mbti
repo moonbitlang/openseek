@@ -27,6 +27,8 @@ pub fn introduced(CheckErrors, CheckErrors) -> Introduced
 
 pub async fn package_graph(String) -> PackageGraph?
 
+pub async fn write_parse_error(String, String, String) -> ParseGate?
+
 // Errors
 
 // Types and methods

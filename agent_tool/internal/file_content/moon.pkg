@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/core/async/fs",
+  "moonbitlang/x/crypto",
+}
+
+supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async/fs" ],
+)
