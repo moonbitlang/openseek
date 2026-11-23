@@ -63,7 +63,7 @@ pub fn Input::render(
     .map_or(self.label, choice => choice.label)
   @rui.select(
     id~,
-    class~,
+    class="source-selector \{class}",
     options~,
     default_value=self.selected.key(),
     placeholder=selected_label,
