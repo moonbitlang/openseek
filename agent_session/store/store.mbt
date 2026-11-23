@@ -16,7 +16,7 @@ fn session_file_name(id : @agent_session.SessionId) -> String {
 let lock_file_name : String = "session.lock"
 
 ///|
-/// User-authored display titles live beside the append-only transcript. A
+/// Display titles live beside the append-only transcript. A
 /// separate file lets a running session be renamed without rewriting history
 /// or replacing the inode its engine is still appending to.
 let title_file_name : String = "session-title"
@@ -610,7 +610,8 @@ pub async fn SessionStore::fork(
     // The session file goes last: it is what makes the id a session, so a
     // write that fails before it leaves a directory nothing loads rather
     // than a fork that exists without its title.
-    if title is Some(title) {
+    let title = title.unwrap_or_else(() => snapshot_default_title(copy))
+    if !title.is_empty() {
       write_text_atomic(self.title_path(fork), title, dirs~)
     }
     if model is Some(model) {
@@ -619,7 +620,6 @@ pub async fn SessionStore::fork(
     if base_prompt is Some(text) {
       write_text_atomic(self.base_prompt_file(fork), text, dirs~)
     }
-    self.save_default_title_best_effort(fork, snapshot_default_title(copy))
     write_text_atomic(path, session_file_text(copy), dirs~)
     record_mark(self, copy)
   })
@@ -674,16 +674,14 @@ pub fn SessionListing::first_prompt(self : SessionListing) -> String {
 }
 
 ///|
-/// Return the explicit user-authored title, or `None` when this session still
-/// uses its first prompt as the display label.
+/// Return the saved title, or `None` when no title has been initialized.
 pub fn SessionListing::title(self : SessionListing) -> String? {
   self.title
 }
 
 ///|
-/// Read a session's explicit display title. A missing sidecar means the title
-/// still derives from the first user prompt; malformed or unreadable metadata
-/// remains an error rather than masquerading as absence.
+/// Read a session's saved display title. A missing sidecar means the title
+/// has yet to be initialized. Malformed or unreadable metadata raises.
 pub async fn SessionStore::title(
   self : SessionStore,
   id : @agent_session.SessionId,
@@ -913,9 +911,10 @@ pub async fn SessionStore::load(
 /// `openseek_session-<id>.jsonl`, and the new immutable `Session` is
 /// returned. The
 /// first append for a session id creates the file, writing the header line and
-/// the first event together; and when a crash left the durable tail
-/// unterminated, the append rewrites the file atomically instead, repairing
-/// the tail as it persists the new event. The input session is unchanged.
+/// the first event together. The first user prompt initializes a missing title.
+/// When a crash left the durable tail unterminated, the append rewrites the
+/// file atomically, repairing the tail as it persists the new event.
+/// The input session is unchanged.
 pub async fn SessionStore::append(
   self : SessionStore,
   session : @agent_session.Session,
@@ -925,23 +924,18 @@ pub async fn SessionStore::append(
   with_session_lock(self, session.id(), Exclusive, () => {
     let repair_tail = ensure_session_is_current(self, session)
     let events = session.events()
-    let default_title = if item is User(message) &&
-      events.length() < first_prompt_scan_limit &&
-      first_title_content(session) is None {
-      Some(default_title_from_content(message.content()))
-    } else {
-      None
-    }
-    if events.is_empty() || default_title is Some(_) {
-      self.clear_default_title(session.id())
-    }
     let (next, event) = session.append_event(
       item,
       unix_ms=@env.now().reinterpret_as_int64(),
     )
     persist_event(self, next, event, repair_tail~)
-    if default_title is Some(title) {
-      self.save_default_title_best_effort(session.id(), title)
+    if item is User(message) &&
+      events.length() < first_prompt_scan_limit &&
+      first_title_content(session) is None {
+      self.initialize_title(
+        session.id(),
+        default_title_from_content(message.content()),
+      )
     }
     record_mark(self, next)
     next

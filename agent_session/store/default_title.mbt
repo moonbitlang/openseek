@@ -1,12 +1,4 @@
 ///|
-fn SessionStore::default_title_path(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> String raise {
-  "\{self.session_dir(id)}/session-default-title"
-}
-
-///|
 fn default_title_text(first_prompt : String) -> String {
   let first_prompt = match @command_context.parse(first_prompt) {
     Some(shell) => "$ \{shell.command}"
@@ -46,70 +38,66 @@ fn snapshot_default_title(session : @agent_session.Session) -> String {
 }
 
 ///|
-async fn read_default_title(path : String) -> String? {
-  Some(@fs.read_text(path)) catch {
-    @os_error.OsError(NotFound, ..) => None
-    error => raise error
-  }
-}
-
-///|
-/// The caller holds the session lock. Clear the old title before publishing a
-/// transcript that can have a different first prompt. If publication stops
-/// halfway, the next reader can recover the title from the current transcript.
-async fn SessionStore::clear_default_title(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> Unit {
-  @fs.remove(self.default_title_path(id)) catch {
-    @os_error.OsError(NotFound, ..) => return
-    error => raise error
-  }
-  sync_dir_best_effort(self.session_dir(id))
-}
-
-///|
-/// The transcript is authoritative. A failed metadata write leaves it
-/// readable and lets a listing retry the backfill.
-async fn SessionStore::save_default_title_best_effort(
+/// The caller holds the session lock and has checked that the title is absent
+/// and the candidate is nonblank. A later listing can retry a failed write.
+async fn SessionStore::write_initial_title(
   self : SessionStore,
   id : @agent_session.SessionId,
   title : String,
 ) -> Unit {
-  write_text_atomic(self.default_title_path(id), title, dirs=[
-    self.session_dir(id),
-  ]) catch {
+  write_text_atomic(self.title_path(id), title, dirs=[self.session_dir(id)]) catch {
     _ => ()
   }
 }
 
 ///|
-/// Return the saved default display title for an existing transcript. An
-/// empty title records that the transcript has no usable label. Callers opt
-/// into legacy backfill by providing their first-prompt reader. Backfill and
-/// transcript replacement share a lock so a title from the old transcript
-/// cannot be published after replacement.
-pub async fn SessionStore::read_or_backfill_default_title(
+/// The session lock covers the absence check and the title write. The
+/// transcript has already been saved, so a title error leaves it readable.
+async fn SessionStore::initialize_title(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  title : String,
+) -> Unit {
+  guard !title.is_empty() else { return }
+  let existing = self.title(id) catch { _ => return }
+  if existing is None {
+    self.write_initial_title(id, title)
+  }
+}
+
+///|
+/// Fill a missing session title from a legacy transcript. Recheck the title
+/// under the session lock so a concurrent rename or initializer wins. Return
+/// no title when the reader finds no usable text.
+pub async fn SessionStore::backfill_title(
   self : SessionStore,
   id : @agent_session.SessionId,
   read_legacy_prompt~ : async (String) -> String?,
-) -> String {
-  let path = self.default_title_path(id)
-  if read_default_title(path) is Some(title) {
-    return title
-  }
+) -> String? {
   let transcript = self.session_file_path(id)
   with_session_lock(self, id, Exclusive, () => {
-    if read_default_title(path) is Some(title) {
-      return title
+    if self.title(id) is Some(title) {
+      return Some(title)
     }
-    let title = default_title_text(read_legacy_prompt(transcript).unwrap_or(""))
-    self.save_default_title_best_effort(id, title)
+    let title = title_from_legacy_prompt(read_legacy_prompt(transcript))
+    if title is Some(title) {
+      self.write_initial_title(id, title)
+    }
     title
   }) catch {
     // A read-only legacy store can still supply its display title.
     @os_error.OsError(_) =>
-      default_title_text(read_legacy_prompt(transcript).unwrap_or(""))
+      title_from_legacy_prompt(read_legacy_prompt(transcript))
     error => raise error
+  }
+}
+
+///|
+fn title_from_legacy_prompt(prompt : String?) -> String? {
+  let title = default_title_text(prompt.unwrap_or(""))
+  if title.is_empty() {
+    None
+  } else {
+    Some(title)
   }
 }

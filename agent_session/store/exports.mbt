@@ -8,7 +8,8 @@
 /// `create` ensures the session directory exists, takes an exclusive lock, and
 /// atomically rewrites `openseek_session-<id>.jsonl` (write to a temp file,
 /// then rename). Use it for new sessions, fixtures, import tools, or deliberate
-/// full rewrites. Do not use it for ordinary agent progress; `append`
+/// full rewrites. An existing title is preserved, and a missing title is
+/// initialized from the first prompt. For ordinary agent progress, `append`
 /// preserves stale-snapshot detection and writes only one new event.
 ///
 /// The call raises on invalid ids, filesystem errors, JSON encoding/write
@@ -19,16 +20,12 @@ pub async fn SessionStore::create(
 ) -> Unit {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
-    self.clear_default_title(session.id())
     write_text_atomic(
       self.session_file_path(session.id()),
       session_file_text(session),
       dirs=self.session_dir_chain(session.id()),
     )
-    self.save_default_title_best_effort(
-      session.id(),
-      snapshot_default_title(session),
-    )
+    self.initialize_title(session.id(), snapshot_default_title(session))
     record_mark(self, session)
   })
 }
