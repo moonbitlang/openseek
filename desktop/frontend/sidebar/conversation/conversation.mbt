@@ -453,7 +453,7 @@ fn Actions::child_component(
   _id : Id,
   input : @rabbita.Val[Input],
   search : @rabbita.Val[Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[(String, @html.Html)] {
   component(locale, input, self, search)
 }
 
@@ -466,7 +466,7 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   search : @rabbita.Val[Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[(String, @html.Html)] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ children_open: false, }, @cmd.none),
@@ -781,12 +781,7 @@ pub fn component(
         })
       },
     }
-    let rows : Map[String, @html.Html] = Map([])
-    for group in child_rows {
-      for child in group {
-        rows[child.0] = child.1
-      }
-    }
+    let rows = Map::from_iter(child_rows.iter())
     let collapsed = !children_open || input.children.is_empty()
     (
       input.id.key(),
@@ -808,19 +803,17 @@ pub fn component(
   let context = @action_menu.row_context(rendered.map(row => row.3))
   rendered.map2(context, (row, context) => {
     let (id, class, title, _, trailing, children, collapsed) = row
-    [
-      (
-        id,
-        @html.div(
-          class=if collapsed {
-            "sidebar-conversation sidebar-branch collapsed"
-          } else {
-            "sidebar-conversation sidebar-branch"
-          },
-          [@html.div(class~, title~, [context, ..trailing]), children],
-        ),
+    (
+      id,
+      @html.div(
+        class=if collapsed {
+          "sidebar-conversation sidebar-branch collapsed"
+        } else {
+          "sidebar-conversation sidebar-branch"
+        },
+        [@html.div(class~, title~, [context, ..trailing]), children],
       ),
-    ]
+    )
   })
 }
 

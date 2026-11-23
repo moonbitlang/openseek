@@ -147,7 +147,7 @@ pub(all) struct Actions {
 fn Actions::placeholder_component(
   self : Actions,
   input : @rabbita.Val[Placeholder],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[(String, @html.Html)] {
   input.map(row => {
     let mut class = "conversation-row placeholder"
     if row.nested {
@@ -180,20 +180,18 @@ fn Actions::placeholder_component(
         ),
       )
     }
-    [
-      (
-        "placeholder:\{row.id}",
-        @html.div(
-          class~,
-          on_click=if row.openable {
-            (self.placeholder)(row.id)
-          } else {
-            @cmd.none
-          },
-          children,
-        ),
+    (
+      "placeholder:\{row.id}",
+      @html.div(
+        class~,
+        on_click=if row.openable {
+          (self.placeholder)(row.id)
+        } else {
+          @cmd.none
+        },
+        children,
       ),
-    ]
+    )
   })
 }
 
@@ -204,7 +202,7 @@ fn Actions::entry_component(
   input : @rabbita.Val[Entry],
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[(String, @html.Html)] {
   input.switch_by(
     entry => {
       match entry {
@@ -250,7 +248,7 @@ fn Actions::entry_component(
 #derive(Eq)
 pub(all) struct RenderedSection {
   tools : @html.Html
-  rows : Array[(String, @html.Html)]
+  row : (String, @html.Html)
 }
 
 ///|
@@ -314,27 +312,20 @@ pub fn component(
     for action in input.secondary_actions {
       tools.push(action.button(input.id, actions, locale))
     }
-    let rows : Map[String, @html.Html] = Map([])
-    for group in entry_rows {
-      for row in group {
-        rows[row.0] = row.1
-      }
-    }
+    let rows = Map::from_iter(entry_rows.iter())
     {
       tools: @html.fragment(tools),
-      rows: [
-        (
-          input.id.key(),
-          @html.div(class="sidebar-group", [
-            heading,
-            @html.div(
-              id=input.id.key() + ":content",
-              class="sidebar-group-content",
-              rows,
-            ),
-          ]),
-        ),
-      ],
+      row: (
+        input.id.key(),
+        @html.div(class="sidebar-group", [
+          heading,
+          @html.div(
+            id=input.id.key() + ":content",
+            class="sidebar-group-content",
+            rows,
+          ),
+        ]),
+      ),
     }
   })
 }

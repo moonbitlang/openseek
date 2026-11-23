@@ -170,9 +170,8 @@ fn Actions::list_component(
     let tools : Array[@html.Html] = []
     for section in section_rows {
       tools.push(section.tools)
-      for row in section.rows {
-        rows[row.0] = row.1
-      }
+      let (key, row) = section.row
+      rows[key] = row
     }
     if !hidden &&
       !input.search.query().is_blank() &&
