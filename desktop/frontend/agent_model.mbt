@@ -122,29 +122,61 @@ test "agent choices round-trip their wire names" {
 }
 
 ///|
-/// The OpenSeek group offers the configured provider's models: the DeepSeek
-/// service tiers, the GLM models, or — for a custom endpoint, where the key
-/// follows whichever model is named — every model this build knows. A
-/// conversation running a model outside that list keeps it visible, same as
-/// the old selector.
+/// The OpenSeek group offers the models the configured provider serves: the
+/// DeepSeek service tiers, the GLM models, or — for a custom endpoint — only the
+/// entries saved for it, because that endpoint's models and their windows are
+/// named in the section above and nothing else is known to be served by it. A
+/// conversation running a model outside that list keeps it visible, same as the
+/// old selector.
 fn openseek_model_group(
   provider : ApiProvider,
   selected : @deepseek.Model,
+  saved : Array[CustomModel],
+  locale : @i18n.Locale,
 ) -> @composer.ModelGroup {
   let listed : Array[@deepseek.Model] = match provider {
-    Deepseek => [Deepseek(V4Pro), Deepseek(V4Flash)]
+    Deepseek | OpenRouter => [Deepseek(V4Pro), Deepseek(V4Flash)]
     Glm => [Glm(G53), Glm(G53Flash)]
-    OpenRouter => [Deepseek(V4Pro), Deepseek(V4Flash)]
-    Custom => [Deepseek(V4Pro), Deepseek(V4Flash), Glm(G53), Glm(G53Flash)]
+    // A tier this build ships would run against the endpoint with no entry
+    // stating what window it serves, which is what an entry is for.
+    Custom => []
   }
   let options = listed.map(model => @composer.ModelOption::{
     value: ModelChoice::OpenSeekModel(model).wire(),
     label: model.label(),
   })
-  if !listed.contains(selected) {
+  // The user's own entries belong to the custom endpoint's section and ride its
+  // URL, so they are offered there alone. An entry may name a built-in id, in
+  // which case selecting it runs that built-in protocol against the custom URL.
+  if provider is Custom {
+    for entry in saved {
+      options.push({
+        value: ModelChoice::OpenSeekModel(entry.engine_model()).wire(),
+        label: entry.display_name(),
+      })
+    }
+  }
+  let selected_is_listed = listed.contains(selected) ||
+    (provider is Custom && saved.any(entry => entry.matches_model(selected)))
+  if !selected_is_listed {
+    // A model the provider does not serve stays visible so the chip can still
+    // name it, and says so in the menu: keeping it is not an offer to run it.
+    // A saved entry is named the way the section names it, not by its id.
+    let name = if provider is Custom || selected is @deepseek.Custom(_) {
+      match saved.search_by(entry => entry.matches_model(selected)) {
+        Some(index) => saved[index].display_name()
+        None => selected.label()
+      }
+    } else {
+      selected.label()
+    }
     options.push({
       value: ModelChoice::OpenSeekModel(selected).wire(),
-      label: selected.label(),
+      label: if provider_serves_model(provider, selected, saved) {
+        name
+      } else {
+        name + " " + @settings.text(locale, ModelNotOnEndpointLabel)
+      },
     })
   }
   { label: "OpenSeek", options, }
@@ -180,7 +212,12 @@ fn Model::openseek_model_chip(
   conv : Conversation,
 ) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = [
-    openseek_model_group(self.api_provider(), conv.engine_model),
+    openseek_model_group(
+      self.api_provider(),
+      conv.engine_model,
+      self.host_settings().map(settings => settings.models).unwrap_or([]),
+      self.locale,
+    ),
   ]
   if self.composing_new_chat() {
     groups.push(self.codex_model_group())
@@ -189,7 +226,10 @@ fn Model::openseek_model_chip(
     id: "openseek-model-picker",
     groups,
     selected: ModelChoice::OpenSeekModel(conv.engine_model).wire(),
-    disabled: conv.controls.edit is Some(_) ||
+    // Nothing to pick until the section names a model, so the menu stays
+    // closed rather than offering the placeholder this chat carries.
+    disabled: self.model_availability(conv.engine_model) is ModelNoneSaved ||
+    conv.controls.edit is Some(_) ||
     conv.controls.pending is Some(_) ||
     conv.pending_semantic_submission is Some(_),
     open: self.select_menu is Some(OpenSeekModelMenu),
@@ -200,8 +240,24 @@ fn Model::openseek_model_chip(
       English => "Model: "
       Spanish => "Modelo: "
     }) +
-    conv.engine_model.label(),
+    self.selected_model_name(conv.engine_model),
   }
+}
+
+///|
+/// The name a conversation's model goes by: the entry's own name when the user
+/// gave it one (on Custom or for a custom entry), the built-in's product name
+/// otherwise.
+fn Model::selected_model_name(self : Model, model : @deepseek.Model) -> String {
+  if self.api_provider() is Custom || model is @deepseek.Custom(_) {
+    if self.host_settings() is Some(settings) {
+      if settings.models.search_by(entry => entry.matches_model(model))
+        is Some(index) {
+        return settings.models[index].display_name()
+      }
+    }
+  }
+  model.label()
 }
 
 ///|
@@ -273,7 +329,14 @@ fn openseek_reasoning_control(
 fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = []
   if self.codex.composing_draft() {
-    groups.push(openseek_model_group(self.api_provider(), self.default_model))
+    groups.push(
+      openseek_model_group(
+        self.api_provider(),
+        self.default_model,
+        self.host_settings().map(settings => settings.models).unwrap_or([]),
+        self.locale,
+      ),
+    )
   }
   groups.push(self.codex_model_group())
   let selected = match self.codex.model_listing(locale=self.locale) {
@@ -294,4 +357,162 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
       Spanish => "Modelo de Codex"
     },
   }
+}
+
+///|
+test "the model menu lists saved entries under their own names" {
+  let saved : Array[CustomModel] = [
+    {
+      id: "gemini-4-carbon",
+      label: Some("Gemini 4 Carbon"),
+      api_url: Some("https://gw.example/v1/chat/completions"),
+      full_url: false,
+      has_api_key: true,
+      images: false,
+      context_window: 1_000_000,
+    },
+    {
+      id: "o3-mini",
+      label: None,
+      api_url: Some("https://gw.example/v1/chat/completions"),
+      full_url: false,
+      has_api_key: true,
+      images: false,
+      context_window: 1_000_000,
+    },
+  ]
+  // A provider family serves its own tiers: an entry rides the custom
+  // endpoint's URL, so it is not on offer here.
+  let group = openseek_model_group(Deepseek, Deepseek(V4Flash), saved, English)
+  assert_eq(group.options.map(option => option.label), [
+    "DeepSeek Pro", "DeepSeek Flash",
+  ])
+  // The selected model is already listed, so it is not appended twice.
+  assert_eq(group.options.length(), 2)
+  // A conversation running a model nobody lists keeps it visible, so a deleted
+  // entry does not silently switch the user to another model — and one this
+  // provider cannot run says so.
+  let stale = openseek_model_group(
+    Deepseek,
+    @deepseek.Custom("gone-model"),
+    saved,
+    English,
+  )
+  assert_eq(stale.options.length(), 3)
+  assert_eq(stale.options[2].label, "gone-model (not served here)")
+  let on_entry = openseek_model_group(
+    Deepseek,
+    @deepseek.Custom("gemini-4-carbon"),
+    saved,
+    English,
+  )
+  assert_eq(on_entry.options.map(option => option.label), [
+    "DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Carbon (not served here)",
+  ])
+  // A custom endpoint serves the entries its section named and nothing else: a
+  // tier this build ships would run there with no entry saying what window the
+  // endpoint serves.
+  let custom = openseek_model_group(
+    Custom,
+    @deepseek.Custom("gemini-4-carbon"),
+    saved,
+    English,
+  )
+  assert_eq(custom.options.map(option => option.label), [
+    "Gemini 4 Carbon", "o3-mini",
+  ])
+  // A conversation already running a shipped tier keeps it visible rather than
+  // being silently rewritten to an entry, and the row says the endpoint does
+  // not serve it when that tier was not added to Custom models.
+  let kept = openseek_model_group(Custom, Deepseek(V4Flash), saved, English)
+  assert_eq(kept.options.map(option => option.label), [
+    "Gemini 4 Carbon", "o3-mini", "DeepSeek Flash (not served here)",
+  ])
+  // Adding `deepseek-flash` explicitly to the custom list serves it in the
+  // menu without the unserved marker.
+  let with_flash : Array[CustomModel] = [
+    ..saved,
+    {
+      id: "deepseek-flash",
+      label: None,
+      api_url: None,
+      full_url: false,
+      has_api_key: false,
+      images: true,
+      context_window: 131_072,
+    },
+  ]
+  let served = openseek_model_group(
+    Custom,
+    Deepseek(V4Flash),
+    with_flash,
+    English,
+  )
+  assert_eq(served.options.map(option => option.label), [
+    "Gemini 4 Carbon", "o3-mini", "DeepSeek Flash",
+  ])
+  assert_eq(served.options[2].value, "openseek:deepseek-flash")
+}
+
+///|
+/// Whether the selected provider can run `model` at all. A custom endpoint runs
+/// only the entries saved for it (including any built-in id the user explicitly
+/// added there). Any other provider keeps the families it serves.
+fn provider_serves_model(
+  provider : ApiProvider,
+  model : @deepseek.Model,
+  saved : Array[CustomModel],
+) -> Bool {
+  match provider {
+    Custom => saved.any(entry => entry.matches_model(model))
+    _ => !(model is @deepseek.Custom(_))
+  }
+}
+
+///|
+/// Whether this host can run `model` for this conversation, and why not when it
+/// cannot: on Custom, only entries saved in the custom list are runnable (empty
+/// list means nothing is offered); on built-in providers, custom-only models are
+/// not served.
+priv enum ModelAvailability {
+  ModelReady
+  // The entry the conversation ran on is gone from Settings.
+  ModelEntryDeleted
+  // The selected provider does not serve this model.
+  ModelNotOnEndpoint
+  // A custom endpoint with no saved model: the section names none yet.
+  ModelNoneSaved
+}
+
+///|
+fn Model::model_availability(
+  self : Model,
+  model : @deepseek.Model,
+) -> ModelAvailability {
+  let saved = self
+    .host_settings()
+    .map(settings => settings.models)
+    .unwrap_or([])
+  match (self.api_provider(), model) {
+    (Custom, _) if saved.is_empty() => ModelNoneSaved
+    (Custom, _) =>
+      if saved.any(entry => entry.matches_model(model)) {
+        ModelReady
+      } else if model is @deepseek.Custom(_) {
+        ModelEntryDeleted
+      } else {
+        ModelNotOnEndpoint
+      }
+    (_, @deepseek.Custom(_)) => ModelNotOnEndpoint
+    _ => ModelReady
+  }
+}
+
+///|
+/// Whether this host can run the model at all.
+fn Model::conversation_model_ready(
+  self : Model,
+  model : @deepseek.Model,
+) -> Bool {
+  self.model_availability(model) is ModelReady
 }
