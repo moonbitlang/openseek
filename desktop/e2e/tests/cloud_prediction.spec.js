@@ -1,5 +1,6 @@
+import { devices } from '@playwright/test';
 import { test, expect } from './support/test.js';
-import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 const prediction = (source_sequence = 12, text = 'Commit the fix') => ({
   version: 1, source_sequence,
@@ -88,3 +89,24 @@ test('Cloud shows native predictions and Tab fills the shared composer without s
   cloud.assertNoPredictionRequests();
 });
 
+for (const [client, userAgent] of [
+  ['phone browser', devices['iPhone 13'].userAgent],
+  ['Android app', devices['Galaxy Tab S4'].userAgent + ' SeekMoonAndroid/1.0'],
+]) {
+  test.describe(client, () => {
+    test.use({ userAgent, viewport: { width: 393, height: 851 }, hasTouch: true });
+
+    test('keeps the ordinary placeholder and lets Tab move focus with a saved prediction', async ({ page }) => {
+      const cloud = new CloudPredictionHarness(page);
+      await cloud.install();
+      await page.goto(`${authOrigin}/cloud/session/${sessionB}`);
+      await expect(page.getByText('Done at 32', { exact: true }).first()).toBeVisible();
+      const input = page.locator('#task');
+      await expect(input).toHaveAttribute('placeholder', 'Ask SeekMoon to inspect, edit, or explain this workspace.');
+      await input.press('Tab');
+      await expect(input).toHaveValue('');
+      await expect(input).not.toBeFocused();
+      expect(cloud.postCount).toBe(0);
+    });
+  });
+}

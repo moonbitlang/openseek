@@ -568,16 +568,14 @@ fn main {
     is Some(_)
   // The shell sets its app token before loading any page, so this works for
   // both bundled and downloaded frontends, including after a reload.
-  let android = if @interop.js_prop(
-      @js.Value::cast_from(@dom.window().navigator()),
-      "userAgent",
-    )
-    is Some(value) &&
-    (@js.Cast::into(value) : String?) is Some(user_agent) {
-    user_agent.contains(" SeekMoonAndroid/")
-  } else {
-    false
-  }
+  let navigator = @js.Value::cast_from(@dom.window().navigator())
+  let user_agent = @interop.js_prop(navigator, "userAgent")
+    .bind(value => (@js.Cast::into(value) : String?))
+    .unwrap_or("")
+  let android = user_agent.contains(" SeekMoonAndroid/")
+  // The input device is independent of window width: a narrow desktop
+  // window still supports accepting a prediction with Tab.
+  let mobile = !desktop && (android || user_agent.contains("Mobi"))
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
@@ -912,7 +910,14 @@ fn main {
           }
         },
       )
-    let composer_input = state.map(model => model.composer_input())
+    let composer_input = state.map(model => {
+      let input = model.composer_input()
+      if mobile {
+        { ..input, prediction: None, }
+      } else {
+        input
+      }
+    })
     let (composer_html, composer_quote, command_result) = @composer.component(
       state.map(model => model.locale),
       composer_input,
