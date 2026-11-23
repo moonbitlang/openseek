@@ -608,6 +608,145 @@ async test "an added model reaches the status and can be removed" {
 }
 
 ///|
+async test "a run on a user entry rides the custom endpoint" {
+  with_settings_dir((dir, manager) => {
+    let previous_home = @sys.get_env_var(test_home_env_name())
+    defer restore_home_env(previous_home)
+    set_test_home(dir.join("global").to_string())
+    let workspace = attach_run_workspace(dir)
+    // The endpoint and its key belong to the provider slot; the entry names
+    // only the model, so the same address serves every model on it.
+    let _ = update_settings(
+      manager,
+      {
+        provider: Some("custom"),
+        providers: Some({
+          "custom": {
+            api_url: Some("https://gateway.example/v1"),
+            api_key: Some("sk-slot"),
+          },
+        }),
+      },
+      models=[
+        {
+          id: "gemini-4-carbon",
+          label: Some("Gemini 4 Carbon"),
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: Some(true),
+          context_window: None,
+        },
+      ],
+    )
+    let config = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("gemini-4-carbon"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-entry-default",
+      workspace: Some(workspace),
+    })
+    assert_eq(config.model, "gemini-4-carbon")
+    // The key and address are the slot's, not a copy the entry carries.
+    assert_eq(config.api_key, "sk-slot")
+    assert_eq(
+      config.api_url,
+      Some("https://gateway.example/v1/chat/completions"),
+    )
+    // The credential travels in the generic variable the CLI's --api-key
+    // reads, not in a provider family's.
+    assert_eq(config.key_env, @deepseek.CustomApiKeyEnv)
+    // A user entry always accepts images, never a built-in tier's rule.
+    assert_true(config.images)
+    assert_true(config.supports_images())
+  })
+}
+
+///|
+async test "a user entry never borrows a built-in provider slot" {
+  with_settings_dir((dir, manager) => {
+    let previous_home = @sys.get_env_var(test_home_env_name())
+    defer restore_home_env(previous_home)
+    set_test_home(dir.join("global").to_string())
+    let workspace = attach_run_workspace(dir)
+    // Active provider is DeepSeek with NO DeepSeek key; an entry carrying its
+    // own endpoint and key still resolves without asking for DeepSeek's key.
+    let _ = update_settings(
+      manager,
+      {
+        provider: Some("deepseek"),
+        providers: Some({
+          "custom": {
+            api_url: Some("https://custom-slot.example/v1"),
+            api_key: Some("sk-custom-slot"),
+          },
+        }),
+      },
+      models=[
+        {
+          id: "self-hosted-model",
+          label: None,
+          api_url: Some("https://self-hosted.example/v1"),
+          full_url: None,
+          api_key: Some("sk-self"),
+          images: None,
+          context_window: Some(65_536),
+        },
+        {
+          id: "slot-backed-model",
+          label: None,
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: None,
+          context_window: None,
+        },
+      ],
+    )
+    let own = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("self-hosted-model"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-own-route",
+      workspace: Some(workspace),
+    })
+    assert_eq(own.api_key, "sk-self")
+    assert_eq(
+      own.api_url,
+      Some("https://self-hosted.example/v1/chat/completions"),
+    )
+    assert_eq(own.context_window, Some(65_536))
+    let slot_backed = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("slot-backed-model"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-slot-route",
+      workspace: Some(workspace),
+    })
+    assert_eq(slot_backed.api_key, "sk-custom-slot")
+    assert_eq(
+      slot_backed.api_url,
+      Some("https://custom-slot.example/v1/chat/completions"),
+    )
+  })
+}
+
+///|
 /// One patch naming `window`, for the tests that care only about it.
 fn window_patch(window : Int32) -> @protocol.ModelPatch {
   {
@@ -644,4 +783,128 @@ test "a model's context window is bounded" {
     decode_model_entry(at_min[0]).unwrap().context_window,
     MinModelContextWindow,
   )
+}
+
+///|
+async test "a built-in id saved under custom keeps the built-in protocol" {
+  with_settings_dir((dir, manager) => {
+    let previous_home = @sys.get_env_var(test_home_env_name())
+    defer restore_home_env(previous_home)
+    set_test_home(dir.join("global").to_string())
+    let workspace = attach_run_workspace(dir)
+    let _ = update_settings(
+      manager,
+      {
+        provider: Some("custom"),
+        providers: Some({
+          "deepseek": { api_url: None, api_key: Some("sk-official"), },
+          "custom": {
+            api_url: Some("https://gateway.example/v1"),
+            api_key: Some("sk-custom"),
+          },
+        }),
+      },
+      models=[
+        {
+          id: "deepseek-flash",
+          label: Some("Custom DS Flash"),
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: Some(true),
+          context_window: Some(131_072),
+        },
+        {
+          id: "deepseek-v4-pro",
+          label: None,
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: Some(true),
+          context_window: None,
+        },
+        {
+          id: "text-only-custom",
+          label: None,
+          api_url: None,
+          full_url: None,
+          api_key: None,
+          images: Some(false),
+          context_window: None,
+        },
+      ],
+    )
+    let flash = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("deepseek-flash"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-custom-ds-flash",
+      workspace: Some(workspace),
+    })
+    assert_eq(flash.api_key, "sk-custom")
+    assert_eq(
+      flash.api_url,
+      Some("https://gateway.example/v1/chat/completions"),
+    )
+    assert_eq(flash.key_env, "DEEPSEEK")
+    assert_true(flash.supports_images())
+    assert_eq(flash.context_window, Some(131_072))
+
+    let pro = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("deepseek-v4-pro"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-custom-ds-pro",
+      workspace: Some(workspace),
+    })
+    assert_eq(pro.key_env, "DEEPSEEK")
+    // Built-in DeepSeek Pro does not accept images even if the patch set true.
+    assert_false(pro.supports_images())
+
+    let text_only = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("text-only-custom"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-text-only-custom",
+      workspace: Some(workspace),
+    })
+    assert_false(text_only.supports_images())
+
+    // Switching back to the DeepSeek provider ignores the custom entry for
+    // `deepseek-flash` and uses the official DeepSeek slot.
+    let _ = update_settings(manager, {
+      provider: Some("deepseek"),
+      providers: None,
+    })
+    let official = run_config(manager, {
+      system_prompt: None,
+      images: [],
+      task: "hello",
+      submission_id: None,
+      model: Some("deepseek-flash"),
+      thinking: None,
+      approval: None,
+      max_steps: None,
+      session: "s-official-ds-flash",
+      workspace: Some(workspace),
+    })
+    assert_eq(official.api_key, "sk-official")
+    assert_true(official.api_url is None)
+    assert_true(official.context_window is None)
+  })
 }
