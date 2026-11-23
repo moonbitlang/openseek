@@ -63,8 +63,11 @@ fn migrate_provider_settings(raw : Map[String, Json]) -> Unit {
 }
 
 ///|
-/// Root and version-root URLs are base URLs. Other paths are complete custom
-/// endpoints and must not be rewritten. Queries belong after the appended path.
+/// Root and version-root URLs are base URLs and gain the completions path.
+/// A URL that already names the completions endpoint is kept as typed, so
+/// normalizing twice changes nothing. Any other path is neither a base URL nor
+/// a complete endpoint: it is refused here rather than stored and left to fail
+/// with a 404 on the first request. Queries belong after the appended path.
 fn normalize_custom_api_url(value : String) -> String raise EngineError {
   let value = value.trim()
   let url = @url.Url::parse(value) catch {
@@ -80,7 +83,11 @@ fn normalize_custom_api_url(value : String) -> String raise EngineError {
   if path.is_empty() || path =~ re"/v[0-9]+$" {
     url.set_pathname(path + "/chat/completions")
     url.to_string()
-  } else {
+  } else if path.has_suffix("/chat/completions") {
     value.to_owned()
+  } else {
+    raise EngineError(
+      "Enter a base URL such as https://host/v1, or a full Chat Completions URL",
+    )
   }
 }

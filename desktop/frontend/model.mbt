@@ -3279,6 +3279,14 @@ fn Model::edit_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
 }
 
 ///|
+/// Show an edit of the focused host's endpoint without writing it: the field
+/// keeps what the user typed while nothing is pushed, so no write is counted
+/// and no reply has to settle it.
+fn Model::preview_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
+  self.map_host_settings(self.focused, mirror => mirror.preview(endpoint))
+}
+
+///|
 /// The base prompt a new draft on `channel` captures, once that host's
 /// settings have arrived; until then the draft cannot be sent.
 fn Model::draft_system_prompt(
@@ -3447,6 +3455,59 @@ fn Model::api_ready(self : Model) -> Bool {
 /// against an endpoint every run fails on.
 fn plausible_endpoint_url(url : String) -> Bool {
   url.trim() =~ re"^https?://[^/]"
+}
+
+///|
+/// Why the endpoint URL is not one this endpoint can post to, or `None` when it
+/// is — blank included, which means "clear the stored value".
+///
+/// Mirrors the path rule in the engine's `normalize_custom_api_url`: a base URL
+/// (root or version root) or a URL that already names the completions endpoint.
+/// Anything else would be stored and then fail with a 404 on the first request,
+/// so the field says so while the user is still looking at it. A string with no
+/// `scheme://host` is left to the host, which names that error itself.
+fn endpoint_url_problem(value : String) -> @settings.Message? {
+  let url = value.trim().to_owned()
+  if url.is_empty() {
+    return None
+  }
+  let path = endpoint_url_path(url)
+  if path.is_empty() ||
+    path =~ re"/v[0-9]+$" ||
+    path.has_suffix("/chat/completions") {
+    None
+  } else {
+    Some(@settings.EndpointUrlInvalid)
+  }
+}
+
+///|
+/// The path of an absolute URL, with the query and fragment dropped and any
+/// trailing slashes removed. Empty when the string names no path, or is not an
+/// absolute URL at all.
+fn endpoint_url_path(url : String) -> String {
+  let after_scheme = match url.find("://") {
+    Some(index) => index + 3
+    None => return ""
+  }
+  let rest = url.unsafe_substring(start=after_scheme, end=url.length())
+  let path_start = match rest.find("/") {
+    Some(index) => index
+    None => return ""
+  }
+  let tail = rest.unsafe_substring(start=path_start, end=rest.length())
+  let end = match (tail.find("?"), tail.find("#")) {
+    (Some(query), Some(fragment)) =>
+      if query < fragment {
+        query
+      } else {
+        fragment
+      }
+    (Some(query), None) => query
+    (None, Some(fragment)) => fragment
+    (None, None) => tail.length()
+  }
+  tail.unsafe_substring(start=0, end~).trim_end(chars="/").to_owned()
 }
 
 ///|

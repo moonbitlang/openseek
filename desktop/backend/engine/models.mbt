@@ -38,34 +38,27 @@ const ModelFamilyCustom : String = "custom"
 const MaxModelLabelChars : Int32 = 64
 
 ///|
-/// Where a request for this entry is posted. A base URL gains the endpoint
-/// path the client posts to; a URL the user marked complete is used as typed.
+/// Where a request for this entry is posted. A base URL uses the same rules as
+/// the custom provider slot (`normalize_custom_api_url`); a URL the user marked
+/// complete is validated and kept as typed.
 fn normalize_model_url(
   value : String,
   full_url : Bool,
 ) -> String raise EngineError {
-  let url = @url.Url::parse(value) catch {
-    _ => raise EngineError("Enter a valid HTTP or HTTPS endpoint URL")
-  }
-  guard (url.scheme == "http" || url.scheme == "https") && url.host is Some(_) else {
-    raise EngineError("Enter a valid HTTP or HTTPS endpoint URL")
-  }
-  guard url.fragment is None else {
-    raise EngineError("Endpoint URL must not contain a fragment (#)")
-  }
   if full_url {
-    value
-  } else {
-    let path = url.pathname().trim_end(chars="/").to_owned()
-    // Idempotent: a URL that already ends at the endpoint is not given the
-    // path twice, which is what an entry saved once and then edited re-opens
-    // with.
-    if path.has_suffix("/chat/completions") {
-      value
-    } else {
-      url.set_pathname(path + "/chat/completions")
-      url.to_string()
+    let trimmed = value.trim()
+    let url = @url.Url::parse(trimmed) catch {
+      _ => raise EngineError("Enter a valid HTTP or HTTPS endpoint URL")
     }
+    guard (url.scheme == "http" || url.scheme == "https") && url.host is Some(_) else {
+      raise EngineError("Enter a valid HTTP or HTTPS endpoint URL")
+    }
+    guard url.fragment is None else {
+      raise EngineError("Endpoint URL must not contain a fragment (#)")
+    }
+    trimmed.to_owned()
+  } else {
+    normalize_custom_api_url(value)
   }
 }
 
@@ -539,6 +532,40 @@ test "a blank id is refused and a built-in id is accepted" {
   assert_true(model_patch_error([], [builtin], []) is None)
   let saved = apply_model_patches([], [builtin], [])
   assert_eq(decode_model_entry(saved[0]).unwrap().id, "deepseek-flash")
+}
+
+///|
+test "entry URL normalization matches the custom slot and refuses a partial path" {
+  assert_eq(
+    normalize_model_url("https://gw.example/v1", false),
+    "https://gw.example/v1/chat/completions",
+  )
+  // Normalizing twice changes nothing: a completions URL is kept as typed.
+  assert_eq(
+    normalize_model_url("https://gw.example/v1/chat/completions", false),
+    "https://gw.example/v1/chat/completions",
+  )
+  // A URL the user marked complete is used as typed, path and all.
+  assert_eq(
+    normalize_model_url("https://gw.example/v1/chat", true),
+    "https://gw.example/v1/chat",
+  )
+  // Neither a base URL nor a completions URL: refused when it is saved instead
+  // of stored and left to fail with a 404 on the first request.
+  let half : @protocol.ModelPatch = {
+    id: "half-url",
+    label: None,
+    api_url: Some("https://gw.example/v1/chat"),
+    full_url: None,
+    api_key: None,
+    images: None,
+    context_window: None,
+  }
+  match model_patch_error([], [half], []) {
+    Some(message) =>
+      assert_true(message.contains("a full Chat Completions URL"))
+    None => fail("a partial path must be refused")
+  }
 }
 
 ///|

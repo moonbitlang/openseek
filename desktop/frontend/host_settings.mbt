@@ -120,6 +120,19 @@ fn HostSettingsMirror::edit(
 }
 
 ///|
+/// Show an edit that is not written to the host: the field keeps what the user
+/// typed, and the next authoritative snapshot still wins. Nothing is counted, so
+/// a value that never leaves the page cannot hold the mirror in a save that no
+/// reply will ever settle.
+fn HostSettingsMirror::preview(
+  self : HostSettingsMirror,
+  endpoint : HostEndpoint,
+) -> HostSettingsMirror {
+  guard self.current is Some(current) else { return self }
+  { ..self, current: Some({ ..current, endpoint, }), }
+}
+
+///|
 /// One write went out; its reply settles it.
 fn HostSettingsMirror::write_sent(
   self : HostSettingsMirror,

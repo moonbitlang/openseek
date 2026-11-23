@@ -834,7 +834,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             provider: None,
             providers: Some({
               "custom": {
-                api_url: Some("https://custom.example/chat"),
+                api_url: Some("https://custom.example/v1/chat/completions"),
                 api_key: Some("sk-custom"),
               },
             }),
@@ -863,7 +863,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
     )
     assert_true(
       stored.provider_config(Custom).api_url
-      is Some("https://custom.example/chat"),
+      is Some("https://custom.example/v1/chat/completions"),
     )
     assert_true(stored.provider_config(Custom).api_key is Some("sk-custom"))
     // Revision is a host-process epoch, not a persistence-format change.

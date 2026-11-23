@@ -4527,6 +4527,21 @@ fn update_msg(
       guard model.host_settings() is Some({ endpoint, .. }) else {
         return (@cmd.none, model)
       }
+      let edited : HostEndpoint = {
+        ..endpoint,
+        providers: endpoint.providers.add(Custom, {
+          ..endpoint.config(Custom),
+          api_url: Some(value),
+        }),
+      }
+      // What the field shows is what the user typed; a URL this endpoint cannot
+      // post to is kept there with the hint under it and never pushed, because
+      // the host's refusal arrives as a generic save failure and the field
+      // would fall back to the value it had before. A preview, not an edit: a
+      // value that never leaves the page must not hold a save open.
+      if endpoint_url_problem(value) is Some(_) {
+        return (@cmd.none, model.preview_host_endpoint(edited))
+      }
       (
         push_host_settings(
           dispatch,
@@ -4534,13 +4549,7 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        model.edit_host_endpoint({
-          ..endpoint,
-          providers: endpoint.providers.add(Custom, {
-            ..endpoint.config(Custom),
-            api_url: Some(value),
-          }),
-        }),
+        model.edit_host_endpoint(edited),
       )
     }
     NotificationCornerChanged(value) => {
@@ -17160,6 +17169,48 @@ test "the OpenRouter provider restores independently of Custom" {
   )
   assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
+}
+
+///|
+test "a partial endpoint URL stays in the field instead of being saved" {
+  let model = test_model().with_host_settings(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="custom"))
+    { ..mirror, current: Some(current), }
+  })
+  // Base URLs, their already-complete form, and a blank field (which clears
+  // the stored value) all pass the check.
+  for
+    accepted in [
+      "https://host/v1", "https://host", "https://host/v1/chat/completions", "   ",
+    ] {
+    assert_true(endpoint_url_problem(accepted) is None)
+  }
+  // A path that is neither is refused while the user is looking at the field.
+  assert_true(
+    endpoint_url_problem("https://host/v1/chat") is Some(EndpointUrlInvalid),
+  )
+  let (_, edited) = update(
+    test_dispatch(),
+    CustomApiUrlChanged("https://host/v1/chat"),
+    model,
+  )
+  assert_eq(
+    edited
+    .host_settings()
+    .map(settings => settings.endpoint.config(Custom).api_url.unwrap_or("")),
+    Some("https://host/v1/chat"),
+  )
+  // A field that was never pushed must not count a write: no reply would ever
+  // settle it, and a stuck count keeps every connection test disabled.
+  assert_eq(edited.host_settings_mirror().saves, 0)
+  assert_false(edited.host_settings_saving())
+  let (_, saved) = update(
+    test_dispatch(),
+    CustomApiUrlChanged("https://host/v1"),
+    model,
+  )
+  assert_eq(saved.host_settings_mirror().saves, 1)
+  assert_true(saved.host_settings_saving())
 }
 
 ///|
