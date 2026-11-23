@@ -32,6 +32,20 @@ for (const desktop of [true, false]) {
     await cloud.open(sessionB);
     await expect.poll(async () => (await cache()).size).toBe(2);
     const etag = (await cache()).get(sessionA).etag;
+    if (!desktop) {
+      // An upgraded cache can have a page with no catalog row yet.
+      await page.evaluate(([origin, session]) => new Promise((resolve, reject) => {
+        const open = indexedDB.open('seekmoon.cloud-history.v1');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction('catalog', 'readwrite');
+          tx.objectStore('catalog').delete([origin, '123', session]);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onabort = () => reject(tx.error);
+        };
+      }), [cloudOrigin, sessionB]);
+    }
 
     let releaseList;
     cloud.pauseList = new Promise(resolve => { releaseList = resolve; });
@@ -39,8 +53,25 @@ for (const desktop of [true, false]) {
     const offlineHistory = url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionB}/messages`;
     const offlineRead = route => route.request().method() === 'GET' ? route.abort('failed') : route.fallback();
     await page.route(offlineHistory, offlineRead);
+    if (!desktop) await page.addInitScript(() => {
+      window.historyPageReads = [];
+      for (const api of [IDBObjectStore, IDBIndex]) {
+        for (const method of ['getAll', 'get']) {
+          const read = api.prototype[method];
+          api.prototype[method] = function (...args) {
+            const store = this.objectStore || this;
+            if (['pages', 'minimalPages'].includes(store.name)) window.historyPageReads.push(store.name);
+            return read.apply(this, args);
+          };
+        }
+      }
+    });
     await cloud.goto();
     await expect(cloud.row(sessionA)).toHaveText('Cached question A');
+    if (!desktop) {
+      await expect(cloud.row(sessionB)).toHaveText(sessionB);
+      expect(await page.evaluate(() => window.historyPageReads)).toEqual([]);
+    }
     let releaseHistory;
     cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
     const historyPath = `/v1/sessions/${sessionA}/messages`;
@@ -88,7 +119,7 @@ for (const desktop of [true, false]) {
 
 async function changeCacheRows(page, corrupt) {
   await page.evaluate(corrupt => new Promise((resolve, reject) => {
-    const request = indexedDB.open('seekmoon.cloud-history.v1', 2);
+    const request = indexedDB.open('seekmoon.cloud-history.v1');
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;

@@ -56,6 +56,19 @@ async test "Cloud history survives a host restart and follows account retirement
     reopened.cloud_history_cache(read)
     is Page(Some({ etag: Some("etag-1"), .. })),
   )
+  // Listing still finds the saved title even if neither page can be decoded.
+  let cache_dir = root.join("cloud-history-cache").join("123")
+  for dir in [cache_dir, cache_dir.join("minimal")] {
+    @fsx.write_text(dir.join("chat-a.json"), "invalid page")
+  }
+  // Pre-catalog pages remain selectable by ID without opening their bodies.
+  @fsx.write_text(cache_dir.join("legacy.json"), "invalid legacy page")
+  let entries = reopened.cloud_history_cache({ ..write, action: List, })
+  guard entries is Entries(rows) else { fail("missing catalog") }
+  assert_true(rows.any(row => row.session == "legacy" && row.label == "legacy"))
+  ignore(
+    reopened.cloud_history_cache({ ..write, action: Remove(session="legacy"), }),
+  )
   assert_true(
     reopened.cloud_history_cache({ ..write, action: List, })
     is Entries([{ session: "chat-a", label: "Cached chat", }]),
@@ -94,7 +107,6 @@ async test "Cloud history survives a host restart and follows account retirement
     reopened.cloud_history_cache({ token: second.account.token, action: List, })
     is Entries([]),
   )
-  let cache_dir = root.join("cloud-history-cache").join("123")
   assert_eq(@fs.readdir(cache_dir.join("minimal").to_string()), [])
   assert_eq(
     @fs.readdir(cache_dir.to_string()).filter(name => name.has_suffix(".json")),

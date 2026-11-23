@@ -49,7 +49,7 @@ pub async fn AuthStore::cloud_history_cache(
   }
   match request.action {
     List => {
-      let entries : Map[String, @protocol.CloudHistoryCacheEntry] = Map([])
+      let sessions : Set[String] = Set([])
       for view in [@protocol.CloudHistoryView::Detail, Minimal] {
         let dir = pages(view)
         if @fsx.Directory::try_open(dir) is Some(directory) {
@@ -58,15 +58,20 @@ pub async fn AuthStore::cloud_history_cache(
             guard name.strip_suffix(".json") is Some(prefix) else { continue }
             let session = prefix.to_owned()
             if valid_cache_id(session) &&
-              !self.cloud_history_deleted.contains((user, session)) &&
-              (read_cloud_history(dir.join(name)) catch { _ => None })
-              is Some(page) {
-              entries[session] = { session, label: page.label(session), }
+              !self.cloud_history_deleted.contains((user, session)) {
+              sessions.add(session)
             }
           }
         }
       }
-      Entries(entries.values().to_array())
+      let entries : Array[@protocol.CloudHistoryCacheEntry] = []
+      for session in sessions {
+        let label = @fsx.try_read_text(dir.join(session + ".label")).unwrap_or(
+          session,
+        )
+        entries.push({ session, label, })
+      }
+      Entries(entries)
     }
     Read(session~, view~) => {
       guard valid_cache_id(session) &&
@@ -76,16 +81,19 @@ pub async fn AuthStore::cloud_history_cache(
       Page(read_cloud_history(pages(view).join(session + ".json")))
     }
     Write(session~, page~, view~) => {
-      let dir = pages(view)
       if valid_cache_id(session) &&
         !self.cloud_history_deleted.contains((user, session)) {
-        @fs.mkdir(dir.to_string(), recursive=true, permission=0o700) catch {
+        @fs.mkdir(pages(view).to_string(), recursive=true, permission=0o700) catch {
           @os_error.OsError(AlreadyExists, ..) => ()
           error => raise error
         }
         @openseek/atomic_file.write_text_atomic(
-          dir.join(session + ".json").to_string(),
+          pages(view).join(session + ".json").to_string(),
           page.to_json().stringify(),
+        )
+        @openseek/atomic_file.write_text_atomic(
+          dir.join(session + ".label").to_string(),
+          page.label(session),
         )
       }
       Done
@@ -96,6 +104,7 @@ pub async fn AuthStore::cloud_history_cache(
         for view in [@protocol.CloudHistoryView::Detail, Minimal] {
           @fsx.remove_if_exists(pages(view).join(session + ".json"))
         }
+        @fsx.remove_if_exists(dir.join(session + ".label"))
       }
       Done
     }

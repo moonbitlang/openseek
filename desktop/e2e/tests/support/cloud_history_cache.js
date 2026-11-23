@@ -1,6 +1,6 @@
 export async function historyCacheRows(page, store = 'minimalPages') {
   return page.evaluate(store => new Promise((resolve, reject) => {
-    const request = indexedDB.open('seekmoon.cloud-history.v1', 2);
+    const request = indexedDB.open('seekmoon.cloud-history.v1');
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;
