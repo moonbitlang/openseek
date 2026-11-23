@@ -234,7 +234,7 @@ async fn with_worktree_fork_fixture(
 async test "a fork of a worktree conversation works in a checkout of its own" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let prompt = "  Project rules\n中文\n"
-    @shared_fsx.write_text_atomic(
+    @openseek/fsx.write_text_atomic(
       session_prompt_path(store, SessionId("s-src")).to_string(),
       prompt,
     )
@@ -312,7 +312,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
 #cfg(not(platform="windows"))
 async test "a later-message edit takes over its source's checkout" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
-    @shared_fsx.write_text_atomic(
+    @openseek/fsx.write_text_atomic(
       session_prompt_path(store, SessionId("s-src")).to_string(),
       "",
     )
@@ -478,7 +478,7 @@ async test "a fork cancelled after its record was written keeps its worktree and
 async test "a side chat is a numbered member of its conversation's family" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let prompt = "Side chat instructions"
-    @shared_fsx.write_text_atomic(
+    @openseek/fsx.write_text_atomic(
       session_prompt_path(store, SessionId("s-src")).to_string(),
       prompt,
     )

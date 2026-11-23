@@ -323,7 +323,7 @@ pub async fn update_settings(
   if custom_prompt is Some(_) {
     let path = custom_prompt_path()
     @fsx.ensure_dir(path.dirname())
-    @shared_fsx.write_text_atomic(path.to_string(), text)
+    @openseek/fsx.write_text_atomic(path.to_string(), text)
   } else {
     write_settings_file(dir, Json(raw).stringify(indent=2))
   }
@@ -365,7 +365,7 @@ fn apply_text_patch(
 /// never leave a truncated store, and the contents must never be readable by
 /// other users.
 async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
-  @shared_fsx.write_text_atomic(
+  @openseek/fsx.write_text_atomic(
     settings_file(runtime_dir).to_string(),
     text,
     permission=0o600,

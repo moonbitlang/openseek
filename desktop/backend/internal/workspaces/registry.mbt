@@ -166,7 +166,7 @@ async fn write_registry(registry : Registry) -> Unit {
     "workspaces": Json(registry.workspaces.map(path => path.0)),
     "initialized": Json(registry.initialized),
   }
-  @shared_fsx.write_text_atomic(
+  @openseek/fsx.write_text_atomic(
     root.join(WorkspacesFile).to_string(),
     json.stringify(indent=2),
   ) catch {

@@ -96,7 +96,7 @@ async fn save_session_file(
   session : AuthSession,
 ) -> Unit {
   let text = session_to_json(session).stringify(indent=2)
-  @shared_fsx.write_text_atomic(
+  @openseek/fsx.write_text_atomic(
     auth_file(runtime_dir).to_string(),
     text,
     permission=0o600,

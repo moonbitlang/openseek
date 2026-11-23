@@ -17,7 +17,7 @@ import {
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/message_receipts",
   "openseek_desktop/backend/internal/fsx",
-  "moonbitlang/openseek/fsx" @shared_fsx,
+  "moonbitlang/openseek/fsx" @openseek/fsx,
   "openseek_desktop/backend/internal/files",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/moonbit",

@@ -2,7 +2,7 @@ import {
   "moonbitlang/core/env" @sys,
   "openseek_desktop/backend/entropy",
   "openseek_desktop/backend/internal/fsx",
-  "moonbitlang/openseek/fsx" @shared_fsx,
+  "moonbitlang/openseek/fsx" @openseek/fsx,
   "openseek_desktop/backend/internal/gitx",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/protocol",

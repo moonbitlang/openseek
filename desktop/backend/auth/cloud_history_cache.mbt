@@ -73,7 +73,7 @@ pub async fn AuthStore::cloud_history_cache(
           @os_error.OsError(AlreadyExists, ..) => ()
           error => raise error
         }
-        @shared_fsx.write_text_atomic(
+        @openseek/fsx.write_text_atomic(
           dir.join(session + ".json").to_string(),
           page.to_json().stringify(),
         )

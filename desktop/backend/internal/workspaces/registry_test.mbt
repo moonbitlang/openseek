@@ -151,7 +151,7 @@ async test "an attach waits for another host's change and keeps its entry" {
     group.spawn_bg(() => @workspaces.register_task_directory(ours))
     // Long enough for the attach to reach the lock and block on it.
     @async.sleep(100)
-    @shared_fsx.write_text_atomic(
+    @openseek/fsx.write_text_atomic(
       registry.to_string(),
       ({ "workspaces": [theirs.to_string()], "initialized": true } : Json).stringify(),
     )
