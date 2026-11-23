@@ -13,7 +13,7 @@ import {
 // Values
 pub const RenameFieldId : String = "conversation-rename-input"
 
-pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], Actions, @rabbita.Val[Search]) -> @rabbita.Val[Array[(String, @html.Html)]]
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], Actions, @rabbita.Val[Search]) -> @rabbita.Val[(String, @html.Html)]
 
 pub fn open_id(Id) -> String
 
