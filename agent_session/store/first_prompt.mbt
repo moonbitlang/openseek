@@ -1,18 +1,11 @@
 ///|
-/// Lines scanned from the front of a session file while looking for the first
-/// user prompt, not counting the header line. The agent appends the user turn
-/// as a session's first event, so this is normally one line; the cap keeps a
-/// pathological log from turning a listing into a full read.
-let first_prompt_scan_limit : Int32 = 50
-
-///|
 /// The first user prompt recorded in the session file at `path`, or `None`
 /// when none is found within the scan limit. `Some("")` is actual empty text.
 /// Read and parse failures raise at the time of the read.
 /// Streams line by line instead of loading the session: a listing only needs a
 /// label, and long or compacted histories should not make the sidebar
 /// deserialize every event ever appended.
-pub async fn read_first_prompt(path : String) -> String? {
+async fn read_first_prompt(path : String) -> String? {
   let file = @fs.open(path, mode=ReadOnly)
   defer file.close()
   // The first line is the session header; the prompt scan starts after it.

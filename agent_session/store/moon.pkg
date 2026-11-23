@@ -24,6 +24,10 @@ import {
   "moonbitlang/core/async/fs",
 } for "test"
 
+import {
+  "moonbitlang/core/async",
+} for "wbtest"
+
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"

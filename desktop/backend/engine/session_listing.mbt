@@ -49,12 +49,7 @@ async fn session_group(
         title
       } else if stamp is Some(_) {
         // A damaged transcript must not hide the rest of the sidebar.
-        (store.backfill_title(
-          id,
-          read_first_prompt=@session_preview.read_first_prompt,
-        ) catch {
-          _ => None
-        }).unwrap_or("")
+        (store.backfill_title(id) catch { _ => None }).unwrap_or("")
       } else {
         ""
       }

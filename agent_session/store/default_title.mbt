@@ -72,7 +72,6 @@ async fn SessionStore::initialize_title(
 pub async fn SessionStore::backfill_title(
   self : SessionStore,
   id : @agent_session.SessionId,
-  read_first_prompt~ : async (String) -> String?,
 ) -> String? {
   let transcript = self.session_file_path(id)
   with_session_lock(self, id, Exclusive, () => {
