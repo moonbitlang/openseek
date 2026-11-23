@@ -265,6 +265,49 @@ test "Cloud hides a sealed reasoning preview only after this step committed it" 
 }
 
 ///|
+test "a completed minimal page retires the intermediate SSE reply it omits" {
+  let live = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .progress_test_event(2, "assistant_message", { "content": "Checking" })
+    .progress_test_event(3, "assistant_message", { "content": "Final" })
+    .progress_test_event(4, "task_finished", { "status": "completed" })
+  let record : Record = {
+    task_id: "task",
+    kind: "assistant_message",
+    data: {},
+    created_at: 1,
+    engine_sequence: Some(2),
+  }
+  let page : History = {
+    offset: Some(0),
+    prediction: None,
+    generating: false,
+    etag: None,
+    session: native_turn(2, [
+      { "kind": "assistant", "payload": { "content": "Final" } },
+      {
+        "kind": "terminal",
+        "payload": { "kind": "finished", "message": "Final" },
+      },
+    ]),
+    messages: [
+      record,
+      {
+        ..record,
+        kind: "task_finished",
+        engine_sequence: None,
+        data: { "status": "completed" },
+      },
+    ],
+  }
+  assert_eq(live.conversations["session"].pending_assistants.length(), 2)
+  assert_true(
+    live.latest_read(page).conversations["session"].items(English)
+    is [{ kind: Assistant(prose=Some("Final"), finished=true, ..), .. }],
+  )
+}
+
+///|
 test "Cloud keeps an assistant preview when the latest page moves past its turn" {
   let pending = progress_test_state()
     .progress_test_event(1, "task_started", {})

@@ -159,12 +159,18 @@ pub fn Conversation::extends_history_backward(
 fn Conversation::with_latest_page(
   self : Conversation,
   history : History,
+  view : @protocol.CloudHistoryView,
   request? : Int32,
 ) -> Conversation {
   // Disk hydration supplies no request because its snapshot can predate SSE.
   let self = match request {
     Some(request) =>
-      self.acknowledge_assistants(request, history.session, history.messages)
+      self.acknowledge_assistants(
+        request,
+        history.session,
+        history.messages,
+        minimal_page=view is Minimal,
+      )
     None => self
   }
   guard history.offset is Some(offset) else {
@@ -191,6 +197,7 @@ fn Conversation::with_latest_page(
 fn Conversation::with_older_page(
   self : Conversation,
   history : History,
+  view : @protocol.CloudHistoryView,
   request : Int32,
 ) -> Conversation {
   guard history.offset is Some(offset) &&
@@ -198,7 +205,12 @@ fn Conversation::with_older_page(
     return self
   }
   self
-  .acknowledge_assistants(request, history.session, history.messages)
+  .acknowledge_assistants(
+    request,
+    history.session,
+    history.messages,
+    minimal_page=view is Minimal,
+  )
   .with_history_window(window)
 }
 
@@ -208,6 +220,7 @@ fn Conversation::with_turn_page(
   self : Conversation,
   offset : Int32,
   history : History,
+  view : @protocol.CloudHistoryView,
   request : Int32,
 ) -> Conversation {
   guard history.offset == Some(offset) &&
@@ -215,7 +228,12 @@ fn Conversation::with_turn_page(
     return self
   }
   self
-  .acknowledge_assistants(request, history.session, history.messages)
+  .acknowledge_assistants(
+    request,
+    history.session,
+    history.messages,
+    minimal_page=view is Minimal,
+  )
   .with_history_window(window)
 }
 
@@ -247,14 +265,14 @@ fn Conversation::with_history_window(
 }
 
 ///|
-/// Only an assistant actually present in the returned document can replace
-/// its preview. A task may contain several identical replies, so consume
-/// matching native sequences once and in order.
+/// Completed minimal turns may omit intermediate replies. For other turns,
+/// consume matching native sequences once and in order.
 fn Conversation::acknowledge_assistants(
   self : Conversation,
   request : Int32,
   document : @protocol.SessionDocument,
   records : Array[Record],
+  minimal_page~ : Bool = false,
 ) -> Conversation {
   guard !self.pending_assistants.is_empty() else { return self }
   let events = document.events
@@ -287,6 +305,12 @@ fn Conversation::acknowledge_assistants(
     guard pending.history_request.map_or(true, first => request >= first) &&
       pending.item.kind is @transcript.Assistant(prose~, reasoning~, ..) else {
       return true
+    }
+    if minimal_page &&
+      records.any(record => {
+        record.task_id == pending.task && record.kind == "task_finished"
+      }) {
+      return false
     }
     let after = matched.get(pending.task).unwrap_or(0)
     guard events

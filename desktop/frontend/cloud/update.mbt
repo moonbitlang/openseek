@@ -1225,7 +1225,7 @@ pub fn update(
         id,
         if history is Some(history) && !conversation.history_cached {
           let cached = conversation
-            .with_latest_page(history)
+            .with_latest_page(history, state.history_view)
             .with_prediction(history.prediction)
           {
             ..cached.restore_goal(cached.document),
@@ -1257,7 +1257,11 @@ pub fn update(
       }
       let conversation = { ..conversation, history_older_request: None, }
       let next = if owner == navigation && history.offset == Some(offset) {
-        conversation.with_older_page({ ..history, generating: false, }, request)
+        conversation.with_older_page(
+          { ..history, generating: false, },
+          state.history_view,
+          request,
+        )
       } else {
         { ..conversation, history_restore_range: None, }
       }
@@ -1275,6 +1279,7 @@ pub fn update(
       let settled = conversation.with_turn_page(
         offset,
         { ..history, generating: false, },
+        state.history_view,
         request,
       )
       let next = state.replace(id, { ..settled, history_turn_request: None, })
@@ -1327,6 +1332,7 @@ pub fn update(
     Loaded(epoch, id, request, history) => {
       let conversation = state.conversations[id].with_latest_page(
         history,
+        state.history_view,
         request~,
       )
       let accepted = conversation.pending is Some(submission) &&
@@ -1469,12 +1475,14 @@ pub fn update(
             request,
             page.session,
             page.messages,
+            minimal_page=state.history_view is Minimal,
           )
         None =>
           conversation.acknowledge_assistants(
             request,
             conversation.document,
             conversation.records,
+            minimal_page=state.history_view is Minimal,
           )
       }
       let next = state.replace(id, {
