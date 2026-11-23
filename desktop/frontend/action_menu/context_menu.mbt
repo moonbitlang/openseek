@@ -55,8 +55,18 @@ priv struct ContextOpen {
 }
 
 ///|
+#derive(Eq)
+priv enum ContextState {
+  NoContextMenu
+  WaitingForRelease(String, ContextOpen)
+  Visible(String, ContextOpen)
+}
+
+///|
 priv enum ContextMsg {
-  Requested(ContextOpen)
+  Requested(ContextOpen, wait_for_release~ : Bool)
+  Released(String?)
+  Cancelled
   Closed(ContextOpen)
 }
 
@@ -316,7 +326,7 @@ fn context_definition(
 /// Register a content region, without installing RUI's menu keyboard handler
 /// on its descendants. Nested controls and editable elements retain first refusal.
 pub fn content_attrs(region : String) -> @html.Attrs {
-  let request = (event : @dom.Event, x, y, keyboard) => {
+  let request = (event : @dom.Event, x, y, keyboard, wait_for_release) => {
     guard !event.get_default_prevented() &&
       event_element(event) is Some(element) &&
       !context_editable(element) &&
@@ -347,7 +357,9 @@ pub fn content_attrs(region : String) -> @html.Attrs {
       // An internal, typed in-memory event, not a JSON wire message.
       let event = @dom.CustomEvent::new(
         ContentContextEvent,
-        detail=@js.Optional::from_option(Some(@js.Value::cast_from(context))),
+        detail=@js.Optional::from_option(
+          Some(@js.Value::cast_from(Requested(context, wait_for_release~))),
+        ),
       )
       @dom.document().as_event_target().dispatch_event(event.as_event())
     })
@@ -357,7 +369,15 @@ pub fn content_attrs(region : String) -> @html.Attrs {
   .on_contextmenu(event => {
     let x = event.get_client_x().to_int()
     let y = event.get_client_y().to_int()
-    request(event.as_event(), x, y, x == 0 && y == 0)
+    // An auto popover opened during the press can be dismissed by the
+    // browser on release of the same right click.
+    request(
+      event.as_event(),
+      x,
+      y,
+      x == 0 && y == 0,
+      (event.get_buttons() & 2) != 0,
+    )
   })
   .on_keydown(event => {
     guard !event.is_composing() &&
@@ -368,7 +388,7 @@ pub fn content_attrs(region : String) -> @html.Attrs {
       ) else {
       return @cmd.none
     }
-    request(event.as_event(), 0, 0, true)
+    request(event.as_event(), 0, 0, true, false)
   })
 }
 
@@ -380,11 +400,11 @@ pub fn content_region(region : String, content : @html.Html) -> @html.Html {
 
 ///|
 priv suberror ContextSubscription {
-  ContextSubscription(@cmd.Emit[ContextOpen])
+  ContextSubscription(@cmd.Emit[ContextMsg])
 }
 
 ///|
-fn context_subscription(emit : @cmd.Emit[ContextOpen]) -> @sub.Sub {
+fn context_subscription(emit : @cmd.Emit[ContextMsg]) -> @sub.Sub {
   @sub.custom_sub("content-context-open", Local, ContextSubscription(emit), (
     payload,
     scheduler,
@@ -392,14 +412,36 @@ fn context_subscription(emit : @cmd.Emit[ContextOpen]) -> @sub.Sub {
     guard payload is ContextSubscription(emit) else { return None }
     let mut emit = emit
     let target = @dom.document().as_event_target()
+    let window = @dom.window().as_event_target()
     let listener : @dom.Listener = event => {
       if event.to_custom_event() is Some(event) {
         scheduler.add(emit(event.get_detail().cast()))
       }
     }
+    let release : @dom.Listener = event => {
+      if event.to_mouse_event() is Some(mouse) && mouse.get_button() == 2 {
+        let region = event_element(event)
+          .bind(element => element.closest("[data-content-context]"))
+          .bind(element => element.get_attribute("data-content-context"))
+        scheduler.add(
+          emit(Released(region.map(region => "content-context:" + region))),
+        )
+      }
+    }
+    let cancel : @dom.Listener = _ => scheduler.add(emit(Cancelled))
     target.add_event_listener(ContentContextEvent, listener)
+    target.add_event_listener_with_options("mouseup", release, capture=true)
+    window.add_event_listener("blur", cancel)
     Some({
-      unload: _ => target.remove_event_listener(ContentContextEvent, listener),
+      unload: _ => {
+        target.remove_event_listener(ContentContextEvent, listener)
+        target.remove_event_listener_with_options(
+          "mouseup",
+          release,
+          capture=true,
+        )
+        window.remove_event_listener("blur", cancel)
+      },
       update_tagger: payload => {
         if payload is ContextSubscription(next) {
           emit = next
@@ -419,14 +461,44 @@ pub fn context_component(
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, _) => (None, @cmd.none),
+    init=(_, _) => (NoContextMenu, @cmd.none),
     update=(state, input, msg, _) => {
       match msg {
-        Requested(open) => (Some((input.scope, open)), @cmd.none)
+        Requested(open, wait_for_release~) =>
+          (
+            if wait_for_release {
+              WaitingForRelease(input.scope, open)
+            } else {
+              Visible(input.scope, open)
+            },
+            @cmd.none,
+          )
+        Released(region) =>
+          if state is WaitingForRelease(scope, open) {
+            (
+              if scope == input.scope && region == Some(open.open.target) {
+                Visible(scope, open)
+              } else {
+                NoContextMenu
+              },
+              @cmd.none,
+            )
+          } else {
+            (state, @cmd.none)
+          }
+        Cancelled =>
+          (
+            if state is WaitingForRelease(_, _) {
+              NoContextMenu
+            } else {
+              state
+            },
+            @cmd.none,
+          )
         Closed(open) =>
           (
-            if state is Some((_, current)) && current == open {
-              None
+            if state is Visible(_, current) && current == open {
+              NoContextMenu
             } else {
               state
             },
@@ -435,25 +507,23 @@ pub fn context_component(
       }
     },
     subscriptions=(state, _, emit) => {
-      @sub.batch(
-        [
-          context_subscription(emit.map(open => Requested(open))),
-          ..state.map_or([], pair => {
-            let (_, open) = pair
-            [
-              @dismiss.on_back("content-context-back", level=TopLayer, _ => {
-                emit(Closed(open))
-              }),
-              @sub.on_resize(_ => emit(Closed(open))),
-            ]
+      let requests = context_subscription(emit)
+      if state is Visible(_, open) {
+        @sub.batch([
+          requests,
+          @dismiss.on_back("content-context-back", level=TopLayer, _ => {
+            emit(Closed(open))
           }),
-        ],
-      )
+          @sub.on_resize(_ => emit(Closed(open))),
+        ])
+      } else {
+        requests
+      }
     },
   )
   state.switch_by(
     current => {
-      guard current is Some((scope, context)) else {
+      guard current is Visible(scope, context) else {
         return @rabbita.Val::constant(@html.nothing)
       }
       menu_component(
@@ -471,10 +541,11 @@ pub fn context_component(
       )
     },
     by=current => {
-      current.map_or("closed", pair => {
-        let (scope, context) = pair
+      if current is Visible(scope, context) {
         scope + context.open.key() + Repr::Repr(context.request).to_string()
-      })
+      } else {
+        "closed"
+      }
     },
   )
 }
