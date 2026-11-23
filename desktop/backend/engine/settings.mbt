@@ -256,6 +256,11 @@ pub async fn update_settings(
   followup_behavior? : String,
   prompt_source? : String,
   custom_prompt? : String,
+  // The model entries this request adds or edits, and the ids it drops. They
+  // travel as parameters rather than in `patch` because a model edit is not a
+  // provider edit: the provider slot keeps its own credential.
+  models? : Array[@protocol.ModelPatch],
+  removed_models? : Array[String],
   on_committed? : (@protocol.SettingsStatusPayload) -> Unit,
 ) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
@@ -271,6 +276,8 @@ pub async fn update_settings(
   }
   let edits_json = patch.provider is Some(_) ||
     patch.providers is Some(_) ||
+    models is Some(_) ||
+    removed_models is Some(_) ||
     followup_behavior is Some(_) ||
     prompt_source is Some(_)
   guard !(custom_prompt is Some(_) && edits_json) else {
@@ -323,6 +330,23 @@ pub async fn update_settings(
       providers[name] = Json(fields)
     }
     raw["providers"] = Json(providers)
+  }
+  if models is Some(_) || removed_models is Some(_) {
+    let stored : Array[Json] = match raw.get("models") {
+      Some(Array(items)) => items
+      _ => []
+    }
+    let entries = apply_model_patches(
+      stored,
+      models.unwrap_or([]),
+      removed_models.unwrap_or([]),
+    )
+    // An empty list is removed rather than stored: absence is the default.
+    if entries.is_empty() {
+      raw.remove("models")
+    } else {
+      raw["models"] = Json(entries)
+    }
   }
   if followup_behavior is Some(value) {
     guard value == "steer" || value == "queue" else {
