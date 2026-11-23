@@ -19,8 +19,9 @@ fn default_api_url_for_model(model : @deepseek.Model) -> String {
     Kimi(_) => KimiDefaultApiUrl
     Glm(_) => GlmDefaultApiUrl
     Deepseek(_) => DeepSeekDefaultApiUrl
-    // A custom model is only reachable through the endpoint its entry names,
-    // which the caller always passes; this value is never used.
+    // A custom model requires an explicit endpoint from its launcher; this
+    // fallback is only reached by callers (such as unit tests) that inspect
+    // `Client::context_window` without sending a request.
     Custom(_) => DeepSeekDefaultApiUrl
   }
 }

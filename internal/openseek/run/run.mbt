@@ -217,7 +217,14 @@ async fn run_general(
   match @setup.resolved_session_id(matches) {
     None => {
       let (model, thinking, api_url) = @options.agent_settings(matches)
-      guard model.api_key(matches.values) is Some(api_key) else {
+      if model is Custom(_) && api_url is None {
+        fail("an --api-url is required for custom model \{model}")
+      }
+      guard model.api_key(
+          matches.values,
+          explicit_api_key=@options.explicitly_provided(matches, "api-key"),
+        )
+        is Some(api_key) else {
         fail("an API key is required for \{model}: pass --api-key")
       }
       let session_scratch_dir = @fs.tmpdir(prefix="openseek-session-")
@@ -272,7 +279,14 @@ async fn run_general(
       let (model, thinking, api_url) = @setup.session_agent_settings(
         matches, recorded,
       )
-      guard model.api_key(matches.values) is Some(api_key) else {
+      if model is Custom(_) && api_url is None {
+        fail("an --api-url is required for custom model \{model}")
+      }
+      guard model.api_key(
+          matches.values,
+          explicit_api_key=@options.explicitly_provided(matches, "api-key"),
+        )
+        is Some(api_key) else {
         fail("an API key is required for \{model}: pass --api-key")
       }
       let writer = @setup.SessionWriter(

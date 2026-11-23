@@ -13,10 +13,16 @@
 /// from, not for what to say when there is none.
 
 ///|
-/// Resolve the API key for this model: an explicit `--api-key` wins, then the
-/// provider-specific option (which each command table backs with the
-/// provider's environment variable). `None` when neither is set — whether that
-/// is fatal is the caller's call.
+/// Resolve the API key for this model: an explicit `--api-key` flag wins, then
+/// the provider-specific option (which each command table backs with the
+/// provider's environment variable), and finally an ambient `--api-key`
+/// environment fallback (`OPENSEEK_API_KEY`). `None` when none is set —
+/// whether that is fatal is the caller's call.
+///
+/// Checking `explicit_api_key` before provider-specific variables ensures an
+/// ambient `OPENSEEK_API_KEY` in the shell never outranks `DEEPSEEK`, `KIMI`,
+/// or `GLM` for a built-in model, while `--api-key k` on the command line
+/// still wins over everything.
 ///
 /// Matching the model together with the parsed options makes the whole
 /// resolution one ordered list of arms: the first arm to match is the key to
@@ -27,16 +33,19 @@
 pub fn Model::api_key(
   self : Model,
   opts : Map[String, Array[String]],
+  explicit_api_key~ : Bool = true,
 ) -> String? {
   // `trim` yields a borrowed view; the caller owns the key, so copy out.
   match (self, opts) {
-    (_, { "api-key": [k, ..], .. }) if !k.is_blank() =>
+    (_, { "api-key": [k, ..], .. }) if explicit_api_key && !k.is_blank() =>
       Some(k.trim().to_owned())
     (Deepseek(_), { "deepseek-api-key": [k, ..], .. }) if !k.is_blank() =>
       Some(k.trim().to_owned())
     (Kimi(_), { "kimi-api-key": [k, ..], .. }) if !k.is_blank() =>
       Some(k.trim().to_owned())
     (Glm(_), { "glm-api-key": [k, ..], .. }) if !k.is_blank() =>
+      Some(k.trim().to_owned())
+    (_, { "api-key": [k, ..], .. }) if !k.is_blank() =>
       Some(k.trim().to_owned())
     _ => None
   }

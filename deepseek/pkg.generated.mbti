@@ -87,7 +87,7 @@ pub(all) enum Model {
   Glm(GlmVariant)
   Custom(String)
 }
-pub fn Model::api_key(Self, Map[String, Array[String]]) -> String?
+pub fn Model::api_key(Self, Map[String, Array[String]], explicit_api_key? : Bool) -> String?
 pub fn Model::api_key_env(Self) -> String
 pub fn Model::context_window(Self) -> Int32
 pub fn Model::output(Self, &Logger) -> Unit

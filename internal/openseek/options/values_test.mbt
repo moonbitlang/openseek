@@ -160,3 +160,40 @@ test "cli rejects invalid review deadline" {
   }
   fail("invalid review deadline parsed")
 }
+
+///|
+test "ambient OPENSEEK_API_KEY never outranks provider keys for built-in models" {
+  let env_only = @testkit.run_matches(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "ds-key",
+    "OPENSEEK_API_KEY": "custom-key",
+  })
+  let ds : @deepseek.Model = Deepseek(V4Flash)
+  assert_eq(
+    ds.api_key(
+      env_only.values,
+      explicit_api_key=@options.explicitly_provided(env_only, "api-key"),
+    ),
+    Some("ds-key"),
+  )
+  // An explicit --api-key flag still wins over the provider variable.
+  let explicit = @testkit.run_matches(
+    argv=["--api-key", "flag-key", "write", "MoonBit"],
+    env={ "DEEPSEEK": "ds-key", "OPENSEEK_API_KEY": "custom-key" },
+  )
+  assert_eq(
+    ds.api_key(
+      explicit.values,
+      explicit_api_key=@options.explicitly_provided(explicit, "api-key"),
+    ),
+    Some("flag-key"),
+  )
+  // Custom models still read OPENSEEK_API_KEY from the environment.
+  let custom : @deepseek.Model = Custom("gemini-4-hydrogen")
+  assert_eq(
+    custom.api_key(
+      env_only.values,
+      explicit_api_key=@options.explicitly_provided(env_only, "api-key"),
+    ),
+    Some("custom-key"),
+  )
+}
