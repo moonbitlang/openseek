@@ -42,12 +42,12 @@ fn RewriteStage::feed(self : RewriteStage, chunk : String) -> String {
 
 ///|
 /// Read-only view of a job's retained output after ordered literal rewrites.
-pub struct DisplayTail {
-  priv stages : Array[RewriteStage]
-  priv tail : FixedArray[Char]
-  priv mut next : Int32
+struct DisplayTail {
+  stages : Array[RewriteStage]
+  tail : FixedArray[Char]
+  mut next : Int32
   // Saturates at capacity + 1 to distinguish an exact fit from truncation.
-  priv mut count : Int32
+  mut count : Int32
 }
 
 ///|

@@ -13,9 +13,7 @@ pub let default_hard_cap : Int32
 // Errors
 
 // Types and methods
-pub struct DisplayTail {
-  // private fields
-}
+type DisplayTail
 pub fn DisplayTail::snapshot(Self) -> DisplayTailSnapshot
 
 #derive(Eq, @debug.Debug)
