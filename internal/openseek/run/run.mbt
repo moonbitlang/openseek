@@ -214,6 +214,7 @@ async fn run_general(
     )
   }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
+  let context_window = @options.context_window()
   match @setup.resolved_session_id(matches) {
     None => {
       let (model, thinking, api_url) = @options.agent_settings(matches)
@@ -255,6 +256,7 @@ async fn run_general(
         max_steps?,
         thinking~,
         api_url?,
+        context_window?,
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,
@@ -334,6 +336,7 @@ async fn run_general(
         max_steps?,
         thinking~,
         api_url?,
+        context_window?,
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,

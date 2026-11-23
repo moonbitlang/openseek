@@ -1645,11 +1645,7 @@ async test "an oversized tool result is clamped at the loop" {
 /// this build assumes for an unknown id — no pressure at all — and 92% of the
 /// 128K the launcher states, which must yield.
 ///
-/// The window is stated here rather than exported as `OPENSEEK_CONTEXT_WINDOW`:
-/// async tests in one package run concurrently, so a test that set the process
-/// variable would decide what every other test's turn plans against. The
-/// desktop engine's own test covers the host exporting it, and the parse of the
-/// variable is covered on its own in `context_window_wbtest.mbt`.
+/// This test exercises the explicit window that the launcher passes to the agent.
 async test "a stated context window decides the ceiling" {
   @async.with_task_group() <| group => {
     let checkpoint_requests : Array[Json] = []

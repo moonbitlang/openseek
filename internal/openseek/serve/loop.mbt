@@ -84,6 +84,7 @@ async fn run_serve(
     fail("an API key is required for \{model}: pass --api-key")
   }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
+  let context_window = @options.context_window()
   let max_steps = @options.max_steps(matches)
   let review_deadline_ms = @options.review_deadline_ms(matches)
   let writer = match durable {
@@ -515,6 +516,7 @@ async fn run_serve(
           max_steps?,
           thinking~,
           api_url?,
+          context_window?,
           retry_attempts?,
           retry_backoff_ms?,
           tools~,

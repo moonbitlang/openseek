@@ -5,8 +5,6 @@ import {
   "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/core/int",
-  "moonbitlang/core/env",
-  "moonbitlang/core/string",
   "moonbitlang/openseek/agent_session/compact",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool",
