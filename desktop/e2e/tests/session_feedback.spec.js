@@ -230,8 +230,16 @@ test('a Cloud conversation can send the next chat message before feedback finish
   await app.open();
   const task = page.locator('#task');
   const status = page.locator('.composer-feedback-status');
-  await task.fill('/feedback ' + message);
-  await task.press('Enter');
+  // Deliver input and Enter before the composer can render the typed draft.
+  await task.evaluate((field, command) => {
+    field.focus();
+    field.value = command;
+    field.dispatchEvent(new InputEvent('input', { bubbles: true, data: command, inputType: 'insertText' }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13,
+    }));
+  }, '/feedback ' + message);
+  await expect(status).toContainText('Submitting feedback…');
   await expect(task).toHaveValue('');
   await task.fill('next chat message');
   await task.press('Enter');
@@ -239,6 +247,8 @@ test('a Cloud conversation can send the next chat message before feedback finish
     r.path.endsWith('/commands') && JSON.parse(r.body).command?.content === 'next chat message'
   )).toBe(true);
   await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
+  await task.fill('unsent draft while feedback is pending');
   release();
   await expect(status).toHaveText('Feedback submitted');
+  await expect(task).toHaveValue('unsent draft while feedback is pending');
 });

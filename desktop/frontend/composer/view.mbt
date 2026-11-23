@@ -925,6 +925,7 @@ priv struct View {
   before_inner : Map[String, @html.Html]
   mentions : Array[@html.Html]
   value : String
+  empty_message_owner : String?
   // The draft is a `!` shell command: the input wears the shell-mode chip
   // and monospace text.
   shell : Bool
@@ -964,6 +965,13 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   for action in self.actions {
     actions[action.id] = action.render(locale~)
   }
+  // The surrounding card owns the visible focus frame.
+  let input_attrs = self.keyboard.attrs().data_set("focus-target", "")
+  let input_attrs = if self.empty_message_owner is Some(owner) {
+    input_attrs.data_set("empty-message-owner", owner)
+  } else {
+    input_attrs
+  }
   let inner : Array[@html.Html] = [
     self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita
@@ -984,10 +992,7 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
           placeholder=self.placeholder,
           disabled=self.disabled,
           on_input=self.input,
-          // The surrounding card owns the visible focus frame; this marker lets
-          // the global focus styling find the textarea without drawing a second
-          // border around the control itself.
-          attrs=self.keyboard.attrs().data_set("focus-target", ""),
+          attrs=input_attrs,
           "",
         ),
         // Appended after the textarea, so the chip coming and going never
