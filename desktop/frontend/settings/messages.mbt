@@ -97,6 +97,9 @@ pub(all) enum Message {
   CustomApiKey
   SavedKey
   ApiKey
+  TestConnection
+  TestingConnection
+  ConnectionSuccessful
   SaveApiKey
   KeyStorageDescription
   Language
@@ -860,6 +863,21 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ApiKey) => "API 密钥"
     (TraditionalChinese, ApiKey) => "API 金鑰"
     (Japanese, ApiKey) => "API キー"
+    (English, TestConnection) => "Test connection"
+    (Spanish, TestConnection) => "Probar conexión"
+    (SimplifiedChinese, TestConnection) => "测试连接"
+    (TraditionalChinese, TestConnection) => "測試連線"
+    (Japanese, TestConnection) => "接続をテスト"
+    (English, TestingConnection) => "Testing connection…"
+    (Spanish, TestingConnection) => "Probando conexión…"
+    (SimplifiedChinese, TestingConnection) => "正在测试连接…"
+    (TraditionalChinese, TestingConnection) => "正在測試連線…"
+    (Japanese, TestingConnection) => "接続をテストしています…"
+    (English, ConnectionSuccessful) => "Connection successful"
+    (Spanish, ConnectionSuccessful) => "Conexión establecida"
+    (SimplifiedChinese, ConnectionSuccessful) => "连接成功"
+    (TraditionalChinese, ConnectionSuccessful) => "連線成功"
+    (Japanese, ConnectionSuccessful) => "接続に成功しました"
     (English, SaveApiKey) => "Save API key"
     (Spanish, SaveApiKey) => "Guardar clave de API"
     (SimplifiedChinese, SaveApiKey) => "保存 API 密钥"

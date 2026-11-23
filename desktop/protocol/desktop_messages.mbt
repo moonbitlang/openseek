@@ -1577,6 +1577,44 @@ pub impl ToJson for ProviderStatus with fn to_json(self) {
 }
 
 ///|
+/// Saved settings revision to test.
+#derive(Debug, Eq)
+pub(all) struct ApiConnectionProbePayload {
+  revision : Int32
+}
+
+///|
+pub impl FromJson for ApiConnectionProbePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "API connection probe payload")
+  { revision: object.required_int("revision"), }
+}
+
+///|
+pub impl ToJson for ApiConnectionProbePayload with fn to_json(self) {
+  { "revision": Json(self.revision) }
+}
+
+///|
+#derive(Debug, Eq)
+pub(all) struct ApiConnectionProbeReply {
+  error : String?
+}
+
+///|
+pub impl FromJson for ApiConnectionProbeReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "API connection probe reply")
+  { error: object.optional_string("error"), }
+}
+
+///|
+pub impl ToJson for ApiConnectionProbeReply with fn to_json(self) {
+  match self.error {
+    Some(error) => { "error": Json(error) }
+    None => Json::object({})
+  }
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32

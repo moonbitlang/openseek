@@ -1470,12 +1470,7 @@ fn api_settings_rows(
               .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
-          @html.button(
-            class="button primary save-api-key",
-            disabled=!settings_loaded || model.setup_api_key.is_blank(),
-            on_click=dispatch(SaveApiKey),
-            @settings.text(model.locale, SaveApiKey),
-          ),
+          api_key_actions(dispatch, model, settings_loaded~),
         ],
         desc=@settings.text(model.locale, KeyStorageDescription),
         stack=true,

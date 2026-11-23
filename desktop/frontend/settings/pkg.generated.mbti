@@ -106,6 +106,9 @@ pub(all) enum Message {
   CustomApiKey
   SavedKey
   ApiKey
+  TestConnection
+  TestingConnection
+  ConnectionSuccessful
   SaveApiKey
   KeyStorageDescription
   Language
