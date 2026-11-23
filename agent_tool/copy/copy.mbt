@@ -194,7 +194,7 @@ async fn commit_copy(
     file_state~,
     write_scope?,
     approval?,
-    track_changes=existed,
+    check_contents=false,
   )
   if @fs.exists(path) && (@fs.realpath(path) catch { _ => path }) != target {
     authorization.recheck()

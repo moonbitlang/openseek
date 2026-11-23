@@ -80,7 +80,7 @@ async test "copy copies arbitrary bytes and records their provenance" {
 }
 
 ///|
-async test "copy streams large binary files and snapshots existing large targets" {
+async test "copy streams large binary files" {
   @vfs.with_tmpdir(dir => {
     let source = "\{dir}/large.bin"
     let file = @fs.open(source, mode=WriteOnly, create_mode=CreateNew)
@@ -108,29 +108,6 @@ async test "copy streams large binary files and snapshots existing large targets
         "sha256": @crypto.bytes_to_hex_string(@crypto.sha256(copied)),
       }),
     )
-    // Snapshot the existing large target, then change one byte while the
-    // approval wait releases the gate. Equal size is not equal content.
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    let guarded = @copy.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      approval=ApprovalChannel(_ => {
-        let file = @fs.open("\{dir}/copy.bin", mode=WriteOnly)
-        defer file.close()
-        file.at(17825794L).write(b"X")
-        AllowedOnce
-      }),
-    )
-    guard run_copy(guarded, { "destination": "copy.bin", "source": "large.bin" })
-      is Respond(changed) else {
-      fail("expected response")
-    }
-    assert_true(changed.is_error)
-    assert_true(changed.content.contains("changed while awaiting approval"))
-    assert_eq(@fs.file_size("\{dir}/copy.bin"), 17825795L)
   })
 }
 
@@ -169,7 +146,7 @@ async test "copy binary approval permits only the selected write and preserves r
 }
 
 ///|
-async test "copy snapshot rejects a symlink retargeted during approval" {
+async test "copy rejects a symlink retargeted during approval" {
   @vfs.with_tmpdir(dir => {
     let original = "fn f() -> Int { 1 }"
     @fs.write_text("\{dir}/one.bin", original)
@@ -431,7 +408,7 @@ async test "copy cannot bypass source overwrite rejection or destination write s
 }
 
 ///|
-async test "copy approvals retain binary metadata and target snapshots" {
+async test "copy approvals retain binary metadata and allow changed destination contents" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/outside.bin"
     @fs.write_binary(path, b"\x00\xffbefore")
@@ -456,12 +433,8 @@ async test "copy approvals retain binary metadata and target snapshots" {
       is Respond(out) else {
       fail("expected response")
     }
-    assert_true(out.is_error)
-    assert_true(
-      out.content.contains("changed while awaiting approval"),
-      msg=out.content,
-    )
-    assert_eq(@fs.read_binary(path), b"\x00\xffchange")
+    assert_false(out.is_error, msg=out.content)
+    assert_eq(@fs.read_binary(path), b"\x00\xffafter")
   })
 }
 

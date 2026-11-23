@@ -10,7 +10,7 @@ priv enum Contents {
 #derive(Eq)
 priv struct Snapshot {
   destination : String
-  contents : Contents
+  contents : Contents?
 }
 
 ///|
@@ -37,7 +37,12 @@ pub async fn Authorization::deny_reason(
 /// file gate held, after preparing any temporary data and just before mutation.
 pub async fn Authorization::recheck(self : Authorization) -> Unit {
   for (path, before) in self.snapshots {
-    guard snapshot(path, self.scope) == before else {
+    let current = snapshot(
+      path,
+      self.scope,
+      include_contents=before.contents is Some(_),
+    )
+    guard current == before else {
       fail(
         "target changed while awaiting approval or preparing the operation; reconsider and retry",
       )
@@ -46,22 +51,29 @@ pub async fn Authorization::recheck(self : Authorization) -> Unit {
 }
 
 ///|
-async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
+async fn snapshot(
+  path : String,
+  scope : @write_scope.WriteScope?,
+  include_contents~ : Bool,
+) -> Snapshot {
   let destination = match scope {
     Some(scope) => scope.destination(path)
     None => @fs.realpath(path)
   }
-  let contents = if !@fs.exists(path) {
-    Missing
+  let contents = if !include_contents {
+    None
+  } else if !@fs.exists(path) {
+    Some(Missing)
   } else {
     match @fs.kind(path) {
       Regular => {
         let file = @fs.open(path, mode=ReadOnly)
         defer file.close()
         let (_, digest) = @file_content.transfer(file)
-        File(digest)
+        Some(File(digest))
       }
-      Directory => Directory(@fs.readdir(path, include_hidden=true, sort=true))
+      Directory =>
+        Some(Directory(@fs.readdir(path, include_hidden=true, sort=true)))
       _ => fail("unsupported filesystem target: \{path}")
     }
   }
@@ -74,7 +86,7 @@ async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
 /// the returned authorization before mutating their targets.
 /// `target_path` names the operation's root for the approval summary.
 /// `reason` adds an operation-specific permission requirement (e.g. deletion).
-/// `track_changes` also snapshots targets that do not need human approval.
+/// With `check_contents=false`, approval is tied to the resolved paths alone.
 pub async fn authorize(
   paths : Array[String],
   target_path~ : String,
@@ -84,7 +96,7 @@ pub async fn authorize(
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
   reason? : String,
-  track_changes~ : Bool = false,
+  check_contents~ : Bool = true,
 ) -> Authorization {
   let reasons : Array[String] = []
   if reason is Some(reason) {
@@ -100,21 +112,18 @@ pub async fn authorize(
     }
   }
   if reasons.is_empty() {
-    let snapshots = if track_changes {
-      [
-        for path in paths => (path, snapshot(path, write_scope))
-      ]
-    } else {
-      []
-    }
-    return { scope: write_scope, snapshots, }
+    return { scope: write_scope, snapshots: [], }
   }
   guard approval is Some(channel) else {
     fail(
       "\{reasons.join("; ")}; operation requires approval, but this session has no approval channel",
     )
   }
-  let snapshots = [ for path in paths => (path, snapshot(path, write_scope)) ]
+  let snapshots = [
+    for path in paths => {
+      (path, snapshot(path, write_scope, include_contents=check_contents))
+    }
+  ]
   let outcome = file_state.without_access(() => {
     channel.ask({
       tool_name,
