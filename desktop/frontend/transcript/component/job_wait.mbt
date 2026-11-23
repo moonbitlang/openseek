@@ -25,7 +25,11 @@ fn pending_job_wait_label(
   // Waiting can end when any target finishes (or user input arrives). This
   // names the current wait, never claims that every selected job is done.
   let targets = ids.map(id => {
-    if descriptions.get(id) is Some(description) {
+    if args is { "job_descriptions": Object(labels), .. } &&
+      labels.get(id) is Some(String(description)) &&
+      !description.is_blank() {
+      "\"\{description}\""
+    } else if descriptions.get(id) is Some(description) {
       "\"\{description}\""
     } else {
       id

@@ -219,6 +219,27 @@ test('Cloud uses the displayed history view across resize, pagination and reload
   await expect.poll(() => requests.slice(beforeReload)).toEqual([['detail', null, '"detail-1"']]);
 });
 
+test('Cloud minimal history names a pending job even when its launch is off-page', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.language', 'zh-Hans'));
+  const cloud = new CloudHarness(page);
+  const wait = {
+    id: 'wait', name: 'job_wait',
+    arguments: JSON.stringify({ job_ids: ['bg-2', 'bg-1'], job_descriptions: { 'bg-1': 'Build docs' } }),
+  };
+  cloud.historyTurns.set(sessionA, [{
+    messages: [], events: [{ sequence: 1, item: { kind: 'assistant', payload: {
+      content: '', tool_calls: [{ id: 'start', name: 'mbtx', arguments: '{"description":"Build docs"}' }],
+    } } }, { sequence: 2, item: { kind: 'tool_result', payload: {
+      tool_call_id: 'start', tool_name: 'mbtx', brief: 'mbtx → bg bg-1', content: '', is_error: false,
+    } } }],
+  }, {
+    messages: [], events: [{ sequence: 3, item: { kind: 'assistant', payload: { content: '', tool_calls: [wait] } } }],
+  }]);
+  await cloud.install();
+  await page.goto(sessionURL);
+  await expect(page.locator('#transcript .minimal-call-caption')).toHaveText('等待以下任一任务完成：bg-2、"Build docs"');
+});
+
 test('reopening an interrupted Cloud task keeps the engine reply and its process visible', async ({ page }) => {
   const cloud = new CloudHarness(page);
   const native = (sequence, kind, payload) => ({ sequence, item: { kind, payload } });
