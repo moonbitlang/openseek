@@ -16,8 +16,8 @@ let profile_write_lock : @semaphore.Semaphore = Semaphore(1, initial_value=1)
 async fn save_profiles(hosts : Array[@protocol.SshProfile]) -> Unit {
   let path = @pathx.Path(profile_path())
   @fs.mkdir(path.dirname().to_string(), recursive=true, allow_existing=true)
-  @fsx.write_text_atomic(
-    path,
+  @openseek/atomic_file.write_text_atomic(
+    path.to_string(),
     @protocol.SshProfiles::{ hosts, }.to_json().stringify(),
   )
 }

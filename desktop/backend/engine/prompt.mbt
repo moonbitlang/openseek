@@ -43,6 +43,6 @@ async fn capture_session_prompt(
     return Some(path)
   }
   guard text is Some(text) else { return None }
-  @fsx.write_text_atomic(path, text)
+  @openseek/atomic_file.write_text_atomic(path.to_string(), text)
   Some(path)
 }

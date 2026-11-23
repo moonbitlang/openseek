@@ -166,8 +166,8 @@ async fn write_registry(registry : Registry) -> Unit {
     "workspaces": Json(registry.workspaces.map(path => path.0)),
     "initialized": Json(registry.initialized),
   }
-  @fsx.write_text_atomic(
-    root.join(WorkspacesFile).to_path(),
+  @openseek/atomic_file.write_text_atomic(
+    root.join(WorkspacesFile).to_string(),
     json.stringify(indent=2),
   ) catch {
     error => raise WorkspaceError("could not save the workspace list: \{error}")
