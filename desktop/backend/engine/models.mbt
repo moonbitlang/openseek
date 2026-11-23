@@ -99,7 +99,7 @@ fn model_entry(id : String, family : String) -> ModelEntry {
     api_url: None,
     full_url: false,
     api_key: None,
-    images: false,
+    images: true,
     context_window: DefaultModelContextWindow,
   }
 }
@@ -135,7 +135,7 @@ fn decode_model_entry(json : Json) -> ModelEntry? {
     api_url: settings_text(fields, "api_url"),
     full_url: model_flag(fields, "full_url", default=false),
     api_key: settings_text(fields, "api_key"),
-    images: model_flag(fields, "images", default=false),
+    images: model_flag(fields, "images", default=true),
     context_window: match fields.get("context_window") {
       Some(Number(value, ..)) if value > 0.0 => value.to_int()
       _ => DefaultModelContextWindow
@@ -197,7 +197,8 @@ test "a stored entry reads with defaults" {
   assert_eq(entry.context_window, DefaultModelContextWindow)
   assert_true(entry.label is None)
   assert_false(entry.full_url)
-  assert_false(entry.images)
+  // User entries accept images unless explicitly set to false.
+  assert_true(entry.images)
 }
 
 ///|
@@ -269,7 +270,7 @@ test "an entry round-trips through its stored form" {
   assert_eq(stored.context_window, entry.context_window)
   assert_true(stored.label is None)
   assert_false(stored.full_url)
-  assert_false(stored.images)
+  assert_true(stored.images)
   // No endpoint or credential was set, so neither is invented on the way out.
   assert_true(stored.api_url is None)
   assert_true(stored.api_key is None)
@@ -319,7 +320,7 @@ fn new_entry_fields(id : String) -> Map[String, Json] {
     "id": Json(id),
     "family": Json(ModelFamilyCustom),
     "full_url": Json(false),
-    "images": Json(false),
+    "images": Json(true),
     "context_window": Json(DefaultModelContextWindow),
   }
 }
