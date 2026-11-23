@@ -182,6 +182,8 @@ fn settings_status_payload(
     revision,
     provider: settings.provider.wire(),
     providers,
+    // The catalog reports nothing until the storage slice lands.
+    models: [],
     followup_behavior: settings.followup_behavior,
     prompt_source: match settings.raw.get("prompt_source") {
       Some(String("custom")) => "custom"

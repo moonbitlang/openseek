@@ -4426,6 +4426,8 @@ fn update_msg(
         followup_behavior: None,
         prompt_source: source,
         custom_prompt: text,
+        models: None,
+        removed_models: None,
       }
       (
         push_host_settings(
@@ -17134,6 +17136,7 @@ fn host_settings(
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
+    models: [],
   })
 }
 
