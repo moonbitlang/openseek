@@ -88,8 +88,8 @@ pub(all) struct Actions {
 }
 
 ///|
-/// Panel data stays root-owned; the shared action menu owns only its ephemeral
-/// opening and focus state, resolving tab commands from the latest input.
+/// Panel data stays root-owned. The shared tab menu resolves its commands
+/// when opening and manages its own focus.
 pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],

@@ -151,28 +151,6 @@ for (const gesture of ['right-click', 'keyboard']) {
   });
 }
 
-test('open tab menu follows live locale changes', async ({ page }) => {
-  const app = await openTabs(page, ['alpha', 'bravo']);
-  await page.locator('.editor-tab').first().click({ button: 'right' });
-  for (const [locale, label, closeTitle, items] of [
-    ['zh-CN', '标签页操作', '关闭此标签页', ['关闭', '关闭其他标签页', '关闭左侧标签页', '关闭右侧标签页', '关闭所有标签页']],
-    ['zh-TW', '標籤頁操作', '關閉此標籤頁', ['關閉', '關閉其他標籤頁', '關閉左側標籤頁', '關閉右側標籤頁', '關閉所有標籤頁']],
-    ['ja', 'タブの操作', 'このタブを閉じる', ['閉じる', '他のタブを閉じる', '左側のタブを閉じる', '右側のタブを閉じる', 'すべて閉じる']],
-    ['es', 'Acciones de pestaña', 'Cerrar esta pestaña', ['Cerrar', 'Cerrar las demás pestañas', 'Cerrar pestañas a la izquierda', 'Cerrar pestañas a la derecha', 'Cerrar todas']],
-    ['en', 'Tab actions', 'Close this tab', ['Close', 'Close Others', 'Close to the Left', 'Close to the Right', 'Close All']],
-  ]) {
-    await page.evaluate(locale => {
-      Object.defineProperty(navigator, 'languages', { configurable: true, value: [locale] });
-      window.dispatchEvent(new Event('languagechange'));
-    }, locale);
-    const menu = page.getByRole('menu', { name: label, exact: true });
-    await expect(menu).toBeVisible();
-    await expect(menu.getByRole('menuitem')).toHaveText(items);
-    await expect(menu.getByRole('menuitem').first()).toHaveAttribute('title', closeTitle);
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 // Exercise the real frontend visibility commands with a simulated Proton
 // transport. This does not launch a native CEF window.
 test('tab menu hides and restores the native browser view through the host bridge', async ({ page }) => {

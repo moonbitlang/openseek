@@ -1,5 +1,6 @@
 import {
   "moonbit-community/rui",
+  "openseek_desktop/frontend/ruix",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/uri",
   "moonbitlang/core/math",

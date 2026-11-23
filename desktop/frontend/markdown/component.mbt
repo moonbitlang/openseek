@@ -659,20 +659,22 @@ fn link_menu(
   content : @rabbita.Val[@html.Html],
   inline~ : Bool = true,
 ) -> @rabbita.Val[@html.Html] {
-  let revision = Ref(0)
-  target
-  .map2(context.input, (target, input) => {
-    revision.val += 1
-    (revision.val, target, input)
-  })
+  let id = target
+    .map(target => target.1)
+    .map(target => {
+      guard !(target is NoTarget) else { return "" }
+      let id = "\{context.id}-\{context.next_menu.val}"
+      context.next_menu.val += 1
+      id
+    })
+  id
+  .map3(target, context.input, (id, target, input) => (id, target, input))
   .switch_by(
     value => {
-      let (_, (locale, target), input) = value
+      let (id, (locale, target), input) = value
       if target is NoTarget {
         return content
       }
-      let id = "\{context.id}-\{context.next_menu.val}"
-      context.next_menu.val += 1
       @action_menu.link_context(
         id,
         locale,
@@ -686,7 +688,7 @@ fn link_menu(
       // at this position needs a new trigger element with its new menu ID.
       .map(menu => @html.span(style=["display:contents"], Map([(id, menu)])))
     },
-    by=value => value.0.to_string(),
+    by=value => value.0,
   )
 }
 

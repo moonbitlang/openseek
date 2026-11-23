@@ -16,60 +16,38 @@ pub impl Eq for RowContext with fn equal(a, b) {
 pub extend RowContext with Eq::{equal, not_equal}
 
 ///|
-/// Use the supplied row as the right-click trigger. The menu instance keeps
-/// its initial definition while the same row has contextual actions.
+/// Keep the row live while reusing the right-click menu and its initial definition.
 pub fn row_context(row : @rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html] {
   row.switch_by(
     input => {
       guard input.definition is Some(definition) else {
-        return row.map(row => {
+        return row.view(row => {
           @html.div(class?=row.class, title?=row.title, row.content)
         })
       }
       let id = input.target + ":context"
       let on_open_change = context_open_change(id)
-      let row_scope : Ref[@rui.ContextMenuScope?] = Ref(None)
-      let menu = @rui.context_menu(id~, on_open_change~, scope => {
-        row_scope.val = Some(scope)
-        context_popup(scope, definition)
+      let trigger = row.map(row => @ruix.ContextMenuTrigger::{
+        class: row.class,
+        title: row.title,
+        content: row.content,
       })
-      // The trigger and popup share RUI's scope and are bound by ID. Keep
-      // the row outside the popup root so its own dropdown has independent
-      // keyboard handling and row updates preserve the context menu.
-      row.view2(menu, (row, menu) => {
-        match row_scope.val {
-          Some(scope) =>
-            @html.fragment([
-              @rui.context_menu_trigger(
-                scope,
-                tabindex=-1,
-                class?=row.class,
-                title?=row.title,
-                row.content,
-              ),
-              menu,
-            ])
-          None => @html.div(class?=row.class, title?=row.title, row.content)
-        }
-      })
+      @ruix.context_menu_with_input(
+        input=trigger,
+        id~,
+        tabindex=-1,
+        on_open_change~,
+        scope => context_popup(scope, definition),
+      )
     },
-    by=row => {
-      if row.definition is Some(_) {
-        row.target + ":context"
-      } else {
-        ""
-      }
-    },
+    by=row => if row.definition is Some(_) { row.target } else { "" },
   )
 }
 
 ///|
-fn context_open_change(
-  id : String,
-  on_mount~ : @cmd.Cmd = @cmd.none,
-) -> @cmd.Emit[Bool] {
-  let (_, emit) = @rabbita.create_state_with_init(
-    init=_ => (false, on_mount),
+fn context_open_change(id : String) -> @cmd.Emit[Bool] {
+  let (_, emit) = @rabbita.create_state(
+    false,
     update=(_, visible : Bool, _) => (visible, @cmd.none),
     subscriptions=(visible, _) => {
       if visible {
@@ -187,38 +165,24 @@ pub fn link_context(
     return content
   }
   let id = id + ":context"
-  let revision = Ref(0)
-  content
-  .map(content => {
-    revision.val += 1
-    (revision.val.to_string(), content)
+  let on_open_change = context_open_change(id)
+  let class = if inline {
+    "inline-context-trigger"
+  } else {
+    "citation-source-trigger"
+  }
+  let trigger = content.map(content => @ruix.ContextMenuTrigger::{
+    class: Some(class),
+    title: None,
+    content,
   })
-  .switch_by(
-    pair => {
-      // A reparsed message can reuse the trigger and popover DOM after
-      // the previous component scope is disposed.
-      let on_open_change = context_open_change(
-        id,
-        on_mount=@rui.popover_close(id + "-content"),
-      )
-      @rui.context_menu(id~, on_open_change~, scope => {
-        @html.fragment([
-          @rui.context_menu_trigger(
-            scope,
-            tabindex=-1,
-            class=if inline {
-              "inline-context-trigger"
-            } else {
-              "citation-source-trigger"
-            },
-            style=if inline { ["display:inline"] } else { [] },
-            attrs=link_trigger_attrs(inline),
-            pair.1,
-          ),
-          context_popup(scope, definition),
-        ])
-      })
-    },
-    by=pair => pair.0,
+  @ruix.context_menu_with_input(
+    input=trigger,
+    id~,
+    tabindex=-1,
+    on_open_change~,
+    trigger_attrs=link_trigger_attrs(inline),
+    trigger_style=if inline { ["display:inline"] } else { [] },
+    scope => context_popup(scope, definition),
   )
 }

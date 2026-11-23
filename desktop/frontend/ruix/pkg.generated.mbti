@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/ruix"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rui",
+}
+
+// Values
+pub fn context_menu_with_input(input~ : @rabbita.Val[ContextMenuTrigger], id~ : String, tabindex? : Int32, on_open_change? : @cmd.Emit[Bool], trigger_attrs? : @html.Attrs, trigger_style? : Array[String], (@rui.ContextMenuScope) -> @html.Html) -> @rabbita.Val[@html.Html]
+
+// Errors
+
+// Types and methods
+#derive(Eq)
+pub(all) struct ContextMenuTrigger {
+  class : String?
+  title : String?
+  content : @html.Html
+}
+
+// Type aliases
+
+// Traits
