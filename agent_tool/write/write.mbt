@@ -157,7 +157,7 @@ async fn write_file(
       brief="write rejected (\{bound}\{gate.errors.length()} parse error(s))",
     )
   }
-  let write_scope = try {
+  let authorization = try {
     let authorization = @permission.authorize(
       [path],
       target_path=path,
@@ -168,14 +168,14 @@ async fn write_file(
       approval?,
     )
     authorization.recheck()
-    authorization.scope
+    authorization
   } catch {
     error => return err(@tool_error.failure_message("\{error}"))
   }
   // Containment re-check at the moment of writing (before parent directories
   // are created for the target): the early gate decided on filesystem state
   // that awaits ago may have changed underneath the tool.
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
+  if authorization.deny_reason(path) is Some(reason) {
     return err("write blocked: \{reason}")
   }
   if @fs.exists(path) && (@fs.realpath(path) catch { _ => path }) != target {

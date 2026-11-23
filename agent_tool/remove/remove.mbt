@@ -130,16 +130,15 @@ async fn execute_with_workspace(
       reason?,
     )
     authorization.recheck()
-    let write_scope = authorization.scope
-    guard inspect_target(path, workspace_root, write_scope?) == version else {
+    guard inspect_target(path, workspace_root, authorization~) == version else {
       return removal_error(
         path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",
       )
     }
     if version.entries.last() is Some((_, Directory(_))) {
-      delete_directory(path, input.reason, version, file_state, write_scope?)
+      delete_directory(path, input.reason, version, file_state, authorization)
     } else {
-      delete_file(path, input.reason, file_state, write_scope?)
+      delete_file(path, input.reason, file_state, authorization)
     }
   }) catch {
     error => removal_error(path, @tool_error.failure_message("\{error}"))
@@ -164,12 +163,13 @@ fn created_directory_tree(
 }
 
 ///|
-/// Approval never overrides scope or kind restrictions. Hash complete raw bytes.
+/// Check the authorized path and hash the complete raw bytes of regular files.
 async fn inspect_node(
   path : String,
-  write_scope? : @write_scope.WriteScope,
+  authorization? : @permission.Authorization,
 ) -> NodeVersion {
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
+  if authorization is Some(authorization) &&
+    authorization.deny_reason(path) is Some(reason) {
     fail("write blocked: \{reason}")
   }
   guard @fs.exists(path) else { fail("no such file") }
@@ -194,12 +194,12 @@ async fn inspect_node(
 async fn inspect_target(
   path : String,
   workspace_root : String,
-  write_scope? : @write_scope.WriteScope,
+  authorization? : @permission.Authorization,
 ) -> RemovalVersion {
   let entries = []
   let root = @fs.realpath(workspace_root)
   async fn visit(path : String) -> Unit {
-    let node = inspect_node(path, write_scope?)
+    let node = inspect_node(path, authorization?)
     if node is Directory(canonical) {
       // This also protects filesystem roots and aliases of workspace ancestors.
       if @workspace_path.is_under_workspace_root(canonical, root) {
@@ -221,12 +221,12 @@ async fn delete_directory(
   reason : String,
   version : RemovalVersion,
   file_state : @agent_tool.FileStateMap,
-  write_scope? : @write_scope.WriteScope,
+  authorization : @permission.Authorization,
 ) -> @agent_tool.ToolAction {
   // Delete only the reviewed entries. Never use recursive rmdir, which could
   // silently include new files added by an external writer after the recheck.
   for (entry, expected) in version.entries {
-    guard inspect_node(entry, write_scope?) == expected else {
+    guard inspect_node(entry, authorization~) == expected else {
       fail("directory changed during deletion; remaining entries were kept")
     }
     match expected {
@@ -251,9 +251,9 @@ async fn delete_file(
   path : String,
   reason : String,
   file_state : @agent_tool.FileStateMap,
-  write_scope? : @write_scope.WriteScope,
+  authorization : @permission.Authorization,
 ) -> @agent_tool.ToolAction {
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(why) {
+  if authorization.deny_reason(path) is Some(why) {
     return removal_error(path, "write blocked: \{why}")
   }
   @fs.remove(path)

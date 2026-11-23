@@ -200,8 +200,7 @@ async fn commit_copy(
     authorization.recheck()
     fail("file target changed before copying; re-read and retry")
   }
-  if authorization.scope is Some(scope) &&
-    scope.deny_reason(path) is Some(reason) {
+  if authorization.deny_reason(path) is Some(reason) {
     fail("copy blocked: \{reason}")
   }
   file_state.create_parent_directories(path)

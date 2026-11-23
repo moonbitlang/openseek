@@ -14,10 +14,8 @@ pub async fn authorize(Array[String], target_path~ : String, tool_name~ : String
 // Errors
 
 // Types and methods
-pub struct Authorization {
-  scope : @write_scope.WriteScope?
-  // private fields
-}
+type Authorization
+pub async fn Authorization::deny_reason(Self, String) -> String?
 pub async fn Authorization::recheck(Self) -> Unit
 
 // Type aliases

@@ -15,9 +15,21 @@ priv struct Snapshot {
 
 ///|
 /// The one-operation scope and the observed state of its targets.
-pub struct Authorization {
+struct Authorization {
   scope : @write_scope.WriteScope?
-  priv snapshots : Array[(String, Snapshot)]
+  snapshots : Array[(String, Snapshot)]
+}
+
+///|
+/// Check the current destination against this operation's effective scope.
+pub async fn Authorization::deny_reason(
+  self : Authorization,
+  path : String,
+) -> String? {
+  match self.scope {
+    Some(scope) => scope.deny_reason(path)
+    None => None
+  }
 }
 
 ///|

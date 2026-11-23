@@ -45,8 +45,7 @@ async fn publish_file(
     .join(Path(basename.to_owned()))
     .to_string()
   async fn recheck_path() -> Unit {
-    if authorization.scope is Some(scope) &&
-      scope.deny_reason(path) is Some(reason) {
+    if authorization.deny_reason(path) is Some(reason) {
       fail("copy blocked: \{reason}")
     }
     guard @fs.realpath(parent) == destination_parent else {
