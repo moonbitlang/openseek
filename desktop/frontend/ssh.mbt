@@ -1294,67 +1294,69 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let locale = model.locale
-  let choices = [
-    @html.button(
-      class=if model.focused == Local {
-        "ssh-location selected"
-      } else {
-        "ssh-location"
-      },
-      on_click=dispatch(Ssh(Select(Local))),
-      ssh_text(locale, ThisComputer),
-    ),
-  ]
-  for host in model.ssh_ui.hosts {
-    choices.push(
-      @html.button(
-        class=if model.focused == Remote(host.id) {
-          "ssh-location selected"
-        } else {
-          "ssh-location"
-        },
-        id="ssh-location-\{host.id}",
-        title=host.connection_label(),
-        disabled=model.ssh_ui.connecting.contains(host.id),
-        on_click=dispatch(Ssh(Select(Remote(host.id)))),
-        [
-          @icons.icon(@icons.icon_server),
-          @html.span(host.display_label()),
-          if model.ssh_ui.connecting.get(host.id) is Some(progress) {
-            @html.small(progress.text(model.locale))
-          } else if !model.ssh_online(host.id) {
-            @html.small(ssh_text(locale, Disconnected))
-          } else {
-            @html.span("")
-          },
-        ],
-      ),
-    )
+fn Model::project_sources(self : Model) -> @source_selector.Input? {
+  guard self.is_desktop && self.project_picker is Some(picker) else {
+    return None
   }
-  choices.push(
+  let choices : Array[@source_selector.Choice] = [
+    {
+      source: Device(Local),
+      label: @source_selector.local_label(self.locale),
+      title: None,
+      disabled: false,
+    },
+  ]
+  for host in self.ssh_ui.hosts {
+    let progress = self.ssh_ui.connecting.get(host.id)
+    let name = host.display_label()
+    let label = match progress {
+      Some(progress) => name + " · " + progress.text(self.locale)
+      None if !self.ssh_online(host.id) =>
+        name + " · " + ssh_text(self.locale, Disconnected)
+      None => name
+    }
+    choices.push({
+      source: Device(Remote(host.id)),
+      label,
+      title: Some(host.connection_label()),
+      disabled: progress is Some(_),
+    })
+  }
+  Some({
+    label: ssh_text(self.locale, ProjectLocation),
+    selected: Device(picker.channel()),
+    choices,
+  })
+}
+
+///|
+fn ssh_locations(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  selector : @html.Html,
+) -> @html.Html {
+  @html.div(class="ssh-locations", [
+    selector,
     @html.button(
       id="ssh-add-host",
-      class="ssh-location add",
+      class="ssh-add-host",
+      type_="button",
       on_click=dispatch(Ssh(Open)),
-      [@icons.icon(@icons.icon_add), @html.span(ssh_text(locale, AddHost))],
+      [
+        @icons.icon(@icons.icon_add),
+        @html.span(ssh_text(model.locale, AddHost)),
+      ],
     ),
-  )
-  if model.ssh_ui.error is Some(error) {
-    choices.push(
+    if model.ssh_ui.error is Some(error) {
       @html.pre(
         class="ssh-error",
         attrs=@html.Attrs::build().role("alert"),
         error,
-      ),
-    )
-  }
-  @html.div(
-    class="ssh-locations",
-    attrs=@html.Attrs::build().aria_label(ssh_text(locale, ProjectLocation)),
-    choices,
-  )
+      )
+    } else {
+      @html.nothing
+    },
+  ])
 }
 
 ///|

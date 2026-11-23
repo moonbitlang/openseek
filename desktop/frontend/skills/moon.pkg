@@ -16,6 +16,7 @@ import {
   "openseek_desktop/frontend/markdown",
   "openseek_desktop/frontend/ui",
   "openseek_desktop/frontend/select_control",
+  "openseek_desktop/frontend/source_selector",
   "openseek_desktop/frontend/action_menu",
 }
 

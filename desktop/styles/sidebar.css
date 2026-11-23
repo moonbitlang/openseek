@@ -614,33 +614,18 @@ button.row-twisty:hover {
 #project-picker-dialog .picker-content > :not(.picker-browser) {
   flex: none;
 }
+.picker-content > :is(.ssh-locations, .picker-location-bar, .picker-browser) {
+  padding-inline: 1rem;
+}
+.picker-content > .ssh-locations {
+  padding-block-start: var(--space-5);
+}
 #project-picker-dialog .picker-footer {
   grid-area: footer;
   margin: 0 !important;
-}
-.picker-header-leading {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: var(--space-5);
-}
-.picker-header-icon {
-  --icon-size: var(--icon-lg);
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-inline);
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-.picker-header-copy {
-  min-width: 0;
+  background: transparent !important;
 }
 .picker-subtitle {
-  margin-top: var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: 1.35;
@@ -649,23 +634,22 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-divider);
-  background: var(--color-bg-subtle);
+  padding-block: var(--space-4);
 }
-.picker-crumbs {
-  display: flex;
+.picker-crumbs,
+.picker-path-editor {
   flex: 1 1 auto;
   align-items: center;
   min-width: 0;
+  min-height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.picker-crumbs {
+  display: flex;
   overflow-x: auto;
   gap: var(--space-1);
-  min-height: 2.5rem;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 2px rgba(20, 23, 26, 0.04);
   scrollbar-width: none;
 }
 .picker-crumbs::-webkit-scrollbar {
@@ -674,27 +658,23 @@ button.row-twisty:hover {
 .picker-path-editor {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) 2rem;
-  flex: 1 1 auto;
-  align-items: center;
-  min-width: 0;
-  min-height: 2.5rem;
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
-  border: 1px solid var(--color-focus-ring);
-  border-radius: var(--radius-control);
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--color-focus-ring) 16%, transparent);
+}
+.picker-path-editor:focus-within {
+  border-color: var(--color-focus-ring);
 }
 .picker-path-editor-icon {
   --icon-size: var(--icon-sm);
   display: grid;
   place-items: center;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
 }
 .picker-path-editor input {
   width: 100%;
   height: 2rem;
   padding: 0 var(--space-2);
   border: 0;
+  background: transparent;
   font-size: var(--font-size-sm);
 }
 .picker-path-editor-cancel {
@@ -713,10 +693,6 @@ button.row-twisty:hover {
 .picker-path-editor-cancel:hover {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
-}
-.picker-path-editor-cancel:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
 }
 .picker-crumb {
   flex: none;
@@ -757,37 +733,37 @@ button.row-twisty:hover {
   padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 2px rgba(20, 23, 26, 0.04);
   color: var(--color-text-primary);
   font: inherit;
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
 .picker-new-folder:not(:disabled):hover {
-  background: var(--color-bg-canvas);
-  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
 }
-.picker-new-folder:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
+.picker-content :is(
+  .project-source-select [data-slot="select-trigger"],
+  .ssh-add-host,
+  .picker-crumb,
+  .picker-path-editor-cancel,
+  .picker-new-folder
+):focus-visible {
+  box-shadow: inset 0 0 0 2px var(--color-focus-ring);
 }
 .picker-browser {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  padding: var(--space-5);
-  background: var(--color-bg-surface);
+  padding-block-end: 1rem;
 }
 .picker-list {
+  --picker-folder-icon-width: 20px;
   flex: 1 1 23rem;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: none;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-surface);
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 2px rgba(20, 23, 26, 0.035);
 }
 .picker-list-heading {
   position: sticky;
@@ -797,13 +773,11 @@ button.row-twisty:hover {
   align-items: center;
   justify-content: space-between;
   min-height: 2.25rem;
-  padding: 0 var(--space-5) 0 3rem;
+  padding-inline:
+    calc(var(--space-5) + var(--picker-folder-icon-width) + var(--space-4))
+    var(--space-5);
   border-bottom: 1px solid var(--color-divider);
-  background: color-mix(
-    in srgb,
-    var(--color-bg-subtle) 88%,
-    var(--color-bg-surface)
-  );
+  background: var(--color-bg-canvas);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -822,9 +796,8 @@ button.row-twisty:hover {
   gap: var(--space-4);
   width: 100%;
   min-height: 2.75rem;
-  padding: 0 var(--space-5) 0 var(--space-5);
+  padding: 0 var(--space-5);
   border: 0;
-  border-bottom: 1px solid var(--color-divider);
   border-radius: 0;
   background: transparent;
   font: inherit;
@@ -837,24 +810,22 @@ button.row-twisty:hover {
 }
 .picker-row:not(:disabled):hover {
   background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
 }
-.picker-row.selected:not(:disabled),
-.picker-row:not(:disabled):focus-visible {
+.picker-row.selected:not(:disabled) {
   background: var(--color-accent-soft);
-  color: var(--color-text-primary);
-  outline: none;
   box-shadow: inset 0 0 0 1px var(--color-accent-border);
+}
+.picker-row:not(:disabled):focus-visible {
+  box-shadow: inset 0 0 0 2px var(--color-focus-ring);
 }
 .picker-row-icon {
   display: grid;
   place-items: center;
   flex: none;
-  width: 20px;
-  color: var(--color-accent);
+  width: var(--picker-folder-icon-width);
+  color: var(--color-text-secondary);
 }
-.picker-row:not(:disabled):hover .picker-row-icon,
-.picker-row:not(:disabled):focus-visible .picker-row-icon {
+.picker-row.selected:not(:disabled) .picker-row-icon {
   color: var(--color-accent);
 }
 .picker-row-name {
@@ -883,20 +854,17 @@ button.row-twisty:hover {
 .picker-create-row {
   --icon-size: var(--icon-md);
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  grid-template-columns: var(--picker-folder-icon-width) minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-4);
   min-height: 3.5rem;
   padding: var(--space-2) var(--space-4) var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--color-accent-border);
-  background: var(--color-accent-soft);
 }
 .picker-create-icon {
   display: grid;
   place-items: center;
-  width: 28px;
   height: 28px;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
 }
 .picker-create-row input {
   width: 100%;
@@ -909,7 +877,6 @@ button.row-twisty:hover {
   padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font: inherit;
   font-size: var(--font-size-sm);
@@ -952,27 +919,9 @@ button.row-twisty:hover {
   align-items: center;
 }
 .picker-current-location {
-  --icon-size: var(--icon-md);
+  display: grid;
+  min-width: 0;
   margin-inline-end: auto;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: var(--space-4);
-}
-.picker-current-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-inline);
-  background: var(--color-bg-surface);
-  color: var(--color-accent);
-}
-.picker-current-copy {
-  display: grid;
-  min-width: 0;
   line-height: 1.25;
 }
 .picker-current-label {
@@ -992,6 +941,9 @@ button.row-twisty:hover {
   display: flex;
   flex: none;
   gap: var(--space-4);
+}
+.picker-actions .button.secondary {
+  --button-background: transparent;
 }
 #project-picker-dialog input:disabled {
   cursor: default;
@@ -1015,7 +967,7 @@ button.row-twisty:hover {
     flex-basis: min(42vh, 23rem);
   }
   .picker-create-row {
-    grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: var(--picker-folder-icon-width) repeat(2, minmax(0, 1fr));
   }
   .picker-create-row input {
     grid-column: 2 / 4;

@@ -17,7 +17,6 @@ priv enum SshMessage {
   NoHosts
   AddHost
   ConnectionsLocal
-  ThisComputer
   ProjectLocation
   RenameHost
   RenameHelp
@@ -153,11 +152,6 @@ fn ssh_text(locale : @i18n.Locale, message : SshMessage) -> String {
       "連線僅保留在此電腦上。"
     (Japanese, ConnectionsLocal) =>
       "接続情報はこのコンピュータにのみ保存されます。"
-    (English, ThisComputer) => "This computer"
-    (Spanish, ThisComputer) => "Este equipo"
-    (SimplifiedChinese, ThisComputer) => "此计算机"
-    (TraditionalChinese, ThisComputer) => "此電腦"
-    (Japanese, ThisComputer) => "このコンピュータ"
     (English, ProjectLocation) => "Project location"
     (Spanish, ProjectLocation) => "Ubicación del proyecto"
     (SimplifiedChinese, ProjectLocation) => "项目位置"

@@ -120,19 +120,11 @@ pub fn view(
     attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
     [
       @rui.dialog_header([
-        @html.div(class="picker-header-leading", [
-          @html.span(
-            class="picker-header-icon",
-            @icons.icon(@icons.icon_folder_opened),
-          ),
-          @html.div(class="picker-header-copy", [
-            @rui.dialog_title(
-              id="project-picker-title",
-              ui(locale, AddProjectTitle),
-            ),
-            @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
-          ]),
-        ]),
+        @rui.dialog_title(
+          id="project-picker-title",
+          ui(locale, AddProjectTitle),
+        ),
+        @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
       ]),
       @html.div(
         class="picker-content dialog-scroll-body dialog-content",
@@ -386,14 +378,8 @@ fn current_location(
     None => (ui(locale, LocationLabel), ui(locale, LoadingLabel))
   }
   @html.div(class="picker-current-location", [
-    @html.span(
-      class="picker-current-icon",
-      @icons.icon(@icons.icon_folder_opened),
-    ),
-    @html.div(class="picker-current-copy", [
-      @html.span(class="picker-current-label", label),
-      @html.span(class="picker-current-path", path),
-    ]),
+    @html.span(class="picker-current-label", label),
+    @html.span(class="picker-current-path", path),
   ])
 }
 

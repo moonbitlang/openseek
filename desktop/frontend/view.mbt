@@ -2269,10 +2269,10 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  shell_overlays : (@html.Html, @html.Html),
+  shell_overlays : (@html.Html, @html.Html, @html.Html),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, selection_actions_html) = shell_overlays
+  let (quick_open_html, selection_actions_html, project_source_html) = shell_overlays
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2681,7 +2681,7 @@ fn view(
         dispatch.map(msg => ProjectPicker(msg)),
         picker,
         location?=if model.is_desktop {
-          Some(ssh_locations(dispatch, model))
+          Some(ssh_locations(dispatch, model, project_source_html))
         } else {
           None
         },

@@ -77,6 +77,7 @@ import {
   "openseek_desktop/frontend/preview",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/select_control",
+  "openseek_desktop/frontend/source_selector",
   "openseek_desktop/frontend/settings",
   "openseek_desktop/frontend/quick_open",
   "openseek_desktop/frontend/right_panel",

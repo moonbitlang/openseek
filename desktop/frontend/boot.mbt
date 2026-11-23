@@ -1167,10 +1167,24 @@ fn main {
         (skills, workspace_settings, archived_chats)
       },
     )
-    let shell_overlays = @rabbita.Val::map2(
+    let project_source_html = @source_selector.component(
+      state.map(model => model.project_sources()),
+      id="project-source",
+      class="project-source-select",
+      @cmd.Emit(source => {
+        match source {
+          Device(channel) => emit(Ssh(Select(channel)))
+          Cloud => @cmd.none
+        }
+      }),
+    )
+    let shell_overlays = @rabbita.Val::map3(
       quick_open_html,
       selection_actions_html,
-      (quick_open, selection_actions) => (quick_open, selection_actions),
+      project_source_html,
+      (quick_open, selection_actions, project_source) => {
+        (quick_open, selection_actions, project_source)
+      },
     )
     let shell = state.view9(
       terminal_html,
