@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/openseek/fsx"
+package "moonbitlang/openseek/atomic_file"
 
 import {
   "moonbitlang/core/async/fs",

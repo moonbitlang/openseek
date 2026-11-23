@@ -186,7 +186,7 @@ async test "single edit waits for the submitted message before deleting its sour
     .append(Terminal(Finished("answer")))
   store.create(source)
   let custom_prompt = "  Custom instructions\n中文\n"
-  @openseek/fsx.write_text_atomic(
+  @openseek/atomic_file.write_text_atomic(
     @pathx.Path(store.session_file(SessionId("source")))
     .dirname()
     .join("system-prompt.md")

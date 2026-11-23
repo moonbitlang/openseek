@@ -8,9 +8,9 @@ priv suberror AtomicWriteTestError {
 async test "atomic text saves create and replace a file" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/registry.json"
-    @fsx.write_text_atomic(path, "first")
+    @atomic_file.write_text_atomic(path, "first")
     assert_eq(@fs.read_text(path), "first")
-    @fsx.write_text_atomic(path, "second")
+    @atomic_file.write_text_atomic(path, "second")
     assert_eq(@fs.read_text(path), "second")
     assert_eq(@fs.readdir(dir, include_hidden=true), ["registry.json"])
   })
@@ -25,7 +25,7 @@ async test "atomic text saves leave a preexisting temporary symlink alone" {
     let link = "\{path}.tmp"
     @fs.write_text(victim, "precious")
     @fs.symlink(link, target=victim)
-    @fsx.write_text_atomic(path, "saved")
+    @atomic_file.write_text_atomic(path, "saved")
     assert_eq(@fs.read_text(path), "saved")
     assert_eq(@fs.read_text(victim), "precious")
     assert_true(@fs.kind(link, follow_symlink=false) is SymLink)
@@ -40,7 +40,7 @@ async test "an atomic text save leaves an occupied directory intact" {
     @fs.mkdir(path)
     @fs.write_text(kept, "precious")
     let refused = try {
-      @fsx.write_text_atomic(path, "clobber")
+      @atomic_file.write_text_atomic(path, "clobber")
       false
     } catch {
       _ => true
@@ -56,7 +56,7 @@ async test "atomic writes expose the completed file only after the commit check"
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/target"
     @fs.write_binary(path, b"old")
-    @fsx.write_atomic(
+    @atomic_file.write_atomic(
       path,
       file => {
         file.write(b"\x00")
@@ -77,7 +77,7 @@ async test "atomic writes preserve the old target after a partial write fails or
     let path = "\{dir}/target"
     @fs.write_binary(path, b"old")
     let failed = try {
-      @fsx.write_atomic(
+      @atomic_file.write_atomic(
         path,
         file => {
           file.write(b"partial")
@@ -96,7 +96,7 @@ async test "atomic writes preserve the old target after a partial write fails or
 
     let wrote_partial = Ref(false)
     let cancelled = @async.with_timeout_opt(500, () => {
-      @fsx.write_atomic(
+      @atomic_file.write_atomic(
         path,
         file => {
           file.write(b"partial")
@@ -118,9 +118,14 @@ async test "an atomic creation cannot replace a file created before the rename" 
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/target"
     let failed = try {
-      @fsx.write_atomic(path, file => file.write(b"candidate"), replace=false, before_commit=() => {
-        @fs.write_binary(path, b"other", create_mode=CreateNew)
-      })
+      @atomic_file.write_atomic(
+        path,
+        file => file.write(b"candidate"),
+        replace=false,
+        before_commit=() => {
+          @fs.write_binary(path, b"other", create_mode=CreateNew)
+        },
+      )
       false
     } catch {
       _ => true
@@ -137,9 +142,12 @@ async test "a rejected commit check discards the prepared file" {
     let path = "\{dir}/target"
     @fs.write_binary(path, b"old")
     let failed = try {
-      @fsx.write_atomic(path, file => file.write(b"candidate"), replace=true, before_commit=() => {
-        raise CommitRejected
-      })
+      @atomic_file.write_atomic(
+        path,
+        file => file.write(b"candidate"),
+        replace=true,
+        before_commit=() => raise CommitRejected,
+      )
       false
     } catch {
       CommitRejected => true

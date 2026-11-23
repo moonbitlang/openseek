@@ -304,7 +304,7 @@ async fn write_worktrees(
   // write leaves the old registry intact instead of truncating it and
   // orphaning all of those other rows, and a reader in another process never
   // sees a partial list.
-  @openseek/fsx.write_text_atomic(
+  @openseek/atomic_file.write_text_atomic(
     worktrees_file(workspace).to_string(),
     registry.stringify(indent=2),
   ) catch {
