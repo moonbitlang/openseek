@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/openseek_protocol/command_context",
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/log" @session_log,
@@ -22,6 +23,10 @@ import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
 } for "test"
+
+import {
+  "moonbitlang/core/async",
+} for "wbtest"
 
 warnings = "+unnecessary_annotation"
 

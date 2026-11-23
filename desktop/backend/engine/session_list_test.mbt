@@ -117,8 +117,8 @@ async test "live and archived listings read stores without an engine executable"
   let blank = @engine.search_sessions({ query: "  ", include_archived: true, })
   assert_eq(blank.hits.length(), 0)
   assert_eq(blank.errors.length(), 0)
-  // The sidebar and search share a Desktop-owned cache. Other writers, including
-  // CLI sessions and archive moves, must remain visible after a warm search.
+  // Other writers, including CLI sessions and archive moves, must remain
+  // visible after Desktop has already listed the same session.
   store.set_title(SessionId("renamed"), "Updated title")
   assert_eq(
     @engine.search_sessions({ query: "explicit", include_archived: false, }).hits.length(),
@@ -135,6 +135,10 @@ async test "live and archived listings read stores without an engine executable"
   )
   assert_eq(
     @engine.search_sessions({ query: "rewritten", include_archived: false, }).hits.length(),
+    0,
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "first line", include_archived: false, }).hits.length(),
     1,
   )
   @fs.rename(
@@ -142,37 +146,40 @@ async test "live and archived listings read stores without an engine executable"
     workspace + "/.openseek/archived/sessions/prompt",
   )
   assert_eq(
-    @engine.search_sessions({ query: "rewritten", include_archived: false, }).hits.length(),
+    @engine.search_sessions({ query: "first line", include_archived: false, }).hits.length(),
     0,
   )
   let moved = @engine.search_sessions({
-    query: "rewritten",
+    query: "first line",
     include_archived: true,
   })
   assert_eq(moved.hits.length(), 1)
   assert_true(moved.hits[0].archived)
-  // Reusing a live path after an archive move must not reuse the old prompt.
+  // Reusing a live path after an archive move initializes a new title.
   let recreated = @agent_session.Session(SessionId("prompt"), system_prompt="")
   store.create(recreated.append(User(UserMessage(Content([Text("Before")])))))
   assert_eq(
     @engine.search_sessions({ query: "before", include_archived: false, }).hits.length(),
     1,
   )
-  // Same-length external rewrites must invalidate cached text.
+  // A same-ID transcript replacement preserves the saved title.
   store.create(recreated.append(User(UserMessage(Content([Text("After!")])))))
   assert_eq(
     @engine.search_sessions({ query: "before", include_archived: false, }).hits.length(),
-    0,
-  )
-  assert_eq(
-    @engine.search_sessions({ query: "after!", include_archived: false, }).hits.length(),
     1,
   )
-  @fs.remove(store.session_file(SessionId("prompt")))
   assert_eq(
     @engine.search_sessions({ query: "after!", include_archived: false, }).hits.length(),
     0,
   )
+  @fs.remove(store.session_file(SessionId("prompt")))
+  let husks = @engine.list_sessions().groups[0].sessions
+  guard husks.iter().find_first(row => row.id == "prompt") is Some(husk) else {
+    fail("expected the session directory to remain visible")
+  }
+  assert_eq(husk.updated_at_ms, None)
+  assert_eq(husk.title, Some("Before"))
+  @fs.remove(workspace + "/.openseek/sessions/prompt", recursive=true)
   store.create(recreated.append(User(UserMessage(Content([Text("")])))))
   let titles = Map::from_array(
     @engine.list_sessions().groups[0].sessions.map(row => (row.id, row.title)),

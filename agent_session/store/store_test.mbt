@@ -168,7 +168,7 @@ async test "listings order by recency and keep husk directories visible" {
 }
 
 ///|
-async test "an explicit session title overrides the first prompt without rewriting it" {
+async test "renaming an initialized session leaves the first prompt unchanged" {
   let store = new_store()
   defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("named")
@@ -177,7 +177,7 @@ async test "an explicit session title overrides the first prompt without rewriti
       User(UserMessage(Content([Text("original first prompt")]))),
     ),
   )
-  assert_eq(store.title(id), None)
+  assert_eq(store.title(id), Some("original first prompt"))
   store.set_title(id, "  Renamed conversation  ")
   assert_eq(store.title(id), Some("Renamed conversation"))
   let listings = store.listings()
