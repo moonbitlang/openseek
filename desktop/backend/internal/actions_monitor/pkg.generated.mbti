@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/actions_monitor"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type ActionsMonitor
+pub fn ActionsMonitor::ActionsMonitor() -> Self
+pub fn ActionsMonitor::set_artifacts(Self, session~ : String, artifacts~ : @protocol.SessionArtifacts) -> Unit
+pub async fn ActionsMonitor::start(Self, notify~ : async (Notice) -> Unit) -> Unit
+pub fn ActionsMonitor::stop_session(Self, session~ : String) -> Unit
+
+pub struct Notice {
+  session : String
+  url : String
+  head : String
+  outcome : Outcome
+}
+
+#derive(Eq)
+pub enum Outcome {
+  Failed
+  Passed
+}
+
+// Type aliases
+
+// Traits

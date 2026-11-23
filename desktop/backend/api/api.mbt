@@ -44,6 +44,7 @@ struct ApiState {
   cloud_browser : ((String) -> @mcp.Tool)?
   questions : @user_questions.Service
   messages : @session_messages.Service
+  actions_monitor : @actions_monitor.ActionsMonitor
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -315,6 +316,7 @@ pub fn ApiState::ApiState(
     cloud_clients: Map([]),
     messages: Service(),
     questions: Service(),
+    actions_monitor: ActionsMonitor(),
     on_finished,
   }
 }
@@ -627,7 +629,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_artifacts_list, payload => {
-      @engine.session_artifacts_list(state.manager, payload.session)
+      @session_store.list_artifacts(payload.session)
     }),
     Endpoint(@commands.session_artifacts_remove, payload => {
       state.save_session_artifacts(payload.session, artifacts => {
@@ -1443,6 +1445,9 @@ fn publish_session_changed(
   session : String,
   workspace : String,
 ) -> Unit {
+  if change == "archived" || change == "deleted" {
+    state.actions_monitor.stop_session(session~)
+  }
   state.hub.publish(SessionChanged({ change, session, workspace, }))
 }
 
