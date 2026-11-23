@@ -218,3 +218,30 @@ test('Cloud uses the displayed history view across resize, pagination and reload
   await expect(questions).toHaveText(['Question 1']);
   await expect.poll(() => requests.slice(beforeReload)).toEqual([['detail', null, '"detail-1"']]);
 });
+
+test('reopening an interrupted Cloud task keeps the engine reply and its process visible', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  const native = (sequence, kind, payload) => ({ sequence, item: { kind, payload } });
+  const recovered = {
+    messages: [
+      { ...user('recovered', '', 1), engine_sequence: 1 },
+      { task_id: 'recovered', kind: 'task_finished', data: { status: 'interrupted', reason: 'Service restarted' }, created_at: 2 },
+    ],
+    events: [
+      native(1, 'user', { content: 'Inspect the file' }),
+      native(2, 'assistant', { content: 'Checking the file' }),
+      native(3, 'assistant', { content: 'Found the entry' }),
+      native(4, 'terminal', { kind: 'finished', message: 'Found the entry' }),
+    ],
+  };
+  cloud.historyTurns.set(sessionA, [recovered]);
+  await cloud.install();
+  await page.goto(sessionURL);
+  const transcript = page.locator('#transcript');
+  await expect(transcript.getByText('stopped', { exact: true })).toBeVisible();
+  await expect(transcript.getByText('Checking the file', { exact: true })).toBeVisible();
+  await expect(transcript.getByText('Found the entry', { exact: true })).toHaveCount(1);
+  await page.reload();
+  await expect(transcript.getByText('stopped', { exact: true })).toBeVisible();
+  await expect(transcript.getByText('Checking the file', { exact: true })).toBeVisible();
+});
