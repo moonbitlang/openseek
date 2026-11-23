@@ -12,6 +12,9 @@ import {
 // Values
 
 // Errors
+pub suberror TitleBackfillError {
+  TitleBackfillError(title~ : String, cause~ : Error)
+}
 
 // Types and methods
 pub(all) enum SessionClaim {

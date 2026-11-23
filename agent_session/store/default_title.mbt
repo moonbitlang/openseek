@@ -45,9 +45,7 @@ async fn SessionStore::write_initial_title(
   id : @agent_session.SessionId,
   title : String,
 ) -> Unit {
-  write_text_atomic(self.title_path(id), title, dirs=[self.session_dir(id)]) catch {
-    _ => ()
-  }
+  write_text_atomic(self.title_path(id), title, dirs=[self.session_dir(id)])
 }
 
 ///|
@@ -61,31 +59,49 @@ async fn SessionStore::initialize_title(
   guard !title.is_empty() else { return }
   let existing = self.title(id) catch { _ => return }
   if existing is None {
-    self.write_initial_title(id, title)
+    self.write_initial_title(id, title) catch {
+      _ => ()
+    }
   }
+}
+
+///|
+/// The title can be displayed, but could not be saved during backfill.
+pub suberror TitleBackfillError {
+  TitleBackfillError(title~ : String, cause~ : Error)
 }
 
 ///|
 /// Fill a missing session title from the transcript. Recheck the title
 /// under the session lock so a concurrent rename or initializer wins. Return
-/// no title when the reader finds no usable text.
+/// no title when the reader finds no usable text. Raise TitleBackfillError
+/// with the computed title when it can be displayed but could not be saved.
 pub async fn SessionStore::backfill_title(
   self : SessionStore,
   id : @agent_session.SessionId,
 ) -> String? {
   let transcript = self.session_file_path(id)
+  let mut locked = false
   with_session_lock(self, id, Exclusive, () => {
+    locked = true
     if self.title(id) is Some(title) {
       return Some(title)
     }
     let title = title_from_prompt(read_first_prompt(transcript))
     if title is Some(title) {
-      self.write_initial_title(id, title)
+      self.write_initial_title(id, title) catch {
+        cause => raise TitleBackfillError(title~, cause~)
+      }
     }
     title
   }) catch {
     // A read-only store can still supply its display title.
-    @os_error.OsError(_) => title_from_prompt(read_first_prompt(transcript))
+    @os_error.OsError(_) as cause if !locked => {
+      if title_from_prompt(read_first_prompt(transcript)) is Some(title) {
+        raise TitleBackfillError(title~, cause~)
+      }
+      None
+    }
     error => raise error
   }
 }

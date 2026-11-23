@@ -49,7 +49,19 @@ async fn session_group(
         title
       } else if stamp is Some(_) {
         // A damaged transcript must not hide the rest of the sidebar.
-        (store.backfill_title(id) catch { _ => None }).unwrap_or("")
+        let title = store.backfill_title(id) catch {
+          @store.TitleBackfillError(title~, cause~) => {
+            @xlog.warn() <?
+              {
+                "event": "desktop_session_title_backfill_failed",
+                "session": id.value(),
+                "error": cause.to_string(),
+              }
+            Some(title)
+          }
+          _ => None
+        }
+        title.unwrap_or("")
       } else {
         ""
       }
