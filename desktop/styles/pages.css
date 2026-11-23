@@ -272,7 +272,8 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-.api-key-actions {
+.api-key-actions,
+.api-key-buttons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -280,8 +281,12 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: var(--space-4);
 }
 
+.api-key-buttons {
+  max-width: 100%;
+}
+
 .api-key-actions > .form-row-status {
-  flex-basis: 100%;
+  flex: 1 1 8rem;
   text-align: end;
   overflow-wrap: anywhere;
 }

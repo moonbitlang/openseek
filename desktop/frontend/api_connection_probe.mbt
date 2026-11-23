@@ -85,24 +85,22 @@ fn api_key_actions(
 ) -> @html.Html {
   let locale = model.locale
   let probe = model.current_api_connection_probe()
-  let verdict : Array[@html.Html] = match probe {
-    Some({ reply, .. }) => {
-      let (class, text) = match reply {
-        None => ("form-row-status", @settings.text(locale, TestingConnection))
-        Some({ error: None, }) =>
-          (
-            "form-row-status success",
-            @settings.text(locale, ConnectionSuccessful),
-          )
-        Some({ error: Some(error), }) => ("form-row-status danger", error)
-      }
-      [@html.span(class~, attrs=@html.Attrs::build().role("status"), text)]
-    }
-    None => []
+  let (class, text) = match probe {
+    None => ("form-row-status", "")
+    Some({ reply: None, .. }) =>
+      ("form-row-status", @settings.text(locale, TestingConnection))
+    Some({ reply: Some({ error: None, }), .. }) =>
+      ("form-row-status success", @settings.text(locale, ConnectionSuccessful))
+    Some({ reply: Some({ error: Some(error), }), .. }) =>
+      ("form-row-status danger", error)
   }
-  @html.div(
-    class="api-key-actions",
-    [
+  @html.div(class="api-key-actions", [
+    @html.span(
+      class~,
+      attrs=@html.Attrs::build().role("status").hidden(probe is None),
+      text,
+    ),
+    @html.div(class="api-key-buttons", [
       @html.button(
         class="button secondary",
         type_="button",
@@ -118,7 +116,6 @@ fn api_key_actions(
         on_click=dispatch(SaveApiKey),
         @settings.text(locale, SaveApiKey),
       ),
-      ..verdict,
-    ],
-  )
+    ]),
+  ])
 }
