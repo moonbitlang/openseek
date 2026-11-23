@@ -24,7 +24,7 @@ export class SshBrowserHarness extends DesktopBrowserHarness {
       };
       return this.replyFor({ method, params });
     });
-    await this.page.addInitScript(() => {
+    await this.page.addInitScript(protocol => {
       const handlers = new Map();
       window.sshFixtureEmit = (name, payload) => {
         for (const fn of handlers.get(name) || []) fn({ payload });
@@ -38,12 +38,12 @@ export class SshBrowserHarness extends DesktopBrowserHarness {
       window.__MoonBit__ = { events, app: events, openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.sshFixtureEmit('openseek.agent.connected', { protocol: 6 });
+            window.sshFixtureEmit('openseek.agent.connected', { protocol });
           }
           return window.sshFixtureRpc(method, params);
         },
       }) };
-    });
+    }, this.hostProtocol);
   }
 
   async goto() {

@@ -303,63 +303,43 @@ fn matches(query : String, fields : Array[String]) -> Bool {
 }
 
 ///|
-/// Always name the selected library. Each device keeps its own identity,
-/// including while unavailable, so the selection never implies another host.
+fn Library::source(self : Library) -> @source_selector.Source {
+  match self {
+    Host(channel) => Device(channel)
+    Cloud(_) => Cloud
+  }
+}
+
+///|
+/// Each library keeps its identity even while unavailable.
 fn library_select(
   locale : @i18n.Locale,
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @rabbita.Val[@html.Html] {
-  let options = input.choices.map(choice => {
-    @rui.select_option(
-      value=choice.library.key(),
-      label=choice.label(locale),
-      disabled=!choice.available,
-    )
-  })
-  let label = ui(locale, Library)
-  let selected_label = input.choices
-    .iter()
-    .find_first(choice => choice.library == input.library)
-    .map_or(label, choice => choice.label(locale))
-  @rui.select(
+  let selector : @source_selector.Input = {
+    label: ui(locale, Library),
+    selected: input.library.source(),
+    choices: input.choices.map(choice => {
+      source: choice.library.source(),
+      label: choice.label(locale),
+      title: None,
+      disabled: !choice.available,
+    }),
+  }
+  selector.render(
     id="skills-library",
     class="skills-library-select",
-    options~,
-    default_value=input.library.key(),
-    placeholder=selected_label,
-    on_value_change=@cmd.Emit(value => {
+    @cmd.Emit(source => {
       if input.choices
         .iter()
-        .find_first(choice => choice.library.key() == value)
+        .find_first(choice => choice.library.source() == source)
         is Some(choice) {
         emit(SelectLibrary(choice.library))
       } else {
         @cmd.none
       }
     }),
-    render=scope => {
-      @html.fragment([
-        @rui.select_trigger(
-          scope~,
-          aria_label=label,
-          class="setting-select-button field-surface",
-        ),
-        @rui.select_content(
-          scope~,
-          class="menu-surface",
-          input.choices.map(choice => {
-            @rui.select_item(
-              scope~,
-              value=choice.library.key(),
-              disabled=!choice.available,
-              class="menu-option",
-              choice.label(locale),
-            )
-          }),
-        ),
-      ])
-    },
   )
 }
 

@@ -36,7 +36,6 @@ priv enum UiMessage {
   Refreshing
   Refresh
   LibraryUnavailable
-  ThisDevice
   CloudLibraryLabel
   OfflineDevice(String)
 }
@@ -46,7 +45,7 @@ fn LibraryChoice::label(self : LibraryChoice, locale : @i18n.Locale) -> String {
   let label = if self.library is Cloud(_) {
     ui(locale, CloudLibraryLabel)
   } else {
-    self.name.unwrap_or(ui(locale, ThisDevice))
+    self.name.unwrap_or(@source_selector.local_label(locale))
   }
   if self.available {
     label
@@ -183,11 +182,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AllStatuses) => "全部状态"
     (TraditionalChinese, AllStatuses) => "全部狀態"
     (Japanese, AllStatuses) => "すべての状態"
-    (English, ThisDevice) => "This device"
-    (Spanish, ThisDevice) => "Este dispositivo"
-    (SimplifiedChinese, ThisDevice) => "此设备"
-    (TraditionalChinese, ThisDevice) => "此裝置"
-    (Japanese, ThisDevice) => "このデバイス"
     (English, CloudLibraryLabel) => "Cloud"
     (Spanish, CloudLibraryLabel) => "Nube"
     (SimplifiedChinese, CloudLibraryLabel) => "云端"

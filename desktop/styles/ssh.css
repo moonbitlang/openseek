@@ -15,12 +15,29 @@
 .ssh-dot.pending { background: #bd8b36; animation: ssh-pulse 1.4s ease-in-out infinite; }
 @keyframes ssh-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .ssh-dot.pending { animation: none; } }
-.ssh-locations { display: flex; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-5) var(--space-7); border-bottom: 1px solid var(--color-divider); }
-.ssh-location { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); min-width: 0; max-width: 100%; border: 1px solid var(--color-border); font-size: var(--font-size-xs); }
-.ssh-location > span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ssh-location small { color: var(--color-text-secondary); }
-.ssh-location.selected { background: var(--color-bg-subtle); border-color: var(--color-text-secondary); }
-.ssh-location.add { border-style: dashed; color: var(--color-text-secondary); }
+.ssh-locations {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+.project-source-select {
+  flex: 0 1 15rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.ssh-add-host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.ssh-add-host:hover {
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
 /* OpenSSH output includes fingerprints and fixed-column warning banners.
    Preserve its lines; scrolling must not reflow them into misleading fragments. */
 .ssh-output, .ssh-error {

@@ -83,6 +83,10 @@
   color: var(--color-accent);
 }
 
+.source-selector :is([data-slot="select-trigger"], [data-slot="select-item"]) {
+  padding-block: var(--space-2) !important;
+}
+
 [data-slot="dialog"] {
   border-radius: var(--radius-modal) !important;
 }
