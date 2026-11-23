@@ -19,15 +19,13 @@ test "display polls equal full ordered replacement at every split" {
         let full = rules.fold(init=prefix, (text, pair) => {
           text.replace_all(old=pair.0, new=pair.1)
         })
-        assert_eq(
-          view.snapshot(),
-          (last_chars(full, n), full.char_length() > n),
-        )
+        let expected : DisplayTailSnapshot = {
+          text: last_chars(full, n),
+          truncated: full.char_length() > n,
+        }
+        assert_eq(view.snapshot(), expected)
         view.feed("")
-        assert_eq(
-          view.snapshot(),
-          (last_chars(full, n), full.char_length() > n),
-        )
+        assert_eq(view.snapshot(), expected)
       }
     }
   }
@@ -44,9 +42,9 @@ async test "late display registration joins a spilled UTF-8 prefix and future ch
   let before = "x".repeat(65535) + "🌙/tm"
   sink.append_text(before)
   let view = sink.track_display_tail([("🌙/tmp", "source")], 12)
-  assert_eq(view.snapshot(), (last_chars(before, 12), true))
+  assert_eq(view.snapshot(), { text: last_chars(before, 12), truncated: true, })
   sink.append_chunk(b"p\r\nend")
-  assert_eq(view.snapshot(), ("xsource\r\nend", true))
+  assert_eq(view.snapshot(), { text: "xsource\r\nend", truncated: true, })
   assert_eq(sink.read_all(), before + "p\r\nend")
 }
 
@@ -57,7 +55,7 @@ async test "display views keep only successfully retained output" {
   sink.append_text("abc")
   let late = sink.track_display_tail([("ab", "x")], 20)
   sink.append_text("defg")
-  assert_eq(early.snapshot(), ("xcd", false))
+  assert_eq(early.snapshot(), { text: "xcd", truncated: false, })
   assert_eq(late.snapshot(), early.snapshot())
   assert_true(sink.truncated())
 }
@@ -72,7 +70,7 @@ async test "a live view crosses the first spill and ignores a failed write" {
   let view = sink.track_display_tail([("abc", "s")], 8)
   sink.append_text("a")
   sink.append_text("bcdef")
-  assert_eq(view.snapshot(), ("sdef", false))
+  assert_eq(view.snapshot(), { text: "sdef", truncated: false, })
   sink.close()
   sink.file = Some(@fs.open(path, mode=ReadOnly))
   try sink.append_text("more") catch {
@@ -80,6 +78,6 @@ async test "a live view crosses the first spill and ignores a failed write" {
   } noraise {
     _ => fail("expected write failure")
   }
-  assert_eq(view.snapshot(), ("sdef", false))
+  assert_eq(view.snapshot(), { text: "sdef", truncated: false, })
   assert_eq(sink.read_all(), "abcdef")
 }

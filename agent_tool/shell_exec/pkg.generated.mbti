@@ -16,7 +16,13 @@ pub let default_hard_cap : Int32
 pub struct DisplayTail {
   // private fields
 }
-pub fn DisplayTail::snapshot(Self) -> (String, Bool)
+pub fn DisplayTail::snapshot(Self) -> DisplayTailSnapshot
+
+#derive(Eq, @debug.Debug)
+pub(all) struct DisplayTailSnapshot {
+  text : String
+  truncated : Bool
+}
 
 #derive(Eq, @debug.Debug)
 pub enum ExecStatus {

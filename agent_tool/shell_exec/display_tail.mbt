@@ -81,9 +81,17 @@ fn DisplayTail::feed(self : DisplayTail, chunk : String) -> Unit {
 }
 
 ///|
-/// The display window at this instant, and whether it omits earlier rewritten
-/// text. A poll renders unfinished matches without changing subsequent output.
-pub fn DisplayTail::snapshot(self : DisplayTail) -> (String, Bool) {
+/// Rewritten output visible in the tail and whether any output was omitted.
+#derive(Eq, Debug)
+pub(all) struct DisplayTailSnapshot {
+  text : String
+  truncated : Bool
+}
+
+///|
+/// The display window at this instant. A poll renders unfinished matches
+/// without changing subsequent output.
+pub fn DisplayTail::snapshot(self : DisplayTail) -> DisplayTailSnapshot {
   let mut pending = ""
   for stage in self.stages {
     pending = (stage.pending + pending).replace_all(
@@ -94,7 +102,10 @@ pub fn DisplayTail::snapshot(self : DisplayTail) -> (String, Bool) {
   let n = self.tail.length()
   let extra = pending.char_length()
   if extra >= n {
-    return (last_chars(pending, n), extra > n || self.count > 0)
+    return {
+      text: last_chars(pending, n),
+      truncated: extra > n || self.count > 0,
+    }
   }
   let keep = self.count.min(n - extra)
   let out = StringBuilder()
@@ -102,5 +113,5 @@ pub fn DisplayTail::snapshot(self : DisplayTail) -> (String, Bool) {
     out.write_char(self.tail[(self.next + n - keep + i) % n])
   }
   out.write_string(pending)
-  (out.to_string(), self.count > n - extra)
+  { text: out.to_string(), truncated: self.count > n - extra, }
 }

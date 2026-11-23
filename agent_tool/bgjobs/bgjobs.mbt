@@ -679,17 +679,16 @@ pub const JobOutputWindow : Int32 = 12000
 pub fn BgJobRuntime::rewritten_output_tail(
   self : BgJobRuntime,
   id : String,
-) -> (String, Bool)? {
+) -> @shell_exec.DisplayTailSnapshot? {
   guard self.jobs.get(id) is Some(job) && job.display_tail is Some(view) else {
     return None
   }
-  let (text, clipped) = view.snapshot()
-  Some(
-    (
-      text,
-      clipped || (job.exec.spill_path() is None && job.exec.over_inline_cap()),
-    ),
-  )
+  let tail = view.snapshot()
+  Some({
+    text: tail.text,
+    truncated: tail.truncated ||
+    (job.exec.spill_path() is None && job.exec.over_inline_cap()),
+  })
 }
 
 ///|

@@ -117,11 +117,11 @@ async fn execute(
   // Default polls report truncation in the rewritten display instead.
   let (output, clipped) = match page {
     None =>
-      bg_runtime
-      .rewritten_output_tail(job_id)
-      .unwrap_or_else(() => {
+      if bg_runtime.rewritten_output_tail(job_id) is Some(tail) {
+        (tail.text, tail.truncated)
+      } else {
         (raw_output, raw_output.char_length() < snapshot.size)
-      })
+      }
     Some(_) =>
       (
         apply_output_rewrites(raw_output, snapshot.output_rewrites),
