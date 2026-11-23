@@ -78,9 +78,10 @@ fn Model::test_api_connection(
 }
 
 ///|
-fn api_connection_probe_row(
+fn api_key_actions(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  settings_loaded~ : Bool,
 ) -> @html.Html {
   let locale = model.locale
   let probe = model.current_api_connection_probe()
@@ -99,16 +100,23 @@ fn api_connection_probe_row(
     }
     None => []
   }
-  @ui.form_row(
-    "",
+  @html.div(
+    class="api-key-actions",
     [
       @html.button(
-        class="button secondary compact",
+        class="button secondary",
         type_="button",
         disabled=model.api_connection_probe_payload() is None ||
           probe is Some({ reply: None, .. }),
         on_click=dispatch(TestApiConnection),
         @settings.text(locale, TestConnection),
+      ),
+      @html.button(
+        class="button primary",
+        type_="button",
+        disabled=!settings_loaded || model.setup_api_key.is_blank(),
+        on_click=dispatch(SaveApiKey),
+        @settings.text(locale, SaveApiKey),
       ),
       ..verdict,
     ],
