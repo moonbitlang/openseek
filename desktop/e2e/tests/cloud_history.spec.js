@@ -42,7 +42,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   await expect(bubbles).toHaveText(['Third question']);
   await expect(loadingOlder).toHaveCount(0);
   await expect(rowSpinner).toHaveCount(0);
-  expect(requests.map(request => new URL(request.url()).search)).toEqual(['?limit=1']);
+  expect(requests.map(request => new URL(request.url()).search)).toEqual(['?view=minimal&limit=1']);
 
   // Pause the page after the viewport has moved to the boundary so we can
   // compare the same rendered turn before and after the prepend.
@@ -77,7 +77,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   await transcript.hover();
   await page.mouse.wheel(0, -400);
   expect(requests.map(request => new URL(request.url()).search)).toEqual([
-    '?limit=1', '?limit=1&offset=1', '?limit=1&offset=0',
+    '?view=minimal&limit=1', '?view=minimal&limit=1&offset=1', '?view=minimal&limit=1&offset=0',
   ]);
 
   await cloud.open(sessionB);
@@ -113,7 +113,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { task: 'turn-3' });
   const updated = await refreshed;
   expect(updated.status()).toBe(200);
-  expect(new URL(updated.url()).search).toBe('?limit=1');
+  expect(new URL(updated.url()).search).toBe('?view=minimal&limit=1');
   await expect(bubbles).toHaveText(['First question', 'Second question', 'Third question', 'Fourth question']);
   await expect(answer).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('Keep the local draft');
@@ -139,7 +139,7 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   const bubbles = transcript.locator('.msg.user .msg-content');
   await expect(bubbles).toHaveText(['Latest question']);
   expect(await transcript.evaluate(element => element.scrollHeight === element.clientHeight)).toBe(true);
-  expect(queries).toEqual(['?limit=1']);
+  expect(queries).toEqual(['?view=minimal&limit=1']);
   let release;
   cloud.pauseHistory = new Promise(resolve => { release = resolve; });
   const oldResponse = settledResponse(page, response => new URL(response.url()).searchParams.get('offset') === '0');
@@ -160,5 +160,61 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   await transcript.hover();
   await page.mouse.wheel(0, -200);
   await expect(bubbles).toHaveText(['Earlier question', 'Latest question']);
-  expect(queries).toEqual(['?limit=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=0']);
+  expect(queries).toEqual(['?view=minimal&limit=1', '?view=minimal&limit=1&offset=0', '?view=minimal&limit=1', '?view=minimal&limit=1&offset=0']);
+});
+
+test('Cloud uses the displayed history view across resize, pagination and reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 850 });
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
+  const cloud = new CloudHarness(page);
+  await cloud.install();
+  const requests = [];
+  await page.route(url => url.pathname === `/v1/sessions/${sessionA}/messages`, async route => {
+    const params = new URL(route.request().url()).searchParams;
+    const view = params.get('view');
+    const offset = params.get('offset');
+    const validator = await route.request().headerValue('if-none-match');
+    expect(params.get('limit')).toBe('1');
+    requests.push([view, offset, validator]);
+    const turn = Number(offset ?? 1);
+    const etag = `"${view}-${turn}"`;
+    const headers = { ETag: etag, 'Access-Control-Expose-Headers': 'ETag' };
+    if (validator === etag) return route.fulfill({ status: 304, headers });
+    const question = `Question ${turn}`;
+    const messages = [user(`task-${turn}`, question, turn * 2 + 1)];
+    if (view === 'detail') messages.push({
+      task_id: `task-${turn}`, kind: 'assistant_message', created_at: turn * 2 + 2,
+      data: { content: '', reasoning_content: `reasoning ${turn}` },
+    });
+    const native = cloud.nativeHistory(sessionA, { messages });
+    native.session.events.forEach(event => { event.sequence += turn * 2; });
+    native.messages[0].engine_sequence = turn * 2 + 1;
+    return route.fulfill({ headers, json: {
+      ...native, page: { offset: turn }, generating: false,
+    } });
+  });
+  await page.goto(sessionURL);
+  const transcript = page.locator('#transcript');
+  const questions = transcript.locator('.msg.user .msg-content');
+  await expect(questions).toHaveText(['Question 1']);
+  expect(requests).toEqual([['minimal', null, null]]);
+  await transcript.hover();
+  await page.mouse.wheel(0, -200);
+  await expect(questions).toHaveText(['Question 0', 'Question 1']);
+  expect(requests.at(-1)).toEqual(['minimal', '0', null]);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect.poll(() => requests.slice(-2)).toEqual([['detail', null, null], ['detail', '0', null]]);
+  await expect(questions).toHaveText(['Question 0', 'Question 1']);
+  await expect.poll(async () => (await historyCacheRows(page, 'pages'))[0]?.page.etag).toBe('"detail-1"');
+  expect((await historyCacheRows(page))[0].page.etag).toBe('"minimal-1"');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Minimal', exact: true }).click();
+  await expect.poll(() => requests.at(-1)).toEqual(['minimal', null, '"minimal-1"']);
+  await page.getByRole('button', { name: 'Detail', exact: true }).click();
+  await expect.poll(() => requests.at(-1)).toEqual(['detail', null, '"detail-1"']);
+  const beforeReload = requests.length;
+  await page.reload();
+  await expect(questions).toHaveText(['Question 1']);
+  await expect.poll(() => requests.slice(beforeReload)).toEqual([['detail', null, '"detail-1"']]);
 });

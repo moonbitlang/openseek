@@ -28,14 +28,33 @@ async test "Cloud history survives a host restart and follows account retirement
   }
   let write : @protocol.CloudHistoryCacheRequest = {
     token: first.account.token,
-    action: Write(session="chat-a", page~),
+    action: Write(session="chat-a", view=Detail, page~),
   }
   assert_true(store.cloud_history_cache(write) is Done)
   let reopened = AuthStore::load(runtime_dir=root)
-  let read = { ..write, action: Read(session="chat-a"), }
+  let read = { ..write, action: Read(session="chat-a", view=Detail), }
   assert_true(
     reopened.cloud_history_cache(read)
     is Page(Some({ etag: Some("etag-1"), offset: Some(3), .. })),
+  )
+  let minimal_read = { ..read, action: Read(session="chat-a", view=Minimal), }
+  assert_true(reopened.cloud_history_cache(minimal_read) is Page(None))
+  ignore(
+    reopened.cloud_history_cache({
+      ..write,
+      action: Write(session="chat-a", view=Minimal, page={
+        ..page,
+        etag: Some("minimal"),
+      }),
+    }),
+  )
+  assert_true(
+    reopened.cloud_history_cache(minimal_read)
+    is Page(Some({ etag: Some("minimal"), .. })),
+  )
+  assert_true(
+    reopened.cloud_history_cache(read)
+    is Page(Some({ etag: Some("etag-1"), .. })),
   )
   assert_true(
     reopened.cloud_history_cache({ ..write, action: List, })
@@ -47,10 +66,11 @@ async test "Cloud history survives a host restart and follows account retirement
   )
   assert_true(reopened.cloud_history_cache(write) is Done)
   assert_true(reopened.cloud_history_cache(read) is Page(None))
+  assert_true(reopened.cloud_history_cache(minimal_read) is Page(None))
   assert_true(
     reopened.cloud_history_cache({
       ..write,
-      action: Write(session="chat-b", page~),
+      action: Write(session="chat-b", view=Detail, page~),
     })
     is Done,
   )
@@ -66,7 +86,7 @@ async test "Cloud history survives a host restart and follows account retirement
   assert_true(
     reopened.cloud_history_cache({
       ..write,
-      action: Write(session="late", page~),
+      action: Write(session="late", view=Detail, page~),
     })
     is Done,
   )
@@ -74,8 +94,10 @@ async test "Cloud history survives a host restart and follows account retirement
     reopened.cloud_history_cache({ token: second.account.token, action: List, })
     is Entries([]),
   )
+  let cache_dir = root.join("cloud-history-cache").join("123")
+  assert_eq(@fs.readdir(cache_dir.join("minimal").to_string()), [])
   assert_eq(
-    @fs.readdir(root.join("cloud-history-cache").join("123").to_string()),
+    @fs.readdir(cache_dir.to_string()).filter(name => name.has_suffix(".json")),
     ["chat-b.json"],
   )
   reopened.commit_session(first)

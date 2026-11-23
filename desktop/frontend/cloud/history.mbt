@@ -317,3 +317,84 @@ fn Conversation::acknowledge_assistants(
   }
   { ..self, pending_assistants, assistant_handoffs, }
 }
+
+///|
+/// The inactive view retains its own pages and latest-page validator.
+#derive(Eq)
+pub struct CachedTranscript {
+  window : HistoryWindow
+  records : Array[Record]
+  document : @protocol.SessionDocument
+  etag : String?
+}
+
+///|
+pub fn State::switch_history_view(
+  self : State,
+  view : @protocol.CloudHistoryView,
+  selected : String?,
+  navigation : Int32,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+) -> (State, @cmd.Cmd) {
+  guard self.history_view != view else { return (self, @cmd.none) }
+  let fence = self.sequence + 1
+  let conversations = self.conversations.copy()
+  let mut next = { ..self, history_view: view, sequence: fence, conversations, }
+  let reload = []
+  for id, conv in self.conversations {
+    if self.is_draft(id) {
+      continue
+    }
+    let other = conv.other_history
+    let saved = if conv.history_cached {
+      Some(CachedTranscript::{
+        window: conv.history_window,
+        records: conv.records,
+        document: conv.document,
+        etag: conv.history_etag,
+      })
+    } else {
+      None
+    }
+    let restored = {
+      ..conv.fence_history(fence),
+      other_history: saved,
+      history_restore_range: if selected == Some(id) &&
+        conv.history_window.pages.length() > 1 {
+        Some((navigation, conv.history_window.lo))
+      } else {
+        None
+      },
+      history_window: other.map(c => c.window).unwrap_or(HistoryWindow::empty()),
+      records: other.map(c => c.records).unwrap_or([]),
+      document: other
+      .map(c => c.document)
+      .unwrap_or({ ..conv.document, events: Some([]), }),
+      history_etag: other.bind(c => c.etag),
+      history_cached: other is Some(_),
+      history_required: other is None || conv.history_required,
+      history_cache_request: None,
+      history_older_request: None,
+      history_turn_request: None,
+      history_resume_baseline: None,
+      loading: other is None && selected == Some(id),
+    }
+    conversations[id] = restored
+    if selected == Some(id) || conv.history_reading || conv.generating {
+      reload.push(id)
+    }
+  }
+  guard token is Some(token) else { return (next, @cmd.none) }
+  let commands = []
+  for id in reload {
+    let (loaded, command) = if next.conversations[id].history_cached {
+      next.load(id, Some(token), emit)
+    } else {
+      next.read_persistent_history(id, token, emit)
+    }
+    next = loaded
+    commands.push(command)
+  }
+  (next, @cmd.batch(commands))
+}

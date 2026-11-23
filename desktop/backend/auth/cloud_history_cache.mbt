@@ -41,32 +41,42 @@ pub async fn AuthStore::cloud_history_cache(
   }
   let user = account.user.user_id
   let dir = cloud_history_directory(runtime, user)
+  fn pages(view : @protocol.CloudHistoryView) -> @pathx.Path {
+    match view {
+      Detail => dir
+      Minimal => dir.join("minimal")
+    }
+  }
   match request.action {
     List => {
-      let entries : Array[@protocol.CloudHistoryCacheEntry] = []
-      if @fsx.Directory::try_open(dir) is Some(directory) {
-        for entry in directory.collect() {
-          let name = entry.name()
-          guard name.strip_suffix(".json") is Some(prefix) else { continue }
-          let session = prefix.to_owned()
-          if valid_cache_id(session) &&
-            !self.cloud_history_deleted.contains((user, session)) &&
-            (read_cloud_history(dir.join(name)) catch { _ => None })
-            is Some(page) {
-            entries.push({ session, label: page.label(session), })
+      let entries : Map[String, @protocol.CloudHistoryCacheEntry] = Map([])
+      for view in [@protocol.CloudHistoryView::Detail, Minimal] {
+        let dir = pages(view)
+        if @fsx.Directory::try_open(dir) is Some(directory) {
+          for entry in directory.collect() {
+            let name = entry.name()
+            guard name.strip_suffix(".json") is Some(prefix) else { continue }
+            let session = prefix.to_owned()
+            if valid_cache_id(session) &&
+              !self.cloud_history_deleted.contains((user, session)) &&
+              (read_cloud_history(dir.join(name)) catch { _ => None })
+              is Some(page) {
+              entries[session] = { session, label: page.label(session), }
+            }
           }
         }
       }
-      Entries(entries)
+      Entries(entries.values().to_array())
     }
-    Read(session~) => {
+    Read(session~, view~) => {
       guard valid_cache_id(session) &&
         !self.cloud_history_deleted.contains((user, session)) else {
         return Page(None)
       }
-      Page(read_cloud_history(dir.join(session + ".json")))
+      Page(read_cloud_history(pages(view).join(session + ".json")))
     }
-    Write(session~, page~) => {
+    Write(session~, page~, view~) => {
+      let dir = pages(view)
       if valid_cache_id(session) &&
         !self.cloud_history_deleted.contains((user, session)) {
         @fs.mkdir(dir.to_string(), recursive=true, permission=0o700) catch {
@@ -83,7 +93,9 @@ pub async fn AuthStore::cloud_history_cache(
     Remove(session~) => {
       if valid_cache_id(session) {
         self.cloud_history_deleted.add((user, session))
-        @fsx.remove_if_exists(dir.join(session + ".json"))
+        for view in [@protocol.CloudHistoryView::Detail, Minimal] {
+          @fsx.remove_if_exists(pages(view).join(session + ".json"))
+        }
       }
       Done
     }

@@ -88,12 +88,12 @@ for (const desktop of [true, false]) {
 
 async function changeCacheRows(page, corrupt) {
   await page.evaluate(corrupt => new Promise((resolve, reject) => {
-    const request = indexedDB.open('seekmoon.cloud-history.v1', 1);
+    const request = indexedDB.open('seekmoon.cloud-history.v1', 2);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;
-      const tx = db.transaction('pages', 'readwrite');
-      const store = tx.objectStore('pages');
+      const tx = db.transaction('minimalPages', 'readwrite');
+      const store = tx.objectStore('minimalPages');
       store.getAll().onsuccess = event => {
         for (const row of event.target.result) {
           // Alternate scopes deliberately use identical session identifiers.

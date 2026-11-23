@@ -657,8 +657,8 @@ pub impl @json.ToJson for CloudFileDownloadReply
 
 pub(all) enum CloudHistoryCacheAction {
   List
-  Read(session~ : String)
-  Write(session~ : String, page~ : CloudHistoryCachePage)
+  Read(session~ : String, view~ : CloudHistoryView)
+  Write(session~ : String, view~ : CloudHistoryView, page~ : CloudHistoryCachePage)
   Remove(session~ : String)
 }
 
@@ -702,6 +702,13 @@ pub fn CloudHistoryCacheRequest::from_json(@json.Json, @json.DecodeContext) -> S
 pub fn CloudHistoryCacheRequest::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCacheRequest
 pub impl @json.ToJson for CloudHistoryCacheRequest
+
+#derive(Eq)
+pub(all) enum CloudHistoryView {
+  Minimal
+  Detail
+}
+pub fn CloudHistoryView::wire_name(Self) -> String
 
 #derive(Eq, @debug.Debug)
 pub(all) enum CloudMcpEvent {
