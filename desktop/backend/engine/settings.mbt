@@ -19,7 +19,7 @@
 // - Saves are atomic: temp file + rename, 0600.
 
 ///|
-const EngineSettingsVersion = 3
+const EngineSettingsVersion = 4
 
 ///|
 const EngineSettingsFileName = "engine-settings.json"
@@ -82,6 +82,8 @@ priv struct EngineSettings {
   version : Int32
   provider : ApiProvider
   providers : Map[String, Provider]
+  // The user's own model entries; this build's built-in catalog is not stored.
+  models : Array[ModelEntry]
   followup_behavior : String
 }
 
@@ -143,6 +145,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
       }
       _ => Map([])
     },
+    models: decode_model_entries(raw),
     followup_behavior: match settings_text(raw, "followup_behavior") {
       Some("queue") => "queue"
       _ => "steer"
@@ -182,8 +185,17 @@ fn settings_status_payload(
     revision,
     provider: settings.provider.wire(),
     providers,
-    // The catalog reports nothing until the storage slice lands.
-    models: [],
+    // The user's own entries, in saved order. The built-in catalog belongs to
+    // the build rather than the file, so it is not reported here.
+    models: settings.models.map(entry => {
+      id: entry.id,
+      label: entry.label,
+      api_url: entry.api_url,
+      full_url: entry.full_url,
+      has_api_key: entry.api_key is Some(_),
+      images: entry.images,
+      context_window: entry.context_window,
+    }),
     followup_behavior: settings.followup_behavior,
     prompt_source: match settings.raw.get("prompt_source") {
       Some(String("custom")) => "custom"
