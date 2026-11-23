@@ -834,9 +834,16 @@ fn Model::send_feedback(
       },
       feedback: Some(Sending(request, command)),
     },
-    action_emit(
-      FeedbackSubmitted(identity=entry.identity(), request~, message~),
-    ),
+    @cmd.batch([
+      if clear {
+        clear_submitted_feedback_draft(entry.identity(), command)
+      } else {
+        @cmd.none
+      },
+      action_emit(
+        FeedbackSubmitted(identity=entry.identity(), request~, message~),
+      ),
+    ]),
     action_emit,
   )
 }

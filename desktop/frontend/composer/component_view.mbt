@@ -510,6 +510,11 @@ fn Entry::view(
     } else {
       self.draft.task
     },
+    empty_message_owner: if !goal_mode && self.draft.task.is_empty() {
+      Some(self.identity().message_owner_key())
+    } else {
+      None
+    },
     shell: shell_command is Some(_),
     placeholder: if self.prediction_text(input) is Some(text) {
       text
