@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/backend/internal/fsx",
+  "moonbitlang/openseek/fsx" @shared_fsx,
   "openseek_desktop/backend/internal/gitx",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/pathx",

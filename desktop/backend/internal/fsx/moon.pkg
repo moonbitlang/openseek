@@ -1,7 +1,6 @@
 import {
   "moonbitlang/core/async/os_error",
   "moonbitlang/core/async/fs",
-  "openseek_desktop/backend/entropy",
   "openseek_desktop/backend/pathx",
   "moonbitlang/core/async",
 }

@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/fsx"
+
+import {
+  "moonbitlang/core/async/fs",
+}
+
+// Values
+pub async fn write_atomic(String, async (@fs.File) -> Unit, replace~ : Bool, permission? : Int32, before_commit? : async () -> Unit) -> Unit
+
+pub async fn write_text_atomic(String, String, permission? : Int32) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

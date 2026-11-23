@@ -67,8 +67,8 @@ pub async fn session_artifacts_update(
   defer lock.release()
   let next = update(read_session_artifacts(root, session))
   @async.protect_from_cancel(() => {
-    @fsx.write_text_atomic(
-      directory.join("artifacts.json").to_path(),
+    @shared_fsx.write_text_atomic(
+      directory.join("artifacts.json").to_string(),
       next.to_json().stringify(),
     )
     on_committed()

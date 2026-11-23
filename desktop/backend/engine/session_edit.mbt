@@ -161,8 +161,8 @@ async fn prepare_session_edit(
         let directory = selected.root.join("sessions").join(session)
         @fsx.ensure_dir(directory.to_path())
         ignore(capture_session_prompt(store, id, source_prompt))
-        @fsx.write_text_atomic(
-          directory.join("session-title").to_path(),
+        @shared_fsx.write_text_atomic(
+          directory.join("session-title").to_string(),
           payload.source_title.trim().to_owned(),
         )
       },
