@@ -66,34 +66,33 @@ async fn SessionStore::initialize_title(
 }
 
 ///|
-/// Fill a missing session title from a legacy transcript. Recheck the title
+/// Fill a missing session title from the transcript. Recheck the title
 /// under the session lock so a concurrent rename or initializer wins. Return
 /// no title when the reader finds no usable text.
 pub async fn SessionStore::backfill_title(
   self : SessionStore,
   id : @agent_session.SessionId,
-  read_legacy_prompt~ : async (String) -> String?,
+  read_first_prompt~ : async (String) -> String?,
 ) -> String? {
   let transcript = self.session_file_path(id)
   with_session_lock(self, id, Exclusive, () => {
     if self.title(id) is Some(title) {
       return Some(title)
     }
-    let title = title_from_legacy_prompt(read_legacy_prompt(transcript))
+    let title = title_from_prompt(read_first_prompt(transcript))
     if title is Some(title) {
       self.write_initial_title(id, title)
     }
     title
   }) catch {
-    // A read-only legacy store can still supply its display title.
-    @os_error.OsError(_) =>
-      title_from_legacy_prompt(read_legacy_prompt(transcript))
+    // A read-only store can still supply its display title.
+    @os_error.OsError(_) => title_from_prompt(read_first_prompt(transcript))
     error => raise error
   }
 }
 
 ///|
-fn title_from_legacy_prompt(prompt : String?) -> String? {
+fn title_from_prompt(prompt : String?) -> String? {
   let title = default_title_text(prompt.unwrap_or(""))
   if title.is_empty() {
     None

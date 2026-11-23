@@ -51,7 +51,7 @@ async fn session_group(
         // A damaged transcript must not hide the rest of the sidebar.
         (store.backfill_title(
           id,
-          read_legacy_prompt=@session_preview.read_first_prompt,
+          read_first_prompt=@session_preview.read_first_prompt,
         ) catch {
           _ => None
         }).unwrap_or("")
