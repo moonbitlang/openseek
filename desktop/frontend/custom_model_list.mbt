@@ -46,8 +46,9 @@ fn custom_model_rows(
 
 ///|
 /// One stored entry: the name it goes by, the id and how many chats use it,
-/// and the two actions that own it. The endpoint and key above the list are
-/// shared, so nothing here repeats them.
+/// and the actions that own it. Each row owns its connection test, because
+/// each entry names its own endpoint and key; the endpoint above the list is
+/// only the fallback, so nothing here repeats it.
 fn custom_model_entry_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -61,6 +62,8 @@ fn custom_model_entry_row(
   @ui.form_row(
     entry.display_name(),
     [
+      connection_probe_status_line(model, model_id=Some(entry.id)),
+      connection_test_button(dispatch, model, model_id=Some(entry.id)),
       @html.button(
         class="button secondary compact",
         type_="button",

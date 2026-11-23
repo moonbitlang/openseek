@@ -1594,21 +1594,32 @@ pub impl ToJson for ProviderStatus with fn to_json(self) {
 }
 
 ///|
-/// Saved settings revision to test.
+/// Saved settings revision to test, and the saved model entry to test it with.
+/// `model` absent asks for the provider's own default route; the custom-model
+/// section sends one entry id per row so each row can report on its own
+/// endpoint.
 #derive(Debug, Eq)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
+  model : String?
 }
 
 ///|
 pub impl FromJson for ApiConnectionProbePayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "API connection probe payload")
-  { revision: object.required_int("revision"), }
+  {
+    revision: object.required_int("revision"),
+    model: object.optional_string("model"),
+  }
 }
 
 ///|
 pub impl ToJson for ApiConnectionProbePayload with fn to_json(self) {
-  { "revision": Json(self.revision) }
+  let fields : Map[String, Json] = { "revision": Json(self.revision) }
+  if self.model is Some(model) {
+    fields["model"] = Json(model)
+  }
+  Json(fields)
 }
 
 ///|

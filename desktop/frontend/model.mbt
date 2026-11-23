@@ -1955,7 +1955,9 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
-  TestApiConnection
+  // The saved entry to test (its row's id), or `None` for the provider's own
+  // default route.
+  TestApiConnection(String?)
   ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
   // The custom endpoint's models. The endpoint and its key are the API

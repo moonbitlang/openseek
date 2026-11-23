@@ -5176,7 +5176,8 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
-    TestApiConnection => model.test_api_connection(dispatch)
+    TestApiConnection(model_id) =>
+      model.test_api_connection(dispatch, model_id~)
     ApiConnectionProbed(attempt, reply) => {
       guard model.api_connection_probe is Some(probe) &&
         probe.attempt == attempt &&
@@ -17144,6 +17145,7 @@ fn host_settings(
   has_openrouter_key~ : Bool = false,
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
+  models~ : Array[@protocol.ModelStatus] = [],
 ) -> HostSettings {
   HostSettings::from_status({
     revision,
@@ -17157,7 +17159,7 @@ fn host_settings(
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
-    models: [],
+    models,
   })
 }
 

@@ -395,8 +395,9 @@ returned. `has_api_key` includes the official provider's environment fallback.
 
 **Test connection** sends one short text prompt through the selected provider's
 saved API settings and the provider's default model, and reports whether it
-received streamed text. For Custom URL, the gateway needs to accept
-`deepseek-flash`, the default model ID for that provider.
+received streamed text. A custom model entry carries its own test instead: the
+probe names the entry, and the host routes it through that entry's endpoint and
+key with the fallbacks a run would use.
 
 `settings.set` also carries the user's own model entries: `models` upserts the
 entries it names (keyed by id) and `removed_models` drops the ids it names, so
