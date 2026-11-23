@@ -19,10 +19,15 @@ pub async fn SessionStore::create(
 ) -> Unit {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
+    self.clear_default_title(session.id())
     write_text_atomic(
       self.session_file_path(session.id()),
       session_file_text(session),
       dirs=self.session_dir_chain(session.id()),
+    )
+    self.save_default_title_best_effort(
+      session.id(),
+      snapshot_default_title(session),
     )
     record_mark(self, session)
   })

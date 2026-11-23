@@ -619,6 +619,7 @@ pub async fn SessionStore::fork(
     if base_prompt is Some(text) {
       write_text_atomic(self.base_prompt_file(fork), text, dirs~)
     }
+    self.save_default_title_best_effort(fork, snapshot_default_title(copy))
     write_text_atomic(path, session_file_text(copy), dirs~)
     record_mark(self, copy)
   })
@@ -923,11 +924,25 @@ pub async fn SessionStore::append(
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
     let repair_tail = ensure_session_is_current(self, session)
+    let events = session.events()
+    let default_title = if item is User(message) &&
+      events.length() < first_prompt_scan_limit &&
+      first_title_content(session) is None {
+      Some(default_title_from_content(message.content()))
+    } else {
+      None
+    }
+    if events.is_empty() || default_title is Some(_) {
+      self.clear_default_title(session.id())
+    }
     let (next, event) = session.append_event(
       item,
       unix_ms=@env.now().reinterpret_as_int64(),
     )
     persist_event(self, next, event, repair_tail~)
+    if default_title is Some(title) {
+      self.save_default_title_best_effort(session.id(), title)
+    }
     record_mark(self, next)
     next
   })

@@ -54,6 +54,7 @@ pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_sessio
 pub async fn SessionStore::model(Self, @agent_session.SessionId) -> SessionModel?
 pub async fn SessionStore::prediction(Self, @agent_session.SessionId) -> @openseek_protocol.PredictionRecord?
 pub async fn SessionStore::read_base_prompt(Self, @agent_session.SessionId) -> String?
+pub async fn SessionStore::read_or_backfill_default_title(Self, @agent_session.SessionId, read_legacy_prompt~ : async (String) -> String?) -> String
 pub fn SessionStore::report_file(Self, @agent_session.SessionId) -> String raise
 pub fn SessionStore::root(Self) -> String
 pub async fn SessionStore::save_model(Self, @agent_session.SessionId, SessionModel) -> Unit

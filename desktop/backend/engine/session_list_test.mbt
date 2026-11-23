@@ -117,8 +117,8 @@ async test "live and archived listings read stores without an engine executable"
   let blank = @engine.search_sessions({ query: "  ", include_archived: true, })
   assert_eq(blank.hits.length(), 0)
   assert_eq(blank.errors.length(), 0)
-  // The sidebar and search share a Desktop-owned cache. Other writers, including
-  // CLI sessions and archive moves, must remain visible after a warm search.
+  // Other writers, including CLI sessions and archive moves, must remain
+  // visible after Desktop has already listed the same session.
   store.set_title(SessionId("renamed"), "Updated title")
   assert_eq(
     @engine.search_sessions({ query: "explicit", include_archived: false, }).hits.length(),
