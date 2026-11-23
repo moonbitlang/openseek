@@ -265,6 +265,89 @@ async test "job_output applies display rewrites supplied by the launcher" {
 }
 
 ///|
+async test "rewritten display and footer agree while offsets still address raw output" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-rewrite-window-")
+    defer @fs.remove(dir, recursive=true)
+    let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir=dir)
+    let path = "/tmp/mbtx/snippet.mbtx"
+    for
+      (raw, expected, clipped) in [
+        (path + "x".repeat(11990), "source" + "x".repeat(11990), false),
+        ("x".repeat(12000) + path, "x".repeat(11994) + "source", true),
+      ] {
+      let id = bg.start(
+        program="moonx",
+        args=[CLI_PRINTF, "%s", raw],
+        command="display test",
+        output_rewrites=[(path, "source")],
+      )
+      poll_bg_terminal(bg, id)
+      let result = run_job_output(bg, { "job_id": id })
+      assert_false(result.is_error)
+      assert_true(result.content.has_prefix(expected + "\n<system>"))
+      assert_true(
+        result.content.contains("shown_chars=\{expected.char_length()}"),
+      )
+      assert_eq(result.content.contains("truncated=true"), clipped)
+      assert_eq(bg.read_output(id), Some(raw))
+      let page = run_job_output(bg, { "job_id": id, "offset": 12000 })
+      let expected_page = raw[12000:]
+        .to_owned()
+        .replace_all(old=path, new="source")
+      assert_true(page.content.has_prefix(expected_page + "\n<system>"))
+      let consumed = raw.char_length() - 12000
+      assert_true(page.content.contains("shown_chars=\{consumed}"))
+      if consumed != expected_page.char_length() {
+        assert_true(
+          page.content.contains(
+            "displayed_chars=\{expected_page.char_length()}",
+          ),
+        )
+      }
+    }
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a running handoff completes a partial rewrite after an intervening poll" {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group(group => {
+      let dir = @fs.tmpdir(prefix="openseek-rewrite-handoff-")
+      defer @fs.remove(dir, recursive=true)
+      let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir=dir)
+      let (input, release) = @process.write_to_process()
+      defer input.close()
+      defer release.close()
+      let exec = bg.spawn_foreground_retained(
+        "/bin/sh",
+        ["-c", "printf /tmp/sn; cat >/dev/null; printf ippet"],
+        None,
+        200,
+        stdin=Shared(input),
+      )
+      while exec.head() != "/tmp/sn" {
+        @async.sleep(10)
+      }
+      let id = bg.adopt(exec, command="gate", output_rewrites=[
+        ("/tmp/snippet", "source"),
+      ])
+      let running = run_job_output(bg, { "job_id": id })
+      assert_false(running.is_error)
+      assert_true(running.content.has_prefix("/tmp/sn\n<system>"))
+      assert_true(running.content.contains("running"))
+      release.close()
+      bg.wait_any([id])
+      let done = run_job_output(bg, { "job_id": id })
+      assert_false(done.is_error)
+      assert_true(done.content.has_prefix("source\n<system>"))
+      assert_eq(bg.read_output(id), Some("/tmp/snippet"))
+    })
+  })
+}
+
+///|
 async test "a job with policy disabled does not invent a policy refusal" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
@@ -298,6 +381,7 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
         "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000; exit 3",
       ],
       command="policy then output",
+      output_rewrites=[("Sandbox policy blocked ", "display: ")],
       moonrun_policy_active=true,
     )
     poll_bg_terminal(bg, id)
@@ -314,6 +398,7 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
         "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
       ],
       command="policy wording then exit 0",
+      output_rewrites=[("Sandbox policy blocked ", "display: ")],
       moonrun_policy_active=true,
     )
     poll_bg_terminal(bg, quiet)

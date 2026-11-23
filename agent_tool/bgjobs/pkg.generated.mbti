@@ -12,6 +12,8 @@ import {
 }
 
 // Values
+pub const JobOutputWindow : Int32 = 12000
+
 pub async fn earlier_job_records(String, own~ : String) -> Array[@openseek_protocol.JobRecord]
 
 // Errors
@@ -30,6 +32,7 @@ pub async fn BgJobRuntime::read_output(Self, String) -> String?
 pub async fn BgJobRuntime::read_output_tail(Self, String, Int32) -> String?
 pub fn BgJobRuntime::records(Self) -> Array[@openseek_protocol.JobRecord]
 pub async fn BgJobRuntime::request_stop(Self, String) -> Bool
+pub fn BgJobRuntime::rewritten_output_tail(Self, String) -> @shell_exec.DisplayTailSnapshot?
 pub fn BgJobRuntime::snapshot(Self, String) -> BgJobSnapshot?
 pub async fn BgJobRuntime::spawn_foreground_retained(Self, String, Array[String], String?, Int32, stdin? : @process.ProcessInput) -> @shell_exec.ShellExecution
 pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, description? : String, cwd? : String, max_output_chars? : Int32, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, stdin? : @process.ProcessInput, cancel_handler? : @process.CancellationHandler, extra_env? : Map[String, String], on_end? : async (JobEnd) -> Unit, on_published? : () -> Unit, subagent? : () -> @openseek_protocol.SubagentInfo, reaped? : Bool) -> String
