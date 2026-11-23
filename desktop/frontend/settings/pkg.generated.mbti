@@ -100,10 +100,10 @@ pub(all) enum Message {
   CustomUrl
   EndpointUrl
   EndpointUrlDescription
+  EndpointUrlInvalid
   DeepseekApiKey
   GlmApiKey
   OpenRouterApiKey
-  CustomApiKey
   SavedKey
   ApiKey
   TestConnection
@@ -165,6 +165,31 @@ pub(all) enum Message {
   CustomEndpoint
   CurrentVersion(String)
   LanguageStorageFailed(String)
+  CustomModels
+  NoCustomModels
+  ModelId
+  ModelIdHint
+  ModelIdDuplicate
+  RenameModelInUse(Int32)
+  ModelName
+  ModelNameHint
+  ModelNameTooLong
+  ModelContextWindow
+  ModelContextWindowHint
+  ModelContextWindowInvalid
+  AddModel
+  SaveModel
+  EditModel
+  DeleteModel
+  DeleteModelTitle
+  DeleteModelUnused
+  DeleteModelInUse(Int32)
+  CustomModelInUse(Int32)
+  CustomModelUnused
+  ModelDeletedNotice
+  ModelNotOnEndpointNotice
+  ModelNotOnEndpointLabel
+  CustomModelsMissingNotice
 }
 
 // Type aliases

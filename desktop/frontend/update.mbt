@@ -2328,6 +2328,18 @@ fn update_msg(
     return (@cmd.batch([focus, connect]), model)
   }
   match msg {
+    // The custom endpoint's model owns its own state; one arm keeps its
+    // messages out of the rest of this dispatch.
+    CustomModelAdd
+    | CustomModelEdit(_)
+    | CustomModelIdChanged(_)
+    | CustomModelLabelChanged(_)
+    | CustomModelWindowChanged(_)
+    | CustomModelCancel
+    | CustomModelSubmit
+    | CustomModelDeleteRequest(_)
+    | CustomModelDeleteCancelled
+    | CustomModelDelete(_) => model.update_custom_model(dispatch, msg)
     Init => {
       // Both pages boot the same console; they differ only in where its
       // device comes from. A browser console asks the relay who is signed

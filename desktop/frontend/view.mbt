@@ -1449,7 +1449,7 @@ fn api_settings_rows(
       Deepseek => @settings.text(model.locale, DeepseekApiKey)
       Glm => @settings.text(model.locale, GlmApiKey)
       OpenRouter => @settings.text(model.locale, OpenRouterApiKey)
-      Custom => @settings.text(model.locale, CustomApiKey)
+      Custom => @settings.text(model.locale, ApiKey)
     }
     rows.push(
       @ui.form_row(
@@ -1476,6 +1476,13 @@ fn api_settings_rows(
         stack=true,
       ),
     )
+  }
+  // The custom models this endpoint serves close the section: one row each,
+  // with the editor in place of the entry it changes.
+  if model.api_provider() is Custom {
+    for row in custom_model_rows(dispatch, model) {
+      rows.push(row)
+    }
   }
   rows
 }

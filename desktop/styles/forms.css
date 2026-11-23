@@ -65,6 +65,17 @@
   overflow-wrap: anywhere;
 }
 
+/* A description that states why the field's value was refused, not a hint. */
+.form-row-description.danger {
+  color: var(--color-danger);
+}
+
+/* The field itself carries the rejection too, so a glance finds it without
+   reading the line below. */
+.field-surface[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
 .form-row-controls {
   flex-shrink: 0;
   width: 280px;
@@ -79,6 +90,12 @@
   width: auto;
   flex-direction: column;
   align-items: stretch;
+}
+
+/* Keep the model editor actions aligned. */
+.form-row.custom-model-save-row {
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .switch-control {
@@ -172,6 +189,10 @@
 
 .form-row-status.success {
   color: var(--color-success);
+}
+
+.form-row-status.danger {
+  color: var(--color-danger);
 }
 
 .form-row[hidden],
