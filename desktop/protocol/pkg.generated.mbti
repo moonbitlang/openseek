@@ -2598,6 +2598,7 @@ pub(all) struct ModelPatch {
   api_key : String?
   images : Bool?
   context_window : Int32?
+  removed : Bool?
 }
 pub impl @json.FromJson for ModelPatch
 pub impl @json.ToJson for ModelPatch
@@ -4332,7 +4333,6 @@ pub(all) struct SettingsSetPayload {
   prompt_source : String?
   custom_prompt : String?
   models : Array[ModelPatch]?
-  removed_models : Array[String]?
 }
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError

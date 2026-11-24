@@ -77,3 +77,27 @@ test "settings status preserves and requires the GLM capability flag" {
   }
   assert_true(malformed is None)
 }
+
+///|
+test "settings patches carry model upserts and removals in one ordered list" {
+  let patch : @protocol.SettingsSetPayload = @json.from_json({
+    "models": [
+      { "id": " old-id ", "removed": true },
+      { "id": "new-id", "label": "New", "context_window": 32768 },
+    ],
+    "future_field": true,
+  })
+  guard patch.models is Some(entries) else { fail("models must decode") }
+  // The id is the key the host matches on, so it is trimmed on the way in.
+  assert_eq(entries[0].id, "old-id")
+  assert_eq(entries[0].removed, Some(true))
+  // An edit states no removal at all, so absence stays absence on the way out.
+  assert_eq(entries[1].removed, None)
+  assert_eq(entries[1].context_window, Some(32768))
+  @debug.assert_eq(patch.to_json(), {
+    "models": [
+      { "id": "old-id", "removed": true },
+      { "id": "new-id", "label": "New", "context_window": 32768 },
+    ],
+  })
+}

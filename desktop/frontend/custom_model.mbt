@@ -143,6 +143,8 @@ fn CustomModelDraft::patch(self : CustomModelDraft) -> @protocol.ModelPatch {
     // The window the user stated, or the default when the field is blank. The
     // stored entry always names a number, so a run never has to guess.
     context_window: Some(self.window_value().unwrap_or(DefaultContextWindow)),
+    // Saving writes the entry; dropping one is the list's delete action.
+    removed: None,
   }
 }
 
@@ -182,32 +184,55 @@ fn Model::custom_model_session_count(self : Model, id : String) -> Int32 {
 }
 
 ///|
+/// The instruction that drops one saved entry. A delete travels in the same
+/// ordered `models` list as an upsert, so the host needs no second field to
+/// tell the two apart.
+fn removed_model_patch(id : String) -> @protocol.ModelPatch {
+  {
+    id,
+    label: None,
+    api_url: None,
+    full_url: None,
+    api_key: None,
+    images: None,
+    context_window: None,
+    removed: Some(true),
+  }
+}
+
+///|
+/// The ordered instructions one save sends. A rename drops the id the editor
+/// opened and writes the new one, in that order, so the host applies both in
+/// one request; any other save is the single upsert it always was.
+fn CustomModelDraft::patches(
+  self : CustomModelDraft,
+) -> Array[@protocol.ModelPatch] {
+  let id = self.id.trim().to_owned()
+  match self.original {
+    Some(original) if original != id =>
+      [removed_model_patch(original), self.patch()]
+    _ => [self.patch()]
+  }
+}
+
+///|
 /// Write the draft as an upsert. Every other entry is left alone, so editing
-/// one custom model never strands a conversation on another. Renaming the
-/// entry the editor holds drops the id it used to have.
+/// one custom model never strands a conversation on another. A rename sends
+/// the drop of the old id and the write of the new one in the same list, which
+/// the host applies in order.
 fn save_custom_model(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   draft : CustomModelDraft,
   connection_generation : Int32,
 ) -> @cmd.Cmd {
-  let id = draft.id.trim().to_owned()
-  let renamed_from : Array[String] = match draft.original {
-    Some(original) if original != id => [original]
-    _ => []
-  }
   let patch : @protocol.SettingsSetPayload = {
     provider: None,
     providers: None,
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
-    models: Some([draft.patch()]),
-    removed_models: if renamed_from.is_empty() {
-      None
-    } else {
-      Some(renamed_from)
-    },
+    models: Some(draft.patches()),
   }
   push_host_settings(dispatch, channel, patch, connection_generation)
 }
@@ -271,8 +296,7 @@ fn Model::update_custom_model(
         followup_behavior: None,
         prompt_source: None,
         custom_prompt: None,
-        models: None,
-        removed_models: Some([id]),
+        models: Some([removed_model_patch(id)]),
       }
       (
         push_host_settings(
@@ -311,6 +335,8 @@ test "a draft starts as a new entry and needs an id" {
   assert_true(patch.api_url is None)
   assert_true(patch.api_key is None)
   assert_true(patch.full_url is None)
+  // Saving writes an entry, so the patch states no removal.
+  assert_eq(patch.removed, None)
   // Every custom entry accepts images; the form offers nothing to choose.
   assert_eq(patch.images, Some(true))
   assert_eq(patch.id, "gemini-4-hydrogen")
@@ -420,4 +446,40 @@ test "editing a stored entry remembers which id it came from" {
   assert_eq(draft.window, "131072")
   // The name falls back to the id when the user never set one.
   assert_eq(CustomModelDraft::of({ ..entry, label: None, }).label, "")
+}
+
+///|
+/// A delete is a removal instruction in the same ordered list an edit uses, so
+/// the host drops the entry it names with no second field to read.
+test "a delete is a removal instruction in the model list" {
+  json_inspect(Json(removed_model_patch("gemini-4-hydrogen")), content={
+    "id": "gemini-4-hydrogen",
+    "removed": true,
+  })
+}
+
+///|
+/// A rename is two instructions in one list — drop the id the editor opened,
+/// write the new one — so the host applies both at once and never leaves both
+/// entries behind. Every other save is the one upsert it always was.
+test "a rename drops the old id and writes the new one in one list" {
+  let entry : CustomModel = {
+    id: "gemini-4-hydrogen",
+    label: Some("Gemini 4 Hydrogen"),
+    api_url: None,
+    full_url: false,
+    has_api_key: false,
+    images: true,
+    context_window: 131_072,
+  }
+  let renamed = { ..CustomModelDraft::of(entry), id: "gemini-4-helium", }
+  let patches = renamed.patches()
+  assert_eq(patches.length(), 2)
+  assert_eq(patches[0].id, "gemini-4-hydrogen")
+  assert_eq(patches[0].removed, Some(true))
+  assert_eq(patches[1].id, "gemini-4-helium")
+  // The write names no removal: one entry is created, not deleted.
+  assert_eq(patches[1].removed, None)
+  // Saving without changing the id is the single upsert it always was.
+  assert_eq(CustomModelDraft::of(entry).patches().length(), 1)
 }

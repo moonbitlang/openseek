@@ -385,46 +385,52 @@ fn apply_model_patch(
 }
 
 ///|
-/// Apply one `settings.set` instruction to the stored array: removals first,
-/// then upserts in the order given, each merged into the object it names so a
-/// field this build does not know survives an edit.
+/// Apply one `settings.set` model list to the stored array, in the order the
+/// list gives: a patch marked `removed` drops the entry it names, and every
+/// other patch upserts the entry it names, merged into the object already
+/// stored so a field this build does not know survives an edit. The order is
+/// the whole instruction set, so one list renames (`[remove old, upsert new]`)
+/// or replaces (`[remove id, upsert id]`) an entry.
 fn apply_model_patches(
   stored : Array[Json],
-  upserts : Array[@protocol.ModelPatch],
-  removals : Array[String],
+  patches : Array[@protocol.ModelPatch],
 ) -> Array[Json] raise EngineError {
-  let dropped = removals.map(id => id.trim().to_owned())
   let entries : Array[Json] = []
   for item in stored {
-    let keep = match entry_id(item) {
-      // A malformed object is dropped: it names no model to run.
-      Some(id) => !dropped.contains(id)
-      None => false
-    }
-    if keep {
+    // A malformed object is dropped: it names no model to run.
+    if entry_id(item) is Some(_) {
       entries.push(item)
     }
   }
-  for patch in upserts {
+  for patch in patches {
     let id = patch.id.trim().to_owned()
     guard !id.is_empty() else { raise EngineError("a model needs a name") }
     let existing = find_entry(entries, id)
-    let fields = match existing {
-      Some(index) =>
-        match entries[index] {
-          Object(stored) => copy_fields(stored)
-          _ => new_entry_fields(id)
+    if patch.removed is Some(true) {
+      // A delete names an entry; naming one the store does not hold changes
+      // nothing, so a client may drop an id another client already removed.
+      match existing {
+        Some(index) => ignore(entries.remove(index))
+        None => ()
+      }
+    } else {
+      let fields = match existing {
+        Some(index) =>
+          match entries[index] {
+            Object(stored) => copy_fields(stored)
+            _ => new_entry_fields(id)
+          }
+        None => new_entry_fields(id)
+      }
+      apply_model_patch(fields, patch)
+      match existing {
+        Some(index) => entries[index] = Json(fields)
+        None => {
+          guard entries.length() < MaxModelEntries else {
+            raise EngineError("too many saved models; remove one first")
+          }
+          entries.push(Json(fields))
         }
-      None => new_entry_fields(id)
-    }
-    apply_model_patch(fields, patch)
-    match existing {
-      Some(index) => entries[index] = Json(fields)
-      None => {
-        guard entries.length() < MaxModelEntries else {
-          raise EngineError("too many saved models; remove one first")
-        }
-        entries.push(Json(fields))
       }
     }
   }
@@ -441,8 +447,9 @@ test "a new entry is written with explicit values" {
     api_key: Some("  sk-test  "),
     images: Some(true),
     context_window: None,
+    removed: None,
   }
-  let entries = apply_model_patches([], [patch], [])
+  let entries = apply_model_patches([], [patch])
   assert_eq(entries.length(), 1)
   let stored = decode_model_entry(entries[0]).unwrap()
   assert_eq(stored.id, "gemini-4-carbon")
@@ -466,8 +473,9 @@ test "an edit keeps a field this build does not know" {
     api_key: None,
     images: None,
     context_window: Some(32768),
+    removed: None,
   }
-  let entries = apply_model_patches(stored, [patch], [])
+  let entries = apply_model_patches(stored, [patch])
   assert_eq(entries.length(), 1)
   assert_true(entries[0].stringify().contains("future_field"))
   let entry = decode_model_entry(entries[0]).unwrap()
@@ -478,14 +486,29 @@ test "an edit keeps a field this build does not know" {
 }
 
 ///|
-/// The error one patch would raise, or `None` when it applies cleanly. `catch`
+/// One delete instruction, for the tests that care only about which ids a list
+/// drops.
+fn removal_patch(id : String) -> @protocol.ModelPatch {
+  {
+    id,
+    label: None,
+    api_url: None,
+    full_url: None,
+    api_key: None,
+    images: None,
+    context_window: None,
+    removed: Some(true),
+  }
+}
+
+///|
+/// The error a list would raise, or `None` when it applies cleanly. `catch`
 /// yields a value rather than a flag, so the tests share this one boundary.
 fn model_patch_error(
   stored : Array[Json],
-  upserts : Array[@protocol.ModelPatch],
-  removals : Array[String],
+  patches : Array[@protocol.ModelPatch],
 ) -> String? {
-  let _ = apply_model_patches(stored, upserts, removals) catch {
+  let _ = apply_model_patches(stored, patches) catch {
     EngineError(message) => return Some(message)
   }
   None
@@ -497,23 +520,20 @@ test "an empty value clears and a removal wins" {
     { "id": "a", "api_url": "https://gw.example/v1", "api_key": "sk-a" },
     { "id": "b" },
   ]
-  let cleared = apply_model_patches(
-    stored,
-    [
-      {
-        id: "a",
-        label: Some(""),
-        api_url: None,
-        full_url: None,
-        api_key: Some(""),
-        images: None,
-        context_window: None,
-      },
-    ],
-    [],
-  )
+  let cleared = apply_model_patches(stored, [
+    {
+      id: "a",
+      label: Some(""),
+      api_url: None,
+      full_url: None,
+      api_key: Some(""),
+      images: None,
+      context_window: None,
+      removed: None,
+    },
+  ])
   assert_true(decode_model_entry(cleared[0]).unwrap().api_key is None)
-  assert_eq(apply_model_patches(stored, [], ["b"]).length(), 1)
+  assert_eq(apply_model_patches(stored, [removal_patch("b")]).length(), 1)
 }
 
 ///|
@@ -526,11 +546,12 @@ test "a blank id is refused and a built-in id is accepted" {
     api_key: None,
     images: None,
     context_window: None,
+    removed: None,
   }
   let builtin : @protocol.ModelPatch = { ..blank, id: "deepseek-flash", }
-  assert_true(model_patch_error([], [blank], []) is Some(_))
-  assert_true(model_patch_error([], [builtin], []) is None)
-  let saved = apply_model_patches([], [builtin], [])
+  assert_true(model_patch_error([], [blank]) is Some(_))
+  assert_true(model_patch_error([], [builtin]) is None)
+  let saved = apply_model_patches([], [builtin])
   assert_eq(decode_model_entry(saved[0]).unwrap().id, "deepseek-flash")
 }
 
@@ -560,8 +581,9 @@ test "entry URL normalization matches the custom slot and refuses a partial path
     api_key: None,
     images: None,
     context_window: None,
+    removed: None,
   }
-  match model_patch_error([], [half], []) {
+  match model_patch_error([], [half]) {
     Some(message) =>
       assert_true(message.contains("a full Chat Completions URL"))
     None => fail("a partial path must be refused")
@@ -580,9 +602,10 @@ test "the entry count is capped" {
       api_key: None,
       images: None,
       context_window: None,
+      removed: None,
     })
   }
-  let stored = apply_model_patches([], upserts, [])
+  let stored = apply_model_patches([], upserts)
   assert_eq(stored.length(), MaxModelEntries)
   let overflow : @protocol.ModelPatch = {
     id: "one-too-many",
@@ -592,11 +615,14 @@ test "the entry count is capped" {
     api_key: None,
     images: None,
     context_window: None,
+    removed: None,
   }
-  assert_true(model_patch_error(stored, [overflow], []) is Some(_))
-  // Removing one first makes room again, which is what a client that replaces
-  // its whole list sends.
-  assert_true(model_patch_error(stored, [overflow], ["m-0"]) is None)
+  assert_true(model_patch_error(stored, [overflow]) is Some(_))
+  // Dropping one first makes room again, which is what a client that replaces
+  // its whole list sends: the list applies in order.
+  assert_true(
+    model_patch_error(stored, [removal_patch("m-0"), overflow]) is None,
+  )
 }
 
 ///|
@@ -610,6 +636,7 @@ async test "an added model reaches the status and can be removed" {
       api_key: Some("sk-test"),
       images: Some(true),
       context_window: None,
+      removed: None,
     }
     let status = update_settings(
       manager,
@@ -628,7 +655,7 @@ async test "an added model reaches the status and can be removed" {
     let removed = update_settings(
       manager,
       { provider: None, providers: None, },
-      removed_models=["gemini-4-carbon"],
+      models=[removal_patch("gemini-4-carbon")],
     )
     assert_true(removed.models.is_empty())
   })
@@ -663,6 +690,7 @@ async test "a run on a user entry rides the custom endpoint" {
           api_key: None,
           images: Some(true),
           context_window: None,
+          removed: None,
         },
       ],
     )
@@ -723,6 +751,7 @@ async test "a user entry never borrows a built-in provider slot" {
           api_key: Some("sk-self"),
           images: None,
           context_window: Some(65_536),
+          removed: None,
         },
         {
           id: "slot-backed-model",
@@ -732,6 +761,7 @@ async test "a user entry never borrows a built-in provider slot" {
           api_key: None,
           images: None,
           context_window: None,
+          removed: None,
         },
       ],
     )
@@ -784,6 +814,7 @@ fn window_patch(window : Int32) -> @protocol.ModelPatch {
     api_key: None,
     images: None,
     context_window: Some(window),
+    removed: None,
   }
 }
 
@@ -792,20 +823,20 @@ fn window_patch(window : Int32) -> @protocol.ModelPatch {
 /// plan against a number no endpoint serves, while anything a real endpoint
 /// serves — and the default — passes.
 test "a model's context window is bounded" {
-  match model_patch_error([], [window_patch(MinModelContextWindow - 1)], []) {
+  match model_patch_error([], [window_patch(MinModelContextWindow - 1)]) {
     Some(message) => assert_true(message.contains("between"))
     None => fail("a window below the minimum must be refused")
   }
-  match model_patch_error([], [window_patch(MaxModelContextWindow + 1)], []) {
+  match model_patch_error([], [window_patch(MaxModelContextWindow + 1)]) {
     Some(message) => assert_true(message.contains("between"))
     None => fail("a window above the maximum must be refused")
   }
-  let at_max = apply_model_patches([], [window_patch(MaxModelContextWindow)], [])
+  let at_max = apply_model_patches([], [window_patch(MaxModelContextWindow)])
   assert_eq(
     decode_model_entry(at_max[0]).unwrap().context_window,
     MaxModelContextWindow,
   )
-  let at_min = apply_model_patches([], [window_patch(MinModelContextWindow)], [])
+  let at_min = apply_model_patches([], [window_patch(MinModelContextWindow)])
   assert_eq(
     decode_model_entry(at_min[0]).unwrap().context_window,
     MinModelContextWindow,
@@ -840,6 +871,7 @@ async test "a built-in id saved under custom keeps the built-in protocol" {
           api_key: None,
           images: Some(true),
           context_window: Some(131_072),
+          removed: None,
         },
         {
           id: "deepseek-v4-pro",
@@ -849,6 +881,7 @@ async test "a built-in id saved under custom keeps the built-in protocol" {
           api_key: None,
           images: Some(true),
           context_window: None,
+          removed: None,
         },
         {
           id: "text-only-custom",
@@ -858,6 +891,7 @@ async test "a built-in id saved under custom keeps the built-in protocol" {
           api_key: None,
           images: Some(false),
           context_window: None,
+          removed: None,
         },
       ],
     )
@@ -934,4 +968,43 @@ async test "a built-in id saved under custom keeps the built-in protocol" {
     assert_true(official.api_url is None)
     assert_true(official.context_window is None)
   })
+}
+
+///|
+/// One list can carry both kinds of instruction, and the order decides what the
+/// store holds: a rename drops the old id and writes the new one in one
+/// request, and naming an id after dropping it replaces that entry rather than
+/// appending a second copy.
+test "a removal and an upsert in one list apply in the order given" {
+  let stored : Array[Json] = [
+    { "id": "old-name", "label": "Old", "future_field": 7 },
+    { "id": "keep" },
+  ]
+  let renamed = apply_model_patches(stored, [
+    removal_patch("old-name"),
+    { ..removal_patch("new-name"), removed: None, label: Some("New"), },
+  ])
+  assert_eq(renamed.map(json => decode_model_entry(json).unwrap().id), [
+    "keep", "new-name",
+  ])
+  // The new entry starts from the defaults, so the old object's private field
+  // is not carried over to a model it never described.
+  assert_false(renamed[1].stringify().contains("future_field"))
+  let replaced = apply_model_patches(stored, [
+    removal_patch("old-name"),
+    { ..removal_patch("old-name"), removed: None, label: Some("Revised"), },
+  ])
+  assert_eq(replaced.length(), 2)
+  assert_eq(decode_model_entry(replaced[1]).unwrap().label, Some("Revised"))
+  assert_false(replaced[1].stringify().contains("future_field"))
+}
+
+///|
+/// A delete names an entry; naming one the store does not hold changes nothing,
+/// so a client may drop an id another client already removed.
+test "removing an id nothing stores changes nothing" {
+  let stored : Array[Json] = [{ "id": "a" }, { "id": "b" }]
+  let entries = apply_model_patches(stored, [removal_patch("gone")])
+  assert_eq(entries.map(item => entry_id(item)), [Some("a"), Some("b")])
+  assert_true(model_patch_error(stored, [removal_patch("gone")]) is None)
 }

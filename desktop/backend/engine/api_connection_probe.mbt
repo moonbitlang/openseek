@@ -97,6 +97,7 @@ async test "a per-model connection test reads the saved entry and refuses an unk
           api_key: None,
           images: Some(true),
           context_window: None,
+          removed: None,
         },
         {
           id: "own-endpoint",
@@ -106,6 +107,7 @@ async test "a per-model connection test reads the saved entry and refuses an unk
           api_key: Some("sk-own"),
           images: Some(false),
           context_window: None,
+          removed: None,
         },
       ],
     )

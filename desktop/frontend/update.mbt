@@ -4439,7 +4439,6 @@ fn update_msg(
         prompt_source: source,
         custom_prompt: text,
         models: None,
-        removed_models: None,
       }
       (
         push_host_settings(

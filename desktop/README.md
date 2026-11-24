@@ -399,11 +399,14 @@ received streamed text. A custom model entry carries its own test instead: the
 probe names the entry, and the host routes it through that entry's endpoint and
 key with the fallbacks a run would use.
 
-`settings.set` also carries the user's own model entries: `models` upserts the
-entries it names (keyed by id) and `removed_models` drops the ids it names, so
-editing one entry never touches another. `settings.status` returns the stored
-entries in saved order, each with its id, display name, endpoint, full-URL
-flag, image answer, key presence, and context window.
+`settings.set` also carries the user's own model entries: `models` is an
+ordered list of instructions keyed by id, where each one upserts the fields it
+names and a patch carrying `removed: true` drops that entry instead. Applying
+the list in order lets one request rename an entry (`[remove old, upsert
+new]`) or replace its contents, so editing one entry never touches another.
+`settings.status` returns the stored entries in saved order, each with its id,
+display name, endpoint, full-URL flag, image answer, key presence, and context
+window.
 
 A custom entry names its own context window, because no table in the host can
 know an arbitrary endpoint's: leaving the field blank uses the 1,000,000-token

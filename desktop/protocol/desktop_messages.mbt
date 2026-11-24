@@ -309,11 +309,11 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
-  // Upserts keyed by `id`, applied after `removed_models`.
+  // Model instructions keyed by `id`, applied in the order given: each upserts
+  // the fields it names, and one marked `removed` drops that entry instead. A
+  // conversation still naming a dropped model keeps its record; the UI shows
+  // it as needing reconfiguration rather than silently switching.
   models : Array[ModelPatch]?
-  // Ids to drop. A conversation still naming one keeps its record; the UI
-  // shows it as needing reconfiguration rather than silently switching.
-  removed_models : Array[String]?
 }
 
 ///|
@@ -330,9 +330,6 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     models: object
     .optional_json("models")
     .map(value => @json.from_json(value, path=path.add_key("models"))),
-    removed_models: object
-    .optional_json("removed_models")
-    .map(value => @json.from_json(value, path=path.add_key("removed_models"))),
   }
 }
 
@@ -356,9 +353,6 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.models is Some(value) {
     fields["models"] = Json(value)
-  }
-  if self.removed_models is Some(value) {
-    fields["removed_models"] = Json(value)
   }
   Json(fields)
 }
@@ -1698,8 +1692,12 @@ pub impl ToJson for ModelStatus with fn to_json(self) {
 ///|
 /// One saved model as `settings.set` supplies it: an upsert keyed by `id`.
 /// Absent (or null) fields leave the stored value alone; an empty string
-/// clears it. Creating an entry with a built-in's id is refused by the host,
-/// so one id always names one model.
+/// clears it. Marking `removed` turns the instruction into a delete instead:
+/// the entry named by `id` is dropped, and the other fields are ignored. A
+/// list applies in the order it gives, so `[remove(a), upsert(b)]` renames an
+/// entry and `[remove(a), upsert(a)]` replaces its contents. Creating an entry
+/// with a built-in's id is refused by the host, so one id always names one
+/// model.
 #derive(Debug, Eq)
 pub(all) struct ModelPatch {
   id : String
@@ -1711,6 +1709,9 @@ pub(all) struct ModelPatch {
   api_key : String?
   images : Bool?
   context_window : Int32?
+  // Drop `id` from the saved list instead of upserting it. Absent means an
+  // ordinary edit, so a client that states no removal writes nothing.
+  removed : Bool?
 }
 
 ///|
@@ -1755,6 +1756,7 @@ pub impl FromJson for ModelPatch with fn from_json(json, path) {
     api_key: patch_string(fields, "api_key"),
     images: patch_bool(fields, "images"),
     context_window: patch_int(fields, "context_window"),
+    removed: patch_bool(fields, "removed"),
   }
 }
 
@@ -1778,6 +1780,9 @@ pub impl ToJson for ModelPatch with fn to_json(self) {
   }
   if self.context_window is Some(value) {
     fields["context_window"] = Json(value)
+  }
+  if self.removed is Some(value) {
+    fields["removed"] = Json(value)
   }
   Json(fields)
 }
