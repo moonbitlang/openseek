@@ -251,7 +251,7 @@ fn host_browse_error(
 /// A directory reads as a repository root when it carries MoonBit module
 /// metadata or a git checkout marker.
 async fn looks_like_repository_root(path : String) -> Bool {
-  for marker in ["moon.mod", "moon.mod.json", ".git"] {
+  for marker in ["moon.mod", ".git"] {
     if (Some(@fs.exists(join_host_path(path, marker))) catch { _ => None }) ==
       Some(true) {
       return true

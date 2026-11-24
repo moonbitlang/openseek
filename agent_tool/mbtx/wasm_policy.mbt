@@ -558,8 +558,7 @@ fn glob_literal(path : String) -> String {
 /// moon treats as source or a manifest, and git metadata. Each applies at any
 /// depth and in any letter case.
 let source_tails : Array[String] = [
-  "*{.mbt.md,.mbt,.mbti,.mbtx}", "{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
-  ".git", ".git/**",
+  "*{.mbt.md,.mbt,.mbti,.mbtx}", "{moon.mod,moon.pkg,moon.work}", ".git", ".git/**",
 ]
 
 ///|
@@ -741,8 +740,8 @@ test "a workspace grant writes the root minus sources, scripts and git" {
       "/lab",
       "/w[1]*{a,b}?/",
       ..[
-        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
-        "**/.git", "**/.git/**",
+        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work}", "**/.git",
+        "**/.git/**",
       ].map(pattern => {
         Json::object({
           "glob": Json::string("!\{root}/\{case_insensitive_glob(pattern)}"),

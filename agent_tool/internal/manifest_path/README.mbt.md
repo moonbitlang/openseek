@@ -1,6 +1,6 @@
 # agent_tool/internal/manifest_path
 
-Four predicates that answer "is this path a MoonBit manifest?" — the shared
+Predicates for MoonBit manifests and generated interfaces — the shared
 vocabulary behind the write tools' manifest guards. `internal/manifest_error`
 uses them to reject known-bad manifest rewrites before `edit`, `multi_edit`, and
 `write` touch the file; `internal/auto_check` uses them to decide which paths
@@ -21,12 +21,10 @@ one that does.
 - **Basename or full path both work.** A bare `moon.mod` classifies the same as
   `packages/demo/moon.mod`.
 
-## The three manifest predicates
+## The manifest predicates
 
-`is_moon_mod_path`, `is_moon_mod_json_path`, and `is_moon_pkg_path` are anchored
-at a separator: the match is either the whole path or a complete final
-component. That anchoring is the point — it is what keeps a file merely *named*
-like a manifest from being treated as one.
+`is_moon_mod_path` and `is_moon_pkg_path` match a complete basename. The match can
+come from a bare filename or the final component of a path.
 
 ```mbt check
 ///|
@@ -49,26 +47,12 @@ test "manifest predicates match a whole final component" {
 }
 
 ///|
-test "the module manifest and its legacy JSON form are separate questions" {
-  inspect(
-    @manifest_path.is_moon_mod_json_path("packages/demo/moon.mod.json"),
-    content="true",
-  )
-  // `moon.mod.json` is NOT a `moon.mod`: the suffixes are distinct, so a caller
-  // that wants "either module manifest" must ask both.
-  inspect(@manifest_path.is_moon_mod_path("moon.mod.json"), content="false")
-  inspect(@manifest_path.is_moon_mod_json_path("moon.mod"), content="false")
-}
-
-///|
-test "package manifests, and the JSON form this package does not classify" {
+test "package predicate classifies current manifests" {
   inspect(@manifest_path.is_moon_pkg_path("moon.pkg"), content="true")
   inspect(
     @manifest_path.is_moon_pkg_path("agent_tool/mbtx/moon.pkg"),
     content="true",
   )
-  // There is deliberately no `is_moon_pkg_json_path`. Only `moon.mod.json` has
-  // a predicate here, because only that legacy form is guarded on creation.
   inspect(@manifest_path.is_moon_pkg_path("moon.pkg.json"), content="false")
 }
 ```

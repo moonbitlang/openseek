@@ -23,12 +23,6 @@ pub fn is_moon_mod_path(path : String) -> Bool {
 }
 
 ///|
-/// Whether `path` is a `moon.mod.json` module manifest.
-pub fn is_moon_mod_json_path(path : String) -> Bool {
-  is_named_file(path, "moon.mod.json")
-}
-
-///|
 /// Whether `path` is a `moon.pkg` package manifest (the non-JSON form).
 pub fn is_moon_pkg_path(path : String) -> Bool {
   is_named_file(path, "moon.pkg")

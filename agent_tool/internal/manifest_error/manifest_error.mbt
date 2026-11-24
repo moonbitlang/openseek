@@ -1,23 +1,11 @@
 ///|
 /// Guard rail for writes to MoonBit manifests: returns the error to feed back
-/// to the model when writing `content` to `path` would produce a known-bad
-/// manifest, or `None` when the write may proceed.
-///
-/// Models trained on older MoonBit emit legacy shapes — `moon.mod.json`
-/// files, JSON syntax inside `moon.mod`/`moon.pkg` — that the toolchain no
-/// longer accepts. Rejecting the write with a corrective message at the tool
-/// boundary fixes the mistake in one round trip, instead of letting a broken
-/// manifest fail every later build step.
-pub async fn write_error(path : String, content : String) -> String? {
+/// to the model for known errors in current manifests or generated interfaces.
+pub fn write_error(path : String, content : String) -> String? {
   let trimmed = content.trim()
   if @manifest_path.is_generated_mbti_path(path) {
     return Some(
       "*.generated.mbti files are generated; run moon info instead of editing them",
-    )
-  }
-  if @manifest_path.is_moon_mod_json_path(path) && !@fs.exists(path) {
-    return Some(
-      "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
     )
   }
   if @manifest_path.is_moon_mod_path(path) {

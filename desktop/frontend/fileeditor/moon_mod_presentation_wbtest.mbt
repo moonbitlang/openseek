@@ -273,7 +273,12 @@ test "reviewed and historical moon.mod views remain source-only" {
 }
 
 ///|
-test "package graph invalidation covers manifests but not source edits" {
+test "package graph invalidation covers current manifests" {
+  for name in ["moon.mod.json", "nested/moon.pkg.json"] {
+    let path = @pathx.Relative(name)
+    assert_false(Modified(path).package_graph_relevant())
+    assert_false(moonbit_check_input(path))
+  }
   assert_true(Modified(@pathx.Relative("moon.mod")).package_graph_relevant())
   assert_true(
     Modified(@pathx.Relative("nested/moon.pkg")).package_graph_relevant(),

@@ -36,9 +36,8 @@ Prefer `write` when the file is new, generated, or easier to reason about as a
 complete replacement.
 
 MoonBit manifests get a small extra guardrail because bad manifests poison every
-later compiler diagnostic. New projects should write `moon.mod`, not legacy
-`moon.mod.json`; `moon.mod` rewrites that look empty or JSON-style are rejected,
-as are `moon.pkg` rewrites that use JSON-style syntax or `#` comments. Generated
+later compiler diagnostic. The tool rejects empty or JSON-style `moon.mod`
+content and `moon.pkg` content with JSON-style syntax or `#` comments. Generated
 `*.generated.mbti` interface files are rejected too; refresh them with `moon info`
 instead.
 
@@ -86,9 +85,8 @@ has one of these shapes:
   excerpts the rejected content at each error and says how to retry.
 - `"error writing <path>: <error>"` — the write failed. Common causes:
   permission denied, missing parent directory, read-only filesystem.
-- `"error writing <path>: moon.mod.json is legacy; create moon.mod ..."` or
-  similar manifest-guard messages — the requested manifest rewrite looked like a
-  likely agent mistake.
+- `"error writing <path>: moon.mod uses current text syntax, not JSON"` and
+  similar messages explain a rejected manifest rewrite.
 - `"error: write requires arguments.content"` — payload had `path` but no
   `content` (or `content` was not a string).
 - `"error: write requires arguments.path"` — payload was an object missing

@@ -20,9 +20,9 @@ and identical replacements protects against no-op edits. The tool is designed
 for small surgical changes; if a file needs a complete rewrite, `write` is the
 clearer API.
 
-MoonBit manifests get the same safety check as `write`: edits that would create
-legacy `moon.mod.json`, JSON-style `moon.mod` or `moon.pkg`, or `moon.pkg` with
-`#` comments are rejected before the original file is overwritten.
+MoonBit manifests get the same safety check as `write`. The tool rejects
+JSON-style `moon.mod` or `moon.pkg` content and `moon.pkg` content with `#`
+comments before overwriting the original file.
 
 Edits to syncheck inputs (`.mbt`, `.mbt.md`, `.mbtx`, `moon.mod`, `moon.pkg`) get a
 pre-write syntax gate: the edited result is parsed standalone (`moonc syncheck`

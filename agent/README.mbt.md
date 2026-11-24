@@ -287,9 +287,8 @@ improving:
 - Long runs should be observable while they are running. The agent writes loop
   logs through async logging so piped runs such as `2>&1 | tee run.log` receive
   step output promptly.
-- Current MoonBit projects use `moon.mod`; `moon.mod.json` is legacy. Manifest
-  or package-import edits should be followed quickly by a `moon check` or
-  another explicit validation command.
+- Current MoonBit projects use `moon.mod` and `moon.pkg`. Run `moon check` or
+  another explicit validation command after editing manifests or package imports.
 - Use `mbtx` for exact end-to-end MoonBit command validation beyond
   compiler feedback, especially `moon test`, `moon run`, and README command
   checks. Source-writing commands (`moon fmt`, `moon info`, `git checkout`) run

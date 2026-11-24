@@ -103,7 +103,7 @@ line-shape pins live in `denial_output_wbtest.mbt`; the end-to-end kernel tests
 The generated profile starts from `(allow default)` and then:
 
 - denies writes to `*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`, `moon.pkg`, and
-  `moon.work`, including the legacy JSON manifests, under the workspace root;
+  `moon.work`, under the workspace root;
 - denies every directory write under the workspace root (`vnode-type
   DIRECTORY`): creating, renaming, or removing a directory;
 - re-allows `_build` and `.mooncakes` trees where Moon writes generated

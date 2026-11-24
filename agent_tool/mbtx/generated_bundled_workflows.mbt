@@ -3044,7 +3044,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let owned : Map[String, Array[String]] = Map([])
           #|  for file in listed {
           #|    let (dir, name) = parts(file)
-          #|    if name is ("moon.pkg" | "moon.pkg.json") && within(dir, paths) {
+          #|    if name == "moon.pkg" && within(dir, paths) {
           #|      owned[dir] = []
           #|    }
           #|  }

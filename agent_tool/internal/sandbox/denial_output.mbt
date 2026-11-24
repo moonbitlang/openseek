@@ -38,8 +38,7 @@ let worker_write_denial_feedback : String =
 /// path in a denial line. Matched with `line_names_subject`, so `.mbt` does not
 /// also cover `.mbt.md` — both are listed.
 let protected_source_subjects : ReadOnlyArray[String] = [
-  ".mbt.md", ".mbt", ".mbti", "moon.mod.json", "moon.pkg.json", "moon.mod", "moon.pkg",
-  "moon.work",
+  ".mbt.md", ".mbt", ".mbti", "moon.mod", "moon.pkg", "moon.work",
 ]
 
 ///|

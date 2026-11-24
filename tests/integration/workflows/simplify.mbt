@@ -221,7 +221,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
   let artifact = compile(root, temp, "simplify")
   let repo = temp + "/simplify-repo"
   let origin = temp + "/simplify-origin.git"
-  for dir in ["alpha/nested", "beta", "delta", "gamma", "empty"] {
+  for dir in ["alpha/nested", "beta", "delta", "gamma", "empty", "legacy-only"] {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
@@ -236,7 +236,9 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
   write(repo + "/beta/b.mbt", "fn b() -> Int {\n  5\n}\n")
   write(repo + "/delta/moon.pkg", "")
   write(repo + "/delta/d.mbt", "fn d() -> Int {\n  6\n}\n")
-  write(repo + "/gamma/moon.pkg.json", "{}\n")
+  write(repo + "/gamma/moon.pkg", "")
+  write(repo + "/legacy-only/moon.pkg.json", "{}\n")
+  write(repo + "/legacy-only/legacy.mbt", "// ignored\n")
   write(repo + "/gamma/g.mbt", "fn g() -> Int {\n  7\n}\n")
   write(repo + "/empty/moon.pkg", "")
   // More packages than the engine runs workers at once, for the queue.

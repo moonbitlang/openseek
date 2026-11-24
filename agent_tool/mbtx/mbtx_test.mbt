@@ -615,13 +615,16 @@ async test "a snippet writes the workspace except its sources" {
         #|  attempt("manifest_case", () => write("MOON.PKG"))
         #|  attempt("outside", () => write("OUTSIDE/escape.txt"))
         #|  attempt("data", () => write("data.json"))
+        #|  attempt("module_json", () => write("moon.mod.json"))
+        #|  attempt("package_json", () => write("moon.pkg.json"))
         #|  attempt("remove_data", () => @fs.remove("notes.txt"))
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
       for
         line in [
-          "source=false", "manifest_case=false", "outside=false", "data=true", "remove_data=true",
+          "source=false", "manifest_case=false", "outside=false", "data=true", "module_json=true",
+          "package_json=true", "remove_data=true",
         ] {
         assert_true(out.content.contains(line), msg=out.content)
       }

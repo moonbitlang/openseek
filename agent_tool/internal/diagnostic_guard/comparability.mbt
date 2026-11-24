@@ -187,13 +187,8 @@ async fn is_build_input(path : String) -> Bool {
   guard path.rev_split_once("/") is Some((dir, name)) && dir != "" else {
     return false
   }
-  for manifest in ["moon.pkg", "moon.pkg.json"] {
-    let text = @fs.read_text("\{dir}/\{manifest}") catch { _ => continue }
-    if text.contains(name) {
-      return true
-    }
-  }
-  false
+  let text = @fs.read_text("\{dir}/moon.pkg") catch { _ => return false }
+  text.contains(name)
 }
 
 ///|
@@ -345,11 +340,7 @@ fn moon_compiles(path : String) -> Bool {
     return true
   }
   let name = path.rev_after("/").unwrap_or(path)
-  name == "moon.pkg" ||
-  name == "moon.pkg.json" ||
-  name == "moon.mod" ||
-  name == "moon.mod.json" ||
-  name == "moon.work"
+  name is ("moon.pkg" | "moon.mod" | "moon.work")
 }
 
 ///|

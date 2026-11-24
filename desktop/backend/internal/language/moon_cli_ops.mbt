@@ -278,7 +278,7 @@ async fn workspace_module_roots(
 /// `dir`, or `None` when `dir` holds none — i.e. it is not a module root.
 async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
   let mut newest : Int64? = None
-  for name in ["moon.mod", "moon.mod.json", "moon.work"] {
+  for name in ["moon.mod", "moon.work"] {
     let path = dir.join((name : @pathx.Relative)).to_string()
     guard @fs.exists(path) else { continue }
     let seconds = (@fs.mtime(path) catch { _ => continue }).sec()

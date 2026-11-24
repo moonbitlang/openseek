@@ -1385,10 +1385,7 @@ fn FileChange::package_graph_relevant(self : FileChange) -> Bool {
 ///|
 fn package_graph_input(path : @pathx.Relative) -> Bool {
   let text = path.0
-  for
-    name in [
-      "moon.pkg", "moon.mod", "moon.work", "moon.pkg.json", "moon.mod.json", "moon.lock",
-    ] {
+  for name in ["moon.pkg", "moon.mod", "moon.work", "moon.lock"] {
     if text == name || text.has_suffix("/" + name) {
       return true
     }
@@ -1426,10 +1423,7 @@ fn moonbit_check_input(path : @pathx.Relative) -> Bool {
     text.has_suffix(".mbt.md") {
     return true
   }
-  for
-    name in [
-      "moon.pkg", "moon.mod", "moon.work", "moon.pkg.json", "moon.mod.json",
-    ] {
+  for name in ["moon.pkg", "moon.mod", "moon.work"] {
     if text == name || text.has_suffix("/" + name) {
       return true
     }

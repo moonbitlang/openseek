@@ -157,51 +157,34 @@ fn normalize_dir(path : String) -> String {
 }
 
 ///|
-/// A module's configured source subdirectory, read from its `moon.mod`
-/// (`source = "src"`) or legacy `moon.mod.json` (`"source": "src"`); `""`
-/// when unset or unreadable, meaning packages live under the module root.
+/// A module's source subdirectory from its moon.mod. An unset or unreadable
+/// setting means packages live under the module root.
 async fn module_source_dir(root : String) -> String {
-  let modern = @fs.read_text("\{root}/moon.mod") catch {
-    _ => {
-      let legacy = @fs.read_text("\{root}/moon.mod.json") catch {
-        _ => return ""
-      }
-      return parse_module_source(legacy, json=true)
-    }
-  }
-  parse_module_source(modern, json=false)
+  let text = @fs.read_text("\{root}/moon.mod") catch { _ => return "" }
+  parse_module_source(text)
 }
 
 ///|
-/// Extract the `source` setting from a manifest's text. The modern manifest
-/// is line-oriented (`source = "src"`); the legacy one is JSON. A leading
-/// `./` and trailing `/` are dropped so the value joins cleanly.
-fn parse_module_source(text : String, json~ : Bool) -> String {
-  let raw = if json {
-    match (@json.parse(text) catch { _ => return "" }) {
-      { "source": String(source), .. } => source
-      _ => return ""
-    }
-  } else {
-    let mut found = ""
-    for line in text.split("\n") {
-      let line = line.trim()
-      guard line.has_prefix("source") else { continue }
-      let rest = line[6:].trim()
-      guard rest.has_prefix("=") else { continue }
-      let value = rest[1:].trim()
-      guard value.has_prefix("\"") && value.length() >= 2 else { continue }
-      match value[1:].find("\"") {
-        Some(end) => {
-          found = value[1:1 + end].to_owned()
-          break
-        }
-        None => continue
+/// Extract the source setting from a text manifest. A leading ./ and trailing
+/// slashes are dropped so the value joins cleanly.
+fn parse_module_source(text : String) -> String {
+  let mut found = ""
+  for line in text.split("\n") {
+    let line = line.trim()
+    guard line.has_prefix("source") else { continue }
+    let rest = line[6:].trim()
+    guard rest.has_prefix("=") else { continue }
+    let value = rest[1:].trim()
+    guard value.has_prefix("\"") && value.length() >= 2 else { continue }
+    match value[1:].find("\"") {
+      Some(end) => {
+        found = value[1:1 + end].to_owned()
+        break
       }
+      None => continue
     }
-    found
   }
-  let mut source = raw[:]
+  let mut source = found[:]
   if source.has_prefix("./") {
     source = source[2:]
   }
@@ -311,27 +294,12 @@ test "normalize_dir collapses dot segments lexically" {
 }
 
 ///|
-test "parse_module_source reads modern and legacy manifests" {
-  assert_eq(
-    parse_module_source("name = \"a/b\"\nsource = \"src\"\n", json=false),
-    "src",
-  )
-  assert_eq(
-    parse_module_source("name = \"a/b\"\nsource=\"./lib/\"\n", json=false),
-    "lib",
-  )
-  assert_eq(parse_module_source("name = \"a/b\"\n", json=false), "")
+test "parse_module_source reads text manifests" {
+  assert_eq(parse_module_source("name = \"a/b\"\nsource = \"src\"\n"), "src")
+  assert_eq(parse_module_source("name = \"a/b\"\nsource=\"./lib/\"\n"), "lib")
+  assert_eq(parse_module_source("name = \"a/b\"\n"), "")
   // A `source` inside another key's value is not the setting.
-  assert_eq(
-    parse_module_source("description = \"source = \\\"x\\\"\"\n", json=false),
-    "",
-  )
-  assert_eq(
-    parse_module_source("{\"name\":\"a/b\",\"source\":\"src\"}", json=true),
-    "src",
-  )
-  assert_eq(parse_module_source("{\"name\":\"a/b\"}", json=true), "")
-  assert_eq(parse_module_source("not json", json=true), "")
+  assert_eq(parse_module_source("description = \"source = \\\"x\\\"\"\n"), "")
 }
 
 ///|

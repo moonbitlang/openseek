@@ -14,8 +14,7 @@ pub(all) struct HostPathRequest {
 
 ///|
 /// One child directory in a host filesystem listing. `is_workspace` marks
-/// directories that look like a repository root (a `moon.mod`,
-/// `moon.mod.json`, or `.git` entry).
+/// directories with a `moon.mod` or `.git` entry.
 #derive(Debug, Eq)
 pub(all) struct HostDirectoryEntry {
   name : String

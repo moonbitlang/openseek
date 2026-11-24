@@ -217,13 +217,16 @@ async test "write accepts empty content" {
 }
 
 ///|
-async test "write rejects new legacy moon.mod.json" {
+async test "write treats retired JSON manifest names as ordinary files" {
   @vfs.with_tmpdir(prefix="openseek-write-manifest-", dir => {
-    let path = "\{dir}/moon.mod.json"
-    let result = execute({ "path": path, "content": "{\"name\":\"legacy\"}" })
-    guard result is Respond(output) else { fail("expected Respond") }
-    assert_true(output.is_error)
-    assert_true(output.content.contains("moon.mod.json is legacy"))
+    for name in ["moon.mod.json", "moon.pkg.json"] {
+      let path = "\{dir}/\{name}"
+      let content = "{\"name\":\"legacy\"}"
+      let result = execute({ "path": path, "content": content })
+      guard result is Respond(output) else { fail("expected Respond") }
+      assert_false(output.is_error, msg=output.content)
+      assert_eq(@fs.read_text(path), content)
+    }
   })
 }
 

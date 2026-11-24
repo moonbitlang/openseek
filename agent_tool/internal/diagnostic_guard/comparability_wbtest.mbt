@@ -382,13 +382,13 @@ test "comparability compares by error code so a reworded message is not new" {
 }
 
 ///|
-test "moon_compiles recognises sources and every manifest flavour" {
+test "moon_compiles recognises sources and current manifests" {
   assert_true(moon_compiles("/r/x/x.mbt"))
   assert_true(moon_compiles("/r/x/README.mbt.md"))
   assert_true(moon_compiles("/r/x/moon.pkg"))
-  assert_true(moon_compiles("/r/x/moon.pkg.json"))
+  assert_false(moon_compiles("/r/x/moon.pkg.json"))
   assert_true(moon_compiles("/r/moon.mod"))
-  assert_true(moon_compiles("/r/moon.mod.json"))
+  assert_false(moon_compiles("/r/moon.mod.json"))
   assert_true(moon_compiles("/r/moon.work"))
   assert_false(moon_compiles("/r/x/README.md"))
   assert_false(moon_compiles("/r/x/source.txt"))

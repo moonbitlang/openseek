@@ -12,6 +12,11 @@ async test "host directory listing keeps directories and flags repositories" {
       create_mode=CreateOrTruncate,
     )
     @fs.mkdir("\{root}/beta", recursive=true)
+    @fs.write_text(
+      "\{root}/beta/moon.mod.json",
+      "{\"name\":\"beta\"}",
+      create_mode=CreateOrTruncate,
+    )
     @fs.mkdir("\{root}/gamma/.git", recursive=true)
     @fs.mkdir("\{root}/.hidden", recursive=true)
     @fs.write_text("\{root}/notes.txt", "text\n", create_mode=CreateOrTruncate)

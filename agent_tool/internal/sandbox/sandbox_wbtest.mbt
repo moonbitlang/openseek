@@ -20,7 +20,7 @@ async test "sandbox profile text" {
     content=(
       #|(version 1)
       #|(allow default)
-      #|(deny file-write* (regex "^\\/workspace(/|$)(.*/)?([^/]*(\\.mbt\\.md|\\.mbt|\\.mbti)|(moon\\.mod\\.json|moon\\.pkg\\.json|moon\\.mod|moon\\.pkg|moon\\.work))$"))
+      #|(deny file-write* (regex "^\\/workspace(/|$)(.*/)?([^/]*(\\.mbt\\.md|\\.mbt|\\.mbti)|(moon\\.mod|moon\\.pkg|moon\\.work))$"))
       #|(deny file-write* (require-all (subpath "/workspace") (vnode-type DIRECTORY)))
       #|(allow file-write* (regex "^\\/workspace/(.*/)?(_build|\\.mooncakes)(/|$)"))
       #|

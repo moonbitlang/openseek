@@ -4,8 +4,6 @@ package "moonbitlang/openseek/agent_tool/internal/manifest_path"
 // Values
 pub fn is_generated_mbti_path(String) -> Bool
 
-pub fn is_moon_mod_json_path(String) -> Bool
-
 pub fn is_moon_mod_path(String) -> Bool
 
 pub fn is_moon_pkg_path(String) -> Bool

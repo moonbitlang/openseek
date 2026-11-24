@@ -61,7 +61,7 @@ async fn Launcher::resolve_directory(
   // could neither build nor test it.
   let mut above = @workspace_path.parent_dir(directory)
   while above is Some(dir) && @workspace_path.is_under_workspace_root(root, dir) {
-    for manifest in ["moon.mod", "moon.mod.json", "moon.work"] {
+    for manifest in ["moon.mod", "moon.work"] {
       if (@fs.exists("\{dir}/\{manifest}") catch { _ => false }) {
         return Err(
           "\{path} is inside the MoonBit module or workspace at \{dir}, which builds at its root; give a worker that root, or a worktree",
