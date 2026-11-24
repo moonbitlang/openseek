@@ -301,9 +301,14 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   const rows = await page.evaluate(() => {
     const rows = ['.sidebar-header', '.topbar', '.editor-tabsbar'].map(selector => document.querySelector(selector));
     const controls = ['.sidebar-toggle', '.sidebar-mode', '.right-panel-toggle', '.editor-tabsbar .tab-add'];
+    const [sidebarHeader, ...canvasRows] = rows;
+    const sidebarBackground = getComputedStyle(sidebarHeader.closest('aside')).backgroundColor;
+    const headerBackground = getComputedStyle(sidebarHeader).backgroundColor;
     return {
       heights: rows.map(row => row.getBoundingClientRect().height),
-      backgrounds: rows.map(row => getComputedStyle(row).backgroundColor),
+      backgrounds: canvasRows.map(row => getComputedStyle(row).backgroundColor),
+      sidebarBackground,
+      sidebarHeaderBackground: headerBackground === 'rgba(0, 0, 0, 0)' ? sidebarBackground : headerBackground,
       centers: controls.map(selector => {
         const { top, height } = document.querySelector(selector).getBoundingClientRect();
         return top + height / 2;
@@ -314,7 +319,8 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   expect(rows.heights).toEqual(Array(3).fill(resized.nativeHeight));
   for (const center of rows.centers) expect(center).toBeCloseTo(resized.nativeHeight / 2, 1);
   const rgb = `rgb(${lastStyle().background_color.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ')})`;
-  expect(rows.backgrounds).toEqual(Array(3).fill(rgb));
+  expect(rows.backgrounds).toEqual([rgb, rgb]);
+  expect(rows.sidebarHeaderBackground).toBe(rows.sidebarBackground);
   const { x, width } = await page.getByRole('button', { name: 'Hide panel', exact: true }).boundingBox();
   expect(x + width).toBeLessThanOrEqual(rows.nativeBoundary);
 

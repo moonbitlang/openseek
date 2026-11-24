@@ -447,6 +447,7 @@ html.is-resizing-review .review-split-handle {
       var(--titlebar-control-gap)
   );
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
+  --titlebar-section-divider: inset 0 -1px var(--color-seam);
   --sidebar-toggle-inline-inset: max(
     calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
     var(--native-titlebar-left, 0px)
@@ -481,14 +482,23 @@ html.is-resizing-review .review-split-handle {
   transition-delay: var(--drawer-duration);
 }
 
-/* Windows uses Proton's actual row height after DIP and zoom rounding. The
-   sidebar header shares the canvas color used by the other header sections
-   and by the native caption buttons. */
+/* Windows uses Proton's actual row height after DIP and zoom rounding. */
 html.native-titlebar-custom .app {
   --topbar-height: var(--native-titlebar-height);
+  --titlebar-section-divider: none;
 }
-html.native-titlebar-custom .app .sidebar-header {
-  background: var(--color-bg-canvas);
+
+/* CEF is clipped out of the caption buttons. Draw one divider at the first
+   row below their rectangle, where the page can paint the whole width. */
+html.native-titlebar-custom .app::after {
+  content: "";
+  position: fixed;
+  inset-block-start: var(--topbar-height);
+  inset-inline: 0;
+  block-size: 1px;
+  background: var(--color-seam);
+  pointer-events: none;
+  z-index: var(--z-titlebar-control);
 }
 
 /* Proton's overlay titlebar extends the page into window chrome.
