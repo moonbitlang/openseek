@@ -1,0 +1,41 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+		100000000000000000000001 = {isa = PBXProject; buildConfigurationList = 100000000000000000000011; developmentRegion = en; knownRegions = (en, Base); mainGroup = 100000000000000000000002; productRefGroup = 100000000000000000000003; projectDirPath = ""; projectRoot = ""; preferredProjectObjectVersion = 77; targets = (100000000000000000000004, 100000000000000000000005, 100000000000000000000041); };
+		100000000000000000000002 = {isa = PBXGroup; children = (100000000000000000000006, 100000000000000000000007, 100000000000000000000042, 100000000000000000000003); sourceTree = "<group>"; };
+		100000000000000000000003 = {isa = PBXGroup; name = Products; children = (100000000000000000000008, 100000000000000000000009, 100000000000000000000043); sourceTree = "<group>"; };
+		100000000000000000000004 = {isa = PBXNativeTarget; buildConfigurationList = 100000000000000000000012; buildPhases = (100000000000000000000021, 100000000000000000000022); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (100000000000000000000006); name = SeekMoon; productName = SeekMoon; productReference = 100000000000000000000008; productType = "com.apple.product-type.application"; };
+		100000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = 100000000000000000000013; buildPhases = (100000000000000000000023); buildRules = (); dependencies = (100000000000000000000024); fileSystemSynchronizedGroups = (100000000000000000000007); name = SeekMoonTests; productName = SeekMoonTests; productReference = 100000000000000000000009; productType = "com.apple.product-type.bundle.unit-test"; };
+		100000000000000000000006 = {isa = PBXFileSystemSynchronizedRootGroup; path = SeekMoon; sourceTree = "<group>"; };
+		100000000000000000000007 = {isa = PBXFileSystemSynchronizedRootGroup; path = SeekMoonTests; sourceTree = "<group>"; };
+		100000000000000000000008 = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SeekMoon.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000009 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SeekMoonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000011 = {isa = XCConfigurationList; buildConfigurations = (100000000000000000000031, 100000000000000000000032); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		100000000000000000000012 = {isa = XCConfigurationList; buildConfigurations = (100000000000000000000033, 100000000000000000000034); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		100000000000000000000013 = {isa = XCConfigurationList; buildConfigurations = (100000000000000000000035, 100000000000000000000036); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		100000000000000000000021 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000022 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000023 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000024 = {isa = PBXTargetDependency; target = 100000000000000000000004; targetProxy = 100000000000000000000025; };
+		100000000000000000000025 = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = 100000000000000000000004; remoteInfo = SeekMoon; };
+		100000000000000000000031 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; SDKROOT = iphoneos; TARGETED_DEVICE_FAMILY = 1; IPHONEOS_DEPLOYMENT_TARGET = 17.4; SWIFT_VERSION = 5.0; ENABLE_TESTABILITY = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; }; };
+		100000000000000000000032 = {isa = XCBuildConfiguration; name = Release; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; SDKROOT = iphoneos; TARGETED_DEVICE_FAMILY = 1; IPHONEOS_DEPLOYMENT_TARGET = 17.4; SWIFT_VERSION = 5.0; SWIFT_COMPILATION_MODE = wholemodule; }; };
+		100000000000000000000033 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.moonbit.seekmoon.ios.prototype; PRODUCT_NAME = SeekMoon; INFOPLIST_FILE = Info.plist; CODE_SIGN_STYLE = Automatic; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; }; };
+		100000000000000000000034 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.moonbit.seekmoon.ios.prototype; PRODUCT_NAME = SeekMoon; INFOPLIST_FILE = Info.plist; CODE_SIGN_STYLE = Automatic; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; }; };
+		100000000000000000000035 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.moonbit.seekmoon.ios.prototype.tests; PRODUCT_NAME = SeekMoonTests; GENERATE_INFOPLIST_FILE = YES; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SeekMoon.app/SeekMoon"; BUNDLE_LOADER = "$(TEST_HOST)"; }; };
+		100000000000000000000036 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.moonbit.seekmoon.ios.prototype.tests; PRODUCT_NAME = SeekMoonTests; GENERATE_INFOPLIST_FILE = YES; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SeekMoon.app/SeekMoon"; BUNDLE_LOADER = "$(TEST_HOST)"; }; };
+		100000000000000000000041 = {isa = PBXNativeTarget; buildConfigurationList = 100000000000000000000044; buildPhases = (100000000000000000000045); buildRules = (); dependencies = (100000000000000000000046); fileSystemSynchronizedGroups = (100000000000000000000042); name = LiveSmoke; productName = LiveSmoke; productReference = 100000000000000000000043; productType = "com.apple.product-type.bundle.ui-testing"; };
+		100000000000000000000042 = {isa = PBXFileSystemSynchronizedRootGroup; path = LiveSmoke; sourceTree = "<group>"; };
+		100000000000000000000043 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = LiveSmoke.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000044 = {isa = XCConfigurationList; buildConfigurations = (100000000000000000000048, 100000000000000000000049); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		100000000000000000000045 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000046 = {isa = PBXTargetDependency; target = 100000000000000000000004; targetProxy = 100000000000000000000047; };
+		100000000000000000000047 = {isa = PBXContainerItemProxy; containerPortal = 100000000000000000000001; proxyType = 1; remoteGlobalIDString = 100000000000000000000004; remoteInfo = SeekMoon; };
+		100000000000000000000048 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.moonbit.seekmoon.ios.prototype.livesmoke; PRODUCT_NAME = LiveSmoke; GENERATE_INFOPLIST_FILE = YES; TEST_TARGET_NAME = SeekMoon; }; };
+		100000000000000000000049 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.moonbit.seekmoon.ios.prototype.livesmoke; PRODUCT_NAME = LiveSmoke; GENERATE_INFOPLIST_FILE = YES; TEST_TARGET_NAME = SeekMoon; }; };
+	};
+	rootObject = 100000000000000000000001;
+}
