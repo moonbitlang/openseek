@@ -63,9 +63,8 @@ fn is_moonbit_managed(path : String) -> Bool {
   path.has_suffix(".mbtx") ||
   path.has_suffix(".mbti") ||
   @manifest_path.is_moon_mod_path(path) ||
-  @manifest_path.is_moon_mod_json_path(path) ||
   @manifest_path.is_moon_pkg_path(path) ||
-  @workspace_path.path_basename(path) is ("moon.work" | "moon.pkg.json")
+  @workspace_path.path_basename(path) == "moon.work"
 }
 
 ///|
