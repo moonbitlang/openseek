@@ -50,7 +50,7 @@ async fn harness(
     Some(root) => root
     None => {
       let root = @fs.tmpdir(prefix="openseek-subagent-")
-      group.add_defer(() => @fs.rmdir(root, recursive=true))
+      group.add_defer(() => @fs.remove(root, recursive=true))
       root
     }
   }
@@ -150,7 +150,7 @@ async test "a child that reports is Captured, with its usage and stored report" 
           completion_tokens=15,
           source=Result,
           ..
-        )
+        ),
       ),
     )
     assert_true(info.report is Some(Stored))

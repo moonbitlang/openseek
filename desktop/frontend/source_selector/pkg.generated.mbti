@@ -1,0 +1,44 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/source_selector"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
+}
+
+// Values
+pub fn component(@rabbita.Val[Input?], id~ : String, class~ : String, @cmd.Emit[Source]) -> @rabbita.Val[@html.Html]
+
+pub fn local_label(@i18n.Locale) -> String
+
+// Errors
+
+// Types and methods
+#derive(Eq)
+pub(all) struct Choice {
+  source : Source
+  label : String
+  title : String?
+  disabled : Bool
+}
+
+#derive(Eq)
+pub(all) struct Input {
+  label : String
+  selected : Source
+  choices : Array[Choice]
+}
+pub fn Input::render(Self, id~ : String, class~ : String, @cmd.Emit[Source]) -> @rabbita.Val[@html.Html]
+
+#derive(Eq)
+pub(all) enum Source {
+  Device(@interop.ChannelId)
+  Cloud
+}
+
+// Type aliases
+
+// Traits

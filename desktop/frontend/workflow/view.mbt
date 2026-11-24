@@ -34,6 +34,7 @@ pub fn panel(
   ordered.rev_in_place()
   @html.div(
     class="workflow-panel",
+    attrs=@action_menu.content_attrs("workflow"),
     ordered.map(run => run_view(locale~, run, actions)),
   )
 }

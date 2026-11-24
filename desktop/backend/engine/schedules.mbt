@@ -153,8 +153,8 @@ async fn Schedules::commit(
   state : @protocol.SchedulesReply,
 ) -> Unit {
   let json : Json = { "version": 1, "state": state.to_json() }
-  @fsx.write_text_atomic(
-    self.directory().join("schedules.json"),
+  @openseek/atomic_file.write_text_atomic(
+    self.directory().join("schedules.json").to_string(),
     json.stringify(),
     permission=0o600,
   )

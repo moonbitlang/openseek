@@ -100,7 +100,7 @@ async fn open_generation(key_dir : String, generation : Int32) -> String {
   }
   for entry in @fs.readdir(key_dir) {
     if entry.has_prefix("gen-") && entry != name {
-      @fs.rmdir("\{key_dir}/\{entry}", recursive=true) catch {
+      @fs.remove("\{key_dir}/\{entry}", recursive=true) catch {
         _ => ()
       }
     }

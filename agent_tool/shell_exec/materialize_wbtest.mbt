@@ -1,7 +1,7 @@
 ///|
 async test "background materialization seeds small output and preserves an empty file" {
   let dir = @fs.tmpdir(prefix="openseek-materialize-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/output.log"
   let sink = ShellOutputSink(inline_cap=100, spill_path=path)
   defer sink.close()
@@ -21,7 +21,7 @@ async test "background materialization seeds small output and preserves an empty
 ///|
 async test "materialization serializes with the writer and retains split UTF-8" {
   let dir = @fs.tmpdir(prefix="openseek-materialize-race-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/output.log"
   let sink = ShellOutputSink(inline_cap=10000, spill_path=path)
   defer sink.close()
@@ -46,7 +46,7 @@ async test "materialization serializes with the writer and retains split UTF-8" 
 ///|
 async test "a failed log write never advances the committed offset or hides the failure" {
   let dir = @fs.tmpdir(prefix="openseek-log-error-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/output.log"
   let sink = ShellOutputSink(inline_cap=100, spill_path=path)
   defer sink.close()
@@ -67,7 +67,7 @@ async test "a failed log write never advances the committed offset or hides the 
 ///|
 async test "file creation and read failures are distinct from an empty log" {
   let dir = @fs.tmpdir(prefix="openseek-log-missing-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let bad = ShellOutputSink(inline_cap=100, spill_path="\{dir}/missing/out")
   try bad.materialize() catch {
     _ => assert_true(bad.failure is Some(_))
@@ -89,7 +89,7 @@ async test "file creation and read failures are distinct from an empty log" {
 ///|
 async test "full reads remain consistent while output is appended" {
   let dir = @fs.tmpdir(prefix="openseek-read-prefix-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let sink = ShellOutputSink(inline_cap=100, spill_path="\{dir}/log")
   defer sink.close()
   let prefix = "你好🙂".repeat(100000)
@@ -106,7 +106,7 @@ async test "full reads remain consistent while output is appended" {
 ///|
 async test "a failed seed keeps the captured head readable and partial path inspectable" {
   let dir = @fs.tmpdir(prefix="openseek-seed-failure-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/log"
   let sink = ShellOutputSink(inline_cap=100, spill_path=path)
   sink.append_text("captured before adoption")

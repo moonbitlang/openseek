@@ -32,6 +32,8 @@ continues to negotiate `2025-11-25` and earlier supported revisions.
   stateless `server/discover`.
 - `server.mbt` — the listener, the grants, and one task per request.
 - `stdio.mbt` — newline-delimited JSON-RPC over streams supplied by the host.
+- `skill.mbt` — the `SKILL.md` of the `seekmoon` skill that tells an engine's
+  agent about the server.
 
 ## Host-owned streams
 
@@ -83,10 +85,9 @@ The adapter writes only JSON-RPC responses to its supplied output stream.
 
 ## Configuration
 
-Engines started by a host configured with tools connect automatically, for both
-conversations and scheduled runs. The engine launcher writes `host-mcp.json`
-in the runtime directory (or the global store directory when no runtime directory
-was supplied) and passes it as the first `--mcp-config` argument. It contains:
+Engines started by a host configured with tools reach it, for both
+conversations and scheduled runs. The application bundles
+`seekmoon/skills/seekmoon/mcp.json` under its resource directory. It contains:
 
 ```json
 {
@@ -103,11 +104,19 @@ was supplied) and passes it as the first `--mcp-config` argument. It contains:
 
 OpenSeek expands the HTTP URL and header values from the engine's environment
 when it loads the configuration. Missing variables are errors, so a process
-that was not granted access cannot connect through this entry. The tools
-reach the model as `mcp__seekmoon__<tool>` automatically.
+that was not granted access cannot connect through this entry. Only variable
+placeholders are persisted; the URL and token remain conversation-specific
+environment values.
+
+The launcher passes the bundled `seekmoon/skills` directory through
+`--skills-dir`. The agent learns of the tools from the adjacent `SKILL.md`,
+and the engine connects the server when a script first searches or calls it.
+Both files are maintained in `desktop/skills/seekmoon/` and copied unchanged
+when packaging. They are read directly; no embedded source, runtime copy, or
+user-directory fallback is used. Unbundled development reads `desktop/skills`.
 
 The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
-file is absent, follows the host defaults as another `--mcp-config` argument.
+file is absent, is passed through `--mcp-config` and overrides the skill defaults.
 Later entries replace whole same-named servers before any connection starts.
 A user can therefore override `seekmoon` to customize its headers. A broken
 user file is reported without preventing the host defaults from loading.
@@ -269,6 +278,17 @@ The [Desktop session protocol](../../../docs/remote-protocol.md#session-artifact
 documents frontend list/remove commands and the `session.artifacts_changed`
 notification emitted after a save. Removal targets an exact type and URL
 against the latest list, preserving unrelated concurrent additions.
+
+After attachment, the running host uses its authenticated GitHub CLI to poll
+open pull requests in batches by GitHub host. Sessions that attach the same
+PR share one lookup. The host delivers a failure or a stable passing check
+rollup to each subscribing session, steering a running turn or starting a
+new one if idle.
+New head commits are tracked separately. An empty rollup never counts as
+passing. Detaching the PR or archiving or deleting the session stops the watch.
+While GitHub CLI is unavailable, the host logs the lookup error and retries.
+Watches live for the host process. Attach the PR again to resume after a host
+restart.
 
 These tools belong to the `artifacts` group. If the configuration filters
 groups with `X-SeekMoon-Tool-Groups`, include `artifacts` (for example

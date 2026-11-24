@@ -1,4 +1,4 @@
-// Copy and reply actions beside a fresh text selection. "Reply" turns the bar into
+// Reply beside a fresh text selection. "Reply" turns the bar into
 // a small composer that keeps the quote in view while a comment is typed; the
 // result is handed to the composer the selection's screen named, either to be
 // sent at once or batched into the message being written there. The reply
@@ -34,9 +34,6 @@ priv struct SelectionAnchor {
 #derive(Eq)
 priv enum SelectionStage {
   Offered
-  Copying
-  Copied
-  CopyFailed
   // `declined` shows that the composer would not take the last attempt.
   Replying(comment~ : String, declined~ : Bool)
 }
@@ -57,17 +54,12 @@ priv struct SelectionState[T] {
   open : SelectionOpen[T]?
   // Sticky for the page: a reader collecting quotes keeps collecting.
   batched : Bool
-  // Fences clipboard completions and expiry against later selections.
-  generation : Int32
 }
 
 ///|
 priv enum SelectionMsg {
   Settled(SelectionAnchor)
   Closed
-  CopyStarted
-  CopyFinished(Int32, Result[Unit, String])
-  CopyExpired(Int32)
   ReplyStarted
   CommentChanged(String)
   BatchToggled
@@ -93,8 +85,7 @@ priv enum SelectionWatch {
 fn[T] SelectionState::watch(self : SelectionState[T]) -> SelectionWatch {
   match self.open {
     None => Idle
-    Some({ stage: Offered | Copying | Copied | CopyFailed, anchor, .. }) =>
-      Offer(anchor)
+    Some({ stage: Offered, anchor, .. }) => Offer(anchor)
     Some({ stage: Replying(..), .. }) => Reply
   }
 }
@@ -336,43 +327,12 @@ fn[T : Eq] SelectionState::update(
         {
           ..self,
           open: target.map(target => { anchor, target, stage: Offered, }),
-          generation: self.generation + 1,
         },
         unpin,
       )
     (Closed, Some(_)) | (Delivered, Some({ stage: Replying(..), .. })) =>
       ({ ..self, open: None, }, unpin)
-    (CopyStarted, Some({ stage: Offered | CopyFailed, .. } as open)) => {
-      guard target == Some(open.target) else { return (self, @cmd.none) }
-      let generation = self.generation + 1
-      (
-        { ..self, generation, open: Some({ ..open, stage: Copying, }), },
-        @clipboard.copy(
-          Text(open.anchor.text),
-          copied=emit(CopyFinished(generation, Ok(()))),
-          failed=error => emit(CopyFinished(generation, Err(error))),
-        ),
-      )
-    }
-    (CopyFinished(generation, result), Some({ stage: Copying, .. } as open)) => {
-      guard generation == self.generation && target == Some(open.target) else {
-        return (self, @cmd.none)
-      }
-      match result {
-        Ok(_) =>
-          (
-            { ..self, open: Some({ ..open, stage: Copied, }), },
-            @cmd.delay(emit(CopyExpired(generation)), 1000),
-          )
-        Err(_) =>
-          ({ ..self, open: Some({ ..open, stage: CopyFailed, }), }, @cmd.none)
-      }
-    }
-    (CopyExpired(generation), Some({ stage: Copied, .. })) => {
-      guard generation == self.generation else { return (self, @cmd.none) }
-      ({ ..self, open: None, }, @cmd.none)
-    }
-    (ReplyStarted, Some({ stage: Offered | Copying | CopyFailed, .. } as open)) =>
+    (ReplyStarted, Some({ stage: Offered, .. } as open)) =>
       (
         {
           ..self,
@@ -443,14 +403,13 @@ fn selection_surface_attrs(
   match stage {
     // Keep the selection and the focus where they are while the button is
     // pressed; `ReplyStarted` decides what moves.
-    Offered | Copying | CopyFailed =>
+    Offered =>
       attrs
       .role("toolbar")
       .on_mousedown(event => {
         event.prevent_default()
         @cmd.none
       })
-    Copied => attrs.role("status")
     Replying(..) => attrs.role("dialog")
   }
 }
@@ -466,12 +425,7 @@ pub fn[T : Eq] selection_component(
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input=target,
-    init=(_, _) => {
-      (
-        SelectionState::{ open: None, batched: false, generation: 0, },
-        @cmd.none,
-      )
-    },
+    init=(_, _) => (SelectionState::{ open: None, batched: false, }, @cmd.none),
     update=(state, target, msg, emit) => {
       state.update(target, msg, emit, deliver)
     },
@@ -510,7 +464,7 @@ pub fn[T : Eq] selection_component(
       "max-height: \{room}",
     ]
     match open.stage {
-      Offered | Copying | CopyFailed =>
+      Offered =>
         @html.div(
           class="selection-actions\{placement}",
           style~,
@@ -519,45 +473,14 @@ pub fn[T : Eq] selection_component(
             ui(locale, SelectionActions),
           ),
           [
-            @html.div(class="selection-actions-buttons", [
-              @html.button(
-                class="action-menu-item",
-                type_="button",
-                title=ui(locale, CopySelected),
-                disabled=open.stage is Copying,
-                on_click=emit(CopyStarted),
-                ui(locale, CopyLabel),
-              ),
-              @html.div(
-                class="selection-actions-separator",
-                attrs=@html.Attrs::build().aria_hidden("true"),
-                @html.nothing,
-              ),
-              @html.button(
-                class="action-menu-item",
-                type_="button",
-                title=ui(locale, ReplyHint),
-                attrs=@html.Attrs::build().on_click(_ => emit(ReplyStarted)),
-                ui(locale, ReplyLabel),
-              ),
-            ]),
-            if open.stage is CopyFailed {
-              @html.div(
-                class="selection-copy-error",
-                attrs=@html.Attrs::build().role("status"),
-                ui(locale, CopyFailure),
-              )
-            } else {
-              @html.nothing
-            },
+            @html.button(
+              class="action-menu-item",
+              type_="button",
+              title=ui(locale, ReplyHint),
+              attrs=@html.Attrs::build().on_click(_ => emit(ReplyStarted)),
+              ui(locale, ReplyLabel),
+            ),
           ],
-        )
-      Copied =>
-        @html.div(
-          class="selection-actions selection-copy-feedback\{placement}",
-          style~,
-          attrs=selection_surface_attrs(open.stage, ui(locale, CopySuccess)),
-          [@icons.icon(@icons.icon_check), @html.span(ui(locale, CopySuccess))],
         )
       Replying(comment~, declined~) => {
         let sendable = state.batched || !comment.is_blank()

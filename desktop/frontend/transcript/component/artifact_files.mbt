@@ -16,7 +16,7 @@ pub(all) enum ArtifactInteraction {
   RequestFollowup(
     prompt~ : String,
     title~ : String,
-    snapshot~ : @mention_context.ArtifactSnapshot?
+    snapshot~ : @mention_context.ArtifactSnapshot?,
   )
 }
 

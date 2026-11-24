@@ -3,7 +3,7 @@ import { CloudHarness, authOrigin, sessionA } from './support/cloud_harness.js';
 
 test('browser creates Cloud on first send through the existing composer and unified account', async ({ page, context }) => {
   const cloud = new CloudHarness(page, { cached: false });
-  cloud.device.hostSettings.has_deepseek_key = false;
+  cloud.device.hostSettings.providers.deepseek.has_api_key = false;
   await context.addCookies([{ name: 'session', value: 'fixture-account', url: authOrigin }]);
   await cloud.install();
   await cloud.goto();

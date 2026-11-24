@@ -14,7 +14,10 @@
      appears and the native scrollbar claims its lane. */
   scrollbar-gutter: stable both-edges;
   /* The conversation overview's rail adds its width to this inset. */
-  --transcript-padding-inline: 24px;
+  --transcript-padding-inline: var(--conversation-padding-inline);
+  --conversation-inline-inset: calc(
+    var(--transcript-padding-inline) + var(--scrollbar-lane)
+  );
   padding: 24px var(--transcript-padding-inline) 22px;
   background: transparent;
   /* Size the overview rail against this scroller. Containment is safe because
@@ -26,7 +29,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: 820px;
+  max-width: var(--conversation-width);
   margin: 0 auto 20px;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -45,7 +48,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 820px;
+  max-width: var(--conversation-width);
   margin: 0 auto;
   padding-inline: 2em;
 }
@@ -66,6 +69,8 @@
   bottom: 0;
   display: flex;
   justify-content: center;
+  max-width: var(--conversation-width);
+  margin-inline: auto;
   height: 0;
   overflow: visible;
   z-index: 5;
@@ -184,7 +189,7 @@
   width: min(360px, 44cqw);
   padding: 10px 12px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   pointer-events: none;
   z-index: 7;
@@ -254,7 +259,7 @@
   place-items: center;
   width: 52px;
   height: 52px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-inline);
   background: var(--color-control-surface);
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
@@ -295,7 +300,7 @@
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -358,7 +363,7 @@
   margin-bottom: 6px;
   padding: 0 9px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   color: var(--color-text-muted);
 }
 .empty-project-search input {
@@ -391,7 +396,7 @@
   margin: 0;
   padding: 8px 9px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
@@ -419,6 +424,7 @@
   white-space: nowrap;
 }
 .empty-project-option-check {
+  --icon-size: var(--icon-md);
   color: var(--color-text-secondary);
   text-align: center;
 }
@@ -438,7 +444,7 @@
   padding: 9px;
   border: 0;
   border-top: 1px solid var(--color-border);
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-radius: 0 0 var(--radius-surface) var(--radius-surface);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
@@ -467,7 +473,7 @@
   min-width: 0;
   max-width: 85%;
   padding: 13px 17px;
-  border-radius: 20px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-content);
 }
 .session-message-source {
@@ -537,7 +543,7 @@
   height: 28px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -554,6 +560,12 @@
 .message-copy:focus-visible {
   outline: 1px solid var(--color-focus-ring);
   outline-offset: 1px;
+}
+.codicon-markdown::before {
+  content: "\eb1d";
+}
+.codicon-file-code::before {
+  content: "\eae9";
 }
 
 .msg-content {
@@ -620,13 +632,13 @@
   --markdown-quote-color: var(--color-text-secondary);
   --markdown-code-padding: 10px 13px;
   --markdown-code-border: 1px solid var(--color-border);
-  --markdown-code-radius: var(--radius-sm);
+  --markdown-code-radius: 6px;
   --markdown-code-background: var(--color-bg-surface);
   --markdown-code-font: var(--font-family-mono);
   --markdown-code-size: var(--font-size-sm);
   --markdown-code-line-height: var(--line-height-relaxed);
   --markdown-inline-code-size: 0.92em;
-  --markdown-inline-code-radius: var(--radius-xs);
+  --markdown-inline-code-radius: var(--radius-inline);
   --markdown-inline-code-background: var(--color-bg-content);
   --markdown-inline-code-color: var(--color-text-inline-code);
   --markdown-border: var(--color-border);
@@ -685,7 +697,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--markdown-code-radius, 6px);
   background: var(--color-bg-surface);
 }
 .msg-content.markdown .chat-code-block:has(> pre) > .chat-code-toolbar {
@@ -751,7 +763,7 @@
   padding: 12px;
   overflow: auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--markdown-code-radius, 6px);
   background: var(--color-bg-surface);
 }
 .msg-content.markdown
@@ -819,7 +831,7 @@
   margin: 0 0.15em;
   padding: 0 0.35em;
   border: 1px solid var(--color-border);
-  border-radius: 5px;
+  border-radius: var(--radius-inline);
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
   font-size: 0.75em;
@@ -847,7 +859,7 @@
   min-height: 34px;
   padding: var(--space-2) var(--space-5) var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font-weight: 500;
@@ -872,7 +884,7 @@
 .msg-content.markdown .citation-sources-count {
   min-width: 18px;
   padding: var(--space-1) var(--space-2);
-  border-radius: 6px;
+  border-radius: var(--radius-inline);
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
   font-size: var(--font-size-caption);
@@ -893,7 +905,7 @@
 .msg-content.markdown .citation-source-glyph {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-inline);
   background: var(--color-bg-subtle);
 }
 .msg-content.markdown .citation-source-glyph svg {
@@ -931,7 +943,7 @@
   margin: 0;
   padding: var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
 }
 .msg-content.markdown .citation-source-number {
@@ -973,7 +985,7 @@
 .msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child::after {
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   content: "";
 }
 .msg-content.markdown .citation-source:has(:focus-visible) {
@@ -1006,7 +1018,7 @@
 
 
 .inline-code {
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-inline);
   background: var(--color-bg-content);
   color: var(--color-text-inline-code);
   box-decoration-break: clone;
@@ -1049,7 +1061,7 @@
   margin: 0.35em 0 0.8em;
   padding: 5px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-surface, 9px);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
@@ -1069,7 +1081,7 @@
   margin: 0.65em 0;
   padding: 7px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-surface, 9px);
   background: var(--color-bg-surface);
   color: inherit;
   text-align: left;
@@ -1186,12 +1198,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.activity-text::before {
-  content: "▸ ";
-  display: inline-block;
+/* A real icon node keeps disclosure markers independent of caption text. */
+.transcript-disclosure {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  flex: none;
+  align-self: center;
   transition: transform var(--disclosure-duration) ease;
 }
-.activity[open] > .activity-summary .activity-text::before {
+.activity[open] > .activity-summary > .transcript-disclosure,
+.summary-card[open] > .summary-card-label > .transcript-disclosure,
+.tool-call[open] > .tool-call-summary > .transcript-disclosure,
+.tool-result[open] > .tool-result-summary > .transcript-disclosure {
   transform: rotate(90deg);
 }
 
@@ -1211,12 +1229,9 @@
 }
 /* Reserve the disclosure marker's width even when the step has no thought fold. */
 .activity-heading {
+  padding-left: calc(var(--icon-md) + 10px);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-}
-.activity-heading::before {
-  content: "▸ ";
-  visibility: hidden;
 }
 
 .activity-time {
@@ -1253,12 +1268,6 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-}
-.summary-card-text::after {
-  content: " ▸";
-}
-.summary-card[open] > .summary-card-label .summary-card-text::after {
-  content: " ▾";
 }
 .summary-card-body {
   padding: 10px 0 4px;
@@ -1305,12 +1314,28 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
-.tool-flow {
-  flex: 0 0 1em;
-  color: var(--color-text-muted);
-  text-align: center;
+.tool-caption-icon {
+  display: inline-flex;
+  vertical-align: -0.15em;
+  --icon-size: var(--icon-md);
 }
-/* Keep status at the far right, after the summary's ::after disclosure arrow.
+.tool-caption-icon > .codicon,
+.minimal-tool-icon > .codicon {
+  font-size: var(--icon-size, var(--icon-md));
+}
+.tool-caption-icon > svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+.tool-flow {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  align-self: center;
+  justify-content: center;
+  flex: 0 0 var(--icon-md);
+  color: var(--color-text-muted);
+}
+/* Keep status at the far right, after the disclosure icon.
    The arrow stays beside the caption while the auto margin separates status. */
 .tool-status {
   display: inline-flex;
@@ -1382,19 +1407,6 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* The marker belongs to rows that own a fold; `.tool-call-label` rows have
-   nothing to disclose and stay bare. Its separate flex item follows the
-   caption but precedes status, and cannot be ellipsized with a long brief. */
-.tool-call-summary::after,
-.tool-result-summary::after {
-  content: "▸";
-  display: inline-block;
-  transition: transform var(--disclosure-duration) ease;
-}
-.tool-call[open] > .tool-call-summary::after,
-.tool-result[open] > .tool-result-summary::after {
-  transform: rotate(90deg);
-}
 .tool-call-label.error,
 .tool-call.error > .tool-call-summary,
 .tool-result-label.error,
@@ -1454,7 +1466,7 @@
 .tool-result pre {
   margin: 6px 0 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
@@ -1532,7 +1544,7 @@
 .tool-call-arguments-friendly {
   margin: 6px 0 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
@@ -1593,7 +1605,7 @@
 .tool-card-chip {
   padding: 0 6px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-inline);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   overflow-wrap: anywhere;
@@ -1656,7 +1668,7 @@
 .tool-diff {
   margin: 6px 0 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-subtle);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
@@ -1697,11 +1709,12 @@
   margin: 3px 0;
 }
 .plan-step .step-icon {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  align-self: center;
   flex: none;
-  width: 14px;
+  width: var(--icon-md);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  text-align: center;
 }
 .plan-step.completed .step-icon {
   color: var(--color-success);
@@ -1715,7 +1728,7 @@
   flex: none;
   padding: 0 5px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-inline);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
 }
@@ -1839,7 +1852,7 @@
 .minimal-activity-summary:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 }
 .minimal-call-list,
 .minimal-process-body {
@@ -1916,10 +1929,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.minimal-call > .minimal-edit-changes {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
 .minimal-call > .minimal-image-call {
   grid-column: 1 / -1;
   min-width: 0;
@@ -1983,9 +1992,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-image-call)::details-content,
-  .activity-text::before,
-  .tool-call-summary::after,
-  .tool-result-summary::after,
+  .transcript-disclosure,
   .minimal-chevron {
     transition: none;
   }
@@ -2001,80 +2008,7 @@
   max-width: min(100%, 320px);
   max-height: 240px;
   object-fit: contain;
-  border-radius: 8px;
-}
-
-/* Match ordinary code blocks, with a separate row for the path and copy action.
-   Numbers are separate from selectable source and from the copied diff. */
-.minimal-edit-block {
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-}
-.minimal-edit-block + .minimal-edit-block {
-  padding-top: 0;
-}
-.edit-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 4px 4px 4px 13px;
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--font-size-sm);
-}
-.edit-path,
-.edit-path-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-  color: var(--color-text-muted);
-}
-.edit-path {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: var(--color-accent);
-  cursor: pointer;
-}
-.edit-path:hover,
-.edit-path:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.edit-copy.icon-button {
-  --icon-size: var(--icon-lg);
-  --icon-button-size: calc(var(--font-size-base) * 26 / 14);
-  display: grid;
-  place-items: center;
-  flex: none;
-  padding: 0;
-  line-height: 1;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-.minimal-edit-block:hover .edit-copy,
-.edit-titlebar:focus-within .edit-copy {
-  opacity: 1;
-  pointer-events: auto;
-}
-.minimal-diff-preview {
-  --editor-font-family: var(--font-family-mono);
-  --editor-font-size: var(--font-size-xs);
-  --editor-line-height: calc(20 / 12);
-}
-
-@media (hover: none) {
-  .minimal-edit-block .edit-copy {
-    opacity: 1;
-    pointer-events: auto;
-  }
+  border-radius: var(--radius-surface);
 }
 
 .user-shell-command {
@@ -2108,7 +2042,7 @@
   max-height: 320px;
   overflow: auto;
   padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-surface);
   background: color-mix(in srgb, var(--color-bg-canvas) 70%, transparent);
   font: var(--font-size-sm) / 1.5 var(--font-family-mono);
   white-space: pre-wrap;

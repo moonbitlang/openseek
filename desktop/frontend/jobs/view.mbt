@@ -56,7 +56,7 @@ fn job_extent(
 ) -> String {
   match job.subagent {
     Some(
-      { usage: Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)), .. }
+      { usage: Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)), .. },
     ) => {
       let tokens = (prompt_tokens + completion_tokens).to_string()
       match steps {
@@ -569,7 +569,7 @@ pub fn panel(
       body.push(@html.div(class="jobs-detail", details))
     }
   }
-  @html.div(class="jobs-panel", body)
+  @html.div(class="jobs-panel", attrs=@action_menu.content_attrs("jobs"), body)
 }
 
 ///|

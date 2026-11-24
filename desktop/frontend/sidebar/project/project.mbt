@@ -241,17 +241,6 @@ pub fn Input::menu_entries(
 }
 
 ///|
-fn Actions::conversation_component(
-  self : Actions,
-  locale : @rabbita.Val[@i18n.Locale],
-  _id : @conversation.Id,
-  input : @rabbita.Val[@conversation.Input],
-  search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  @conversation.component(locale, input, self.conversation, search)
-}
-
-///|
 /// One keyed project component owns disclosure and compact-preview state.
 /// Those values therefore cannot leak to an equal path rendered by a
 /// different sidebar source. The shared action-menu component owns the
@@ -262,7 +251,7 @@ pub fn component(
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
-) -> @rabbita.Val[Array[(String, @html.Html)]] {
+) -> @rabbita.Val[(String, @html.Html)] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ fold: Open, preview_limit: PreviewLimit, }, @cmd.none),
@@ -272,11 +261,11 @@ pub fn component(
     @vector.from_array(input.conversations.map(row => (locale, row, search)))
   })
   let conversation_rows = conversation_inputs.assoc_by(
-    (id, conversation) => {
-      actions.conversation_component(
+    (_, conversation) => {
+      @conversation.component(
         conversation.map(pair => pair.0),
-        id,
         conversation.map(pair => pair.1),
+        actions.conversation,
         conversation.map(parts => parts.2),
       )
     },
@@ -429,16 +418,14 @@ pub fn component(
     }
     let rows : Map[String, @html.Html] = Map([])
     for index = 0; index < conversation_rows.length(); index = index + 1 {
-      let group = conversation_rows[index]
       if searching ||
         state.conversation_visible(
           input,
           index,
           stays_visible(input.conversations[index]),
         ) {
-        for row in group {
-          rows[row.0] = row.1
-        }
+        let (key, row) = conversation_rows[index]
+        rows[key] = row
       }
     }
     if !searching && state.has_hidden_conversation(input) {
@@ -470,19 +457,17 @@ pub fn component(
   let context = @action_menu.row_context(rendered.map(row => row.3))
   rendered.map2(context, (row, context) => {
     let (id, class, title, _, trailing, children, collapsed) = row
-    [
-      (
-        id,
-        @html.div(
-          class=if collapsed {
-            "sidebar-project sidebar-branch collapsed"
-          } else {
-            "sidebar-project sidebar-branch"
-          },
-          [@html.div(class~, title~, [context, trailing]), children],
-        ),
+    (
+      id,
+      @html.div(
+        class=if collapsed {
+          "sidebar-project sidebar-branch collapsed"
+        } else {
+          "sidebar-project sidebar-branch"
+        },
+        [@html.div(class~, title~, [context, trailing]), children],
       ),
-    ]
+    )
   })
 }
 

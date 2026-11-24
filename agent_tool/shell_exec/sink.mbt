@@ -32,6 +32,8 @@ priv struct ShellOutputSink {
   mut failure : String?
   mut last_output_at_ms : Int64?
   head : StringBuilder
+  // Each adoption can supply its own display rules for the same execution.
+  display_tails : Array[DisplayTail]
   mut head_chars : Int32
   // Total decoded characters of full output (across memory + file), ≤ hard_cap.
   mut total_chars : Int32
@@ -71,6 +73,7 @@ fn ShellOutputSink::ShellOutputSink(
     failure: None,
     last_output_at_ms: None,
     head: StringBuilder(),
+    display_tails: [],
     head_chars: 0,
     total_chars: 0,
     pending: b"",
@@ -148,14 +151,26 @@ async fn ShellOutputSink::append_locked(
     }
     if self.file is Some(file) {
       let bytes = @utf8.encode(text)
-      file.write_at(bytes, position=self.file_bytes) catch {
+      file.at(self.file_bytes).write(bytes) catch {
         error => {
+          let error : Error = if error is TransportError(cause, ..) {
+            cause
+          } else {
+            error
+          }
           let message = "failed to write output log: \{error}"
           self.failure = Some(message)
           fail(message)
         }
       }
       self.file_bytes += bytes.length().to_int64()
+    }
+  }
+  // Observe only committed, retained text. A memory-only sink drops the
+  // suffix beyond its head; the display must not resurrect it.
+  if self.file is Some(_) {
+    for view in self.display_tails {
+      view.feed(text)
     }
   }
   // Head: keep the first inline_cap characters.
@@ -168,6 +183,11 @@ async fn ShellOutputSink::append_locked(
     }
     self.head.write_string(piece)
     self.head_chars += piece.char_length()
+    if self.file is None {
+      for view in self.display_tails {
+        view.feed(piece)
+      }
+    }
   }
   self.total_chars += text.char_length()
   self.seq += 1
@@ -190,7 +210,7 @@ async fn ShellOutputSink::open_spill(
     self.file_created = true
     errdefer file.close()
     let seed = @utf8.encode(self.head.to_string())
-    file.write_at(seed, position=0)
+    file.at(0).write(seed)
     self.file = Some(file)
     self.file_bytes = seed.length().to_int64()
   } catch {
@@ -245,6 +265,38 @@ async fn ShellOutputSink::discard(self : ShellOutputSink) -> Unit {
 /// Total full-output length in characters (≤ hard_cap).
 fn ShellOutputSink::size(self : ShellOutputSink) -> Int32 {
   self.total_chars
+}
+
+///|
+/// Foreground handoff can supply rules after output has already spilled.
+/// Replay the committed prefix once and subscribe under the append mutex so
+/// no chunk can be skipped or counted twice.
+async fn ShellOutputSink::track_display_tail(
+  self : ShellOutputSink,
+  rules : Array[(String, String)],
+  window : Int32,
+) -> DisplayTail {
+  let view = DisplayTail::new(rules, window.max(1))
+  self.lock.acquire()
+  defer self.lock.release()
+  if self.total_chars <= self.head_chars || self.spill_path() is None {
+    view.feed(self.head.to_string())
+  } else if self.spill_path() is Some(path) {
+    let file = @fs.open(path, mode=ReadOnly)
+    defer file.close()
+    let mut offset = 0L
+    let mut carry = b""
+    while offset < self.file_bytes {
+      let length = (self.file_bytes - offset).min(65536L).to_int()
+      let bytes = file.at(offset).read_exactly(length)
+      let (text, rest, _) = split_valid_utf8(carry + bytes)
+      view.feed(text)
+      carry = rest
+      offset += length.to_int64()
+    }
+  }
+  self.display_tails.push(view)
+  view
 }
 
 ///|
@@ -311,7 +363,7 @@ async fn ShellOutputSink::read_all(self : ShellOutputSink) -> String {
       // read this immutable prefix without backpressuring the pipe writer.
       let file = @fs.open(path, mode=ReadOnly)
       defer file.close()
-      @utf8.decode_lossy(file.read_exactly_at(committed.to_int(), position=0))
+      @utf8.decode_lossy(file.at(0).read_exactly(committed.to_int()))
     }
     None => head
   }
@@ -333,10 +385,7 @@ async fn ShellOutputSink::read_tail(
     defer file.close()
     let want = n.to_int64() * 4 + 4
     let start = (self.file_bytes - want).max(0)
-    let bytes = file.read_exactly_at(
-      (self.file_bytes - start).to_int(),
-      position=start,
-    )
+    let bytes = file.at(start).read_exactly((self.file_bytes - start).to_int())
     last_chars(@utf8.decode_lossy(bytes), n)
   } else {
     last_chars(self.head.to_string(), n)
@@ -459,7 +508,7 @@ async test "small output stays in memory, no file" {
 ///|
 async test "output over the inline cap spills; read_all returns everything, head previews" {
   let dir = @fs.tmpdir(prefix="openseek-sink-spill-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/spill.out"
   let sink = ShellOutputSink::ShellOutputSink(
     inline_cap=4,
@@ -479,7 +528,7 @@ async test "output over the inline cap spills; read_all returns everything, head
 ///|
 async test "the spill file is seeded with output buffered before the spill" {
   let dir = @fs.tmpdir(prefix="openseek-sink-seed-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/spill.out"
   let sink = ShellOutputSink::ShellOutputSink(
     inline_cap=4,
@@ -492,6 +541,37 @@ async test "the spill file is seeded with output buffered before the spill" {
   assert_eq(sink.read_all(), "abcdef") // seed + new chunk, in order
   assert_eq(sink.head(), "abcd")
   sink.close()
+}
+
+///|
+async test "spill write failures retain the underlying file error" {
+  let dir = @fs.tmpdir(prefix="openseek-sink-write-error-")
+  defer @fs.remove(dir, recursive=true)
+  let path = "\{dir}/spill.out"
+  let sink = ShellOutputSink::ShellOutputSink(inline_cap=1, spill_path=path)
+  defer sink.close()
+  sink.append_text("ab")
+  guard sink.file is Some(file) else { fail("expected an open spill file") }
+  file.close()
+  sink.file = Some(@fs.open(path, mode=ReadOnly))
+  let failure = try {
+    sink.append_text("c")
+    None
+  } catch {
+    Failure(message) => Some(message)
+    error => raise error
+  }
+  guard failure is Some(message) else { fail("expected a write failure") }
+  guard sink.failure is Some(recorded) else {
+    fail("expected the sink to retain the write failure")
+  }
+  assert_true(
+    recorded.has_prefix(
+      "failed to write output log: impl @io.BinaryWriter for @fs.FileView: ",
+    ),
+  )
+  assert_true(message.contains(recorded))
+  assert_eq(sink.size(), 2)
 }
 
 ///|

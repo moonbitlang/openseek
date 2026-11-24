@@ -202,24 +202,24 @@ priv enum FileSearchRequest {
     query~ : String,
     max_results~ : Int32,
     request_generation~ : Int32,
-    reply~ : @async.Queue[FileSearchResponse]
+    reply~ : @async.Queue[FileSearchResponse],
   )
   Cancel(
     cache_key~ : String,
     request_generation~ : Int32,
-    reply~ : @async.Queue[Unit]
+    reply~ : @async.Queue[Unit],
   )
   Clear(cache_key~ : String, reply~ : @async.Queue[Unit])
   ScanFinished(
     cache_key~ : String,
     generation~ : Int32,
-    outcome~ : FileScanOutcome
+    outcome~ : FileScanOutcome,
   )
   RankFinished(
     cache_key~ : String,
     scan_generation~ : Int32,
     generation~ : Int32,
-    outcome~ : FileRankOutcome
+    outcome~ : FileRankOutcome,
   )
 }
 
@@ -439,7 +439,7 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
           query~,
           max_results~,
           request_generation~,
-          reply~
+          reply~,
         ) => {
           if cache_key.is_empty() {
             reply.put(SearchFailed(EmptyCacheKey))
@@ -665,7 +665,7 @@ async test "native file scan uses the same ignore and DFS semantics" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="openseek-file-search-")
     group.add_defer(() => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     })
     @fs.mkdir("\{root}/a", recursive=true)
     @fs.mkdir("\{root}/.claude/session", recursive=true)

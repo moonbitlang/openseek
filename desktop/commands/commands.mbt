@@ -121,6 +121,12 @@ pub let session_share : Command[
 ] = Command("session.share")
 
 ///|
+pub let session_feedback : Command[
+  @protocol.SessionFeedbackPayload,
+  @protocol.SessionFeedbackReply,
+] = Command("session.feedback")
+
+///|
 pub let session_list_archived : Command[
   @protocol.EmptyPayload,
   @protocol.SessionsReply,
@@ -173,6 +179,13 @@ pub let settings_set : Command[
   @protocol.SettingsSetPayload,
   @protocol.SettingsStatusPayload,
 ] = Command("settings.set")
+
+///|
+/// Test the selected provider with a short streamed text request.
+pub let settings_test : Command[
+  @protocol.ApiConnectionProbePayload,
+  @protocol.ApiConnectionProbeReply,
+] = Command("settings.test")
 
 ///|
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply] = Command(
@@ -1054,3 +1067,33 @@ pub let fs_share_file : Command[
 pub let cloud_mcp : Command[@protocol.CloudMcpRequest, Json] = Command(
   "cloud.mcp",
 )
+
+///|
+pub let connectors_list : Command[
+  @protocol.EmptyPayload,
+  @protocol.ConnectorReply,
+] = Command("connectors.list")
+
+///|
+pub let connectors_connect : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.connect")
+
+///|
+pub let connectors_poll : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.poll")
+
+///|
+pub let connectors_cancel : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.cancel")
+
+///|
+pub let connectors_disconnect : Command[
+  @protocol.ConnectorRequest,
+  @protocol.ConnectorReply,
+] = Command("connectors.disconnect")

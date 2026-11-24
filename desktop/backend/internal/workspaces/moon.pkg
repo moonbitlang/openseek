@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/backend/internal/fsx",
+  "moonbitlang/openseek/atomic_file" @openseek/atomic_file,
   "openseek_desktop/backend/internal/gitx",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/pathx",

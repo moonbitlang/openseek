@@ -62,8 +62,9 @@ teardown cancels it) and starts a monitor task. The monitor's design point:
 **draining the pipe and awaiting the exit are decoupled.** Coupling them (read
 to EOF, then wait) hangs forever when the child exits but a descendant it
 spawned still holds the pipe open — so a concurrent reader drains bytes while
-`process.wait()` is the authoritative exit signal, followed by a short drain
-grace and a forced close.
+`process.wait()` observes the direct child's exit. After exit, an idle timeout
+bounds each pipe read. Spill-file writes complete outside that timeout. The
+monitor joins the reader before finalizing the output and publishing the result.
 
 Two output-limit watchdogs, two thresholds (plus a wall-clock lifetime kill:
 `kill_for_time_limit`, driven by the bgjobs reaper, records

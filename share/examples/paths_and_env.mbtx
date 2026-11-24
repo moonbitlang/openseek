@@ -1,6 +1,5 @@
 ---
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
@@ -8,7 +7,7 @@ import {
 ---
 
 ///|
-async fn main {
+fn main {
   // `@shell.glob` expands `*`, `?`, character sets, and `**` without shell
   // parsing; it is `async`, and its sorted matches are ordinary `Array[String]`
   // values. A pattern that matches nothing returns an empty array. Spread them

@@ -39,7 +39,7 @@ contract.
 Part 2 teaches the language:
 
 - `checked_errors.mbtx`: checked errors as an effect, `suberror`, translation
-  at a boundary, `fn main raise`.
+  at a boundary, and error inference in `fn main`.
 - `syntax_basics.mbtx`: bindings, negation, `Map([])`, match arms, lambdas.
 - `strings_and_views.mbtx`: interpolation, multi-line literals, code units,
   clamping views, shortlex ordering, in-place sort, map lookup, JSON

@@ -211,7 +211,7 @@ test "package graph process errors retain Moon's best diagnostic" {
 ///|
 async test "package graph cwd is the authorized moon.mod parent" {
   let root = @fs.tmpdir(prefix="openseek-package-graph-root-")
-  defer (@fs.rmdir(root, recursive=true) catch { _ => () })
+  defer (@fs.remove(root, recursive=true) catch { _ => () })
   defer @async.protect_from_cancel(() => {
     @work_dir.revoke_host_workspace("package-graph-test") catch {
       _ => ()

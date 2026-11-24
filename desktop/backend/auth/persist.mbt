@@ -96,7 +96,11 @@ async fn save_session_file(
   session : AuthSession,
 ) -> Unit {
   let text = session_to_json(session).stringify(indent=2)
-  @fsx.write_text_atomic(auth_file(runtime_dir), text, permission=0o600) catch {
+  @openseek/atomic_file.write_text_atomic(
+    auth_file(runtime_dir).to_string(),
+    text,
+    permission=0o600,
+  ) catch {
     error => raise AuthError("could not save the sign-in file: \{error}")
   }
 }

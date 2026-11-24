@@ -55,6 +55,7 @@ pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, a
 pub struct HostResources {
   moonbit : @moonbit.ToolchainSource
   viz : VizAssets?
+  skills : @pathx.Path?
 }
 pub fn HostResources::from_path() -> Self
 

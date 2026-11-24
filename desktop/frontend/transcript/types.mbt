@@ -30,7 +30,7 @@ pub(all) enum ItemKind {
     finished~ : Bool,
     // The confirming Terminal event; the Assistant keeps its own identity.
     // Codex and legacy rows have no OpenSeek terminal sequence.
-    end_sequence~ : Int32?
+    end_sequence~ : Int32?,
   )
   // A turn's final answer carried by a Finished terminal whose text is not
   // the preceding response's prose: a completion-tool answer, or the

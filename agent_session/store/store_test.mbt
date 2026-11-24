@@ -29,7 +29,7 @@ async fn append_raw(
 ///|
 async test "store creates and loads a session from one session file" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage(Content([Text("hello")]))))
     .append(Terminal(Finished("done")))
@@ -45,7 +45,7 @@ async test "store creates and loads a session from one session file" {
 ///|
 async test "store writes the header record on the first line" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("s1"), system_prompt="system"))
   let text = @fs.read_text(session_file(store, "s1"))
   assert_eq(
@@ -59,7 +59,7 @@ async test "store writes the header record on the first line" {
 ///|
 async test "store creates different sessions concurrently under one root" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   ignore(
     @async.all(
       [
@@ -76,7 +76,7 @@ async test "store creates different sessions concurrently under one root" {
 ///|
 async test "store creates different sessions concurrently under a missing root" {
   let parent = @fs.tmpdir(prefix="openseek-session-store-race-")
-  defer @fs.rmdir(parent, recursive=true)
+  defer @fs.remove(parent, recursive=true)
   let store : @store.SessionStore = SessionStore("\{parent}/missing-root")
   ignore(
     @async.all(
@@ -94,7 +94,7 @@ async test "store creates different sessions concurrently under a missing root" 
 ///|
 async test "store validates invalid ids before creating directories" {
   let parent = @fs.tmpdir(prefix="openseek-session-store-invalid-")
-  defer @fs.rmdir(parent, recursive=true)
+  defer @fs.remove(parent, recursive=true)
   let root = "\{parent}/missing-root"
   let store : @store.SessionStore = SessionStore(root)
   try store.create(Session(SessionId("../bad"), system_prompt="system")) catch {
@@ -110,7 +110,7 @@ async test "store validates invalid ids before creating directories" {
 ///|
 async test "store lists known sessions" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   assert_eq(store.list().length(), 0)
   store.create(Session(SessionId("b"), system_prompt="system"))
   store.create(Session(SessionId("a"), system_prompt="system"))
@@ -123,7 +123,7 @@ async test "store lists known sessions" {
 ///|
 async test "store picks the most recently active session as latest" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   assert_true(store.latest() is None)
   store.create(Session(SessionId("first"), system_prompt="system"))
   // Filesystem mtimes need a beat between writes to order reliably.
@@ -142,7 +142,7 @@ async test "store picks the most recently active session as latest" {
 ///|
 async test "listings order by recency and keep husk directories visible" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let older : @agent_session.Session = Session(
     SessionId("older"),
     system_prompt="system",
@@ -168,16 +168,16 @@ async test "listings order by recency and keep husk directories visible" {
 }
 
 ///|
-async test "an explicit session title overrides the first prompt without rewriting it" {
+async test "renaming an initialized session leaves the first prompt unchanged" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id = @agent_session.SessionId("named")
   store.create(
     @agent_session.Session(id, system_prompt="system").append(
       User(UserMessage(Content([Text("original first prompt")]))),
     ),
   )
-  assert_eq(store.title(id), None)
+  assert_eq(store.title(id), Some("original first prompt"))
   store.set_title(id, "  Renamed conversation  ")
   assert_eq(store.title(id), Some("Renamed conversation"))
   let listings = store.listings()
@@ -194,7 +194,7 @@ async test "an explicit session title overrides the first prompt without rewriti
 ///|
 async test "fork copies a session's finished turns and title into a new session" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let origin = @agent_session.Session(
       SessionId("origin"),
       system_prompt="system",
@@ -272,7 +272,7 @@ async fn fork_refused(
 ///|
 async test "fork never replaces a session that already exists" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let origin = @agent_session.Session(
       SessionId("origin"),
       system_prompt="system",
@@ -306,7 +306,7 @@ async test "fork never replaces a session that already exists" {
 ///|
 async test "session titles reject blank text and missing records" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id : @agent_session.SessionId = SessionId("named")
   store.create(Session(id, system_prompt="system"))
   for title in ["", "   ", "\n\t"] {
@@ -327,7 +327,7 @@ async test "session titles reject blank text and missing records" {
 ///|
 async test "latest skips a corrupt newest session in favor of a loadable one" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("valid"), system_prompt="system"))
   @async.sleep(50)
   store.create(Session(SessionId("corrupt"), system_prompt="system"))
@@ -344,7 +344,7 @@ async test "latest skips a corrupt newest session in favor of a loadable one" {
 ///|
 async test "store propagates non-missing list errors" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   @fs.write_text(
     "\{store.root()}/sessions",
     "not a directory",
@@ -360,7 +360,7 @@ async test "store propagates non-missing list errors" {
 ///|
 async test "store appends one event without rewriting the in-memory caller value" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store.create(session)
   let next = store.append(session, User(UserMessage(Content([Text("first")]))))
@@ -382,7 +382,7 @@ async test "store appends one event without rewriting the in-memory caller value
 ///|
 async test "generic append persists summary events the projection honors" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage(Content([Text("first task")]))))
     .append(Terminal(Finished("first answer")))
@@ -414,7 +414,7 @@ async test "generic append persists summary events the projection honors" {
 ///|
 async test "first append creates the session file with its header" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   // No create(): the CLI resumes-or-starts sessions whose first durable write
   // is an append. The header line and the first event must land together.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
@@ -465,7 +465,7 @@ async fn race_two_appends(
 ///|
 async test "store serializes concurrent first appends from empty snapshots" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   // Two writers race to be the first durable write for the same id. The loser
   // sees the winner's file and must not clobber the first event.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
@@ -480,7 +480,7 @@ async test "chained appends on returned values persist every event" {
   // The common agent loop: each append's return value feeds the next call,
   // which is exactly the shape the fingerprint fast path accelerates.
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let mut session = @agent_session.Session(
     SessionId("s1"),
     system_prompt="system",
@@ -506,7 +506,7 @@ async test "another store instance's write defeats the fingerprint fast path" {
   // appends. store_a's snapshot is physically the value it last synced, so
   // only the on-disk fingerprint reveals the divergence.
   let store_a = new_store()
-  defer @fs.rmdir(store_a.root(), recursive=true)
+  defer @fs.remove(store_a.root(), recursive=true)
   let store_b : @store.SessionStore = SessionStore(store_a.root())
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store_a.create(session)
@@ -530,7 +530,7 @@ async test "another store instance's write defeats the fingerprint fast path" {
 ///|
 async test "a same-size rewrite by another store is still detected" {
   let store_a = new_store()
-  defer @fs.rmdir(store_a.root(), recursive=true)
+  defer @fs.remove(store_a.root(), recursive=true)
   let store_b : @store.SessionStore = SessionStore(store_a.root())
   let session = @agent_session.Session(
     SessionId("s1"),
@@ -558,7 +558,7 @@ async test "a same-size rewrite by another store is still detected" {
 ///|
 async test "store rejects stale snapshots before appending" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store.create(session)
   ignore(store.append(session, User(UserMessage(Content([Text("first")])))))
@@ -576,7 +576,7 @@ async test "store rejects stale snapshots before appending" {
 ///|
 async test "store rejects divergent snapshots with the same sequence" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
     User(UserMessage(Content([Text("first")]))),
   )
@@ -601,7 +601,7 @@ async test "store rejects divergent snapshots with the same sequence" {
 ///|
 async test "store rejects non-empty snapshots when the session file is missing" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
     User(UserMessage(Content([Text("hello")]))),
   )
@@ -617,7 +617,7 @@ async test "store rejects non-empty snapshots when the session file is missing" 
 ///|
 async test "store serializes concurrent appends from the same snapshot" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store.create(session)
   race_two_appends(store, session)
@@ -629,7 +629,7 @@ async test "store serializes concurrent appends from the same snapshot" {
 ///|
 async test "store rejects stale snapshots before compacting" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
@@ -656,7 +656,7 @@ async test "store rejects stale snapshots before compacting" {
 ///|
 async test "store fails load when the session file is missing" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("s1"), system_prompt="system"))
   @fs.remove(session_file(store, "s1"))
   try store.load(SessionId("s1")) catch {
@@ -669,7 +669,7 @@ async test "store fails load when the session file is missing" {
 ///|
 async test "store rejects a session file without a header record" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let (_, event) = session.append_event(
     User(UserMessage(Content([Text("first")]))),
@@ -693,7 +693,7 @@ async test "store rejects a session file without a header record" {
 ///|
 async test "store rejects a malformed header line" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_text(
     session_file(store, "s1"),
@@ -711,7 +711,7 @@ async test "store rejects a malformed header line" {
 ///|
 async test "store rejects a header whose id does not match the directory" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("other"), system_prompt="system"))
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_text(
@@ -729,7 +729,7 @@ async test "store rejects a header whose id does not match the directory" {
 ///|
 async test "load drops a torn trailing record without mutating the file" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
     User(UserMessage(Content([Text("first")]))),
   )
@@ -747,7 +747,7 @@ async test "load drops a torn trailing record without mutating the file" {
 ///|
 async test "load keeps a complete final record that lost only its newline" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let (_, event) = session.append_event(
     User(UserMessage(Content([Text("first")]))),
@@ -766,7 +766,7 @@ async test "load keeps a complete final record that lost only its newline" {
 ///|
 async test "append repairs a torn tail before persisting the next event" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
     User(UserMessage(Content([Text("first")]))),
   )
@@ -788,7 +788,7 @@ async test "append repairs a torn tail before persisting the next event" {
 ///|
 async test "append repairs and keeps a complete unterminated final event" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let (_, event) = session.append_event(
     User(UserMessage(Content([Text("first")]))),
@@ -812,7 +812,7 @@ async test "append repairs and keeps a complete unterminated final event" {
 ///|
 async test "append rejects a stale snapshot against an unterminated durable event" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let (_, event) = session.append_event(
     User(UserMessage(Content([Text("first")]))),
@@ -840,7 +840,7 @@ async test "append rejects a stale snapshot against an unterminated durable even
 ///|
 async test "load tolerates unterminated tails in every torn shape" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   // Valid JSON that is not a valid event: torn exactly inside the payload in
   // a way that still balances braces.
   store.create(Session(SessionId("json"), system_prompt="system"))
@@ -863,7 +863,7 @@ async test "load tolerates unterminated tails in every torn shape" {
 ///|
 async test "load keeps a header-only file that lost its newline" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   // `create` can never produce this (tmp+rename is atomic), but the tolerance
   // rule is uniform: in a zero-event file the header is the final record.
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
@@ -885,7 +885,7 @@ async test "load keeps a header-only file that lost its newline" {
 ///|
 async test "compact repairs a torn tail before persisting the summary" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
@@ -908,7 +908,7 @@ async test "compact repairs a torn tail before persisting the summary" {
 ///|
 async test "latest can resume a session whose newest write was torn" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("older"), system_prompt="system"))
   @async.sleep(50)
   let newest = @agent_session.Session(
@@ -926,7 +926,7 @@ async test "latest can resume a session whose newest write was torn" {
 ///|
 async test "load still fails on corruption that is not a torn tail" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
     User(UserMessage(Content([Text("first")]))),
   )
@@ -954,7 +954,7 @@ async test "load still fails on corruption that is not a torn tail" {
 ///|
 async test "store propagates unreadable session files instead of dropping history" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
     User(UserMessage(Content([Text("hello")]))),
   )
@@ -972,7 +972,7 @@ async test "store propagates unreadable session files instead of dropping histor
 ///|
 async test "store names an unsupported session file version on load" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_text(
     session_file(store, "s1"),
@@ -990,7 +990,7 @@ async test "store names an unsupported session file version on load" {
 ///|
 async test "store rejects session ids containing NUL" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   try store.exists(SessionId("bad\u{0}id")) catch {
     error => assert_true("\{error}".contains("NUL"))
   } noraise {
@@ -1001,7 +1001,7 @@ async test "store rejects session ids containing NUL" {
 ///|
 async test "store rejects path-like session ids" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   try store.exists(SessionId("../bad")) catch {
     error => assert_true("\{error}".contains("path separators"))
   } noraise {
@@ -1012,7 +1012,7 @@ async test "store rejects path-like session ids" {
 ///|
 async test "store compacts by appending a durable summary" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
@@ -1036,7 +1036,7 @@ async test "store compacts by appending a durable summary" {
 ///|
 async test "job directory lookup does not create a new session" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let id : @agent_session.SessionId = SessionId("not-started")
   assert_eq(store.job_logs_dir(id), "\{store.root()}/sessions/not-started/jobs")
   assert_false(store.exists(id))
@@ -1046,7 +1046,7 @@ async test "job directory lookup does not create a new session" {
 ///|
 async test "single-text records keep the string content understood by old clients" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(
       SessionId("plain"),
       system_prompt="system",
@@ -1088,7 +1088,7 @@ async test "single-text records keep the string content understood by old client
 ///|
 async test "legacy JSONL can append and replay embedded images and text" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("mixed"), system_prompt="system"))
   let legacy = (
       #|{"version":1,"id":"mixed","system_prompt":"system"}
@@ -1167,7 +1167,7 @@ async test "legacy JSONL can append and replay embedded images and text" {
 ///|
 async test "store refuses malformed content parts instead of silently dropping images" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   store.create(Session(SessionId("invalid-content"), system_prompt="system"))
   append_raw(
     store,
@@ -1187,7 +1187,7 @@ async test "store refuses malformed content parts instead of silently dropping i
 ///|
 async test "image-only conversations have a nonempty listing preview" {
   let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let image = @agent_session.Image::from_bytes(
     @fs.read_binary("deepseek/client/testdata/two-colors.png"),
   )

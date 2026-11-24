@@ -69,3 +69,75 @@ References: [versioning](https://modelcontextprotocol.io/specification/2026-07-2
 [stdio](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio),
 [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
 [MRTR](https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr).
+
+## OAuth for HTTP servers
+
+A skill's `mcp.json` can declare a public OAuth client instead of a static
+Authorization header or `headersHelper`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "oauth": {
+        "grantType": "device_code",
+        "clientId": "Ov23liDY0j2riv3dZtVY",
+        "deviceAuthorizationEndpoint": "https://github.com/login/device/code",
+        "tokenEndpoint": "https://github.com/login/oauth/access_token",
+        "scopes": "repo read:org"
+      }
+    }
+  }
+}
+```
+
+This is the Device Authorization Grant. The bundled GitHub skill uses the
+OpenSeek OAuth App. Desktop displays the provider's URL and user code, and the
+host polls at the provider's interval.
+
+For a server that supports public client registration and S256 PKCE, use the
+Authorization Code Grant in the skill's `mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "example": {
+      "url": "https://mcp.example.com/mcp",
+      "oauth": {
+        "grantType": "authorization_code",
+        "issuer": "https://mcp.example.com"
+      }
+    }
+  }
+}
+```
+
+Copy the skill directory into `~/.openseek/skills/` (or the library set by
+`OPENSEEK_GLOBAL_SKILLS_DIR`), then connect the server in Desktop Settings → MCP.
+
+For `authorization_code`, the MCP URL and discovered OAuth endpoints must
+belong to the configured HTTPS issuer. OpenSeek reads protected resource and
+issuer metadata, registers and reuses a public client, and verifies the
+provider's redirect on a loopback listener with a temporary port. The browser
+must run on the same computer as the host. The host exchanges the code
+directly with the provider.
+
+Desktop Settings → MCP lists MCP configurations in bundled and globally
+installed skills. Globally installed skills override bundled skills of the
+same name. Connect opens the provider's page. Workspace-only skills and
+standalone MCP configurations are outside this settings list. An explicit MCP
+config overrides a same-named skill server.
+
+Credentials and public client registrations are stored under
+`~/.openseek/oauth` (`OPENSEEK_OAUTH_DIR` overrides this). Files are atomically
+replaced with mode 0600 on POSIX and the directory is created with mode 0700.
+The settings UI receives status only. The engine refreshes browser grants
+before expiry and serializes refreshes across processes so each rotated token
+is saved before the next refresh. Device grants require reconnect after expiry.
+The next tool search or call reloads changed credentials and resets the
+connection. Disconnect deletes the local credential. Provider-side revocation
+is separate.
+
+OAuth configuration cannot be combined with an Authorization header or
+`headersHelper`. Environment placeholders expand as in other MCP fields.

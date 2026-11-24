@@ -8,7 +8,7 @@ let legacy_v1_fixture = "agent_session/store/testdata/session-v1.jsonl"
 ///|
 async test "a frozen version-1 session file still loads" {
   let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-legacy-v1-"))
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   @fs.mkdir("\{store.root()}/sessions/legacy", recursive=true)
   @fs.write_text(
     session_file(store, "legacy"),
@@ -102,7 +102,7 @@ async test "a current terminal whose text matches an older encoding round-trips"
   // dedicated variants, or the store's stale-snapshot check rejects the
   // next append of the unchanged session.
   let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-verbatim-"))
-  defer @fs.rmdir(store.root(), recursive=true)
+  defer @fs.remove(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage(Content([Text("echo the marker")]))))
     .append(Terminal(Finished("[context ceiling] echoed on request")))

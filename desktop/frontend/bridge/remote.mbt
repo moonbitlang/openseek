@@ -68,7 +68,7 @@ fn RemoteBridgeSub::install(
           return
         }
         guard response.code == 200 &&
-          @json.parse(body)
+          body.json()
           is { "ticket": String(ticket), "expires_in": Number(expires, ..), .. } &&
           ticket.has_prefix("wst_") &&
           expires > 0 else {

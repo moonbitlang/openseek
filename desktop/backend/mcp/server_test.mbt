@@ -120,7 +120,14 @@ async fn post(
     headers~,
   )
   let text = body
-  (response.code, if text.is_empty() { None } else { Some(@json.parse(text)) })
+  (
+    response.code,
+    if text.binary().is_empty() {
+      None
+    } else {
+      Some(text.json())
+    },
+  )
 }
 
 ///|
@@ -213,7 +220,7 @@ async test "HTTP clients select tool groups for discovery and calls" {
       )
       assert_eq(response.code, 200)
       assert_true(
-        @json.parse(body) is { "error": { "code": Number(-32602, ..), .. }, .. },
+        body.json() is { "error": { "code": Number(-32602, ..), .. }, .. },
       )
     })
   })
@@ -327,7 +334,7 @@ async test "requests without a granted token, or from a web origin, are refused"
     // enough for it.
     assert_true(post(grant, ping, origin="https://example.com") is (403, None))
     assert_true(post({ ..grant, url: grant.url + "x", }, ping) is (404, None))
-    let (response, _) = @http.get_text(grant.url, headers={
+    let (response, _) = @http.get(grant.url, headers={
       "Authorization": grant.authorization,
     })
     assert_eq(response.code, 405)
@@ -343,7 +350,7 @@ async test "a body that is not JSON is a parse error" {
     })
     assert_eq(response.code, 400)
     assert_true(
-      @json.parse(body) is { "error": { "code": Number(-32700, ..), .. }, .. },
+      body.json() is { "error": { "code": Number(-32700, ..), .. }, .. },
     )
   })
 }

@@ -1,7 +1,7 @@
 ///|
 async test "share progress is scoped to the requesting endpoint catalog" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-progress-"))
-  defer @fs.rmdir(dir.to_string(), recursive=true)
+  defer @fs.remove(dir.to_string(), recursive=true)
   @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=dir)
   let state = ApiState(engine="unused-test-engine", auth=store)
@@ -73,9 +73,9 @@ async test "share refusal retires the captured login and preserves a newer one" 
   for login in [Current, Stale, Retired] {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let origin = "http://127.0.0.1:\{server.addr.port()}"
+    let origin = "http://127.0.0.1:\{server.addr.port}"
     let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-auth-"))
-    defer @fs.rmdir(dir.to_string(), recursive=true)
+    defer @fs.remove(dir.to_string(), recursive=true)
     @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
     let store = @auth.AuthStore::load(runtime_dir=dir)
     assert_true(store.signed_in())
@@ -98,7 +98,6 @@ async test "share refusal retires the captured login and preserves a newer one" 
     defer subscription.close()
     let share = SessionShare::{
       state,
-      local_account: true,
       payload: {
         generation: 1,
         idempotency_key: "a".repeat(64),
@@ -179,13 +178,12 @@ async test "remote grants never retire the host account even when the upload is 
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
     let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-grant-"))
-    defer @fs.rmdir(dir.to_string(), recursive=true)
+    defer @fs.remove(dir.to_string(), recursive=true)
     @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
     let store = @auth.AuthStore::load(runtime_dir=dir)
     let original = store.account()
     let share = SessionShare::{
       state: ApiState(engine="unused-test-engine", auth=store),
-      local_account: false,
       payload: {
         generation: 1,
         idempotency_key: "b".repeat(64),
@@ -219,7 +217,7 @@ async test "remote grants never retire the host account even when the upload is 
           [],
         ),
         Grant("sug_fixture"),
-        server_url="http://127.0.0.1:\{server.addr.port()}",
+        server_url="http://127.0.0.1:\{server.addr.port}",
       )
       receiver.wait()
       assert_true(reply is Failed(_))
@@ -232,7 +230,7 @@ async test "remote grants never retire the host account even when the upload is 
 ///|
 async test "remote share calls cannot select the host account" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-authority-"))
-  defer @fs.rmdir(dir.to_string(), recursive=true)
+  defer @fs.remove(dir.to_string(), recursive=true)
   @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=dir)
   let state = ApiState(engine="unused-test-engine", auth=store)

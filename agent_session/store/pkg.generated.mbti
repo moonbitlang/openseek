@@ -12,6 +12,9 @@ import {
 // Values
 
 // Errors
+pub suberror TitleBackfillError {
+  TitleBackfillError(title~ : String, cause~ : Error)
+}
 
 // Types and methods
 pub(all) enum SessionClaim {
@@ -39,11 +42,13 @@ pub fn SessionStore::SessionStore(String) -> Self
 pub async fn SessionStore::accept_claim(Self, @agent_session.SessionId, String) -> Unit
 pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 pub async fn SessionStore::artifact_dir(Self, @agent_session.SessionId) -> String
+pub async fn SessionStore::backfill_title(Self, @agent_session.SessionId) -> String?
+pub fn SessionStore::base_prompt_file(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::claim(Self, @agent_session.SessionId) -> SessionClaim
 pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> @agent_session.Session
 pub async fn SessionStore::create(Self, @agent_session.Session) -> Unit
 pub async fn SessionStore::exists(Self, @agent_session.SessionId) -> Bool
-pub async fn SessionStore::fork(Self, @agent_session.SessionId, @agent_session.SessionId, through? : Int32, system_prompt~ : String, notice? : String) -> @agent_session.Session
+pub async fn SessionStore::fork(Self, @agent_session.SessionId, @agent_session.SessionId, through? : Int32, system_prompt~ : String, base_prompt? : String, notice? : String) -> @agent_session.Session
 pub fn SessionStore::inbox_path(Self, @agent_session.SessionId) -> String raise
 pub fn SessionStore::job_logs_dir(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::latest(Self) -> @agent_session.SessionId?
@@ -52,6 +57,7 @@ pub async fn SessionStore::listings(Self) -> Array[SessionListing]
 pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_session.Session
 pub async fn SessionStore::model(Self, @agent_session.SessionId) -> SessionModel?
 pub async fn SessionStore::prediction(Self, @agent_session.SessionId) -> @openseek_protocol.PredictionRecord?
+pub async fn SessionStore::read_base_prompt(Self, @agent_session.SessionId) -> String?
 pub fn SessionStore::report_file(Self, @agent_session.SessionId) -> String raise
 pub fn SessionStore::root(Self) -> String
 pub async fn SessionStore::save_model(Self, @agent_session.SessionId, SessionModel) -> Unit

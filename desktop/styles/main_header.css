@@ -1,6 +1,9 @@
 
 
 main {
+  /* Capture the shell edge before the transcript resets shell animation tokens. */
+  --conversation-left: var(--sidebar-column-width);
+  --conversation-padding-inline: var(--space-7);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   /* Allow wide transcript content to scroll instead of widening the main track. */
@@ -13,6 +16,40 @@ main {
   min-height: 0;
   overflow: hidden;
   background: var(--color-bg-canvas);
+}
+
+/* Prefer the window center; clamp to the column's available space so neither
+   the sidebar nor the editor/overview can cover it. Percentages resolve against
+   each parent's content box, including its live right-panel reservation. */
+@media (min-width: 761px) {
+  /* Match the transcript's reserved scrollbar gutters even when the column
+     reaches a panel edge and can no longer sit on the window center. */
+  main > .composer {
+    --composer-padding-inline: calc(
+      var(--conversation-padding-inline) + var(--scrollbar-lane)
+    );
+  }
+
+  main > .user-question-region {
+    --conversation-inline-inset: calc(
+      var(--conversation-padding-inline) + var(--scrollbar-lane)
+    );
+  }
+
+  .transcript > :is(.stream, .transcript-loading-older, .jump-latest-wrap),
+  .composer > :is(
+    .composer-context, .composer-inner, .composer-toolbar, .archived-read-only-bar
+  ),
+  .user-question-region > .user-question-card {
+    margin-inline-start: clamp(
+      0px,
+      calc(
+        50vw - var(--conversation-left) - var(--conversation-inline-inset) -
+          var(--conversation-width) / 2
+      ),
+      max(0px, calc(100% - var(--conversation-width)))
+    );
+  }
 }
 
 .topbar {
@@ -47,7 +84,7 @@ main {
   block-size: var(--titlebar-control-size) !important;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   line-height: var(--line-height-tight);
 }
 

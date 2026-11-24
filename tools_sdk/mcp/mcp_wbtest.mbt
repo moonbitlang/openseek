@@ -51,7 +51,7 @@ async fn with_host(
         (
           {
             "version": 1,
-            "url": "http://127.0.0.1:\{server.addr.port()}/call",
+            "url": "http://127.0.0.1:\{server.addr.port}/call",
             "token": token,
           } : Json).stringify(),
       )

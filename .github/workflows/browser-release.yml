@@ -83,6 +83,8 @@ jobs:
       # touches the window host, so call the build program directly, as
       # desktop CI does.
       - name: Build browser release artifact
+        env:
+          SEEKMOON_BROWSER_RELEASE: ${{ steps.resolve.outputs.release }}
         shell: bash
         run: |
           set -euo pipefail

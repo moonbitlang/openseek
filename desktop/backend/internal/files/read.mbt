@@ -103,7 +103,7 @@ pub async fn materialize_semantic_selection(
 ///|
 async test "semantic selections materialize as bounded JSONL below the checkout" {
   let dir = @fs.tmpdir(prefix="openseek-semantic-selection-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
@@ -142,7 +142,7 @@ async test "semantic selections materialize as bounded JSONL below the checkout"
 ///|
 async test "semantic selection accepts an existing artifact directory" {
   let dir = @fs.tmpdir(prefix="openseek-semantic-selection-existing-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
@@ -176,7 +176,7 @@ async test "semantic selection accepts an existing artifact directory" {
 ///|
 async test "semantic selection materialization rejects path-shaped ids" {
   let dir = @fs.tmpdir(prefix="openseek-semantic-selection-invalid-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
@@ -202,7 +202,7 @@ async test "semantic selection materialization rejects path-shaped ids" {
 ///|
 async test "semantic selection materialization never replaces an old snapshot" {
   let dir = @fs.tmpdir(prefix="openseek-semantic-selection-retry-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
@@ -291,14 +291,9 @@ pub async fn read_file(
       // Retain signature-based PDF routing even for a file with no .pdf
       // suffix. Only the small header is read before the allocation limit.
       let size = source.size()
-      let header = source.read_exactly_at(
-        if size < 12 {
-          size.to_int()
-        } else {
-          12
-        },
-        position=0,
-      )
+      let header = source
+        .at(0)
+        .read_exactly(if size < 12 { size.to_int() } else { 12 })
       if @filekind.classify(header) is Pdf {
         Some("application/pdf")
       } else {
@@ -369,7 +364,7 @@ fn office_media_type(path : String) -> String? {
 ///|
 async test "PDF reads preserve bytes and use the document limit with or without an extension" {
   let dir = @fs.tmpdir(prefix="openseek-read-pdf-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let bytes = @utf8.encode("%PDF-1.7\n" + "x".repeat(MaxEditorFileBytes + 1))
   for name in ["report.PDF", "report-without-extension"] {
     let file = "\{dir}/\{name}"
@@ -403,7 +398,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
 async test "binary file reads expose only recognized raster signatures" {
   let dir = "_build/host-read-file-image-test"
   if @fs.exists(dir) {
-    @fs.rmdir(dir, recursive=true)
+    @fs.remove(dir, recursive=true)
   }
   @fs.mkdir(dir, recursive=true)
   let image = "\{dir}/image.png"
@@ -422,7 +417,7 @@ async test "binary file reads expose only recognized raster signatures" {
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
-      sig=_
+      sig=_,
     ),
   )
   let root = @pathx.Path(@fs.realpath(dir))
@@ -435,7 +430,7 @@ async test "binary file reads expose only recognized raster signatures" {
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
-      sig=_
+      sig=_,
     ),
   )
   let disguised = "\{dir}/not-an-image.png"
@@ -449,14 +444,14 @@ async test "binary file reads expose only recognized raster signatures" {
     read_file({ max_bytes: None, path: disguised_absolute, root: None, }),
     Binary,
   )
-  @fs.rmdir(dir, recursive=true)
+  @fs.remove(dir, recursive=true)
 }
 
 ///|
 async test "Office file reads return original package bytes and media type" {
   let dir = "_build/host-read-file-office-test"
   if @fs.exists(dir) {
-    @fs.rmdir(dir, recursive=true)
+    @fs.remove(dir, recursive=true)
   }
   @fs.mkdir(dir, recursive=true)
   let xlsx = "\{dir}/example.xlsx"
@@ -477,7 +472,7 @@ async test "Office file reads return original package bytes and media type" {
     }
     _ => fail("an .xlsx read must preserve its original package bytes")
   }
-  @fs.rmdir(dir, recursive=true)
+  @fs.remove(dir, recursive=true)
 }
 
 ///|

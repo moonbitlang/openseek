@@ -52,7 +52,7 @@ pub fn share_json_url(input : String) -> String raise {
 async fn download(input : String) -> String {
   let url = share_json_url(input)
   @async.with_timeout(60_000, () => {
-    let (response, client) = @http.get(url)
+    let (response, client) = @http.get_stream(url)
     defer client.close()
     match response.code {
       200 => ()

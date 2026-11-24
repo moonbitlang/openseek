@@ -20,7 +20,7 @@ async test "unconnected requests are unsent regardless of supplied epoch" {
 ///|
 async test "saved SSH profiles survive an existing directory and subsequent additions" {
   let directory = @fs.tmpdir(prefix="ssh-profiles-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   let previous = @env.get_env_var("SEEKMOON_SSH_PROFILES")
   defer (match previous {
     Some(value) => @env.set_env_var("SEEKMOON_SSH_PROFILES", value)

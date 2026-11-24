@@ -2,7 +2,7 @@
 #cfg(not(platform="windows"))
 async test "job files survive scope cleanup and a new runtime cannot overwrite them" {
   let root = @fs.tmpdir(prefix="openseek-retained-jobs-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let run : async () -> String = () => {
     let mut path = ""
     @async.with_timeout(5000, () => {
@@ -46,7 +46,7 @@ async test "job files survive scope cleanup and a new runtime cannot overwrite t
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "small foreground execution materializes all prior output at adoption" {
   let root = @fs.tmpdir(prefix="openseek-adopt-jobs-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let jobs = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir=root)
@@ -76,7 +76,7 @@ async test "small foreground execution materializes all prior output at adoption
 #cfg(not(platform="windows"))
 async test "failed background adoption stops the execution and publishes no phantom job" {
   let root = @fs.tmpdir(prefix="openseek-adopt-failure-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let jobs = @bgjobs.BgJobRuntime(
@@ -99,7 +99,7 @@ async test "failed background adoption stops the execution and publishes no phan
 ///|
 async test "constructing session tools does not create a phantom durable session" {
   let root = @fs.tmpdir(prefix="openseek-lazy-jobs-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let session_dir = "\{root}/sessions/new-session"
   @async.with_task_group(group => {
     ignore(
@@ -118,7 +118,7 @@ async test "constructing session tools does not create a phantom durable session
 #cfg(not(platform="windows"))
 async test "concurrent first jobs prepare one canonical runtime directory" {
   let root = @fs.tmpdir(prefix="openseek-lazy-race-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let tools = @agent.build_tools(
@@ -152,7 +152,7 @@ async test "concurrent first jobs prepare one canonical runtime directory" {
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "tiny foreground burst leaves no log files and concurrent noisy jobs retain every byte" {
   let root = @fs.tmpdir(prefix="openseek-job-load-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   @async.with_timeout(15000, () => {
     @async.with_task_group(group => {
       let tools = @agent.build_tools(
@@ -206,7 +206,7 @@ async test "tiny foreground burst leaves no log files and concurrent noisy jobs 
 #cfg(not(platform="windows"))
 async test "foreground-only runtime generations are removed after shutdown" {
   let root = @fs.tmpdir(prefix="openseek-empty-generations-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   for _ in 0..<3 {
     @async.with_task_group(group => {
       let tools = @agent.build_tools(
@@ -234,7 +234,7 @@ async test "foreground-only runtime generations are removed after shutdown" {
 #cfg(not(platform="windows"))
 async test "failed metadata persistence never prunes an adopted job log" {
   let root = @fs.tmpdir(prefix="openseek-keep-failed-metadata-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let mut retained = ""
   @async.with_task_group(group => {
     let tools = @agent.build_tools(

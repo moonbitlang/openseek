@@ -125,7 +125,7 @@ async fn fetch_archive(
 ) -> (@zip.Archive, String) {
   try {
     let temporary = @fs.tmpdir(prefix="openseek-skill-download-")
-    defer @fs.rmdir(temporary, recursive=true)
+    defer @fs.remove(temporary, recursive=true)
     let download = @registry.Client(registry~).download(
       entry,
       output="\{temporary}/skill.zip",
@@ -136,7 +136,7 @@ async fn fetch_archive(
       limits=archive_limits(bytes.length()),
       cancelled=@async.is_being_cancelled,
     )
-    (archive, "sha256:\{download.skill.archive_sha256}")
+    (archive, "sha256:\{download.skill.archive_digest}")
   } catch {
     error => raise SkillsError("skill download for \{entry}: \{error}")
   }

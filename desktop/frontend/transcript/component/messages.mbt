@@ -69,9 +69,6 @@ priv enum UiMessage {
   AssistantLabel
   ContextSummary
   ViewActivity
-  RequestedChanges
-  CopyDiff
-  OpenDiffFile
   ShellFailed
   ShellStopped
   ShellTruncated
@@ -92,16 +89,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "正在載入較早的訊息…"
     (Japanese, LoadingOlderHistory) =>
       "以前のメッセージを読み込み中…"
-    (English, CopyDiff) => "Copy diff"
-    (Spanish, CopyDiff) => "Copiar diferencias"
-    (SimplifiedChinese, CopyDiff) => "复制差异"
-    (TraditionalChinese, CopyDiff) => "複製差異"
-    (Japanese, CopyDiff) => "差分をコピー"
-    (English, OpenDiffFile) => "Open file"
-    (Spanish, OpenDiffFile) => "Abrir archivo"
-    (SimplifiedChinese, OpenDiffFile) => "打开文件"
-    (TraditionalChinese, OpenDiffFile) => "開啟檔案"
-    (Japanese, OpenDiffFile) => "ファイルを開く"
     (English, WhatBuild) => "What should we build?"
     (Spanish, WhatBuild) => "¿Qué quieres crear?"
     (SimplifiedChinese, WhatBuild) => "我们来构建什么？"
@@ -433,11 +420,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ViewActivity) => "查看活动"
     (TraditionalChinese, ViewActivity) => "檢視活動"
     (Japanese, ViewActivity) => "アクティビティを表示"
-    (English, RequestedChanges) => "Requested changes"
-    (Spanish, RequestedChanges) => "Cambios solicitados"
-    (SimplifiedChinese, RequestedChanges) => "请求的更改"
-    (TraditionalChinese, RequestedChanges) => "請求的更改"
-    (Japanese, RequestedChanges) => "要求された変更"
     (English, ShellFailed) => "could not run"
     (Spanish, ShellFailed) => "no se pudo ejecutar"
     (SimplifiedChinese, ShellFailed) => "无法运行"

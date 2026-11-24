@@ -96,7 +96,7 @@ async test "compiler capture preserves literal arguments and the working directo
     cwd=dir,
     max_output_chars=100,
   )
-  @fs.rmdir(dir, recursive=true)
+  @fs.remove(dir, recursive=true)
   assert_eq(output.exit_code, Some(0))
   assert_eq(output.text, literal + "cwd-ok")
   assert_false(output.output_limit_reached)

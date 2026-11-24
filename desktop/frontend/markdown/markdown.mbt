@@ -1,9 +1,3 @@
-// Markdown rendering for transcript content. The engine's assistant text is
-// CommonMark (with the GFM-ish cmark extensions: tables, strikethrough, task
-// lists); this module parses it with moonbit-community/cmark and maps the
-// document tree directly onto Rabbita nodes. Raw HTML stays visible as text;
-// no input HTML is inserted into the live document.
-
 ///|
 /// Render a markdown string to a list of block-level Rabbita nodes.
 ///
@@ -26,6 +20,37 @@ pub fn markdown_nodes(
   open_file? : (String) -> @cmd.Cmd,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
+  render_math~ : (String, Bool) -> @html.Html = math_node,
+) -> Array[@html.Html] {
+  render_markdown(
+    locale,
+    source,
+    open_file?,
+    artifact_view?,
+    defer_artifacts~,
+    render_math~,
+  )
+}
+
+///|
+/// Preview a user message without requesting images or interpreting code
+/// fences as diagrams or workspace references. Only web and mail links open.
+pub fn user_markdown_nodes(
+  locale~ : @i18n.Locale = English,
+  source : String,
+) -> Array[@html.Html] {
+  render_markdown(locale, source, user_preview=true)
+}
+
+///|
+fn render_markdown(
+  locale : @i18n.Locale,
+  source : String,
+  open_file? : (String) -> @cmd.Cmd,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  defer_artifacts~ : Bool = false,
+  render_math~ : (String, Bool) -> @html.Html = math_node,
+  user_preview~ : Bool = false,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
@@ -35,9 +60,11 @@ pub fn markdown_nodes(
       open_file,
       artifact_view,
       defer_artifacts,
+      render_math,
       citations: [],
       footnotes: Footnotes::new(),
       in_sources: false,
+      user_preview,
     }
     let nodes = render.block_nodes(doc.block)
     if !render.citations.is_empty() {
@@ -62,11 +89,13 @@ priv struct MarkdownRender {
   open_file : ((String) -> @cmd.Cmd)?
   artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
   defer_artifacts : Bool
+  render_math : (String, Bool) -> @html.Html
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
   footnotes : Footnotes
   in_sources : Bool
+  user_preview : Bool
 }
 
 ///|
@@ -96,13 +125,7 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     ExtMathBlock(node) =>
-      out.push(
-        @html.div(
-          class="math math-display",
-          attrs=@html.Attrs::build().data_set("math-display", "true"),
-          "\\[\n" + lines_text(node.v.code) + "\n\\]",
-        ),
-      )
+      out.push((self.render_math)(lines_text(node.v.code), true))
     CodeBlock(node) =>
       out.push(
         code_block(
@@ -111,9 +134,9 @@ fn MarkdownRender::push_block(
           self.open_file,
           artifact_view?=self.artifact_view,
           defer_artifacts=self.defer_artifacts,
+          user_preview=self.user_preview,
         ),
       )
-    // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
     List(node) => out.push(self.list(node.v))
@@ -155,6 +178,7 @@ fn code_block(
   open_file : ((String) -> @cmd.Cmd)?,
   artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
+  user_preview~ : Bool = false,
 ) -> @html.Html {
   let source = lines_text(block.code)
   let language = code_block_language(block)
@@ -162,7 +186,7 @@ fn code_block(
   let info = block.info_string
     .map(info => info.v.trim().to_owned())
     .unwrap_or(language)
-  if language == @workspace_file_ref.FenceLanguage {
+  if !user_preview && language == @workspace_file_ref.FenceLanguage {
     if defer_artifacts && info == @workspace_file_ref.ArtifactFenceLanguage {
       return @html.nothing
     }
@@ -189,7 +213,7 @@ fn code_block(
     },
     [
       @html.div(class="chat-code-toolbar", [code_copy_button(locale~, source)]),
-      code_block_body(block, source, language),
+      code_block_body(block, source, language, render_diagrams=!user_preview),
     ],
   )
 }
@@ -200,6 +224,7 @@ fn code_block_body(
   block : @cmark.CodeBlock,
   source : String,
   language : String,
+  render_diagrams~ : Bool,
 ) -> @html.Html {
   // Unlabelled fences and indented code use MoonBit by default, including
   // code inside completed reasoning. Explicit language labels still win.
@@ -213,7 +238,8 @@ fn code_block_body(
     language == "diago" ||
     language == "uml" ||
     language == "plantuml"
-  if diagram && block.layout is Fenced({ closing_fence: None, .. }) {
+  if diagram &&
+    (!render_diagrams || block.layout is Fenced({ closing_fence: None, .. })) {
     return @html.pre(@html.code(class="language-\{language}", source))
   }
   if language == "mermaid" || language == "d2" || language == "diago" {
@@ -585,23 +611,7 @@ fn MarkdownRender::push_inline(
       out.push(@html.strong(self.inline_nodes(node.v.inline, linkify_urls~)))
     ExtStrikethrough(node) =>
       out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
-    ExtMathSpan(node) => {
-      let (opening, closing) = if node.v.display {
-        ("\\[", "\\]")
-      } else {
-        ("\\(", "\\)")
-      }
-      out.push(
-        @html.span(
-          class=if node.v.display { "math math-display" } else { "math" },
-          attrs=@html.Attrs::build().data_set(
-            "math-display",
-            node.v.display.to_string(),
-          ),
-          opening + tights_text(node.v.tex_layout) + closing,
-        ),
-      )
-    }
+    ExtMathSpan({ v, .. }) => out.push((self.render_math)(v.tex(), v.display))
     Autolink(node) => {
       let url = node.v.link.v
       // Email autolinks resolve to a safe `mailto:`; a URI autolink like
@@ -610,7 +620,7 @@ fn MarkdownRender::push_inline(
       if node.v.is_email {
         out.push(link_node("mailto:" + url, [@html.text(url)]))
       } else {
-        match safe_destination(url) {
+        match self.safe_destination(url) {
           Some(href) => out.push(link_node(href, [@html.text(url)]))
           None => out.push(@html.text(url))
         }
@@ -650,6 +660,10 @@ fn MarkdownRender::push_inline(
     Image(node) => {
       let alt = plain_text(node.v.text)
       let title = self.link_title(node.v)
+      if self.user_preview {
+        out.push(@html.span(title?, alt))
+        return
+      }
       if self.local_image_destination(node.v) is Some(path) {
         // Local paths must not resolve against the page's `proton://app/`
         // origin. Leave `src` empty and let the transcript's viewport observer
@@ -672,7 +686,6 @@ fn MarkdownRender::push_inline(
         }
       }
     }
-    // Raw HTML is shown as text, not injected; see the module comment.
     RawHtml(node) => out.push(@html.text(tights_text(node.v.0)))
   }
 }
@@ -854,13 +867,17 @@ fn MarkdownRender::link_destination(
   guard self.raw_link_destination(link) is Some(destination) else {
     return None
   }
-  safe_destination(destination)
+  self.safe_destination(destination)
 }
 
 ///|
-fn safe_destination(destination : String) -> String? {
+fn MarkdownRender::safe_destination(
+  self : MarkdownRender,
+  destination : String,
+) -> String? {
   if destination.has_prefix("artifact:") ||
-    @cmark.InlineLink::is_unsafe(destination) {
+    @cmark.InlineLink::is_unsafe(destination) ||
+    (self.user_preview && !(destination =~ re"(?i:^(?:https?://|mailto:))")) {
     None
   } else {
     Some(destination)

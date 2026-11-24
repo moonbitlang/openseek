@@ -5,7 +5,7 @@ pub(all) enum HoverPart {
   MarkdownHover(
     range~ : @base_common.Range,
     contents~ : Array[@language.HoverContent],
-    ordinal~ : Int32
+    ordinal~ : Int32,
   )
   MarkerHover(range~ : @base_common.Range, marker~ : @markers.Marker)
   LoadingHover(range~ : @base_common.Range, message~ : String)

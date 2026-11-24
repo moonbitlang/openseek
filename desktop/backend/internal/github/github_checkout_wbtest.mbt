@@ -211,7 +211,7 @@ test "checkout errors explain recovery and retain Git diagnostics" {
     github_checkout_failure(fetch_then_error)
     is CheckoutFailure(
       "fatal: Not possible to fast-forward, aborting.",
-      Some(details)
+      Some(details),
     ) &&
     details == fetch_then_error,
   )
@@ -222,7 +222,7 @@ test "checkout errors explain recovery and retain Git diagnostics" {
 /// cancellation, and an rmdir failure is the test's own tmpdir and is ignored.
 async fn git_test_cleanup(dir : String) -> Unit nocancel {
   @async.protect_from_cancel(() => {
-    @fs.rmdir(dir, recursive=true) catch {
+    @fs.remove(dir, recursive=true) catch {
       _ => ()
     }
   })

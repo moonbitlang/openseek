@@ -675,6 +675,13 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     settings_active: self.management_dialog is Some(Settings(_)),
     downloads: self.show_app_downloads(),
     account: self.sidebar_account(),
+    account_action: if self.sidebar_account() is Some(_) {
+      OpenSettings
+    } else if self.is_desktop && self.account_login is Some(_) {
+      CancelSignIn(disabled=self.account_login is Some(Cancelling(..)))
+    } else {
+      SignIn(disabled=self.remote_connecting)
+    },
   }.filtered()
 }
 
@@ -1312,6 +1319,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   @html.div(
     class="setup-guide",
+    attrs=@html.Attrs::build().hidden(model.api_ready()),
     [
       @html.p(@settings.text(model.locale, OwnProviderDescription)),
       @html.div(class="setup-guide-steps", steps),
@@ -1362,11 +1370,10 @@ fn api_settings_rows(
     ]
   }
   let settings_loaded = model.host_settings_loaded()
-  let ready = model.api_ready()
   let rows : Array[@html.Html] = [
-    ..if !ready {
-      [byok_setup_guide(dispatch, model)]
-    },
+    // Keep row positions stable: conditional removal can reuse a URL input
+    // as the password input and retain its browser-owned value.
+    byok_setup_guide(dispatch, model),
     @ui.form_row(
       @settings.text(model.locale, ApiEndpoint),
       [
@@ -1398,30 +1405,41 @@ fn api_settings_rows(
       desc=provider_hint(model, model.api_provider()),
     ),
   ]
-  if model.api_provider() is Custom {
-    rows.push(
-      @ui.form_row(
-        @settings.text(model.locale, EndpointUrl),
-        [
-          @html.input(
-            class="setting-input field-surface",
-            input_type=@html.InputType::Text,
-            value=model
-              .host_settings()
-              .map(settings => settings.endpoint.custom_api_url)
-              .unwrap_or(""),
-            placeholder="https://host/chat/completions",
-            on_input=dispatch.map(value => CustomApiUrlChanged(value)),
-            attrs=@html.Attrs::build()
-              .aria_label(@settings.text(model.locale, EndpointUrl))
-              .data_set("focus-owner", "")
-              .disabled(!settings_loaded),
-          ),
-        ],
-        stack=true,
-      ),
-    )
-  }
+  rows.push(
+    @ui.form_row(
+      @settings.text(model.locale, EndpointUrl),
+      [
+        @html.input(
+          class="setting-input field-surface",
+          input_type=@html.InputType::Text,
+          value=model
+            .host_settings()
+            .map(settings => {
+              settings.endpoint.config(Custom).api_url.unwrap_or("")
+            })
+            .unwrap_or(""),
+          placeholder="https://host/v1",
+          on_change=dispatch.map(value => CustomApiUrlChanged(value)),
+          attrs=@html.Attrs::build()
+            .aria_label(@settings.text(model.locale, EndpointUrl))
+            .on_keydown(event => {
+              if event.key() == "Enter" && !event.is_composing() {
+                event.prevent_default()
+                if event.target().to_html_input_element() is Some(input) {
+                  input.blur()
+                }
+              }
+              @cmd.none
+            })
+            .data_set("focus-owner", "")
+            .disabled(!settings_loaded),
+        ),
+      ],
+      desc=@settings.text(model.locale, EndpointUrlDescription),
+      stack=true,
+      hidden=!(model.api_provider() is Custom),
+    ),
+  )
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
@@ -1452,12 +1470,7 @@ fn api_settings_rows(
               .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
-          @html.button(
-            class="button primary save-api-key",
-            disabled=!settings_loaded || model.setup_api_key.is_blank(),
-            on_click=dispatch(SaveApiKey),
-            @settings.text(model.locale, SaveApiKey),
-          ),
+          api_key_actions(dispatch, model, settings_loaded~),
         ],
         desc=@settings.text(model.locale, KeyStorageDescription),
         stack=true,
@@ -1816,22 +1829,6 @@ fn run_indicator(
 }
 
 ///|
-/// Where `conv` runs, for the overview's environment card.
-fn Model::overview_environment(
-  self : Model,
-  conv : Conversation,
-) -> @conversation_overview.Environment {
-  let project = conv.project()
-  {
-    device: self.device_name(conv.device),
-    project: @resource.label(project),
-    path: project.path,
-    branch: conv.branch.filter(branch => !branch.is_empty()),
-    worktree: conv.worktree_name(),
-  }
-}
-
-///|
 /// What `conv` runs in the background, for the overview's card; `None` while
 /// nothing runs. The jobs listing counts only while it is `conv`'s own.
 fn Model::overview_background(
@@ -1866,9 +1863,8 @@ fn Model::overview_background(
 }
 
 ///|
-/// The overview beside `conv`: where it runs, which pull requests and branches
-/// it works on, what its engine is connected to, and what it runs in the
-/// background.
+/// The overview beside `conv`: which pull requests and branches it works
+/// on, and what it runs in the background.
 fn overview_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -1882,7 +1878,6 @@ fn overview_view(
   @conversation_overview.view(
     locale=model.locale,
     model.overview,
-    environment=model.overview_environment(conv),
     changes=@session_changes.summary(
       locale=model.locale,
       key,
@@ -1900,15 +1895,6 @@ fn overview_view(
         )
       },
     }),
-    connectors={
-      summary: @mcp.summary(locale=model.locale, key, model.mcp),
-      rows: () => @mcp.rows(locale=model.locale, key, model.mcp),
-      refresh: if @mcp.checking(key, model.mcp) {
-        None
-      } else {
-        Some(dispatch(Mcp(Refresh(key))))
-      },
-    },
     background?=model.overview_background(dispatch, conv),
     dispatch.map(msg => Overview(msg)),
   )
@@ -1988,15 +1974,12 @@ fn conversation_header(
       ),
     )
   }
-  items.push(conversation_transfer_button(model.locale))
+  items.push(model.conversation_export_button(dispatch))
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
     items.push(model.terminal_toggle(toggle_terminal))
   }
-  // The overview is the only place the conversation's connectors are shown,
-  // so the narrow layout keeps it: there it is always the panel over the
-  // transcript.
   items.push(
     @conversation_overview.toggle(
       locale=model.locale,
@@ -2284,7 +2267,7 @@ fn view(
   shell_overlays : (@html.Html, @html.Html, @html.Html),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, selection_actions_html, transfer_menu_html) = shell_overlays
+  let (quick_open_html, selection_actions_html, project_source_html) = shell_overlays
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2361,7 +2344,7 @@ fn view(
               title,
               selected.map(selected => selected.workspace),
             )
-            items.push(conversation_transfer_button(model.locale))
+            items.push(model.conversation_export_button(dispatch))
             items
           }
         }
@@ -2547,6 +2530,7 @@ fn view(
   let page_content = [
     @html.div(
       class=if model.screen is Codex { "topbar codex-topbar" } else { "topbar" },
+      attrs=@action_menu.content_attrs("heading"),
       header,
     ),
     ..content,
@@ -2692,7 +2676,7 @@ fn view(
         dispatch.map(msg => ProjectPicker(msg)),
         picker,
         location?=if model.is_desktop {
-          Some(ssh_locations(dispatch, model))
+          Some(ssh_locations(dispatch, model, project_source_html))
         } else {
           None
         },
@@ -2713,7 +2697,6 @@ fn view(
   // placeholder — so opening it never shifts the overlay children around it.
   children.push(quick_open_html)
   children.push(selection_actions_html)
-  children.push(transfer_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last
@@ -2723,6 +2706,14 @@ fn view(
     model.focused == Local &&
     model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
+  }
+  // Dialogs and notices keep link actions, without a shell-wide trigger.
+  // The first three slots are the toggle, sidebar and conversation/panel layout.
+  for index in 3..<children.length() {
+    children[index] = @action_menu.content_region(
+      "overlay:\{index}",
+      children[index],
+    )
   }
   @html.div(class=app_shell_class(model.sidebar_open), children)
 }

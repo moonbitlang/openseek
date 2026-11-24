@@ -15,9 +15,7 @@ fn ApiState::artifact_tools(self : ApiState) -> Array[@mcp.Tool] {
         }
         [
           Text(
-            @engine.session_artifacts_list(self.manager, call.session)
-            .to_json()
-            .stringify(),
+            @session_store.list_artifacts(call.session).to_json().stringify(),
           ),
         ]
       },
@@ -56,7 +54,8 @@ async fn ApiState::save_session_artifacts(
   session : String,
   update : (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts,
 ) -> @protocol.SessionArtifacts {
-  @engine.session_artifacts_update(self.manager, session, update, () => {
+  @engine.session_artifacts_update(self.manager, session, update~, on_committed=next => {
+    self.actions_monitor.set_artifacts(session~, artifacts=next)
     self.publish(SessionArtifactsChanged({ session, }))
   })
 }

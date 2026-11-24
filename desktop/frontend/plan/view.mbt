@@ -141,49 +141,52 @@ fn step_row(
 }
 
 ///|
-/// The leading cell of a row: a glyph for the statuses this build knows, or
+/// The leading cell of a row: an icon for the statuses this build knows, or
 /// the literal word for anything else. Disguising an unknown status as a
 /// pending ring would misread e.g. a blocked step as untouched.
 fn status_cell(locale~ : @i18n.Locale = English, status : Status) -> @html.Html {
-  match status {
+  let (label, icon) = match status {
     Pending =>
-      @html.span(
-        class="step-icon",
-        title=match locale {
+      (
+        match locale {
           SimplifiedChinese => "待处理"
           TraditionalChinese => "待處理"
           Japanese => "保留中"
           English => "pending"
           Spanish => "pendiente"
         },
-        "○",
+        @icons.icon_circle,
       )
     InProgress =>
-      @html.span(
-        class="step-icon",
-        title=match locale {
+      (
+        match locale {
           SimplifiedChinese => "进行中"
           TraditionalChinese => "進行中"
           Japanese => "進行中"
           English => "in_progress"
           Spanish => "en curso"
         },
-        "◐",
+        @icons.icon_loading,
       )
     Completed =>
-      @html.span(
-        class="step-icon",
-        title=match locale {
+      (
+        match locale {
           SimplifiedChinese => "已完成"
           TraditionalChinese => "已完成"
           Japanese => "完了"
           English => "completed"
           Spanish => "completado"
         },
-        "✓",
+        @icons.icon_check,
       )
-    Other(word) => @html.span(class="step-status", word)
+    Other(word) => return @html.span(class="step-status", word)
   }
+  @html.span(
+    class="step-icon",
+    title=label,
+    attrs=@html.Attrs::build().role("img").aria_label(label),
+    @icons.icon(icon),
+  )
 }
 
 ///|

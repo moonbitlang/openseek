@@ -64,11 +64,16 @@ async fn drain_stderr_capped(reader : @process.ReadFromProcess) -> String {
     // can never overshoot the cap; once full, read fixed blocks purely to drain.
     let remaining = StderrCaptureLimitBytes - buffer.length()
     let max_len = if remaining > 0 { remaining } else { StderrDrainChunkBytes }
-    let read = reader.read_into(chunk, max_len~) catch {
+    let read = reader.read_into(chunk.mut_view(end=max_len)) catch {
       // Stop on a genuine read error, but keep the prefix already captured and
       // record the failure so it is surfaced below. `0` ends the loop the
       // same way EOF does.
       error => {
+        let error : Error = if error is TransportError(cause, ..) {
+          cause
+        } else {
+          error
+        }
         read_error = Some("\{error}")
         0
       }

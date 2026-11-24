@@ -165,7 +165,7 @@ async fn ensure_moonx_alias(moon_home : @pathx.Path) -> Unit {
   let moonx = bin.join("moonx" + ExecutableSuffix)
   if !@fsx.exists(moonx) {
     let unique : @pathx.Path = @fs.tmpdir(prefix="openseek-moonx-")
-    defer @fs.rmdir(unique.to_string())
+    defer @fs.remove(unique.to_string())
     let temporary = bin.join(unique.basename().to_owned())
     defer @async.protect_from_cancel(() => @fsx.remove_if_exists(temporary))
     @fsx.copy_file(moonbit_command(moon_home), temporary)
@@ -253,7 +253,7 @@ async fn prepare_moonbit_payload(
 ///|
 async test "prepared payload dir accepts existing toolchain root" {
   let runtime = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-runtime-"))
-  defer (@fs.rmdir(runtime.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(runtime.to_string(), recursive=true) catch { _ => () })
   let root = runtime.join("toolchains/moonbit")
   @fs.mkdir(root.to_string(), recursive=true)
   let expected = root.join("macos-arm64").to_string()
@@ -273,7 +273,7 @@ async test "prepared payload dir accepts existing toolchain root" {
 /// bundles itself — which this fixture's empty `moon` cannot do.
 async test "a host waits for another host's preparation and reuses it" {
   let runtime = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-two-hosts-"))
-  defer (@fs.rmdir(runtime.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(runtime.to_string(), recursive=true) catch { _ => () })
   let seed_dir = runtime.join("seed").join("macos-arm64").resolve()
   @fs.mkdir(seed_dir.to_string(), recursive=true)
   @fs.write_text(

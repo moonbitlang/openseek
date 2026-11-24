@@ -8,7 +8,7 @@
 /// `other/b.txt` committed; the store's own files are its siblings.
 async fn seeded(group : @async.TaskGroup) -> (String, String) {
   let root = @fs.tmpdir(prefix="openseek-worker-")
-  group.add_defer(() => @fs.rmdir(root, recursive=true))
+  group.add_defer(() => @fs.remove(root, recursive=true))
   let repo = "\{root}/repo"
   @fs.mkdir(repo)
   @fs.mkdir("\{repo}/lib")
@@ -85,7 +85,7 @@ async test "a worker's change is handed over as a commit on its branch" {
     assert_true(info.outcome is Some(Captured))
     guard info.workspace
       is Worktree(
-        { name: "fix-lib", state: Committed(commit~), path, branch, base, .. }
+        { name: "fix-lib", state: Committed(commit~), path, branch, base, .. },
       ) else {
       fail("expected a committed worktree")
     }

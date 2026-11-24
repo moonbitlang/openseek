@@ -50,6 +50,7 @@ test('accepting and clearing restores the broadcast suggestion without requests'
   app.publish();
   const input = page.locator('#task');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
+  await expect(page.getByRole('button', { name: 'Use suggestion', exact: true })).toHaveCount(0);
   await expect(input).toHaveValue('');
   await input.focus();
   await input.press('Shift+Tab');

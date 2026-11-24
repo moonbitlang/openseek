@@ -6,7 +6,7 @@ async test "native host reads root-relative text files" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="openseek-native-host-read")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.mkdir("\{root}/src", recursive=true)
     @fs.write_text(
@@ -40,7 +40,7 @@ async test "native host resolves one directory level with minted uris" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="openseek-native-host-resolve")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.mkdir("\{root}/src/lib", recursive=true)
     @fs.mkdir("\{root}/_build", recursive=true)
@@ -123,7 +123,7 @@ async test "native host polling watch emits changed and deleted" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="openseek-native-host-watch")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/watched.mbt",

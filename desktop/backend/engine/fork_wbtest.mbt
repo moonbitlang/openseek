@@ -40,7 +40,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-fork-title-failure-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let workspace = dir + "/workspace"
   @sys.set_env_var("HOME", dir + "/home")
   @fs.mkdir(dir + "/home/.openseek", recursive=true)
@@ -99,7 +99,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 
 ///|
 /// A stand-in for the engine's `sessions fork <id> --as <fork> --through <n>
-/// --session-root <root> --dir <dir> --model <model> [--notice=<text>]
+/// --session-root <root> --dir <dir> --model <model> [--inherit-system-prompt] [--notice=<text>]
 /// [--mcp-config=<path>]...`. It
 /// copies the record, refuses an id that exists, writes what the host handed
 /// it — the directory, the model, the cut — as the fork's system prompt, the
@@ -123,11 +123,11 @@ fn worktree_fork_engine_script() -> String {
     $|source="$3"
     $|shift 3
     $|notice=""
-    $|prompt=""
+    $|inherit_prompt=false
     $|while [ "$#" -gt 0 ]; do
     $|  case "$1" in
-    $|    --system-prompt-file=*)
-    $|      prompt="${1#--system-prompt-file=}"
+    $|    --inherit-system-prompt)
+    $|      inherit_prompt=true
     $|      shift
     $|      continue
     $|      ;;
@@ -154,10 +154,14 @@ fn worktree_fork_engine_script() -> String {
     $|  exit 1
     $|fi
     $|to="$root/sessions/$fork"
-    $|mkdir -p "$to" || exit 1
+    $|mkdir -p "$root/sessions" || exit 1
+    $|mkdir "$to" || exit 1
     $|record="$to/openseek_session-$fork.jsonl"
-    $|test ! -f "$record" || exit 1
-    $|if [ -n "$prompt" ]; then cp "$prompt" "$root/base-$fork"; fi
+    $|prompt="$root/sessions/$source/system-prompt.md"
+    $|if [ "$inherit_prompt" = true ] && [ -e "$prompt" ]; then
+    $|  cp "$prompt" "$to/system-prompt.md" || exit 1
+    $|  cp "$prompt" "$root/base-$fork" || exit 1
+    $|fi
     $|printf '{"version":1,"id":"%s","system_prompt":"dir=%s model=%s through=%s"}\{newline}' "$fork" "$dir" "$model" "$through" > "$record"
     $|if [ -n "$notice" ]; then
     $|  printf '%s' "$notice" > "$root/notice-$fork"
@@ -196,7 +200,7 @@ async fn with_worktree_fork_fixture(
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-fork-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())
@@ -230,8 +234,8 @@ async fn with_worktree_fork_fixture(
 async test "a fork of a worktree conversation works in a checkout of its own" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let prompt = "  Project rules\n中文\n"
-    @fsx.write_text_atomic(
-      session_prompt_path(store, SessionId("s-src")),
+    @openseek/atomic_file.write_text_atomic(
+      session_prompt_path(store, SessionId("s-src")).to_string(),
       prompt,
     )
     @fsx.write_text(checkout.join("draft.txt").to_path(), "uncommitted")
@@ -308,7 +312,10 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
 #cfg(not(platform="windows"))
 async test "a later-message edit takes over its source's checkout" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
-    @fsx.write_text_atomic(session_prompt_path(store, SessionId("s-src")), "")
+    @openseek/atomic_file.write_text_atomic(
+      session_prompt_path(store, SessionId("s-src")).to_string(),
+      "",
+    )
     let placements : Array[Array[@protocol.WorktreeInfo]] = []
     let reply = prepare_session_edit(
       manager,
@@ -471,8 +478,8 @@ async test "a fork cancelled after its record was written keeps its worktree and
 async test "a side chat is a numbered member of its conversation's family" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let prompt = "Side chat instructions"
-    @fsx.write_text_atomic(
-      session_prompt_path(store, SessionId("s-src")),
+    @openseek/atomic_file.write_text_atomic(
+      session_prompt_path(store, SessionId("s-src")).to_string(),
       prompt,
     )
     let placements : Array[Array[@protocol.WorktreeInfo]] = []

@@ -138,6 +138,16 @@ pub let codex_turn_start : Command[@protocol.CodexTurnStartPayload, @protocol.Co
 
 pub let codex_turn_steer : Command[@protocol.CodexTurnSteerPayload, @protocol.CodexCommandReply[@protocol.CodexTurnReply]]
 
+pub let connectors_cancel : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
+pub let connectors_connect : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
+pub let connectors_disconnect : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
+pub let connectors_list : Command[@protocol.EmptyPayload, @protocol.ConnectorReply]
+
+pub let connectors_poll : Command[@protocol.ConnectorRequest, @protocol.ConnectorReply]
+
 pub let extension_contract : @proton_contract.ExtensionContract
 
 pub let fs_browse : Command[@protocol.BrowseDirectoryPayload, @protocol.BrowseDirectoryReply]
@@ -268,6 +278,8 @@ pub let session_edit : Command[@protocol.SessionEditPayload, @protocol.SessionFo
 
 pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]
 
+pub let session_feedback : Command[@protocol.SessionFeedbackPayload, @protocol.SessionFeedbackReply]
+
 pub let session_fork : Command[@protocol.SessionForkPayload, @protocol.SessionForkReply]
 
 pub let session_import : Command[@protocol.SessionImportPayload, @protocol.SessionImportReply]
@@ -295,6 +307,8 @@ pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.Sessions
 pub let settings_get : Command[@protocol.EmptyPayload, @protocol.SettingsStatusPayload]
 
 pub let settings_set : Command[@protocol.SettingsSetPayload, @protocol.SettingsStatusPayload]
+
+pub let settings_test : Command[@protocol.ApiConnectionProbePayload, @protocol.ApiConnectionProbeReply]
 
 pub let shell_open_external : Command[@protocol.ExternalLinkPayload, @protocol.OpenExternalReply]
 

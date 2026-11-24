@@ -252,7 +252,7 @@ async test "write rejects generated mbti files" {
 }
 
 ///|
-async test "write requires approval to overwrite an existing .mbt source file" {
+async test "write rejects overwriting a pre-existing .mbt source file" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/lib.mbt"
     @vfs.FileSystem({ "lib.mbt": "pub fn f() -> Int { 1 }\n" }).write_to(dir)
@@ -262,7 +262,6 @@ async test "write requires approval to overwrite an existing .mbt source file" {
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("no approval channel"))
     // unchanged on disk
     assert_eq(@fs.read_text(path), "pub fn f() -> Int { 1 }\n")
   })
@@ -283,19 +282,19 @@ async test "write still creates a NEW .mbt source file" {
 }
 
 ///|
-async test "write requires approval to overwrite an existing .mbt.md doc file" {
+async test "write rejects overwriting a pre-existing .mbt.md doc file" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/doc.mbt.md"
     @vfs.FileSystem({ "doc.mbt.md": "# old\n" }).write_to(dir)
     let result = execute({ "path": path, "content": "# new\n" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("no approval channel"))
+    assert_eq(@fs.read_text(path), "# old\n")
   })
 }
 
 ///|
-async test "write requires approval to overwrite source through a symlink" {
+async test "write rejects overwriting pre-existing source through a symlink" {
   @vfs.with_tmpdir(dir => {
     let src = "\{dir}/lib.mbt"
     @vfs.FileSystem({ "lib.mbt": "pub fn f() -> Int { 1 }\n" }).write_to(dir)
@@ -309,7 +308,6 @@ async test "write requires approval to overwrite source through a symlink" {
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("no approval channel"))
     assert_eq(@fs.read_text(src), "pub fn f() -> Int { 1 }\n")
   })
 }

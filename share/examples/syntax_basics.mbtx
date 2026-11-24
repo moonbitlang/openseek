@@ -31,7 +31,7 @@ fn Counter::bump(self : Counter) -> Unit {
 }
 
 ///|
-fn main raise {
+fn main {
   // A mutable local is `let mut`; there is no `var`. Mutable maps and arrays
   // are updated in place without `mut`.
   let mut total = 0

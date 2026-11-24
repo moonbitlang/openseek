@@ -15,6 +15,22 @@ priv enum Catalog {
 }
 
 ///|
+#derive(Eq)
+pub(all) enum BrowseSection {
+  Discover
+  InstalledSkills
+}
+
+///|
+#derive(Eq)
+pub(all) enum StatusFilter {
+  AllSkills
+  EnabledSkills
+  DisabledSkills
+  WithUpdates
+}
+
+///|
 /// Everything the page alone can see. The catalog is fetched when the page
 /// opens and kept until the user refreshes it; `busy` holds the entries with
 /// an operation in flight, keyed by host and version-independent identity;
@@ -29,7 +45,10 @@ struct State {
   preview : Preview
   preview_cache : Map[(String, String), String]
   preview_library : Library?
-  list_scroll_top : Double
+  section : BrowseSection
+  filter : StatusFilter
+  filter_open : Bool
+  installed_loading : Bool
 }
 
 ///|
@@ -217,7 +236,10 @@ pub fn State::empty() -> State {
     preview: Closed,
     preview_cache: Map([]),
     preview_library: None,
-    list_scroll_top: 0.0,
+    section: Discover,
+    filter: AllSkills,
+    filter_open: false,
+    installed_loading: false,
   }
 }
 
@@ -236,7 +258,12 @@ pub fn State::with_installed(
   guard self.selection is Some(selection) && selection.library == library else {
     return self
   }
-  { ..self, selection: Some({ library, installed: items, }), }
+  {
+    ..self,
+    selection: Some({ library, installed: items, }),
+    installed_loading: false,
+    notices: self.notices.filter(notice => !(notice is LibraryLoadFailed(_))),
+  }
 }
 
 ///|
@@ -260,16 +287,19 @@ pub(all) enum Msg {
     library~ : Library,
     request~ : Int32,
     target~ : PreviewTarget,
-    content~ : String
+    content~ : String,
   )
   PreviewFailed(
     library~ : Library,
     request~ : Int32,
     target~ : PreviewTarget,
-    message~ : String
+    message~ : String,
   )
   BackToList
-  SkillsScrolled(Double)
+  Browse(BrowseSection)
+  SetFilterOpen(Bool)
+  FilterBy(StatusFilter)
+  ClearFilters
   // Select a library in page state, then ask the root to read its contents.
   SelectLibrary(Library)
 }
@@ -288,6 +318,8 @@ pub fn State::opening(
   let state = {
     ..self,
     selection: Some({ library: input.library, installed: input.installed, }),
+    installed_loading: input.available() && input.installed.is_empty(),
+    filter_open: false,
   }
   guard input.available() else { return (@cmd.none, state) }
   let (cmd, catalog) = match state.catalog {
@@ -310,7 +342,7 @@ pub fn State::opening(
 pub fn State::with_library_error(self : State, message : String) -> State {
   let notices = self.notices.filter(notice => !(notice is LibraryLoadFailed(_)))
   notices.push(LibraryLoadFailed(message))
-  { ..self, notices, }
+  { ..self, notices, installed_loading: false, }
 }
 
 ///|
@@ -372,8 +404,7 @@ pub fn State::sync_library(
 }
 
 ///|
-/// Return from a detail to the list, restoring its scroll position. `None`
-/// means the page is already at the list and the shell owns the next return.
+/// `None` means the page is already at the list and the shell owns the next return.
 pub fn State::back(
   self : State,
   emit : @cmd.Emit[Msg],
@@ -410,7 +441,8 @@ pub fn State::handle(
     }
   }
   match msg {
-    QueryChanged(value) => (@cmd.none, { ..self, query: value, }, None)
+    QueryChanged(value) =>
+      (scroll_results_to_start(), { ..self, query: value, }, None)
     PreviewMarket(item) => {
       let target = preview_target_for_market(input.installed, item)
       match
@@ -510,13 +542,31 @@ pub fn State::handle(
       )
     }
     BackToList =>
+      (@cmd.none, { ..self, preview: Closed, preview_library: None, }, None)
+    Browse(section) =>
       (
-        restore_list_scroll(self.list_scroll_top),
-        { ..self, preview: Closed, preview_library: None, },
+        scroll_results_to_start(),
+        { ..self, section, filter_open: false, },
         None,
       )
-    SkillsScrolled(scroll_top) =>
-      (@cmd.none, { ..self, list_scroll_top: scroll_top, }, None)
+    SetFilterOpen(open) => (@cmd.none, { ..self, filter_open: open, }, None)
+    FilterBy(filter) =>
+      (scroll_results_to_start(), { ..self, filter, filter_open: false, }, None)
+    ClearFilters =>
+      (
+        scroll_results_to_start(),
+        {
+          ..self,
+          query: "",
+          filter_open: false,
+          filter: if self.section is Discover {
+            self.filter
+          } else {
+            AllSkills
+          },
+        },
+        None,
+      )
     SelectLibrary(library) => {
       guard library != input.library &&
         input.choices.any(choice => {

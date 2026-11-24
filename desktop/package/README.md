@@ -34,6 +34,7 @@ Application-owned files live below Proton's resource directory:
 seekmoon/
   bin/
   licenses/
+  skills/seekmoon/
   toolchains/
   web/
 ```
@@ -119,7 +120,7 @@ moon run ./desktop/package/linux
 moon run ./desktop/package/windows
 ```
 
-These commands download fixed Mermaid and xterm browser distributions plus a
+These commands download fixed Mermaid, xterm, and KaTeX distributions plus a
 standalone esbuild executable, verify their checked-in SHA-256 digests, and
 cache only the archives below `desktop/target/vendor-web/cache`. They do not
 require npm.

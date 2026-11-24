@@ -28,12 +28,14 @@ test('browser Cloud manages the account skill library and completes its skills',
 
   // The selector identifies Cloud even when no device page is open.
   await expect(library(page).getByRole('combobox', { name: 'Library', exact: true })).toContainText('Cloud');
+  await row(page, 'alpha').getByRole('button', { name: 'Install', exact: true }).click();
+  await expect(row(page, 'alpha')).toContainText('Installed');
+  await library(page).getByRole('tab', { name: /^Installed/ }).click();
   // Cloud's built-ins are always on: no switch or menu.
   await expect(row(page, 'typst')).toBeVisible();
   await expect(row(page, 'typst').getByRole('switch')).toHaveCount(0);
   await expect(row(page, 'typst').getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
 
-  await row(page, 'alpha').getByRole('button', { name: 'Install', exact: true }).click();
   await expect(row(page, 'alpha').getByRole('switch')).toBeChecked();
   const install = cloud.requests.find(request => request.method === 'POST' && request.path === '/v1/me/skills');
   expect(JSON.parse(install.body)).toEqual({ module_name: 'acme/alpha', version: '1.0.0' });
@@ -48,6 +50,7 @@ test('browser Cloud manages the account skill library and completes its skills',
 
   await showSidebar(page);
   await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await library(page).getByRole('tab', { name: /^Installed/ }).click();
   await row(page, 'alpha').getByRole('switch').click();
   await expect(row(page, 'alpha').getByRole('switch')).not.toBeChecked();
   const toggle = cloud.requests.find(request => request.method === 'PATCH' && request.path === '/v1/me/skills/acme-alpha');
@@ -76,6 +79,7 @@ test('a signed-in browser selects the named device library and Cloud', async ({ 
 
   const libraries = library(page).getByRole('combobox', { name: 'Library', exact: true });
   await expect(libraries).toContainText('Test Mac');
+  await library(page).getByRole('tab', { name: /^Installed/ }).click();
   await expect(row(page, 'local-notes')).toBeVisible();
   await expect(row(page, 'typst')).toHaveCount(0);
 

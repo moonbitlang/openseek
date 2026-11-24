@@ -271,15 +271,41 @@ pub(all) struct SessionDeletePayload {
 }
 
 ///|
-/// `settings.set`: every field optional (absent = unchanged); a present
-/// string field is trimmed, and empty clears the stored value.
+/// Fields omitted or null are unchanged; an empty string clears the value.
+#derive(Debug, Eq)
+pub(all) struct ProviderPatch {
+  api_url : String?
+  api_key : String?
+}
+
+///|
+pub impl FromJson for ProviderPatch with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "provider patch")
+  {
+    api_url: object.optional_string("api_url"),
+    api_key: object.optional_string("api_key"),
+  }
+}
+
+///|
+pub impl ToJson for ProviderPatch with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.api_url is Some(value) {
+    fields["api_url"] = Json(value)
+  }
+  if self.api_key is Some(value) {
+    fields["api_key"] = Json(value)
+  }
+  Json(fields)
+}
+
+///|
+/// `settings.set`: merge only the named providers and their supplied fields.
+/// Selecting a provider is independent of editing provider configuration.
 #derive(Debug, Eq)
 pub(all) struct SettingsSetPayload {
   provider : String?
-  custom_api_url : String?
-  deepseek_api_key : String?
-  glm_api_key : String?
-  custom_api_key : String?
+  providers : Map[String, ProviderPatch]?
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
@@ -290,10 +316,9 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "settings patch payload")
   {
     provider: object.optional_string("provider"),
-    custom_api_url: object.optional_string("custom_api_url"),
-    deepseek_api_key: object.optional_string("deepseek_api_key"),
-    glm_api_key: object.optional_string("glm_api_key"),
-    custom_api_key: object.optional_string("custom_api_key"),
+    providers: object
+    .optional_json("providers")
+    .map(value => @json.from_json(value, path=path.add_key("providers"))),
     followup_behavior: object.optional_string("followup_behavior"),
     prompt_source: object.optional_string("prompt_source"),
     custom_prompt: object.optional_string("custom_prompt"),
@@ -306,20 +331,11 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   if self.provider is Some(value) {
     fields["provider"] = Json(value)
   }
-  if self.custom_api_url is Some(value) {
-    fields["custom_api_url"] = Json(value)
-  }
-  if self.deepseek_api_key is Some(value) {
-    fields["deepseek_api_key"] = Json(value)
-  }
-  if self.glm_api_key is Some(value) {
-    fields["glm_api_key"] = Json(value)
+  if self.providers is Some(value) {
+    fields["providers"] = Json(value.map((_name, entry) => entry.to_json()))
   }
   if self.followup_behavior is Some(value) {
     fields["followup_behavior"] = Json(value)
-  }
-  if self.custom_api_key is Some(value) {
-    fields["custom_api_key"] = Json(value)
   }
   if self.prompt_source is Some(value) {
     fields["prompt_source"] = Json(value)
@@ -1535,14 +1551,75 @@ pub(all) struct WorkspaceSettingsPayload {
 }
 
 ///|
+/// Public configuration and credential availability; never the credential itself.
+#derive(Debug, Eq)
+pub(all) struct ProviderStatus {
+  api_url : String?
+  has_api_key : Bool
+}
+
+///|
+pub impl FromJson for ProviderStatus with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "provider status")
+  {
+    api_url: object.optional_string("api_url"),
+    has_api_key: object.required_bool("has_api_key"),
+  }
+}
+
+///|
+pub impl ToJson for ProviderStatus with fn to_json(self) {
+  let fields : Map[String, Json] = { "has_api_key": Json(self.has_api_key) }
+  if self.api_url is Some(value) {
+    fields["api_url"] = Json(value)
+  }
+  Json(fields)
+}
+
+///|
+/// Saved settings revision to test.
+#derive(Debug, Eq)
+pub(all) struct ApiConnectionProbePayload {
+  revision : Int32
+}
+
+///|
+pub impl FromJson for ApiConnectionProbePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "API connection probe payload")
+  { revision: object.required_int("revision"), }
+}
+
+///|
+pub impl ToJson for ApiConnectionProbePayload with fn to_json(self) {
+  { "revision": Json(self.revision) }
+}
+
+///|
+#derive(Debug, Eq)
+pub(all) struct ApiConnectionProbeReply {
+  error : String?
+}
+
+///|
+pub impl FromJson for ApiConnectionProbeReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "API connection probe reply")
+  { error: object.optional_string("error"), }
+}
+
+///|
+pub impl ToJson for ApiConnectionProbeReply with fn to_json(self) {
+  match self.error {
+    Some(error) => { "error": Json(error) }
+    None => Json::object({})
+  }
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32
   provider : String
-  custom_api_url : String?
-  has_deepseek_key : Bool
-  has_glm_key : Bool
-  has_custom_key : Bool
+  providers : Map[String, ProviderStatus]
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
@@ -1554,10 +1631,10 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
   {
     revision: object.required_int("revision"),
     provider: object.required_string("provider"),
-    custom_api_url: object.optional_string("custom_api_url"),
-    has_deepseek_key: object.required_bool("has_deepseek_key"),
-    has_glm_key: object.required_bool("has_glm_key"),
-    has_custom_key: object.required_bool("has_custom_key"),
+    providers: @json.from_json(
+      object.required_json("providers"),
+      path=path.add_key("providers"),
+    ),
     followup_behavior: object.required_string("followup_behavior"),
     prompt_source: object.required_string("prompt_source"),
     custom_prompt: object.required_string("custom_prompt"),
@@ -1566,20 +1643,14 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
-  let fields : Map[String, Json] = {
+  Json::object({
     "revision": Json(self.revision),
     "provider": Json(self.provider),
-    "has_deepseek_key": Json(self.has_deepseek_key),
-    "has_glm_key": Json(self.has_glm_key),
-    "has_custom_key": Json(self.has_custom_key),
+    "providers": Json(self.providers.map((_name, entry) => entry.to_json())),
     "followup_behavior": Json(self.followup_behavior),
     "prompt_source": Json(self.prompt_source),
     "custom_prompt": Json(self.custom_prompt),
-  }
-  if self.custom_api_url is Some(value) {
-    fields["custom_api_url"] = Json(value)
-  }
-  Json(fields)
+  })
 }
 
 ///|
@@ -1588,7 +1659,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 8
+pub const HostProtocolRevision : Int32 = 14
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
@@ -4361,3 +4432,27 @@ pub impl ToJson for FsWatchFailedPayload with fn to_json(self) {
   fields["generation"] = Json(self.generation)
   Json(fields)
 }
+
+///|
+pub extend ProviderPatch with Debug::{to_repr}
+
+///|
+pub extend ProviderPatch with Eq::{equal, not_equal}
+
+///|
+pub extend ProviderPatch with FromJson::{from_json}
+
+///|
+pub extend ProviderPatch with ToJson::{to_json}
+
+///|
+pub extend ProviderStatus with Debug::{to_repr}
+
+///|
+pub extend ProviderStatus with Eq::{equal, not_equal}
+
+///|
+pub extend ProviderStatus with FromJson::{from_json}
+
+///|
+pub extend ProviderStatus with ToJson::{to_json}

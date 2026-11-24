@@ -48,7 +48,7 @@ async test "session scratch permits raw file IO and script saving outside the wo
         #|  let dir = @env.args()[1]
         #|  guard @fs.read_binary("\{dir}/data/value.bin") == b"\x00\xff" else { fail("lost bytes") }
         #|  @fs.remove("\{dir}/data/value.bin")
-        #|  @fs.rmdir("\{dir}/data")
+        #|  @fs.remove("\{dir}/data")
         #|  println("read and removed")
         #|}
       ),

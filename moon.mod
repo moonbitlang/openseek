@@ -3,17 +3,18 @@ name = "moonbitlang/openseek"
 version = "0.7.6"
 
 import {
-  "moonbitlang/async@0.22.7",
-  "bobzhang/open_in_browser@0.1.0",
-  "moonbitlang/x@0.5.5",
+  "moonbitlang/async@0.22.10",
+  "bobzhang/open_in_browser@0.1.2",
+  "moonbitlang/x@0.5.7",
   "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.4.2",
-  "moonbit-community/rabbita@0.16.4",
+  "moonbit-community/rabbita@0.17.0",
   "Lampese/office-viewer@0.2.6",
   "moonbitlang/editor@0.4.6",
-  "moonbitlang/workflow@0.11.0",
-  "Yoorkin/multipart@0.1.3",
-  "moonbit-community/yaml@0.0.8",
+  "moonbitlang/workflow@0.11.1",
+  "Yoorkin/multipart@0.2.2",
+  "moonbit-community/yaml@0.0.10",
+  "kokic/katex-parser@0.7.4",
 }
 
 readme = "README.md"

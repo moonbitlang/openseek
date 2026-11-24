@@ -13,9 +13,13 @@ pub fn button_attrs(String, align_right? : Bool, open_upward? : Bool) -> @html.A
 
 pub fn[Input : Eq] component(@rabbita.Val[Input], (Input, String) -> Definition?, on_open_change? : @cmd.Emit[Bool]) -> @rabbita.Val[@html.Html]
 
+pub fn content_attrs(String) -> @html.Attrs
+
+pub fn content_region(String, @html.Html) -> @html.Html
+
 pub fn context_attrs(String) -> @html.Attrs
 
-pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions, @rabbita.Val[@html.Html]) -> @rabbita.Val[@html.Html]
+pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
 
 pub fn dropdown(String, Definition, class~ : String, @html.Html) -> @rabbita.Val[@html.Html]
 
@@ -49,6 +53,7 @@ pub(all) struct ContextActions {
 #derive(Eq)
 pub(all) struct ContextInput {
   platform : ClientPlatform
+  scope : String
   open_web_links_in_app : Bool
   reveal_files : Bool
   preview_files : Bool

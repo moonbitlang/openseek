@@ -1,4 +1,5 @@
 import {
+  "tonyfettes/url",
   "openseek_desktop/backend/internal/session_import",
   "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/base64",
@@ -6,14 +7,19 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
+  "moonbitlang/openseek/agent_session/log" @session_log,
+  "moonbitlang/openseek/workspace_file_ref",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/viz_export",
   "moonbitlang/openseek_protocol" @wire,
-  "moonbitlang/openseek_protocol/command_context",
   "moonbitlang/jsonl",
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/message_receipts",
   "openseek_desktop/backend/internal/fsx",
+  "moonbitlang/openseek/atomic_file" @openseek/atomic_file,
+  "openseek_desktop/backend/internal/files",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/moonbit",
   "openseek_desktop/backend/mcp",
@@ -22,7 +28,6 @@ import {
   "openseek_desktop/protocol",
   "openseek_desktop/backend/internal/session_record",
   "openseek_desktop/backend/internal/session_store",
-  "openseek_desktop/backend/internal/session_preview",
   "openseek_desktop/backend/internal/skills",
   "openseek_desktop/backend/internal/subrun",
   "openseek_desktop/backend/internal/workflow",
@@ -44,6 +49,10 @@ import {
   "openseek_desktop/backend/internal/gitx",
   "openseek_desktop/backend/internal/work_dir",
 } for "wbtest"
+
+import {
+  "moonbitlang/openseek_protocol/command_context",
+} for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

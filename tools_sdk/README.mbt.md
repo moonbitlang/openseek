@@ -2,18 +2,18 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. SDK `moonbitlang/openseek_tools@0.4.1` uses
-`moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
+implementation. SDK `moonbitlang/openseek_tools@0.4.2` uses
+`moonbitlang/core/async` and speaks PTC protocol version 1. The examples use
+MoonBit 0.10.22 or later to infer async and error effects in `fn main`.
 
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.1" @tools,
-  "moonbitlang/core/async",
+  "moonbitlang/openseek_tools@0.4.2" @tools,
 }
 ---
 
-async fn main {
+fn main {
   let result = @tools.call("edit", {
     "path": "note.txt", "start_line": 1,
     "old_string": "before", "new_string": "after",
@@ -72,21 +72,46 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.4.1/mcp" @mcp,
-  "moonbitlang/core/async",
+  "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
 }
 ---
 
-async fn main {
+fn main {
   // Print the page so the next model request sees the tools and schemas.
   let page = @mcp.search(query="list issues", server="github")
   println(page)
-  guard page.tools is [tool, ..] else { return }
-  let result = @mcp.call(tool.server, tool.name, { "repo": "moonbitlang/openseek" })
-  if result.is_error { fail(result.content) }
-  println(result.content)
 }
 ```
+
+After this script returns, read the tool descriptions and schemas, select a tool
+for the task, and construct its arguments in the next script.
+
+Match `result.data` against the discovered output schema and print the fields or
+summary the task needs. For example, suppose discovery showed a `tracker`
+server with a `list_issues` tool taking `repo` and returning an `issues` array:
+
+```mbtx
+---
+import {
+  "moonbitlang/openseek_tools@0.4.2/mcp" @mcp,
+}
+---
+
+fn main {
+  let result = @mcp.call("tracker", "list_issues", { "repo": "alpha" })
+  if result.is_error { fail(result.content) }
+  guard result.data is Some({ "issues": Array(issues), .. }) else {
+    fail("Expected structured issues. Tool text: \{result.content}")
+  }
+  println("Issues on this page: \{issues.length()}")
+}
+```
+
+`data` comes from the server's `structuredContent`; `content` renders the server's
+content blocks as text. A tool can return either or both. `data` is absent when
+the server supplies no structured result or it exceeds the reply budget. Use
+`content` for text results. For a read that needs structured data, narrow an
+oversized query or reduce its page size.
 
 `search` runs in the script. The first search downloads the host's catalog of
 servers and tools, and later searches in the same script reuse it. The host
@@ -182,12 +207,14 @@ SDK 0.4.0 and later use `moonbitlang/core/async`; 0.3.0 and earlier releases
 use the separate `moonbitlang/async` runtime. The wire protocol remains v1.
 SDK 0.4.1 pages an MCP catalog download through one host snapshot, so a server
 that connects or loses its connection mid-download cannot shift the pages; its
-API is unchanged from 0.4.0. The next release names the server of a scoped
+API is unchanged from 0.4.0. SDK 0.4.2 names the server of a scoped
 search in its first `list` request, so the host waits for that server alone;
-a listing from an earlier SDK waits for every server. Publish a release before pinning scripts and
-prompts to it. Keep SDK and wire
-versions separate. Documentation and host tool additions do not require
-changing the SDK API. For a future SDK release, check and test the independent module first:
+a listing from an earlier SDK waits for every server. This release also uses
+the current core async streaming HTTP API for PTC and MCP requests without
+changing their public APIs or wire protocols. Publish a release before pinning
+scripts and prompts to it. Keep SDK and wire versions separate. Documentation
+and host tool additions do not require changing the SDK API. For a future SDK
+release, check and test the independent module first:
 
 ```sh
 moon -C tools_sdk check --target native --deny-warn

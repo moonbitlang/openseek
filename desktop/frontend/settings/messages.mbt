@@ -90,12 +90,16 @@ pub(all) enum Message {
   GlmOfficial
   CustomUrl
   EndpointUrl
+  EndpointUrlDescription
   DeepseekApiKey
   GlmApiKey
   OpenRouterApiKey
   CustomApiKey
   SavedKey
   ApiKey
+  TestConnection
+  TestingConnection
+  ConnectionSuccessful
   SaveApiKey
   KeyStorageDescription
   Language
@@ -813,6 +817,16 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, CustomUrl) => "自定义 URL"
     (TraditionalChinese, CustomUrl) => "自定義 URL"
     (Japanese, CustomUrl) => "カスタム URL"
+    (English, EndpointUrlDescription) =>
+      "Use a base URL (https://host/v1) or a full Chat Completions URL. Saved when you leave the field or press Enter."
+    (SimplifiedChinese, EndpointUrlDescription) =>
+      "填写基础 URL（https://host/v1）或完整的 Chat Completions 地址。离开输入框或按 Enter 时保存。"
+    (TraditionalChinese, EndpointUrlDescription) =>
+      "填寫基礎 URL（https://host/v1）或完整的 Chat Completions 網址。離開輸入框或按 Enter 時儲存。"
+    (Japanese, EndpointUrlDescription) =>
+      "ベース URL（https://host/v1）または完全な Chat Completions URL を入力します。フォーカスを外すか Enter キーで保存します。"
+    (Spanish, EndpointUrlDescription) =>
+      "Introduce una URL base (https://host/v1) o la URL completa de Chat Completions. Se guarda al salir del campo o pulsar Enter."
     (English, EndpointUrl) => "Endpoint URL"
     (Spanish, EndpointUrl) => "URL del endpoint"
     (SimplifiedChinese, EndpointUrl) => "端点 URL"
@@ -849,6 +863,21 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ApiKey) => "API 密钥"
     (TraditionalChinese, ApiKey) => "API 金鑰"
     (Japanese, ApiKey) => "API キー"
+    (English, TestConnection) => "Test connection"
+    (Spanish, TestConnection) => "Probar conexión"
+    (SimplifiedChinese, TestConnection) => "测试连接"
+    (TraditionalChinese, TestConnection) => "測試連線"
+    (Japanese, TestConnection) => "接続をテスト"
+    (English, TestingConnection) => "Testing connection…"
+    (Spanish, TestingConnection) => "Probando conexión…"
+    (SimplifiedChinese, TestingConnection) => "正在测试连接…"
+    (TraditionalChinese, TestingConnection) => "正在測試連線…"
+    (Japanese, TestingConnection) => "接続をテストしています…"
+    (English, ConnectionSuccessful) => "Connection successful"
+    (Spanish, ConnectionSuccessful) => "Conexión establecida"
+    (SimplifiedChinese, ConnectionSuccessful) => "连接成功"
+    (TraditionalChinese, ConnectionSuccessful) => "連線成功"
+    (Japanese, ConnectionSuccessful) => "接続に成功しました"
     (English, SaveApiKey) => "Save API key"
     (Spanish, SaveApiKey) => "Guardar clave de API"
     (SimplifiedChinese, SaveApiKey) => "保存 API 密钥"

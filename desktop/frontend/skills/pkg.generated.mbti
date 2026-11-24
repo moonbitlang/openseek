@@ -32,6 +32,12 @@ pub(all) suberror SkillReplyError {
 
 // Types and methods
 #derive(Eq)
+pub(all) enum BrowseSection {
+  Discover
+  InstalledSkills
+}
+
+#derive(Eq)
 pub(all) struct Input {
   library : Library
   installed : Array[InstalledItem]
@@ -110,7 +116,10 @@ pub(all) enum Msg {
   PreviewLoaded(library~ : Library, request~ : Int32, target~ : PreviewTarget, content~ : String)
   PreviewFailed(library~ : Library, request~ : Int32, target~ : PreviewTarget, message~ : String)
   BackToList
-  SkillsScrolled(Double)
+  Browse(BrowseSection)
+  SetFilterOpen(Bool)
+  FilterBy(StatusFilter)
+  ClearFilters
   SelectLibrary(Library)
 }
 
@@ -156,6 +165,14 @@ pub fn State::sync_library(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
 pub fn State::with_builtin_errors(Self, Library, Array[@protocol.BuiltinSkillError]) -> Self
 pub fn State::with_installed(Self, Library, Array[InstalledItem]) -> Self
 pub fn State::with_library_error(Self, String) -> Self
+
+#derive(Eq)
+pub(all) enum StatusFilter {
+  AllSkills
+  EnabledSkills
+  DisabledSkills
+  WithUpdates
+}
 
 // Type aliases
 

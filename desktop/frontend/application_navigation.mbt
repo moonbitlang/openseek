@@ -25,7 +25,7 @@ fn reconcile_navigation(
     previous.cloud.user_id != next.cloud.user_id &&
     next.navigation.location
     is Some(
-      { target: CloudSession(session~, ..) | CloudDraft(id=session, ..), .. } as location
+      { target: CloudSession(session~, ..) | CloudDraft(id=session, ..), .. } as location,
     ) {
     let target : @routes.Target = if location.target is CloudDraft(..) {
       CloudDraft(account=next.cloud.user_id, id=session)

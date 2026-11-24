@@ -167,6 +167,7 @@ priv struct BgJob {
   // Display-only rewrites carried by the launching tool (for example, mapping
   // a throwaway compiler path back to the submitted source name).
   output_rewrites : Array[(String, String)]
+  display_tail : @shell_exec.DisplayTail?
   // True only when the launching tool enabled moonrun's policy, so ordinary
   // job output resembling a refusal cannot be misclassified as one.
   moonrun_policy_active : Bool
@@ -468,6 +469,12 @@ async fn BgJobRuntime::register(
   reaped~ : Bool,
   pinned? : () -> Bool,
 ) -> Unit {
+  let output_rewrites = output_rewrites.copy()
+  let display_tail = if output_rewrites.is_empty() {
+    None
+  } else {
+    Some(exec.track_display_tail(output_rewrites, JobOutputWindow))
+  }
   self.jobs[id] = {
     id,
     revision: 1,
@@ -481,7 +488,8 @@ async fn BgJobRuntime::register(
     exec,
     sandboxed_command,
     read_only_review,
-    output_rewrites: output_rewrites.copy(),
+    output_rewrites,
+    display_tail,
     moonrun_policy_active,
     on_terminal,
     on_published,
@@ -662,6 +670,28 @@ pub async fn BgJobRuntime::read_output_tail(
 }
 
 ///|
+/// Character budget shared by the background display and job_output paging.
+pub const JobOutputWindow : Int32 = 12000
+
+///|
+/// Rewritten tail and whether retained text was clipped or dropped from a
+/// memory-only job. Absent for unknown jobs and jobs with no display rules.
+pub fn BgJobRuntime::rewritten_output_tail(
+  self : BgJobRuntime,
+  id : String,
+) -> @shell_exec.DisplayTailSnapshot? {
+  guard self.jobs.get(id) is Some(job) && job.display_tail is Some(view) else {
+    return None
+  }
+  let tail = view.snapshot()
+  Some({
+    text: tail.text,
+    truncated: tail.truncated ||
+    (job.exec.spill_path() is None && job.exec.over_inline_cap()),
+  })
+}
+
+///|
 /// Whether `id` has been asked to stop, for any reason, as of now: set
 /// synchronously with the request, before the process has wound down.
 /// `false` for an unknown id.
@@ -777,7 +807,7 @@ async test "stop terminates a running job" {
 #cfg(not(platform="windows"))
 async test "a large-output job spills; snapshot previews, read_output is full" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   @async.with_task_group(group => {
     let rt = BgJobRuntime::BgJobRuntime(
       AgentTaskScope(group),
@@ -864,6 +894,44 @@ async test "job snapshots do not alias launcher rewrite arrays" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "failed display replay stops the process before publishing an adoption" {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group(group => {
+      let dir = @fs.tmpdir(prefix="openseek-failed-display-")
+      defer @fs.remove(dir, recursive=true)
+      let rt = BgJobRuntime(AgentTaskScope(group), spill_dir=dir)
+      let (input, release) = @process.write_to_process()
+      defer input.close()
+      defer release.close()
+      let path = dir + "/early"
+      let exec = @shell_exec.ShellExecution::start(
+        AgentTaskScope(group),
+        program="/bin/sh",
+        args=["-c", "printf ready; exec cat"],
+        stdin=Shared(input),
+        inline_cap=1,
+        spill_path=path,
+      )
+      while exec.size() < 5 {
+        @async.sleep(10)
+      }
+      @fs.remove(path)
+      try
+        rt.adopt(exec, command="gate", output_rewrites=[("ready", "ok")])
+      catch {
+        _ => assert_true(rt.list().is_empty())
+      } noraise {
+        _ => fail("expected missing spill file to fail the adoption")
+      }
+      // The gate is still held open: only the failed adoption could stop it.
+      exec.wait()
+      assert_true(exec.stop_cause() is Some(Requested))
+    })
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "on_job_exit fires once on a natural exit, never on stop" {
   @async.with_task_group(group => {
     let seen : Array[BgJobSnapshot] = []
@@ -903,7 +971,7 @@ async test "snapshot, read_output, and stop handle unknown ids" {
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "start allocates one id per job (id matches its spill file)" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   @async.with_task_group(group => {
     let rt = BgJobRuntime::BgJobRuntime(
       AgentTaskScope(group),

@@ -152,8 +152,8 @@
   .console-account-action {
     min-height: 44px;
   }
-  .composer-input textarea {
-    font-size: 16px;
+  .composer-inner {
+    --composer-input-font-size: 16px;
   }
 
   .portal-header {

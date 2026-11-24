@@ -89,7 +89,7 @@ pub fn Placeholder::to_repr(Self) -> @debug.Repr
 #derive(Eq)
 pub(all) struct RenderedSection {
   tools : @html.Html
-  rows : Array[(String, @html.Html)]
+  row : (String, @html.Html)
 }
 pub fn RenderedSection::equal(Self, Self) -> Bool
 pub fn RenderedSection::not_equal(Self, Self) -> Bool

@@ -46,14 +46,25 @@ fn list_component(
 ) -> @rabbita.Val[@html.Html] {
   let installed = localized.map(localized => {
     let (state, input, locale) = localized
-    @vector.from_array(
-      input.installed
-      .filter(item => {
-        input.available() &&
-        matches(state.query, [item.name, item.description, item.source])
-      })
-      .map(item => installed_menu_input(locale, state, input, item)),
-    )
+    let visible : Array[InstalledMenuInput] = []
+    if state.section is InstalledSkills && input.available() {
+      for item in input.installed {
+        guard matches(state.query, [item.name, item.description, item.source]) else {
+          continue
+        }
+        let menu = installed_menu_input(locale, state, input, item)
+        let keep = match state.filter {
+          AllSkills => true
+          EnabledSkills => item.enabled
+          DisabledSkills => !item.enabled
+          WithUpdates => menu.update is Some(_)
+        }
+        if keep {
+          visible.push(menu)
+        }
+      }
+    }
+    @vector.from_array(visible)
   })
   let list_menus = installed.assoc_by(
     (id, input) => {
@@ -62,20 +73,13 @@ fn list_component(
         input.map(input => Some(input)),
         emit,
         class="skill-action",
-      ).map2(input, (menu, input) => (input.item.id, menu))
+      ).map2(input, (menu, input) => (input.item, menu))
     },
     by=input => "\{input.library}:\{input.item.id}",
   )
   localized.map3(list_menus, selector, (localized, menus, selector) => {
     let (state, input, locale) = localized
-    list_page(
-      locale~,
-      state,
-      input,
-      emit,
-      Map::from_array(menus.to_array()),
-      selector,
-    )
+    list_page(locale~, state, input, emit, menus.to_array(), selector)
   })
 }
 

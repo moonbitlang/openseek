@@ -112,7 +112,7 @@ priv suberror OfficeFeedbackSubscription {
     @cmd.Emit[Msg],
     OfficeSelectionPreview,
     String,
-    (String, Bool) -> @cmd.Cmd
+    (String, Bool) -> @cmd.Cmd,
   )
 }
 

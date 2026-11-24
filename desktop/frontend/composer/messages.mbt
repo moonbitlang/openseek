@@ -25,6 +25,10 @@ priv enum UiMessage {
   AttachHint
   AttachImages
   ReadingImages
+  SubmittingFeedback
+  FeedbackSubmittedLabel
+  FeedbackNeedsSignIn
+  FeedbackLoginLabel
   UploadAttachment
   UploadAttachmentQuestion
   CancelAttachment
@@ -57,6 +61,9 @@ priv enum UiMessage {
   DeleteLabel
   CompactionQueued
   CompactingContext
+  ContextYieldHint
+  ContextYieldContinueHint
+  ContinueLabel
   WaitingPlacement
   RetryWorktreeList
   RetryLabel
@@ -249,30 +256,54 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AttachImages) => "添加附件"
     (TraditionalChinese, AttachImages) => "新增附件"
     (Japanese, AttachImages) => "ファイルを添付"
+    (English, FeedbackNeedsSignIn) => "Sign in to submit feedback."
+    (English, FeedbackLoginLabel) => "Sign in"
+    (English, SubmittingFeedback) => "Submitting feedback…"
+    (English, FeedbackSubmittedLabel) => "Feedback submitted"
     (English, ReadingImages) => "Reading attachments…"
     (English, PreparingAttachment) => "Preparing attachment…"
     (English, CancelAttachment) => "Cancel"
     (English, UploadAttachmentQuestion) =>
       "Upload this file to the current workspace? The original file will be kept."
     (English, UploadAttachment) => "Upload to workspace"
+    (Spanish, FeedbackNeedsSignIn) => "Inicia sesión para enviar comentarios."
+    (Spanish, FeedbackLoginLabel) => "Iniciar sesión"
+    (Spanish, SubmittingFeedback) => "Enviando comentarios…"
+    (Spanish, FeedbackSubmittedLabel) => "Comentarios enviados"
     (Spanish, ReadingImages) => "Leyendo archivos adjuntos…"
     (Spanish, PreparingAttachment) => "Preparando archivo adjunto…"
     (Spanish, CancelAttachment) => "Cancelar"
     (Spanish, UploadAttachmentQuestion) =>
       "¿Subir este archivo al espacio de trabajo actual? Se conservará el original."
     (Spanish, UploadAttachment) => "Subir al espacio de trabajo"
+    (SimplifiedChinese, FeedbackNeedsSignIn) =>
+      "请先登录，再提交反馈。"
+    (SimplifiedChinese, FeedbackLoginLabel) => "登录"
+    (SimplifiedChinese, SubmittingFeedback) => "正在提交反馈…"
+    (SimplifiedChinese, FeedbackSubmittedLabel) => "反馈已提交"
     (SimplifiedChinese, ReadingImages) => "正在读取附件…"
     (SimplifiedChinese, PreparingAttachment) => "正在准备附件…"
     (SimplifiedChinese, CancelAttachment) => "取消"
     (SimplifiedChinese, UploadAttachmentQuestion) =>
       "将此文件上传到当前工作区？原文件会保留。"
     (SimplifiedChinese, UploadAttachment) => "上传到工作区"
+    (TraditionalChinese, FeedbackNeedsSignIn) =>
+      "請先登入，再提交意見回饋。"
+    (TraditionalChinese, FeedbackLoginLabel) => "登入"
+    (TraditionalChinese, SubmittingFeedback) => "正在提交意見回饋…"
+    (TraditionalChinese, FeedbackSubmittedLabel) => "意見回饋已提交"
     (TraditionalChinese, ReadingImages) => "正在讀取附件…"
     (TraditionalChinese, PreparingAttachment) => "正在準備附件…"
     (TraditionalChinese, CancelAttachment) => "取消"
     (TraditionalChinese, UploadAttachmentQuestion) =>
       "將此文件上傳到目前工作區？原文件會保留。"
     (TraditionalChinese, UploadAttachment) => "上傳到工作區"
+    (Japanese, FeedbackNeedsSignIn) =>
+      "フィードバックを送信するにはログインしてください。"
+    (Japanese, FeedbackLoginLabel) => "ログイン"
+    (Japanese, SubmittingFeedback) => "フィードバックを送信中…"
+    (Japanese, FeedbackSubmittedLabel) =>
+      "フィードバックを送信しました"
     (Japanese, ReadingImages) => "添付ファイルを読み込み中…"
     (Japanese, PreparingAttachment) => "添付ファイルを準備中…"
     (Japanese, CancelAttachment) => "キャンセル"
@@ -452,6 +483,31 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, CompactingContext) => "正在压缩上下文…"
     (TraditionalChinese, CompactingContext) => "正在壓縮上下文…"
     (Japanese, CompactingContext) => "コンテキストを圧縮中…"
+    (English, ContextYieldHint) =>
+      "Context limit reached — the next turn continues from the checkpoint summary"
+    (Spanish, ContextYieldHint) =>
+      "Límite de contexto alcanzado: el siguiente turno continúa desde el resumen del punto de control"
+    (SimplifiedChinese, ContextYieldHint) =>
+      "已达上下文上限，下一轮将从检查点摘要继续"
+    (TraditionalChinese, ContextYieldHint) =>
+      "已達上下文上限，下一輪將從檢查點摘要繼續"
+    (Japanese, ContextYieldHint) =>
+      "コンテキスト上限に達しました。次のターンはチェックポイントの要約から続行します"
+    (English, ContextYieldContinueHint) =>
+      "Send the continuation prompt as a new turn"
+    (Spanish, ContextYieldContinueHint) =>
+      "Enviar el mensaje de continuación como un turno nuevo"
+    (SimplifiedChinese, ContextYieldContinueHint) =>
+      "作为新一轮发送继续指令"
+    (TraditionalChinese, ContextYieldContinueHint) =>
+      "作為新一輪傳送繼續指令"
+    (Japanese, ContextYieldContinueHint) =>
+      "継続のプロンプトを新しいターンとして送信"
+    (English, ContinueLabel) => "Continue"
+    (Spanish, ContinueLabel) => "Continuar"
+    (SimplifiedChinese, ContinueLabel) => "继续"
+    (TraditionalChinese, ContinueLabel) => "繼續"
+    (Japanese, ContinueLabel) => "続ける"
     (English, WaitingPlacement) => "Waiting for workspace placement…"
     (Spanish, WaitingPlacement) =>
       "Esperando la ubicación del espacio de trabajo…"

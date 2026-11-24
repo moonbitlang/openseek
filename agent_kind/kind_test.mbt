@@ -52,7 +52,7 @@ async fn child_test_server(
       max_connections=8,
     )
   }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  Some("http://127.0.0.1:\{server.addr.port}/chat/completions")
 }
 
 ///|
@@ -262,7 +262,7 @@ async test "a store-backed append_item persists the child transcript" {
     }
     guard child_test_server(group, handle) is Some(url) else { return }
     let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-subrun-child-"))
-    defer @fs.rmdir(store.root(), recursive=true)
+    defer @fs.remove(store.root(), recursive=true)
     let value = run_answer_kind(url, "parent-sr-1", append_item=(session, item) => {
       store.append(session, item)
     })

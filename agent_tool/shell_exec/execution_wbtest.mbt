@@ -61,7 +61,7 @@ async test "kill_when_full stops a runaway once the sink fills" {
 #cfg(not(platform="windows"))
 async test "large output spills and read_all returns the full output" {
   let dir = @fs.tmpdir(prefix="openseek-exec-spill-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let path = "\{dir}/spill.out"
   @async.with_task_group(group => {
     let exec = ShellExecution::start(

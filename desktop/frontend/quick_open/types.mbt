@@ -172,23 +172,23 @@ pub(all) enum Msg {
   CloudFilesLoaded(
     owner~ : @interop.ConversationIdentity,
     generation~ : Int32,
-    files~ : Array[@pathx.Relative]
+    files~ : Array[@pathx.Relative],
   )
   CloudFilesFailed(owner~ : @interop.ConversationIdentity, generation~ : Int32)
   FilesDue(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   FileCacheLoaded(
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   FileCacheRequestFailed(
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   FilesLoaded(
     owner~ : @interop.ConversationKey,
@@ -197,29 +197,29 @@ pub(all) enum Msg {
     generation~ : Int32,
     files~ : Array[@pathx.Relative],
     from_cache~ : Bool,
-    limit_hit~ : Bool
+    limit_hit~ : Bool,
   )
   FilesRequestFailed(
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
     query~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   SymbolsDue(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   SymbolsLoaded(
     owner~ : @interop.ConversationKey,
     query~ : String,
     generation~ : Int32,
-    items~ : Array[@symbols.Symbol]
+    items~ : Array[@symbols.Symbol],
   )
   SymbolsRequestFailed(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int32
+    generation~ : Int32,
   )
   Move(Int32)
   Select(Int32)

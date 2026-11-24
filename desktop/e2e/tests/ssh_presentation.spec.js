@@ -27,6 +27,37 @@ async function expectContained(locator) {
   expect(fits).toBe(true);
 }
 
+test('the project source selector connects only on confirmation and keeps the current browse', async ({ page }) => {
+  const app = new SshBrowserHarness(page);
+  app.workspaces = [];
+  await app.install();
+  await app.goto();
+  await page.getByRole('main').getByRole('button', { name: 'Add a project', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  await expect(picker.getByRole('button', { name: 'Open folder Projects' })).toBeVisible();
+  const select = picker.getByRole('combobox', { name: 'Project location', exact: true });
+  const local = picker.getByRole('option', { name: 'This computer', exact: true });
+  const remote = picker.getByRole('option', { name: /^Demonstration SSH workstation.*Disconnected/ });
+  const browses = () => app.requests.filter(r => r.method === 'fs.browse').length;
+  const initialBrowses = browses();
+
+  await select.click();
+  await local.click();
+  await expect(select).toHaveAttribute('aria-expanded', 'false');
+  expect(browses()).toBe(initialBrowses);
+
+  await select.press('ArrowDown');
+  await expect(local).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(remote).toBeFocused();
+  expect(app.attempt).toBe(0);
+  await page.keyboard.press('Enter');
+  await expect.poll(() => app.attempt).toBe(1);
+  await expect(picker).toBeHidden();
+  expect(app.requests.some(r => r.method === 'workspace.add')).toBe(false);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('SSH failure output scrolls without widening the page and narrow retry remains usable', async ({ page }) => {
   const app = await start(page);
   await app.sshEvent({ disconnected: warning });

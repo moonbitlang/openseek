@@ -30,7 +30,7 @@ fn history_record(generation : String, id : String) -> @protocol.JobRecord {
 /// Store `record` in its generation under `root`, as an engine publishes it.
 async fn store_record(root : String, record : @protocol.JobRecord) -> Unit {
   let directory = "\{root}/\{record.generation}"
-  @fs.mkdir(directory, recursive=true, allow_exist=true)
+  @fs.mkdir(directory, recursive=true, allow_existing=true)
   @fs.write_text(
     "\{directory}/\{@protocol.job_storage_name(record.id)}.json",
     record.to_json().stringify(),
@@ -54,7 +54,7 @@ async fn owner_lock(root : String, generation : String) -> @fs.File {
 async test "earlier job records are read from generations whose engine is gone" {
   @async.with_task_group(group => {
     let root = @fs.tmpdir(prefix="openseek-job-history-")
-    group.add_defer(() => @fs.rmdir(root, recursive=true))
+    group.add_defer(() => @fs.remove(root, recursive=true))
     // A dead engine's generation: its lock is free.
     store_record(root, history_record("gen-dead", "uuid-1"))
     store_record(root, history_record("gen-dead", "uuid-2"))

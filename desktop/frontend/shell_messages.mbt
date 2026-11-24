@@ -20,7 +20,6 @@ priv enum ShellMessage {
   ArchivedReadOnly
   RestoreBeforeContinue
   RestoreLabel
-  ConversationTransfer
   ExportConversation
   HideTerminal
   ShowTerminal
@@ -81,12 +80,14 @@ priv enum ShellMessage {
   NoGlmKey
   NoOpenRouterKey
   NoDeepSeekKey
+  SubmitFeedback
   CompactContext
   ShellTerminalUnavailable
   ShellWorktreeFailed
   SetGoal
   UltraReview
   SimplifyProject
+  ContinuePrompt
   GoalPlaceholder
   EditQueuePlaceholder
   QueuePlaceholder
@@ -222,11 +223,6 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, RestoreLabel) => "恢复"
     (TraditionalChinese, RestoreLabel) => "恢復"
     (Japanese, RestoreLabel) => "復元"
-    (English, ConversationTransfer) => "Conversation actions"
-    (Spanish, ConversationTransfer) => "Acciones de conversación"
-    (SimplifiedChinese, ConversationTransfer) => "对话操作"
-    (TraditionalChinese, ConversationTransfer) => "對話操作"
-    (Japanese, ConversationTransfer) => "会話の操作"
     (English, ExportConversation) => "Export"
     (Spanish, ExportConversation) => "Exportar"
     (SimplifiedChinese, ExportConversation) => "导出"
@@ -608,6 +604,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尚未設定 DeepSeek API 金鑰，無法傳送。"
     (Japanese, NoDeepSeekKey) =>
       "DeepSeek API キーが未設定のため送信できません。"
+    (English, SubmitFeedback) =>
+      "Include runtime environment details. Anyone with the link can read the full conversation."
+    (Spanish, SubmitFeedback) =>
+      "Adjunta los datos del entorno de ejecución. Cualquiera con el enlace puede leer la conversación completa."
+    (SimplifiedChinese, SubmitFeedback) =>
+      "附上运行环境。持链接者可查看完整对话。"
+    (TraditionalChinese, SubmitFeedback) =>
+      "附上執行環境。持連結者可查看完整對話。"
+    (Japanese, SubmitFeedback) =>
+      "実行環境の情報を添付します。リンクを知っている人は誰でも会話の全履歴を閲覧できます。"
     (English, CompactContext) =>
       "Summarize and shrink this conversation's context"
     (Spanish, CompactContext) =>
@@ -655,6 +661,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尋找安全的簡化並為每個套件建立一個提取請求（耗用大量 token）"
     (Japanese, SimplifyProject) =>
       "安全な簡略化を探し、パッケージごとにプルリクエストを作成（トークンを大量に消費）"
+    (English, ContinuePrompt) =>
+      "Continue the task from the checkpoint summary. Do not redo finished work; take the next step."
+    (Spanish, ContinuePrompt) =>
+      "Continúa la tarea desde el resumen del punto de control. No repitas el trabajo ya hecho; pasa al siguiente paso."
+    (SimplifiedChinese, ContinuePrompt) =>
+      "继续完成这个任务：从检查点摘要接着做，不要重做已完成的工作，直接进行下一步。"
+    (TraditionalChinese, ContinuePrompt) =>
+      "繼續完成這個任務：從檢查點摘要接著做，不要重做已完成的工作，直接進行下一步。"
+    (Japanese, ContinuePrompt) =>
+      "タスクを続けてください。チェックポイントの要約から再開し、完了済みの作業はやり直さず、次の手順に進んでください。"
     (English, UltraReview) =>
       "Parallel multi-lens review of your changes — uses many tokens"
     (Spanish, UltraReview) =>

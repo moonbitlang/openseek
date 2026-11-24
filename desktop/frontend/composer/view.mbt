@@ -644,6 +644,26 @@ fn ContextComponent::render(
           ),
         ]),
       )
+    ContextYieldNotice(continue_available~) => {
+      let row : Array[@html.Html] = [
+        @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_play)),
+        @html.span(class="composer-notice-text", ui(locale, ContextYieldHint)),
+      ]
+      // Continuing sends a prompt of the composer's own making, so the offer
+      // is only a button while nothing of the person's draft is in the way.
+      if continue_available {
+        row.push(
+          @html.button(
+            class="composer-notice-btn",
+            type_="button",
+            title=ui(locale, ContextYieldContinueHint),
+            on_click=action_emit(ContextContinueRequested(identity~)),
+            ui(locale, ContinueLabel),
+          ),
+        )
+      }
+      Some(@html.div(class="composer-context-row composer-notice", row))
+    }
     WorktreePlacementNotice =>
       Some(
         @html.div(class="composer-context-row composer-notice", [
@@ -905,6 +925,7 @@ priv struct View {
   before_inner : Map[String, @html.Html]
   mentions : Array[@html.Html]
   value : String
+  empty_message_owner : String?
   // The draft is a `!` shell command: the input wears the shell-mode chip
   // and monospace text.
   shell : Bool
@@ -944,6 +965,13 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   for action in self.actions {
     actions[action.id] = action.render(locale~)
   }
+  // The surrounding card owns the visible focus frame.
+  let input_attrs = self.keyboard.attrs().data_set("focus-target", "")
+  let input_attrs = if self.empty_message_owner is Some(owner) {
+    input_attrs.data_set("empty-message-owner", owner)
+  } else {
+    input_attrs
+  }
   let inner : Array[@html.Html] = [
     self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita
@@ -964,10 +992,7 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
           placeholder=self.placeholder,
           disabled=self.disabled,
           on_input=self.input,
-          // The surrounding card owns the visible focus frame; this marker lets
-          // the global focus styling find the textarea without drawing a second
-          // border around the control itself.
-          attrs=self.keyboard.attrs().data_set("focus-target", ""),
+          attrs=input_attrs,
           "",
         ),
         // Appended after the textarea, so the chip coming and going never

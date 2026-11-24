@@ -2,7 +2,7 @@
 #cfg(not(platform="windows"))
 async test "language and semantic tools execute the explicit host toolchain" {
   let root = @pathx.Path(@fs.tmpdir(prefix="host-toolchain-")).resolve()
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let seed = root.join("explicit seed")
   let runtime = root.join("runtime")
   let payload = runtime.join("toolchains/moonbit/linux-x64")

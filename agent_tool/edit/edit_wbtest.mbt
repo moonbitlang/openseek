@@ -33,7 +33,7 @@ async test "restore refuses a target replaced by a link to a look-alike" {
   }
   assert_true(reason.contains("changed after the edit"), msg=reason)
   assert_eq(@fs.read_text(target), "someone else's save\n")
-  @fs.rmdir(dir, recursive=true)
+  @fs.remove(dir, recursive=true)
 }
 
 ///|

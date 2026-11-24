@@ -55,7 +55,9 @@ pub struct MarkdownRenderFact {
 /// synchronous and receives both the MoonBit-owned block value and the active
 /// language id supplied by the caller. Conversion failures never expose raw
 /// input as HTML: they produce one escaped plaintext paragraph.
-/// `source_mapping` writes original-snapshot source ranges on block elements.
+/// `render_math` receives delimiter-free TeX and its display mode. Without it,
+/// formulas remain escaped source. `source_mapping` writes original-snapshot
+/// source ranges on block elements.
 /// Parse-local IDs stay inside parsing and renderer dispatch. A custom renderer
 /// may set `code_block_renderer_owns_source_root=true` only when it writes the
 /// block's source attributes onto its own root; other HTML receives a wrapper.
@@ -65,6 +67,7 @@ pub fn render_markdown(
   source_mapping~ : Bool = false,
   code_block_renderer_owns_source_root~ : Bool = false,
   code_block_renderer? : (MarkdownCodeBlock, String?) -> String,
+  render_math? : (String, Bool) -> String,
 ) -> MarkdownRenderFact {
   let saw_code_block = Ref(false)
   let parser_input = markdown_cmark_input(markdown)
@@ -89,49 +92,61 @@ pub fn render_markdown(
     None
   }
   let renderer = @cmark_html.renderer(safe=true, node_attributes?)
-  let block_override = @cmark_renderer.Renderer::new(block=fn(
-    ctx,
-    block,
-  ) raise {
-    match block {
-      CodeBlock(node) => {
-        saw_code_block.val = true
-        guard code_blocks_by_id.get(node.meta.id) is Some(code_block) else {
-          return false
-        }
-        if render_diagram_code_block(code_block) is Some(html) {
-          ctx.string(html)
-          true
-        } else if code_block_renderer is Some(render) {
-          markdown_write_code_override(
-            ctx,
-            code_block.block_source_range,
-            render(code_block, language_id),
-            source_mapping=source_mapping &&
-              !code_block_renderer_owns_source_root,
-          )
-          true
-        } else {
-          false
-        }
+  let overrides = @cmark_renderer.Renderer::new(
+    inline=(ctx, inline) => {
+      guard inline is ExtMathSpan({ v, .. }) && render_math is Some(render) else {
+        return false
       }
-      ExtMathBlock(node) => {
-        guard source_mapping &&
-          markdown_offset_range(node.meta.loc) is Some(source_range) else {
-          return false
+      ctx.string(render(v.tex(), v.display))
+      true
+    },
+    block=(ctx, block) => {
+      match block {
+        CodeBlock(node) => {
+          saw_code_block.val = true
+          guard code_blocks_by_id.get(node.meta.id) is Some(code_block) else {
+            return false
+          }
+          if render_diagram_code_block(code_block) is Some(html) {
+            ctx.string(html)
+            true
+          } else if code_block_renderer is Some(render) {
+            let html = render(code_block, language_id)
+            let source_range = {
+              guard !source_mapping || code_block_renderer_owns_source_root else {
+                Some(code_block.block_source_range)
+              }
+              None
+            }
+            markdown_write_source_block(ctx, source_range, () => {
+              ctx.string(html)
+            })
+            true
+          } else {
+            false
+          }
         }
-        ctx.string(
-          "<div class=\"moonbit-viewer-markdown-source-block\"\{markdown_source_attributes(source_range)}>",
-        )
-        let _ = (renderer.block)(ctx, block)
-        ctx.string("</div>")
-        true
+        ExtMathBlock(node) => {
+          let source_range = {
+            guard source_mapping else { None }
+            markdown_offset_range(node.meta.loc)
+          }
+          markdown_write_source_block(ctx, source_range, () => {
+            if render_math is Some(render) {
+              let tex = node.v.code.iter().map(line => line.v).join("\n")
+              ctx.string(render(tex, true))
+            } else {
+              let _ = (renderer.block)(ctx, block)
+            }
+          })
+          true
+        }
+        _ => false
       }
-      _ => false
-    }
-  })
+    },
+  )
   markdown_conversion_result(markdown, saw_code_block, projection, () => {
-    renderer.compose(block_override).doc_to_string(doc)
+    renderer.compose(overrides).doc_to_string(doc)
   })
 }
 
@@ -162,7 +177,7 @@ fn markdown_cmark_input(markdown : String) -> String {
     }
   }
   guard needs_cleaning else { return markdown }
-  let cleaned = StringBuilder(size_hint=markdown.length())
+  let cleaned = StringBuilder(capacity=markdown.length())
   i = 0
   while i < markdown.length() {
     let unit = markdown[i].to_int()

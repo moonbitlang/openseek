@@ -302,8 +302,8 @@ test "subrun lifecycle brackets decode to their display forms" {
       SubrunFinished(
         status="cancelled",
         steps=0,
-        unaccounted=Some("the sub-run was cancelled before its result was read")
-      )
+        unaccounted=Some("the sub-run was cancelled before its result was read"),
+      ),
     ),
   )
   // A finish missing its required fields drops rather than misrendering.

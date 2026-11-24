@@ -11,29 +11,16 @@ async fn catalog(host : @mcphost.Service?) -> Array[Json] {
   let (_, body) = @http.post_text(url, request.stringify(), headers={
     "Authorization": "Bearer \{token}",
   })
-  guard @json.parse(body) is { "data": { "items": Array(items), .. }, .. } else {
+  guard body.json() is { "data": { "items": Array(items), .. }, .. } else {
     fail("expected the whole catalog in one listing")
   }
   items
 }
 
 ///|
-/// Start connecting the servers of `config_paths` and wait until every one
-/// has settled.
-async fn settled_mcp(
-  scope : @agent_runtime.AgentTaskScope,
-  config_paths : Array[String],
-  workspace_root~ : String,
-) -> @execution.McpRegistry {
-  let registry = @execution.start_mcp(scope, config_paths, workspace_root~)
-  registry.wait()
-  registry
-}
-
-///|
 async test "multiple MCP files merge before connecting and bad files do not hide valid tools" {
   let directory = @fs.tmpdir(prefix="openseek-mcp-merge-")
-  defer @fs.rmdir(directory, recursive=true)
+  defer @fs.remove(directory, recursive=true)
   let first = directory + "/first.json"
   let second = directory + "/second.json"
   let broken = directory + "/broken.json"
@@ -93,7 +80,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
           allow_failure=true,
         )
       })
-      let base = "http://127.0.0.1:\{server.addr.port()}"
+      let base = "http://127.0.0.1:\{server.addr.port}"
       let earlier : Json = {
         "mcpServers": {
           "seekmoon": { "url": base + "/overridden" },
@@ -106,7 +93,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       @fs.write_text(first, earlier.stringify())
       @fs.write_text(second, later.stringify())
       @fs.write_text(broken, "invalid JSON")
-      let mcp = settled_mcp(
+      let mcp = @execution.start_mcp(
         AgentTaskScope(group),
         [first, broken, missing, second],
         workspace_root=directory,
@@ -170,10 +157,9 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       }
       assert_eq(t1.map(tool => tool.name), ["echo"])
       assert_eq(t2.map(tool => tool.name), ["echo"])
-      // Failed inputs alone must not publish a successful registration.
-      // In particular, retain the original single-file event contract.
+      // Failed inputs alone leave no server, and each failure is reported.
       for paths in [[broken], [broken, missing]] {
-        let failed = settled_mcp(
+        let failed = @execution.start_mcp(
           AgentTaskScope(group),
           paths,
           workspace_root=directory,
@@ -183,15 +169,10 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         // With no server there is no host to hand scripts.
         assert_true(failed.serve(AgentTaskScope(group)) is None)
         // The sink is process-global and async tests run concurrently, so
-        // match only events this call can have produced: failures by their
-        // path, and a registration by its zero servers, the only count failed
-        // inputs could report. Other tests register configured servers.
+        // match only the failures this call can have produced, by their path.
         let failed_paths : Array[String] = []
         while @emit.poll_line() is Some(line) {
           let event = @json.parse(line)
-          assert_false(
-            event is { "event": "mcp_tools_registered", "servers": 0, .. },
-          )
           if event
             is {
               "event": "mcp_config_invalid"
@@ -213,7 +194,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
 async test "the MCP registry tells its owner as a server settles and when it is lost" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-mcp-registry-")
-    defer @fs.rmdir(dir, recursive=true)
+    defer @fs.remove(dir, recursive=true)
     // Offers one tool, then exits a moment later.
     let brief =
       #|read _
@@ -238,9 +219,11 @@ async test "the MCP registry tells its owner as a server settles and when it is 
       workspace_root=dir,
       on_change=() => ignore(changed.try_put(()) catch { _ => false }),
     )
-    // Listed from the start, before it has come to anything.
-    assert_true(registry.status().servers is [{ state: Connecting, .. }])
-    while registry.status().servers is [{ state: Connecting, .. }] {
+    // Listed from the start, idle until a script reaches it.
+    assert_true(registry.status().servers is [{ state: Idle, .. }])
+    let host = registry.serve(AgentTaskScope(group))
+    group.spawn_bg(() => ignore(catalog(host)))
+    while registry.status().servers is [{ state: Idle | Connecting, .. }] {
       changed.get()
     }
     guard registry.status().servers is [server] else {
@@ -272,6 +255,129 @@ async test "the MCP registry tells its owner as a server settles and when it is 
     assert_eq([ for tool in tools => tool.name ], ["ping"])
     // Its tools leave the catalog, which says why.
     let lost : Json = { "server": "brief", "error": "the connection was lost" }
-    assert_eq(catalog(registry.serve(AgentTaskScope(group))), [lost])
+    assert_eq(catalog(host), [lost])
+  })
+}
+
+///|
+/// Write a skill named `name` under `dir`/skills whose `mcp.json` is `config`.
+async fn write_skill(dir : String, name : String, config : Json) -> Unit {
+  let skill = "\{dir}/skills/\{name}"
+  @fs.mkdir(skill, recursive=true)
+  @fs.write_text(
+    "\{skill}/SKILL.md",
+    "---\nname: \{name}\n---\n",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text(
+    "\{skill}/mcp.json",
+    config.stringify(),
+    create_mode=CreateOrTruncate,
+  )
+}
+
+///|
+async test "a skill's stdio server accepts a configured native command" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.remove(dir, recursive=true)
+  write_skill(dir, "tracker", {
+    "mcpServers": {
+      "tracker": {
+        "command": "node",
+        "args": ["${OPENSEEK_SKILL_DIR}/server.js"],
+        "env": { "MODE": "read-only", "HOST_PATH": "${PATH}" },
+      },
+    },
+  })
+  @async.with_task_group(group => {
+    let registry = @execution.start_mcp(
+      AgentTaskScope(group),
+      [],
+      skills=@agent_skill.discover_skills("\{dir}/skills"),
+      workspace_root=dir,
+    )
+    guard registry.status()
+      is {
+        configs: [{ state: Loaded, .. }],
+        servers: [{ target, state: Idle, .. }],
+      } else {
+      fail("a native server from a skill should load, idle")
+    }
+    assert_eq(target, "node")
+    assert_false(@fs.exists("\{dir}/policies"))
+  })
+}
+
+///|
+async test "a skill's malformed helper or missing variable makes its configuration invalid" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.remove(dir, recursive=true)
+  let rejected : Array[(String, Json)] = [
+    (
+      "helper",
+      {
+        "helper": {
+          "url": "https://example.com/mcp",
+          "headersHelper": "print-token",
+        },
+      },
+    ),
+    // Missing variables remain configuration errors.
+    (
+      "secret",
+      {
+        "secret": {
+          "url": "https://example.com/mcp",
+          "headers": {
+            "Authorization": "${OPENSEEK_TEST_MISSING_SKILL_MCP_VARIABLE_2505}",
+          },
+        },
+      },
+    ),
+  ]
+  for entry in rejected {
+    let (name, servers) = entry
+    write_skill(dir, name, { "mcpServers": servers })
+  }
+  @async.with_task_group(group => {
+    let registry = @execution.start_mcp(
+      AgentTaskScope(group),
+      [],
+      skills=@agent_skill.discover_skills("\{dir}/skills"),
+      workspace_root=dir,
+    )
+    let status = registry.status()
+    assert_true(status.servers is [])
+    assert_eq(status.configs.length(), rejected.length())
+    assert_true(status.configs.all(config => config.state is Failed(_)))
+  })
+}
+
+///|
+async test "a skill's HTTP server connects when a script reaches it" {
+  let dir = @fs.tmpdir(prefix="openseek-mcp-skill-")
+  defer @fs.remove(dir, recursive=true)
+  // Nothing listens on port 9, so connecting settles at once as failed.
+  write_skill(dir, "tracker", {
+    "mcpServers": {
+      "tracker": {
+        "url": "http://127.0.0.1:9/mcp",
+        "headersHelper": ["${OPENSEEK_SKILL_DIR}/missing-helper"],
+      },
+    },
+  })
+  @async.with_timeout(10000, () => {
+    @async.with_task_group(group => {
+      let registry = @execution.start_mcp(
+        AgentTaskScope(group),
+        [],
+        skills=@agent_skill.discover_skills("\{dir}/skills"),
+        workspace_root=dir,
+      )
+      assert_true(registry.status().servers is [{ state: Idle, .. }])
+      ignore(catalog(registry.serve(AgentTaskScope(group))))
+      assert_true(registry.status().servers is [{ state: Failed(_), .. }])
+      group.return_immediately()
+    })
   })
 }

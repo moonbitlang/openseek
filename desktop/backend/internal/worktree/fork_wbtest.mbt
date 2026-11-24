@@ -151,7 +151,7 @@ async test "a fork whose record was not written leaves no worktree behind" {
 async test "a source whose checkout is gone is refused before anything is made" {
   with_recovery_fixture((repo, host) => {
     let created = create(host, repo, WorktreeOwner::openseek("first"), _ => ())
-    @fs.rmdir(worktree_dir(repo, created.name).to_string(), recursive=true)
+    @fs.remove(worktree_dir(repo, created.name).to_string(), recursive=true)
     let mut asked = false
     let refused = try {
       add_session_to_new_worktree(
@@ -183,7 +183,7 @@ async test "a fork provisions the submodules of its own commit" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-fork-submodules-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let dependency = root.join("dependency")

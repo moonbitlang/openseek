@@ -17,7 +17,7 @@ test "full-diff comments cross the Desktop boundary without losing line identity
       quote="obsolete()",
       comment="good removal",
       resource=None,
-      feedback_id=None
+      feedback_id=None,
     ),
   )
   let context = diff_comment_message(
@@ -52,7 +52,7 @@ test "full-diff comments cross the Desktop boundary without losing line identity
       original_line_number=Some(12),
       modified_line_number=None,
       resource=Some(
-        { uri: "openseek-review-original://workspace/src/main.mbt", .. }
+        { uri: "openseek-review-original://workspace/src/main.mbt", .. },
       ),
       feedback_id=Some("feedback-12"),
       ..

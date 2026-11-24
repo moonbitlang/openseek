@@ -48,7 +48,7 @@ pub async fn write_drafts(
   let parent = path.dirname()
   @fsx.ensure_dir(parent)
   let unique = @fs.tmpdir(prefix="github-drafts-")
-  defer @fs.rmdir(unique)
+  defer @fs.remove(unique)
   let unique_path : @pathx.Path = unique
   let temp = parent.join(unique_path.basename().to_owned())
   defer @async.protect_from_cancel(() => @fsx.remove_if_exists(temp))

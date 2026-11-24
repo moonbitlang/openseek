@@ -18,7 +18,7 @@ async test "worktree creation reads settings using a resource path" {
       let code = result.exit_code
       assert_eq(code, 0, msg=result.stderr_text())
     } else {
-      @fs.rmdir(root.to_string(), recursive=true)
+      @fs.remove(root.to_string(), recursive=true)
     }
   })
   let home_variable = if windows { "USERPROFILE" } else { "HOME" }

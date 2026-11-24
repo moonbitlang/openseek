@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/mcp/oauth",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/mcp",
@@ -11,6 +12,8 @@ import {
 }
 
 import {
+  "moonbitlang/core/env",
+  "moonbitlang/openseek/mcp/oauth",
   "moonbitlang/openseek/mcp/host" @mcphost,
   "moonbitlang/openseek/jsonrpc",
   "moonbitlang/openseek/agent_runtime",

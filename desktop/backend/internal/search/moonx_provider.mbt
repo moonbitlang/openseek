@@ -3,7 +3,7 @@
 /// through the selected toolchain. Pinning the version keeps search and
 /// Pattern Repair deterministic instead of running whatever the local registry
 /// index knows as "latest".
-pub const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.5"
+pub const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.12"
 
 ///|
 pub fn moongrep_args(args : Array[String]) -> Array[String] {

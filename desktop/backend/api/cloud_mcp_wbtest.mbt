@@ -1,7 +1,7 @@
 ///|
 async test "Cloud MCP discovers only client tools without loading Local history" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="seekmoon-cloud-mcp-"))
-  defer @fs.rmdir(dir.to_string(), recursive=true)
+  defer @fs.remove(dir.to_string(), recursive=true)
   @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=dir)
   let opened : Array[String] = []

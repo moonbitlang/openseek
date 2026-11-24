@@ -13,6 +13,18 @@ pub async fn pull_request_summary(
   guard github_pull_request_summary_identity(payload.url) is Some(identity) else {
     return { pull_request: None, }
   }
+  let raw = read_pull_request_fields(identity, PullRequestSummaryFields)
+  guard parse_pull_request(raw) is Some(pull_request) else {
+    raise InvalidResponse("GitHub returned invalid PR status.")
+  }
+  { pull_request: Some(pull_request), }
+}
+
+///|
+async fn read_pull_request_fields(
+  identity : GithubReviewIdentity,
+  fields : String,
+) -> Json {
   guard resolve_gh() is Some(gh) else {
     raise Unavailable("Install GitHub CLI (gh) and sign in to load PR status.")
   }
@@ -31,7 +43,7 @@ pub async fn pull_request_summary(
         "--repo",
         "https://\{identity.host}/\{identity.owner}/\{identity.repo}",
         "--json",
-        PullRequestSummaryFields,
+        fields,
       ],
       env~,
     )
@@ -42,10 +54,7 @@ pub async fn pull_request_summary(
   guard result is Some(raw) else {
     raise Unavailable("PR status lookup timed out.")
   }
-  guard parse_pull_request(raw) is Some(pull_request) else {
-    raise InvalidResponse("GitHub returned invalid PR status.")
-  }
-  { pull_request: Some(pull_request), }
+  raw
 }
 
 ///|

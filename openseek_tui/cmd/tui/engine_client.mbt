@@ -286,6 +286,11 @@ async fn EngineClient::send(
   }
   live.writer.write(@utf8.encode("\{command.stringify()}\n")) catch {
     error => {
+      let error : Error = if error is TransportError(cause, ..) {
+        cause
+      } else {
+        error
+      }
       self.live = None
       self.messages.put(AgentFailed(run_id~, error))
     }
@@ -418,6 +423,11 @@ async fn EngineClient::goal(
   live.pending_goal_acks.push(goal)
   live.writer.write(@utf8.encode("\{command.stringify()}\n")) catch {
     error => {
+      let error : Error = if error is TransportError(cause, ..) {
+        cause
+      } else {
+        error
+      }
       if live.pending_goal_acks.search(goal) is Some(index) {
         live.pending_goal_acks.remove(index) |> ignore
       }

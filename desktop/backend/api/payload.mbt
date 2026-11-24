@@ -5,13 +5,7 @@
 fn @protocol.SettingsSetPayload::to_patch(
   self : @protocol.SettingsSetPayload,
 ) -> @engine.SettingsPatch {
-  {
-    provider: self.provider,
-    custom_api_url: self.custom_api_url,
-    deepseek_api_key: self.deepseek_api_key,
-    glm_api_key: self.glm_api_key,
-    custom_api_key: self.custom_api_key,
-  }
+  { provider: self.provider, providers: self.providers, }
 }
 
 ///|

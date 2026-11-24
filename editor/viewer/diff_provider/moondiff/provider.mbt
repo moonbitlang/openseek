@@ -117,6 +117,10 @@ fn paired_inner_changes(
 ) -> Array[@diff.RangeMapping]? {
   let original_ranges = changed_ranges(original)
   let modified_ranges = changed_ranges(modified)
+  if (original.intraline is NotComputed && original_ranges.is_empty()) ||
+    (modified.intraline is NotComputed && modified_ranges.is_empty()) {
+    return None
+  }
   if original_ranges.is_empty() && modified_ranges.is_empty() {
     return Some([])
   }
@@ -154,14 +158,15 @@ fn old_only_change(
   modified_lines : Array[String],
 ) -> @diff.DetailedLineRangeMapping {
   let anchor = cursor_anchor(modified_lines, modified_cursor)
+  let ranges = changed_ranges(original)
   DetailedLineRangeMapping(
     LineRange(original.index + 1, original.index + 2),
     LineRange(modified_cursor + 1, modified_cursor + 1),
-    Some(
-      changed_ranges(original).map(original_range => {
-        RangeMapping(original_range, anchor)
-      }),
-    ),
+    if original.intraline is Computed || !ranges.is_empty() {
+      Some(ranges.map(original_range => RangeMapping(original_range, anchor)))
+    } else {
+      None
+    },
   )
 }
 
@@ -172,14 +177,15 @@ fn new_only_change(
   original_lines : Array[String],
 ) -> @diff.DetailedLineRangeMapping {
   let anchor = cursor_anchor(original_lines, original_cursor)
+  let ranges = changed_ranges(modified)
   DetailedLineRangeMapping(
     LineRange(original_cursor + 1, original_cursor + 1),
     LineRange(modified.index + 1, modified.index + 2),
-    Some(
-      changed_ranges(modified).map(modified_range => {
-        RangeMapping(anchor, modified_range)
-      }),
-    ),
+    if modified.intraline is Computed || !ranges.is_empty() {
+      Some(ranges.map(modified_range => RangeMapping(anchor, modified_range)))
+    } else {
+      None
+    },
   )
 }
 

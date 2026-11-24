@@ -291,8 +291,8 @@ fn check_state(fields : Map[String, Json]) -> CheckState {
           | "TIMED_OUT"
           | "ACTION_REQUIRED"
           | "STARTUP_FAILURE"
-          | "STALE"
-        )
+          | "STALE",
+        ),
       ) => Failed
       _ => Passed
     }

@@ -12,7 +12,7 @@ test "unnamed workspace storage uses stable app data rather than development run
 ///|
 async test "chat root metadata reports broken storage without raising into registry operations" {
   let dir = @fs.tmpdir(prefix="openseek-chat-root-error-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let parent = @pathx.Path(dir).resolve().join("file")
   @fs.write_text(parent.to_string(), "keep", create_mode=CreateOrTruncate)
   assert_true(chat_workspace_root_in(parent.join("workspaces")) is Failed(_))

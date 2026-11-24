@@ -87,7 +87,7 @@ pub(all) enum MouseTarget {
     element~ : @rdom.Element?,
     mouse_column~ : Int32,
     position~ : @base_common.Position?,
-    range~ : @base_common.Range?
+    range~ : @base_common.Range?,
   )
   MouseTargetMargin(
     type_~ : MouseTargetType,
@@ -95,7 +95,7 @@ pub(all) enum MouseTarget {
     mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
-    detail~ : MouseTargetMarginData
+    detail~ : MouseTargetMarginData,
   )
   MouseTargetViewZone(
     type_~ : MouseTargetType,
@@ -103,44 +103,44 @@ pub(all) enum MouseTarget {
     mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
-    detail~ : MouseTargetViewZoneData
+    detail~ : MouseTargetViewZoneData,
   )
   MouseTargetContentText(
     element~ : @rdom.Element?,
     mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
-    detail~ : MouseTargetContentTextData
+    detail~ : MouseTargetContentTextData,
   )
   MouseTargetContentEmpty(
     element~ : @rdom.Element?,
     mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
-    detail~ : MouseTargetContentEmptyData
+    detail~ : MouseTargetContentEmptyData,
   )
   MouseTargetContentWidget(
     element~ : @rdom.Element?,
     mouse_column~ : Int32,
-    detail~ : String
+    detail~ : String,
   )
   MouseTargetScrollbar(
     element~ : @rdom.Element?,
     mouse_column~ : Int32,
     position~ : @base_common.Position,
-    range~ : @base_common.Range
+    range~ : @base_common.Range,
   )
   MouseTargetOverlayWidget(
     element~ : @rdom.Element?,
     mouse_column~ : Int32,
-    detail~ : String
+    detail~ : String,
   )
   MouseTargetOutsideEditor(
     mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
     outside_position~ : OutsidePosition,
-    outside_distance~ : Double
+    outside_distance~ : Double,
   )
 }
 

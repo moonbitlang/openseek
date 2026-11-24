@@ -6,7 +6,7 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-cleanup-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(dir)
   @sys.set_env_var("HOME", root.join("global").to_string())
   let workspace = attach_run_workspace(root)
@@ -69,7 +69,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let root = worktree_test_root("openseek-first-edit-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   @fsx.ensure_dir(root.join("global").to_path())
   let repo = root.join("repo")
@@ -175,7 +175,7 @@ async test "single edit waits for the submitted message before deleting its sour
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-single-edit-"))
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(dir)
   @sys.set_env_var("HOME", root.join("global").to_string())
   let workspace = attach_run_workspace(root)
@@ -186,10 +186,11 @@ async test "single edit waits for the submitted message before deleting its sour
     .append(Terminal(Finished("answer")))
   store.create(source)
   let custom_prompt = "  Custom instructions\n中文\n"
-  @fsx.write_text_atomic(
+  @openseek/atomic_file.write_text_atomic(
     @pathx.Path(store.session_file(SessionId("source")))
     .dirname()
-    .join("system-prompt.md"),
+    .join("system-prompt.md")
+    .to_string(),
     custom_prompt,
   )
   let manager = new_engine_manager("unused")

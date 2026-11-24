@@ -1,7 +1,25 @@
 ///|
-/// A terminal result is a standalone message, independent of editable text,
-/// images and attachments. Delivery updates are correlated by the command id.
+#derive(Eq)
+pub(all) enum FeedbackFailure {
+  SignInRequired
+  Diagnostic(String)
+}
+
+///|
+#derive(Eq)
+priv enum FeedbackStatus {
+  Sending(String, String)
+  Submitted
+  Failed(FeedbackFailure, held~ : String?)
+  RetryReady(String)
+}
+
+///|
+/// Command outcomes delivered to the composer entry that submitted them.
 pub(all) enum CommandResult {
+  FeedbackSettled(Identity, String, Result[Unit, FeedbackFailure])
+  RestoreFeedback(Input, String, String?)
+  FeedbackAccountUpdated(signed_in~ : Bool, changed~ : Bool)
   Ready(Input, String, String)
   Restore(Input, String)
   Settled(@interop.ConversationIdentity, String, Bool)
@@ -36,12 +54,80 @@ fn Entry::hold_result(self : Entry, text : String) -> Entry {
 }
 
 ///|
+fn Entry::feedback_failed(
+  self : Entry,
+  command : String,
+  reason : FeedbackFailure,
+) -> Entry {
+  if !self.draft.task.is_empty() || self.holds_draft() {
+    { ..self, feedback: Some(Failed(reason, held=Some(command))), }
+  } else {
+    {
+      ..self,
+      draft: { ..self.draft, task: command, },
+      feedback: Some(Failed(reason, held=None)),
+    }
+  }
+}
+
+///|
 fn Model::command_result(
   self : Model,
   message : CommandResult,
   action_emit : @cmd.Emit[Action],
 ) -> (Model, @cmd.Cmd) {
   match message {
+    FeedbackAccountUpdated(signed_in~, changed~) =>
+      (
+        {
+          ..self,
+          entries: self.entries.map(entry => {
+            match entry.feedback {
+              Some(Sending(_, command)) if !signed_in =>
+                {
+                  ..entry,
+                  feedback: Some(Failed(SignInRequired, held=Some(command))),
+                }
+              Some(Failed(SignInRequired, held=Some(command))) if signed_in =>
+                { ..entry, feedback: Some(RetryReady(command)), }
+              Some(Failed(SignInRequired, ..)) if !signed_in => entry
+              Some(Failed(SignInRequired, ..)) => { ..entry, feedback: None, }
+              _ if changed => { ..entry, feedback: None, }
+              _ => entry
+            }
+          }),
+        },
+        @cmd.none,
+      )
+    FeedbackSettled(identity, request, result) => {
+      guard self.entries
+        .iter()
+        .find_first(entry => entry.identity() == identity)
+        is Some(entry) &&
+        entry.feedback is Some(Sending(active, submitted)) &&
+        active == request else {
+        return (self, @cmd.none)
+      }
+      let next = match result {
+        Ok(_) => { ..entry, feedback: Some(Submitted), }
+        Err(reason) => entry.feedback_failed(submitted, reason)
+      }
+      self.commit_entry_change(entry, next, @cmd.none, action_emit)
+    }
+    RestoreFeedback(input, draft, held) => {
+      let entry = self.active(input)
+      let next = if entry.holds_draft() {
+        entry
+      } else {
+        entry.hold_result(draft)
+      }
+      self.commit_entry_change(
+        entry,
+        { ..next, feedback: held.map(command => RetryReady(command)), },
+        @cmd.none,
+        action_emit,
+      )
+    }
     Ready(input, id, text) => {
       let entry = self.active(input)
       if entry.results.any(result => result.id == id) {

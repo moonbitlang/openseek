@@ -14,11 +14,9 @@ MoonBit.
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
   `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
-- Keep `async fn main` for async IO.
-- Helpers that run an async command/IO are `async fn` too;
-  a plain `fn` cannot call them. (so async is contagious)
-- There is no `await`: async calls are written normally, and async functions
-  and tests are marked `async`.
+- Use `fn main`. The entry point infers async and error effects. Import
+  `moonbitlang/core/async` only when using its APIs, such as `@async.sleep`.
+- Declare async helpers with `async fn` and write async calls directly.
 - Use `println` (no `print`).
 
 A minimal `moon check` script:
@@ -37,7 +35,7 @@ Below is a complete example of CLI parsing using argparse:
 
 [share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
 
-For a nonzero exit,import `"moonbitlang/x/sys"`, and call `@sys.exit(1)`.
+For a nonzero exit, import `"moonbitlang/core/env"` and call `@env.exit(1)`.
 
 ## Shell EDSL with moonbitlang/core/async/shell
 
@@ -71,7 +69,10 @@ An example of using rg in `mbtx`:
 
 [share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
 
-Use `moon ide doc @moonbitlang/core/async/shell` for the full API.
+Use `moon ide doc @moonbitlang/core/async/shell` for a package API overview.
+Use `moon ide doc '@moonbitlang/core/async/shell.<Type>'` for a specific type's
+definition and documentation, as in
+`moon ide doc @moonbitlang/core/async/shell.Stdin`.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
@@ -103,7 +104,7 @@ import {
 }
 ---
 
-async fn main {
+fn main {
   @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
   for pass in 0..<12; previous = None {
     ignore(
@@ -212,7 +213,6 @@ Example native CLI package:
 
 ```moon.pkg
 import {
-  "moonbitlang/core/async",
   "moonbitlang/core/async/fs", // package
   "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",

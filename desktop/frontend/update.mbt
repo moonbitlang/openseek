@@ -1592,7 +1592,6 @@ fn desired_browser_view(model : Model) -> Int32? {
     model.right_panel_open &&
     !model.right_panel_menu_open &&
     !model.dock_tab_menu_open &&
-    !model.conversation_transfer_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
     !covering_overlay(model) else {
@@ -2120,24 +2119,16 @@ fn update(
   } else {
     model
   }
-  // The overview's connectors and changes cards ask about their conversation
-  // whenever the overview comes on screen for one: shown, or another
-  // conversation arriving under it. What the engine holds and what another
-  // client attached change on their own and asking starts nothing, so every
-  // arrival asks.
+  // The changes card reads attachments when the overview comes on screen
+  // or switches to another conversation.
   let (overview_cmd, model) = match model.overview_conversation() {
     Some(conversation) if previous.overview_conversation() != Some(conversation) => {
-      let (mcp_cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        Opened(conversation),
-        model.mcp,
-      )
       let (changes_cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
         Opened(conversation),
         model.changes,
       )
-      (@cmd.batch([mcp_cmd, changes_cmd]), { ..model, mcp, changes, })
+      (changes_cmd, { ..model, changes, })
     }
     _ => (@cmd.none, model)
   }
@@ -2479,7 +2470,7 @@ fn update_msg(
       codex_model~,
       codex_effort~,
       openseek_effort~,
-      glm_effort~
+      glm_effort~,
     ) => {
       let theme = theme
         .map(value => Theme::parse(value, model.theme))
@@ -2678,6 +2669,39 @@ fn update_msg(
         }
         _ => codex_composer_action(dispatch, model, action)
       }
+    ComposerAction(@composer.FeedbackSignIn(identity~, draft~, held~)) => {
+      guard model.accepts_composer_action(identity) && !model.remote_connecting else {
+        return (@cmd.none, model)
+      }
+      if !model.is_desktop {
+        let saved : Json = {
+          "owner": identity.owner.key(),
+          "draft": draft,
+          "held": match held {
+            Some(command) => Json::string(command)
+            None => Json::null()
+          },
+        }
+        guard remember_feedback_login(saved.stringify()) else {
+          return model.notify_error(
+            dispatch, "Could not save the feedback draft for sign-in.",
+          )
+        }
+      }
+      begin_account_login(
+        dispatch,
+        model,
+        rejected_token?=if model.is_desktop &&
+          identity.owner is @interop.Host(_) {
+          // The local publisher already expired the rejected host credential.
+          None
+        } else {
+          model.account.map(account => account.token)
+        },
+      )
+    }
+    ComposerAction(@composer.FeedbackSubmitted(identity~, request~, message~)) =>
+      model.submit_feedback(dispatch, identity, request, message)
     ComposerAction(action) => {
       if action is @composer.CommandResultRecovered(identity~) {
         return recover_command_result(model, identity)
@@ -2849,7 +2873,9 @@ fn update_msg(
         }
       }
       match action {
-        @composer.DraftAttachmentsSubmitted(..)
+        @composer.FeedbackSignIn(..)
+        | @composer.FeedbackSubmitted(..)
+        | @composer.DraftAttachmentsSubmitted(..)
         | @composer.CommandResultSubmitted(..)
         | @composer.CommandResultRecovered(..)
         | @composer.ReviewContextChanged(..) => (@cmd.none, model)
@@ -2876,7 +2902,8 @@ fn update_msg(
         | @composer.QueuedInputDeleteRequested(..)
         | @composer.WorktreePlacementRetried(..)
         | @composer.MissingWorktreeRebuildRequested(..)
-        | @composer.MissingWorktreeArchiveRequested(..) => {
+        | @composer.MissingWorktreeArchiveRequested(..)
+        | @composer.ContextContinueRequested(..) => {
           let identity = action.identity()
           guard model.screen is Chat &&
             model.conversation_for_composer_action(identity) is Some(conv) &&
@@ -2885,6 +2912,21 @@ fn update_msg(
             return (@cmd.none, model)
           }
           match action {
+            // Continuing after a context yield is an ordinary submission of a
+            // prompt the composer wrote, so it takes the same path the Send
+            // button does rather than a second way to start a turn.
+            @composer.ContextContinueRequested(identity~) =>
+              update_msg(
+                dispatch,
+                ComposerAction(
+                  @composer.DraftSubmitted(identity~, draft={
+                    task: shell_text(model.locale, ContinuePrompt),
+                    mentions: [],
+                    images: [],
+                  }),
+                ),
+                model,
+              )
             @composer.ModelMenuToggled(..) =>
               update_msg(dispatch, ToggleSelectMenu(OpenSeekModelMenu), model)
             @composer.ReasoningMenuToggled(..) =>
@@ -3455,7 +3497,7 @@ fn update_msg(
     FileEditor(
       EditorCommentAdded(..)
       | ApplyAllFeedback
-      | ApplyEditorFeedback(_) as feedback
+      | ApplyEditorFeedback(_) as feedback,
     ) => update_editor_feedback(dispatch, feedback, model)
     ArtifactFollowupRequested(slot~, prompt~, title~, snapshot~) => {
       guard model.artifact_followup is None &&
@@ -3490,8 +3532,8 @@ fn update_msg(
         quote~,
         comment~,
         resource~,
-        feedback_id~
-      )
+        feedback_id~,
+      ),
     ) => {
       let clear_feedback = match (resource, feedback_id) {
         (Some(resource), Some(feedback_id)) =>
@@ -3709,8 +3751,8 @@ fn update_msg(
         epoch~,
         path~,
         sig~,
-        selection~
-      )
+        selection~,
+      ),
     ) => {
       guard model.file_panel.accepts_office_callback(
         file_ctx(model),
@@ -3831,8 +3873,8 @@ fn update_msg(
         path~,
         sig~,
         generation~,
-        result~
-      )
+        result~,
+      ),
     ) => {
       let ctx = file_ctx(model)
       guard ctx.panel_open &&
@@ -3892,8 +3934,8 @@ fn update_msg(
         path~,
         sig~,
         generation~,
-        selection~
-      )
+        selection~,
+      ),
     ) => {
       guard model.file_panel.accepts_pdf_callback(
         file_ctx(model),
@@ -4017,7 +4059,7 @@ fn update_msg(
     // callback by its original conversation and coalesce identical live
     // toasts: one user gesture can cause Viewer to ask more than once.
     FileEditor(
-      @fileeditor.LanguageRequestFailed(owner~, message~, cloud_epoch~)
+      @fileeditor.LanguageRequestFailed(owner~, message~, cloud_epoch~),
     ) => {
       let ctx = file_ctx(model)
       guard model.file_panel.owner == Some(owner) &&
@@ -4036,7 +4078,7 @@ fn update_msg(
     // before/after check uses that package's owner/root/generation fencing and
     // also prevents a repeated host notification from stacking duplicates.
     FileEditor(
-      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~)
+      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~),
     ) => {
       let file_message = @fileeditor.FileWatchFailed(
         channel~,
@@ -4380,10 +4422,7 @@ fn update_msg(
       }
       let patch : @protocol.SettingsSetPayload = {
         provider: None,
-        custom_api_url: None,
-        deepseek_api_key: None,
-        glm_api_key: None,
-        custom_api_key: None,
+        providers: None,
         followup_behavior: None,
         prompt_source: source,
         custom_prompt: text,
@@ -4418,20 +4457,11 @@ fn update_msg(
       let push = push_host_settings(
         dispatch,
         model.focused,
-        provider_settings_patch(provider, endpoint.custom_api_url),
+        provider_settings_patch(provider),
         model.focused_connection_generation(),
       )
       let next = {
-        ..model.edit_host_endpoint({
-          ..endpoint,
-          provider,
-          custom_api_url: if provider is Custom &&
-            endpoint.custom_api_url == OpenRouterChatCompletionsUrl {
-            ""
-          } else {
-            endpoint.custom_api_url
-          },
-        }),
+        ..model.edit_host_endpoint({ ..endpoint, provider, }),
         setup_api_key: "",
         select_menu: None,
       }.align_new_chats_with_provider(model.focused)
@@ -4490,7 +4520,13 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        model.edit_host_endpoint({ ..endpoint, custom_api_url: value, }),
+        model.edit_host_endpoint({
+          ..endpoint,
+          providers: endpoint.providers.add(Custom, {
+            ..endpoint.config(Custom),
+            api_url: Some(value),
+          }),
+        }),
       )
     }
     NotificationCornerChanged(value) => {
@@ -4880,6 +4916,33 @@ fn update_msg(
           select_menu: None,
         },
       )
+    SettingsSectionSelected(Connectors) => {
+      let (cmd, connectors) = @connectors.update(
+        dispatch.map(msg => Connectors(msg)),
+        @connectors.Refresh,
+        model.connectors,
+        open_external=url => open_external_link(dispatch, url),
+      )
+      (
+        cmd,
+        {
+          ..model,
+          connectors,
+          management_dialog: Some(Settings(Connectors)),
+          api_setup_open: false,
+          select_menu: None,
+        },
+      )
+    }
+    Connectors(msg) => {
+      let (cmd, connectors) = @connectors.update(
+        dispatch.map(msg => Connectors(msg)),
+        msg,
+        model.connectors,
+        open_external=url => open_external_link(dispatch, url),
+      )
+      (cmd, { ..model, connectors, })
+    }
     SettingsSectionSelected(section) =>
       (
         @cmd.none,
@@ -5090,6 +5153,21 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
+    TestApiConnection => model.test_api_connection(dispatch)
+    ApiConnectionProbed(attempt, reply) => {
+      guard model.api_connection_probe is Some(probe) &&
+        probe.attempt == attempt &&
+        probe.reply is None else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          api_connection_probe: Some({ ..probe, reply: Some(reply), }),
+        },
+      )
+    }
     SaveApiKey => {
       guard model.host_settings() is Some({ endpoint, .. }) else {
         return (@cmd.none, model)
@@ -5110,11 +5188,10 @@ fn update_msg(
             let next = {
               ..model.edit_host_endpoint({
                 ..endpoint,
-                deepseek_key_saved: endpoint.deepseek_key_saved ||
-                provider is Deepseek,
-                glm_key_saved: endpoint.glm_key_saved || provider is Glm,
-                custom_key_saved: endpoint.custom_key_saved ||
-                provider is (OpenRouter | Custom),
+                providers: endpoint.providers.add(provider, {
+                  ..endpoint.config(provider),
+                  has_api_key: true,
+                }),
               }),
               setup_api_key: "",
             }
@@ -6570,8 +6647,6 @@ fn update_msg(
       )
     }
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false, })
-    // Showing the overview reads its conversation's connectors; the root
-    // transition notices the overview arriving and asks.
     ToggleOverview => {
       let overview_open = !model.overview_open
       (save_overview_open(overview_open), { ..model, overview_open, })
@@ -6657,8 +6732,6 @@ fn update_msg(
     }
     CloseRightPanelMenu =>
       (@cmd.none, { ..model, right_panel_menu_open: false, })
-    ConversationTransferMenuChanged(open) =>
-      (@cmd.none, { ..model, conversation_transfer_menu_open: open, })
     DockTabMenuChanged(open) =>
       (
         @cmd.none,
@@ -6770,7 +6843,7 @@ fn update_msg(
           auth_epoch~,
           generation~,
           path~,
-          bytes~
+          bytes~,
         ) {
         return (
           @fileeditor.browser_download(
@@ -7177,14 +7250,6 @@ fn update_msg(
       )
       (cmd, { ..model, jobs, })
     }
-    Mcp(msg) => {
-      let (cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        msg,
-        model.mcp,
-      )
-      (cmd, { ..model, mcp, })
-    }
     Changes(msg) => {
       let (cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
@@ -7443,7 +7508,7 @@ fn update_msg(
     Terminal(@terminal.LinkActivated(url~)) =>
       update_msg(dispatch, ExternalLinkClicked(url), model)
     Terminal(
-      @terminal.CommandFinished(shell~, exit_code~, output~, truncated~) as msg
+      @terminal.CommandFinished(shell~, exit_code~, output~, truncated~) as msg,
     ) => {
       // The panel sees it too: the result is read, so the tab can retire.
       let (retire, terminal) = model.terminal.handle(
@@ -8147,21 +8212,7 @@ fn update_device_msg(
       } else {
         model
       }
-      // MCP reports are not replayed across a connection gap either: a panel
-      // holding a conversation on this device asks about it again.
-      let model = if model.mcp.conversation is Some(conversation) &&
-        conversation.channel == channel {
-        let (cmd, mcp) = @mcp.update(
-          dispatch.map(msg => Mcp(msg)),
-          Changed(conversation),
-          model.mcp,
-        )
-        commands.push(cmd)
-        { ..model, mcp, }
-      } else {
-        model
-      }
-      // Nor are attached-list changes.
+      // Attachment changes are not replayed across a connection gap.
       let model = if model.changes.conversation is Some(conversation) &&
         conversation.channel == channel {
         let (cmd, changes) = @session_changes.update(
@@ -8394,7 +8445,7 @@ fn update_device_msg(
           guard conv.queue_edit
             is Some(
               Saving(id=saving_id, run_id=saving_run, ..)
-              | SavingDetached(id=saving_id, run_id=saving_run)
+              | SavingDetached(id=saving_id, run_id=saving_run),
             ) &&
             saving_id == id &&
             saving_run == run_id else {
@@ -8468,7 +8519,7 @@ fn update_device_msg(
         conv.queue_edit
         is Some(
           Saving(id=saving_id, run_id=saving_run, ..)
-          | SavingDetached(id=saving_id, run_id=saving_run)
+          | SavingDetached(id=saving_id, run_id=saving_run),
         ) &&
         saving_id == id &&
         saving_run == run_id else {
@@ -8726,7 +8777,7 @@ fn update_device_msg(
       paths,
       connection_generation~,
       request_generation~,
-      chat_root~
+      chat_root~,
     ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.projects_request_generation else {
@@ -8835,7 +8886,7 @@ fn update_device_msg(
       checkout_submodules~,
       submodule_checkout_timeout_seconds~,
       connection_generation~,
-      request_generation~
+      request_generation~,
     ) => {
       // The same per-workspace staleness fence as `WorktreesLoaded` — plus a
       // registry-membership check, because pruning a detached workspace's
@@ -8865,7 +8916,7 @@ fn update_device_msg(
       workspace~,
       worktree_mode~,
       checkout_submodules~,
-      submodule_checkout_timeout_seconds~
+      submodule_checkout_timeout_seconds~,
     ) => {
       // A broadcast can race the detach commit the same way a reply can
       // (the hub orders them per client, so an attach is always processed
@@ -8894,7 +8945,7 @@ fn update_device_msg(
       workspace~,
       connection_generation~,
       request_generation~,
-      result~
+      result~,
     ) => {
       guard dev.projects.contains(workspace) &&
         connection_generation == dev.connection_generation else {
@@ -8950,7 +9001,7 @@ fn update_device_msg(
       rows,
       workspace~,
       connection_generation~,
-      request_generation~
+      request_generation~,
     ) => {
       // The staleness fence is per workspace: this reply is stale only when
       // THIS workspace's rows were already applied under a newer token — a
@@ -8988,7 +9039,7 @@ fn update_device_msg(
       workspace~,
       connection_generation~,
       request_generation~,
-      message~
+      message~,
     ) => {
       // A later snapshot or broadcast for this workspace makes an older
       // failure irrelevant, just as a dead connection's rejection must not
@@ -9109,7 +9160,7 @@ fn update_device_msg(
       items,
       connection_generation~,
       request_generation~,
-      fresh_session~
+      fresh_session~,
     ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.archived_request_generation else {
@@ -9193,7 +9244,7 @@ fn update_device_msg(
       items~,
       connection_generation~,
       request_generation~,
-      fresh_session~
+      fresh_session~,
     ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.archived_request_generation else {
@@ -9520,7 +9571,7 @@ fn update_device_msg(
       goal~,
       goal_markers~,
       prediction~,
-      generation~
+      generation~,
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
@@ -9533,7 +9584,7 @@ fn update_device_msg(
       goal~,
       goal_markers~,
       prediction~,
-      generation~
+      generation~,
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
@@ -9746,7 +9797,7 @@ fn update_device_msg(
       generation~,
       queried~,
       pull_request~,
-      compare_url~
+      compare_url~,
     ) => {
       guard model.find_conversation(channel, session) is Some(conv) else {
         return (@cmd.none, model)
@@ -9803,7 +9854,7 @@ fn update_device_msg(
       model=selected_model,
       max_steps~,
       session_root~,
-      submission_id~
+      submission_id~,
     ) => {
       // This run's durable store, classified exactly the way a commit's root
       // is: Started precedes the first commit, so on a fresh connection this
@@ -10031,7 +10082,7 @@ fn update_device_msg(
       approvals~,
       live~,
       frontier~,
-      connection_generation~
+      connection_generation~,
     ) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
@@ -10262,14 +10313,6 @@ fn update_device_msg(
         conv
       })
       (@cmd.none, { ..model, conversations: settled, })
-    }
-    McpChanged(session) => {
-      let (cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        Changed({ channel, session, }),
-        model.mcp,
-      )
-      (cmd, { ..model, mcp, })
     }
     ArtifactsChanged(session) => {
       let (cmd, changes) = @session_changes.update(
@@ -10984,20 +11027,37 @@ fn Model::with_host_endpoint(
   followup_behavior? : FollowupBehavior,
   deepseek_key_saved? : Bool,
   glm_key_saved? : Bool,
+  openrouter_key_saved? : Bool,
   custom_key_saved? : Bool,
 ) -> Model {
   self.with_host_settings(mirror => {
     let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
     let endpoint = current.endpoint
+    let mut providers = endpoint.providers
+    for
+      (name, key) in [
+        (Deepseek, deepseek_key_saved),
+        (Glm, glm_key_saved),
+        (OpenRouter, openrouter_key_saved),
+        (Custom, custom_key_saved),
+      ] {
+      if key is Some(has_api_key) {
+        let config = providers
+          .get(name)
+          .unwrap_or({ api_url: None, has_api_key: false, })
+        providers = providers.add(name, { ..config, has_api_key, })
+      }
+    }
+    if custom_api_url is Some(url) {
+      let config = providers
+        .get(Custom)
+        .unwrap_or({ api_url: None, has_api_key: false, })
+      providers = providers.add(Custom, { ..config, api_url: Some(url), })
+    }
     let endpoint = {
       provider: provider.unwrap_or(endpoint.provider),
-      custom_api_url: custom_api_url.unwrap_or(endpoint.custom_api_url),
+      providers,
       followup_behavior: followup_behavior.unwrap_or(endpoint.followup_behavior),
-      deepseek_key_saved: deepseek_key_saved.unwrap_or(
-        endpoint.deepseek_key_saved,
-      ),
-      glm_key_saved: glm_key_saved.unwrap_or(endpoint.glm_key_saved),
-      custom_key_saved: custom_key_saved.unwrap_or(endpoint.custom_key_saved),
     }
     { ..mirror, current: Some({ ..current, endpoint, }), }
   })
@@ -12148,10 +12208,10 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
         stage: Retrying(
           attempt=2,
           max_attempts=5,
-          reason="Stream ended before [DONE]"
+          reason="Stream ended before [DONE]",
         ),
         ..
-      }
+      },
     ),
   )
   // The replacement attempt's first delta ends the notice.
@@ -16334,14 +16394,14 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
 }
 
 ///|
-test "OpenRouter setup requires only its stored custom key" {
+test "OpenRouter setup requires only its own stored key" {
   let openrouter = test_model().with_host_endpoint(
     deepseek_key_saved=true,
     custom_key_saved=false,
     provider=OpenRouter,
   )
   assert_false(openrouter.api_ready())
-  let keyed = openrouter.with_host_endpoint(custom_key_saved=true)
+  let keyed = openrouter.with_host_endpoint(openrouter_key_saved=true)
   assert_true(keyed.api_ready())
   // Model choice belongs to the chat, just as with the official endpoint.
   assert_true({ ..keyed, default_model: Deepseek(V4Pro), }.api_ready())
@@ -17047,16 +17107,19 @@ fn host_settings(
   revision~ : Int32 = 0,
   has_deepseek_key~ : Bool = false,
   has_glm_key~ : Bool = false,
+  has_openrouter_key~ : Bool = false,
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
 ) -> HostSettings {
   HostSettings::from_status({
     revision,
     provider,
-    custom_api_url: Some(custom_api_url),
-    has_deepseek_key,
-    has_glm_key,
-    has_custom_key,
+    providers: {
+      "deepseek": { api_url: None, has_api_key: has_deepseek_key, },
+      "glm": { api_url: None, has_api_key: has_glm_key, },
+      "openrouter": { api_url: None, has_api_key: has_openrouter_key, },
+      "custom": { api_url: Some(custom_api_url), has_api_key: has_custom_key, },
+    },
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
@@ -17064,14 +17127,10 @@ fn host_settings(
 }
 
 ///|
-test "the OpenRouter custom preset restores as OpenRouter" {
+test "the OpenRouter provider restores independently of Custom" {
   let restored = test_model().apply_host_settings(
     Local,
-    host_settings(
-      provider="custom",
-      custom_api_url=OpenRouterChatCompletionsUrl,
-      has_custom_key=true,
-    ),
+    host_settings(provider="openrouter", has_openrouter_key=true),
   )
   assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
@@ -17141,7 +17200,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(restored.screen is Chat)
   assert_true(!restored.api_setup_open)
-  assert_true(restored.test_endpoint().deepseek_key_saved)
+  assert_true(restored.test_endpoint().config(Deepseek).has_api_key)
 }
 
 ///|
@@ -17474,7 +17533,7 @@ test "saving the key from the setup modal retires it" {
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.test_endpoint().deepseek_key_saved)
+  assert_true(saved.test_endpoint().config(Deepseek).has_api_key)
   assert_true(saved.screen is Chat)
   assert_true(!saved.api_setup_open)
   assert_eq(saved.setup_api_key, "")
@@ -17579,7 +17638,7 @@ test "host settings are deferred while this client's writes are in flight" {
   )
   inspect(settled.host_settings_mirror().saves, content="0")
   assert_true(settled.api_provider() is Deepseek)
-  assert_true(settled.test_endpoint().deepseek_key_saved)
+  assert_true(settled.test_endpoint().config(Deepseek).has_api_key)
   assert_true(settled.host_settings() is Some({ revision: 2, .. }))
   // With more writes still out, even a reply only decrements.
   let stacked = model.with_host_settings(mirror => { ..mirror, saves: 2, })
@@ -17824,8 +17883,8 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
-  assert_true(saved_deepseek.test_endpoint().deepseek_key_saved)
-  assert_false(saved_deepseek.test_endpoint().custom_key_saved)
+  assert_true(saved_deepseek.test_endpoint().config(Deepseek).has_api_key)
+  assert_false(saved_deepseek.test_endpoint().config(Custom).has_api_key)
   inspect(saved_deepseek.setup_api_key, content="")
   inspect(saved_deepseek.host_settings_mirror().saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
@@ -17843,8 +17902,8 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
-  assert_false(saved_custom.test_endpoint().deepseek_key_saved)
-  assert_true(saved_custom.test_endpoint().custom_key_saved)
+  assert_false(saved_custom.test_endpoint().config(Deepseek).has_api_key)
+  assert_true(saved_custom.test_endpoint().config(Custom).has_api_key)
   assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
@@ -17857,9 +17916,9 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
-  assert_true(saved_glm.test_endpoint().glm_key_saved)
-  assert_false(saved_glm.test_endpoint().deepseek_key_saved)
-  assert_false(saved_glm.test_endpoint().custom_key_saved)
+  assert_true(saved_glm.test_endpoint().config(Glm).has_api_key)
+  assert_false(saved_glm.test_endpoint().config(Deepseek).has_api_key)
+  assert_false(saved_glm.test_endpoint().config(Custom).has_api_key)
   assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
     ..test_model().with_host_endpoint(
@@ -17871,8 +17930,8 @@ test "saving a key marks the active provider credential only" {
     management_dialog: Some(Settings(Engine)),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
-  assert_true(saved_openrouter.test_endpoint().custom_key_saved)
-  assert_false(saved_openrouter.test_endpoint().deepseek_key_saved)
+  assert_true(saved_openrouter.test_endpoint().config(OpenRouter).has_api_key)
+  assert_false(saved_openrouter.test_endpoint().config(Deepseek).has_api_key)
 }
 
 ///|
@@ -18820,7 +18879,7 @@ test "session.changed decoder preserves archive invalidation identity" {
       workspace: store.path,
     })
     is Some(
-      SessionsChanged(change="archived", key=archived, fresh_session=Some(_))
+      SessionsChanged(change="archived", key=archived, fresh_session=Some(_)),
     ) else {
     fail("archive invalidation was not decoded")
   }
@@ -18831,7 +18890,7 @@ test "session.changed decoder preserves archive invalidation identity" {
       workspace: store.path,
     })
     is Some(
-      SessionsChanged(change="deleted", key=deleted, fresh_session=Some(_))
+      SessionsChanged(change="deleted", key=deleted, fresh_session=Some(_)),
     ) else {
     fail("delete invalidation was not decoded")
   }
@@ -20863,10 +20922,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     is Some(
       {
         state: @fileeditor.TabReadFailed(
-          @fileeditor.Diagnostic("newer ordinary read failed")
+          @fileeditor.Diagnostic("newer ordinary read failed"),
         ),
         ..
-      }
+      },
     ),
   )
   let (_, old_after_failure) = update(
@@ -20933,10 +20992,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     is Some(
       {
         state: @fileeditor.TabReadFailed(
-          @fileeditor.Diagnostic("old read failed")
+          @fileeditor.Diagnostic("old read failed"),
         ),
         ..
-      }
+      },
     ),
   )
   // The current failure is authoritative even if the stale success filled the
@@ -20961,10 +21020,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     is Some(
       {
         state: @fileeditor.TabReadFailed(
-          @fileeditor.Diagnostic("current read failed")
+          @fileeditor.Diagnostic("current read failed"),
         ),
         ..
-      }
+      },
     ),
   )
   let (_, current_file_reply) = update(
@@ -21194,7 +21253,7 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
       end_line=7,
       quote="let answer = 42",
       comment="name this constant",
-      side=@mention_context.WorkingRevision
+      side=@mention_context.WorkingRevision,
     ),
   )
   assert_eq(added_mentions[0].range, Some(@common.Range(7, 1, 7, 16)))
@@ -21220,7 +21279,7 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
       end_line=3,
       quote="obsolete()",
       comment="good removal",
-      side=@mention_context.OriginalRevision
+      side=@mention_context.OriginalRevision,
     ),
   )
   assert_eq(deleted_mentions[1].range, None)
@@ -21266,7 +21325,7 @@ test "Codex original-side diff feedback queues in the Codex draft" {
       end_line=3,
       quote="obsolete()",
       comment="keep this removal",
-      side=@mention_context.OriginalRevision
+      side=@mention_context.OriginalRevision,
     ),
   )
   assert_eq(draft.mentions[0].range, None)
@@ -22122,7 +22181,7 @@ test "a finished download stages the release; restarting stays a click away" {
     progressed.update_ux
     is DownloadingUpdate(
       version="0.2.0",
-      progress={ downloaded_bytes: 42, total_bytes: Some(100), }
+      progress={ downloaded_bytes: 42, total_bytes: Some(100), },
     ),
   )
   // Downloaded stages the release instead of swapping it: restarting is the
@@ -23466,7 +23525,7 @@ test "a changed row opens the file tab in review mode" {
         state: TabLoading,
         review: Some({ generation: 1, baseline: ReviewLoading, .. }),
         ..
-      }
+      },
     ),
   )
 }
@@ -23787,8 +23846,8 @@ test "the host's typed request for a tab needs no page id" {
       BrowserOpenRequested(
         request="r-1",
         session="s-1",
-        url="https://example.com/"
-      )
+        url="https://example.com/",
+      ),
     ),
   )
 }

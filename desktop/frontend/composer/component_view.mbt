@@ -234,8 +234,21 @@ fn Entry::action_buttons(
       },
     ]
   }
+  let feedback_button : ActionButton? = self
+    .feedback_submission(input)
+    .map(submission => {
+      id: "send",
+      class_name: "icon-button send-button",
+      title: ui(locale, SendLabel),
+      disabled: submission is Disabled,
+      command: emit(SubmitRequested),
+      content: @icons.icon(@icons.icon_newline),
+    })
   match input.presentation.primary_action {
     Send(available~) | SaveQueuedInput(available~) => {
+      if feedback_button is Some(button) {
+        return [button]
+      }
       guard !self.draft.is_blank() || !self.attachment_requests.is_empty() else {
         return []
       }
@@ -275,6 +288,10 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_stop_circle),
         },
       ]
+      if feedback_button is Some(button) {
+        actions.push(button)
+        return actions
+      }
       // A draft keeps its submit action at the end, where Send was, even
       // while the run cannot take a follow-up yet; it stays disabled until it
       // can. Leaving the slot to Stop would turn a press aimed at Send into a
@@ -329,6 +346,7 @@ fn Entry::view(
       ShellCommandsRunning(..) => "shell-commands"
       QueuedInputPanel(..) => "queue"
       CompactionNotice(..) => "compaction"
+      ContextYieldNotice(..) => "context-yield"
       WorktreePlacementNotice => "worktree-placement"
       MissingWorktreeNoticeComponent(_) => "missing-worktree"
     }
@@ -397,6 +415,64 @@ fn Entry::view(
       _ => leading.push(rendered)
     }
   }
+  if self.feedback is Some(status) {
+    let content : Array[@html.Html] = []
+    let (label, command) = match status {
+      Sending(_, command) =>
+        (Some(ui(locale, SubmittingFeedback)), Some(command))
+      Submitted => (Some(ui(locale, FeedbackSubmittedLabel)), None)
+      Failed(SignInRequired, held~) =>
+        (Some(ui(locale, FeedbackNeedsSignIn)), held)
+      Failed(Diagnostic(reason), held~) => (Some(reason), held)
+      RetryReady(command) => (None, Some(command))
+    }
+    if label is Some(label) {
+      content.push(@html.span(label))
+    }
+    if command.bind(feedback_body) is Some(body) {
+      content.push(@html.span(class="composer-feedback-message", body))
+    }
+    match status {
+      Failed(SignInRequired, held~) =>
+        content.push(
+          @html.button(
+            type_="button",
+            class="button composer-context-action",
+            on_click=action_emit(
+              FeedbackSignIn(
+                identity=self.identity(),
+                draft=self.draft.task,
+                held~,
+              ),
+            ),
+            ui(locale, FeedbackLoginLabel),
+          ),
+        )
+      Failed(Diagnostic(_), held=Some(retry)) | RetryReady(retry) =>
+        content.push(
+          @html.button(
+            type_="button",
+            class="button composer-context-action",
+            disabled=input.presentation.disabled ||
+              input.feedback_message({ ..self.draft, task: retry, }) is None,
+            on_click=emit(RetryFeedback),
+            ui(locale, RetryLabel),
+          ),
+        )
+      _ => ()
+    }
+    context["feedback"] = @html.div(
+      class="composer-context-row composer-feedback-status",
+      attrs=@html.Attrs::build().role(
+        if status is Failed(_, ..) {
+          "alert"
+        } else {
+          "status"
+        },
+      ),
+      content,
+    )
+  }
   if self.image_reads > 0 {
     context["image-reading"] = @html.div(
       class="composer-context-row composer-image-notice",
@@ -433,6 +509,11 @@ fn Entry::view(
       self.goal_draft.unwrap_or("")
     } else {
       self.draft.task
+    },
+    empty_message_owner: if !goal_mode && self.draft.task.is_empty() {
+      Some(self.identity().message_owner_key())
+    } else {
+      None
     },
     shell: shell_command is Some(_),
     placeholder: if self.prediction_text(input) is Some(text) {
@@ -475,7 +556,8 @@ fn Entry::view(
     trailing,
     actions,
     // A command is not a follow-up: it never steers or queues behind the turn.
-    followup_menu: if shell_command is Some(_) {
+    followup_menu: if shell_command is Some(_) ||
+      input.feedback_message(self.draft) is Some(_) {
       None
     } else {
       self.followup_menu(locale~, input, emit)

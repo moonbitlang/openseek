@@ -126,7 +126,7 @@ pub(all) enum PrimaryAction {
     steer_available~ : Bool,
     can_stop~ : Bool,
     submit~ : RunningSubmit,
-    queue_available~ : Bool
+    queue_available~ : Bool,
   )
 }
 
@@ -198,6 +198,12 @@ pub(all) enum ContextComponent {
   ShellCommandsRunning(commands~ : Array[String])
   QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
+  // The last turn stopped at the model's context ceiling instead of
+  // answering, so the work continues in the next turn, from the checkpoint
+  // summary the engine wrote on its way out. `continue_available` is false
+  // while the draft holds something of the person's own: the offered
+  // continuation must never replace text, mentions, or images already there.
+  ContextYieldNotice(continue_available~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
 }
@@ -342,32 +348,34 @@ pub(all) enum Action {
   DraftAttachmentsSubmitted(
     identity~ : Identity,
     draft~ : Draft,
-    attachments~ : Array[@protocol.AttachmentSource]
+    attachments~ : Array[@protocol.AttachmentSource],
   )
   FollowupSubmitted(
     identity~ : Identity,
     draft~ : Draft,
     choice~ : FollowupChoice,
-    attachments~ : Array[@protocol.AttachmentSource]
+    attachments~ : Array[@protocol.AttachmentSource],
   )
   DraftPresenceChanged(
     identity~ : Identity,
     present~ : Bool,
-    cleared_source~ : Draft?
+    cleared_source~ : Draft?,
   )
   ReviewContextChanged(
     identity~ : Identity,
-    selections~ : Array[@mention_context.ReviewChanges]
+    selections~ : Array[@mention_context.ReviewChanges],
   )
   ReviewChangesRemoved(
     identity~ : Identity,
-    selections~ : Array[@mention_context.ReviewChanges]
+    selections~ : Array[@mention_context.ReviewChanges],
   )
   ReviewChangesOpened(
     identity~ : Identity,
-    selection~ : @mention_context.ReviewChanges
+    selection~ : @mention_context.ReviewChanges,
   )
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
+  FeedbackSignIn(identity~ : Identity, draft~ : String, held~ : String?)
+  FeedbackSubmitted(identity~ : Identity, request~ : String, message~ : String)
   SlashCommand(identity~ : Identity, command~ : String)
   // A `!` draft was submitted: run `command` (the text after `!`, trimmed and
   // non-empty) and hand its output to the conversation.
@@ -377,7 +385,7 @@ pub(all) enum Action {
     identity~ : Identity,
     id~ : String,
     text~ : String,
-    choice~ : FollowupChoice?
+    choice~ : FollowupChoice?,
   )
   // Show the terminal tab of the running `!` command at `index` in
   // `ShellCommandsRunning`.
@@ -388,6 +396,9 @@ pub(all) enum Action {
   GoalCleared(identity~ : Identity)
   GoalSubmitted(identity~ : Identity, draft~ : String, prompt_present~ : Bool)
   StopRequested(identity~ : Identity)
+  // The person accepted the composer's offer to continue after a context
+  // yield: submit the composer's continuation prompt as an ordinary turn.
+  ContextContinueRequested(identity~ : Identity)
   FileIndexEnsured(identity~ : Identity)
   ModelMenuToggled(identity~ : Identity)
   ReasoningMenuToggled(identity~ : Identity)
@@ -400,23 +411,23 @@ pub(all) enum Action {
     identity~ : Identity,
     request_key~ : String,
     question_id~ : String,
-    answer~ : String
+    answer~ : String,
   )
   CodexQuestionChanged(
     identity~ : Identity,
     request_key~ : String,
-    action~ : @question_card.Action
+    action~ : @question_card.Action,
   )
   CodexRequestResponded(
     identity~ : Identity,
     request_key~ : String,
-    decision~ : Json
+    decision~ : Json,
   )
   PermissionMenuToggled(identity~ : Identity)
   PermissionMenuDismissed(identity~ : Identity)
   PermissionSelected(
     identity~ : Identity,
-    mode~ : @protocol.CodexPermissionMode
+    mode~ : @protocol.CodexPermissionMode,
   )
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
@@ -444,6 +455,8 @@ pub fn Action::identity(self : Action) -> Identity {
     | ReviewChangesRemoved(identity~, ..)
     | ReviewChangesOpened(identity~, ..)
     | RootMentionRemoved(identity~, ..)
+    | FeedbackSignIn(identity~, ..)
+    | FeedbackSubmitted(identity~, ..)
     | SlashCommand(identity~, ..)
     | ShellCommandSubmitted(identity~, ..)
     | CommandResultRecovered(identity~)
@@ -455,6 +468,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | GoalCleared(identity~)
     | GoalSubmitted(identity~, ..)
     | StopRequested(identity~)
+    | ContextContinueRequested(identity~)
     | FileIndexEnsured(identity~)
     | ModelMenuToggled(identity~)
     | ReasoningMenuToggled(identity~)
@@ -609,7 +623,7 @@ pub(all) enum EntryChange {
   Retire(@interop.ConversationIdentity)
   Move(
     from~ : @interop.ConversationIdentity,
-    to~ : @interop.ConversationIdentity
+    to~ : @interop.ConversationIdentity,
   )
 }
 

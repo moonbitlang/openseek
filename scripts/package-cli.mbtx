@@ -1,10 +1,10 @@
 ---
 import {
-  "moonbitlang/async@0.22.4",
-  "moonbitlang/async@0.22.4/fs",
-  "moonbitlang/async@0.22.4/shell",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/shell",
   "moonbitlang/core/env",
-  "moonbitlang/x@0.5.5/crypto",
+  "moonbitlang/x@0.5.7/crypto",
 }
 ---
 
@@ -16,7 +16,8 @@ async fn main {
       "Usage: moon run scripts/package-cli.mbtx <platform> <output-directory>",
     )
   }
-  guard platform is ("linux-x64" | "linux-arm64" | "macos-arm64" | "windows-x64") else {
+  guard platform
+    is ("linux-x64" | "linux-arm64" | "macos-arm64" | "windows-x64") else {
     fail("Unsupported platform: \{platform}")
   }
   let windows = platform == "windows-x64"
@@ -34,7 +35,9 @@ async fn main {
   )
   @fs.write_file(
     "\{root}/bin/openseek-app-server\{suffix}",
-    @fs.read_file("_build/native/release/build/openseek_desktop/backend/server/server.exe"),
+    @fs.read_file(
+      "_build/native/release/build/openseek_desktop/backend/server/server.exe",
+    ),
   )
   if !windows {
     @fs.chmod("\{root}/bin/openseek", 0o755)

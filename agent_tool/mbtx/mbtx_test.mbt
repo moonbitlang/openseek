@@ -532,7 +532,7 @@ async fn sandbox_enforcement_available() -> Bool {
       profile_path="\{dir}/profile.sb",
     )
     is Some(_)
-  @fs.rmdir(dir, recursive=true) catch {
+  @fs.remove(dir, recursive=true) catch {
     _ => ()
   }
   available
@@ -554,7 +554,7 @@ async test "a snippet's temp directory lands somewhere it may write" {
       #|  let dir = @fs.tmpdir(prefix="probe-")
       #|  @fs.write_text("\{dir}/x.txt", "hi", create_mode=CreateOrTruncate)
       #|  @stdio.stdout.text.write("ok=\{@fs.exists("\{dir}/x.txt")}\n")
-      #|  @fs.rmdir(dir, recursive=true)
+      #|  @fs.remove(dir, recursive=true)
       #|}
     ),
   )
@@ -1106,7 +1106,7 @@ test "the schema advertises every decoded argument" {
   assert_true(
     properties.get("args")
     is Some(
-      { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
+      { "type": "array", "items": { "type": "string", .. }, "default": [], .. },
     ),
   )
   assert_true(properties.get("target") is None)

@@ -53,7 +53,7 @@ pub fn mcp_status(EngineManager, @protocol.McpStatusPayload) -> @protocol.McpSta
 
 pub async fn migrate_global_store() -> Int32
 
-pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, moonbit? : @moonbit.ToolchainSource) -> EngineActor
+pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, skills_dir? : @pathx.Path, moonbit? : @moonbit.ToolchainSource) -> EngineActor
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 
@@ -67,9 +67,7 @@ pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Un
 
 pub async fn search_sessions(@protocol.SessionSearchPayload) -> @protocol.SessionSearchReply
 
-pub async fn session_artifacts_list(EngineManager, String) -> @protocol.SessionArtifacts
-
-pub async fn session_artifacts_update(EngineManager, String, (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts, () -> Unit) -> @protocol.SessionArtifacts
+pub async fn session_artifacts_update(EngineManager, String, update~ : (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts, on_committed~ : (@protocol.SessionArtifacts) -> Unit) -> @protocol.SessionArtifacts
 
 pub async fn session_command(EventSink, EngineManager, @protocol.SessionCommandPayload) -> @protocol.SessionCommandReply
 
@@ -84,6 +82,8 @@ pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 pub async fn stop_job(EngineManager, @protocol.JobTarget) -> @protocol.JobStopReply
 
 pub async fn submit_session_message(EngineManager, EventSink, String, String, String, (MessageReceipt) -> Unit) -> MessageSubmission
+
+pub async fn test_api_connection(EngineManager, @protocol.ApiConnectionProbePayload) -> @protocol.ApiConnectionProbeReply
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
@@ -158,10 +158,7 @@ pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.S
 
 pub(all) struct SettingsPatch {
   provider : String?
-  custom_api_url : String?
-  deepseek_api_key : String?
-  glm_api_key : String?
-  custom_api_key : String?
+  providers : Map[String, @protocol.ProviderPatch]?
 }
 
 // Type aliases

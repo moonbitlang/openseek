@@ -142,7 +142,7 @@ pub fn browser_view_id(name : String) -> Int32? {
   guard name.strip_prefix("browser-") is Some(digits) && !digits.is_empty() else {
     return None
   }
-  Some(@string.parse_int(digits, base=10)) catch {
+  Some(@string.parse_int(digits, radix=10)) catch {
     _ => None
   }
 }

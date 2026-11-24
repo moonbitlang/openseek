@@ -178,7 +178,7 @@ async fn pattern_repair_result(
         "candidate_pattern": String(pattern),
         "message": String(message),
         ..
-      }
+      },
     ) => Some(Ok((pattern, message)))
     Completed(output~) =>
       Some(Err(pattern_repair_diagnostic(output.stringify())))
@@ -244,7 +244,7 @@ async fn request_pattern_repair_candidate(
   let dir = @fs.tmpdir(prefix="openseek-pattern-repair-") catch {
     error => return Failed("\{error}", [])
   }
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let result_path = "\{dir}/result.json"
   let session_root = "\{dir}/sessions"
   let request : @openseek_protocol.RunRequest = {
@@ -433,7 +433,7 @@ pub async fn repair(
 ///|
 async test "pattern repair reads its candidate, or why there is none, from the result" {
   let dir = @fs.tmpdir(prefix="openseek-pattern-repair-result-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let path = "\{dir}/result.json"
   async fn read(result : String) -> Result[(String, String), String]? {
     @fs.write_text(path, result, create_mode=CreateOrTruncate)

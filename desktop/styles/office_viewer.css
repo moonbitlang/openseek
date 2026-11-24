@@ -176,7 +176,7 @@
   margin: 8px 0 8px 8px;
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: 0 3px 12px rgb(15 23 42 / 7%);
 }
@@ -228,7 +228,7 @@
   padding: var(--space-4);
   color: inherit;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
 }
 .pdf-password-error {
   color: var(--color-danger);
@@ -346,7 +346,12 @@
   overflow-x: auto;
 }
 .office-viewer-surface .office-context-excel > .office-context-document {
-  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.office-viewer-surface .office-context-excel > .office-context-rail {
+  overflow: auto;
 }
 .office-viewer-surface .office-context-rail {
   position: relative;
@@ -369,7 +374,7 @@
   margin: 0 0 var(--space-5);
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--color-control-surface);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -405,7 +410,7 @@
   margin: 0;
   padding: 0 var(--space-2);
   border: 2px solid var(--color-bg-subtle);
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   background: var(--color-accent);
   color: var(--color-on-accent);
   font-size: var(--font-size-xs);
@@ -422,7 +427,7 @@
   margin: 0;
   padding: 1rem;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   box-shadow: 0 2px 8px rgb(15 23 42 / 6%);
@@ -512,7 +517,7 @@
   min-height: 2rem;
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--color-control-surface);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -529,7 +534,7 @@
   height: 24px;
   padding: 0;
   border: 1px solid var(--color-accent-soft);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--color-accent-soft);
   color: var(--color-accent);
   cursor: pointer;
@@ -602,6 +607,10 @@
 
 /* The file panel already owns the document title and context actions. Keep
    the standalone spreadsheet's instructions and inspector out of this host. */
+.office-viewer-surface.sheet-mode {
+  display: flex;
+  padding: 0;
+}
 .office-viewer-surface .excel-view-toolbar,
 .office-viewer-surface .excel-formula-bar,
 .office-viewer-surface .excel-tabs-label,
@@ -613,19 +622,31 @@
 .office-viewer-surface .excel-workspace {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 .office-viewer-surface .sheet-document.office-excel-workbook {
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   padding: 0;
   background: transparent;
   box-shadow: none;
 }
 .office-viewer-surface .office-excel-workbook section[data-sheet] {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   margin: 0;
 }
 .office-viewer-surface .office-excel-workbook section[data-sheet][hidden] {
   display: none;
+}
+.office-viewer-surface .office-sheet-viewport {
+  flex: 1 1 auto;
+  /* The viewer sets an inline 65vh cap; this host owns the available height. */
+  max-height: none !important;
 }
 .office-viewer-surface .office-grid-column-headings th,
 .office-viewer-surface .office-row-heading {
@@ -646,9 +667,9 @@
 .office-viewer-surface .excel-sheet-tabs {
   display: flex;
   align-items: stretch;
+  flex: 0 0 auto;
   gap: var(--space-2);
   min-width: 0;
-  margin-top: var(--space-5);
   padding: var(--space-2);
   overflow-x: auto;
   background: var(--color-bg-surface);
@@ -664,7 +685,7 @@
   min-height: 2.5rem;
   padding: var(--space-3) var(--space-5);
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
@@ -751,7 +772,6 @@
 
 @media (max-width: 760px) {
   .office-viewer-surface.word-mode { padding: 18px 8px 34px; }
-  .office-viewer-surface.sheet-mode { padding: 10px 8px 28px; }
 }
 
 .pdf-region-capture {
@@ -785,7 +805,7 @@
 .office-region-capture { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
 .office-region-capture-box { position: fixed; box-sizing: border-box; border: 2px solid var(--color-region-selection); background: color-mix(in srgb, var(--color-region-selection) 8%, transparent); }
 .office-region-capture-box[hidden] { display: none; }
-.office-region-capture-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-xs); white-space: nowrap; }
+.office-region-capture-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--radius-surface); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-xs); white-space: nowrap; }
 .office-region-capture[aria-busy="true"] .office-region-capture-box { border-style: dashed; }
 .office-region-capture[aria-busy="true"] .office-region-capture-hint::before { content: "◌ "; }
 .pdf-capture-feedback[data-annotation] .feedback-source-selection::after {
@@ -797,7 +817,7 @@
   height: 20px;
   padding-inline: 3px;
   box-sizing: border-box;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: grid;
   place-items: center;
   color: white;

@@ -157,6 +157,11 @@ async fn connect(
         for ;; {
           let line = stderr_reader.text.read_until("\n") catch {
             error => {
+              let error : Error = if error is TransportError(cause, ..) {
+                cause
+              } else {
+                error
+              }
               @xlog.warn(category="codex") <?
                 {
                   "event": "codex_app_server_stderr_read_failed",

@@ -235,7 +235,7 @@ priv enum Msg {
   ArtifactResolved(
     ArtifactOwner,
     String,
-    Result[@protocol.ReadFileReply, String]
+    Result[@protocol.ReadFileReply, String],
   )
   Overview(@transcript_overview.Msg)
 }
@@ -428,7 +428,12 @@ pub fn component(
         actions,
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
-      changes.map2(row, (changes, row) => {
+      let (markdown, markdown_emit) = @rabbita.create_state(false, update=(
+        previewing,
+        _,
+        _,
+      ) => (!previewing, @cmd.none))
+      changes.map3(row, markdown, (changes, row, previewing) => {
         let (locale, block, editor, owner) = row
         renders.val += 1
         let html = @html.memo_by(
@@ -443,6 +448,7 @@ pub fn component(
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
               begin_edit=editor_emit(BeginEdit),
+              user_markdown={ previewing, toggle: markdown_emit(()), },
             )
           },
           by=_ => renders.val,
@@ -762,7 +768,7 @@ priv suberror TranscriptSubscription {
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
     pinned~ : Bool,
-    active~ : @transcript_overview.TurnKey?
+    active~ : @transcript_overview.TurnKey?,
   )
 }
 
@@ -809,7 +815,7 @@ fn transcript_sub_loader(
       load_older~,
       localization~,
       pinned~,
-      active~
+      active~,
     ) => {
       let mut emit = emit
       let mut departed = departed
@@ -953,7 +959,7 @@ fn transcript_sub_loader(
               load_older=next_load_older,
               localization=_,
               pinned=next_pinned,
-              active=next_active
+              active=next_active,
             ) else {
             return
           }

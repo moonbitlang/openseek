@@ -31,15 +31,20 @@ pub fn form_row(
   controls : Array[@html.Html],
   desc? : String,
   stack~ : Bool = false,
+  hidden~ : Bool = false,
 ) -> @html.Html {
   let text : Array[@html.Html] = [@html.div(class="form-row-label", name)]
   if desc is Some(desc) && !desc.is_empty() {
     text.push(@html.div(class="form-row-description", desc))
   }
-  @html.div(class=if stack { "form-row stack" } else { "form-row" }, [
-    @html.div(class="form-row-text", text),
-    @html.div(class="form-row-controls", controls),
-  ])
+  @html.div(
+    class=if stack { "form-row stack" } else { "form-row" },
+    attrs=@html.Attrs::build().hidden(hidden),
+    [
+      @html.div(class="form-row-text", text),
+      @html.div(class="form-row-controls", controls),
+    ],
+  )
 }
 
 ///|

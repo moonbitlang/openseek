@@ -19,7 +19,7 @@ pub(all) struct ShellOutput {
 /// runtime so a wasm build follows the host running it.
 let shell_program : String = match @async.platform {
   Windows => "powershell.exe"
-  Linux | MacOS => "sh"
+  _ => "sh"
 }
 
 ///|
@@ -36,7 +36,7 @@ fn shell_args(cmd : String) -> Array[String] {
         "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
         cmd,
       ]
-    Linux | MacOS => ["-c", cmd]
+    _ => ["-c", cmd]
   }
 }
 
@@ -105,7 +105,7 @@ async fn read_output_prefix(
   let chunk = FixedArray::make(1024, b'\x00')
   for ;; {
     let chunk_limit = (byte_budget - buffer.length()).clamp(min=1, max=1024)
-    let read = reader.read_into(chunk, max_len=chunk_limit)
+    let read = reader.read_into(chunk.mut_view(end=chunk_limit))
     guard read > 0 else {
       return {
         text: decode_valid_utf8_prefix(buffer.to_bytes()),

@@ -3,18 +3,19 @@ name = "openseek_desktop/backend"
 version = "0.1.5"
 
 import {
+  "tonyfettes/url@0.3.5",
   "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.4.2",
-  "moonbit-community/pty@0.4.3",
+  "moonbit-community/pty@0.4.4",
   "moonbit-community/flate@0.10.0",
-  "moonbit-community/skills@0.1.0",
-  "moonbitlang/x@0.5.5",
-  "moonbitlang/async@0.22.7",
-  "moonbitlang/moonback@0.8.9",
-  "tonyfettes/xlog@0.4.2",
+  "moonbit-community/skills@0.2.0",
+  "moonbitlang/x@0.5.7",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/moonback@0.8.10",
+  "tonyfettes/xlog@0.5.1",
   "moonbitlang/openseek@0.7.6",
   "openseek_desktop@0.1.5",
-  "Yoorkin/multipart@0.1.3",
+  "Yoorkin/multipart@0.2.2",
 }
 
 license = "Apache-2.0"

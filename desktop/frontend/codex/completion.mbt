@@ -622,6 +622,8 @@ fn State::apply_composer_action(
     | @composer.GoalSubmitted(..)
     | @composer.CommandResultRecovered(..)
     | @composer.CommandResultSubmitted(..)
+    | @composer.FeedbackSignIn(..)
+    | @composer.FeedbackSubmitted(..)
     | @composer.ShellCommandSubmitted(..)
     | @composer.ShellTerminalRequested(..)
     | @composer.FileIndexEnsured(..)
@@ -639,7 +641,9 @@ fn State::apply_composer_action(
     | @composer.QueuedInputEditRequested(..)
     | @composer.QueuedInputSteerRequested(..)
     | @composer.QueuedInputDeleteRequested(..)
-    | @composer.WorktreePlacementRetried(..) => (@cmd.none, self)
+    | @composer.WorktreePlacementRetried(..)
+    // A Codex composer never offers the continuation after a context yield.
+    | @composer.ContextContinueRequested(..) => (@cmd.none, self)
   }
 }
 

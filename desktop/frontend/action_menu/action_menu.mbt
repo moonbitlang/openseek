@@ -286,11 +286,6 @@ fn open_subscription(emit : @cmd.Emit[Open]) -> @sub.Sub {
 }
 
 ///|
-fn Definition::has_enabled_actions(self : Definition) -> Bool {
-  self.entries.any(entry => entry is Action(item) && item.enabled)
-}
-
-///|
 fn Definition::has_actions(self : Definition) -> Bool {
   self.entries.any(entry => entry is Action(_))
 }

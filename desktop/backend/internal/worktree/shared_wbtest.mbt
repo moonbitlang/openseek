@@ -61,7 +61,7 @@ async test "a shared checkout goes only with the last conversation holding it" {
     // The archived conversation's record has left the live store, which
     // makes the remaining one the last holder: its archive is the one that
     // must confirm discarding the uncommitted work.
-    @fs.rmdir(shared_fixture_record(repo, "first").to_string(), recursive=true)
+    @fs.remove(shared_fixture_record(repo, "first").to_string(), recursive=true)
     guard second.archive_checkout(host, false) is Some(refusal) else {
       fail("the last holder must confirm discarding uncommitted changes")
     }
@@ -153,7 +153,7 @@ async test "an archive waits for another host's fork into the same worktree" {
 async test "a worktree whose checkout is gone takes no new member" {
   with_recovery_fixture((repo, host) => {
     let created = create(host, repo, WorktreeOwner::openseek("first"), _ => ())
-    @fs.rmdir(worktree_dir(repo, created.name).to_string(), recursive=true)
+    @fs.remove(worktree_dir(repo, created.name).to_string(), recursive=true)
     // Nothing is created for a directory that is not there, and nothing is
     // bound to it.
     let mut asked = false
@@ -334,7 +334,7 @@ async test "a fork is bound to its original's worktree around its record's creat
 ///|
 async test "single-member registry rows read as member lists and are rewritten as one" {
   let root = worktree_test_root("openseek-worktree-members-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @fsx.ensure_dir(@workspaces.store_root(root).to_path())
   let registry : Json = {
     "worktrees": [

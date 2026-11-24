@@ -72,7 +72,7 @@ async test "host-authorized workspaces are exact and session-scoped" {
   let exact_revoked = @work_dir.resolve_host_workspace_authorization(
     session, resource,
   )
-  @fs.rmdir(root, recursive=true) catch {
+  @fs.remove(root, recursive=true) catch {
     _ => ()
   }
   assert_eq(

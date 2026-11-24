@@ -72,7 +72,7 @@ pub async fn Service::start(
       socket,
       _,
     ) => {
-      let conn = @http.ServerConnection::new(socket)
+      let conn = @http.ServerConnection(socket)
       defer conn.close()
       let reader = @loopback_http.RequestReader(socket)
       // Bound the entire admission phase, as PTC does: nothing runs until
@@ -111,7 +111,8 @@ pub async fn Service::start(
       let reply = @async.any([
         () => service.answer(input),
         () => {
-          ignore(socket.read_into(FixedArray::make(1, b'\x00'))) catch {
+          let probe = FixedArray::make(1, b'\x00')
+          ignore(socket.read_into(probe.mut_view())) catch {
             _ => ()
           }
           raise ScriptGone
@@ -151,7 +152,7 @@ pub fn Service::env(self : Service) -> Map[String, String] {
     "OPENSEEK_MCP": (
       {
         "version": 1,
-        "url": "http://127.0.0.1:\{self.server.addr.port()}/call",
+        "url": "http://127.0.0.1:\{self.server.addr.port}/call",
         "token": self.token,
       } : Json).stringify(),
   }
@@ -177,7 +178,9 @@ async fn Service::answer(self : Service, input : Json) -> Json {
       ..
     } => {
       let action = match
-        self.servers.search_by(configured => configured.config.name() == server) {
+        self.servers.search_by(configured => {
+          configured.config().name() == server
+        }) {
         Some(index) => self.servers[index].call(tool, arguments)
         None =>
           @agent_tool.respond(
@@ -386,7 +389,7 @@ async fn save_image(
   }
   let path = "\{directory}/mcp-image-\{@crypto.bytes_to_hex_string(entropy)}\{extension}"
   try {
-    @fs.mkdir(directory, permission=0o700, recursive=true, allow_exist=true)
+    @fs.mkdir(directory, permission=0o700, recursive=true, allow_existing=true)
     @fs.write_binary(path, image.bytes, create_mode=CreateNew, permission=0o600)
   } catch {
     error => Err("\{error}")

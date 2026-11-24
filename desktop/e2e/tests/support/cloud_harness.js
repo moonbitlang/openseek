@@ -707,7 +707,7 @@ export class CloudHarness {
     await this.page.goto(`${authOrigin}/console/index.html?device=device-a`);
     const dismiss = this.page.getByRole('button', { name: 'Not now', exact: true });
     const hasCookie = (await this.page.context().cookies(authOrigin)).some(cookie => cookie.name === 'session');
-    if (!this.device.hostSettings.has_deepseek_key && (this.desktop || this.accountSignedIn || this.meStatus === 200 || hasCookie)) {
+    if (!this.device.hostSettings.providers.deepseek.has_api_key && (this.desktop || this.accountSignedIn || this.meStatus === 200 || hasCookie)) {
       await expect(dismiss).toBeVisible();
       await dismiss.click();
     } else {

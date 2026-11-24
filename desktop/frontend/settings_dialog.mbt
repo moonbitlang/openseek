@@ -5,6 +5,7 @@ fn SettingsSection::id(self : SettingsSection) -> String {
     Account => "account"
     Devices => "devices"
     Engine => "engine"
+    Connectors => "connectors"
     Connections => "connections"
     ArchivedChats => "archived-chats"
     SystemSettings => "system"
@@ -21,6 +22,7 @@ fn SettingsSection::label(
     Account => @settings.text(locale, Account)
     Devices => @settings.text(locale, Devices)
     Engine => @settings.text(locale, Engine)
+    Connectors => "MCP"
     Connections => @settings.text(locale, Connections)
     ArchivedChats => @archived_chats.text(locale, Title)
     SystemSettings => @settings.text(locale, SystemSettings)
@@ -33,7 +35,7 @@ fn SettingsSection::available(self : SettingsSection, model : Model) -> Bool {
     General | Account | ArchivedChats => true
     Devices => !model.is_desktop && model.account is Some(_)
     Engine => model.has_host()
-    Connections | SystemSettings => model.is_desktop
+    Connections | Connectors | SystemSettings => model.is_desktop
   }
 }
 
@@ -66,6 +68,7 @@ fn settings_page(
       Account,
       Devices,
       Connections,
+      Connectors,
       ArchivedChats,
       SystemSettings,
     ] {
@@ -121,6 +124,14 @@ fn settings_page(
         ]
       }
       Devices => [settings_devices(dispatch, model)]
+      Connectors =>
+        [
+          @connectors.view(
+            dispatch.map(msg => Connectors(msg)),
+            model.connectors,
+            model.locale,
+          ),
+        ]
       Connections =>
         [
           ssh_settings(dispatch, model),

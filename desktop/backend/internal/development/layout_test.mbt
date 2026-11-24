@@ -1,7 +1,7 @@
 ///|
 async test "Moon native host layout identifies checkout-local development paths" {
   let root : @path.Path = @fs.tmpdir(prefix="openseek-development-layout-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let command_dir = root.join(
     "desktop/app/_build/native/debug/build/openseek_desktop/app",
   )

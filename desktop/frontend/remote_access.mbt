@@ -40,14 +40,38 @@ fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// Run the loopback sign-in. The reply arrives only after the user's
 /// browser round-trip, minutes later at the worst — the section shows an
 /// in-progress state the whole while.
-fn connect_remote(dispatch : @cmd.Emit[Msg], epoch : Int32) -> @cmd.Cmd {
+fn connect_remote(
+  dispatch : @cmd.Emit[Msg],
+  epoch : Int32,
+  rejected_token? : String,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let _ = @interop.bridge_request(
-        Local,
-        @commands.auth_connect,
-        @protocol.NoPayload,
-      ) catch {
+      try {
+        // auth.connect reuses a stored account. Clear the rejected credential
+        // before opening sign-in, leaving a newer host account alone.
+        if rejected_token is Some(token) &&
+          @interop.bridge_request(
+            Local,
+            @commands.account_session,
+            @protocol.NoPayload,
+          ).session
+          is Some(account) &&
+          account.token == token {
+          @interop.bridge_request(
+            Local,
+            @commands.auth_disconnect,
+            @protocol.NoPayload,
+          )
+          |> ignore
+        }
+        @interop.bridge_request(
+          Local,
+          @commands.auth_connect,
+          @protocol.NoPayload,
+        )
+        |> ignore
+      } catch {
         error => {
           // These are the existing auth.connect failure messages. Translate
           // expected outcomes at the host boundary and keep other diagnostics.

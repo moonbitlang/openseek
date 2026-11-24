@@ -73,7 +73,7 @@ async test "edit guards are opt-in and multi_edit retains its default boundary" 
                 "baseline"? : None,
                 "check": { "error_count": Number(n, ..), .. },
                 ..
-              }
+              },
             ) &&
             n == count.to_double(),
           )
@@ -88,7 +88,7 @@ async test "edit guards are opt-in and multi_edit retains its default boundary" 
                 "verdict": "over_match",
                 "reissue_with"? : None,
                 ..
-              }
+              },
             ),
           )
           assert_true(result.content.contains("comparability:"))
@@ -121,7 +121,7 @@ async test "both tools recommend delta plus one for newly reached errors" {
       assert_true(
         result.data
         is Some(
-          { "verdict": "plausible_reach", "reissue_with": Number(12, ..), .. }
+          { "verdict": "plausible_reach", "reissue_with": Number(12, ..), .. },
         ),
         msg=result.content,
       )

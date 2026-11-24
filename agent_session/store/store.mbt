@@ -16,7 +16,7 @@ fn session_file_name(id : @agent_session.SessionId) -> String {
 let lock_file_name : String = "session.lock"
 
 ///|
-/// User-authored display titles live beside the append-only transcript. A
+/// Display titles live beside the append-only transcript. A
 /// separate file lets a running session be renamed without rewriting history
 /// or replacing the inode its engine is still appending to.
 let title_file_name : String = "session-title"
@@ -511,6 +511,27 @@ pub fn SessionStore::session_file(
 }
 
 ///|
+/// The saved base prompt, before adding the session's runtime context.
+pub fn SessionStore::base_prompt_file(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/system-prompt.md"
+}
+
+///|
+/// Older sessions may have no saved base prompt.
+pub async fn SessionStore::read_base_prompt(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String? {
+  Some(@fs.read_text(self.base_prompt_file(id))) catch {
+    @os_error.OsError(NotFound, ..) => None
+    error => raise error
+  }
+}
+
+///|
 /// Copy the session `source` into the new session `fork` and return it.
 ///
 /// The copy is `Session::fork` of the source as it is durably recorded now —
@@ -527,7 +548,8 @@ pub fn SessionStore::session_file(
 /// `system_prompt` is the fork's own. A prompt names the session's scratch
 /// directory, which is a different directory for the fork, so the source's
 /// prompt is never inherited: the caller builds the one a new session in the
-/// fork's environment would get.
+/// fork's environment would get. If supplied, `base_prompt` is saved alongside
+/// the transcript so future forks can build their own prompts from it.
 ///
 /// `notice`, when given, is appended after the copied history as a runtime
 /// notice: the model reads it before the fork's first prompt.
@@ -553,6 +575,7 @@ pub async fn SessionStore::fork(
   fork : @agent_session.SessionId,
   through? : Int32,
   system_prompt~ : String,
+  base_prompt? : String,
   notice? : String,
 ) -> @agent_session.Session {
   let copy = self.load(source).fork(fork, system_prompt~, through?)
@@ -587,11 +610,15 @@ pub async fn SessionStore::fork(
     // The session file goes last: it is what makes the id a session, so a
     // write that fails before it leaves a directory nothing loads rather
     // than a fork that exists without its title.
-    if title is Some(title) {
+    let title = title.unwrap_or_else(() => snapshot_default_title(copy))
+    if !title.is_empty() {
       write_text_atomic(self.title_path(fork), title, dirs~)
     }
     if model is Some(model) {
       write_text_atomic(self.model_path(fork), session_model_text(model), dirs~)
+    }
+    if base_prompt is Some(text) {
+      write_text_atomic(self.base_prompt_file(fork), text, dirs~)
     }
     write_text_atomic(path, session_file_text(copy), dirs~)
     record_mark(self, copy)
@@ -647,16 +674,14 @@ pub fn SessionListing::first_prompt(self : SessionListing) -> String {
 }
 
 ///|
-/// Return the explicit user-authored title, or `None` when this session still
-/// uses its first prompt as the display label.
+/// Return the saved title, or `None` when no title has been initialized.
 pub fn SessionListing::title(self : SessionListing) -> String? {
   self.title
 }
 
 ///|
-/// Read a session's explicit display title. A missing sidecar means the title
-/// still derives from the first user prompt; malformed or unreadable metadata
-/// remains an error rather than masquerading as absence.
+/// Read a session's saved display title. A missing sidecar means the title
+/// has yet to be initialized. Malformed or unreadable metadata raises.
 pub async fn SessionStore::title(
   self : SessionStore,
   id : @agent_session.SessionId,
@@ -886,9 +911,10 @@ pub async fn SessionStore::load(
 /// `openseek_session-<id>.jsonl`, and the new immutable `Session` is
 /// returned. The
 /// first append for a session id creates the file, writing the header line and
-/// the first event together; and when a crash left the durable tail
-/// unterminated, the append rewrites the file atomically instead, repairing
-/// the tail as it persists the new event. The input session is unchanged.
+/// the first event together. The first user prompt initializes a missing title.
+/// When a crash left the durable tail unterminated, the append rewrites the
+/// file atomically, repairing the tail as it persists the new event.
+/// The input session is unchanged.
 pub async fn SessionStore::append(
   self : SessionStore,
   session : @agent_session.Session,
@@ -897,11 +923,20 @@ pub async fn SessionStore::append(
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
     let repair_tail = ensure_session_is_current(self, session)
+    let events = session.events()
     let (next, event) = session.append_event(
       item,
       unix_ms=@env.now().reinterpret_as_int64(),
     )
     persist_event(self, next, event, repair_tail~)
+    if item is User(message) &&
+      events.length() < first_prompt_scan_limit &&
+      first_title_content(session) is None {
+      self.initialize_title(
+        session.id(),
+        default_title_from_content(message.content()),
+      )
+    }
     record_mark(self, next)
     next
   })

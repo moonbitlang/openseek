@@ -55,7 +55,7 @@ textarea {
 
 button {
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
@@ -74,6 +74,7 @@ textarea,
 }
 
 .field-surface {
+  border-radius: var(--radius-control);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
 }
@@ -81,7 +82,7 @@ textarea,
 .card-surface {
   background: var(--color-bg-canvas);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
 }
 
 .search-field {
@@ -90,7 +91,6 @@ textarea,
   gap: var(--space-5);
   width: 100%;
   min-width: 0;
-  border-radius: var(--radius-md);
   padding: var(--space-4) var(--space-5);
 }
 
@@ -110,7 +110,7 @@ textarea,
 ) {
   min-width: 0;
   padding: 0.75em 0.75em;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   font-size: var(--font-size-md);
 
   &::placeholder {
@@ -178,9 +178,10 @@ samp,
 /* Action menus and selects share visual treatment, not value-selection state. */
 .menu-surface,
 [id="conversation-transfer:actions"] {
-  padding: 5px;
+  --menu-surface-padding: 5px;
+  padding: var(--menu-surface-padding);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-surface);
 }
@@ -190,7 +191,8 @@ samp,
 }
 
 .custom-select-menu:popover-open,
-.custom-select-group {
+.custom-select-group,
+.menu-surface[data-slot="select-content"] > [data-slot="select-viewport"] {
   display: grid;
   gap: var(--space-2);
 }
@@ -218,7 +220,7 @@ samp,
   margin: 0;
   padding: 7px 9px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
@@ -229,8 +231,13 @@ samp,
 }
 
 .menu-option {
+  --menu-option-padding: 0.7em 9px;
   grid-template-columns: minmax(0, 1fr) 16px;
-  padding-block: 0.7em;
+  padding: var(--menu-option-padding);
+}
+
+.custom-select-option {
+  padding-block: 0.45em;
 }
 
 [id="conversation-transfer:actions"] .action-menu-item {
@@ -272,12 +279,15 @@ samp,
   background: var(--color-text-selection);
 }
 
-/* Preserve native scrollbar geometry; dom_helpers.mbt measures its occupied
-   width as --scrollbar-lane. Chromium ignores ::-webkit-scrollbar styling
-   where the inherited scrollbar-color is non-auto. */
 html {
   font-size: var(--font-size-base);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+/* scrollbar-width is not inherited. Apply it to every scroller, including
+   the probe that measures --scrollbar-lane, without overriding local hides. */
+* {
+  scrollbar-width: thin;
 }
 
 /* Controls set --icon-size on the wrapper; SVG and font icons share it. */
@@ -295,8 +305,17 @@ html {
 .icon > .codicon {
   font-size: var(--icon-size, var(--icon-lg));
 }
-.codicon-newline::before {
-  content: "\ebea";
+.codicon-arrow-left::before {
+  content: "\ea9b";
+}
+.codicon-arrow-right::before {
+  content: "\ea9c";
+}
+.codicon-bell::before {
+  content: "\eaa2";
+}
+.codicon-circle-small-filled::before {
+  content: "\eb8a";
 }
 .codicon-stop-circle::before {
   content: "\eba5";
@@ -383,6 +402,7 @@ html.is-resizing-review .review-split-handle {
      Component styles consume the dimension that matches their seam. */
   --resize-handle-width: 6px;
   --resize-handle-height: 6px;
+  --conversation-width: 820px;
   --sidebar-mode-padding: calc(var(--titlebar-control-gap) / 2);
   /* Native controls, navigation and the mode switch must all fit. The
      trailing 13px includes the sidebar inset and its border. */

@@ -208,8 +208,9 @@ pub async fn gather_comparability(
 ) -> Comparability {
   let cwd = @auto_check.check_cwd(check_path)
   let graph = match cwd {
-    Some(cwd) => @auto_check.package_graph(cwd) catch { _ => None }
-    None => None
+    Some(cwd) if !check_path.has_suffix(".mbtx") =>
+      @auto_check.package_graph(cwd)
+    _ => None
   }
   comparability(before, after, edited_targets(paths), cwd~, graph~)
 }

@@ -40,7 +40,7 @@ pub fn RequestReader::RequestReader(socket : @socket.Tcp) -> RequestReader {
 async fn RequestReader::byte(self : RequestReader) -> Byte {
   if self.offset == self.buffer.length() {
     let chunk = FixedArray::make(4096, b'\x00')
-    let read = self.socket.read_into(chunk)
+    let read = self.socket.read_into(chunk.mut_view())
     guard read > 0 else { fail("Incomplete request") }
     let bytes = Bytes::from_array(chunk[:read])
     self.wire_bytes += bytes.length()
@@ -137,7 +137,7 @@ pub async fn RequestReader::body(
         guard !line.is_empty() && line.all(c => c.is_ascii_hexdigit()) else {
           fail("Invalid chunk size")
         }
-        let size = @string.parse_int(line, base=16) catch {
+        let size = @string.parse_int(line, radix=16) catch {
           _ => raise RequestTooLarge("Request exceeds 64 KiB")
         }
         guard size >= 0 && size <= MaxBodyBytes - bytes.length() else {

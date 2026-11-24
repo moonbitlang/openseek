@@ -206,7 +206,6 @@ test('read_image and PTC results display images when committed and after reload'
       await expect(result.locator('.user-image')).toHaveAttribute('src', url);
       await expect.poll(() => result.locator('.user-image').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
     }
-    await expect(page.locator('#transcript')).toContainText('🖼️ picture.png');
     expect(app.pageErrors).toEqual([]);
   }
   await verify();

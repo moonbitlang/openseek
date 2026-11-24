@@ -6,10 +6,11 @@ async fn Inbound::read(reader : &@io.BinaryReader) -> Inbound {
   let buffer = Buffer()
   let chunk = FixedArray::make(65536, b'\x00')
   for ;; {
-    let read = reader.read_into(
-      chunk,
-      max_len=Int32::min(65536, InboundFrameMaxBytes - buffer.length() + 1),
+    let chunk_limit = Int32::min(
+      chunk.length(),
+      InboundFrameMaxBytes - buffer.length() + 1,
     )
+    let read = reader.read_into(chunk.mut_view(end=chunk_limit))
     guard read > 0 else { break }
     if read > InboundFrameMaxBytes - buffer.length() {
       return Oversized

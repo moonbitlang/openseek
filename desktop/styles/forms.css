@@ -95,7 +95,7 @@
   position: relative;
   width: 30px;
   height: 18px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-border);
   transition: background-color 160ms ease;
 }
@@ -172,4 +172,9 @@
 
 .form-row-status.success {
   color: var(--color-success);
+}
+
+.form-row[hidden],
+.setup-guide[hidden] {
+  display: none;
 }

@@ -345,7 +345,7 @@ pub fn panel(
   let details : Map[String, @html.Html] = Map([
     (detail_key, detail_view(locale~, state, emit, open_link)),
   ])
-  @html.div(class="github-panel", [
+  @html.div(class="github-panel", attrs=@action_menu.content_attrs("github"), [
     @html.div(class="github-detail-host", details),
     inventory(locale~, state, emit, open_link),
   ])

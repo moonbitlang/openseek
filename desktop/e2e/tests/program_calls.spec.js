@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 {
   const minimal = true;
-  test(`PTC results retain edit diffs and interruptions across reload (${minimal ? 'minimal' : 'full'})`, async ({ page }) => {
+  test(`PTC results retain nested call summaries and interruptions across reload (${minimal ? 'minimal' : 'full'})`, async ({ page }) => {
     await page.addInitScript((enabled) => {
       localStorage.setItem('openseek.minimal_transcript', String(enabled));
     }, minimal);
@@ -37,8 +37,9 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
         const calls = group.locator('.minimal-call');
         await expect(calls).toHaveCount(3);
         await expect(calls.nth(0).locator('.minimal-call-caption')).toHaveText('Update note');
-        await expect(calls.nth(1)).toContainText('before');
-        await expect(calls.nth(1)).toContainText('after');
+        await expect(calls.nth(1).locator('.minimal-call-caption')).toHaveText('edit');
+        await expect(calls.nth(1)).not.toContainText('before');
+        await expect(calls.nth(1)).not.toContainText('after');
         await expect(calls.nth(1).locator('.tool-status, .minimal-tool-status')).toHaveCount(0);
         await expect(group.getByRole('img', { name: 'Tool failed' })).toHaveCount(0);
         await expect(group.locator('details.tool-params, details.tool-result')).toHaveCount(0);
@@ -98,7 +99,9 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
         await expect(nested.locator('.tool-status, .minimal-tool-status')).toHaveCount(0);
       } else {
         const outer = page.locator('#transcript details.tool-call').first();
-        await outer.locator(':scope > summary').click();
+        const summary = outer.locator(':scope > summary');
+        await expect(summary.getByRole('img', { name: 'mbtx', exact: true })).toBeVisible();
+        await summary.click();
         const nested = outer.locator('details.tool-call').first();
         await expect(nested.getByRole('img', { name: 'Recorded snapshot' })).toBeVisible();
         await expect(nested.getByRole('img', { name: 'Tool succeeded' })).toHaveCount(0);

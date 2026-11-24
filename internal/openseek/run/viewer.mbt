@@ -63,7 +63,7 @@ async fn start_viewer(
   wait_ms~ : Int32,
 ) -> String {
   let dir = @fs.tmpdir(prefix="openseek-inspect-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let out = "\{dir}/inspect.out"
   // One handle for both streams: opening the file twice kept the viewer's
   // output from showing up on Windows.

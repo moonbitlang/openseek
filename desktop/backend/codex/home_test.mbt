@@ -15,7 +15,7 @@ test "codex home is a codex subdirectory of the runtime dir" {
 #cfg(not(platform="windows"))
 async test "Codex home failure prevents spawning and can recover on a later request" {
   let root = @fs.tmpdir(prefix="openseek-codex-isolation-")
-  defer @fs.rmdir(root, recursive=true)
+  defer @fs.remove(root, recursive=true)
   let home = root + "/codex"
   let marker = root + "/spawned"
   let script = root + "/app-server.sh"

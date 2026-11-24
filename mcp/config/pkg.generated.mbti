@@ -18,6 +18,26 @@ pub suberror ConfigError {
 
 // Types and methods
 #derive(Eq, @debug.Debug)
+pub(all) struct AuthorizationCodeConfig {
+  issuer : String
+  scopes : String
+}
+pub fn AuthorizationCodeConfig::equal(Self, Self) -> Bool
+pub fn AuthorizationCodeConfig::not_equal(Self, Self) -> Bool
+pub fn AuthorizationCodeConfig::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct DeviceOAuthConfig {
+  client_id : String
+  device_authorization_endpoint : String
+  token_endpoint : String
+  scopes : String
+}
+pub fn DeviceOAuthConfig::equal(Self, Self) -> Bool
+pub fn DeviceOAuthConfig::not_equal(Self, Self) -> Bool
+pub fn DeviceOAuthConfig::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
 pub(all) struct HeadersHelperCommand {
   command : String
   arguments : Array[String]
@@ -26,10 +46,19 @@ pub(all) struct HeadersHelperCommand {
 #derive(Eq, @debug.Debug)
 pub(all) enum McpServer {
   Stdio(name~ : String, command~ : String, args~ : Array[String], env~ : Map[String, String])
-  Http(name~ : String, url~ : String, headers~ : Map[String, String], headers_helper~ : HeadersHelperCommand?)
+  Http(name~ : String, url~ : String, headers~ : Map[String, String], headers_helper~ : HeadersHelperCommand?, oauth~ : OAuthConfig?)
 }
 pub fn McpServer::name(Self) -> String
 pub fn McpServer::target(Self) -> String
+
+#derive(Eq, @debug.Debug)
+pub(all) enum OAuthConfig {
+  DeviceCode(DeviceOAuthConfig)
+  AuthorizationCode(AuthorizationCodeConfig)
+}
+pub fn OAuthConfig::equal(Self, Self) -> Bool
+pub fn OAuthConfig::not_equal(Self, Self) -> Bool
+pub fn OAuthConfig::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

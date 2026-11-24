@@ -14,7 +14,8 @@ const MaxToolOutputChars : Int32 = 60000
 
 ///|
 /// The deadline for a connected server to answer `tools/list` (including
-/// pagination), so a wedged server delays engine startup instead of hanging it.
+/// pagination), so a wedged server delays the script that reached it instead
+/// of hanging it.
 const DefaultDiscoveryTimeoutMs : Int32 = 30000
 
 ///|
@@ -73,69 +74,165 @@ pub struct ServerEntry {
 }
 
 ///|
-/// One configured server being connected in the background, with the task
-/// that connects it (see `start`). The task's result is what connecting came
-/// to.
-pub struct Server {
+/// One configured server and the task that connects it in the background (see
+/// `Server::new`), whose result is what connecting came to. It has no task until a
+/// script first reaches it.
+struct Server {
   config : @config.McpServer
-  connecting : @async.Task[ServerEntry]
+  group : @async.TaskGroup
+  on_change : (() -> Unit)?
+  mut credential : Result[String?, Error]
+  mut checking : @async.Task[Unit]?
+  mut connecting : @async.Task[ServerEntry]?
+  connect : (Result[String?, Error]) -> @async.Task[ServerEntry]
 }
 
 ///|
-/// Start connecting every configured server at once, each in a task of its
-/// own on `scope`'s group, and return them in config order right away. A
-/// server that never settles (a stuck headers helper, say) holds back only its
-/// own task, which ends with the group. Every failure a task returns is also
-/// reported as the event it always was. The connections' reader/writer tasks
-/// run on `scope`'s group and live until it ends.
-pub fn start(
+/// The configuration this server connects with.
+pub fn Server::config(self : Server) -> @config.McpServer {
+  self.config
+}
+
+///|
+/// `config`, to connect in a task of its own on `scope`'s group once a script
+/// first reaches it (see `settle` and `Server::call`); nothing connects here.
+/// A server that never settles (a stuck headers helper, say) holds back only
+/// its own task, which ends with the group. A failure the task returns is also
+/// reported as the event it always was. The connection's reader/writer tasks
+/// run on `scope`'s group and live until it ends. `on_change` runs each time
+/// what `try_wait` reads may have changed — the server started connecting or
+/// settled, or its connection closed — and must not block.
+pub fn Server::new(
   scope : @agent_runtime.AgentTaskScope,
-  servers : Array[@config.McpServer],
+  config : @config.McpServer,
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
-) -> Array[Server] {
-  servers.map(server => {
-    config: server,
-    connecting: scope
-    .group()
-    .spawn(no_wait=true, () => {
-      connect_server(
-        scope,
-        server,
-        client_name~,
-        client_version~,
-        workspace_root?,
-        discovery_timeout_ms~,
-      )
-    }),
-  })
+  on_change? : () -> Unit,
+) -> Server {
+  {
+    config,
+    group: scope.group(),
+    on_change,
+    credential: Ok(None),
+    checking: None,
+    connecting: None,
+    connect: credential => {
+      scope
+      .group()
+      .spawn(no_wait=true, () => {
+        let entry = connect_server(
+          scope,
+          config,
+          credential,
+          client_name~,
+          client_version~,
+          workspace_root?,
+          discovery_timeout_ms~,
+        )
+        if on_change is Some(on_change) {
+          // The close handler goes on first, so a connection that closes
+          // from here on reports itself, and one already closed shows as
+          // lost.
+          if entry.connection is Live(client) {
+            client.set_close_handler(on_change)
+          }
+          on_change()
+        }
+        entry
+      })
+    },
+  }
 }
 
 ///|
-/// What connecting this server came to, or `None` while it is still
-/// connecting, as `Task::try_wait` reads its task — except that a task
-/// cancelled with its group, which only happens as the engine shuts down,
+/// The task connecting this server, started now if it has not been.
+fn Server::task(self : Server) -> @async.Task[ServerEntry] {
+  match self.connecting {
+    Some(task) => task
+    None => {
+      let task = (self.connect)(self.credential)
+      self.connecting = Some(task)
+      if self.on_change is Some(on_change) {
+        on_change()
+      }
+      task
+    }
+  }
+}
+
+///|
+/// Start credential lookup on the server's group so the caller can stop
+/// waiting at its deadline while a rotating refresh completes and is saved.
+fn Server::start_credential_check(self : Server) -> @async.Task[Unit] {
+  if self.checking is Some(task) {
+    let pending = (task.try_wait() is None) catch { _ => false }
+    if pending {
+      return task
+    }
+  }
+  let first = !self.started()
+  let task = self.group.spawn(no_wait=true, allow_failure=true, () => {
+    self.check_credential()
+    // Continue connecting even if the caller already stopped waiting.
+    ignore(self.task())
+  })
+  self.checking = Some(task)
+  if first && self.on_change is Some(on_change) {
+    on_change()
+  }
+  task
+}
+
+///|
+async fn Server::ready(self : Server) -> ServerEntry {
+  if self.config is Http(oauth=Some(_), ..) {
+    self.start_credential_check().wait()
+  }
+  self.task().wait()
+}
+
+///|
+/// Whether this server has started connecting, which it does when a script
+/// first reaches it.
+pub fn Server::started(self : Server) -> Bool {
+  self.checking is Some(_) || self.connecting is Some(_)
+}
+
+///|
+/// What connecting this server came to, or `None` while it has not started or
+/// is still connecting, as `Task::try_wait` reads its task — except that a
+/// task cancelled with its group, which only happens as the engine shuts down,
 /// reads as `None` rather than raising.
 pub fn Server::try_wait(self : Server) -> ServerEntry? {
-  self.connecting.try_wait() catch {
+  guard self.connecting is Some(task) else { return None }
+  task.try_wait() catch {
     _ => None
   }
 }
 
 ///|
-/// What connecting this server came to, waiting up to `timeout_ms` for it to
-/// settle: `None` when it is still connecting by then.
+/// What connecting this server comes to, starting it first if it has not
+/// started. Cancellation propagates.
+pub async fn Server::settled(self : Server) -> ServerEntry {
+  self.ready()
+}
+
+///|
+/// What connecting this server came to, starting it first if it has not
+/// started, and waiting up to `timeout_ms` for it to settle: `None` when it is
+/// still connecting by then.
 async fn Server::wait(self : Server, timeout_ms~ : Int32) -> ServerEntry? {
-  @async.with_timeout_opt(timeout_ms, () => self.connecting.wait())
+  @async.with_timeout_opt(timeout_ms, () => self.ready())
 }
 
 ///|
 /// Wait until the servers a search needs have settled: the one named
 /// `server`, or every server when none is named (one not configured needs
-/// nothing). The wait ends after `timeout_ms` whatever is left; a server
-/// still connecting then is listed as such.
+/// nothing), starting any of them that has not started. The wait ends after
+/// `timeout_ms` whatever is left; a server still connecting then is listed as
+/// such.
 pub async fn settle(
   servers : Array[Server],
   server? : String,
@@ -149,16 +246,19 @@ pub async fn settle(
   })
   ignore(
     @async.with_timeout_opt(timeout_ms, () => {
-      for configured in waiting {
-        ignore(configured.connecting.wait())
-      }
+      @async.with_task_group(group => {
+        for configured in waiting {
+          group.spawn_bg(() => ignore(configured.ready()))
+        }
+      })
     }),
   )
 }
 
 ///|
 /// Call `tool` of this server, as `ServerEntry::call` does, once it has
-/// settled. A server still connecting is waited for up to `wait_ms`, and is an
+/// settled, starting it first if it has not started. A
+/// server still connecting is waited for up to `wait_ms`, and is an
 /// error result saying so when it has not settled by then. The wait counts
 /// against the call's deadline.
 pub async fn Server::call(
@@ -227,7 +327,7 @@ pub async fn ServerEntry::call(
 /// object schema (the server still validates its arguments), and an oversized
 /// result schema is dropped, since it only helps whoever reads `data`. A
 /// server still connecting is listed as unavailable, saying so, until it
-/// settles.
+/// settles, and so is one that connects on demand and has not started.
 pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
   let items : Array[Json] = []
   for configured in servers {
@@ -235,6 +335,10 @@ pub fn catalog_items(servers : Array[Server]) -> Array[Json] {
     let fields : Map[String, Json] = { "server": Json(server) }
     let settled = configured.try_wait()
     let error = match settled {
+      None if !configured.started() =>
+        Some(
+          "not connected yet; search it by name, `@mcp.search(server=\{Json(server).stringify()})`, to connect it",
+        )
       None => Some("still connecting; search again from a later script")
       Some({ connection: Failed(error), .. }) => Some(error)
       Some({ connection: Live(client), .. }) if client.is_closed() =>
@@ -293,11 +397,13 @@ fn cut(text : String, limit : Int32, marked~ : Bool) -> String {
 /// Connect one server and return what that came to with the instructions it
 /// sent and its tools — no tools on any failure (reported as an event),
 /// including discovery outrunning `discovery_timeout_ms`, so a server that
-/// handshakes but never answers `tools/list` cannot hang the engine's startup.
+/// handshakes but never answers `tools/list` cannot hang the script waiting
+/// for it.
 /// Cancellation propagates.
 async fn connect_server(
   scope : @agent_runtime.AgentTaskScope,
   server : @config.McpServer,
+  credential : Result[String?, Error],
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
@@ -328,7 +434,7 @@ async fn connect_server(
         )
         (connection.client(), connection.init())
       }
-      Http(url~, headers~, headers_helper~, ..) => {
+      Http(url~, headers~, headers_helper~, oauth~, ..) => {
         // Resolve configuration before connecting. The transport receives only
         // ordinary headers; helper output overrides static keys regardless of case.
         let resolved : Map[String, String] = Map([])
@@ -339,6 +445,15 @@ async fn connect_server(
           for name, value in @headers_helper.run(helper, cwd?=workspace_root) {
             resolved[name.to_lower()] = value
           }
+        }
+        if oauth is Some(_) {
+          let token = match credential {
+            Ok(Some(token)) => token
+            Ok(None) =>
+              fail("Connect this server in Settings > MCP before using it")
+            Err(error) => raise error
+          }
+          resolved["authorization"] = "Bearer \{token}"
         }
         let connection = @streamhttp.connect(
           scope.group(),
@@ -441,10 +556,8 @@ pub async fn call_tool(
     )
     return @agent_tool.respond(message, is_error=true)
   }
-  // The text is what a script prints for the model, so it keeps the budget. A
-  // structured result also rides along as `data`, but only whole and beside
-  // the text: the text renders it too, so leaving it out loses nothing a
-  // reader could not find.
+  // Render the server's content blocks as text and images. Structured output
+  // travels separately as `data` when it fits whole beside the text.
   let rendered = result.render()
   let (content, truncated) = cap_serialized(rendered.text, MaxToolOutputChars)
   let text = if truncated {
@@ -506,4 +619,30 @@ fn cap_chars(text : String, limit : Int32) -> (String, Bool) {
     continue count + 1
   }
   (kept.to_string(), false)
+}
+
+///|
+/// A login/logout changes the credential without requiring an engine restart.
+async fn Server::check_credential(self : Server) -> Unit {
+  guard self.config is Http(url~, oauth=Some(oauth), ..) else { return }
+  // The connection uses this snapshot. Compare usable credentials and pass
+  // each lookup failure through to the connection's error report.
+  let credential = try @oauth.token(url, oauth) catch {
+    error => Err(error)
+  } noraise {
+    token => Ok(token)
+  }
+  if credential is Ok(token) &&
+    self.credential is Ok(previous) &&
+    token == previous {
+    return
+  }
+  if self.try_wait() is Some({ connection: Live(client), .. }) {
+    client.close()
+  }
+  if self.connecting is Some(task) {
+    task.cancel()
+  }
+  self.connecting = None
+  self.credential = credential
 }

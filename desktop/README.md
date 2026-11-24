@@ -2,13 +2,6 @@
 
 A [Proton](https://github.com/moonbit-community/proton) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
-Frontend changes must follow the durable interaction principles in
-[`UX_GUIDELINES.md`](UX_GUIDELINES.md) and the visual and component conventions
-in [`DESIGN.md`](DESIGN.md).
-
-For reproducing and assessing UX issues with real components, follow
-[`UX_REVIEW_WORKFLOW.md`](UX_REVIEW_WORKFLOW.md).
-
 The native side is two modules. `backend` is a library and `app` is the
 executable that hosts it:
 
@@ -171,10 +164,12 @@ the composer.
 ## Conversation overview
 
 The titlebar's overview control shows or hides a column of cards about the
-OpenSeek conversation on screen: its **Environment** — the device it runs
-on, its project, the checked-out branch and whether the conversation has a
-worktree of its own — and its **Connectors** (see MCP servers).
+OpenSeek conversation on screen. **Changes** lists the current checkout and
+attached pull requests and branches. **Background tasks** shows the
+conversation's background jobs and subagents.
 Showing it is a window preference kept across conversations and launches.
+When neither card has content, the overview takes no space. Cards appear
+automatically as content becomes available while the overview is enabled.
 Where the main pane has room for a 600px conversation beside it, the
 overview is a rail to the right of the transcript and the composer; where it
 does not — a narrow window, a wide sidebar, an open file panel — the same
@@ -259,17 +254,22 @@ only entries the app itself installed can be updated or uninstalled.
 
 ## MCP servers
 
+In the desktop app, **Settings → Connectors** manages OAuth authorization
+for connectors provided by installed skills.
+
 The agent can use tools from [MCP](https://modelcontextprotocol.io) servers
 listed in `~/.openseek/mcp.json`, the `{"mcpServers": {...}}` shape described
-in the repository README. The user file is created and edited by hand. The host
-also automatically supplies its own tools through a generated `host-mcp.json`
-in its runtime directory. The user file follows this default configuration,
-so a same-named server in the user file replaces the default entry. When no
-user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment still
-applies after the host defaults.
+in the repository README. The user file is created and edited by hand. When no
+user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment applies.
+The host also bundles a `seekmoon` skill under `seekmoon/skills/seekmoon/` in
+its application resources. The bundled `seekmoon/skills` directory is handed
+to each engine through `--skills-dir` and read directly without a runtime copy. Its
+`SKILL.md` describes the host tools, and its `mcp.json` reaches the host through
+the conversation's grant using environment-variable placeholders. The user
+MCP configuration overrides a same-named server supplied by the skill.
 
-An engine connects its servers once, when it starts — one set of server
-processes per conversation. The host therefore reads the file before each
+An engine connects each server at most once, when a script first reaches it —
+one set of server processes per conversation. The host therefore reads the file before each
 prompt and keeps a digest of its content among the things that pin an engine
 to its configuration, like the model and the endpoint: an edit starts a new
 engine, and with it every server, on that conversation's next prompt, with no
@@ -281,27 +281,6 @@ lands in between leaves the engine on newer content than the host recorded,
 which costs one more engine start than was needed on the next prompt; only an
 edit that is also undone in that moment goes unnoticed until the file changes
 again.
-
-The conversation overview's **Connectors** card shows what that
-conversation's engine holds of its MCP servers, the host's own among them.
-Folded, it is one line — how many servers are still connecting, how many
-failed, and how many connected;
-unfolded, each server is listed connecting, connected with its tool count,
-disconnected since it connected, no tools, failed with the reason, or skipped
-over the tool limit, after any configuration file the engine could not load;
-how a server is reached and its tools are on hover. The host holds no MCP
-connections of its own. Each engine reports what it holds as soon as it
-starts, with its servers still connecting, and again whenever that changes (`mcp_status` on the
-serve protocol); the host keeps a conversation's latest report and the card
-shows it. Reading it starts nothing, so the card reads each time the
-overview comes on screen for a conversation, again whenever its
-conversation's engine reports — a server that exits turns to disconnected
-without a refresh — and again when the host reconnects. A conversation whose
-engine is not running — before its first message, or after a restart — is
-shown as that; its servers connect when its next message starts one. One
-whose engine has started and not reported yet is shown as still connecting.
-An engine that exits while the overview is shown reports nothing more; the
-card's refresh button shows it stopped.
 
 A configuration the engine cannot load, and a server that fails to start, to
 list its tools, or to fit under the tool limit, raise an error toast naming
@@ -388,19 +367,44 @@ billed to that account. The default, **DeepSeek official**, sends requests
 to `api.deepseek.com` with your own key; the engine also falls back to the
 `DEEPSEEK` environment variable when no key is stored. **Z.AI GLM** sends
 requests to `api.z.ai` with its own key (env fallback `GLM`) and offers the
-GLM 5.3 models on the composer's model chip. **OpenRouter** configures its
-canonical chat-completions endpoint through the existing custom backend; its
+GLM 5.3 models on the composer's model chip. **OpenRouter** uses its
+canonical chat-completions endpoint and independent credentials; its
 setup form only asks for an API key. Choose Flash or Pro in the composer, just
 as with DeepSeek official. The shared request encoder maps each tier to its
 OpenRouter id (`deepseek/deepseek-v4.1-flash`, `deepseek/deepseek-v4-pro`) and
 translates the reasoning fields; Desktop keeps the same model preference for
 both endpoints. **Custom URL**
-accepts any other OpenAI-compatible chat-completions endpoint, with the key
+accepts an OpenAI-compatible base URL or full chat-completions endpoint, with the key
 optional — whether one is needed is the endpoint's business. The provider
 choice, the custom URL, and the keys live in the host's settings store
 (`engine-settings.json` in the runtime dir), shared by the desktop window
 and every remote page; a key is never echoed back to a client, only its
-presence. While no usable endpoint is configured, an API-setup modal opens
+presence. The current selection remains in `provider`; each provider's
+configuration is stored independently under `providers[name]`. Switching
+providers preserves every other provider's URL and key. Version 3 migrates
+older flat settings on read and writes the new structure on the next save;
+an old OpenRouter preset becomes an independent OpenRouter entry.
+
+The settings protocol uses the same `providers` map. A `settings.set` request
+merges only the named entries and supplied fields: omitted or null fields
+remain unchanged, while an empty string clears a URL or key. For example,
+`{"providers":{"custom":{"api_url":"https://host/v1"}}}` edits Custom
+without changing the selected `provider`. Replies and broadcasts return
+`providers[name]` with `api_url` and `has_api_key`; credentials are never
+returned. `has_api_key` includes the official provider's environment fallback.
+
+**Test connection** sends one short text prompt through the selected provider's
+saved API settings and the provider's default model, and reports whether it
+received streamed text. For Custom URL, the gateway needs to accept
+`deepseek-flash`, the default model ID for that provider.
+
+Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
+ending in `/v<number>` (with an optional trailing slash) receive
+`/chat/completions`; other paths remain complete endpoints. Query parameters
+are preserved, fragments are rejected, and invalid URLs fail at save time.
+Existing base URLs are also normalized when resolving a run's endpoint.
+
+While no usable endpoint is configured, an API-setup modal opens
 over the chat (the Settings page's API section lifted out of the page) and
 the composer keeps Send disabled, with a notice saying why. The host passes
 a custom endpoint to the engine as `OPENSEEK_API_URL`, substituting a
@@ -601,8 +605,7 @@ CSS, and the generated xterm files under `desktop/target/web/`. Mermaid loads
 from the verified distribution staged under that same directory. Production
 copies those outputs into the fixed package resource tree.
 
-Desktop CSS conventions, including token scope and the single-owner form focus
-contract, live in [`styles/README.md`](styles/README.md).
+Desktop's shared design tokens are defined in [`styles/tokens.css`](styles/tokens.css).
 
 The launcher declares `desktop/` as Proton's development resource directory.
 The host derives the checkout HTML and the fixed native/debug engine from that

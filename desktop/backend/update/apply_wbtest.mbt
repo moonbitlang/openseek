@@ -8,7 +8,7 @@ async test "bundle replacement checks the containing directory" {
     group.add_defer(() => {
       @async.protect_from_cancel(() => {
         @fs.chmod(root, 0o700)
-        @fs.rmdir(root, recursive=true)
+        @fs.remove(root, recursive=true)
       })
     })
     let bundle = "\{root}/SeekMoon.app"
@@ -30,7 +30,7 @@ async test "an unavailable destination stops apply before any mutation" {
     group.add_defer(() => {
       @async.protect_from_cancel(() => {
         @fs.chmod(root, 0o700)
-        @fs.rmdir(root, recursive=true)
+        @fs.remove(root, recursive=true)
       })
     })
     let bundle = "\{root}/SeekMoon.app"
@@ -62,7 +62,7 @@ async test "an unavailable destination stops apply before any mutation" {
 /// marker belongs to the bundle it names.
 async test "a relaunch marker is taken only by the bundle it names" {
   let work = @fs.tmpdir(prefix="openseek-update-marker-")
-  defer @fs.rmdir(work, recursive=true)
+  defer @fs.remove(work, recursive=true)
   // Bundle paths under the fixture: cleanup removes `<bundle>.old`, and a
   // test must not reach for one beside a real installation.
   let installed = "\{work}/installed/SeekMoon.app"
@@ -80,7 +80,7 @@ async test "a relaunch marker is taken only by the bundle it names" {
 ///|
 async test "launch cleanup removes this bundle's own stale marker" {
   let work = @fs.tmpdir(prefix="openseek-update-stale-marker-")
-  defer @fs.rmdir(work, recursive=true)
+  defer @fs.remove(work, recursive=true)
   let installed = "\{work}/installed/SeekMoon.app"
   write_relaunch_marker(work_dir=work, bundle_path=installed)
   cleanup_leftovers(work_dir=work, bundle_path=installed)

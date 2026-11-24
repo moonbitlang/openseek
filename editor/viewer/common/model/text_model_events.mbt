@@ -61,12 +61,12 @@ pub enum ModelRawChange {
   ModelRawLinesDeleted(
     from_line_number~ : Int32,
     to_line_number~ : Int32,
-    last_untouched_line_post_edit~ : Int32
+    last_untouched_line_post_edit~ : Int32,
   )
   ModelRawLinesInserted(
     from_line_number~ : Int32,
     from_line_number_post_edit~ : Int32,
-    count~ : Int32
+    count~ : Int32,
   )
   ModelRawEOLChanged
 }

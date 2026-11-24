@@ -1,0 +1,15 @@
+import {
+  "moonbitlang/core/async",
+  "openseek_desktop/backend/internal/github",
+  "openseek_desktop/backend/internal/session_store",
+  "openseek_desktop/protocol",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

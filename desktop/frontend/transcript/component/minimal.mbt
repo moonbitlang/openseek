@@ -1,6 +1,6 @@
 ///|
-/// A minimal call retains presentation text, image URLs and derived edit
-/// previews, never raw parameters or text output. Categories describe the
+/// A minimal call retains presentation text and image URLs, never edit
+/// previews, raw parameters or text output. Categories describe the
 /// operation, not its success.
 #derive(Eq)
 priv struct MinimalCall {
@@ -9,7 +9,6 @@ priv struct MinimalCall {
   category : String?
   caption : String
   status : ToolStatus
-  changes : EditChanges?
   image_urls : Array[String]
 }
 
@@ -89,11 +88,6 @@ fn MinimalCall::from_tool(
   } else {
     call.name
   }
-  let changes = if call.arguments is Some(arguments) {
-    EditChanges::from_arguments(call.name, arguments)
-  } else {
-    None
-  }
   let image_urls : Array[String] = []
   if call.outcome is Done(content~, ..) {
     for part in content.0 {
@@ -108,7 +102,6 @@ fn MinimalCall::from_tool(
     category,
     caption,
     status,
-    changes,
     image_urls,
   }
 }
@@ -117,32 +110,31 @@ fn MinimalCall::from_tool(
 /// Tool identities stay independent of descriptions and success/failure status.
 /// Use the same monochrome Codicons as app controls; status stays on the right.
 fn MinimalCall::icon(self : MinimalCall) -> @html.Html {
+  if tool_caption_icon(self.tool_name) is Some(icon) {
+    return icon
+  }
   match self.tool_name {
     "read" => @icons.icon_book()
-    "edit" => @icons.icon_edit()
-    "multi_edit" => @icons.icon_diff_multiple()
     "write" => @icons.icon_file()
     "remove" => @icons.icon_trash()
-    "mbtx" => @icons.icon_terminal()
     "shell" => @icons.icon_terminal()
     "web_search" | "webSearch" => @icons.icon_search()
-    "read_image" | "imageView" => @icons.icon_file_media()
+    "imageView" => @icons.icon_file_media()
     "imageGeneration" => @icons.icon_sparkle()
     "enteredReviewMode" | "exitedReviewMode" | "submit_review" =>
       @icons.icon_search()
     "review" | "spawn_agent" => @icons.icon_robot()
-    "wait_agent" | "job_wait" => @icons.icon_watch()
+    "wait_agent" => @icons.icon_watch()
     "send_input" | "send_message" => @icons.icon_comment()
     "resume_agent" => @icons.icon_play()
     "followup_task" => @icons.icon_send()
-    "interrupt_agent" | "job_stop" => @icons.icon_debug_stop()
+    "interrupt_agent" => @icons.icon_debug_stop()
     "close_agent" => @icons.icon_debug_stop()
     "list_agents" => @icons.icon_organization()
     "submit_result" | "submit_answer" | "submit_pattern_repair" =>
       @icons.icon_chat_export()
     "plan" => @icons.icon_tasklist()
     "goal" => @icons.icon_target()
-    "job_output" => @icons.icon_arrow_down()
     "finish" => @icons.icon_check()
     "sleep" => @icons.icon_watch()
     _ => @icons.icon_tools()
@@ -243,7 +235,7 @@ priv enum MinimalContent {
     // context-ceiling answer an older store left unstamped, and for the live
     // streaming bubble.
     completed_at~ : Double?,
-    fork~ : ForkAction?
+    fork~ : ForkAction?,
   )
   Activity(Array[MinimalActivity])
   Note(text~ : String, error~ : Bool)
@@ -618,12 +610,11 @@ fn MinimalContent::summary(
 
 ///|
 /// Render an operation identically inside a tool group or as the only call of
-/// its group. This preserves statuses and edits when the redundant group
+/// its group. This preserves statuses when the redundant group
 /// disclosure is omitted.
 fn MinimalActivity::render(
   locale~ : @i18n.Locale = English,
   self : MinimalActivity,
-  actions : Actions,
   single~ : Bool = false,
 ) -> @html.Html {
   match self {
@@ -638,14 +629,17 @@ fn MinimalActivity::render(
         [
           @html.span(
             class="minimal-tool-icon",
-            attrs=@html.Attrs::build().aria_hidden("true"),
+            attrs=@html.Attrs::build().role("img").aria_label("runtime notice"),
             if error {
               @icons.icon_error()
             } else {
-              @icons.icon_comment()
+              @icons.icon_bell()
             },
           ),
-          @html.span(class="minimal-note-text", text),
+          @html.span(
+            class="minimal-note-text",
+            tool_caption_text("runtime notice", text),
+          ),
         ],
       )
     Call(call) => {
@@ -701,17 +695,6 @@ fn MinimalActivity::render(
               ]),
             ]
           },
-          if call.changes is Some(changes) {
-            @html.div(
-              class="minimal-edit-changes",
-              attrs=@html.Attrs::build().aria_label(
-                ui(locale, RequestedChanges),
-              ),
-              changes.render_minimal(locale~, actions),
-            )
-          } else {
-            @html.nothing
-          },
         ],
       )
     }
@@ -724,7 +707,6 @@ fn MinimalActivity::render(
 fn minimal_activity_views(
   locale~ : @i18n.Locale,
   entries : Array[MinimalActivity],
-  actions : Actions,
 ) -> Map[String, @html.Html] {
   let rows : Map[String, @html.Html] = Map([])
   for entry in entries {
@@ -732,7 +714,7 @@ fn minimal_activity_views(
       Call(call) => "call\u{0}\{call.call_id}"
       Notice(identity~, ..) => "notice\u{0}\{identity}"
     }
-    rows[key] = entry.render(locale~, actions)
+    rows[key] = entry.render(locale~)
   }
   rows
 }
@@ -794,9 +776,9 @@ fn MinimalContent::render(
       )
     Activity(entries) => {
       // A single call has nothing to summarize separately. Render its caption
-      // once, including running/failed status and any requested edit preview.
+      // once, including its running status and image previews.
       if entries is [Call(call)] {
-        return MinimalActivity::Call(call).render(locale~, actions, single=true)
+        return MinimalActivity::Call(call).render(locale~, single=true)
       }
       if active {
         return @html.div(
@@ -806,7 +788,7 @@ fn MinimalContent::render(
           // makes Rabbita insert rows in Map::map's reverse traversal order.
           @html.div(
             class="minimal-rows",
-            minimal_activity_views(locale~, entries, actions),
+            minimal_activity_views(locale~, entries),
           ),
         )
       }
@@ -815,7 +797,7 @@ fn MinimalContent::render(
         self.summary_view(locale~),
         @html.div(
           class="minimal-call-list",
-          minimal_activity_views(locale~, entries, actions),
+          minimal_activity_views(locale~, entries),
         ),
       ])
     }

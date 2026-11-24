@@ -10,6 +10,7 @@
 /// process; each transport connection supplies its own `HostConnection` when
 /// dispatching filesystem watch methods.
 struct ApiState {
+  connectors : @connectors.Service
   // One Codex app-server process for this Desktop process. It is independent
   // of the OpenSeek engine actor and owns Codex account/thread state through
   // Codex's own data directory.
@@ -43,6 +44,7 @@ struct ApiState {
   cloud_browser : ((String) -> @mcp.Tool)?
   questions : @user_questions.Service
   messages : @session_messages.Service
+  actions_monitor : @actions_monitor.ActionsMonitor
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -285,8 +287,10 @@ pub fn ApiState::ApiState(
     runtime_dir?,
     host_mcp?,
     moonbit=resources.moonbit,
+    skills_dir?=resources.skills,
   )
   {
+    connectors: Service(resources.skills),
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),
     codex_draft_threads: CodexDraftThreads(),
@@ -312,6 +316,7 @@ pub fn ApiState::ApiState(
     cloud_clients: Map([]),
     messages: Service(),
     questions: Service(),
+    actions_monitor: ActionsMonitor(),
     on_finished,
   }
 }
@@ -391,6 +396,7 @@ pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
   local_share~ : Bool = false,
+  local_feedback~ : Bool = false,
   on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
@@ -419,11 +425,11 @@ pub fn endpoints(
       state.share_file(payload, local_account=local_share)
     }),
     Endpoint(@commands.session_share, payload => {
-      SessionShare::{ state, payload, local_account: local_share, }.publish(on_progress=progress => {
-        on_share_progress({ generation: payload.generation, progress, }) catch {
-          _ => ()
-        }
-      })
+      state.share_conversation(
+        payload,
+        local_account=local_share,
+        on_share_progress~,
+      )
     }),
     @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(
@@ -553,13 +559,7 @@ pub fn endpoints(
     }),
     Endpoint(@commands.session_list, _ => @engine.list_sessions()),
     Endpoint(@commands.session_snapshot, payload => {
-      let (shell, bundle) = state.host_state().viz_assets().read()
-      let files = @engine.ConversationExport::capture(
-        state.manager,
-        payload,
-        shell,
-        bundle,
-      )
+      let files = state.capture_conversation(payload)
       { html: files.html, json: files.json, }
     }),
     Endpoint(@commands.session_load, payload => {
@@ -629,7 +629,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_artifacts_list, payload => {
-      @engine.session_artifacts_list(state.manager, payload.session)
+      @session_store.list_artifacts(payload.session)
     }),
     Endpoint(@commands.session_artifacts_remove, payload => {
       state.save_session_artifacts(payload.session, artifacts => {
@@ -694,6 +694,9 @@ pub fn endpoints(
       state.schedules.action(payload)
     }),
     Endpoint(@commands.settings_get, _ => @engine.settings_status(state.manager)),
+    Endpoint(@commands.settings_test, payload => {
+      @engine.test_api_connection(state.manager, payload)
+    }),
     @endpoint.Endpoint::sync(@commands.app_info, _ => {
       version: state.app_version,
       console_url: state.console_url,
@@ -845,6 +848,19 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.connectors_list, _ => state.connectors.list()),
+    Endpoint(@commands.connectors_connect, payload => {
+      state.connectors.action("connect", payload)
+    }),
+    Endpoint(@commands.connectors_poll, payload => {
+      state.connectors.action("poll", payload)
+    }),
+    Endpoint(@commands.connectors_cancel, payload => {
+      state.connectors.action("cancel", payload)
+    }),
+    Endpoint(@commands.connectors_disconnect, payload => {
+      state.connectors.action("disconnect", payload)
+    }),
     Endpoint(@commands.auth_status, _ => auth_status(state)),
     Endpoint(@commands.auth_connect, _ => auth_connect(state)),
     Endpoint(@commands.auth_disconnect, _ => auth_disconnect(state)),
@@ -858,6 +874,13 @@ pub fn endpoints(
       state.publish(SkillsChanged)
     }) {
     endpoints.push(endpoint)
+  }
+  if local_feedback {
+    endpoints.push(
+      Endpoint(@commands.session_feedback, payload => {
+        state.submit_feedback(payload)
+      }),
+    )
   }
   endpoints
 }
@@ -1364,7 +1387,7 @@ test "Codex workspace bindings decode only authoritative thread replies" {
       {
         session: "codex-thread-1",
         workspace: Some("/work/project/.worktrees/wt-1"),
-      }
+      },
     ),
   )
   let missing = CodexWorkspaceBinding::decode_reply({
@@ -1422,6 +1445,9 @@ fn publish_session_changed(
   session : String,
   workspace : String,
 ) -> Unit {
+  if change == "archived" || change == "deleted" {
+    state.actions_monitor.stop_session(session~)
+  }
   state.hub.publish(SessionChanged({ change, session, workspace, }))
 }
 
@@ -1451,4 +1477,13 @@ async fn ApiState::run_schedules(self : ApiState) -> Unit {
       publish_session_changed(self, "created", run.session, run.workspace)
     },
   )
+}
+
+///|
+async fn ApiState::capture_conversation(
+  self : ApiState,
+  source : @protocol.SessionExportPayload,
+) -> @engine.ConversationExport {
+  let (shell, bundle) = self.host_state().viz_assets().read()
+  @engine.ConversationExport::capture(self.manager(), source, shell, bundle)
 }

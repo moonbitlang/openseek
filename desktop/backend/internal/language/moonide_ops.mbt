@@ -731,8 +731,8 @@ test "Moon IDE CodeLens parser rejects malformed documents" {
 async test "Moon IDE CodeLens canonicalization drops symlink targets outside the workspace" {
   let root = @fs.tmpdir(prefix="openseek-codelens-root-")
   let outside = @fs.tmpdir(prefix="openseek-codelens-outside-")
-  defer (@fs.rmdir(outside, recursive=true) catch { _ => () })
-  defer (@fs.rmdir(root, recursive=true) catch { _ => () })
+  defer (@fs.remove(outside, recursive=true) catch { _ => () })
+  defer (@fs.remove(root, recursive=true) catch { _ => () })
   @fs.mkdir("\{root}/src", recursive=true)
   @fs.write_text(
     "\{root}/src/inside.mbt",

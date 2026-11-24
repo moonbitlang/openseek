@@ -6,26 +6,26 @@
 
 ///|
 /// Project the shared settings status used by both replies and broadcasts.
-/// OpenRouter is stored as the custom backend at its fixed URL.
+/// Each provider owns its credentials independently of the active selection.
 fn HostSettings::from_status(
   payload : @protocol.SettingsStatusPayload,
 ) -> HostSettings {
-  let custom_api_url = payload.custom_api_url.unwrap_or("")
-  let provider = if payload.provider == "custom" &&
-    custom_api_url == OpenRouterChatCompletionsUrl {
-    OpenRouter
-  } else {
-    ApiProvider::parse(payload.provider)
+  let provider = ApiProvider::parse(payload.provider)
+  let mut providers = @sorted_map.SortedMap([])
+  for provider in [Deepseek, Glm, OpenRouter, Custom] {
+    if payload.providers.get(provider.wire()) is Some(config) {
+      providers = providers.add(provider, ProviderConfig::{
+        api_url: config.api_url,
+        has_api_key: config.has_api_key,
+      })
+    }
   }
   {
     revision: payload.revision,
     endpoint: {
       provider,
-      custom_api_url,
+      providers,
       followup_behavior: FollowupBehavior::parse(payload.followup_behavior),
-      deepseek_key_saved: payload.has_deepseek_key,
-      glm_key_saved: payload.has_glm_key,
-      custom_key_saved: payload.has_custom_key,
     },
     prompt_source: payload.prompt_source,
     custom_prompt: payload.custom_prompt,
@@ -45,14 +45,16 @@ fn HostSettings::prompt_text(
 }
 
 ///|
-/// Whether the host has a key saved for this endpoint's provider. OpenRouter
-/// and custom endpoints share the custom key.
+fn HostEndpoint::config(
+  self : HostEndpoint,
+  provider : ApiProvider,
+) -> ProviderConfig {
+  self.providers.get(provider).unwrap_or({ api_url: None, has_api_key: false, })
+}
+
+///|
 fn HostEndpoint::key_saved(self : HostEndpoint) -> Bool {
-  match self.provider {
-    Deepseek => self.deepseek_key_saved
-    Glm => self.glm_key_saved
-    OpenRouter | Custom => self.custom_key_saved
-  }
+  self.config(self.provider).has_api_key
 }
 
 ///|
@@ -210,24 +212,10 @@ fn push_host_settings(
 ///|
 fn provider_settings_patch(
   provider : ApiProvider,
-  custom_api_url : String,
 ) -> @protocol.SettingsSetPayload {
   {
-    provider: Some(
-      if provider is OpenRouter {
-        "custom"
-      } else {
-        provider.wire()
-      },
-    ),
-    custom_api_url: match provider {
-      OpenRouter => Some(OpenRouterChatCompletionsUrl)
-      Custom if custom_api_url == OpenRouterChatCompletionsUrl => Some("")
-      _ => None
-    },
-    deepseek_api_key: None,
-    glm_api_key: None,
-    custom_api_key: None,
+    provider: Some(provider.wire()),
+    providers: None,
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
@@ -240,10 +228,7 @@ fn provider_settings_patch(
 fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
   {
     provider: None,
-    custom_api_url: Some(url),
-    deepseek_api_key: None,
-    glm_api_key: None,
-    custom_api_key: None,
+    providers: Some({ "custom": { api_url: Some(url), api_key: None, } }),
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
@@ -256,33 +241,10 @@ fn api_key_settings_patch(
   key : String,
 ) -> @protocol.SettingsSetPayload {
   {
-    provider: Some(
-      if provider is OpenRouter {
-        "custom"
-      } else {
-        provider.wire()
-      },
+    provider: None,
+    providers: Some(
+      Map([(provider.wire(), { api_url: None, api_key: Some(key), })]),
     ),
-    custom_api_url: if provider is OpenRouter {
-      Some(OpenRouterChatCompletionsUrl)
-    } else {
-      None
-    },
-    deepseek_api_key: if provider is Deepseek {
-      Some(key)
-    } else {
-      None
-    },
-    glm_api_key: if provider is Glm {
-      Some(key)
-    } else {
-      None
-    },
-    custom_api_key: if provider is (OpenRouter | Custom) {
-      Some(key)
-    } else {
-      None
-    },
     followup_behavior: None,
     prompt_source: None,
     custom_prompt: None,
@@ -290,20 +252,16 @@ fn api_key_settings_patch(
 }
 
 ///|
-test "OpenRouter is an atomic custom-backend preset" {
-  json_inspect(provider_settings_patch(OpenRouter, "").to_json(), content={
-    "provider": "custom",
-    "custom_api_url": "https://openrouter.ai/api/v1/chat/completions",
+test "OpenRouter has independent settings" {
+  json_inspect(provider_settings_patch(OpenRouter).to_json(), content={
+    "provider": "openrouter",
   })
   json_inspect(api_key_settings_patch(OpenRouter, "sk-openrouter").to_json(), content={
-    "provider": "custom",
-    "custom_api_url": "https://openrouter.ai/api/v1/chat/completions",
-    "custom_api_key": "sk-openrouter",
+    "providers": { "openrouter": { "api_key": "sk-openrouter" } },
   })
-  json_inspect(
-    provider_settings_patch(Custom, OpenRouterChatCompletionsUrl).to_json(),
-    content={ "provider": "custom", "custom_api_url": "" },
-  )
+  json_inspect(provider_settings_patch(Custom).to_json(), content={
+    "provider": "custom",
+  })
 }
 
 ///|
@@ -312,10 +270,7 @@ fn followup_behavior_patch(
 ) -> @protocol.SettingsSetPayload {
   {
     provider: None,
-    custom_api_url: None,
-    deepseek_api_key: None,
-    glm_api_key: None,
-    custom_api_key: None,
+    providers: None,
     followup_behavior: Some(behavior.wire()),
     prompt_source: None,
     custom_prompt: None,

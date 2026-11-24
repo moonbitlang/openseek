@@ -18,7 +18,7 @@ async fn load_prediction(
 ///|
 async test "prediction loads offline by exact transcript version and follows archive moves" {
   let dir = @fs.tmpdir(prefix="openseek-prediction-load-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root = @pathx.Path(dir).resolve()
   let store = @store.SessionStore(dir)
   let session = @agent_session.Session(

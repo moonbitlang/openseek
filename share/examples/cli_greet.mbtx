@@ -2,7 +2,7 @@
 import { "moonbitlang/core/argparse" }
 ---
 
-fn main raise {
+fn main {
   let matches = @argparse.parse(
     Command(
       "greet",

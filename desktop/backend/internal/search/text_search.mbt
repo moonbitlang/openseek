@@ -101,17 +101,17 @@ priv enum TextSearchRequest {
     command~ : @moonbit.MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchTextPayload,
-    reply~ : @async.Queue[@protocol.SearchTextReply]
+    reply~ : @async.Queue[@protocol.SearchTextReply],
   )
   Cancel(
     session_key~ : String,
     generation~ : Int32,
-    reply~ : @async.Queue[Unit]
+    reply~ : @async.Queue[Unit],
   )
   Finished(
     session_key~ : String,
     generation~ : Int32,
-    outcome~ : TextSearchOutcome
+    outcome~ : TextSearchOutcome,
   )
 }
 
@@ -1070,7 +1070,7 @@ async fn run_text_search(
     }
     let stderr_task = group.spawn(() => {
       defer stderr_reader.close()
-      let retained = @buffer.Buffer(size_hint=4096)
+      let retained = @buffer.Buffer(capacity=4096)
       let mut retained_bytes = 0
       for ;; {
         guard stderr_reader.read() is Some(chunk) else { break }
@@ -1514,7 +1514,7 @@ async test "text search replies echo resource-form workspace roots" {
 ///|
 async test "text search replies once the search process exits" {
   let dir = @fs.tmpdir(prefix="openseek-text-search-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @fs.write_text("\{dir}/a.txt", "hello needle\n")
   let root = @pathx.Path(dir).resolve()
   let payload : @protocol.SearchTextPayload = {

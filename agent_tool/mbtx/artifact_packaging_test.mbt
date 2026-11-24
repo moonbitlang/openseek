@@ -51,7 +51,7 @@ async test "generic file packaging retains editable sources without a UI library
     assert_true(duplicate.is_error)
     assert_true(duplicate.content.contains("already exists"))
     assert_eq(@fs.read_text(output + "/answer-v1.html"), html)
-    @fs.rmdir(project, recursive=true)
+    @fs.remove(project, recursive=true)
     let rebuilt = dispatch(tool, {
       "filename": recipe,
       "args": [retained, output, "answer-v2.html"],

@@ -59,7 +59,7 @@ fn app_shortcut_sub_loader(
             is AppShortcutSubscription(
               next,
               files=new_files,
-              symbols=new_symbols
+              symbols=new_symbols,
             ) else {
             return
           }
@@ -152,6 +152,8 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
   let ctx = file_ctx(self)
   {
     platform,
+    scope: ctx.owner.key() +
+    (if self.screen is Chat { ":chat" } else { ":codex" }),
     open_web_links_in_app,
     reveal_files,
     preview_files: ctx.can_preview_html(desktop=self.is_desktop),
@@ -540,6 +542,8 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     open_skills: self.emit(OpenSkills),
     open_settings: self.emit(OpenSetup),
     open_account: self.emit(SettingsSectionSelected(Account)),
+    sign_in: self.emit(RemoteConnectClicked),
+    cancel_sign_in: self.emit(RemoteCancelClicked),
     open_downloads: self.emit(OpenDownloads),
     select_mode: mode => self.emit(SidebarModeSelected(mode)),
     section,
@@ -564,19 +568,18 @@ fn main {
     is Some(_)
   // The shell sets its app token before loading any page, so this works for
   // both bundled and downloaded frontends, including after a reload.
-  let android = if @interop.js_prop(
-      @js.Value::cast_from(@dom.window().navigator()),
-      "userAgent",
-    )
-    is Some(value) &&
-    (@js.Cast::into(value) : String?) is Some(user_agent) {
-    user_agent.contains(" SeekMoonAndroid/")
-  } else {
-    false
-  }
+  let navigator = @js.Value::cast_from(@dom.window().navigator())
+  let user_agent = @interop.js_prop(navigator, "userAgent")
+    .bind(value => (@js.Cast::into(value) : String?))
+    .unwrap_or("")
+  let android = user_agent.contains(" SeekMoonAndroid/")
+  // The input device is independent of window width: a narrow desktop
+  // window still supports accepting a prediction with Tab.
+  let mobile = !desktop && (android || user_agent.contains("Mobi"))
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
+    let login_draft = Ref(if desktop { None } else { feedback_login_draft() })
     let composer_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
       @cmd.Emit(_ => @cmd.none),
     )
@@ -637,6 +640,23 @@ fn main {
               None => (@cmd.none, model)
             }
           _ => update(emit, msg, model)
+        }
+        if login_draft.val is Some((owner, draft, held)) && next.screen is Chat {
+          let input = next.composer_input()
+          if input.identity.owner.key() == owner {
+            login_draft.val = None
+            return (
+              next,
+              @cmd.batch([
+                cmd,
+                emit(
+                  ComposerCommandResult(
+                    @composer.RestoreFeedback(input, draft, held),
+                  ),
+                ),
+              ]),
+            )
+          }
         }
         (next, cmd)
       },
@@ -890,7 +910,14 @@ fn main {
           }
         },
       )
-    let composer_input = state.map(model => model.composer_input())
+    let composer_input = state.map(model => {
+      let input = model.composer_input()
+      if mobile {
+        { ..input, prediction: None, }
+      } else {
+        input
+      }
+    })
     let (composer_html, composer_quote, command_result) = @composer.component(
       state.map(model => model.locale),
       composer_input,
@@ -914,11 +941,6 @@ fn main {
       state.map(model => model.quick_open),
       emit.map(msg => QuickOpen(msg)),
       state.map(model => model.locale),
-    )
-    let transfer_menu_html = @action_menu.component(
-      state.map(model => model.conversation_transfer_input()),
-      (input, target) => conversation_transfer_menu(emit, input, target),
-      on_open_change=emit.map(open => ConversationTransferMenuChanged(open)),
     )
     // The floating reply for selected text is a shell overlay like the
     // context menu; they share one slot. It is bound to the composer under
@@ -1150,12 +1172,23 @@ fn main {
         (skills, workspace_settings, archived_chats)
       },
     )
+    let project_source_html = @source_selector.component(
+      state.map(model => model.project_sources()),
+      id="project-source",
+      class="project-source-select",
+      @cmd.Emit(source => {
+        match source {
+          Device(channel) => emit(Ssh(Select(channel)))
+          Cloud => @cmd.none
+        }
+      }),
+    )
     let shell_overlays = @rabbita.Val::map3(
       quick_open_html,
       selection_actions_html,
-      transfer_menu_html,
-      (quick_open, selection_actions, transfer_menu) => {
-        (quick_open, selection_actions, transfer_menu)
+      project_source_html,
+      (quick_open, selection_actions, project_source) => {
+        (quick_open, selection_actions, project_source)
       },
     )
     let shell = state.view9(
@@ -1194,7 +1227,7 @@ fn main {
         )
       },
     )
-    @action_menu.context_component(
+    let context_menu = @action_menu.context_component(
       state.map(model => model.locale),
       state.map(model => model.context_menu_input()),
       {
@@ -1206,8 +1239,10 @@ fn main {
         download_file: path => emit(DownloadFile(path)),
         preview_file: path => emit(PreviewFile(path)),
       },
-      shell,
     )
+    shell.map2(context_menu, (shell, menu) => {
+      @rui.theme(style=["display:contents"], @html.fragment([shell, menu]))
+    })
   })
   app.mount("app")
 }

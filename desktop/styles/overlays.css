@@ -5,7 +5,7 @@
   width: 100%;
   padding: var(--space-2) var(--space-4);
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
@@ -18,14 +18,6 @@
   outline: none;
   background: var(--color-accent-soft);
   color: var(--color-accent);
-}
-.selection-actions .action-menu-item:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.selection-actions .action-menu-item:disabled:hover {
-  background: transparent;
-  color: var(--color-text-primary);
 }
 .selection-actions .action-menu-item.destructive:hover,
 .selection-actions .action-menu-item.destructive:focus-visible {
@@ -54,7 +46,7 @@
   display: flex;
   padding: var(--space-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-overlay);
   white-space: nowrap;
@@ -64,36 +56,10 @@
 .selection-actions.below {
   transform: translate(-50%, 0);
 }
-.selection-actions-buttons {
-  display: flex;
-}
-.selection-actions:has(.selection-actions-buttons) {
-  flex-direction: column;
-}
-.selection-actions-buttons > .action-menu-item {
+.selection-actions > .action-menu-item {
   width: auto;
   justify-content: center;
   padding: var(--space-2) var(--space-5);
-}
-.selection-copy-feedback {
-  /* Match the text-only buttons' content height, including the check icon. */
-  --icon-size: 1em;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-tight);
-}
-.selection-copy-error {
-  padding: var(--space-2) var(--space-5) var(--space-3);
-  color: var(--color-danger);
-  font-size: var(--font-size-sm);
-}
-.selection-actions-separator {
-  align-self: center;
-  width: 1px;
-  height: 16px;
-  background: var(--color-divider);
 }
 .selection-actions.replying {
   flex-direction: column;
@@ -183,7 +149,7 @@
   box-sizing: border-box;
   padding: var(--space-3) var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   color: var(--color-text-primary);
   font: inherit;
   line-height: var(--line-height-normal);
@@ -204,6 +170,11 @@
   margin-top: var(--space-6);
   text-align: left;
 }
+.downloads-version {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
 .downloads-list {
   display: grid;
   gap: var(--space-2);
@@ -218,7 +189,7 @@
   gap: var(--space-5);
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   color: var(--color-text-primary);
   text-decoration: none;
 }
@@ -237,6 +208,7 @@
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
+.downloads-action > svg { flex: none; }
 .downloads-note { margin: var(--space-5) 0 0; font-size: var(--font-size-sm); }
 .downloads-note a {
   display: inline-flex;
@@ -305,7 +277,7 @@
   cursor: pointer;
   padding: var(--space-5) 1rem;
   border: 1px solid var(--color-danger-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-danger-soft);
   color: var(--color-danger);
   box-shadow: var(--shadow-overlay);
@@ -338,7 +310,7 @@
   width: min(440px, 100%);
   padding: var(--space-7);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-overlay);
 }
@@ -448,7 +420,7 @@
 }
 .portal-card {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-surface);
   background: var(--color-bg-surface);
   padding: 2rem;
   margin-top: 8vh;
@@ -469,7 +441,7 @@
 .portal-button-link {
   display: inline-block;
   padding: var(--space-4) 1rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-accent);
   color: var(--color-on-accent);
   text-decoration: none;
@@ -522,7 +494,7 @@
   gap: var(--space-5);
   min-height: 42px;
   padding: var(--space-4) var(--space-4);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: color-mix(in srgb, var(--color-text-primary) 76%, transparent);
   cursor: default;
 }

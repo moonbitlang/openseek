@@ -51,7 +51,7 @@ async fn EngineManager::sweep_archived_deletions_in(
     }
   }
   for name in entries {
-    @fs.rmdir(deleting.join(name).to_string(), recursive=true) catch {
+    @fs.remove(deleting.join(name).to_string(), recursive=true) catch {
       error =>
         @xlog.warn() <?
           {
@@ -813,7 +813,7 @@ async test "archive refuses a durable record while the pump is stopped" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-stopped-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -845,7 +845,7 @@ async test "archive publishes its move before a cancelled listing reply" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-commit-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   // The listing this test cancels is per registered workspace, so the
   // conversation needs a real attached one; the env root now only locates the
@@ -893,7 +893,7 @@ async test "archive and restore move a subagent session family together" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -954,7 +954,7 @@ async test "permanent deletion removes one archived session family only" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-family-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
@@ -1005,7 +1005,7 @@ async test "permanent deletion uses the selected archived store" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-selected-store-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
@@ -1043,7 +1043,7 @@ async test "permanent deletion refuses a live twin in the selected store" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-live-twin-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
@@ -1085,7 +1085,7 @@ async test "startup sweep erases condemned records" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-sweep-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -1109,7 +1109,7 @@ async test "selected archived store is revalidated after detachment" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-detached-selection-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = @pathx.Path(dir + "/workspace").resolve()
@@ -1152,7 +1152,7 @@ async test "a claimed child prevents a partial family archive" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-busy-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"

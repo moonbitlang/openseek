@@ -20,7 +20,7 @@ function requests(app, method) {
 async function showOverview(page) {
   await page.getByRole('button', { name: 'Show overview', exact: true }).click();
   const panel = overview(page);
-  await expect(panel).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hide overview', exact: true })).toBeVisible();
   return panel;
 }
 
@@ -116,10 +116,17 @@ test('the changes card appears when the agent attaches something to a conversati
   await app.install();
   await app.goto();
   await app.openSession();
+  const composer = page.locator('.composer').first();
+  const before = await composer.boundingBox();
   const panel = await showOverview(page);
-  // No checkout to describe and nothing attached: no card.
+  // An empty overview keeps the conversation's full width.
   await expect.poll(() => requests(app, 'session.artifacts_list').length).toBe(1);
-  await expect(panel.getByRole('button', { name: 'Changes', exact: true })).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+  await expect.poll(async () => (await composer.boundingBox()).width).toBeCloseTo(before.width);
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(panel).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // The host announces a saved change; the page reads the list again.
   app.sessionArtifacts['session-1'] = [{ type: 'pull_request', url: `${repo}/pull/2030` }];
@@ -128,7 +135,12 @@ test('the changes card appears when the agent attaches something to a conversati
   // GitHub has nothing to say about it, so it reads as its address.
   await expect(card.getByText('#2030', { exact: true })).toBeVisible();
   await expect(card.getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await composer.boundingBox()).width).toBeLessThan(before.width);
   expect(requests(app, 'session.artifacts_list')).toHaveLength(2);
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(card).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // Another session's change is not this card's business.
   app.notify('session.artifacts_changed', { session: 'another-session' });

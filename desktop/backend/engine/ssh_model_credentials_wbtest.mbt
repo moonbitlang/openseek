@@ -15,10 +15,10 @@ async test "SSH forwards only the selected local provider credential" {
       ignore(
         update_settings(manager, {
           provider: Some(provider),
-          custom_api_url: None,
-          deepseek_api_key: Some("stored-deepseek"),
-          glm_api_key: Some("stored-glm"),
-          custom_api_key: None,
+          providers: Some({
+            "deepseek": { api_url: None, api_key: Some("stored-deepseek"), },
+            "glm": { api_url: None, api_key: Some("stored-glm"), },
+          }),
         }),
       )
       assert_eq(ssh_model_credentials(manager), Map([(name, key)]))
@@ -37,10 +37,12 @@ async test "SSH custom keys follow the model family without forwarding endpoint 
     ignore(
       update_settings(manager, {
         provider: Some("custom"),
-        custom_api_url: Some("https://custom.example/chat/completions"),
-        deepseek_api_key: None,
-        glm_api_key: None,
-        custom_api_key: Some("custom-key"),
+        providers: Some({
+          "custom": {
+            api_url: Some("https://custom.example/chat/completions"),
+            api_key: Some("custom-key"),
+          },
+        }),
       }),
     )
     for
@@ -55,10 +57,7 @@ async test "SSH custom keys follow the model family without forwarding endpoint 
     ignore(
       update_settings(manager, {
         provider: None,
-        custom_api_url: None,
-        deepseek_api_key: None,
-        glm_api_key: None,
-        custom_api_key: Some(""),
+        providers: Some({ "custom": { api_url: None, api_key: Some(""), } }),
       }),
     )
     assert_true(ssh_model_credentials(manager).is_empty())

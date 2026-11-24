@@ -33,19 +33,6 @@ extern "js" fn BrowserSelection::range(
   #| (selection, index) => selection.getRangeAt(index)
 
 ///|
-extern "js" fn BrowserRange::intersects(
-  self : BrowserRange,
-  element : @dom.Element,
-) -> Bool =
-  #| (range, element) => range.intersectsNode(element)
-
-///|
-extern "js" fn BrowserRange::rects(
-  self : BrowserRange,
-) -> FixedArray[@dom.DOMRect] =
-  #| range => Array.from(range.getClientRects())
-
-///|
 extern "js" fn BrowserRange::bounds(self : BrowserRange) -> @dom.DOMRect =
   #| range => range.getBoundingClientRect()
 
@@ -92,15 +79,3 @@ extern "js" fn anchor_href(anchor : @dom.Element) -> String =
 ///|
 extern "js" fn anchor_protocol(anchor : @dom.Element) -> String =
   #| anchor => anchor.protocol
-
-///|
-extern "js" fn dispatch_context_at(
-  element : @dom.Element,
-  x : Int32,
-  y : Int32,
-) -> Unit =
-  #| (element, x, y) => {
-  #|   element.dispatchEvent(new MouseEvent("contextmenu", {
-  #|     bubbles: true, cancelable: true, button: 2, clientX: x, clientY: y,
-  #|   }));
-  #| }

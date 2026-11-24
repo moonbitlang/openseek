@@ -49,6 +49,7 @@ pub struct Target {
   os : Os
   label : String
   url : String
+  size : Int64?
 }
 
 ///|
@@ -132,11 +133,19 @@ let platforms : Array[(String, Os, String)] = [
 ]
 
 ///|
-fn entry_url(entry : Json?) -> String? {
+fn manifest_target(entry : Json?, os : Os, label : String) -> Target? {
   guard entry is Some(Object(fields)) && fields.get("url") is Some(String(url)) else {
     return None
   }
-  Some(url)
+  let size = if fields.get("size") is Some(Number(bytes, ..)) &&
+    bytes >= 0.0 &&
+    bytes <= 9_007_199_254_740_991.0 &&
+    bytes == bytes.floor() {
+    Some(bytes.to_int64())
+  } else {
+    None
+  }
+  Some({ os, label, url, size, })
 }
 
 ///|
@@ -152,8 +161,12 @@ fn parse_manifest(body : String) -> Model {
     let (key, os, label) = platform
     // macOS publishes its updater archive under the bare key and the
     // installer a person downloads under `<key>-dmg`.
-    match (entry_url(entries.get("\{key}-dmg")), entry_url(entries.get(key))) {
-      (Some(url), _) | (None, Some(url)) => targets.push({ os, label, url, })
+    match
+      (
+        manifest_target(entries.get("\{key}-dmg"), os, label),
+        manifest_target(entries.get(key), os, label),
+      ) {
+      (Some(target), _) | (None, Some(target)) => targets.push(target)
       (None, None) => ()
     }
   }

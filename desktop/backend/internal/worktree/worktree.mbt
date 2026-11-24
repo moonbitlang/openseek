@@ -304,8 +304,8 @@ async fn write_worktrees(
   // write leaves the old registry intact instead of truncating it and
   // orphaning all of those other rows, and a reader in another process never
   // sees a partial list.
-  @fsx.write_text_atomic(
-    worktrees_file(workspace).to_path(),
+  @openseek/atomic_file.write_text_atomic(
+    worktrees_file(workspace).to_string(),
     registry.stringify(indent=2),
   ) catch {
     error => raise WorktreeError("could not save the worktree list: \{error}")
@@ -745,7 +745,7 @@ pub enum ForkCheckout {
   NewWorktree(
     dir~ : @pathx.Absolute,
     uncommitted~ : Array[String],
-    omitted~ : Int32
+    omitted~ : Int32,
   )
 }
 
@@ -1563,7 +1563,7 @@ test "worktree names are one branch-safe path component" {
 ///|
 async test "worktree registry decode drops malformed entries" {
   let root = worktree_test_root("openseek-worktree-decode-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @fsx.ensure_dir(@workspaces.store_root(root).to_path())
   @fsx.write_text(worktrees_file(root).to_path(), "{ not json")
   assert_eq(read_worktrees_unlocked(root).length(), 0)
@@ -1635,7 +1635,7 @@ async test "worktree registry decode drops malformed entries" {
 #cfg(not(platform="windows"))
 async test "failed worktree registry staging preserves every live row" {
   let root = worktree_test_root("openseek-worktree-atomic-write-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let retained : WorktreeEntry = {
     name: "retained",
     checkout: Branch("openseek/retained"),
@@ -1687,7 +1687,7 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-attach-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1722,7 +1722,7 @@ async test "worktree create provisions detached checkout, recovery ref, registry
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-create-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1791,7 +1791,7 @@ async test "explicit registry removal can prune a vanished worktree" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-release-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1801,7 +1801,7 @@ async test "explicit registry removal can prune a vanished worktree" {
   ignore(
     create(host, repo, WorktreeOwner::openseek("s-release"), _ => (), name="wt"),
   )
-  @fs.rmdir(repo.join(".worktrees/wt").to_string(), recursive=true)
+  @fs.remove(repo.join(".worktrees/wt").to_string(), recursive=true)
   // The low-level protocol operation remains available for orphan cleanup.
   // The bundled UI does not expose it for a conversation; Archive retains the
   // row so a later Unarchive still requires explicit Repair.
@@ -1818,7 +1818,7 @@ async test "worktree names are host-generated and skip surviving references" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-autoname-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1870,7 +1870,7 @@ async test "worktree remove prunes an externally deleted checkout" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-prune-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1880,7 +1880,7 @@ async test "worktree remove prunes an externally deleted checkout" {
   ignore(
     create(host, repo, WorktreeOwner::openseek("s-gone"), _ => (), name="gone"),
   )
-  @fs.rmdir(repo.join(".worktrees/gone").to_string(), recursive=true)
+  @fs.remove(repo.join(".worktrees/gone").to_string(), recursive=true)
   guard list(repo).worktrees is [listed] else {
     fail("expected the deleted worktree to stay listed")
   }

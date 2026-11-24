@@ -106,8 +106,7 @@ class ExportHarness extends DesktopBrowserHarness {
   count(method) { return this.requests.filter(request => request.method === method).length; }
 
   async openExport() {
-    await this.page.locator('[id="conversation-transfer:actions-trigger"]').click();
-    await this.page.locator('[id="conversation-transfer:actions-content"]').getByRole('menuitem').click();
+    await this.page.locator('main .topbar').getByRole('button', { name: 'Export', exact: true }).click();
     const dialog = this.page.locator('#conversation-export-dialog');
     await expect(dialog).toBeVisible();
     return dialog;
@@ -386,6 +385,7 @@ for (const browser of [false, true]) {
 
 test('Back keeps a dialog above a panel that only covers the page after a resize', async ({ page }) => {
   const app = new ExportHarness(page);
+  app.gitBranch = { branch: 'feature/export-dialog' };
   await app.openDesktop();
   // A wide window shows the overview as a rail beside the conversation; a
   // phone-narrow one turns it into a panel over the transcript.

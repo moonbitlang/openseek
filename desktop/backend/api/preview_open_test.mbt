@@ -6,7 +6,7 @@ async test "Local preview tool uses its caller's workspace and only acknowledges
   let root = @pathx.Path(
     @fs.realpath(@fs.tmpdir(prefix="seekmoon-preview-tools-")),
   ).resolve()
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.to_string())
   defer (match previous {

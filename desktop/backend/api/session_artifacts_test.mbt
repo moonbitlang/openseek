@@ -11,7 +11,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
   let root = @pathx.Path(
     @fs.realpath(@fs.tmpdir(prefix="seekmoon-pr-artifacts-")),
   ).resolve()
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let previous = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.to_string())
   defer (match previous {
@@ -80,12 +80,9 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
     assert_false(
       client.call_tool(name="artifacts_attach", arguments=branch).is_error,
     )
-    let snapshot = @engine.session_artifacts_list(state.manager(), "one")
+    let snapshot = @session_store.list_artifacts("one")
     assert_eq(snapshot.artifacts.length(), 2)
-    assert_eq(
-      @engine.session_artifacts_list(state.manager(), "two").artifacts.length(),
-      0,
-    )
+    assert_eq(@session_store.list_artifacts("two").artifacts.length(), 0)
     guard notifications.try_get() is Some(changed) else {
       fail("no notification after attach")
     }
@@ -109,9 +106,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       assert_true(
         client.call_tool(name="artifacts_attach", arguments=invalid).is_error,
       )
-      assert_true(
-        @engine.session_artifacts_list(state.manager(), "one") == snapshot,
-      )
+      assert_true(@session_store.list_artifacts("one") == snapshot)
       assert_true(notifications.try_get() is None)
     }
     // Neither detach nor the previous replacement tool is exposed to agents.
@@ -123,9 +118,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       }
     }
     let restarted = @api.ApiState(engine="unused")
-    assert_true(
-      @engine.session_artifacts_list(restarted.manager(), "one") == snapshot,
-    )
+    assert_true(@session_store.list_artifacts("one") == snapshot)
     assert_false(
       client.call_tool(name="artifacts_attach", arguments=second).is_error,
     )
@@ -139,8 +132,8 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
     let after_remove = @engine.session_artifacts_update(
       state.manager(),
       "one",
-      current => current.without(first_artifact),
-      () => (),
+      update=current => current.without(first_artifact),
+      on_committed=_ => (),
     )
     assert_eq(after_remove.artifacts.length(), 2)
     assert_true(after_remove.artifacts.contains(@json.from_json(second)))
@@ -157,21 +150,21 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       @engine.session_artifacts_update(
         state.manager(),
         "one",
-        current => current.attach(third),
-        () => (),
+        update=current => current.attach(third),
+        on_committed=_ => (),
       )
     })
     let right = group.spawn(() => {
       @engine.session_artifacts_update(
         restarted.manager(),
         "one",
-        current => current.attach(fourth),
-        () => (),
+        update=current => current.attach(fourth),
+        on_committed=_ => (),
       )
     })
     ignore(left.wait())
     ignore(right.wait())
-    let concurrent = @engine.session_artifacts_list(state.manager(), "one")
+    let concurrent = @session_store.list_artifacts("one")
     assert_eq(concurrent.artifacts.length(), 4)
     assert_true(
       concurrent.artifacts.contains(third) &&
@@ -180,9 +173,12 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
     // The sidecar follows archive/restore; stale grants cannot recreate it.
     let two = expected
     ignore(
-      @engine.session_artifacts_update(state.manager(), "two", _ => two, () => {
-        ()
-      }),
+      @engine.session_artifacts_update(
+        state.manager(),
+        "two",
+        update=_ => two,
+        on_committed=_ => (),
+      ),
     )
     let script = root.join("list-engine.sh").to_string()
     @fs.write_text(script, "#!/bin/sh\nprintf '[]\\n'\n")
@@ -212,16 +208,19 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       ),
     )
     try
-      @engine.session_artifacts_update(state.manager(), "two", _ => two, () => {
-        ()
-      })
+      @engine.session_artifacts_update(
+        state.manager(),
+        "two",
+        update=_ => two,
+        on_committed=_ => (),
+      )
     catch {
       _ => ()
     } noraise {
       _ => fail("an archived session was recreated")
     }
     ignore(@engine.unarchive_session(actor.manager(), "two", (_, _) => ()))
-    assert_true(@engine.session_artifacts_list(state.manager(), "two") == two)
+    assert_true(@session_store.list_artifacts("two") == two)
     // Hold the cross-host archive commit boundary while a second manager
     // starts an attach. Move the record under that lock, as archive does, then
     // let the writer resume: it must revalidate before creating any sidecar.
@@ -236,9 +235,12 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       let pending = group.spawn(() => {
         let refused = try {
           ignore(
-            @engine.session_artifacts_update(state.manager(), "two", _ => two, () => {
-              ()
-            }),
+            @engine.session_artifacts_update(
+              state.manager(),
+              "two",
+              update=_ => two,
+              on_committed=_ => (),
+            ),
           )
           false
         } catch {
@@ -256,7 +258,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
     assert_true(@async.with_timeout(3000, () => pending.wait()))
     assert_false(@fs.exists(live.to_string()))
     ignore(@engine.unarchive_session(actor.manager(), "two", (_, _) => ()))
-    assert_true(@engine.session_artifacts_list(state.manager(), "two") == two)
+    assert_true(@session_store.list_artifacts("two") == two)
     // I/O failure must not masquerade as an empty list.
     let file = workspace.join(".openseek/sessions/one/artifacts.json")
     @fs.remove(file.to_string())

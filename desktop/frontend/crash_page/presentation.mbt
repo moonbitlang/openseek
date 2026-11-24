@@ -23,7 +23,7 @@ let crash_style : String =
   #|      width: min(440px, 100%);
   #|      padding: 24px;
   #|      border: 1px solid var(--color-border, #e9e8e3);
-  #|      border-radius: var(--radius-md, 9px);
+  #|      border-radius: var(--radius-surface, 9px);
   #|      background: var(--color-bg-surface, #fff);
   #|      box-shadow: var(--shadow-overlay, 0 8px 30px -8px rgb(20 23 26 / 22%));
   #|    }
@@ -34,7 +34,7 @@ let crash_style : String =
   #|      margin-bottom: 16px;
   #|      place-items: center;
   #|      border: 1px solid var(--color-danger-border, #f2d4cf);
-  #|      border-radius: var(--radius-md, 9px);
+  #|      border-radius: var(--radius-inline, 4px);
   #|      background: var(--color-danger-soft, #fcefed);
   #|      color: var(--color-danger, #c0453b);
   #|      font-size: 18px;
@@ -53,7 +53,7 @@ let crash_style : String =
   #|    #frontend-crash button {
   #|      padding: 6px 12px;
   #|      border: 1px solid var(--color-accent, #315fd5);
-  #|      border-radius: var(--radius-sm, 6px);
+  #|      border-radius: var(--radius-control, 6px);
   #|      background: var(--color-accent, #315fd5);
   #|      color: var(--color-on-accent, #fff);
   #|      font: inherit;
@@ -81,7 +81,7 @@ let crash_style : String =
   #|      overflow: auto;
   #|      padding: 12px;
   #|      border: 1px solid var(--color-border, #f0efea);
-  #|      border-radius: var(--radius-sm, 6px);
+  #|      border-radius: var(--radius-surface, 9px);
   #|      background: var(--color-bg-subtle, #f6f6f3);
   #|      color: var(--color-text-primary, #2b2f36);
   #|      font: 400 var(--font-size-sm, 13px)/var(--line-height-normal, 1.5)

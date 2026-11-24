@@ -65,7 +65,7 @@ async test "native hover requires exact disk state and runs ordinary moon ide ho
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-hover-fresh")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -97,7 +97,7 @@ async test "native hover skips command for a mismatched request revision" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-hover-mismatch")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -135,7 +135,7 @@ async test "native hover drops a disk change during the command" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-hover-race")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -173,7 +173,7 @@ async test "native document reads reuse one coherent text and revision snapshot"
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-document-snapshot")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -203,7 +203,7 @@ async test "native coherent snapshot rejects invalid utf8 and disappearing entri
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-document-invalid")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     let invalid = Bytes::from_array([0xff, 0xfe])
     @fs.write_binary(
@@ -317,7 +317,7 @@ async test "moon check replays only an exact producing document state" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-check-replay")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -372,7 +372,7 @@ async test "document sync during moon check discards output and reruns once" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-check-sync-race")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -417,7 +417,7 @@ async test "disk-only change during moon check reruns and publishes nothing" {
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-check-disk-race")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -454,7 +454,7 @@ async test "stable incompatible rerun preserves a prior published set silently" 
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-check-preserve")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/main.mbt",
@@ -505,7 +505,7 @@ async test "historical incompatible document does not suppress active diagnostic
   @async.with_task_group() <| group => {
     let root = @fs.tmpdir(prefix="editor-check-per-document")
     group.add_defer() <| () => {
-      @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
+      @async.protect_from_cancel(() => @fs.remove(root, recursive=true))
     }
     @fs.write_text(
       "\{root}/historical.mbt",

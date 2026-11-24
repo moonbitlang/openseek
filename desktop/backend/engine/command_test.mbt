@@ -1,7 +1,7 @@
 ///|
 async test "development layout cannot be shadowed by packaged resources" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-engine-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
+  defer @fs.remove(root.to_string(), recursive=true)
   let build = root.join("_build/native/debug/build")
   let engine_dir = build.join("moonbitlang/openseek")
   let development = engine_dir.join("openseek.exe").to_string()

@@ -279,7 +279,7 @@ priv struct AppFontSize(Int32)
 const AppFontSizeMinPixels : Int32 = 12
 
 ///|
-const AppFontSizeMaxPixels : Int32 = 18
+const AppFontSizeMaxPixels : Int32 = 22
 
 ///|
 fn AppFontSize::parse(value : String) -> AppFontSize? {
@@ -304,20 +304,17 @@ fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
 }
 
 ///|
-const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
-
-///|
 /// Which chat-completions endpoint the engine talks to. SeekMoon runs are
 /// bring-your-own-key only: the hosted proxy is retired. `Deepseek` is the
-/// official endpoint and needs the user's own key; `OpenRouter` is a preset
-/// over the existing custom endpoint; `Custom` accepts any other
+/// official endpoint and needs the user's own key; `OpenRouter` uses its
+/// fixed endpoint and independent credentials; `Custom` accepts any other
 /// OpenAI-compatible endpoint, whose key is optional. The retired hosted
 /// names (`openseek` / `openseek-staging`) parse as `Deepseek` so old
 /// stores and old clients land on the BYOK default instead of wedging.
 /// The setting (and its credentials) live on the host; this mirror is what
 /// `settings.get`/`set` replies and the `settings.changed` broadcast last
 /// reported.
-#derive(Eq)
+#derive(Eq, Compare)
 priv enum ApiProvider {
   Deepseek
   Glm
@@ -883,7 +880,7 @@ priv enum TranscriptSync {
     // A durable boundary arrived after this request started. Keep the read
     // single-flight, then run one more generation so an older in-flight
     // snapshot cannot become the final view of that boundary.
-    reload_after_current~ : Bool
+    reload_after_current~ : Bool,
   )
   ReloadFailed(generation~ : Int32, buffered~ : Array[BufferedCommit])
 }
@@ -920,6 +917,7 @@ priv enum SettingsSection {
   Account
   Devices
   Connections
+  Connectors
   ArchivedChats
   SystemSettings
 }
@@ -1272,6 +1270,7 @@ priv struct Model {
   // saved through `settings.set`. The host settings themselves live on each
   // `DeviceState`.
   setup_api_key : String
+  api_connection_probe : ApiConnectionProbe?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1350,15 +1349,11 @@ priv struct Model {
   right_panel_menu_open : Bool
   // Reported by the tab-menu component so native views yield to its surface.
   dock_tab_menu_open : Bool
-  conversation_transfer_menu_open : Bool
   right_panel_expanded : Bool
   // Terminal tabs and their connection snapshots affect both the component
   // view and root layout. The root owns the opaque state once so neither side
   // reports a second visibility copy back to the other.
   jobs : @jobs.State
-  // The overview's connectors card data: what a conversation's engine last
-  // said it holds of its MCP servers.
-  mcp : @mcp.State
   // The overview's changes card data: the pull requests and branches the
   // agent attached to a conversation.
   changes : @session_changes.State
@@ -1444,6 +1439,7 @@ priv struct Model {
   // The Skills page's own state — the registry catalog, the search filter,
   // in-flight actions, the last failure — which only that page can see.
   schedules : SchedulePage
+  connectors : @connectors.State
   skills : @skills.State
   // The focused host's skills library. Root-owned rather than page-owned
   // because the composer's `$` completion reads the same list, which is why
@@ -1613,19 +1609,22 @@ priv struct ProjectAdoption {
 }
 
 ///|
+/// Frontend-owned configuration for one provider, without credential material.
+#derive(Eq)
+priv struct ProviderConfig {
+  api_url : String?
+  has_api_key : Bool
+}
+
+///|
 /// A host's engine endpoint settings, with key material reduced to presence:
 /// the key text never reaches a client — the Settings page only needs
 /// presence (placeholder wording, the ready gate).
 #derive(Eq)
 priv struct HostEndpoint {
-  // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`.
   provider : ApiProvider
-  custom_api_url : String
+  providers : @sorted_map.SortedMap[ApiProvider, ProviderConfig]
   followup_behavior : FollowupBehavior
-  deepseek_key_saved : Bool
-  glm_key_saved : Bool
-  custom_key_saved : Bool
 }
 
 ///|
@@ -1683,7 +1682,7 @@ priv enum Msg {
     codex_model~ : String?,
     codex_effort~ : String?,
     openseek_effort~ : String?,
-    glm_effort~ : String?
+    glm_effort~ : String?,
   )
   CloudFollowupLoaded(String?)
   // Deliberate actions emitted by the component-local input composer. Raw
@@ -1695,13 +1694,13 @@ priv enum Msg {
   ComposerCommandResult(@composer.CommandResult)
   TranscriptArtifactContextRequested(
     slot~ : String,
-    @mention_context.ArtifactSnapshot
+    @mention_context.ArtifactSnapshot,
   )
   ArtifactFollowupRequested(
     slot~ : String,
     prompt~ : String,
     title~ : String,
-    snapshot~ : @mention_context.ArtifactSnapshot?
+    snapshot~ : @mention_context.ArtifactSnapshot?,
   )
   ArtifactFollowupConfirmed
   ArtifactFollowupDismissed
@@ -1771,14 +1770,14 @@ priv enum Msg {
   // sign-in state moved.
   AccountLoaded(
     Int32,
-    Result[@protocol.AccountSession?, @account_failure.Failure]
+    Result[@protocol.AccountSession?, @account_failure.Failure],
   )
   AccountPreferencesChanged(Bool)
   AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
   // A Cloud skills library read, fenced by the access it was issued with.
   CloudSkillsLoaded(
     @cloud_client.Access,
-    Result[Array[@skills.InstalledItem], String]
+    Result[Array[@skills.InstalledItem], String],
   )
   CloudSkillsExpired(@cloud_client.Access)
   WebPush(@web_push.Msg)
@@ -1877,11 +1876,14 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
+  TestApiConnection
+  ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
   OpenSchedules
   SchedulePage(SchedulePageMsg)
   OpenSkills
   // Everything the Skills page does with itself once it is open.
+  Connectors(@connectors.Msg)
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
@@ -1894,7 +1896,7 @@ priv enum Msg {
   UserQuestions(
     channel~ : @interop.ChannelId,
     connection_generation~ : Int32,
-    @user_questions.Msg
+    @user_questions.Msg,
   )
   // The user answered the active conversation's permission question. `allow`
   // grants the one action it asked about; the card stays until the engine's
@@ -1908,7 +1910,7 @@ priv enum Msg {
   ApprovalAnswerFailed(
     channel~ : @interop.ChannelId,
     session~ : String,
-    id~ : String
+    id~ : String,
   )
   NewChat
   NewChatRequested
@@ -1929,20 +1931,20 @@ priv enum Msg {
   UserMessageEditRequested(
     slot~ : String,
     sequence~ : Int32,
-    draft~ : @composer.Draft
+    draft~ : @composer.Draft,
   )
   ForkRequested(slot~ : String, through~ : Int32)
   ForkCompleted(
     ConversationFork,
     Result[@protocol.SessionForkReply, String],
-    fresh_session~ : String
+    fresh_session~ : String,
   )
   // Open a row from the archived index. Its workspace is part of the row's
   // durable placement and selects the archived twin without restoring it.
   OpenArchivedSession(
     @interop.ChannelId,
     session~ : String,
-    workspace~ : @common.Uri
+    workspace~ : @common.Uri,
   )
   // The user clicked the system notification posted through Proton's
   // notification extension: open the owning local run or Cloud conversation.
@@ -1965,7 +1967,7 @@ priv enum Msg {
   CloudFilePreviewCreated(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,
-    result~ : Result[String, @fileeditor.Failure]
+    result~ : Result[String, @fileeditor.Failure],
   )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
@@ -2045,12 +2047,12 @@ priv enum Msg {
   ConversationRenameRequested(id~ : @conversation.Id, label~ : String)
   ConversationRenameEdited(
     id~ : @conversation.Id,
-    edit~ : @conversation.RenameEdit
+    edit~ : @conversation.RenameEdit,
   )
   ConversationRenameSucceeded(@conversation.Id)
   ConversationRenameFailed(
     id~ : @conversation.Id,
-    message~ : ConversationRenameFailure
+    message~ : ConversationRenameFailure,
   )
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
@@ -2086,7 +2088,7 @@ priv enum Msg {
   TranscriptLoadOlder(String)
   TranscriptReviewChangesOpened(
     slot~ : String,
-    selection~ : @mention_context.ReviewChanges
+    selection~ : @mention_context.ReviewChanges,
   )
   // The right panel renders these root-owned values and reports only user
   // actions. Keeping the transitions here avoids a component mirror and a
@@ -2096,7 +2098,6 @@ priv enum Msg {
   ToggleRightPanelExpanded
   CloseRightPanelMenu
   DockTabMenuChanged(Bool)
-  ConversationTransferMenuChanged(Bool)
   // Close a selection through ordinary teardown; All keeps the launcher open.
   CloseDockTabs(@dock.CloseSelection)
   // The composer's goal-editing mode over the active conversation: open
@@ -2132,7 +2133,7 @@ priv enum Msg {
     account~ : String,
     request~ : String,
     session~ : String,
-    url~ : String
+    url~ : String,
   )
   BrowserOpenRequested(request~ : String, session~ : String, url~ : String)
   ExplorerRequested(@fileeditor.ExplorerMode)
@@ -2142,7 +2143,6 @@ priv enum Msg {
   GithubRequested
   Github(@github.Msg)
   Jobs(@jobs.Msg)
-  Mcp(@mcp.Msg)
   Changes(@session_changes.Msg)
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
@@ -2175,12 +2175,12 @@ priv enum Msg {
   SemanticSelectionMaterialized(
     owner~ : @interop.ConversationKey,
     submission_id~ : String,
-    artifact~ : @mention_context.SemanticSearchArtifact
+    artifact~ : @mention_context.SemanticSearchArtifact,
   )
   SemanticSelectionMaterializationFailed(
     owner~ : @interop.ConversationKey,
     submission_id~ : String,
-    message~ : String
+    message~ : String,
   )
   // Terminal UI, host notifications, and xterm callbacks share one root-owned
   // state machine.
@@ -2192,7 +2192,7 @@ priv enum Msg {
     session~ : String,
     id~ : String,
     command~ : String,
-    attempt~ : Int32
+    attempt~ : Int32,
   )
   /// `!` command `id` never ran — its worktree or its terminal could not be
   /// set up — so it goes back to the composer with `message`.
@@ -2200,7 +2200,7 @@ priv enum Msg {
     channel~ : @interop.ChannelId,
     session~ : String,
     id~ : String,
-    message~ : String
+    message~ : String,
   )
   // A message produced by one device channel's connection — its lifecycle,
   // its notification stream, and every reply fenced by its connection
@@ -2250,7 +2250,7 @@ priv enum DeviceMsg {
   // page's library mirror.
   InstalledSkillsLoaded(
     Array[@skills.InstalledItem],
-    builtin_errors~ : Array[@protocol.BuiltinSkillError]
+    builtin_errors~ : Array[@protocol.BuiltinSkillError],
   )
   InstalledSkillsFailed(String)
   // Another client changed this host's library; the focused client re-reads
@@ -2263,7 +2263,7 @@ priv enum DeviceMsg {
     session~ : String,
     submission_id~ : String,
     text~ : String,
-    run_id~ : String
+    run_id~ : String,
   )
   // The host definitively returned `steered:false`; no canonical User can
   // follow, so the queue entry retires and its draft comes back. The text is
@@ -2274,20 +2274,20 @@ priv enum DeviceMsg {
   QueueAccepted(
     session~ : String,
     action~ : @protocol.QueueAction,
-    run_id~ : String
+    run_id~ : String,
   )
   QueueEditRejected(
     session~ : String,
     id~ : String,
     run_id~ : String,
-    message~ : String
+    message~ : String,
   )
   QueueAddRejected(session~ : String, submission_id~ : String, run_id~ : String)
   QueueSteerRejected(
     session~ : String,
     submission_id~ : String,
     run_id~ : String,
-    message~ : String
+    message~ : String,
   )
   // The addressed run was already absent when Stop reached the host. This is
   // success for the user's intent, but no future Finished notification can
@@ -2300,12 +2300,12 @@ priv enum DeviceMsg {
   SessionsLoaded(
     Array[@transcript.SessionListItem],
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   SessionsFailed(
     message~ : String,
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   // The host's identity-bearing `session.changed` broadcast. Archive changes
   // invalidate that exact live target immediately; rename and every placement
@@ -2313,7 +2313,7 @@ priv enum DeviceMsg {
   SessionsChanged(
     change~ : String,
     key~ : ArchiveRecordKey,
-    fresh_session~ : String?
+    fresh_session~ : String?,
   )
   SessionLoaded(
     session~ : String,
@@ -2322,7 +2322,7 @@ priv enum DeviceMsg {
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
-    generation~ : Int32
+    generation~ : Int32,
   )
   // A foreground stored-session read failed. Generation guards stale replies;
   // bounded retries keep the selection pending before final failure is shown.
@@ -2337,7 +2337,7 @@ priv enum DeviceMsg {
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
-    generation~ : Int32
+    generation~ : Int32,
   )
   // A background re-read failed. The generation identifies the exact read,
   // so an old failure cannot stop a newer one.
@@ -2355,7 +2355,7 @@ priv enum DeviceMsg {
     item~ : @protocol.SessionItem,
     // The durable store root the host read this commit from — the store
     // half of the session's identity.
-    session_root~ : @common.Uri
+    session_root~ : @common.Uri,
   )
   // The host's `subrun.progress` broadcast: a running sub-run advanced. Not
   // durable and not lifecycle — the raw stream's brackets own the sub-run's
@@ -2364,7 +2364,7 @@ priv enum DeviceMsg {
     id~ : String,
     session~ : String,
     steps~ : Int32,
-    activity~ : String
+    activity~ : String,
   )
   // The host's `workflow.entry` broadcast: one resolved call of a workflow a
   // snippet is running, read from the run's journal. Routed to the parent
@@ -2377,12 +2377,12 @@ priv enum DeviceMsg {
     Array[@common.Uri],
     chat_root~ : Result[@common.Uri, String]?,
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   ProjectsLoadFailed(
     message~ : String,
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
@@ -2404,7 +2404,7 @@ priv enum DeviceMsg {
     checkout_submodules~ : Bool,
     submodule_checkout_timeout_seconds~ : Int32,
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   // The post-commit `workspace.settings_changed` broadcast for one
   // workspace: every client adopts the committed state in write order.
@@ -2412,7 +2412,7 @@ priv enum DeviceMsg {
     workspace~ : @common.Uri,
     worktree_mode~ : Bool,
     checkout_submodules~ : Bool,
-    submodule_checkout_timeout_seconds~ : Int32
+    submodule_checkout_timeout_seconds~ : Int32,
   )
   // The result of this client's write, paired with the connection and request
   // that issued it. Settings data still arrives through the commit broadcast.
@@ -2420,7 +2420,7 @@ priv enum DeviceMsg {
     workspace~ : @common.Uri,
     connection_generation~ : Int32,
     request_generation~ : Int32,
-    result~ : Result[Unit, String]
+    result~ : Result[Unit, String],
   )
   // One workspace's worktree registry — the reply to `worktree.list`, with
   // the same two-generation staleness fence as `ProjectsLoaded`.
@@ -2428,7 +2428,7 @@ priv enum DeviceMsg {
     Array[WorktreeRow],
     workspace~ : @common.Uri,
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   // A failed list leaves that workspace's placement unresolved. Carry both
   // generations so a dead connection or an older request cannot surface a
@@ -2437,7 +2437,7 @@ priv enum DeviceMsg {
     workspace~ : @common.Uri,
     connection_generation~ : Int32,
     request_generation~ : Int32,
-    message~ : String
+    message~ : String,
   )
   // The post-commit `worktree.changed` broadcast for one workspace.
   WorktreesChanged(Array[WorktreeRow], workspace~ : @common.Uri)
@@ -2449,7 +2449,7 @@ priv enum DeviceMsg {
   // uncommitted changes; the client stages the discard-confirmation dialog.
   ArchiveNeedsForce(
     session~ : String,
-    refusal~ : @protocol.ArchiveNeedsForceReply
+    refusal~ : @protocol.ArchiveNeedsForceReply,
   )
   // The host's account of what deleting one live conversation removes
   // besides its record: the answer to the check a Delete click sends, or a
@@ -2465,12 +2465,12 @@ priv enum DeviceMsg {
     Array[@transcript.SessionListItem],
     connection_generation~ : Int32,
     request_generation~ : Int32,
-    fresh_session~ : String
+    fresh_session~ : String,
   )
   ArchivedFailed(
     message~ : String,
     connection_generation~ : Int32,
-    request_generation~ : Int32
+    request_generation~ : Int32,
   )
   // The successful delete reply names the identity it removed and a fresh
   // send target, so it can tombstone and leave an active deleted record even
@@ -2481,7 +2481,7 @@ priv enum DeviceMsg {
     items~ : Array[@transcript.SessionListItem],
     connection_generation~ : Int32,
     request_generation~ : Int32,
-    fresh_session~ : String
+    fresh_session~ : String,
   )
   ArchiveFailed(String)
   // A refused delete. `deleting` names the confirmed delete it ends; a
@@ -2501,7 +2501,7 @@ priv enum DeviceMsg {
     branch~ : String?,
     diffstat~ : DiffStat?,
     generation~ : Int32,
-    base_hint~ : String?
+    base_hint~ : String?,
   )
   // A `git.pull_request` reply. `generation` is which request this answers,
   // and is what matches it to the probe waiting for it; `branch` is the one
@@ -2516,7 +2516,7 @@ priv enum DeviceMsg {
     generation~ : Int32,
     queried~ : String?,
     pull_request~ : PullRequest?,
-    compare_url~ : String?
+    compare_url~ : String?,
   )
   // The host accepted a prompt: `session` routes the event to its
   // conversation, and everything after a `started` routes by `run_id`.
@@ -2526,7 +2526,7 @@ priv enum DeviceMsg {
     model~ : @deepseek.Model,
     max_steps~ : Int32,
     session_root~ : @common.Uri?,
-    submission_id~ : String?
+    submission_id~ : String?,
   )
   // One complete `agent.runs` reply. Replayed starts and the negative-set
   // frontier must be accepted or rejected together at one connection
@@ -2544,7 +2544,7 @@ priv enum DeviceMsg {
     approvals~ : Array[RecoveredApproval],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
-    connection_generation~ : Int32
+    connection_generation~ : Int32,
   )
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
@@ -2558,8 +2558,6 @@ priv enum DeviceMsg {
   // by it, because a conversation compacted before its first prompt of this
   // app-lifetime has no run id to match.
   JobsChanged(String)
-  // The engine of this session reported what it holds of its MCP servers.
-  McpChanged(String)
   // The host saved a new list of this session's attached pull requests and
   // branches.
   ArtifactsChanged(String)
@@ -2573,7 +2571,7 @@ priv enum DeviceMsg {
     submission_id~ : String,
     run_id~ : String,
     status~ : String,
-    exit_code~ : Int32
+    exit_code~ : Int32,
   )
   // The response path failed before host acceptance was knowable. Nothing
   // guesses on the client's behalf: the prompt in flight settles and a reload
@@ -2581,7 +2579,7 @@ priv enum DeviceMsg {
   StartUndelivered(
     session~ : String,
     submission_id~ : String,
-    message~ : String
+    message~ : String,
   )
   // The host definitively refused this exact request. Restore its draft and
   // retire the prompt in flight immediately.
@@ -2592,7 +2590,7 @@ priv enum DeviceMsg {
   WorktreeSetupFailed(
     session~ : String,
     submission_id~ : String,
-    message~ : String
+    message~ : String,
   )
   // A host error without a run (`run_id` is `None` — a pre-run failure)
   // belongs to whatever conversation the user is looking at; `diagnostics`
@@ -2603,7 +2601,7 @@ priv enum DeviceMsg {
     run_id~ : String?,
     message~ : String,
     diagnostics~ : String?,
-    exit_code~ : Int32?
+    exit_code~ : Int32?,
   )
   // Transport delivery is separate from native command completion.
   SessionCommandDelivered(
@@ -2611,7 +2609,7 @@ priv enum DeviceMsg {
     id~ : String,
     command~ : @wire.Command,
     delivery~ : @engine_session.Delivery,
-    message~ : String?
+    message~ : String?,
   )
   // `answer` accompanies normal success and context yield (where it is
   // continuation guidance); other terminal statuses carry none.
@@ -2761,6 +2759,7 @@ fn initial_model(
     glm_reasoning: ThinkingOff,
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
+    api_connection_probe: None,
     setup_api_key: "",
     is_desktop: desktop,
     is_android_app: android,
@@ -2794,10 +2793,8 @@ fn initial_model(
     right_panel_open: false,
     right_panel_menu_open: false,
     dock_tab_menu_open: false,
-    conversation_transfer_menu_open: false,
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
-    mcp: @mcp.State::initial(),
     changes: @session_changes.State::initial(),
     overview_open: false,
     overview: @conversation_overview.State::initial(),
@@ -2832,6 +2829,7 @@ fn initial_model(
     },
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
+    connectors: @connectors.State::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
     cloud_skills: [],
@@ -2983,19 +2981,6 @@ fn Model::focused_device_name(self : Model) -> String {
     }
   }
   "SeekMoon"
-}
-
-///|
-/// A remote device's roster name, or its id until the roster lists it.
-/// `None` for the computer this window runs on.
-fn Model::device_name(self : Model, channel : @interop.ChannelId) -> String? {
-  guard channel is Remote(id) else { return None }
-  for meta in self.console.roster {
-    if meta.id == id {
-      return Some(meta.name)
-    }
-  }
-  Some(id)
 }
 
 ///|
@@ -3370,7 +3355,8 @@ fn Model::api_ready(self : Model) -> Bool {
   guard self.host_settings() is Some({ endpoint, .. }) else { return false }
   match endpoint.provider {
     Deepseek | Glm | OpenRouter => endpoint.key_saved()
-    Custom => plausible_endpoint_url(endpoint.custom_api_url)
+    Custom =>
+      plausible_endpoint_url(endpoint.config(Custom).api_url.unwrap_or(""))
   }
 }
 

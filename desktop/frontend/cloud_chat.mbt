@@ -231,7 +231,7 @@ fn update_cloud(
           edit: @cloud.Archive(true),
           navigation: generation,
           ..
-        }
+        },
       ) &&
       pending == request &&
       generation == model.chat_navigation_generation &&
@@ -450,7 +450,7 @@ fn update_cloud(
         @wire.CommandError(error~)
         | @wire.SessionError(error~)
         | @wire.CompactionFailed(error~)
-        | @wire.AutoCompactionFailed(error~)
+        | @wire.AutoCompactionFailed(error~),
       ) => Some(error)
       _ => None
     }
@@ -551,7 +551,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     slash_commands: if !self.cloud.can_compose(owner.session()) {
       []
     } else {
-      self.openseek_commands()
+      self.openseek_commands(editing_queue=conversation.queue_edit is Some(_))
     },
     history,
     root: file_ctx(self).root(),

@@ -166,7 +166,7 @@ async fn remove_tree(path : String) -> Unit {
     return
   }
   if @fs.kind(path) is Directory {
-    @fs.rmdir(path, recursive=true) catch {
+    @fs.remove(path, recursive=true) catch {
       _ => ()
     }
   } else {

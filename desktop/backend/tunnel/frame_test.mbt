@@ -15,7 +15,7 @@ test "notify frames round-trip both push events" {
   assert_true(
     @tunnel.Frame::decode(finished)
     is Some(
-      Notify(Finished(session="s1", status="finished", answer=Some("Done.")))
+      Notify(Finished(session="s1", status="finished", answer=Some("Done."))),
     ),
   )
   let silent = @tunnel.Frame::Notify(

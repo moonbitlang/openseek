@@ -86,7 +86,7 @@ html.is-resizing-terminal {
   align-items: center;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-bg-subtle);
 }
 .terminal-tab.active {
@@ -125,7 +125,7 @@ html.is-resizing-terminal {
 .terminal-new {
   padding: var(--space-1) var(--space-3);
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: none;
   color: var(--color-text-muted);
   font: 500 var(--icon-md)/1 var(--font-family-sans);

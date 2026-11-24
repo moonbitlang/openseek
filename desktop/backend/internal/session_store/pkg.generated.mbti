@@ -4,6 +4,7 @@ package "openseek_desktop/backend/internal/session_store"
 import {
   "moonbitlang/core/debug",
   "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -19,7 +20,11 @@ pub async fn family_in(@pathx.Absolute, String) -> Array[String]
 
 pub async fn known_roots() -> Array[@pathx.Absolute]
 
+pub async fn list_artifacts(String) -> @protocol.SessionArtifacts
+
 pub async fn live_root_of(String) -> @pathx.Absolute?
+
+pub async fn read_artifacts(@pathx.Absolute) -> @protocol.SessionArtifacts
 
 pub async fn root_of(String) -> @pathx.Absolute?
 

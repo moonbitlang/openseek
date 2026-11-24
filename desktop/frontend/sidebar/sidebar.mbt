@@ -6,6 +6,14 @@ pub(all) struct Account {
 }
 
 ///|
+#derive(Debug, Eq)
+pub(all) enum AccountAction {
+  SignIn(disabled~ : Bool)
+  CancelSignIn(disabled~ : Bool)
+  OpenSettings
+}
+
+///|
 /// The id of the grab strip the sidebar renders on its right edge. The
 /// shell's sidebar resize (desktop/frontend/sidebar_resize.mbt) finds the
 /// handle by this id to install its drag listeners.
@@ -46,6 +54,7 @@ pub(all) struct Input {
   // download, signed in or not.
   downloads : Bool
   account : Account?
+  account_action : AccountAction
 }
 
 ///|
@@ -64,6 +73,8 @@ pub(all) struct Actions {
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
   open_account : @cmd.Cmd
+  sign_in : @cmd.Cmd
+  cancel_sign_in : @cmd.Cmd
   open_downloads : @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
@@ -159,9 +170,8 @@ fn Actions::list_component(
     let tools : Array[@html.Html] = []
     for section in section_rows {
       tools.push(section.tools)
-      for row in section.rows {
-        rows[row.0] = row.1
-      }
+      let (key, row) = section.row
+      rows[key] = row
     }
     if !hidden &&
       !input.search.query().is_blank() &&
@@ -190,7 +200,23 @@ pub fn component(
 ) -> @rabbita.Val[@html.Html] {
   let chat_list = actions.list_component(input, ChatMode)
   let work_list = actions.list_component(input, WorkMode)
-  input.map3(chat_list, work_list, (input, chat_list, work_list) => {
+  let avatar = input
+    .map(input => input.account.map(account => account.avatar).unwrap_or(""))
+    .switch_by(
+      src => {
+        @rui.avatar_with_fallback(
+          id="sidebar-account-avatar",
+          src~,
+          alt="",
+          class="console-avatar",
+          style=["--rui-avatar-size:var(--icon-size)"],
+          fallback_style=["background:transparent;color:inherit"],
+          @icons.icon(@icons.icon_account),
+        )
+      },
+      by=src => src,
+    )
+  input.map4(chat_list, work_list, avatar, (input, chat_list, work_list, avatar) => {
     let rows : Map[String, @html.Html] = Map([])
     for index, notice in input.notices {
       rows["notice:\{index}"] = @html.div(
@@ -198,7 +224,40 @@ pub fn component(
         [@html.span(class="sidebar-label sidebar-notice", title=notice, notice)],
       )
     }
-    let footer : Array[@html.Html] = []
+    let footer : Array[@html.Html] = [
+      @html.button(
+        class="sidebar-button console-account",
+        disabled=match input.account_action {
+          SignIn(disabled~) | CancelSignIn(disabled~) => disabled
+          OpenSettings => false
+        },
+        on_click=match input.account_action {
+          SignIn(..) => actions.sign_in
+          CancelSignIn(..) => actions.cancel_sign_in
+          OpenSettings => actions.open_account
+        },
+        [
+          @html.span(
+            class="sidebar-icon",
+            if input.account_action is CancelSignIn(..) {
+              @icons.icon(@icons.icon_close)
+            } else {
+              avatar
+            },
+          ),
+          @html.span(
+            class="sidebar-label console-login",
+            if input.account_action is CancelSignIn(..) {
+              @settings.text(input.locale, CancelSignIn)
+            } else if input.account is Some(account) {
+              account.login
+            } else {
+              @settings.text(input.locale, SignIn)
+            },
+          ),
+        ],
+      ),
+    ]
     if input.update_label is Some(label) {
       footer.push(
         @html.button(
@@ -253,6 +312,17 @@ pub fn component(
         ),
       )
     }
+    if input.downloads {
+      footer.push(
+        @html.button(class="sidebar-button", on_click=actions.open_downloads, [
+          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_down)),
+          @html.span(
+            class="sidebar-label",
+            @messages.text(input.locale, DownloadApps),
+          ),
+        ]),
+      )
+    }
     footer.push(
       @html.button(
         class=if input.settings_active {
@@ -273,42 +343,7 @@ pub fn component(
         ],
       ),
     )
-    if input.downloads {
-      footer.push(
-        @html.button(class="sidebar-button", on_click=actions.open_downloads, [
-          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_down)),
-          @html.span(
-            class="sidebar-label",
-            @messages.text(input.locale, DownloadApps),
-          ),
-        ]),
-      )
-    }
-    footer.push(
-      @html.button(
-        class="sidebar-button console-account",
-        on_click=actions.open_account,
-        [
-          @html.span(
-            class="sidebar-icon",
-            if input.account is Some(account) && !account.avatar.is_empty() {
-              @html.img(class="console-avatar", src=account.avatar, alt="")
-            } else {
-              @icons.icon(@icons.icon_account)
-            },
-          ),
-          @html.span(
-            class="sidebar-label console-login",
-            if input.account is Some(account) {
-              account.login
-            } else {
-              @settings.text(input.locale, SignIn)
-            },
-          ),
-        ],
-      ),
-    )
-    @html.aside([
+    @html.aside(attrs=@action_menu.content_attrs("sidebar"), [
       // The leading edge stays clear for the shell-owned fixed toggle and
       // native controls; the mode switch sits at the trailing edge.
       @html.div(class="sidebar-header", [
@@ -377,3 +412,9 @@ pub extend Mode with Eq::{equal, not_equal}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend AccountAction with Debug::{to_repr}
+
+///|
+pub extend AccountAction with Eq::{equal, not_equal}

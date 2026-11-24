@@ -107,7 +107,7 @@ pub async fn post(path : String, message : Message) -> Bool {
   file.lock(Exclusive)
   defer file.unlock()
   let size = file.size()
-  let torn = size > 0L && file.read_exactly_at(1, position=size - 1L) != b"\n"
+  let torn = size > 0L && file.at(size - 1L).read_exactly(1) != b"\n"
   let record : Json = {
     "v": Json(Version),
     "id": message.id,

@@ -371,7 +371,7 @@ pub fn body_view(
     },
   )
   let markdown_viewer_host = @html.div(
-    attrs=@html.Attrs::build()
+    attrs=@action_menu.content_attrs("file-markdown")
       .id(MarkdownViewerHostId)
       .class(
         if use_markdown_surface {
@@ -446,7 +446,7 @@ pub fn body_view(
   @html.div(class="editor-body", [
     @html.div(
       class="viewer-stack",
-      attrs=@html.Attrs::build()
+      attrs=@action_menu.content_attrs("file-preview")
         .on_keydown(event => {
           if event
             .to_keyboard_event()
@@ -710,87 +710,91 @@ fn tree_pane(
         }
     }
   }
-  @html.div(class="file-tree-pane", [
-    // The grab strip on the panel's top seam for drag-to-resize; wired
-    // imperatively like the editor's left-edge handle (see tree_resize.mbt).
-    @html.div(
-      attrs=@html.Attrs::build()
-        .id(TreeResizeHandleId)
-        .class("tree-resize-handle"),
-      ([] : Array[@html.Html]),
-    ),
-    @html.div(
-      class="explorer-tabs",
-      attrs=@html.Attrs::build()
-        .role("tablist")
-        .aria_label(ui(locale, ExplorerViews)),
-      [
-        explorer_tab(
-          dispatch,
-          state.explorer_mode,
-          ExplorerFiles,
-          ui(locale, WorkspaceFiles),
-          [
-            @icons.icon(@icons.icon_folder),
-            @html.span(class="visually-hidden", ui(locale, FilesLabel)),
-          ],
-        ),
-        if ctx.root() is Some(_) {
+  @html.div(
+    class="file-tree-pane",
+    attrs=@action_menu.content_attrs("file-tree"),
+    [
+      // The grab strip on the panel's top seam for drag-to-resize; wired
+      // imperatively like the editor's left-edge handle (see tree_resize.mbt).
+      @html.div(
+        attrs=@html.Attrs::build()
+          .id(TreeResizeHandleId)
+          .class("tree-resize-handle"),
+        ([] : Array[@html.Html]),
+      ),
+      @html.div(
+        class="explorer-tabs",
+        attrs=@html.Attrs::build()
+          .role("tablist")
+          .aria_label(ui(locale, ExplorerViews)),
+        [
           explorer_tab(
             dispatch,
             state.explorer_mode,
-            ExplorerChanges,
-            ui(locale, ChangedFilesHint),
-            // Keep the name and count in the accessibility tree, as before.
+            ExplorerFiles,
+            ui(locale, WorkspaceFiles),
             [
-              @icons.icon(@icons.icon_diff_multiple),
-              @html.span(class="visually-hidden", ui(locale, ChangesLabel)),
-              change_count(state.changes),
+              @icons.icon(@icons.icon_folder),
+              @html.span(class="visually-hidden", ui(locale, FilesLabel)),
             ],
-          )
+          ),
+          if ctx.root() is Some(_) {
+            explorer_tab(
+              dispatch,
+              state.explorer_mode,
+              ExplorerChanges,
+              ui(locale, ChangedFilesHint),
+              // Keep the name and count in the accessibility tree, as before.
+              [
+                @icons.icon(@icons.icon_diff_multiple),
+                @html.span(class="visually-hidden", ui(locale, ChangesLabel)),
+                change_count(state.changes),
+              ],
+            )
+          } else {
+            @html.nothing
+          },
+          if ctx.search_input() is Some(_) {
+            explorer_tab(
+              dispatch,
+              state.explorer_mode,
+              ExplorerSearch,
+              ui(locale, SearchWorkspace),
+              [
+                @icons.icon(@icons.icon_search),
+                @html.span(class="visually-hidden", ui(locale, SearchLabel)),
+              ],
+            )
+          } else {
+            @html.nothing
+          },
+        ],
+      ),
+      @html.div(
+        class=if state.explorer_mode is ExplorerSearch {
+          "file-tree search-inventory"
+        } else if state.explorer_mode is ExplorerChanges {
+          "file-tree review-git-tree"
         } else {
-          @html.nothing
+          "file-tree workspace-file-list"
         },
-        if ctx.search_input() is Some(_) {
-          explorer_tab(
-            dispatch,
-            state.explorer_mode,
-            ExplorerSearch,
-            ui(locale, SearchWorkspace),
-            [
-              @icons.icon(@icons.icon_search),
-              @html.span(class="visually-hidden", ui(locale, SearchLabel)),
-            ],
-          )
+        attrs=@html.Attrs::build()
+          .id(ExplorerPanelId)
+          .role("tabpanel")
+          .aria_labelledby(explorer_tab_id(state.explorer_mode)),
+        inventory,
+      ),
+      // Rendered even while empty so the row's slot in the pane is stable.
+      @html.div(
+        class=if visible_error is Some(_) {
+          "file-panel-error"
         } else {
-          @html.nothing
+          "file-panel-error empty"
         },
-      ],
-    ),
-    @html.div(
-      class=if state.explorer_mode is ExplorerSearch {
-        "file-tree search-inventory"
-      } else if state.explorer_mode is ExplorerChanges {
-        "file-tree review-git-tree"
-      } else {
-        "file-tree workspace-file-list"
-      },
-      attrs=@html.Attrs::build()
-        .id(ExplorerPanelId)
-        .role("tabpanel")
-        .aria_labelledby(explorer_tab_id(state.explorer_mode)),
-      inventory,
-    ),
-    // Rendered even while empty so the row's slot in the pane is stable.
-    @html.div(
-      class=if visible_error is Some(_) {
-        "file-panel-error"
-      } else {
-        "file-panel-error empty"
-      },
-      visible_error.unwrap_or(""),
-    ),
-  ])
+        visible_error.unwrap_or(""),
+      ),
+    ],
+  )
 }
 
 ///|
@@ -3501,7 +3505,7 @@ fn review_badge(
             state: TabDeleted,
             review: Some({ baseline: ReviewContent(_), .. }),
             ..
-          }
+          },
         ) =>
           (
             ui(locale, DeletedBaseline),
@@ -3514,7 +3518,7 @@ fn review_badge(
             state: TabReadFailed(_),
             review: Some({ baseline: ReviewContent(_), .. }),
             ..
-          }
+          },
         ) =>
           (
             ui(locale, WorkingUnavailable),
@@ -3539,7 +3543,7 @@ fn review_badge(
             state: TabDeleted,
             review: Some({ baseline: ReviewMissing, .. }),
             ..
-          }
+          },
         ) =>
           (ui(locale, DeletedNoBaseline), ui(locale, NoBaseline), false, false)
         Some({ name, review: Some({ baseline: ReviewContent(_), .. }), .. }) if name.has_suffix(

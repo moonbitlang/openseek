@@ -223,7 +223,7 @@ async test "workspace settings survive a write/read round trip independently" {
     sibling_payload.submodule_checkout_timeout_seconds,
     DefaultSubmoduleCheckoutTimeoutSeconds,
   )
-  @fs.rmdir(dir, recursive=true) catch {
+  @fs.remove(dir, recursive=true) catch {
     _ => ()
   }
 }

@@ -64,7 +64,7 @@ async test "the default workspace is attached once and never re-attached" {
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-default-workspace-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -99,7 +99,7 @@ async test "a registry without the marker still receives the default workspace" 
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-legacy-registry-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -135,7 +135,7 @@ async test "an attach waits for another host's change and keeps its entry" {
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-registry-two-hosts-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -151,8 +151,8 @@ async test "an attach waits for another host's change and keeps its entry" {
     group.spawn_bg(() => @workspaces.register_task_directory(ours))
     // Long enough for the attach to reach the lock and block on it.
     @async.sleep(100)
-    @fsx.write_text_atomic(
-      registry,
+    @openseek/atomic_file.write_text_atomic(
+      registry.to_string(),
       ({ "workspaces": [theirs.to_string()], "initialized": true } : Json).stringify(),
     )
     held.release()
@@ -184,7 +184,7 @@ async test "an unreadable registry refuses instead of reading as empty" {
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-unreadable-registry-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -227,7 +227,7 @@ async test "a malformed registry refuses and is left untouched" {
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-malformed-registry-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -265,7 +265,7 @@ async test "attaching a path that cannot be inspected says so" {
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-uninspectable-workspace-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())

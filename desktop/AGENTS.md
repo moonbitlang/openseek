@@ -55,6 +55,8 @@
 
 Apply the [root scope and expansion rules](../AGENTS.md#validation-by-change-scope).
 
+Use semantic theme tokens, not hard-coded colors, for themeable UI.
+
 | Change | Targeted checks |
 | --- | --- |
 | CSS or presentation assets | Rebuild the browser bundle and preview affected UI or run a focused Playwright spec. |

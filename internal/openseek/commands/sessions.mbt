@@ -107,15 +107,24 @@ async fn sessions_fork(matches : @argparse.Matches) -> Unit {
     _ => None
   }
   let (model, _, _) = @options.agent_settings(matches)
+  let base_prompt = if matches.flags.get("inherit-system-prompt") is Some(true) {
+    store.read_base_prompt(source)
+  } else {
+    None
+  }
   let system_prompt = @setup.configured_system_prompt(
     matches,
     model,
+    base_prompt?,
     workspace_root~,
     session_scratch_dir=store.scratch_dir(fork),
   )
   let notice = fork_notice(workspace_root, addendum?)
   println(
-    store.fork(source, fork, through?, system_prompt~, notice~).id().value(),
+    store
+    .fork(source, fork, through?, system_prompt~, base_prompt?, notice~)
+    .id()
+    .value(),
   )
 }
 

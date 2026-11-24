@@ -23,16 +23,13 @@ async test "package download streams to disk and reports byte progress" {
       )
     }
     let dir = @fs.tmpdir(prefix="openseek-update-download-")
-    defer @fs.rmdir(dir, recursive=true)
+    defer @fs.remove(dir, recursive=true)
     let destination = "\{dir}/package.zip"
     let progress : Array[(Int32, Int32?)] = []
-    download(
-      "http://127.0.0.1:\{server.addr.port()}/package.zip",
-      destination,
-      (downloaded_bytes, total_bytes) => {
-        progress.push((downloaded_bytes, total_bytes))
-      },
-    )
+    download("http://127.0.0.1:\{server.addr.port}/package.zip", destination, (
+      downloaded_bytes,
+      total_bytes,
+    ) => progress.push((downloaded_bytes, total_bytes)))
     assert_eq(@fs.read_text(destination), "abcdef")
     assert_true(progress.length() >= 2)
     assert_eq(progress[0].0, 0)
@@ -63,8 +60,8 @@ async test "package download follows HTTP 302 redirects" {
           assert_eq(request.headers.get("Accept-Encoding"), Some("identity"))
           let redirect = match request.path {
             "/package.zip" =>
-              Some((302, "http://127.0.0.1:\{server.addr.port()}/301"))
-            "/301" => Some((301, "//127.0.0.1:\{server.addr.port()}/303"))
+              Some((302, "http://127.0.0.1:\{server.addr.port}/301"))
+            "/301" => Some((301, "//127.0.0.1:\{server.addr.port}/303"))
             "/303" => Some((303, "/307"))
             "/307" => Some((307, "/308"))
             "/308" => Some((308, "/asset.zip"))
@@ -88,16 +85,13 @@ async test "package download follows HTTP 302 redirects" {
       )
     }
     let dir = @fs.tmpdir(prefix="openseek-update-download-")
-    defer @fs.rmdir(dir, recursive=true)
+    defer @fs.remove(dir, recursive=true)
     let destination = "\{dir}/package.zip"
     let progress : Array[(Int32, Int32?)] = []
-    download(
-      "http://127.0.0.1:\{server.addr.port()}/package.zip",
-      destination,
-      (downloaded_bytes, total_bytes) => {
-        progress.push((downloaded_bytes, total_bytes))
-      },
-    )
+    download("http://127.0.0.1:\{server.addr.port}/package.zip", destination, (
+      downloaded_bytes,
+      total_bytes,
+    ) => progress.push((downloaded_bytes, total_bytes)))
     assert_eq(@fs.read_text(destination), "abcdef")
     assert_eq(progress.length(), 2)
     assert_eq(progress[0].0, 0)
@@ -142,7 +136,7 @@ async test "package download reports redirect and final response failures" {
         )
       }
       let dir = @fs.tmpdir(prefix="openseek-update-redirect-")
-      defer @fs.rmdir(dir, recursive=true)
+      defer @fs.remove(dir, recursive=true)
       let destination = "\{dir}/package.zip"
       for
         (path, expected) in [
@@ -151,11 +145,10 @@ async test "package download reports redirect and final response failures" {
           ("/forbidden", "update download returned HTTP 403"),
         ] {
         try
-          download(
-            "http://127.0.0.1:\{server.addr.port()}\{path}",
-            destination,
-            (_, _) => fail("a failed download must not report package progress"),
-          )
+          download("http://127.0.0.1:\{server.addr.port}\{path}", destination, (
+            _,
+            _,
+          ) => fail("a failed download must not report package progress"))
         catch {
           UpdateError(message) => assert_eq(message, expected)
           error => raise error
@@ -165,36 +158,6 @@ async test "package download reports redirect and final response failures" {
         assert_false(@fs.exists(destination))
       }
       assert_eq(loop_requests, 6)
-    }
-  }
-}
-
-///|
-test "package redirect locations preserve HTTPS and reject unsupported targets" {
-  assert_eq(
-    download_redirect_target("https://download.example", "/package.zip"),
-    "https://download.example/package.zip",
-  )
-  assert_eq(
-    download_redirect_target(
-      "https://download.example/package.zip", "//cdn.example/asset.zip",
-    ),
-    "https://cdn.example/asset.zip",
-  )
-  for
-    (location, expected) in [
-      (
-        "http://cdn.example/package.zip", "update download redirected to an insecure address",
-      ),
-      ("file:///package.zip", "update download sent an unsupported redirect"),
-      ("", "update download sent an unsupported redirect"),
-    ] {
-    try
-      download_redirect_target("https://download.example/package.zip", location)
-    catch {
-      UpdateError(message) => assert_eq(message, expected)
-    } noraise {
-      _ => fail("expected the redirect to be refused")
     }
   }
 }

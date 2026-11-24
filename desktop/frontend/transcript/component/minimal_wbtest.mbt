@@ -55,15 +55,15 @@ test "minimal user boundaries group recorded and streaming assistant content" {
     is Minimal(
       Messages(
         [{ content: Prose(..), .. }, { content: Activity(_), .. }],
-        active_group=None
-      )
+        active_group=None,
+      ),
     ),
   )
   assert_true(blocks[2].content is Item(item={ kind: User(..), .. }, ..))
   assert_true(
     blocks[3].content
     is Minimal(
-      Messages([{ content: Prose(live=true, ..), .. }], active_group=None)
+      Messages([{ content: Prose(live=true, ..), .. }], active_group=None),
     ),
   )
   // Subsequent deltas replace the text inside the same keyed message group.
@@ -225,7 +225,6 @@ test "folded minimal summaries preview operations independent of their outcome" 
   let read : MinimalCall = {
     call_id: "read",
     tool_name: "read",
-    changes: None,
     image_urls: [],
     category: Some("Read files"),
     caption: "Read project files",
@@ -234,7 +233,6 @@ test "folded minimal summaries preview operations independent of their outcome" 
   let script : MinimalCall = {
     call_id: "script",
     tool_name: "mbtx",
-    changes: None,
     image_urls: [],
     category: Some("Execute mbtx scripts"),
     caption: "Check project details",
@@ -282,7 +280,6 @@ test "tool group summaries preview all outcomes and track only pending status" {
   let pending : MinimalCall = {
     call_id: "pending",
     tool_name: "read",
-    changes: None,
     image_urls: [],
     category: Some("Read files"),
     caption: "Read project files",
@@ -343,7 +340,6 @@ test "background notices do not count as failed tools or replace pending descrip
   let call : MinimalCall = {
     call_id: "wait",
     tool_name: "job_wait",
-    changes: None,
     image_urls: [],
     category: None,
     caption: "Inspect the background task output",
@@ -510,7 +506,7 @@ test "minimal prose keeps the durable completion stamp only when finished" {
     is [
       {
         content: Minimal(
-          Messages([{ content: Prose(completed_at~, ..), .. }], ..)
+          Messages([{ content: Prose(completed_at~, ..), .. }], ..),
         ),
         ..
       },
@@ -524,7 +520,7 @@ test "minimal prose keeps the durable completion stamp only when finished" {
     is [
       {
         content: Minimal(
-          Messages([{ content: Prose(completed_at~, live~, ..), .. }], ..)
+          Messages([{ content: Prose(completed_at~, live~, ..), .. }], ..),
         ),
         ..
       },
@@ -614,8 +610,8 @@ test "a final answer removes the preceding process from minimal mode" {
           content: Minimal(
             Messages(
               [{ content: Prose(text~, finished=true, ..), .. }],
-              active_group=None
-            )
+              active_group=None,
+            ),
           ),
           ..
         },
@@ -645,8 +641,8 @@ test "a final answer removes the preceding process from minimal mode" {
               { content: Prose(finished=false, ..), .. },
               { content: Activity(_), .. },
             ],
-            active_group=None
-          )
+            active_group=None,
+          ),
         ),
         ..
       },

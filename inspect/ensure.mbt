@@ -65,14 +65,14 @@ fn info_reply(identity : String) -> Reply {
 /// for a closed port, another program, or an `inspect` serving other sessions.
 async fn probe_inspect(host : String, port : Int32, identity : String) -> Bool {
   let reply = @async.with_timeout_opt(3000, () => {
-    @http.get_text("http://\{host}:\{port}/api/info")
+    @http.get("http://\{host}:\{port}/api/info")
   }) catch {
     _ => return false
   }
   guard reply is Some((response, body)) && response.code == 200 else {
     return false
   }
-  let info = @json.parse(body) catch { _ => return false }
+  let info = body.json() catch { _ => return false }
   guard info is { "server": String(server), "identity": String(served), .. } else {
     return false
   }
@@ -198,7 +198,7 @@ async fn token_seed(salt : String) -> Bytes {
 /// `/dev/urandom`. The same source `openseek run` salts its session ids with.
 async fn tmpdir_entropy() -> String {
   let dir = @fs.tmpdir(prefix="openseek-inspect-") catch { _ => return "" }
-  @fs.rmdir(dir) catch {
+  @fs.remove(dir) catch {
     _ => ()
   }
   dir

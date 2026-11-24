@@ -45,7 +45,6 @@ test('local Console signs in independently and keeps its account across reload a
   await openLocalWork(page, local);
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await page.locator('.console-account').click();
-  await page.getByRole('dialog', { name: 'Settings', exact: true }).getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(local.row(sessionA)).toBeVisible();
   expect(local.localRequests.some(request => request.path === '/v2/auth/login')).toBe(true);
   expect(await storedAccount(page)).toEqual(browserAccount);

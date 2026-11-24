@@ -99,7 +99,7 @@ pub async fn build_tools(
   .group()
   .add_defer(() => {
     @async.protect_from_cancel(() => {
-      @fs.rmdir(scratch, recursive=true) catch {
+      @fs.remove(scratch, recursive=true) catch {
         _ => ()
       }
     })
@@ -135,7 +135,7 @@ pub async fn build_tools(
         // Exclusive creation: a collision never reuses another engine's logs.
         @fs.mkdir(spill_dir, permission=0o700)
         errdefer @async.protect_from_cancel(() => {
-          @fs.rmdir(spill_dir, recursive=true) catch {
+          @fs.remove(spill_dir, recursive=true) catch {
             _ => ()
           }
         })
@@ -180,7 +180,7 @@ pub async fn build_tools(
         try {
           if @fs.readdir(spill_dir) == ["owner.lock"] {
             @fs.remove("\{spill_dir}/owner.lock")
-            @fs.rmdir(spill_dir)
+            @fs.remove(spill_dir)
           }
         } catch {
           _ => () // Best effort; never remove unexpected files recursively.
@@ -344,13 +344,14 @@ async test "a finished background job queues a notice and wakes the controller" 
       woke = true
     })
     guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
+    // Outlast the production 10-second foreground wait to exercise the handoff.
     let source =
       #|---
       #|import { "moonbitlang/async" }
       #|---
       #|
       #|async fn main {
-      #|  @async.sleep(5_500)
+      #|  @async.sleep(10_500)
       #|  println(1)
       #|}
     let action = run_async_tool(mbtx, { "source": source })

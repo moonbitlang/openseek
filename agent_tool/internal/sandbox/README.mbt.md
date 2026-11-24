@@ -19,7 +19,7 @@ Prepare, run, classify:
 ///|
 async test "prepare, run, and classify a command" {
   let dir = @fs.tmpdir(prefix="sandbox-example-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
   let argv = ["sandbox-ready"]
   let prepared = @sandbox.SandboxedCommand::create_if_available(
     workspace_root=".",

@@ -47,7 +47,7 @@ async fn scripted_provider(group : @async.TaskGroup, delta : Json) -> String? {
       max_connections=8,
     )
   }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  Some("http://127.0.0.1:\{server.addr.port}/chat/completions")
 }
 
 ///|

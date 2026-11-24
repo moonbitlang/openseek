@@ -44,7 +44,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
     error => raise AuthError("could not open the sign-in listener: \{error}")
   }
   defer server.close()
-  let port = server.addr.port()
+  let port = server.addr.port.to_int()
 
   // Start explicit account selection, independently of the browser cookie.
   let url = start_url(server_url~, oauth_state~, challenge~, port~)
@@ -234,7 +234,7 @@ const SignInPageStyle : String =
   #|    --font-size-lg: 17px;
   #|    --font-weight-regular: 450;
   #|    --line-height-relaxed: 1.6;
-  #|    --radius-md: 9px;
+  #|    --radius-surface: 9px;
   #|  }
   #|  @media (prefers-color-scheme: dark) {
   #|    :root {
@@ -252,7 +252,7 @@ const SignInPageStyle : String =
   #|    margin: 6rem auto;
   #|    padding: 2rem;
   #|    border: 1px solid var(--color-border);
-  #|    border-radius: var(--radius-md);
+  #|    border-radius: var(--radius-surface);
   #|    background: var(--color-bg-surface);
   #|    color: var(--color-text-primary);
   #|    font-family: var(--font-family-sans);
@@ -306,7 +306,7 @@ async fn exchange_code(
   guard response.code == 200 else {
     raise AuthError("the sign-in exchange answered HTTP \{response.code}")
   }
-  let json = @json.parse(data) catch {
+  let json = data.json() catch {
     _ => raise AuthError("the sign-in exchange answered malformed JSON")
   }
   let account : @protocol.AccountSession = @json.from_json(json) catch {

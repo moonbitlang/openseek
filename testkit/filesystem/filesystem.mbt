@@ -126,7 +126,7 @@ pub async fn[T] with_tmpdir(
   prefix~ : String = "openseek-test-",
 ) -> T {
   let dir = @fs.tmpdir(prefix~)
-  defer (@fs.rmdir(dir, recursive=true) catch {
+  defer (@fs.remove(dir, recursive=true) catch {
     // Swallow errors: cleanup is best-effort.
     _ => ()
   })

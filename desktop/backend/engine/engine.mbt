@@ -349,6 +349,11 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
     let command = self.commands.get() catch { _ => break }
     self.writer.write(@utf8.encode(command.command.to_jsonl())) catch {
       error => {
+        let error : Error = if error is TransportError(cause, ..) {
+          cause
+        } else {
+          error
+        }
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
         failure = Some(reason)
@@ -723,6 +728,7 @@ struct EngineManager {
   engine : String
   moonbit : @moonbit.ToolchainSource
   runtime_dir : @pathx.Path?
+  skills_dir : @pathx.Path?
   mcp : McpState
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
@@ -1060,11 +1066,13 @@ fn new_engine_manager(
   engine : String,
   runtime_dir? : @pathx.Path,
   host_mcp? : @mcp.Server,
+  skills_dir? : @pathx.Path,
   moonbit~ : @moonbit.ToolchainSource = DesktopBundle,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
+    skills_dir,
     moonbit,
     mcp: { server: host_mcp, current_engine_id: None, errors: Map([]), },
     workspace_lifecycle_lock: Mutex(),
@@ -1084,9 +1092,18 @@ pub fn new_engine_actor(
   engine : String,
   runtime_dir? : @pathx.Path,
   host_mcp? : @mcp.Server,
+  skills_dir? : @pathx.Path,
   moonbit~ : @moonbit.ToolchainSource = DesktopBundle,
 ) -> EngineActor {
-  { manager: new_engine_manager(engine, runtime_dir?, host_mcp?, moonbit~), }
+  {
+    manager: new_engine_manager(
+      engine,
+      runtime_dir?,
+      host_mcp?,
+      skills_dir?,
+      moonbit~,
+    ),
+  }
 }
 
 ///|
@@ -1468,7 +1485,7 @@ async fn engine_process_env(
 ///|
 async fn engine_process_args(
   config : RunConfig,
-  runtime_dir? : @pathx.Path,
+  skills_dir? : @pathx.Path,
   env~ : Map[String, String] = Map([]),
   host_mcp~ : Bool = false,
 ) -> Array[String] {
@@ -1479,7 +1496,9 @@ async fn engine_process_args(
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
   }
-  args.append(engine_mcp_args(config.mcp_config, runtime_dir, env, host_mcp~))
+  args.append(
+    engine_mcp_args(config?=config.mcp_config, skills_dir?, env~, host_mcp~),
+  )
   if config.session_root is Some(root) {
     let store = @store.SessionStore(root.to_string())
     if capture_session_prompt(
@@ -1553,7 +1572,7 @@ async fn start_serve_engine(
   // session's model at all.
   let args = engine_process_args(
     config,
-    runtime_dir?=manager.runtime_dir,
+    skills_dir?=manager.skills_dir,
     env~,
     host_mcp=manager.mcp.server is Some(_),
   )
@@ -1849,7 +1868,7 @@ async fn ServeEngine::consume(
           // that file again.
           Some(
             McpConfigUnreadable(path~, error~)
-            | McpConfigInvalid(path~, error~)
+            | McpConfigInvalid(path~, error~),
           ) => {
             if manager.mcp.current_engine_id != Some(engine.id) ||
               manager.mcp.errors.get(path) == Some(error) {
@@ -1917,7 +1936,7 @@ async fn ServeEngine::consume(
               }
             }
           Some(
-            WorkflowStarted(id~, journal~, events~, first_child~, child_count~)
+            WorkflowStarted(id~, journal~, events~, first_child~, child_count~),
           ) =>
             // The bracket names both files by absolute path, so the tail
             // needs no store root; only the per-child PROBE does (it locates
@@ -2989,7 +3008,7 @@ async test "timed out command-lock waiter is removed" {
 async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))
-  defer (@fs.rmdir(root.to_string(), recursive=true) catch { _ => () })
+  defer (@fs.remove(root.to_string(), recursive=true) catch { _ => () })
   let input = root.join("Resources/seekmoon")
   let engine = input.join("bin/openseek")
   let seed = input.join("toolchains/moonbit/macos-arm64")
@@ -3106,34 +3125,32 @@ async test "native engine env has one authoritative bundled moon path" {
   }
   // Automatic host config is first; explicit user files and the environment
   // fallback remain effective overrides. No grant value is written to disk.
-  let host_path = runtime.join("host-mcp.json").resolve().to_string()
+  let skills = runtime.join("skills")
   let automatic = engine_process_args(
     config,
-    runtime_dir=runtime,
+    skills_dir=skills,
     env=granted,
     host_mcp=true,
   )
-  assert_true(automatic.contains("--mcp-config=\{host_path}"))
-  let host_text = @fsx.read_text(Path(host_path))
-  assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_URL}"))
-  assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_TOKEN}"))
-  assert_false(host_text.contains(server.url()))
-  assert_false(host_text.contains(granted[@mcp.TokenEnv]))
+  let skills_dir = skills.resolve().to_string()
+  assert_true(automatic.contains("--skills-dir=\{skills_dir}"))
+  assert_false(@fs.exists(skills.to_string()))
+  assert_eq(engine_mcp_args(env={}, host_mcp=true), [])
   let fallback = { "OPENSEEK_MCP_CONFIG": "/fallback/mcp.json" }
-  assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=true), [
-    "--mcp-config=\{host_path}",
+  assert_eq(engine_mcp_args(skills_dir=skills, env=fallback, host_mcp=true), [
+    "--skills-dir=\{skills_dir}",
     "--mcp-config=/fallback/mcp.json",
   ])
   assert_eq(
     engine_mcp_args(
-      Some({ path: mcp_path, revision: McpConfigRevision::of_text("{}"), }),
-      Some(runtime),
-      fallback,
+      config={ path: mcp_path, revision: McpConfigRevision::of_text("{}"), },
+      skills_dir=skills,
+      env=fallback,
       host_mcp=true,
     ),
-    ["--mcp-config=\{host_path}", "--mcp-config=\{mcp_path.to_string()}"],
+    ["--skills-dir=\{skills_dir}", "--mcp-config=\{mcp_path.to_string()}"],
   )
-  assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=false), [])
+  assert_eq(engine_mcp_args(skills_dir=skills, env=fallback, host_mcp=false), [])
   let moon_bin = moon_home.join("bin").to_string()
   let expected_path = if ambient_path is Some(path) && !path.is_empty() {
     "\{moon_bin}\{@env.path_sep}\{path}"
@@ -3200,7 +3217,7 @@ async fn write_fake_executable(path : @pathx.Path) -> Unit {
 #cfg(not(platform="windows"))
 async test "engine startup rolls back follower on pre-spawn failure" {
   let dir = @fs.tmpdir(prefix="openseek-engine-startup-")
-  defer @fs.rmdir(dir, recursive=true)
+  defer @fs.remove(dir, recursive=true)
   let baseline_engine = dir + "/baseline.sh"
   @fs.write_text(
     baseline_engine,

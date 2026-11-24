@@ -35,7 +35,7 @@ async fn write_ui_language(
   let path : @pathx.Path = dir
   // Each writer has its own temporary file, including multiple desktop instances.
   let unique_dir = @fs.tmpdir(prefix="ui-language-")
-  defer @fs.rmdir(unique_dir)
+  defer @fs.remove(unique_dir)
   let unique_path : @pathx.Path = unique_dir
   let temp = path.join(unique_path.basename().to_owned())
   defer @async.protect_from_cancel(() => @fsx.remove_if_exists(temp))
