@@ -317,9 +317,6 @@ html {
 .codicon-circle-small-filled::before {
   content: "\eb8a";
 }
-.codicon-newline::before {
-  content: "\ebea";
-}
 .codicon-stop-circle::before {
   content: "\eba5";
 }

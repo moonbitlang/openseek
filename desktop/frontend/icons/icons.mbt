@@ -71,7 +71,18 @@ pub fn icon_arrow_up() -> @html.Html {
 
 ///|
 pub fn icon_newline() -> @html.Html {
-  @html.span(class="codicon codicon-newline", "")
+  @svg.svg(
+    width=16,
+    height=16,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build()
+      .fill("none")
+      .stroke("currentColor")
+      .stroke_width("1")
+      .stroke_linecap("round")
+      .stroke_linejoin("round"),
+    [@svg.path(d="M14 2.5V7.5A2.5 2.5 0 0 1 11.5 10H2M6 6L2 10L6 14")],
+  )
 }
 
 ///|
