@@ -86,6 +86,7 @@ fn State::send_pending(
         sending: true,
         heartbeat: Some({
           stage: @transcript.Starting,
+          step: None,
           started_ms: None,
           tokens: 0,
         }),

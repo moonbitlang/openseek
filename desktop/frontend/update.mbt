@@ -12026,16 +12026,7 @@ test "the run heartbeat projects the phase it is derived from" {
   let stage_of = (conv : Conversation) => {
     conv.run_heartbeat().map(run => run.stage)
   }
-  // A silent model call is the whole point of the row: nothing else on screen
-  // moves between the step event and the first answer delta.
-  assert_eq(stage_of(running_conversation()), Some(Thinking))
-  assert_eq(
-    stage_of({
-      ..running_conversation(),
-      run: Open(run_id="r7", stage=AtStep(Some(3))),
-    }),
-    Some(AtStep(3)),
-  )
+  assert_eq(stage_of(running_conversation()), Some(Working))
   assert_eq(
     stage_of({
       ..running_conversation(),
@@ -12075,7 +12066,12 @@ test "the run heartbeat carries only the facts the page actually has" {
   }
   assert_eq(
     full.run_heartbeat(),
-    Some({ stage: Thinking, started_ms: Some(1_000.0), tokens: 12_345, }),
+    Some({
+      stage: Working,
+      step: None,
+      started_ms: Some(1_000.0),
+      tokens: 12_345,
+    }),
   )
   // A run adopted from a reconnect has no start this page witnessed. The
   // composer omits the span rather than dating it from when we noticed.
@@ -12086,20 +12082,33 @@ test "the run heartbeat carries only the facts the page actually has" {
 }
 
 ///|
-test "a step event is what moves the heartbeat's stage" {
+test "the local transcript heartbeat distinguishes a step from live reasoning" {
   let running = running_model()
-  assert_eq(
-    running.active().run_heartbeat().map(run => run.stage),
-    Some(Thinking),
+  assert_true(
+    running.local_transcript_run(running.active())
+    is Some({ stage: Working, step: None, .. }),
   )
   let (_, stepped) = update_dev(
     test_dispatch(),
     Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     running,
   )
-  assert_eq(
-    stepped.active().run_heartbeat().map(run => run.stage),
-    Some(AtStep(2)),
+  assert_true(
+    stepped.local_transcript_run(stepped.active())
+    is Some({ stage: Working, step: Some(2), .. }),
+  )
+  let (_, reasoning) = update_dev(
+    test_dispatch(),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="thinking"),
+      session="desktop-test",
+    ),
+    stepped,
+  )
+  assert_true(
+    reasoning.local_transcript_run(reasoning.active())
+    is Some({ stage: Thinking, step: Some(2), .. }),
   )
 }
 
@@ -12226,7 +12235,8 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
   )
   assert_eq(streaming.active().turn.live.response, Some("again"))
   assert_true(
-    streaming.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
+    streaming.active().run_heartbeat()
+    is Some({ stage: Working, step: Some(2), .. }),
   )
 }
 
@@ -12279,7 +12289,8 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
     still,
   )
   assert_true(
-    resumed.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
+    resumed.active().run_heartbeat()
+    is Some({ stage: Working, step: Some(2), .. }),
   )
 }
 

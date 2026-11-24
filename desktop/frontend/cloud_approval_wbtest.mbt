@@ -67,6 +67,12 @@ test "a Cloud approval question asks for attention until it is answered" {
       ..,
     ],
   )
+  assert_true(
+    asked
+    .cloud_conversation()
+    .bind(conversation => cloud_transcript_run(conversation))
+    is Some({ stage: AwaitingApproval, .. }),
+  )
   assert_eq(asked.notification_badge_count(), before + 1)
   let needs_input = @conversation.RunMark::for_task(
     running=true,
@@ -95,6 +101,12 @@ test "a Cloud approval question asks for attention until it is answered" {
   assert_true(
     answered.composer_input().presentation.context
     is [@composer.ApprovalRequest({ answered: true, .. }), ..],
+  )
+  assert_true(
+    answered
+    .cloud_conversation()
+    .bind(conversation => cloud_transcript_run(conversation))
+    is Some({ stage: Working, .. }),
   )
   assert_eq(answered.notification_badge_count(), before)
   assert_eq(

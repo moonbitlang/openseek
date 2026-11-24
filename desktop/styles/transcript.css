@@ -73,14 +73,86 @@
   color: var(--color-danger);
 }
 
-.transcript-run-mark {
+.transcript-run-dots {
+  --dot-size: 0.3em;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--dot-size) * 0.75);
   flex: none;
-  width: 6px;
-  height: 6px;
-  margin-block-start: calc((1lh - 6px) / 2);
+  width: calc(var(--dot-size) * 4.5);
+  height: calc(var(--dot-size) * 4);
+  margin-block-start: calc((1lh - var(--dot-size) * 4) / 2);
+}
+
+.transcript-run-dots > span {
+  width: var(--dot-size);
+  height: var(--dot-size);
   border-radius: 50%;
   background: currentColor;
-  animation: lane-pulse 1.6s ease-in-out infinite;
+  animation: transcript-run-dots-bounce 1s ease-in-out infinite;
+}
+
+.transcript-run-dots > span:nth-child(2) { animation-delay: -0.8s; }
+.transcript-run-dots > span:nth-child(3) { animation-delay: -0.6s; }
+.transcript-run-dots:not(.swapping) > span:nth-child(4) { display: none; }
+
+.transcript-run-dots.swapping {
+  display: grid;
+  grid-template: repeat(2, var(--dot-size)) / repeat(2, var(--dot-size));
+  align-content: center;
+  gap: var(--dot-size);
+}
+
+.transcript-run-dots.swapping > span {
+  --cross-x: calc(var(--dot-size) * 2);
+  --cross-y: calc(var(--dot-size) * 2);
+  animation: transcript-run-dots-swap-first 1s ease infinite;
+}
+
+.transcript-run-dots.swapping > span:nth-child(even) {
+  --cross-x: calc(var(--dot-size) * -2);
+}
+
+.transcript-run-dots.swapping > span:nth-child(n + 3) {
+  --cross-y: calc(var(--dot-size) * -2);
+}
+
+.transcript-run-dots.swapping > span:where(:nth-child(2), :nth-child(3)) {
+  animation-name: transcript-run-dots-swap-second;
+}
+
+.transcript-run-dots.paused > span {
+  animation: none;
+  opacity: 0.4;
+}
+
+@keyframes transcript-run-dots-swap-first {
+  0% { transform: translate(0, 0); }
+  40%, 100% { transform: translate(var(--cross-x), var(--cross-y)); }
+}
+
+@keyframes transcript-run-dots-swap-second {
+  0%, 50% { transform: translate(0, 0); }
+  90%, 100% { transform: translate(var(--cross-x), var(--cross-y)); }
+}
+
+@keyframes transcript-run-dots-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+
+  30% {
+    transform: translateY(calc(var(--dot-size) * -1));
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transcript-run-dots > span,
+  .transcript-run-dots.swapping > span {
+    animation: none;
+  }
 }
 
 /* Floating "jump to latest" over the transcript's bottom edge, shown

@@ -56,6 +56,16 @@ fn Model::snapshot(
 }
 
 ///|
+fn Model::card_for(self : Model, session : String) -> Card? {
+  self.cards.iter().find_first(card => card.request.session == session)
+}
+
+///|
+pub fn Model::awaits_answer(self : Model, session : String) -> Bool {
+  self.card_for(session).map_or(false, card => !card.draft.is_sending())
+}
+
+///|
 fn Card::questions(self : Card) -> Array[@question_card.Question] {
   self.request.questions.map(question => {
     id: question.id,
