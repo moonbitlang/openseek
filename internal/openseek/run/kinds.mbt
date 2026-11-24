@@ -167,16 +167,11 @@ async fn Kind::run(
   }
   let { matches, model, thinking, api_url, workspace_root, .. } = launch
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
-  let context_window = @options.context_window()
   fn api_key() raise {
-    if model is Custom(_) && api_url is None {
+    if model is Custom(_, ..) && api_url is None {
       fail("an --api-url is required for custom model \{model}")
     }
-    guard model.api_key(
-        matches.values,
-        explicit_api_key=@options.explicitly_provided(matches, "api-key"),
-      )
-      is Some(api_key) else {
+    guard @cli.resolve_api_key(model, matches) is Some(api_key) else {
       fail("an API key is required for \{model}: pass --api-key")
     }
     api_key
@@ -199,7 +194,6 @@ async fn Kind::run(
         ),
         thinking~,
         api_url?,
-        context_window?,
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,
@@ -234,7 +228,6 @@ async fn Kind::run(
             ),
             thinking~,
             api_url?,
-            context_window?,
             retry_attempts?,
             retry_backoff_ms?,
             workspace_root~,
@@ -254,7 +247,6 @@ async fn Kind::run(
             ),
             thinking~,
             api_url?,
-            context_window?,
             retry_attempts?,
             retry_backoff_ms?,
             workspace_root~,
@@ -285,7 +277,6 @@ async fn Kind::run(
         ),
         thinking~,
         api_url?,
-        context_window?,
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,
@@ -312,7 +303,6 @@ async fn Kind::run(
           ),
           thinking~,
           api_url?,
-          context_window?,
           retry_attempts?,
           retry_backoff_ms?,
           session_id=launch.session_id,
@@ -347,7 +337,6 @@ async fn Kind::run(
         ),
         thinking~,
         api_url?,
-        context_window?,
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,

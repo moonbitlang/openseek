@@ -40,7 +40,7 @@ pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
-  Custom(String)
+  Custom(String, context_window~ : Int32)
 }
 
 ///|
@@ -77,7 +77,7 @@ pub impl Show for Model with fn to_string(self : Model) -> String {
     Deepseek(variant) => "\{variant}"
     Kimi(variant) => "\{variant}"
     Glm(variant) => "\{variant}"
-    Custom(id) => id
+    Custom(id, ..) => id
   }
 }
 
@@ -86,8 +86,12 @@ pub impl Show for Model with fn to_string(self : Model) -> String {
 ///
 /// A name this build does not know becomes `Custom`: the user configures that
 /// endpoint and this id, so a typo is the endpoint's to report rather than this
-/// parser's to reject. A blank name is still refused — no endpoint serves it.
-pub fn Model::parse(input : String) -> Model raise {
+/// parser's to reject. The optional window applies to custom IDs. A blank
+/// name is still refused — no endpoint serves it.
+pub fn Model::parse(
+  input : String,
+  context_window~ : Int32 = DefaultCustomContextWindow,
+) -> Model raise {
   match input.trim() {
     "deepseek-flash" | "deepseek-v4-flash" => Deepseek(V4Flash)
     "deepseek-v4-pro" => Deepseek(V4Pro)
@@ -96,17 +100,13 @@ pub fn Model::parse(input : String) -> Model raise {
     "glm-5.3" => Glm(G53)
     "glm-5.3-flash" => Glm(G53Flash)
     "" => fail("a model needs a name")
-    other => Custom(other.to_owned())
+    other => Custom(other.to_owned(), context_window~)
   }
 }
 
 ///|
-/// The context window assumed for a model this build does not ship. The
-/// current generation of frontier models serves 1M (Gemini 4, DeepSeek, GLM),
-/// so that is what an unknown id gets; an endpoint that serves less is lowered
-/// per entry in Settings, and the host exports the entry's number so this
-/// value is only the fallback for a caller that has nothing better.
-const CustomModelContextWindow : Int32 = 1_000_000
+/// The context window for a custom ID when no window has been configured.
+const DefaultCustomContextWindow : Int32 = 1_000_000
 
 ///|
 /// The environment variable that carries a custom model's API key. A custom
@@ -122,13 +122,13 @@ pub fn Model::api_key_env(self : Model) -> String {
   match self {
     Kimi(_) => "KIMI"
     Glm(_) => "GLM"
-    Custom(_) => CustomApiKeyEnv
+    Custom(_, ..) => CustomApiKeyEnv
     Deepseek(_) => "DEEPSEEK"
   }
 }
 
 ///|
-/// Context window served by the official API, in tokens.
+/// Model context window in tokens.
 ///
 /// Every DeepSeek variant serves 1M context ("1M context is now the default
 /// across all official DeepSeek services", api-docs.deepseek.com news260424);
@@ -141,9 +141,7 @@ pub fn Model::context_window(self : Model) -> Int32 {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
     Glm(G53 | G53Flash) => 1_000_000
-    // A model this build does not ship: the current generation's 1M, unless
-    // the launcher knows the endpoint's own window and passes it in.
-    Custom(_) => CustomModelContextWindow
+    Custom(_, context_window~) => context_window
   }
 }
 

@@ -281,9 +281,10 @@ fn parse_models(fields : Map[String, Json]) -> Array[@deepseek.Model] raise {
   match fields.get("models") {
     Some(Array(items)) => {
       let models : Array[@deepseek.Model] = []
+      let context_window = @options.context_window()
       for item in items {
         let model = match item {
-          String(value) => @deepseek.Model::parse(value)
+          String(value) => @deepseek.Model::parse(value, context_window?)
           _ => fail("suite model entries must be strings")
         }
         if models.contains(model) {

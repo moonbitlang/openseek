@@ -33,8 +33,8 @@ pub fn agent_settings(
 }
 
 ///|
-/// Read the launcher's window override once before starting a run or serving
-/// turns. An absent or invalid value uses the model's default.
+/// Read the launcher's custom model window. Absent or invalid values leave
+/// the saved or default window in effect.
 pub fn context_window() -> Int32? {
   parse_context_window(@env.get_env_var("OPENSEEK_CONTEXT_WINDOW"))
 }

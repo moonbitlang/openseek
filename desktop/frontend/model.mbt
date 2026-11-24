@@ -18,7 +18,7 @@ fn @deepseek.Model::label(self : @deepseek.Model) -> String {
     Deepseek(V4Flash) => "DeepSeek Flash"
     Glm(G53) => "GLM 5.3"
     Glm(G53Flash) => "GLM 5.3 Flash"
-    Kimi(_) | Custom(_) => self.to_string()
+    Kimi(_) | Custom(_, ..) => self.to_string()
   }
 }
 
@@ -29,7 +29,7 @@ fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
     Deepseek(_) | Glm(_) => true
     // A user entry's own flag decides whether its reasoning control shows;
     // the model alone cannot answer for an endpoint this build never saw.
-    Kimi(_) | Custom(_) => false
+    Kimi(_) | Custom(_, ..) => false
   }
 }
 
@@ -130,7 +130,7 @@ test "engine models round-trip their wire names" {
   // the id survives the round trip so the run can send it.
   assert_true(
     parse_engine_model(" custom-model ")
-    is Some(@deepseek.Custom("custom-model")),
+    is Some(@deepseek.Custom("custom-model", ..)),
   )
   // A blank name has no endpoint that could serve it.
   assert_true(parse_engine_model("  ") is None)
@@ -3286,7 +3286,7 @@ fn Model::reasoning_for(
 ) -> @protocol.Thinking {
   match engine_model {
     Glm(_) => self.glm_reasoning
-    Deepseek(_) | Kimi(_) | Custom(_) => self.openseek_reasoning
+    Deepseek(_) | Kimi(_) | Custom(_, ..) => self.openseek_reasoning
   }
 }
 

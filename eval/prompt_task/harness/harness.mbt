@@ -113,6 +113,9 @@ fn trial_extra_env(
     "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
     "OPENSEEK_GLOBAL_SKILLS_DIR": "\{real_workspace}/.no-global-skills",
   }
+  if config.model is Custom(_, context_window~) {
+    env["OPENSEEK_CONTEXT_WINDOW"] = context_window.to_string()
+  }
   // An explicit `api_key` overrides this model's provider key for every trial.
   // An empty one means "let the engine inherit its provider key from the
   // parent environment" — the only way one suite can span providers, since
@@ -120,14 +123,9 @@ fn trial_extra_env(
   // shared key cannot authenticate all providers. Overriding unconditionally
   // would clobber another provider's inherited key with the wrong key.
   if config.api_key != "" {
-    env[api_key_env_for_model(config.model)] = config.api_key
+    env[config.model.api_key_env()] = config.api_key
   }
   env
-}
-
-///|
-fn api_key_env_for_model(model : @deepseek.Model) -> String {
-  model.api_key_env()
 }
 
 ///|
@@ -139,7 +137,7 @@ fn require_api_access(api_key : String, model : @deepseek.Model) -> Unit raise {
   if api_key != "" {
     return
   }
-  let env_var = api_key_env_for_model(model)
+  let env_var = model.api_key_env()
   if @env.get_env_var(env_var) is Some(value) && value != "" {
     return
   }

@@ -66,7 +66,7 @@ test "context windows per model" {
   // A model this build does not ship gets the current generation's window;
   // a launcher that knows the endpoint's real one overrides it per run.
   assert_eq(
-    (Custom("gemini-4-hydrogen") : @deepseek.Model).context_window(),
+    @deepseek.Model::parse("gemini-4-hydrogen").context_window(),
     1_000_000,
   )
 }

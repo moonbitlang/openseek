@@ -1613,10 +1613,6 @@ async test "an oversized tool result is clamped at the loop" {
       scope=AgentTaskScope(group),
       api_key="test-key",
       model=Deepseek(V4Flash),
-      // This test asserts the tool call RUNS and is clamped, so it states the
-      // window it plans against instead of letting the ambient environment
-      // decide whether the call fits.
-      context_window=1_000_000,
       session~,
       content=Content([Text("flood me")]),
       append_item=(session, item) => session.append(item),
@@ -1670,8 +1666,7 @@ async test "a stated context window decides the ceiling" {
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
       api_key="test-key",
-      model=Custom("gemini-4-hydrogen"),
-      context_window=131_072,
+      model=Custom("gemini-4-hydrogen", context_window=131_072),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),

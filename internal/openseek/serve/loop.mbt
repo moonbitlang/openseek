@@ -73,18 +73,13 @@ async fn run_serve(
   let (model, thinking, api_url) = @setup.session_agent_settings(
     matches, recorded,
   )
-  if model is Custom(_) && api_url is None {
+  if model is Custom(_, ..) && api_url is None {
     fail("an --api-url is required for custom model \{model}")
   }
-  guard model.api_key(
-      matches.values,
-      explicit_api_key=@options.explicitly_provided(matches, "api-key"),
-    )
-    is Some(api_key) else {
+  guard @cli.resolve_api_key(model, matches) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
-  let context_window = @options.context_window()
   let max_steps = @options.max_steps(matches)
   let review_deadline_ms = @options.review_deadline_ms(matches)
   let writer = match durable {
@@ -516,7 +511,6 @@ async fn run_serve(
           max_steps?,
           thinking~,
           api_url?,
-          context_window?,
           retry_attempts?,
           retry_backoff_ms?,
           tools~,

@@ -1,4 +1,35 @@
 ///|
+let provider_api_key_options : Map[String, String] = {
+  "DEEPSEEK": "deepseek-api-key",
+  "KIMI": "kimi-api-key",
+  "GLM": "glm-api-key",
+}
+
+///|
+/// Resolve a nonblank chat key from the parsed options. An explicit
+/// `--api-key` wins, followed by the selected provider's option or environment
+/// variable, then `OPENSEEK_API_KEY`.
+pub fn resolve_api_key(
+  model : @deepseek.Model,
+  matches : @argparse.Matches,
+) -> String? {
+  let generic_key = match matches.values.get("api-key") {
+    Some([key, ..]) if !key.is_blank() => Some(key.trim().to_owned())
+    _ => None
+  }
+  if matches.sources.get("api-key") is Some(Argv) && generic_key is Some(_) {
+    return generic_key
+  }
+  if provider_api_key_options.get(model.api_key_env()) is Some(option) &&
+    matches.values.get(option) is Some([key, ..]) &&
+    !key.is_blank() {
+    Some(key.trim().to_owned())
+  } else {
+    generic_key
+  }
+}
+
+///|
 /// Options shared by the agent-running mains (the root CLI here and the
 /// `openseek_tui` binary in `moonbitlang/openseek_tui`): `--api-key`,
 /// `--model`, `--api-url`, `--retry-attempts`, `--retry-backoff-ms`,
@@ -22,18 +53,13 @@ pub fn agent_shared_options(
     OptionArg(
       "api-key",
       long="api-key",
-      env="OPENSEEK_API_KEY",
+      env=@deepseek.CustomApiKeyEnv,
       default_values=[""],
       global~,
       about="API key for the selected chat provider.",
     ),
     ..[
-      for
-        (name, env) in [
-          ("deepseek-api-key", "DEEPSEEK"),
-          ("kimi-api-key", "KIMI"),
-          ("glm-api-key", "GLM"),
-        ] => {
+      for env, name in provider_api_key_options => {
         @argparse.OptionArg(
           name,
           long=name,

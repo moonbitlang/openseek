@@ -27,10 +27,17 @@ pub extend SessionModel with Debug::{to_repr}
 pub extend SessionModel with ToJson::{to_json}
 
 ///|
-/// `model.json`'s content: the same wire names `--model` and `--thinking`
-/// accept.
+/// Store the model's wire name and thinking mode, and pin the window for a
+/// custom model so a resumed or forked session can use the same budget.
 pub impl ToJson for SessionModel with fn to_json(self) {
-  { "model": self.model.to_string(), "thinking": self.thinking.to_string() }
+  let fields : Map[String, Json] = {
+    "model": Json(self.model.to_string()),
+    "thinking": Json(self.thinking.to_string()),
+  }
+  if self.model is Custom(_, context_window~) {
+    fields["context_window"] = Json(context_window)
+  }
+  Json::object(fields)
 }
 
 ///|
@@ -45,8 +52,18 @@ fn parse_session_model(text : String) -> SessionModel raise {
     fields.get("thinking") is Some(String(thinking)) else {
     fail("session model must be an object with string model and thinking")
   }
+  let context_window = match fields.get("context_window") {
+    None => None
+    Some(value) => {
+      let window : Int32 = @json.from_json(value)
+      guard window > 0 else {
+        fail("session model context_window must be positive")
+      }
+      Some(window)
+    }
+  }
   {
-    model: @deepseek.Model::parse(model),
+    model: @deepseek.Model::parse(model, context_window?),
     thinking: @deepseek.ThinkingMode::parse(thinking),
   }
 }

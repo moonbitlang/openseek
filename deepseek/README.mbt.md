@@ -13,15 +13,9 @@ The HTTP client lives in `moonbitlang/openseek/deepseek/client`.
 - `Model`: provider-tagged chat models, e.g. `Deepseek(V4Pro)`,
   `Deepseek(V4Flash)` (the canonical `deepseek-flash` wire name), `Kimi(K27Code)`,
   and `Glm(G53)`, with `Show` for wire strings and `Debug` for inspection.
-- `Model::api_key(matches)`: resolves the key a command main should send for
-  this model — an explicit `--api-key` first, then the provider-specific
-  option (`--deepseek-api-key` / `--kimi-api-key` / `--glm-api-key`, which the
-  command tables back with `DEEPSEEK` / `KIMI` / `GLM`), and `None` when
-  neither is set. It is the
-  shared answer to *where a key may come from*; whether a missing one is fatal,
-  and what to say about it, is left to each command main. This is the one place
-  in the package that reads parsed CLI options, and it lives here because the
-  model tag is what decides which provider a key belongs to.
+- `Model::api_key_env()`: names the environment variable for this model's
+  credential. CLI commands use `@cli.resolve_api_key(model, matches)` to
+  select a key from parsed arguments and environment variables.
 - `ThinkingMode`: typed thinking control (`No`, `High`, or `Max`), translated
   to each provider's supported request policy.
 - `Role`: `System`, `User`, `Assistant`, and `Tool(tool_call_id)`, with `Show`

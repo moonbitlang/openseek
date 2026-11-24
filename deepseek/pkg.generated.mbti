@@ -85,13 +85,12 @@ pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
-  Custom(String)
+  Custom(String, context_window~ : Int32)
 }
-pub fn Model::api_key(Self, Map[String, Array[String]], explicit_api_key? : Bool) -> String?
 pub fn Model::api_key_env(Self) -> String
 pub fn Model::context_window(Self) -> Int32
 pub fn Model::output(Self, &Logger) -> Unit
-pub fn Model::parse(String) -> Self raise
+pub fn Model::parse(String, context_window? : Int32) -> Self raise
 pub fn Model::to_string(Self) -> String
 pub impl Show for Model
 

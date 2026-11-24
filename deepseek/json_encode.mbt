@@ -14,7 +14,7 @@ fn thinking_json_fields(
     // A user-configured endpoint gets no thinking field: it is not one of the
     // families whose field this build knows, and an unknown field is a 400 on
     // the gateways that reject them.
-    (Custom(_), _) => []
+    (Custom(_, ..), _) => []
     (Kimi(_), _) | (Deepseek(_) | Glm(_), None) => []
     (Glm(_), Some(mode)) => {
       let effort = match mode {

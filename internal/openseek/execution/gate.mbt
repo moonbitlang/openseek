@@ -89,6 +89,7 @@ pub fn build_goal_met_gate(
       kind="review",
       label=@agent_tool.brief_line(goal, limit=48),
       cwd=workspace_root,
+      extra_env=child_model_env(model),
       child_session?,
     )
     match result.value() {

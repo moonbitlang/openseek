@@ -132,7 +132,6 @@ pub async fn run_turn_with_append(
   max_steps~ : Int32 = unbounded_max_steps,
   thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  context_window? : Int32,
   retry_attempts? : Int32,
   retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
@@ -151,7 +150,6 @@ pub async fn run_turn_with_append(
       max_steps~,
       thinking~,
       api_url?,
-      context_window?,
       retry_attempts?,
       retry_backoff_ms?,
     )
@@ -261,8 +259,6 @@ pub async fn run_turn_in_scope(
   max_steps~ : Int32 = unbounded_max_steps,
   thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  // The endpoint's resolved window. Omit it to use the model's default.
-  context_window? : Int32,
   retry_attempts? : Int32,
   retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
@@ -275,7 +271,6 @@ pub async fn run_turn_in_scope(
     api_url?,
     retry_attempts?,
     retry_backoff_ms?,
-    context_window?,
   )
   let summary_client = @client.Client(
     api_key~,
@@ -284,7 +279,6 @@ pub async fn run_turn_in_scope(
     thinking=No,
     retry_attempts?,
     retry_backoff_ms?,
-    context_window?,
   )
   let session = session
     |> append_item(User(UserMessage(content, submission_id?)))

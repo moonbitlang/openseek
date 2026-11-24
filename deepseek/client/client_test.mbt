@@ -21,9 +21,8 @@ test "client endpoint defaults follow selected model" {
 }
 
 ///|
-/// The window the agent loop plans against: the launcher's number when it has
-/// one, otherwise the build's table for the model.
-test "client context window follows the launcher, then the model table" {
+/// The agent loop plans against the client model's context window.
+test "client context window follows the model" {
   assert_eq(@client.Client(api_key="test-key").context_window(), 1_000_000)
   assert_eq(
     @client.Client(api_key="test-key", model=Kimi(K27Code)).context_window(),
@@ -32,20 +31,18 @@ test "client context window follows the launcher, then the model table" {
   // A model this build does not ship, as the desktop host saves it: the entry's
   // own window travels with the run and wins over the table.
   assert_eq(
-    @client.Client(api_key="test-key", model=Custom("gemini-4-hydrogen")).context_window(),
+    @client.Client(
+      api_key="test-key",
+      model=@deepseek.Model::parse("gemini-4-hydrogen"),
+    ).context_window(),
     1_000_000,
   )
   assert_eq(
     @client.Client(
       api_key="test-key",
-      model=Custom("gemini-4-hydrogen"),
-      context_window=131_072,
+      model=Custom("gemini-4-hydrogen", context_window=131_072),
     ).context_window(),
     131_072,
-  )
-  assert_eq(
-    @client.Client(api_key="test-key", context_window=200_000).context_window(),
-    200_000,
   )
 }
 
@@ -71,7 +68,6 @@ test "client debug redacts api key" {
       #|  retry_attempts: 3,
       #|  retry_backoff_ms: 500,
       #|  idle_timeout_ms: 120000,
-      #|  context_window: None,
       #|}
     ),
   )
