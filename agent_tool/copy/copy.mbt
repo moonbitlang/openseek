@@ -8,7 +8,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="copy",
-    description="Copy a readable regular file from source to destination. Relative paths resolve from the workspace. Creates missing parent directories and publishes the bytes atomically after destination validation.",
+    description="Copy a readable regular file from source to destination. Keep the source unchanged until the call completes. Relative paths resolve from the workspace. Creates missing parent directories and publishes the bytes atomically after destination validation.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
@@ -96,24 +96,16 @@ async fn execute_copy(
     guard @fs.kind(source_path) is Regular else {
       fail("source must name a regular file")
     }
-    let directory = @fs.tmpdir(prefix="openseek-copy-")
-    defer (@fs.remove(directory, recursive=true) catch { _ => () })
-    let file = @fs.open(
-      "\{directory}/candidate",
-      mode=ReadWrite,
-      create_mode=CreateNew,
-      permission=0o600,
+    let destination = inspect_destination(path)
+    copy_file(
+      input,
+      source_path,
+      path,
+      destination,
+      file_state,
+      write_scope?,
+      approval?,
     )
-    defer file.close()
-    let (bytes, digest) = {
-      let source = @fs.open(source_path, mode=ReadOnly)
-      defer source.close()
-      @file_content.transfer(source, destination=file)
-    }
-    let candidate = { file, bytes, digest, }
-    file_state.with_access(() => {
-      commit_copy(input, candidate, path, file_state, write_scope?, approval?)
-    })
   } catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
@@ -127,98 +119,161 @@ async fn execute_copy(
 }
 
 ///|
-async fn commit_copy(
+async fn copy_file(
   input : CopyInput,
-  candidate : StagedFile,
+  source_path : String,
   path : String,
+  destination : CopyDestination,
   file_state : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
-  let target = @fs.realpath(path) catch { _ => path }
-  let text = if requires_text(path) || requires_text(target) {
-    let bytes = candidate.file.read_all()
-    Some(
-      @utf8.decode(bytes, ignore_bom=false) catch {
-        _ => fail("source and manifest content must be valid UTF-8")
-      },
-    )
-  } else {
-    None
-  }
-  if text is Some(content) {
-    for checked_path in (if path == target { [path] } else { [path, target] }) {
-      if @manifest_error.write_error(checked_path, content) is Some(message) {
-        fail(message)
-      }
+  let target = destination.resolved_path
+  let paths = if path == target { [path] } else { [path, target] }
+  for checked_path in paths {
+    if @manifest_error.path_error(checked_path) is Some(message) {
+      fail(message)
     }
   }
-  let existed = @fs.exists(path)
-  guard !(existed && (is_mbt_source(path) || is_mbt_source(target))) else {
-    fail("cannot overwrite an existing source file; use edit or multi_edit")
+  let text = paths.any(requires_text)
+  if text && @manifest_error.file_error(paths, source_path) is Some(message) {
+    fail(message)
   }
-  if input.revert_on_parse_errors &&
-    text is Some(content) &&
-    @auto_check.write_parse_error(path, target, content) is Some(gate) {
-    let details = @auto_check.format_parse_gate_errors(
-      path,
-      content,
-      gate.errors,
+
+  let checks = if input.revert_on_parse_errors {
+    @auto_check.gate_paths(path, target).filter_map(
+      @auto_check.gate_scratch_name,
     )
-    return @agent_tool.respond(
-      "rejected: the content for \{path} has parse errors; nothing was written.\n\{details.join("\n")}",
-      is_error=true,
-      brief="copy rejected (parse errors)",
-    )
+  } else {
+    []
   }
-  let bytes = Json::number(
-    candidate.bytes.to_double(),
-    repr=candidate.bytes.to_string(),
-  )
+  let source_kind = @auto_check.gate_scratch_name(source_path)
+  if source_kind is Some(name) &&
+    checks.contains(name) &&
+    syntax_rejection(source_path, path) is Some(result) {
+    return result
+  }
+  let remaining_checks = checks.filter(name => Some(name) != source_kind)
+
+  let dir = @path.Path(destination.staging_parent)
+    .join(Path(".openseek-copy-\{@uuid.v7()}"))
+    .to_string()
+  @async.protect_from_cancel(() => @fs.mkdir(dir, permission=0o700))
+  defer (@fs.remove(dir, recursive=true) catch { _ => () })
+  let first_name = remaining_checks.get(0).unwrap_or("candidate")
+  let mut staged = @path.Path(dir).join(Path(first_name)).to_string()
+  let (size, digest) = {
+    let source = @fs.open(source_path, mode=ReadOnly)
+    defer source.close()
+    let file = @fs.open(
+      staged,
+      mode=WriteOnly,
+      create_mode=CreateNew,
+      permission=if destination.existed { 0o600 } else { 0o644 },
+    )
+    defer file.close()
+    let result = @file_content.transfer(source, destination=file)
+    file.sync(only_data=true)
+    result
+  }
+  // syncheck infers the kind from the input name. Rename inside the private
+  // directory if the requested path and its target need different kinds.
+  for name in remaining_checks {
+    let checked_file = @path.Path(dir).join(Path(name)).to_string()
+    if staged != checked_file {
+      @fs.rename(staged, checked_file, replace=false)
+      staged = checked_file
+    }
+    if syntax_rejection(staged, path) is Some(result) {
+      return result
+    }
+  }
+
+  let bytes = Json::number(size.to_double(), repr=size.to_string())
   let arguments : Map[String, Json] = {
     "destination": Json(path),
     "source": Json(input.source),
     "bytes": bytes,
-    "sha256": Json(candidate.digest),
+    "sha256": Json(digest),
   }
-  if text is Some(content) {
-    arguments["content"] = Json(content)
+  // Inline small text for scoped approval. Large files can be reviewed by
+  // path, size and digest without materializing their entire contents.
+  if text &&
+    write_scope is Some(_) &&
+    approval is Some(_) &&
+    size <= CopyApprovalPreviewBytes {
+    arguments["content"] = Json(@utf8.decode(@fs.read_binary(staged)))
   } else {
     arguments["content_omitted"] = Json(true)
   }
-  let authorization = @permission.authorize(
-    [path],
-    target_path=path,
-    tool_name="copy",
-    arguments=Json::object(arguments),
-    file_state~,
-    write_scope?,
-    approval?,
-    check_contents=false,
-  )
-  if @fs.exists(path) && (@fs.realpath(path) catch { _ => path }) != target {
+  file_state.with_access(() => {
+    recheck_destination(path, destination)
+    let authorization = @permission.authorize(
+      [path],
+      target_path=path,
+      tool_name="copy",
+      arguments=Json::object(arguments),
+      file_state~,
+      write_scope?,
+      approval?,
+      check_contents=false,
+    )
     authorization.recheck()
-    fail("file target changed before copying; re-read and retry")
-  }
-  if authorization.deny_reason(path) is Some(reason) {
-    fail("copy blocked: \{reason}")
-  }
-  file_state.create_parent_directories(path)
-  publish_file(candidate, path, target, existed, authorization, file_state)
-  if existed {
-    file_state.record_modified(path, candidate.digest)
+    recheck_destination(path, destination)
+    if authorization.deny_reason(path) is Some(reason) {
+      fail("copy blocked: \{reason}")
+    }
+    file_state.create_parent_directories(path)
+    recheck_destination(path, destination)
+    @atomic_file.publish_staged_file(
+      staged,
+      target,
+      replace=destination.existed,
+    )
+    if destination.existed {
+      file_state.record_modified(path, digest)
+    } else {
+      file_state.record_created(path, digest)
+    }
+  })
+  let suffix = if destination.existed {
+    " (overwrote existing file)"
   } else {
-    file_state.record_created(path, candidate.digest)
+    ""
   }
-  let suffix = if existed { " (overwrote existing file)" } else { "" }
   @agent_tool.respond(
     @auto_check.append_summary(
       path,
-      "ok: copied \{candidate.bytes} bytes to \{path}\{suffix} (sha256: \{candidate.digest})",
+      "ok: copied \{size} bytes to \{path}\{suffix} (sha256: \{digest})",
     ),
-    brief=@agent_tool.brief_line(
-      "copied \{candidate.bytes} bytes to \{input.destination}",
+    brief=@agent_tool.brief_line("copied \{size} bytes to \{input.destination}"),
+    data={ "bytes": bytes, "sha256": digest },
+  )
+}
+
+///|
+const CopyApprovalPreviewBytes : Int64 = 65536L
+
+///|
+async fn syntax_rejection(
+  source : String,
+  destination : String,
+) -> @agent_tool.ToolAction? {
+  guard @auto_check.file_parse_errors(source) is Some(gate) &&
+    !gate.errors.is_empty() else {
+    return None
+  }
+  // Use the compiler's excerpts without reading the input back into memory.
+  let details = @auto_check.format_parse_gate_errors(
+    destination,
+    "",
+    gate.errors,
+  )
+  Some(
+    @agent_tool.respond(
+      "rejected: the content for \{destination} has parse errors; nothing was written.\n\{details.join("\n")}",
+      is_error=true,
+      brief="copy rejected (parse errors)",
     ),
-    data={ "bytes": bytes, "sha256": candidate.digest },
   )
 }

@@ -2,6 +2,10 @@
 package "moonbitlang/openseek/agent_tool/internal/manifest_error"
 
 // Values
+pub async fn file_error(Array[String], String) -> String?
+
+pub async fn path_error(String) -> String?
+
 pub async fn write_error(String, String) -> String?
 
 // Errors

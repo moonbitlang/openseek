@@ -325,6 +325,27 @@ async test "copy preserves manifest UTF-8 and syntax checks including symlink ta
 }
 
 ///|
+async test "copy checks named MoonBit sources without waiting for the file gate" {
+  @vfs.with_tmpdir(dir => {
+    @fs.write_text("\{dir}/invalid.mbt", "fn f( {")
+    let state = @agent_tool.FileStateMap()
+    let tool = @copy.definition(workspace_root=dir, file_state=state)
+    let result = @async.with_timeout(15000, () => {
+      state.with_access(() => {
+        run_copy(tool, {
+          "destination": "new/source.mbt",
+          "source": "invalid.mbt",
+        })
+      })
+    })
+    guard result is Respond(out) else { fail("expected response") }
+    assert_true(out.is_error)
+    assert_true(out.content.contains("has parse errors"), msg=out.content)
+    assert_eq(@fs.readdir(dir, include_hidden=true), ["invalid.mbt"])
+  })
+}
+
+///|
 async test "copy new source approval displays and writes the fixed candidate" {
   @vfs.with_tmpdir(dir => {
     let source = "\{dir}/candidate"
@@ -364,7 +385,8 @@ async test "copy new source approval displays and writes the fixed candidate" {
 ///|
 async test "copy cannot bypass source overwrite rejection or destination write scopes" {
   @vfs.with_tmpdir(dir => {
-    @fs.write_text("\{dir}/candidate", "fn f() -> Int { 2 }")
+    // Existing source targets must be rejected before decoding the candidate.
+    @fs.write_binary("\{dir}/candidate", b"\xff")
     @fs.write_text("\{dir}/source.mbt", "fn f() -> Int { 1 }")
     @fs.symlink(target="source.mbt", "\{dir}/alias.bin")
     guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
