@@ -11,8 +11,8 @@ script-authoring packages are taught. A host that ships its own prompt owns
 that text too. This file covers hosting, lifetime, and wire bounds. Scripts
 call host tools through the published SDK, which invokes the same registered
 executors as direct tool calls, including edit validation, rollback checks,
-and the session's shared `FileStateMap`. Direct file-tool calls remain available. PTC also exposes `write` and `remove`,
-with the same operation-scoped approval and validation as direct calls.
+and the session's shared `FileStateMap`. Direct file-tool calls remain available,
+and `copy` is offered only through PTC.
 
 For example, pass this as `source` to mbtx:
 
@@ -48,6 +48,11 @@ PTC-enabled tools and their argument shapes:
 - `edit`
 - `multi_edit`, e.g. `{ "edits": edits }` or `{ "edits_file": "edits.json" }`
 - `write`, e.g. `{ "path": "note.txt", "content": "hello" }`
+- `copy`, e.g. `{ "source": "/session-scratch/report.pdf", "destination": "output/report.pdf" }`.
+  The host copies a readable regular file in 64 KiB chunks, publishes it
+  atomically, and returns its byte count and SHA-256. The request and trace
+  carry paths and metadata. Rejects MoonBit source and manifest destinations
+  (use `write` or `edit` for those).
 - `remove`, e.g. `{ "path": "note.txt", "reason": "remove obsolete notes" }`
 - `web_search`, e.g. `{ "query": query }`, when registered
 
