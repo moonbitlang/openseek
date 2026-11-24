@@ -26,14 +26,20 @@ import XCTest
         let html = documents.appending(component: name + ".html")
         let binary = documents.appending(component: name + ".bin")
         let copy = documents.appending(component: name + " (2).html")
+        let longPrefix = name.padding(toLength: 245, withPad: "x", startingAt: 0)
+        let longFile = documents.appending(component: longPrefix + "文件.bin")
+        let longCopy = documents.appending(component: longPrefix + " (2).bin")
         defer {
-            for url in [html, binary, copy] { try? FileManager.default.removeItem(at: url) }
+            for url in [html, binary, copy, longFile, longCopy] { try? FileManager.default.removeItem(at: url) }
         }
         let original = Data("previous export".utf8)
         try original.write(to: html)
+        XCTAssertEqual(longFile.lastPathComponent.utf8.count, 255)
+        try original.write(to: longFile)
         for (filename, type, bytes, destination) in [
             (html.lastPathComponent, "text/html;charset=utf-8", Data("<p>conversation</p>".utf8), copy),
-            (binary.lastPathComponent, "application/octet-stream", Data([0, 255, 128]), binary)
+            (binary.lastPathComponent, "application/octet-stream", Data([0, 255, 128]), binary),
+            (longFile.lastPathComponent, "application/octet-stream", Data([1, 2, 3]), longCopy)
         ] {
             _ = try await web.callAsyncJavaScript("""
                 const link = document.createElement('a');
@@ -49,6 +55,7 @@ import XCTest
             XCTAssertEqual(try Data(contentsOf: destination), bytes)
         }
         XCTAssertEqual(try Data(contentsOf: html), original)
+        XCTAssertEqual(try Data(contentsOf: longFile), original)
         XCTAssertEqual(web.url, Console.home)
         withExtendedLifetime(controller) {}
     }

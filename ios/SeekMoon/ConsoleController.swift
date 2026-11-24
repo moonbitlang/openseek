@@ -184,8 +184,6 @@ extension ConsoleController: WKDownloadDelegate {
     private static func saveDownload(_ temporaryFile: URL, named filename: String) throws {
         let files = FileManager.default
         let folder = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let name = filename as NSString
-        let suffix = name.pathExtension.isEmpty ? "" : "." + name.pathExtension
         var candidate = filename
         var number = 2
         while true {
@@ -193,10 +191,28 @@ extension ConsoleController: WKDownloadDelegate {
                 try files.moveItem(at: temporaryFile, to: folder.appending(component: candidate))
                 return
             } catch CocoaError.fileWriteFileExists {
-                candidate = "\(name.deletingPathExtension) (\(number))\(suffix)"
+                candidate = numberedFilename(filename, number: number)
                 number += 1
             }
         }
+    }
+
+    private static func numberedFilename(_ filename: String, number: Int) -> String {
+        let name = filename as NSString
+        let counter = " (\(number))"
+        let ext = name.pathExtension
+        var ending = ext.isEmpty ? counter : counter + "." + ext
+        var stem = name.deletingPathExtension
+        if ending.utf8.count > Int(NAME_MAX) {
+            stem = filename
+            ending = counter
+        }
+        var remaining = Int(NAME_MAX) - ending.utf8.count
+        let prefix = stem.prefix { character in
+            remaining -= character.utf8.count
+            return remaining >= 0
+        }
+        return prefix + ending
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
