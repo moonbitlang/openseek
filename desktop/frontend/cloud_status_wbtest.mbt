@@ -88,14 +88,22 @@ test "Cloud status reports admission and the existing engine step" {
     ..conv,
     generating: true,
     pending: None,
-    heartbeat: Some({ stage: @composer.Thinking, started_ms: None, tokens: 0, }),
+    heartbeat: Some({
+      stage: @transcript.Thinking,
+      started_ms: None,
+      tokens: 0,
+    }),
   })
   assert_true(running.cloud_display_status() is Some(Running))
   let step = running.with_status_conversation(conv => {
     ..conv,
-    heartbeat: Some({ stage: @composer.AtStep(3), started_ms: None, tokens: 0, }),
+    heartbeat: Some({
+      stage: @transcript.AtStep(3),
+      started_ms: None,
+      tokens: 0,
+    }),
     retrying: Some(
-      @composer.Retrying(attempt=1, max_attempts=3, reason="network"),
+      @transcript.Retrying(attempt=1, max_attempts=3, reason="network"),
     ),
   })
   assert_true(step.cloud_display_status() is Some(Step(Some(3))))

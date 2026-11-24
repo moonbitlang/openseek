@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/transcript"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "moonbitlang/openseek/deepseek",
@@ -104,6 +105,23 @@ pub(all) enum ItemKind {
 }
 pub fn ItemKind::equal(Self, Self) -> Bool
 pub fn ItemKind::not_equal(Self, Self) -> Bool
+
+#derive(Eq, @debug.Debug)
+pub(all) struct RunHeartbeat {
+  stage : RunStage
+  started_ms : Double?
+  tokens : Int32
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum RunStage {
+  Starting
+  Thinking
+  AtStep(Int32)
+  Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
+  Working
+  Stopping
+}
 
 #derive(Eq)
 pub(all) struct SessionListItem {

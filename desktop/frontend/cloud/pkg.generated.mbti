@@ -197,8 +197,8 @@ pub(all) struct Conversation {
   pending_assistants : Array[PendingAssistant]
   live_task : String?
   assistant_handoffs : Map[String, Int32]
-  heartbeat : @composer.RunHeartbeat?
-  retrying : @composer.RunStage?
+  heartbeat : @transcript.RunHeartbeat?
+  retrying : @transcript.RunStage?
   controls : @engine_session.State
   approval_answered : String?
   notice : Notice?
@@ -213,7 +213,7 @@ pub fn Conversation::items(Self, @i18n.Locale) -> Array[@transcript.TranscriptIt
 pub fn Conversation::not_equal(Self, Self) -> Bool
 pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
 pub fn Conversation::published_approval(Self, Self) -> ControlApproval?
-pub fn Conversation::run_heartbeat(Self) -> @composer.RunHeartbeat?
+pub fn Conversation::run_heartbeat(Self) -> @transcript.RunHeartbeat?
 pub fn Conversation::visible_reasoning(Self, Array[@transcript.TranscriptItem]) -> (String?, Bool)
 pub fn Conversation::with_command_result(Self, Self, String) -> (Self, Bool)
 

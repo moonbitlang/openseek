@@ -526,15 +526,6 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         None
       },
     ),
-    run: if conversation.sending || conversation.generating {
-      Some(
-        conversation
-        .run_heartbeat()
-        .unwrap_or({ stage: @composer.Working, started_ms: None, tokens: 0, }),
-      )
-    } else {
-      None
-    },
     shell_available: conversation.queue_edit is None &&
     self.cloud.can_compose(owner.session()),
     prediction: if conversation.shell_commands.is_empty() {

@@ -238,7 +238,6 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // The outer run heartbeat and child-run lanes are both typed live status,
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
-    run: conv.run_heartbeat(),
     goal: conv.controls.input(),
     slash_commands: self.openseek_commands(
       editing_queue=conv.queue_edit is Some(_),
@@ -415,7 +414,6 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
       archive_generation: self.composer_entry_changes.length(),
     },
     draft: { images: [], task: "", mentions: [], },
-    run: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
     shell_available: false,

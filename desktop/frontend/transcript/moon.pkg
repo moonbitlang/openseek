@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/openseek/workspace_file_ref",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol" @protocol,

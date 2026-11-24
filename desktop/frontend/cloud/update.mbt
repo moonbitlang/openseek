@@ -1575,7 +1575,7 @@ pub fn update(
           reasoning_frontier: conversation.durable_frontier(),
           notification_answer: None,
           heartbeat: Some({
-            stage: @composer.Thinking,
+            stage: @transcript.Thinking,
             started_ms: None,
             tokens: 0,
           }),

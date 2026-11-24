@@ -84,10 +84,6 @@ priv enum UiMessage {
   KeepWorking
   DiscardAndArchive
   RemoveLabel
-  StartingLabel
-  ThinkingLabel
-  WorkingLabel
-  StoppingLabel
   RemoveImage
   RemovePrefix
   NetworkDestination
@@ -657,26 +653,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, RemoveLabel) => "移除"
     (TraditionalChinese, RemoveLabel) => "移除"
     (Japanese, RemoveLabel) => "削除"
-    (English, StartingLabel) => "Starting…"
-    (Spanish, StartingLabel) => "Iniciando…"
-    (SimplifiedChinese, StartingLabel) => "正在启动…"
-    (TraditionalChinese, StartingLabel) => "正在啟動…"
-    (Japanese, StartingLabel) => "起動中…"
-    (English, ThinkingLabel) => "Thinking…"
-    (Spanish, ThinkingLabel) => "Pensando…"
-    (SimplifiedChinese, ThinkingLabel) => "正在思考…"
-    (TraditionalChinese, ThinkingLabel) => "正在思考…"
-    (Japanese, ThinkingLabel) => "思考中…"
-    (English, WorkingLabel) => "Working…"
-    (Spanish, WorkingLabel) => "Trabajando…"
-    (SimplifiedChinese, WorkingLabel) => "正在处理…"
-    (TraditionalChinese, WorkingLabel) => "正在處理…"
-    (Japanese, WorkingLabel) => "処理中…"
-    (English, StoppingLabel) => "Stopping…"
-    (Spanish, StoppingLabel) => "Deteniendo…"
-    (SimplifiedChinese, StoppingLabel) => "正在停止…"
-    (TraditionalChinese, StoppingLabel) => "正在停止…"
-    (Japanese, StoppingLabel) => "停止中…"
     (English, RemoveImage) => "Remove image"
     (Spanish, RemoveImage) => "Quitar imagen"
     (SimplifiedChinese, RemoveImage) => "移除图片"

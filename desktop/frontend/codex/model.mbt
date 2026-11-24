@@ -2209,11 +2209,18 @@ fn State::with_observed_first_prompt(self : State) -> State {
 }
 
 ///|
-/// The exact interval in which the transcript should show the submitted
-/// first input locally and the composer should say `Starting…`.
+/// The interval in which the transcript still shows the local first prompt.
 fn State::waiting_for_first_user_item(self : State) -> Bool {
   self.submitted_first_prompt is Some(_) &&
   self.active_thread().map_or(true, thread => !thread.has_user_item())
+}
+
+///|
+/// After the first User item arrives, Codex turns can overlap; there is no
+/// single-turn heartbeat to infer for the transcript.
+pub fn State::run_heartbeat(self : State) -> @transcript.RunHeartbeat? {
+  guard self.waiting_for_first_user_item() else { return None }
+  Some({ stage: Starting, started_ms: None, tokens: 0, })
 }
 
 ///|

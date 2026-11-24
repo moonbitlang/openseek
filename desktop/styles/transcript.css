@@ -55,9 +55,32 @@
 
 /* render_rows_once_after_mount primes remembered row heights before offscreen
    content is skipped. The 120px fallback covers rows not yet measured. */
-.stream > :not(.empty) {
+.stream > :not(.empty, .transcript-run-status) {
   content-visibility: var(--stream-rows-visibility, auto);
   contain-intrinsic-size: auto 120px;
+}
+
+.transcript-run-status {
+  display: flex;
+  align-items: start;
+  gap: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.transcript-run-status.retrying {
+  color: var(--color-danger);
+}
+
+.transcript-run-mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-block-start: calc((1lh - 6px) / 2);
+  border-radius: 50%;
+  background: currentColor;
+  animation: lane-pulse 1.6s ease-in-out infinite;
 }
 
 /* Floating "jump to latest" over the transcript's bottom edge, shown

@@ -268,42 +268,6 @@ pub(all) struct Presentation {
 }
 
 ///|
-/// How far the open turn has gotten. The application owns the run phase; the
-/// composer owns how it reads on screen.
-#derive(Eq, @debug.Debug)
-pub(all) enum RunStage {
-  // Accepted, no run id yet.
-  Starting
-  // Open, no step reported — the engine is in a model call and silent.
-  Thinking
-  // The engine's latest 1-based step counter.
-  AtStep(Int32)
-  // The step's provider request failed and the engine is waiting out its
-  // backoff before attempt `attempt` of `max_attempts`.
-  Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
-  // Open and stepping, from an engine that does not number its steps.
-  Working
-  // A Stop was sent and the engine has not honored it yet.
-  Stopping
-}
-
-///|
-/// The open turn's heartbeat: facts, never a rendered line. The wording, the
-/// clock it is measured against, and the per-second tick that advances it are
-/// all the composer's, so a turn's elapsed span costs one component's render
-/// rather than the whole application's.
-///
-/// `started_ms` is `None` whenever that moment is not the page's to know — a
-/// run adopted from a reconnect began before anyone here was watching, and
-/// dating it from the moment it was noticed always reports too short a wait.
-#derive(Eq, @debug.Debug)
-pub(all) struct RunHeartbeat {
-  stage : RunStage
-  started_ms : Double?
-  tokens : Int32
-}
-
-///|
 /// The complete root-to-composer boundary. It contains canonical external
 /// facts and view-only presentation, never the root application Model or Msg.
 #derive(Eq)
@@ -311,8 +275,6 @@ pub(all) struct Input {
   identity : Identity
   draft : Draft
   goal : GoalInput
-  // The turn in flight, `None` between runs.
-  run : RunHeartbeat?
   // Canonical turn identity, including transitions while this entry is hidden.
   turn_id : String?
   // Eligible finished OpenSeek snapshot; absent for hidden or other-engine composers.
@@ -586,18 +548,6 @@ pub extend RunningSubmit with Debug::{to_repr}
 
 ///|
 pub extend RunningSubmit with Eq::{equal, not_equal}
-
-///|
-pub extend RunHeartbeat with Debug::{to_repr}
-
-///|
-pub extend RunHeartbeat with Eq::{equal, not_equal}
-
-///|
-pub extend RunStage with Debug::{to_repr}
-
-///|
-pub extend RunStage with Eq::{equal, not_equal}
 
 ///|
 pub extend SlashCommand with Debug::{to_repr}

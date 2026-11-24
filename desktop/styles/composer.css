@@ -345,30 +345,6 @@
   font-size: var(--font-size-sm);
 }
 
-/* Ordinary heartbeat rows stay unboxed; retry rows opt into the shared
-   composer-context-row surface. */
-.composer-running {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  max-width: var(--conversation-width);
-  margin: 0 auto var(--space-4);
-  padding: 0 var(--space-5);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-.composer-running-mark {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-muted);
-  animation: lane-pulse 1.6s ease-in-out infinite;
-}
-.composer-running-text {
-  min-width: 0;
-}
-
 .composer-notice-icon {
   --icon-size: var(--icon-md);
   flex: none;
