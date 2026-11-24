@@ -103,7 +103,7 @@ fn model_key_env(model : String) -> String {
 ///|
 /// The environment variable that carries the run's API key to the engine.
 /// The engine resolves its chat key from a provider-specific variable chosen
-/// by the model (`Model::api_key`): `DEEPSEEK`, `KIMI`, or `GLM`. Official
+/// by the model: `DEEPSEEK`, `KIMI`, or `GLM` for built-in models. Official
 /// providers reject a model from another provider before a child process can
 /// inherit that model's ambient credential. A custom endpoint's key instead
 /// follows the model's variable, or the engine would never find it; the

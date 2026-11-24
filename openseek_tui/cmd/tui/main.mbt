@@ -213,7 +213,14 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
   }
   // Enforced here rather than via argparse `required`: see `@cli.agent_shared_options`.
   let model = @deepseek.Model::parse(model_input)
-  guard model.api_key(matches.values) is Some(api_key) else {
+  let api_url = match api_url_input.trim() {
+    "" => None
+    url => Some("\{url}")
+  }
+  if model is Custom(_, ..) && api_url is None {
+    fail("an --api-url is required for custom model \{model}")
+  }
+  guard @cli.resolve_api_key(model, matches) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
   let (engine, engine_args_prefix) = match explicit_engine {
@@ -222,10 +229,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
   }
   {
     api_key,
-    api_url: match api_url_input.trim() {
-      "" => None
-      url => Some("\{url}")
-    },
+    api_url,
     model,
     cwd,
     max_steps: match matches {
@@ -547,8 +551,7 @@ test "cli uses provider API keys only for their models" {
   let glm_config = parse_config(glm)
   assert_eq(glm_config.api_key, "glm-key")
   assert_true(glm_config.model is Glm(G53))
-  // Provider keys do not fall back across models: `Model::api_key` returns
-  // `None` and this main is the one that turns that into a failure.
+  // A provider-specific key only applies to models from that provider.
   let deepseek = cli_command().parse(argv=[], env={
     "KIMI": "kimi-key",
     "GLM": "glm-key",

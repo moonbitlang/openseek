@@ -93,7 +93,7 @@ pub fn build_approval_reviewer(
       kind~,
       label=@agent_tool.brief_line("\{ask.tool_name}: \{ask.detail}", limit=48),
       cwd=workspace_root,
-      extra_env=Map([(provider_key_variable(model), api_key)]),
+      extra_env=child_model_env(model, api_key~),
       child_session?,
     )
     result.value().map(verdict => verdict.decision()).unwrap_or(Escalate)

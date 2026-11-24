@@ -3,6 +3,7 @@ import {
   "moonbitlang/openseek/eval/prompt_task/harness",
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/cli",
+  "moonbitlang/openseek/internal/openseek/options",
 }
 
 warnings = "+unnecessary_annotation"
