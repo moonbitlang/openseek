@@ -109,6 +109,8 @@ struct Input {
   // image paths so the owning host, rather than the frontend, resolves them.
   root : @common.Uri?
   items : Array[VisibleRow]
+  // Only the live tail renders this snapshot; it is never a history row.
+  run : @transcript.RunHeartbeat?
   // The in-flight assistant text to show below the committed rows, or `None`
   // when nothing is streaming. It is deliberately not a `VisibleRow`: the
   // rows are the durable record and this is not durable yet.
@@ -146,6 +148,7 @@ pub fn Input::Input(
   project_query~ : String,
   root~ : @common.Uri?,
   items~ : Array[VisibleRow],
+  run? : @transcript.RunHeartbeat,
   streaming_response~ : String?,
   streaming_reasoning? : String,
   reasoning_complete~ : Bool = false,
@@ -176,6 +179,7 @@ pub fn Input::Input(
     project_query,
     root,
     items,
+    run,
     streaming_response,
     streaming_reasoning,
     reasoning_complete,
@@ -458,7 +462,8 @@ pub fn component(
     },
     by=pair => pair.1.branch_key(),
   )
-  state.view3(input, rendered, (state, input, rendered) => {
+  let clock = run_clock(input)
+  state.view4(input, rendered, clock, (state, input, rendered, clock_ms) => {
     // Incremental input changes do not refresh local subscriptions.
     localization.set_language(transcript_editor_language(input.locale))
     transcript_view(
@@ -467,7 +472,10 @@ pub fn component(
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
-      stream=keyed_stream(rendered),
+      stream=keyed_stream(
+        rendered,
+        input.run.map(run => run_status_row(input.locale, run, clock_ms)),
+      ),
       on_jump_latest=emit(JumpToLatest),
     )
   })

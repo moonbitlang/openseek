@@ -13,9 +13,6 @@ priv enum DynamicMessage {
   DReconnecting(String)
   DArchiveWarning(String, String)
   DArchiveQuestion(String)
-  DWorkingStep(String)
-  DRetry(String, String, String)
-  DTokens(String)
   DFailedChecks(String)
   DPendingChecks(String)
   DPassedChecks(String)
@@ -127,24 +124,6 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (TraditionalChinese, DArchiveQuestion(_)) => "歸檔此對話？"
     (Japanese, DArchiveQuestion(_)) =>
       "このチャットをアーカイブしますか？"
-    (English, DWorkingStep(p0)) => "Working · step \{p0}"
-    (Spanish, DWorkingStep(p0)) => "Trabajando · paso \{p0}"
-    (SimplifiedChinese, DWorkingStep(p0)) => "正在处理 · 第 \{p0} 步"
-    (TraditionalChinese, DWorkingStep(p0)) => "正在處理 · 第 \{p0} 步"
-    (Japanese, DWorkingStep(p0)) => "処理中 · ステップ \{p0}"
-    (English, DRetry(p0, p1, p2)) => "Retrying · attempt \{p0}/\{p1} · \{p2}"
-    (Spanish, DRetry(p0, p1, p2)) =>
-      "Reintentando · intento \{p0}/\{p1} · \{p2}"
-    (SimplifiedChinese, DRetry(p0, p1, p2)) =>
-      "正在重试 · 第 \{p0}/\{p1} 次 · \{p2}"
-    (TraditionalChinese, DRetry(p0, p1, p2)) =>
-      "正在重試 · 第 \{p0}/\{p1} 次 · \{p2}"
-    (Japanese, DRetry(p0, p1, p2)) => "再試行中 · \{p0}/\{p1} 回 · \{p2}"
-    (English, DTokens(p0)) => "\{p0} tokens"
-    (Spanish, DTokens(p0)) => "\{p0} tokens"
-    (SimplifiedChinese, DTokens(p0)) => "\{p0} 个词元"
-    (TraditionalChinese, DTokens(p0)) => "\{p0} 個詞元"
-    (Japanese, DTokens(p0)) => "\{p0} トークン"
     (English, DFailedChecks(p0)) => "\{p0} failed"
     (Spanish, DFailedChecks(p0)) =>
       if p0 == "1" {

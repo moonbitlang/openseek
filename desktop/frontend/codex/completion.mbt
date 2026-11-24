@@ -393,14 +393,6 @@ pub fn State::composer_input(
   {
     identity: self.composer_identity(context.channel),
     draft: { task: self.draft, mentions: self.mentions, images: self.images, },
-    // Before the first real User item arrives, the only honest progress fact
-    // is that this accepted local submission is starting. Later Codex turns
-    // can overlap, so no broader single-turn heartbeat is inferred here.
-    run: if self.waiting_for_first_user_item() {
-      Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
-    } else {
-      None
-    },
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [
       {

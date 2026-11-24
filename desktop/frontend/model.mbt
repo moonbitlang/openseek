@@ -4288,12 +4288,10 @@ fn Conversation::visible_subruns(self : Conversation) -> Array[@subrun.Lane] {
 /// only knows the current step. Once reasoning arrives, the transcript itself
 /// becomes the progress indicator while this heartbeat continues to report
 /// elapsed time.
-/// The open turn as the composer's heartbeat row needs it: facts only. The
-/// wording, the clock, and the tick that advances it belong to the composer,
-/// so a span that changes every second costs one component's render instead
-/// of reprojecting every component's input once a second.
-fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
-  let stage : @composer.RunStage = match self.run {
+fn Conversation::run_heartbeat(
+  self : Conversation,
+) -> @transcript.RunHeartbeat? {
+  let stage : @transcript.RunStage = match self.run {
     NoRun(..) => return None
     Starting(..) => Starting
     Open(stage=Opened, ..) => Thinking
@@ -4302,7 +4300,7 @@ fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
     Open(stage=Cancelling, ..) => Stopping
   }
   // A pending retry replaces the step wording; a Stop already sent still wins.
-  let stage : @composer.RunStage = if self.turn.retrying is Some(retrying) &&
+  let stage : @transcript.RunStage = if self.turn.retrying is Some(retrying) &&
     !(stage is Stopping) {
     Retrying(
       attempt=retrying.attempt,
