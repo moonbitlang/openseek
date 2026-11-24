@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // Replace only Proton's transport. The real shell, DOM focus, and xterm run
 // in Chromium; macOS menu key-equivalent handling still needs a native test.
-async function installDesktop(page, systemDark = false) {
+async function installDesktop(page, systemDark = false, customTitlebar = false) {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   app.systemDark = systemDark;
@@ -13,6 +13,7 @@ async function installDesktop(page, systemDark = false) {
     if (request.method === 'app.system_appearance') {
       return { dark: app.systemDark };
     }
+    if (request.method === 'app.set_titlebar_style') return { custom_overlay: customTitlebar };
     if (request.method === 'terminal.open') return { id: `terminal-${++terminalId}` };
     return app.replyFor(request);
   });
@@ -31,7 +32,13 @@ async function installDesktop(page, systemDark = false) {
     };
     window.titlebarArea = null;
     window.__MoonBit__ = {
-      getTitlebarArea: async () => window.titlebarArea,
+      getTitlebarArea: async () => {
+        if (window.titlebarFullscreen) return null;
+        if (window.customTitlebarHeight) {
+          return { x: 0, y: 0, width: innerWidth - 138, height: window.customTitlebarHeight };
+        }
+        return window.titlebarArea;
+      },
       app: events,
       events,
       openseek: new Proxy({}, {
@@ -39,7 +46,12 @@ async function installDesktop(page, systemDark = false) {
           if (method === 'host.connect') {
             window.desktopEvent('openseek.agent.connected', { protocol: 6 });
           }
-          return window.desktopRequest({ method, params });
+          const reply = await window.desktopRequest({ method, params });
+          if (method === 'app.set_titlebar_style' && reply.custom_overlay) {
+            // The real host rounds to a native row before reporting CSS geometry.
+            window.customTitlebarHeight = Math.round(params.height);
+          }
+          return reply;
         },
       }),
     };
@@ -252,6 +264,73 @@ test('Close follows terminal focus and keeps the remaining terminal usable', asy
   await page.locator('#task').click();
   await closeFocused(page);
   await expect.poll(() => requests('app.close_window').length).toBe(1);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Windows caption row follows the app font and theme and clears in fullscreen', async ({ page }) => {
+  const app = await installDesktop(page, false, true);
+  const root = page.locator('html');
+  const lastStyle = () => app.requests.filter(r => r.method === 'app.set_titlebar_style').at(-1)?.params;
+  const geometry = () => page.evaluate(() => ({
+    preferredHeight: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-header-height')),
+    nativeHeight: window.customTitlebarHeight,
+    rowHeight: document.querySelector('.topbar').getBoundingClientRect().height,
+  }));
+  await expect(root).toHaveClass(/native-titlebar-custom/);
+  const initial = await geometry();
+  expect(initial.rowHeight).toBe(initial.nativeHeight);
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Font size', exact: true }).click();
+  await page.getByRole('option', { name: '22px', exact: true }).click();
+  await expect.poll(async () => (await geometry()).rowHeight).toBeGreaterThan(initial.rowHeight);
+  const resized = await geometry();
+  expect(resized.rowHeight).toBe(resized.nativeHeight);
+  expect(lastStyle().height).toBeCloseTo(resized.preferredHeight);
+  const lightBackground = lastStyle().background_color;
+
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.getByRole('option', { name: 'Dark', exact: true }).click();
+  await expect.poll(() => lastStyle()?.dark).toBe(true);
+  expect(lastStyle().background_color).not.toBe(lightBackground);
+
+  await page.getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('button', { name: 'Dismiss', exact: true }).click();
+  const toggle = page.getByRole('button', { name: 'Show panel', exact: true });
+  await toggle.click();
+  const rows = await page.evaluate(() => {
+    const rows = ['.sidebar-header', '.topbar', '.editor-tabsbar'].map(selector => document.querySelector(selector));
+    const controls = ['.sidebar-toggle', '.sidebar-mode', '.right-panel-toggle', '.editor-tabsbar .tab-add'];
+    return {
+      heights: rows.map(row => row.getBoundingClientRect().height),
+      backgrounds: rows.map(row => getComputedStyle(row).backgroundColor),
+      centers: controls.map(selector => {
+        const { top, height } = document.querySelector(selector).getBoundingClientRect();
+        return top + height / 2;
+      }),
+      nativeBoundary: innerWidth - 138,
+    };
+  });
+  expect(rows.heights).toEqual(Array(3).fill(resized.nativeHeight));
+  for (const center of rows.centers) expect(center).toBeCloseTo(resized.nativeHeight / 2, 1);
+  const rgb = `rgb(${lastStyle().background_color.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ')})`;
+  expect(rows.backgrounds).toEqual(Array(3).fill(rgb));
+  const { x, width } = await page.getByRole('button', { name: 'Hide panel', exact: true }).boundingBox();
+  expect(x + width).toBeLessThanOrEqual(rows.nativeBoundary);
+
+  await page.evaluate(() => {
+    window.titlebarFullscreen = true;
+    window.desktopEvent('openseek.window.chrome_changed', {});
+  });
+  await expect(root).not.toHaveClass(/native-titlebar-(overlay|custom)/);
+  await expect.poll(() => root.evaluate(element => element.style.getPropertyValue('--native-titlebar-right'))).toBe('');
+  expect((await geometry()).rowHeight).toBeCloseTo(resized.preferredHeight, 1);
+  await page.evaluate(() => {
+    window.titlebarFullscreen = false;
+    window.desktopEvent('openseek.window.chrome_changed', {});
+  });
+  await expect(root).toHaveClass(/native-titlebar-custom/);
+  expect((await geometry()).rowHeight).toBe(resized.nativeHeight);
   expect(app.pageErrors).toEqual([]);
 });
 

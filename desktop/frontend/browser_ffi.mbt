@@ -7,10 +7,15 @@ extern "js" fn browser_language_values() -> FixedArray[String] =
   #|() => typeof navigator === 'undefined' ? [] : Array.from(navigator.languages || [navigator.language]).filter(x => typeof x === 'string')
 
 ///|
-extern "js" fn titlebar_overlay_class(
+extern "js" fn titlebar_overlay_classes(
   root : @dom.Element,
   visible : Bool,
-) -> Unit = "(root, visible) => root.classList.toggle('native-titlebar-overlay', visible)"
+  custom : Bool,
+) -> Unit =
+  #| (root, visible, custom) => {
+  #|   root.classList.toggle('native-titlebar-overlay', visible);
+  #|   root.classList.toggle('native-titlebar-custom', visible && custom);
+  #| }
 
 ///|
 // A synchronous bridge throw must become a rejected promise as well.

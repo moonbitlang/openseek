@@ -41,12 +41,7 @@ fn host_prefers_dark(is_desktop : Bool) -> Bool {
 ///|
 /// Mirror the effective model theme onto the document root after update. CSS
 /// owns the palette; the command keeps the DOM write out of the pure handler.
-fn Theme::apply(
-  self : Theme,
-  system_dark : Bool,
-  is_desktop : Bool,
-  dispatch : @cmd.Emit[Msg],
-) -> @cmd.Cmd {
+fn Theme::apply(self : Theme, system_dark : Bool) -> @cmd.Cmd {
   let value = if self.is_dark(system_dark) { "dark" } else { "light" }
   @cmd.batch([
     @cmd.custom_cmd(_ => {
@@ -54,11 +49,6 @@ fn Theme::apply(
         root.set_attribute("data-theme", value)
       }
     }),
-    if is_desktop {
-      app_set_titlebar_theme(dispatch, value == "dark")
-    } else {
-      @cmd.none
-    },
     @fileeditor.apply_theme(value),
   ])
 }

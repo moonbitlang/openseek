@@ -94,7 +94,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
-  border-bottom: 1px solid var(--color-seam);
+  box-shadow: inset 0 -1px var(--color-seam);
   background: var(--color-bg-canvas);
 }
 

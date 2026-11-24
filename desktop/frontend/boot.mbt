@@ -754,6 +754,8 @@ fn main {
           )
           subs.push(
             window_titlebar_subscription(
+              model.theme.is_dark(model.system_dark),
+              model.app_font_size,
               emit.map((_ : Unit) => AppToggleMaximizedRequested),
             ),
           )

@@ -1222,9 +1222,18 @@ pub(all) struct BrowserThemePayload {
 }
 
 ///|
+/// Desired app header style, measured in CSS pixels. Window-local only.
 #derive(Debug, Eq)
-pub(all) struct AppTitlebarThemePayload {
+pub(all) struct AppTitlebarStylePayload {
   dark : Bool
+  height : Double
+  background_color : String
+  symbol_color : String
+}
+
+///|
+pub(all) struct AppTitlebarStyleReply {
+  custom_overlay : Bool
 }
 
 ///|
@@ -2940,26 +2949,6 @@ pub extend WorktreeRemovePayload with Eq::{equal, not_equal}
 pub extend WorktreeRemovePayload with ToJson::{to_json}
 
 ///|
-#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with Debug::{to_repr}
-
-///|
-#deprecated("Use `FromJson::from_json` via the trait instead", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with FromJson::{from_json}
-
-///|
-#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with Eq::{equal, not_equal}
-
-///|
-#deprecated("Use `ToJson::to_json` via the trait instead", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with ToJson::{to_json}
-
-///|
 pub extend BrowserThemePayload with Debug::{to_repr}
 
 ///|
@@ -3818,21 +3807,38 @@ pub impl ToJson for BrowserThemePayload with fn to_json(self) {
 }
 
 ///|
-pub impl FromJson for AppTitlebarThemePayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "AppTitlebarThemePayload")
+pub impl FromJson for AppTitlebarStylePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "AppTitlebarStylePayload")
   {
-    dark: @json.from_json(
-      object.required_json("dark"),
-      path=path.add_key("dark"),
+    dark: object.required_bool("dark"),
+    height: @json.from_json(
+      object.required_json("height"),
+      path=path.add_key("height"),
     ),
+    background_color: object.required_string("background_color"),
+    symbol_color: object.required_string("symbol_color"),
   }
 }
 
 ///|
-pub impl ToJson for AppTitlebarThemePayload with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  fields["dark"] = Json(self.dark)
-  Json(fields)
+pub impl ToJson for AppTitlebarStylePayload with fn to_json(self) {
+  {
+    "dark": Json(self.dark),
+    "height": Json(self.height),
+    "background_color": Json(self.background_color),
+    "symbol_color": Json(self.symbol_color),
+  }
+}
+
+///|
+pub impl FromJson for AppTitlebarStyleReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "AppTitlebarStyleReply")
+  { custom_overlay: object.required_bool("custom_overlay"), }
+}
+
+///|
+pub impl ToJson for AppTitlebarStyleReply with fn to_json(self) {
+  { "custom_overlay": Json(self.custom_overlay) }
 }
 
 ///|

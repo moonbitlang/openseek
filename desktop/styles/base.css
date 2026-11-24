@@ -397,6 +397,18 @@ html.is-resizing-review .review-split-handle {
     var(--resize-handle-line-size, 2px 100%) no-repeat;
 }
 
+/* Share the CSS row size with Proton. The length registration exposes the
+   resolved font-relative value to the titlebar subscription through CSSOM. */
+@property --app-header-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 49px;
+}
+
+:root {
+  --app-header-height: calc(var(--font-size-base) * 46 / 14);
+}
+
 .app {
   /* Vertical and horizontal resize handles share one hit-area size per axis.
      Component styles consume the dimension that matches their seam. */
@@ -434,7 +446,6 @@ html.is-resizing-review .review-split-handle {
     var(--panel-toggle-inline-inset) + var(--titlebar-control-size) +
       var(--titlebar-control-gap)
   );
-  --app-header-height: calc(var(--font-size-base) * 46 / 14);
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
   --sidebar-toggle-inline-inset: max(
     calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
@@ -470,7 +481,17 @@ html.is-resizing-review .review-split-handle {
   transition-delay: var(--drawer-duration);
 }
 
-/* Proton's overlay titlebar lets the page palette paint the native chrome.
+/* Windows uses Proton's actual row height after DIP and zoom rounding. The
+   sidebar header shares the canvas color used by the other header sections
+   and by the native caption buttons. */
+html.native-titlebar-custom .app {
+  --topbar-height: var(--native-titlebar-height);
+}
+html.native-titlebar-custom .app .sidebar-header {
+  background: var(--color-bg-canvas);
+}
+
+/* Proton's overlay titlebar extends the page into window chrome.
    Empty chrome drags the native window; every interactive descendant opts
    back out. Keep these declarations in CSS so newly rendered headers and
    controls receive them without a JavaScript scan. */

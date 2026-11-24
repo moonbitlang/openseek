@@ -2587,7 +2587,7 @@ fn update_msg(
       let next = next.align_new_chats_with_provider(next.focused)
       (
         @cmd.batch([
-          theme.apply(model.system_dark, model.is_desktop, dispatch),
+          theme.apply(model.system_dark),
           apply_app_font_size(app_font_size),
           codex_cmd,
           codex_effort_cmd,
@@ -6573,7 +6573,7 @@ fn update_msg(
         System =>
           (
             @cmd.batch([
-              System.apply(dark, model.is_desktop, dispatch),
+              System.apply(dark),
               browser_set_theme_for_pages(dispatch, model, dark),
             ]),
             model,
@@ -6596,7 +6596,7 @@ fn update_msg(
       } else {
         (
           @cmd.batch([
-            theme.apply(model.system_dark, model.is_desktop, dispatch),
+            theme.apply(model.system_dark),
             browser_set_theme_for_pages(
               dispatch,
               model,

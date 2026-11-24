@@ -878,11 +878,11 @@ pub let app_system_appearance : Command[
 ] = Command("app.system_appearance")
 
 ///|
-/// Set the native window theme without changing the system preference.
-pub let app_set_titlebar_theme : Command[
-  @protocol.AppTitlebarThemePayload,
-  @protocol.EmptyReply,
-] = Command("app.set_titlebar_theme")
+/// Apply the app header's style to this window, without changing the OS theme.
+pub let app_set_titlebar_style : Command[
+  @protocol.AppTitlebarStylePayload,
+  @protocol.AppTitlebarStyleReply,
+] = Command("app.set_titlebar_style")
 
 ///|
 /// Toggle this native desktop window between its maximized and restored
