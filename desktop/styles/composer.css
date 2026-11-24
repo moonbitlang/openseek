@@ -96,11 +96,17 @@
 }
 
 .composer-inner {
+  --composer-input-font-size: var(--font-size-md);
+  /* Keep the controls as tall as a padded line even with the larger phone font. */
+  --composer-control-size: max(
+    2.25rem,
+    calc(var(--composer-input-font-size) * var(--line-height-relaxed) + 2 * var(--space-2))
+  );
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
   border-radius: var(--radius-composer);
   gap: 0 var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2);
 }
 
 /* Fixed columns: the attachment slot collapses when attaching is unavailable,
@@ -139,7 +145,7 @@
 
   .content.terminal-open
     .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
-    grid-template-rows: minmax(2.25rem, 1fr) auto;
+    grid-template-rows: minmax(var(--composer-control-size), 1fr) auto;
     min-height: 6.25rem;
 
     &:has(.mention-tray:not(:empty)) {
@@ -169,7 +175,7 @@
    inside the input rather than pushing the composer out of the pane. */
 .content.terminal-open .composer-inner {
   flex: 0 1 auto;
-  grid-template-rows: minmax(2.25rem, 1fr);
+  grid-template-rows: minmax(var(--composer-control-size), 1fr);
   min-height: 3.5rem;
   width: 100%;
 }
@@ -529,8 +535,9 @@
 
 /* A single line of draft is exactly as tall as the buttons beside it. */
 .composer-input > textarea {
-  min-height: 2.25em;
+  min-height: var(--composer-control-size);
   padding: var(--space-2) var(--space-3);
+  font-size: var(--composer-input-font-size);
 }
 
 /* Menus measure against the toolbar's width, not their trigger's width. */
@@ -635,6 +642,7 @@ button.composer-worktree:hover {
 }
 
 .composer-actions .icon-button {
+  --icon-button-size: var(--composer-control-size);
   border-radius: var(--radius-control);
 }
 
@@ -953,9 +961,9 @@ button.composer-worktree:hover {
 }
 .composer-attach {
   box-sizing: border-box;
-  width: 2.25rem;
-  min-width: 2.25rem;
-  height: 2.25rem;
+  width: var(--composer-control-size);
+  min-width: var(--composer-control-size);
+  height: var(--composer-control-size);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
