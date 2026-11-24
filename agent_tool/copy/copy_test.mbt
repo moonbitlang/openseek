@@ -150,7 +150,7 @@ async test "copy rejects MoonBit source and manifest destinations including syml
     for
       name in [
         "source.mbt", "doc.mbt.md", "script.mbtx", "api.mbti", "pkg.generated.mbti",
-        "moon.mod", "moon.mod.json", "moon.pkg",
+        "moon.mod", "moon.pkg", "moon.work",
       ] {
       guard run_copy(tool, {
           "destination": "new/\{name}",
@@ -166,15 +166,38 @@ async test "copy rejects MoonBit source and manifest destinations including syml
       )
       assert_false(@fs.exists("\{dir}/new"))
     }
-    @fs.write_text("\{dir}/moon.pkg", "import {}\n")
-    @fs.symlink(target="moon.pkg", "\{dir}/alias.bin")
-    guard run_copy(tool, { "destination": "alias.bin", "source": "candidate" })
-      is Respond(out) else {
-      fail("expected response")
+    for name in ["moon.pkg", "moon.work"] {
+      let target = "\{dir}/\{name}"
+      let link_name = "alias-\{name}.bin"
+      @fs.write_text(target, "original")
+      @fs.symlink(target=name, "\{dir}/\{link_name}")
+      guard run_copy(tool, { "destination": link_name, "source": "candidate" })
+        is Respond(out) else {
+        fail("expected response")
+      }
+      assert_true(out.is_error, msg=out.content)
+      assert_true(
+        out.content.contains("non-MoonBit artifacts"),
+        msg=out.content,
+      )
+      assert_eq(@fs.read_text(target), "original")
     }
-    assert_true(out.is_error)
-    assert_true(out.content.contains("non-MoonBit artifacts"), msg=out.content)
-    assert_eq(@fs.read_text("\{dir}/moon.pkg"), "import {}\n")
+  })
+}
+
+///|
+async test "copy treats retired JSON manifest names as ordinary files" {
+  @vfs.with_tmpdir(dir => {
+    let tool = @copy.definition(workspace_root=dir)
+    @fs.write_text("\{dir}/candidate", "{}")
+    for name in ["moon.mod.json", "moon.pkg.json"] {
+      guard run_copy(tool, { "destination": name, "source": "candidate" })
+        is Respond(out) else {
+        fail("expected response")
+      }
+      assert_false(out.is_error, msg=out.content)
+      assert_eq(@fs.read_text("\{dir}/\{name}"), "{}")
+    }
   })
 }
 
