@@ -17497,8 +17497,8 @@ test "switching to the custom provider starts a fresh chat on a saved entry" {
     ),
   )
   assert_true(switched.api_provider() is Custom)
-  assert_true(switched.default_model is Custom("gemini-4-hydrogen"))
-  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen"))
+  assert_true(switched.default_model is Custom("gemini-4-hydrogen", ..))
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
   let chip = switched.openseek_model_chip(switched.active())
   assert_eq(chip.groups[0].options.map(option => option.label), [
     "Gemini 4 Hydrogen", "gemini-4-neon",
@@ -17572,11 +17572,14 @@ test "switching away from the custom provider stops an entry from running" {
     )
     .replace_conversation({
       ..running_conversation(),
-      engine_model: Custom("gemini-4-hydrogen"),
+      engine_model: Custom(
+        "gemini-4-hydrogen",
+        context_window=DefaultContextWindow,
+      ),
     })
   let (_, switched) = update(dispatch, ProviderChanged("deepseek"), on_entry)
   assert_true(switched.api_provider() is Deepseek)
-  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen"))
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
   let chip = switched.openseek_model_chip(switched.active())
   assert_eq(chip.groups[0].options.map(option => option.label), [
     "DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Hydrogen (not served here)",
@@ -17588,7 +17591,10 @@ test "switching away from the custom provider stops an entry from running" {
     ProviderChanged("deepseek"),
     model_with_custom_entries().replace_conversation({
       ..test_conversation(),
-      engine_model: Custom("gemini-4-hydrogen"),
+      engine_model: Custom(
+        "gemini-4-hydrogen",
+        context_window=DefaultContextWindow,
+      ),
     }),
   )
   assert_true(aligned.active().engine_model is Deepseek(V4Flash))
@@ -17632,13 +17638,16 @@ test "deleting a custom model aligns default_model and fresh chats" {
       custom_key_saved=true,
     ),
   )
-  assert_true(switched.default_model is Custom("gemini-4-hydrogen"))
-  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen"))
+  assert_true(switched.default_model is Custom("gemini-4-hydrogen", ..))
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
   // Add a started conversation that also ran on the soon-to-be-deleted entry.
   let with_started = switched.replace_conversation({
     ..running_conversation(),
     session_id: "started-custom",
-    engine_model: Custom("gemini-4-hydrogen"),
+    engine_model: Custom(
+      "gemini-4-hydrogen",
+      context_window=DefaultContextWindow,
+    ),
   })
   // Delete `gemini-4-hydrogen`, leaving `gemini-4-neon`.
   let remaining : Array[@protocol.ModelStatus] = [
@@ -17675,14 +17684,14 @@ test "deleting a custom model aligns default_model and fresh chats" {
     ),
     with_started,
   )
-  assert_true(after_delete.default_model is Custom("gemini-4-neon"))
+  assert_true(after_delete.default_model is Custom("gemini-4-neon", ..))
   assert_true(
     after_delete.find_conversation(Local, "desktop-test").unwrap().engine_model
-    is Custom("gemini-4-neon"),
+    is Custom("gemini-4-neon", ..),
   )
   assert_true(
     after_delete.find_conversation(Local, "started-custom").unwrap().engine_model
-    is Custom("gemini-4-hydrogen"),
+    is Custom("gemini-4-hydrogen", ..),
   )
   // Deleting the last entry resets fresh chats, and adding a new one later
   // aligns them onto the newly added entry automatically.
@@ -17721,10 +17730,10 @@ test "deleting a custom model aligns default_model and fresh chats" {
     ),
     emptied,
   )
-  assert_true(readded.default_model is Custom("gemini-4-argon"))
+  assert_true(readded.default_model is Custom("gemini-4-argon", ..))
   assert_true(
     readded.find_conversation(Local, "desktop-test").unwrap().engine_model
-    is Custom("gemini-4-argon"),
+    is Custom("gemini-4-argon", ..),
   )
 }
 
@@ -17823,7 +17832,10 @@ test "a built-in id added to Custom models runs with built-in controls" {
   // An entry with `images: false` disables image attachments.
   let text_only = with_ds_flash.replace_conversation({
     ..test_conversation(),
-    engine_model: Custom("text-only-custom"),
+    engine_model: Custom(
+      "text-only-custom",
+      context_window=DefaultContextWindow,
+    ),
   })
   assert_false(text_only.composer_input().presentation.images_enabled)
 }

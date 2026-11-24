@@ -27,7 +27,18 @@ async fn resolve_api_connection_probe(
         )
       }
       let (route, _, _, _) = resolve_model_route(settings, id)
-      (parse_model_opt(id).unwrap_or(Custom(id)), route)
+      // A probe names the model it tests, not a run: the id and the protocol
+      // are what the client needs, and the entry's window travels only with an
+      // actual run. The id was validated above, so a parse failure cannot be
+      // reached here.
+      let model = match parse_model_opt(id) {
+        Some(model) => model
+        None =>
+          raise EngineError(
+            "Model \{id} has no name to test. Add it again to test the connection.",
+          )
+      }
+      (model, route)
     }
   }
   Client(
@@ -120,7 +131,10 @@ async test "a per-model connection test reads the saved entry and refuses an unk
       manager,
       payload(Some("own-endpoint")),
     )
-    assert_eq(own.model, Custom("own-endpoint"))
+    assert_eq(
+      own.model,
+      Custom("own-endpoint", context_window=DefaultModelContextWindow),
+    )
     assert_eq(own.api_url, "https://own.example/v1/chat/completions")
     // An entry without an endpoint rides the custom slot, as a run would.
     let shared = resolve_api_connection_probe(

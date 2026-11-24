@@ -1670,17 +1670,26 @@ priv struct CustomModel {
 ///|
 /// The engine model this entry resolves to: a built-in tier when the user
 /// configured one of the build's own ids (keeping its built-in protocol), or
-/// `Custom(id)` otherwise.
+/// `Custom(id)` carrying the window this entry plans against.
 fn CustomModel::engine_model(self : CustomModel) -> @deepseek.Model {
-  parse_engine_model(self.id).unwrap_or(@deepseek.Custom(self.id))
+  parse_engine_model(self.id).unwrap_or(
+    @deepseek.Custom(self.id, context_window=self.context_window),
+  )
 }
 
 ///|
+/// Whether `model` names this entry. A custom id is its identity, and the
+/// window belongs to the entry that named it, so a model parsed from a
+/// session record — which carries the default window — names the same entry.
 fn CustomModel::matches_model(
   self : CustomModel,
   model : @deepseek.Model,
 ) -> Bool {
-  self.engine_model() == model
+  match (parse_engine_model(self.id), model) {
+    (Some(builtin), model) => builtin == model
+    (None, Custom(id, ..)) => id == self.id
+    (None, _) => false
+  }
 }
 
 ///|

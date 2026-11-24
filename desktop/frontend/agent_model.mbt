@@ -394,7 +394,7 @@ test "the model menu lists saved entries under their own names" {
   // provider cannot run says so.
   let stale = openseek_model_group(
     Deepseek,
-    @deepseek.Custom("gone-model"),
+    @deepseek.Custom("gone-model", context_window=DefaultContextWindow),
     saved,
     English,
   )
@@ -402,7 +402,7 @@ test "the model menu lists saved entries under their own names" {
   assert_eq(stale.options[2].label, "gone-model (not served here)")
   let on_entry = openseek_model_group(
     Deepseek,
-    @deepseek.Custom("gemini-4-carbon"),
+    @deepseek.Custom("gemini-4-carbon", context_window=DefaultContextWindow),
     saved,
     English,
   )
@@ -414,7 +414,7 @@ test "the model menu lists saved entries under their own names" {
   // endpoint serves.
   let custom = openseek_model_group(
     Custom,
-    @deepseek.Custom("gemini-4-carbon"),
+    @deepseek.Custom("gemini-4-carbon", context_window=DefaultContextWindow),
     saved,
     English,
   )
