@@ -4,6 +4,55 @@ import XCTest
 @testable import SeekMoon
 
 @MainActor final class SeekMoonTests: XCTestCase {
+    func testAttachmentCameraPurposeIsInAppBundle() throws {
+        let purpose = try XCTUnwrap(Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") as? String)
+        XCTAssertFalse(purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    func testConsoleBlobDownloadsSaveTheirBytesWithoutOverwritingAnEarlierExport() async throws {
+        for key in ["UIFileSharingEnabled", "LSSupportsOpeningDocumentsInPlace"] {
+            XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: key) as? Bool, true)
+        }
+        let web = WKWebView()
+        let loaded = DocumentLoaded()
+        web.navigationDelegate = loaded
+        web.loadHTMLString("<title>Console</title>", baseURL: Console.home)
+        await fulfillment(of: [loaded.loaded], timeout: 10)
+
+        let controller = ConsoleController()
+        web.navigationDelegate = controller
+        let name = UUID().uuidString
+        let documents = URL.documentsDirectory
+        let html = documents.appending(component: name + ".html")
+        let binary = documents.appending(component: name + ".bin")
+        let copy = documents.appending(component: name + " (2).html")
+        defer {
+            for url in [html, binary, copy] { try? FileManager.default.removeItem(at: url) }
+        }
+        let original = Data("previous export".utf8)
+        try original.write(to: html)
+        for (filename, type, bytes, destination) in [
+            (html.lastPathComponent, "text/html;charset=utf-8", Data("<p>conversation</p>".utf8), copy),
+            (binary.lastPathComponent, "application/octet-stream", Data([0, 255, 128]), binary)
+        ] {
+            _ = try await web.callAsyncJavaScript("""
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(new Blob([new Uint8Array(bytes)], {type}));
+                link.download = filename;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+                """, arguments: ["filename": filename, "type": type, "bytes": Array(bytes)], in: nil, contentWorld: .page)
+            let saved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                FileManager.default.fileExists(atPath: destination.path)
+            }, object: nil)
+            await fulfillment(of: [saved], timeout: 8)
+            XCTAssertEqual(try Data(contentsOf: destination), bytes)
+        }
+        XCTAssertEqual(try Data(contentsOf: html), original)
+        XCTAssertEqual(web.url, Console.home)
+        withExtendedLifetime(controller) {}
+    }
+
     func testLoginReturnsThroughOneTimeLoopbackAndUsesTheSameVerifierForExchange() async throws {
         let flow = AccountFlow(scheme: "com.example.seekmoon.test")
         let listener = try CallbackListener(flow: flow)

@@ -4,6 +4,8 @@ Open `ios/SeekMoon.xcodeproj` in Xcode, select **SeekMoon** and an iPhone simula
 
 The app opens the hosted `/cloud` in a persistent WKWebView. Cloud chats need no computer; for Connect, turn on Remote access in the desktop app, sign in with the same account and choose your online computer from the sidebar. The shared MoonBit/Rabbita page owns conversation history, streaming, approvals, stop and reconnection. The iPhone does not run an agent. Internet access is required for launch; a failed document load offers Retry and Open Cloud.
 
+Find exported conversations and downloaded workspace files in **Files → Browse → On My iPhone → SeekMoon**. Downloading the same filename again keeps both copies.
+
 The shell appends `SeekMoonIOS/0.1.0` to the WebView user agent. The public page is the server's selected browser release, not the frontend in your checkout. It may still show browser download links. The prototype has no native command bridge, frontend updater, native push or background socket service. Returning to the foreground keeps the current web view; after process termination the app reopens the last saved Cloud or device page (path only). Unsaved drafts across process termination are not guaranteed.
 
 ## Sign-in

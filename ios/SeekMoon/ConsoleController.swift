@@ -9,6 +9,7 @@ import WebKit
     private let errorText = UILabel()
     private var failedPage: URL?
     private var signIn: SignIn?
+    private var downloads: [WKDownload: (temporaryFile: URL, filename: String)] = [:]
     private let lastPageKey = "console.lastPage"
 
     init() {
@@ -80,6 +81,11 @@ import WebKit
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { decisionHandler(.cancel); return }
+        if url.scheme == "blob", action.shouldPerformDownload {
+            let fromConsole = action.sourceFrame.isMainFrame && Console.isPage(webView.url)
+            decisionHandler(fromConsole ? .download : .cancel)
+            return
+        }
         if action.targetFrame?.isMainFrame == false { decisionHandler(.allow); return }
         if Console.owns(url), url.path == "/v2/auth/login" {
             decisionHandler(.cancel)
@@ -148,5 +154,61 @@ import WebKit
                 }
             }
         }
+    }
+}
+
+extension ConsoleController: WKDownloadDelegate {
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
+                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        let temporaryFile = FileManager.default.temporaryDirectory.appending(component: UUID().uuidString)
+        let basename = (suggestedFilename as NSString).lastPathComponent
+        let filename = ["", ".", "..", "/"].contains(basename) ? "Download" : basename
+        downloads[download] = (temporaryFile, filename)
+        completionHandler(temporaryFile)
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        guard let file = downloads.removeValue(forKey: download) else { return }
+        do {
+            try Self.saveDownload(file.temporaryFile, named: file.filename)
+        } catch {
+            try? FileManager.default.removeItem(at: file.temporaryFile)
+            showDownloadError(error)
+        }
+    }
+
+    private static func saveDownload(_ temporaryFile: URL, named filename: String) throws {
+        let files = FileManager.default
+        let folder = try files.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let name = filename as NSString
+        let suffix = name.pathExtension.isEmpty ? "" : "." + name.pathExtension
+        var candidate = filename
+        var number = 2
+        while true {
+            do {
+                try files.moveItem(at: temporaryFile, to: folder.appending(component: candidate))
+                return
+            } catch CocoaError.fileWriteFileExists {
+                candidate = "\(name.deletingPathExtension) (\(number))\(suffix)"
+                number += 1
+            }
+        }
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        if let file = downloads.removeValue(forKey: download) {
+            try? FileManager.default.removeItem(at: file.temporaryFile)
+        }
+        showDownloadError(error)
+    }
+
+    private func showDownloadError(_ error: Error) {
+        let alert = UIAlertController(title: "Couldn’t save download", message: error.localizedDescription, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
