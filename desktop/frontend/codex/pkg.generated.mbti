@@ -121,6 +121,7 @@ pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Se
 pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::reset_for_channel(Self) -> Self
 pub fn State::restore_navigation_draft(Self, @cmd.Emit[Msg], @interop.ChannelId, String) -> (@cmd.Cmd, Self)?
+pub fn State::run_heartbeat(Self) -> @transcript.RunHeartbeat?
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(locale? : @i18n.Locale, Self) -> Array[@transcript.TranscriptItem]

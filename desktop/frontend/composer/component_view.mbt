@@ -326,7 +326,6 @@ fn Entry::view(
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
   input : Input,
-  clock_ms~ : Double,
 ) -> @html.Html {
   ignore(locale)
   let goal_mode = input.goal.draft is Some(_)
@@ -353,12 +352,6 @@ fn Entry::view(
     if component.render(locale~, self.identity(), action_emit) is Some(html) {
       context[key] = html
     }
-  }
-  // Closest to the textarea: the turn's own liveness is what the person
-  // waiting is watching for, and the wait is spent looking here rather than
-  // at the top bar.
-  if running_row(locale~, input.run, clock_ms~) is Some(row) {
-    context["running"] = row
   }
   if input.goal.view(locale~, self.identity(), action_emit) is Some(row) {
     context["goal"] = row

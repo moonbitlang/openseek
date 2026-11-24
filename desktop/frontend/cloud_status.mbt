@@ -36,7 +36,7 @@ fn Model::cloud_display_status(self : Model) -> Status? {
   if conversation.generating {
     return Some(
       match conversation.heartbeat {
-        Some({ stage: @composer.AtStep(step), .. }) => Step(Some(step))
+        Some({ stage: @transcript.AtStep(step), .. }) => Step(Some(step))
         _ => Running
       },
     )

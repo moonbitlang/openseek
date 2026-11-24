@@ -28,7 +28,7 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(status).toHaveText('Ready');
     await page.locator('#task').fill('Explain the input');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
-    const heartbeat = page.locator('.composer-running-text');
+    const heartbeat = page.locator('#stream > .transcript-run-status:last-child');
     const reasoning = page.locator('#transcript .activity-thinking');
     await expect(heartbeat).toHaveText('Thinking…');
     await expect(status).toHaveText('Running');

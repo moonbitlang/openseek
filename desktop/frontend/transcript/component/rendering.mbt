@@ -608,10 +608,14 @@ fn Block::render(
 /// its own element while its siblings move, appear, or leave.
 fn keyed_stream(
   rendered : @vector.Vector[(String, @html.Html)],
+  run_status : @html.Html?,
 ) -> Map[String, @html.Html] {
   let children : Map[String, @html.Html] = Map([])
   for pair in rendered {
     children[pair.0] = pair.1
+  }
+  if run_status is Some(row) {
+    children["run-status"] = row
   }
   children
 }

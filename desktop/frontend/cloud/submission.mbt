@@ -85,7 +85,7 @@ fn State::send_pending(
         send_request: request,
         sending: true,
         heartbeat: Some({
-          stage: @composer.Starting,
+          stage: @transcript.Starting,
           started_ms: None,
           tokens: 0,
         }),

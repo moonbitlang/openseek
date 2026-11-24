@@ -148,8 +148,8 @@ pub(all) struct Conversation {
   // The task whose start this observation connection delivered.
   live_task : String?
   assistant_handoffs : Map[String, Int32]
-  heartbeat : @composer.RunHeartbeat?
-  retrying : @composer.RunStage?
+  heartbeat : @transcript.RunHeartbeat?
+  retrying : @transcript.RunStage?
   controls : @engine_session.State
   // The permission question this client answered, kept answered until the
   // control snapshot settles it or publishes another.
