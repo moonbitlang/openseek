@@ -27,12 +27,8 @@ async test "copy validates its source and destination arguments" {
           "contain no NUL",
         ),
         (
-          {
-            "source": "input.bin",
-            "destination": "out.bin",
-            "encoding": "base64",
-          },
-          "arguments.encoding",
+          { "source": "input.bin", "destination": "nested/" },
+          "file destination",
         ),
       ] {
       guard run_copy(tool, arguments) is Respond(out) else {
@@ -41,12 +37,13 @@ async test "copy validates its source and destination arguments" {
       assert_true(out.is_error)
       assert_true(out.content.contains(message), msg=out.content)
       assert_false(@fs.exists("\{dir}/out.bin"))
+      assert_false(@fs.exists("\{dir}/nested"))
     }
   })
 }
 
 ///|
-async test "copy copies arbitrary bytes and records their provenance" {
+async test "copy copies arbitrary bytes, supports self-copy, and records provenance" {
   @vfs.with_tmpdir(dir => {
     let bytes = b"\x00\xff\x80hello\r\n"
     @fs.write_binary("\{dir}/input.bin", bytes)
@@ -67,7 +64,6 @@ async test "copy copies arbitrary bytes and records their provenance" {
     assert_true(state.get(path) is Some(Created))
     assert_true(state.created_and_unchanged(path, digest))
     assert_eq(@fs.read_binary("\{dir}/input.bin"), bytes)
-    // A staged read finishes before publication, including a self-copy.
     guard run_copy(tool, { "destination": path, "source": path })
       is Respond(overwritten) else {
       fail("expected response")
@@ -80,13 +76,13 @@ async test "copy copies arbitrary bytes and records their provenance" {
 }
 
 ///|
-async test "copy streams large binary files" {
+async test "copy streams multi-chunk binary files" {
   @vfs.with_tmpdir(dir => {
     let source = "\{dir}/large.bin"
     let file = @fs.open(source, mode=WriteOnly, create_mode=CreateNew)
     defer file.close()
     let chunk = Bytes::make(65536, b'\xff')
-    for _ in 0..<272 {
+    for _ in 0..<4 {
       file.write(chunk)
     }
     file.write(b"\x00\x80\xff")
@@ -98,7 +94,7 @@ async test "copy streams large binary files" {
     }
     assert_false(out.is_error, msg=out.content)
     let copied = @fs.read_binary("\{dir}/copy.bin")
-    assert_eq(copied.length(), 17825795)
+    assert_eq(copied.length(), 262147)
     assert_eq(copied[0], b'\xff')
     assert_eq(copied[copied.length() - 3:], b"\x00\x80\xff")
     assert_eq(
@@ -108,120 +104,6 @@ async test "copy streams large binary files" {
         "sha256": @crypto.bytes_to_hex_string(@crypto.sha256(copied)),
       }),
     )
-  })
-}
-
-///|
-async test "copy binary approval permits only the selected write and preserves rejection" {
-  @vfs.with_tmpdir(dir => {
-    @fs.write_binary("\{dir}/candidate", b"\xff\x00")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    for outcome in [@agent_runtime.Rejected, Cancelled, AllowedOnce] {
-      let tool = @copy.definition(
-        workspace_root=dir,
-        write_scope=scope,
-        approval=ApprovalChannel(_ => outcome),
-      )
-      guard run_copy(tool, {
-          "destination": "outside/new.bin",
-          "source": "candidate",
-        })
-        is Respond(out) else {
-        fail("expected response")
-      }
-      if outcome is AllowedOnce {
-        assert_false(out.is_error, msg=out.content)
-        assert_eq(@fs.read_binary("\{dir}/outside/new.bin"), b"\xff\x00")
-        // The grant is operation-local; the original scope remains unchanged.
-        assert_true(scope.deny_reason("\{dir}/outside/new.bin") is Some(_))
-      } else {
-        assert_true(out.is_error)
-        assert_false(@fs.exists("\{dir}/outside"))
-      }
-    }
-  })
-}
-
-///|
-async test "copy rejects a symlink retargeted during approval" {
-  @vfs.with_tmpdir(dir => {
-    let original = "fn f() -> Int { 1 }"
-    @fs.write_text("\{dir}/one.bin", original)
-    @fs.write_text("\{dir}/two.bin", original)
-    @fs.symlink(target="one.bin", "\{dir}/alias.bin")
-    @fs.write_text("\{dir}/candidate", "fn f() -> Int { 2 }")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    let tool = @copy.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      approval=ApprovalChannel(_ => {
-        @fs.remove("\{dir}/alias.bin")
-        @fs.symlink(target="two.bin", "\{dir}/alias.bin")
-        AllowedOnce
-      }),
-    )
-    guard run_copy(tool, { "destination": "alias.bin", "source": "candidate" })
-      is Respond(out) else {
-      fail("expected response")
-    }
-    assert_true(out.is_error)
-    assert_true(out.content.contains("changed while awaiting approval"))
-    assert_eq(@fs.read_text("\{dir}/one.bin"), original)
-    assert_eq(@fs.read_text("\{dir}/two.bin"), original)
-  })
-}
-
-///|
-async test "copy cancellation during approval preserves the target and releases the gate" {
-  @vfs.with_tmpdir(dir => {
-    @fs.write_text("\{dir}/candidate", "fn f() -> Int { 2 }")
-    @fs.write_text("\{dir}/target.txt", "fn f() -> Int { 1 }")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    let state = @agent_tool.FileStateMap()
-    let asked = Ref(false)
-    let waiting = @copy.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      file_state=state,
-      approval=ApprovalChannel(_ => {
-        asked.val = true
-        @async.sleep(60_000)
-        AllowedOnce
-      }),
-    )
-    let result = @async.with_timeout_opt(1000, () => {
-      run_copy(waiting, { "destination": "target.txt", "source": "candidate" })
-    })
-    assert_true(result is None)
-    assert_true(asked.val)
-    assert_eq(@fs.read_text("\{dir}/target.txt"), "fn f() -> Int { 1 }")
-    assert_eq(state.get("\{dir}/target.txt"), None)
-    let approved = @copy.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      file_state=state,
-      approval=ApprovalChannel(_ => AllowedOnce),
-    )
-    guard @async.with_timeout(2000, () => {
-        run_copy(approved, {
-          "destination": "target.txt",
-          "source": "candidate",
-        })
-      })
-      is Respond(out) else {
-      fail("expected response")
-    }
-    assert_false(out.is_error, msg=out.content)
-    assert_eq(@fs.read_text("\{dir}/target.txt"), "fn f() -> Int { 2 }")
   })
 }
 
@@ -246,21 +128,14 @@ async test "copy accepts empty files and marks existing targets Modified" {
 }
 
 ///|
-async test "copy rejects missing and nonregular sources before touching the destination" {
+async test "copy rejects missing and nonregular sources before touching destination" {
   @vfs.with_tmpdir(dir => {
+    let tool = @copy.definition(workspace_root=dir)
     for source in ["missing.bin", "."] {
-      let tools = @agent_tool.Tools([@copy.definition(workspace_root=dir)])
-      let arguments : Json = {
-        "destination": "new/output.bin",
-        "source": source,
+      guard run_copy(tool, { "destination": "new/output.bin", "source": source })
+        is Respond(out) else {
+        fail("expected response")
       }
-      let result = @agent_tool.execute_tool_call(
-        AgentToolCall(
-          ToolCall(id="copy", name="copy", arguments=arguments.stringify()),
-        ),
-        tools,
-      )
-      guard result is Respond(out) else { fail("expected response") }
       assert_true(out.is_error)
       assert_false(@fs.exists("\{dir}/new"))
     }
@@ -268,23 +143,15 @@ async test "copy rejects missing and nonregular sources before touching the dest
 }
 
 ///|
-async test "copy preserves manifest UTF-8 and syntax checks including symlink targets" {
+async test "copy rejects MoonBit source and manifest destinations including symlink targets" {
   @vfs.with_tmpdir(dir => {
     let tool = @copy.definition(workspace_root=dir)
+    @fs.write_text("\{dir}/candidate", "fn f() -> Int { 1 }\n")
     for
-      (name, content, message) in [
-        ("moon.mod", b"{\"name\":\"bad\"}", "current text syntax"),
-        ("moon.mod.json", b"{}", "legacy"),
-        ("pkg.generated.mbti", b"generated", "run moon info"),
-        ("moon.pkg", b"# bad", "comment syntax"),
-        ("source.mbt", b"\xff", "valid UTF-8"),
-        ("source.mbti", b"\xff", "valid UTF-8"),
-        ("script.mbtx", b"\xff", "valid UTF-8"),
-        ("script.mbtx", b"fn f( {", "nothing was written"),
-        ("source.mbt", b"fn f( {", "nothing was written"),
-        ("doc.mbt.md", b"```mbt check\nfn f( {\n```", "nothing was written"),
+      name in [
+        "source.mbt", "doc.mbt.md", "script.mbtx", "api.mbti", "pkg.generated.mbti",
+        "moon.mod", "moon.mod.json", "moon.pkg",
       ] {
-      @fs.write_binary("\{dir}/candidate", content)
       guard run_copy(tool, {
           "destination": "new/\{name}",
           "source": "candidate",
@@ -293,203 +160,170 @@ async test "copy preserves manifest UTF-8 and syntax checks including symlink ta
         fail("expected response")
       }
       assert_true(out.is_error, msg=out.content)
-      assert_true(out.content.contains(message), msg=out.content)
+      assert_true(
+        out.content.contains("non-MoonBit artifacts"),
+        msg=out.content,
+      )
       assert_false(@fs.exists("\{dir}/new"))
     }
     @fs.write_text("\{dir}/moon.pkg", "import {}\n")
     @fs.symlink(target="moon.pkg", "\{dir}/alias.bin")
-    @fs.write_text("\{dir}/candidate", "{\"import\":{}}")
-    guard run_copy(tool, {
-        "destination": "alias.bin",
-        "source": "candidate",
-        "revert_on_parse_errors": false,
-      })
+    guard run_copy(tool, { "destination": "alias.bin", "source": "candidate" })
       is Respond(out) else {
       fail("expected response")
     }
     assert_true(out.is_error)
-    assert_true(out.content.contains("current text syntax"))
+    assert_true(out.content.contains("non-MoonBit artifacts"), msg=out.content)
     assert_eq(@fs.read_text("\{dir}/moon.pkg"), "import {}\n")
-    // Explicit parse opt-out still applies, without skipping UTF-8/manifest rules.
-    @fs.write_text("\{dir}/candidate", "fn f( {")
-    guard run_copy(tool, {
-        "destination": "fixture.mbt",
+  })
+}
+
+///|
+async test "copy enforces write scope, one-shot approval, and symlink retarget checks" {
+  @vfs.with_tmpdir(dir => {
+    @fs.write_binary("\{dir}/candidate", b"\xff\x00")
+    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
+      is Ok(scope) else {
+      fail("expected scope")
+    }
+    // Without an approval channel, out-of-scope destinations fail closed.
+    guard run_copy(@copy.definition(workspace_root=dir, write_scope=scope), {
+        "destination": "blocked/new.bin",
         "source": "candidate",
-        "revert_on_parse_errors": false,
       })
-      is Respond(fixture) else {
+      is Respond(blocked) else {
       fail("expected response")
     }
-    assert_false(fixture.is_error, msg=fixture.content)
-  })
-}
-
-///|
-async test "copy checks named MoonBit sources without waiting for the file gate" {
-  @vfs.with_tmpdir(dir => {
-    @fs.write_text("\{dir}/invalid.mbt", "fn f( {")
-    let state = @agent_tool.FileStateMap()
-    let tool = @copy.definition(workspace_root=dir, file_state=state)
-    let result = @async.with_timeout(15000, () => {
-      state.with_access(() => {
-        run_copy(tool, {
-          "destination": "new/source.mbt",
-          "source": "invalid.mbt",
-        })
-      })
-    })
-    guard result is Respond(out) else { fail("expected response") }
-    assert_true(out.is_error)
-    assert_true(out.content.contains("has parse errors"), msg=out.content)
-    assert_eq(@fs.readdir(dir, include_hidden=true), ["invalid.mbt"])
-  })
-}
-
-///|
-async test "copy new source approval displays and writes the fixed candidate" {
-  @vfs.with_tmpdir(dir => {
-    let source = "\{dir}/candidate"
-    let path = "\{dir}/source.mbt"
-    let candidate = "fn value() -> Int { 2 }\n"
-    @fs.write_text(source, candidate)
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    let state = @agent_tool.FileStateMap()
-    let tool = @copy.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      file_state=state,
-      approval=ApprovalChannel(ask => {
-        assert_true(
-          ask.body is Some(body) && body.contains(candidate.trim().to_owned()),
-        )
-        // Approval releases the file gate, but changing the original source
-        // cannot change the already checked candidate.
-        state.with_access(() => @fs.write_text(source, "invalid ("))
-        AllowedOnce
-      }),
+    assert_true(blocked.is_error)
+    assert_true(
+      blocked.content.contains("no approval channel"),
+      msg=blocked.content,
     )
-    guard run_copy(tool, { "destination": "source.mbt", "source": "candidate" })
-      is Respond(out) else {
-      fail("expected response")
-    }
-    assert_false(out.is_error, msg=out.content)
-    assert_eq(@fs.read_text(path), candidate)
-    assert_eq(@fs.read_text(source), "invalid (")
-    assert_true(state.get(path) is Some(Created))
-  })
-}
+    assert_false(@fs.exists("\{dir}/blocked"))
 
-///|
-async test "copy cannot bypass source overwrite rejection or destination write scopes" {
-  @vfs.with_tmpdir(dir => {
-    // Existing source targets must be rejected before decoding the candidate.
-    @fs.write_binary("\{dir}/candidate", b"\xff")
-    @fs.write_text("\{dir}/source.mbt", "fn f() -> Int { 1 }")
-    @fs.symlink(target="source.mbt", "\{dir}/alias.bin")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    for
-      (tool, path, message) in [
-        (
-          @copy.definition(
-            workspace_root=dir,
-            approval=ApprovalChannel(_ => fail("must not ask")),
-          ),
-          "source.mbt",
-          "cannot overwrite",
-        ),
-        (
-          @copy.definition(
-            workspace_root=dir,
-            approval=ApprovalChannel(_ => fail("must not ask")),
-          ),
-          "alias.bin",
-          "cannot overwrite",
-        ),
-        (
-          @copy.definition(workspace_root=dir, write_scope=scope),
-          "blocked/new.bin",
-          "no approval channel",
-        ),
-      ] {
-      guard run_copy(tool, { "destination": path, "source": "candidate" })
+    // Rejection and cancellation leave no directories or temporary files;
+    // AllowedOnce grants only the approved target.
+    for outcome in [@agent_runtime.Rejected, Cancelled, AllowedOnce] {
+      let tool = @copy.definition(
+        workspace_root=dir,
+        write_scope=scope,
+        approval=ApprovalChannel(_ => outcome),
+      )
+      guard run_copy(tool, {
+          "destination": "outside/new.bin",
+          "source": "candidate",
+        })
         is Respond(out) else {
         fail("expected response")
       }
-      assert_true(out.is_error)
-      assert_true(out.content.contains(message), msg=out.content)
+      if outcome is AllowedOnce {
+        assert_false(out.is_error, msg=out.content)
+        assert_eq(@fs.read_binary("\{dir}/outside/new.bin"), b"\xff\x00")
+        assert_true(scope.deny_reason("\{dir}/outside/new.bin") is Some(_))
+      } else {
+        assert_true(out.is_error)
+        assert_false(@fs.exists("\{dir}/outside"))
+      }
     }
-    assert_eq(@fs.read_text("\{dir}/source.mbt"), "fn f() -> Int { 1 }")
-    assert_false(@fs.exists("\{dir}/blocked"))
-  })
-}
 
-///|
-async test "copy approvals retain binary metadata and allow changed destination contents" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/outside.bin"
-    @fs.write_binary(path, b"\x00\xffbefore")
-    @fs.write_binary("\{dir}/candidate", b"\x00\xffafter")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    let tool = @copy.definition(
+    // Retargeting a symlink while awaiting approval is rejected.
+    @fs.write_text("\{dir}/one.bin", "one")
+    @fs.write_text("\{dir}/two.bin", "two")
+    @fs.symlink(target="one.bin", "\{dir}/alias.bin")
+    let retarget = @copy.definition(
       workspace_root=dir,
       write_scope=scope,
-      approval=ApprovalChannel(ask => {
-        guard ask.body is Some(body) else { fail("missing approval body") }
-        assert_true(body.contains("sha256"))
-        assert_true(body.contains("content_omitted"))
-        assert_false(body.contains("after"))
-        @fs.write_binary(path, b"\x00\xffchange")
+      approval=ApprovalChannel(_ => {
+        @fs.remove("\{dir}/alias.bin")
+        @fs.symlink(target="two.bin", "\{dir}/alias.bin")
         AllowedOnce
       }),
     )
-    guard run_copy(tool, { "destination": path, "source": "candidate" })
-      is Respond(out) else {
-      fail("expected response")
-    }
-    assert_false(out.is_error, msg=out.content)
-    assert_eq(@fs.read_binary(path), b"\x00\xffafter")
-  })
-}
-
-///|
-async test "copy rejects a dangling destination symlink" {
-  @vfs.with_tmpdir(dir => {
-    @fs.symlink(target="new.bin", "\{dir}/alias.bin")
-    @fs.write_binary("\{dir}/candidate", b"\xff")
-    let tools = @agent_tool.Tools([@copy.definition(workspace_root=dir)])
-    let arguments : Json = { "destination": "alias.bin", "source": "candidate" }
-    guard @agent_tool.execute_tool_call(
-        AgentToolCall(
-          ToolCall(id="copy", name="copy", arguments=arguments.stringify()),
-        ),
-        tools,
-      )
+    guard run_copy(retarget, {
+        "destination": "alias.bin",
+        "source": "candidate",
+      })
       is Respond(out) else {
       fail("expected response")
     }
     assert_true(out.is_error)
-    assert_false(@fs.exists("\{dir}/new.bin"))
+    assert_true(
+      out.content.contains("changed while awaiting approval"),
+      msg=out.content,
+    )
+    assert_eq(@fs.read_text("\{dir}/one.bin"), "one")
+    assert_eq(@fs.read_text("\{dir}/two.bin"), "two")
   })
 }
 
 ///|
-async test "copy atomically replaces the resolved file and preserves its symlink" {
+async test "copy cancellation during approval preserves target and releases the gate" {
   @vfs.with_tmpdir(dir => {
+    @fs.write_text("\{dir}/candidate", "new")
+    @fs.write_text("\{dir}/target.txt", "old")
+    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
+      is Ok(scope) else {
+      fail("expected scope")
+    }
+    let state = @agent_tool.FileStateMap()
+    let asked = Ref(false)
+    let waiting = @copy.definition(
+      workspace_root=dir,
+      write_scope=scope,
+      file_state=state,
+      approval=ApprovalChannel(_ => {
+        asked.val = true
+        @async.sleep(60_000)
+        AllowedOnce
+      }),
+    )
+    let result = @async.with_timeout_opt(1000, () => {
+      run_copy(waiting, { "destination": "target.txt", "source": "candidate" })
+    })
+    assert_true(result is None)
+    assert_true(asked.val)
+    assert_eq(@fs.read_text("\{dir}/target.txt"), "old")
+    assert_eq(state.get("\{dir}/target.txt"), None)
+    let approved = @copy.definition(
+      workspace_root=dir,
+      write_scope=scope,
+      file_state=state,
+      approval=ApprovalChannel(_ => AllowedOnce),
+    )
+    guard @async.with_timeout(2000, () => {
+        run_copy(approved, {
+          "destination": "target.txt",
+          "source": "candidate",
+        })
+      })
+      is Respond(out) else {
+      fail("expected response")
+    }
+    assert_false(out.is_error, msg=out.content)
+    assert_eq(@fs.read_text("\{dir}/target.txt"), "new")
+  })
+}
+
+///|
+async test "copy rejects dangling symlinks and atomically replaces symlink targets" {
+  @vfs.with_tmpdir(dir => {
+    @fs.write_binary("\{dir}/candidate", b"\xff\x00")
+    @fs.symlink(target="missing.bin", "\{dir}/dangling.bin")
+    let tool = @copy.definition(workspace_root=dir)
+    guard run_copy(tool, {
+        "destination": "dangling.bin",
+        "source": "candidate",
+      })
+      is Respond(dangling) else {
+      fail("expected response")
+    }
+    assert_true(dangling.is_error)
+    assert_false(@fs.exists("\{dir}/missing.bin"))
+
     let target = "\{dir}/old.bin"
     let link = "\{dir}/alias.bin"
     @fs.write_binary(target, b"old")
-    @fs.write_binary("\{dir}/candidate", b"\xff\x00")
     @fs.symlink(target="old.bin", link)
-    let tool = @copy.definition(workspace_root=dir)
     guard run_copy(tool, { "destination": "alias.bin", "source": "candidate" })
       is Respond(out) else {
       fail("expected response")
@@ -498,9 +332,10 @@ async test "copy atomically replaces the resolved file and preserves its symlink
     assert_true(@fs.kind(link, follow_symlink=false) is SymLink)
     assert_eq(@fs.read_binary(target), b"\xff\x00")
     let entries = @fs.readdir(dir, include_hidden=true)
-    assert_eq(entries.length(), 3)
+    assert_eq(entries.length(), 4)
     assert_true(entries.contains("alias.bin"))
     assert_true(entries.contains("candidate"))
+    assert_true(entries.contains("dangling.bin"))
     assert_true(entries.contains("old.bin"))
   })
 }

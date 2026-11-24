@@ -6,8 +6,6 @@ import {
 }
 
 // Values
-pub async fn publish_staged_file(String, String, replace~ : Bool) -> Unit
-
 pub async fn write_atomic(String, async (@fs.File) -> Unit, replace~ : Bool, permission? : Int32, before_commit? : async () -> Unit) -> Unit
 
 pub async fn write_text_atomic(String, String, permission? : Int32) -> Unit

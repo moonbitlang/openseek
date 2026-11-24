@@ -48,23 +48,12 @@ pub async fn write_atomic(
   if before_commit is Some(recheck) {
     recheck()
   }
-  publish_staged_file(temp, path, replace~)
-}
-
-///|
-/// Publish a closed temporary file on the destination filesystem. The caller
-/// owns temporary-file cleanup and has already checked the destination.
-pub async fn publish_staged_file(
-  staged : String,
-  destination : String,
-  replace~ : Bool,
-) -> Unit {
-  // Honor cancellation before committing. Once the rename is submitted, wait
-  // for its result so the caller can record the committed write.
+  // Honor cancellation that arrived while acquiring the handle, including for
+  // an empty write. Otherwise do not yield between the caller's check and rename.
   if @async.is_being_cancelled() {
     @async.pause()
   }
-  @async.protect_from_cancel(() => @fs.rename(staged, destination, replace~))
+  @async.protect_from_cancel(() => @fs.rename(temp, path, replace~))
 }
 
 ///|

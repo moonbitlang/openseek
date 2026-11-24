@@ -19,19 +19,13 @@ pub async fn content_parse_errors(String, String) -> ParseGate?
 
 pub async fn count_errors(String) -> CheckErrors?
 
-pub async fn file_parse_errors(String) -> ParseGate?
-
 pub fn format_parse_gate_errors(String, String, Array[ParseGateError]) -> Array[String]
 
 pub fn gate_paths(String, String) -> Array[String]
 
-pub fn gate_scratch_name(String) -> String?
-
 pub fn introduced(CheckErrors, CheckErrors) -> Introduced
 
 pub async fn package_graph(String) -> PackageGraph?
-
-pub async fn write_parse_error(String, String, String) -> ParseGate?
 
 // Errors
 

@@ -3,7 +3,7 @@ import {
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool/write_scope",
   "moonbitlang/core/async/fs",
-  "moonbitlang/openseek/agent_tool/internal/file_content",
+  "moonbitlang/x/crypto",
 }
 
 warnings = "+unnecessary_annotation"

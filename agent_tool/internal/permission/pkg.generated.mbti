@@ -9,14 +9,11 @@ import {
 }
 
 // Values
-pub async fn authorize(Array[String], target_path~ : String, tool_name~ : String, arguments~ : @json.Json, file_state~ : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel, reason? : String, check_contents? : Bool) -> Authorization
+pub async fn authorize(Array[String], target_path~ : String, tool_name~ : String, arguments~ : @json.Json, file_state~ : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel, reason? : String) -> @write_scope.WriteScope?
 
 // Errors
 
 // Types and methods
-type Authorization
-pub async fn Authorization::deny_reason(Self, String) -> String?
-pub async fn Authorization::recheck(Self) -> Unit
 
 // Type aliases
 

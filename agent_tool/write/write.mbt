@@ -148,34 +148,36 @@ async fn write_file(
   // `alias.txt -> moon.pkg`) is caught too. A non-parsing file is never a
   // valid intermediate state; syntax failures never become approval requests.
   // Fail-open: when the gate cannot run (moonc missing), write as usual.
-  if input.revert_on_parse_errors &&
-    @auto_check.write_parse_error(path, target, input.content) is Some(gate) {
-    let bound = if gate.truncated { "≥" } else { "" }
-    return @agent_tool.respond(
-      write_reject_report(path, input.content, gate),
-      is_error=true,
-      brief="write rejected (\{bound}\{gate.errors.length()} parse error(s))",
-    )
+  if input.revert_on_parse_errors {
+    for gate_path in @auto_check.gate_paths(path, target) {
+      let gate = @auto_check.content_parse_errors(gate_path, input.content) catch {
+        _ => None
+      }
+      if gate is Some(gate) && gate.errors.length() > 0 {
+        let bound = if gate.truncated { "≥" } else { "" }
+        return @agent_tool.respond(
+          write_reject_report(path, input.content, gate),
+          is_error=true,
+          brief="write rejected (\{bound}\{gate.errors.length()} parse error(s))",
+        )
+      }
+    }
   }
-  let authorization = try {
-    let authorization = @permission.authorize(
-      [path],
-      target_path=path,
-      tool_name="write",
-      arguments={ "path": path, "content": input.content },
-      file_state~,
-      write_scope?,
-      approval?,
-    )
-    authorization.recheck()
-    authorization
-  } catch {
+  let write_scope = @permission.authorize(
+    [path],
+    target_path=path,
+    tool_name="write",
+    arguments={ "path": path, "content": input.content },
+    file_state~,
+    write_scope?,
+    approval?,
+  ) catch {
     error => return err(@tool_error.failure_message("\{error}"))
   }
   // Containment re-check at the moment of writing (before parent directories
   // are created for the target): the early gate decided on filesystem state
   // that awaits ago may have changed underneath the tool.
-  if authorization.deny_reason(path) is Some(reason) {
+  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
     return err("write blocked: \{reason}")
   }
   if @fs.exists(path) && (@fs.realpath(path) catch { _ => path }) != target {

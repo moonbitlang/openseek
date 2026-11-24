@@ -52,7 +52,7 @@ const MooncParseMaxOutputChars : Int32 = 200000
 /// command always runs from the scratch directory against this bare name, so the
 /// command line never embeds a host path that would need platform-specific
 /// quoting.
-pub fn gate_scratch_name(path : String) -> String? {
+fn gate_scratch_name(path : String) -> String? {
   if path.has_suffix(".mbt.md") {
     Some("parse_gate.mbt.md")
   } else if path.has_suffix(".mbt") {
@@ -118,22 +118,6 @@ pub(all) struct ParseGate {
 }
 
 ///|
-/// Check the candidate against the requested and resolved destination kinds.
-pub async fn write_parse_error(
-  path : String,
-  target : String,
-  content : String,
-) -> ParseGate? {
-  for gate_path in gate_paths(path, target) {
-    let gate = content_parse_errors(gate_path, content) catch { _ => None }
-    if gate is Some(gate) && !gate.errors.is_empty() {
-      return Some(gate)
-    }
-  }
-  None
-}
-
-///|
 /// Parse `content` as the standalone `moonc syncheck` input named by `path`'s
 /// kind and return its lex/parse errors (empty `errors` = parses cleanly).
 /// `path` only selects the scratch-file name (its input kind) — it is never
@@ -145,6 +129,11 @@ pub async fn content_parse_errors(
   content : String,
 ) -> ParseGate? {
   guard gate_scratch_name(path) is Some(scratch_name) else { return None }
+  let frontmatter_args = if scratch_name.has_suffix(".mbtx") {
+    ["-mbtx-frontmatter", "true"]
+  } else {
+    []
+  }
   let dir = @fs.tmpdir(prefix="openseek-parse-gate-") catch { _ => return None }
   // Best-effort cleanup on every path; a leaked scratch dir must never turn
   // into a raised error that masks the gate's answer.
@@ -155,34 +144,10 @@ pub async fn content_parse_errors(
       content,
       create_mode=CreateOrTruncate,
     )
-    syncheck(dir, scratch_name)
-  } catch {
-    _ => None
-  }
-}
-
-///|
-/// Check a file whose name already identifies the intended MoonBit input kind.
-pub async fn file_parse_errors(path : String) -> ParseGate? {
-  guard gate_scratch_name(path) is Some(_) else { return None }
-  let dir = @workspace_path.parent_dir_preserving_separators(path).unwrap_or(
-    ".",
-  )
-  syncheck(dir, @workspace_path.path_basename(path))
-}
-
-///|
-async fn syncheck(dir : String, name : String) -> ParseGate? {
-  let frontmatter_args = if name.has_suffix(".mbtx") {
-    ["-mbtx-frontmatter", "true"]
-  } else {
-    []
-  }
-  try {
     let result = @async.with_timeout_opt(MooncParseTimeoutMs, () => {
       collect_process_output(
         "moonc",
-        ["syncheck", "-error-format", "json", ..frontmatter_args, "./\{name}"],
+        ["syncheck", "-error-format", "json", ..frontmatter_args, scratch_name],
         cwd=dir,
         max_output_chars=MooncParseMaxOutputChars,
       )

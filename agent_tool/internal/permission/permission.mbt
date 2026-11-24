@@ -10,70 +10,22 @@ priv enum Contents {
 #derive(Eq)
 priv struct Snapshot {
   destination : String
-  contents : Contents?
+  contents : Contents
 }
 
 ///|
-/// The one-operation scope and the observed state of its targets.
-struct Authorization {
-  scope : @write_scope.WriteScope?
-  snapshots : Array[(String, Snapshot)]
-}
-
-///|
-/// Check the current destination against this operation's effective scope.
-pub async fn Authorization::deny_reason(
-  self : Authorization,
-  path : String,
-) -> String? {
-  match self.scope {
-    Some(scope) => scope.deny_reason(path)
-    None => None
-  }
-}
-
-///|
-/// Compare the targets with their authorized snapshots. Call this with the
-/// file gate held, after preparing any temporary data and just before mutation.
-pub async fn Authorization::recheck(self : Authorization) -> Unit {
-  for (path, before) in self.snapshots {
-    let current = snapshot(
-      path,
-      self.scope,
-      include_contents=before.contents is Some(_),
-    )
-    guard current == before else {
-      fail(
-        "target changed while awaiting approval or preparing the operation; reconsider and retry",
-      )
-    }
-  }
-}
-
-///|
-async fn snapshot(
-  path : String,
-  scope : @write_scope.WriteScope?,
-  include_contents~ : Bool,
-) -> Snapshot {
+async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
   let destination = match scope {
     Some(scope) => scope.destination(path)
     None => @fs.realpath(path)
   }
-  let contents = if !include_contents {
-    None
-  } else if !@fs.exists(path) {
-    Some(Missing)
+  let contents = if !@fs.exists(path) {
+    Missing
   } else {
     match @fs.kind(path) {
-      Regular => {
-        let file = @fs.open(path, mode=ReadOnly)
-        defer file.close()
-        let (_, digest) = @file_content.transfer(file)
-        Some(File(digest))
-      }
-      Directory =>
-        Some(Directory(@fs.readdir(path, include_hidden=true, sort=true)))
+      Regular =>
+        File(@crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_binary(path))))
+      Directory => Directory(@fs.readdir(path, include_hidden=true, sort=true))
       _ => fail("unsupported filesystem target: \{path}")
     }
   }
@@ -82,11 +34,10 @@ async fn snapshot(
 
 ///|
 /// Authorize one validated operation, never a session or a subtree. Called
-/// under the file gate; only the human wait releases it. Callers revalidate
-/// the returned authorization before mutating their targets.
+/// under the file gate; only the human wait releases it. All affected targets,
+/// including descendants of a removed directory, are revalidated before resuming.
 /// `target_path` names the operation's root for the approval summary.
 /// `reason` adds an operation-specific permission requirement (e.g. deletion).
-/// With `check_contents=false`, approval is tied to the resolved paths alone.
 pub async fn authorize(
   paths : Array[String],
   target_path~ : String,
@@ -96,8 +47,7 @@ pub async fn authorize(
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
   reason? : String,
-  check_contents~ : Bool = true,
-) -> Authorization {
+) -> @write_scope.WriteScope? {
   let reasons : Array[String] = []
   if reason is Some(reason) {
     reasons.push(reason)
@@ -112,18 +62,17 @@ pub async fn authorize(
     }
   }
   if reasons.is_empty() {
-    return { scope: write_scope, snapshots: [], }
+    return write_scope
   }
   guard approval is Some(channel) else {
     fail(
       "\{reasons.join("; ")}; operation requires approval, but this session has no approval channel",
     )
   }
-  let snapshots = [
-    for path in paths => {
-      (path, snapshot(path, write_scope, include_contents=check_contents))
-    }
-  ]
+  let before : Array[Snapshot] = []
+  for path in paths {
+    before.push(snapshot(path, write_scope))
+  }
   let outcome = file_state.without_access(() => {
     channel.ask({
       tool_name,
@@ -140,12 +89,14 @@ pub async fn authorize(
     Cancelled => fail("operation approval cancelled; no changes made")
     Unavailable => fail("operation approval unavailable; no changes made")
   }
-  let scope = write_scope.map(scope => {
-    scope.with_grants(
-      [
-        for (path, before) in snapshots => (path, before.destination)
-      ],
-    )
+  for i, path in paths {
+    guard snapshot(path, write_scope) == before[i] else {
+      fail(
+        "target changed while awaiting approval; reconsider and request approval again",
+      )
+    }
+  }
+  write_scope.map(scope => {
+    scope.with_grants([ for i, path in paths => (path, before[i].destination) ])
   })
-  { scope, snapshots, }
 }

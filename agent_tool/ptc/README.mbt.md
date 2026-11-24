@@ -49,10 +49,10 @@ PTC-enabled tools and their argument shapes:
 - `multi_edit`, e.g. `{ "edits": edits }` or `{ "edits_file": "edits.json" }`
 - `write`, e.g. `{ "path": "note.txt", "content": "hello" }`
 - `copy`, e.g. `{ "source": "/session-scratch/report.pdf", "destination": "output/report.pdf" }`.
-  The host copies a readable regular file, applies the destination checks, and
-  returns its byte count and SHA-256. The request and trace carry paths and metadata.
-  Keep the source unchanged until the call completes. Files stream in 64 KiB
-  chunks into one temporary file on the destination filesystem.
+  The host copies a readable regular file in 64 KiB chunks, publishes it
+  atomically, and returns its byte count and SHA-256. The request and trace
+  carry paths and metadata. Rejects MoonBit source and manifest destinations
+  (use `write` or `edit` for those).
 - `remove`, e.g. `{ "path": "note.txt", "reason": "remove obsolete notes" }`
 - `web_search`, e.g. `{ "query": query }`, when registered
 
@@ -107,8 +107,6 @@ executors directly, independently of the agent loop's wait for mbtx. The outer
 mbtx wait never holds the file gate. Direct and RPC file operations share that
 gate across validation, writes, checks, and rollback. Human approval releases
 the gate; the tool reacquires it and revalidates its targets before writing.
-`copy` checks the source and streams bytes outside the gate. It takes the gate
-for final destination revalidation, the rename, and recording the write.
 
 Normal mbtx background handoff is preserved. After adoption, the job owns the
 script registration; the server stays in OpenSeek. Calls after handoff update
