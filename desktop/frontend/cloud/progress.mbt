@@ -44,7 +44,12 @@ pub fn Conversation::run_heartbeat(
       input.operation is Stop && Some(input.task_id) == self.task
     })
   if stopping {
-    Some({ stage: @transcript.Stopping, started_ms: None, tokens: 0, })
+    Some({
+      stage: @transcript.Stopping,
+      step: self.heartbeat.bind(run => run.step),
+      started_ms: self.heartbeat.bind(run => run.started_ms),
+      tokens: self.heartbeat.map_or(0, run => run.tokens),
+    })
   } else {
     self.heartbeat.map(heartbeat => {
       ..heartbeat,
@@ -118,10 +123,8 @@ fn Conversation::live_progress(
         reasoning_frontier: self.durable_frontier(),
         heartbeat: self.heartbeat.map(heartbeat => {
           ..heartbeat,
-          stage: match step {
-            Some(step) => @transcript.AtStep(step)
-            None => @transcript.Working
-          },
+          stage: @transcript.Working,
+          step,
         }),
       }
     StreamRetry(attempt~, max_attempts~, reason~) =>

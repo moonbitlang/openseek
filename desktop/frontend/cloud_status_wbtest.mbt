@@ -89,7 +89,8 @@ test "Cloud status reports admission and the existing engine step" {
     generating: true,
     pending: None,
     heartbeat: Some({
-      stage: @transcript.Thinking,
+      stage: @transcript.Working,
+      step: None,
       started_ms: None,
       tokens: 0,
     }),
@@ -98,7 +99,8 @@ test "Cloud status reports admission and the existing engine step" {
   let step = running.with_status_conversation(conv => {
     ..conv,
     heartbeat: Some({
-      stage: @transcript.AtStep(3),
+      stage: @transcript.Working,
+      step: Some(3),
       started_ms: None,
       tokens: 0,
     }),

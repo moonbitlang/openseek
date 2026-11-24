@@ -249,7 +249,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       project_query="",
       root=None,
       items=@transcript_component.VisibleRow::history(items),
-      run?=conversation.bind(cloud_transcript_run),
+      run?=conversation.bind(conversation => cloud_transcript_run(conversation)),
       streaming_response=None,
       streaming_identity="idle",
     )
@@ -281,7 +281,11 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       run?=if self.cloud_archived() {
         None
       } else {
-        cloud_transcript_run(conversation)
+        cloud_transcript_run(
+          conversation,
+          awaiting_answer=self.is_desktop &&
+            self.cloud_questions.awaits_answer(owner.session()),
+        )
       },
       streaming_response=conversation.live.response,
       streaming_reasoning?,
@@ -356,7 +360,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           self.scheduled_session_read_only(conv) {
           None
         } else {
-          conv.run_heartbeat()
+          self.local_transcript_run(conv)
         }
       })
     },
@@ -368,14 +372,44 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
 }
 
 ///|
+fn Model::local_transcript_run(
+  self : Model,
+  conversation : Conversation,
+) -> @transcript.RunHeartbeat? {
+  @transcript.live_run_status(
+    conversation.run_heartbeat(),
+    reasoning=conversation.turn.live.reasoning is Some({ complete: false, .. }),
+    compacting=conversation.controls.is_compacting(),
+    awaiting_approval=conversation.pending_approval
+      is Some({ answered: false, .. }),
+    awaiting_answer=self
+      .device_state(conversation.device)
+      .map_or(false, device => {
+        device.questions.awaits_answer(conversation.session_id)
+      }),
+  )
+}
+
+///|
 fn cloud_transcript_run(
   conversation : @cloud.Conversation,
+  awaiting_answer~ : Bool = false,
 ) -> @transcript.RunHeartbeat? {
-  guard conversation.sending || conversation.generating else { return None }
-  Some(
-    conversation
-    .run_heartbeat()
-    .unwrap_or({ stage: Working, started_ms: None, tokens: 0, }),
+  let run = if conversation.sending || conversation.generating {
+    Some(
+      conversation
+      .run_heartbeat()
+      .unwrap_or({ stage: Working, step: None, started_ms: None, tokens: 0, }),
+    )
+  } else {
+    None
+  }
+  @transcript.live_run_status(
+    run,
+    reasoning=conversation.live.reasoning is Some({ complete: false, .. }),
+    compacting=conversation.controls.is_compacting(),
+    awaiting_approval=conversation.awaits_approval(),
+    awaiting_answer~,
   )
 }
 

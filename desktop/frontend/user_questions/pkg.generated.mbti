@@ -20,6 +20,7 @@ pub fn fetch(@interop.ChannelId, @cmd.Emit[Msg]) -> @cmd.Cmd
 #derive(Eq, @debug.Debug)
 type Model
 pub fn Model::Model() -> Self
+pub fn Model::awaits_answer(Self, String) -> Bool
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::reconnecting(Self) -> Self

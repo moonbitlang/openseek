@@ -2220,7 +2220,7 @@ fn State::waiting_for_first_user_item(self : State) -> Bool {
 /// single-turn heartbeat to infer for the transcript.
 pub fn State::run_heartbeat(self : State) -> @transcript.RunHeartbeat? {
   guard self.waiting_for_first_user_item() else { return None }
-  Some({ stage: Starting, started_ms: None, tokens: 0, })
+  Some({ stage: Starting, step: None, started_ms: None, tokens: 0, })
 }
 
 ///|

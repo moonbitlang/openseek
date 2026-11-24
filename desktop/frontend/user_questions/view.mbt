@@ -7,10 +7,7 @@ pub fn Model::view(
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   // Keep one stable sibling slot and show one request at a time.
-  let children = if self.cards
-    .iter()
-    .find_first(card => card.request.session == session)
-    is Some(card) {
+  let children = if self.card_for(session) is Some(card) {
     [
       card.draft.view(
         card.questions(),

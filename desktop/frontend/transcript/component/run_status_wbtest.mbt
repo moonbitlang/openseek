@@ -3,6 +3,7 @@ test "the heartbeat reports only the detail it actually has" {
   let clock_ms = 1_000_000.0
   let full : @transcript.RunHeartbeat = {
     stage: Thinking,
+    step: None,
     started_ms: Some(clock_ms - 134_000.0),
     tokens: 12_345,
   }
@@ -35,7 +36,14 @@ test "the heartbeat reports only the detail it actually has" {
     "Thinking… (12.3k tokens)",
   )
   assert_eq(run_stage_label(English, Starting), "Starting…")
-  assert_eq(run_stage_label(English, AtStep(3)), "Working · step 3")
+  assert_eq(
+    run_status_label(
+      English,
+      { stage: Working, step: Some(3), started_ms: None, tokens: 0, },
+      clock_ms,
+    ),
+    "Working · step 3",
+  )
   assert_eq(
     run_stage_label(
       English,

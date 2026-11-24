@@ -437,7 +437,8 @@ test "Cloud stage and usage use validated per-response values rather than cumula
   )
   let started = sending.progress_test_event(1, "task_started", {})
   assert_true(
-    started.conversations["session"].heartbeat is Some({ stage: Thinking, .. }),
+    started.conversations["session"].heartbeat
+    is Some({ stage: Working, step: None, .. }),
   )
   let step = started.progress_test_event(2, "step", { "step": 3 })
   let used = step.progress_test_event(3, "usage", {
@@ -451,7 +452,7 @@ test "Cloud stage and usage use validated per-response values rather than cumula
   })
   assert_true(
     used.conversations["session"].heartbeat
-    is Some({ stage: AtStep(3), started_ms: None, tokens: 120, }),
+    is Some({ stage: Working, step: Some(3), started_ms: None, tokens: 120, }),
   )
   let malformed_usage : Array[Json] = [
     { "usage": { "prompt_tokens": 200 } },
@@ -498,7 +499,7 @@ test "Cloud stage and usage use validated per-response values rather than cumula
   })
   assert_true(
     response.conversations["session"].run_heartbeat()
-    is Some({ stage: AtStep(3), tokens: 230, .. }),
+    is Some({ stage: Working, step: Some(3), tokens: 230, .. }),
   )
   assert_true(
     response.conversations["session"].heartbeat is Some({ tokens: 230, .. }),
@@ -552,7 +553,7 @@ test "Cloud retry ends on same-step progress without waiting for another step" {
     let recovered = retry.progress_test_event(4, kind, data)
     assert_true(
       recovered.conversations["session"].run_heartbeat()
-      is Some({ stage: AtStep(3), .. }),
+      is Some({ stage: Working, step: Some(3), .. }),
     )
   }
 }

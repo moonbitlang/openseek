@@ -4280,24 +4280,17 @@ fn Conversation::visible_subruns(self : Conversation) -> Array[@subrun.Lane] {
 }
 
 ///|
-/// What the run is doing right now, as one line docked above the composer.
-/// `None` between runs — an idle conversation reports nothing.
-///
-/// Purely derived from the run phase, like `display_status`, so no handler
-/// has to keep a stored line in sync. Before the first reasoning delta this
-/// only knows the current step. Once reasoning arrives, the transcript itself
-/// becomes the progress indicator while this heartbeat continues to report
-/// elapsed time.
+/// Baseline progress from the run phase and its reported step. Neither an
+/// open run nor a step event is evidence of a live reasoning stream.
 fn Conversation::run_heartbeat(
   self : Conversation,
 ) -> @transcript.RunHeartbeat? {
-  let stage : @transcript.RunStage = match self.run {
+  let (stage, step) : (@transcript.RunStage, Int32?) = match self.run {
     NoRun(..) => return None
-    Starting(..) => Starting
-    Open(stage=Opened, ..) => Thinking
-    Open(stage=AtStep(Some(step)), ..) => AtStep(step)
-    Open(stage=AtStep(None), ..) => Working
-    Open(stage=Cancelling, ..) => Stopping
+    Starting(..) => (Starting, None)
+    Open(stage=Opened, ..) => (Working, None)
+    Open(stage=AtStep(step), ..) => (Working, step)
+    Open(stage=Cancelling, ..) => (Stopping, None)
   }
   // A pending retry replaces the step wording; a Stop already sent still wins.
   let stage : @transcript.RunStage = if self.turn.retrying is Some(retrying) &&
@@ -4312,6 +4305,7 @@ fn Conversation::run_heartbeat(
   }
   Some({
     stage,
+    step,
     started_ms: self.run_started_ms,
     tokens: self.turn.usage_tokens,
   })
