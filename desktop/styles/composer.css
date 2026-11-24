@@ -79,6 +79,7 @@
 /* The inline message editor shares the composer's field surface. */
 .composer-inner,
 .composer-surface {
+  --composer-border-width: 1px;
   position: relative;
   container-type: inline-size;
   display: grid;
@@ -89,13 +90,19 @@
   min-width: 0;
   max-width: var(--conversation-width);
   margin: 0 auto;
-  border: 1px solid var(--color-border);
+  border: var(--composer-border-width) solid var(--color-border);
   border-radius: var(--radius-surface);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
 }
 
 .composer-inner {
+  --composer-inset: var(--space-2);
+  /* The hover fill follows the frame's corner at the button's inset. */
+  --composer-control-radius: max(
+    0px,
+    calc(var(--radius-composer) - var(--composer-inset) - var(--composer-border-width))
+  );
   --composer-input-font-size: var(--font-size-md);
   /* Keep the controls as tall as a padded line even with the larger phone font. */
   --composer-control-size: max(
@@ -106,7 +113,7 @@
   align-items: end;
   border-radius: var(--radius-composer);
   gap: 0 var(--space-2);
-  padding: var(--space-2);
+  padding: var(--composer-inset);
 }
 
 /* Fixed columns: the attachment slot collapses when attaching is unavailable,
@@ -643,7 +650,7 @@ button.composer-worktree:hover {
 
 .composer-actions .icon-button {
   --icon-button-size: var(--composer-control-size);
-  border-radius: var(--radius-control);
+  border-radius: var(--composer-control-radius);
 }
 
 .composer-actions .icon-button:disabled {
@@ -965,7 +972,7 @@ button.composer-worktree:hover {
   min-width: var(--composer-control-size);
   height: var(--composer-control-size);
   border: 0;
-  border-radius: var(--radius-control);
+  border-radius: var(--composer-control-radius);
   background: transparent;
   padding: 0;
   position: relative;
