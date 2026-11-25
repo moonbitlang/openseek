@@ -164,6 +164,9 @@
   font-size: var(--font-size-md);
   cursor: pointer;
 }
+.sidebar-conversation {
+  min-width: 0;
+}
 .sidebar-conversation > .conversation-row {
   /* Keep row DOM and state while the browser skips off-screen content.
      These single-line rows reserve their normal minimum height. */
