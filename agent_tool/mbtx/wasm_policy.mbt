@@ -563,16 +563,22 @@ let moonbit_tails : Array[String] = [
 let source_tails : Array[String] = [..moonbit_tails, ".git", ".git/**"]
 
 ///|
-/// Allow writes anywhere except to MoonBit files under the canonical workspace.
+/// Allow writes everywhere, keeping workspace MoonBit files outside scratch
+/// and this call's temporary directory protected.
 fn yolo_policy_document(
   workspace : String,
   tmp_dir : String,
+  extra_roots : Array[String],
   inject : Map[String, String],
 ) -> Json {
-  let prefix = glob_literal(workspace).trim_end(chars="/")
   let writes : Array[Json] = ["*"]
-  for tail in moonbit_tails {
-    writes.push({ "glob": "!\{prefix}/**/\{case_insensitive_glob(tail)}" })
+  for
+    glob in source_exclusions(
+      workspace,
+      [tmp_dir, ..extra_roots],
+      patterns=moonbit_tails,
+    ) {
+    writes.push({ "glob": "!\{glob}" })
   }
   {
     "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
@@ -597,12 +603,22 @@ fn yolo_policy_document(
 fn source_exclusions(
   workspace : String,
   roots : Array[String],
+  patterns~ : Array[String] = source_tails,
 ) -> Array[String] {
-  let workspace = @workspace_path.strip_trailing_slash(workspace)
+  // Use slash-separated components for globs. An empty prefix represents /.
+  fn prefix(path : String) -> String {
+    let path = if @async.platform is Windows {
+      path.replace_all(old="\\", new="/")
+    } else {
+      path
+    }
+    path.trim_end(chars="/").to_owned()
+  }
+  let workspace = prefix(workspace)
   // Each root inside, as its path components below the workspace.
   let inside : Array[ArrayView[String]] = []
   for root in roots {
-    let root = @workspace_path.strip_trailing_slash(root)
+    let root = prefix(root)
     if root == workspace {
       inside.push([])
     } else if root.strip_prefix("\{workspace}/") is Some(relative) {
@@ -615,7 +631,7 @@ fn source_exclusions(
     }
   }
   let globs = []
-  let tails = source_tails.map(case_insensitive_glob)
+  let tails = patterns.map(case_insensitive_glob)
   fn exclude_below(prefix : String, inside : Array[ArrayView[String]]) {
     if inside.iter().any(path => path.is_empty()) {
       return

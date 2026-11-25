@@ -190,9 +190,9 @@ Select YOLO in a local Desktop conversation's approval menu, or pass
 tool permission requests immediately. Scripts can run any command, use any
 network address, and write files anywhere. Inside the workspace, direct writes
 exclude MoonBit sources, interfaces, scripts and manifests at every depth.
-This includes session scratch when it lives under the workspace. Outside the
-workspace, scripts can write MoonBit files too. Native subprocesses use the
-host's permissions.
+Session scratch and the current call's `TMPDIR` allow all file writes, including
+when they are under the workspace. Outside the workspace all files are writable.
+Native subprocesses use the host's permissions.
 
 ## Escalation
 

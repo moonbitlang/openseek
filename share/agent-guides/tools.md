@@ -43,8 +43,9 @@ a required command is refused.
 
 In YOLO mode a script may start any command and use any network address.
 Permission requests are granted immediately. Direct filesystem writes protect
-MoonBit files inside the workspace, including any scratch directory under it.
-Use the file tools to edit those files. Outside the workspace all files are writable.
+MoonBit files inside the workspace. Session scratch and the current call's
+`TMPDIR` allow all file writes, including when they are under the workspace.
+Use the file tools to edit protected files. Outside the workspace all files are writable.
 
 You can also use `mbtx` for probing MoonBit language. When probing,
 emit several independent `mbtx` calls in the same turn — one small program per

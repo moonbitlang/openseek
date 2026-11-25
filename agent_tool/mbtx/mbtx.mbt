@@ -654,13 +654,14 @@ async fn execute(
         },
       )
   }
+  let extra_roots = match scratch_dir {
+    Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
+    None => []
+  }
   let policy = if (snippet_policy, workspace) is (Yolo, Some(root)) {
-    yolo_policy_document(root, snippet_tmp, injected)
+    let tmp_dir = @fs.realpath(snippet_tmp) catch { _ => snippet_tmp }
+    yolo_policy_document(root, tmp_dir, extra_roots, injected)
   } else {
-    let extra_roots = match scratch_dir {
-      Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
-      None => []
-    }
     wasm_policy_document(
       tmp_dir=snippet_tmp,
       extra_roots~,
@@ -1800,7 +1801,7 @@ fn description(
     #|  `moon test` as an admitted child process.
   let write_rule = match snippet_policy {
     Yolo =>
-      "Direct filesystem IO reads anywhere and writes ordinary files anywhere. MoonBit source, scripts, interfaces and manifests are protected from direct writes inside the workspace. Use the file tools for those changes. Outside the workspace all files are writable. Native child processes use normal host permissions."
+      "Direct filesystem IO reads anywhere and writes ordinary files anywhere. MoonBit source, scripts, interfaces and manifests are protected from direct writes inside the workspace, except in session scratch and this call's TMPDIR. Use the file tools for protected files. Outside the workspace all files are writable. Native child processes use normal host permissions."
     ExceptSource =>
       (
         #|- Direct filesystem IO READS anywhere. It WRITES anything in its own

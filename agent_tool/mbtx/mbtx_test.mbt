@@ -1881,31 +1881,38 @@ async test "YOLO allows ordinary files across directories, commands and network 
   @vfs.with_tmpdir(root => {
     let ws = "\{root}/workspace[v1]"
     let scratch = "\{ws}/scratch"
+    let jobs = "\{ws}/jobs"
+    let sibling = "\{ws}/scratch-old"
     let outside = "\{root}/workspacev"
-    for dir in [ws, scratch, outside] {
+    for dir in [ws, scratch, jobs, sibling, outside] {
       @fs.mkdir(dir)
       @fs.write_text("\{dir}/keep.MbT", "original")
     }
     let tool = @mbtx.definition(
       workspace_root=ws,
       scratch_dir=scratch,
+      job_dir=jobs,
       yolo=true,
     )
     let result = dispatch(tool, {
       "description": "Exercise YOLO access in temporary directories",
-      "args": [ws, scratch, outside],
+      "args": [ws, scratch, jobs, sibling, outside],
       "source": (
         #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/shell", "moonbitlang/core/async/socket", "moonbitlang/core/env" }
         #|async fn main {
-        #|  guard @env.args() is [_, workspace, scratch, outside] else { fail("expected three directories") }
-        #|  for dir in [workspace, scratch, outside] {
+        #|  guard @env.args() is [_, workspace, scratch, jobs, sibling, outside] else { fail("expected five directories") }
+        #|  let tmp = @env.get_env_var("TMPDIR").unwrap()
+        #|  for dir in [workspace, scratch, tmp, jobs, sibling, outside] {
         #|    @fs.write_text(dir + "/result.txt", "ok", create_mode=CreateNew)
-        #|    let protected = dir != outside
+        #|    let protected = dir == workspace || dir == jobs || dir == sibling
         #|    for name in ["keep.MbT", "api.MBTI", "run.mbtx", "guide.MBT.MD", "moon.mod", "moon.PKG", "moon.work", "moon.mod.json", "moon.pkg.json"] {
         #|      try @fs.write_text(dir + "/" + name, "changed", create_mode=CreateOrTruncate) catch {
         #|        err => if !protected { raise err }
         #|      } noraise { _ => if protected { fail("unexpected write to " + name) } }
         #|    }
+        #|  }
+        #|  for dir in [scratch, tmp] {
+        #|    guard @fs.read_text(dir + "/keep.MbT") == "changed" else { fail(dir) }
         #|  }
         #|  let server = @socket.TcpServer(@socket.Addr::parse("0.0.0.0:0"))
         #|  server.close()
@@ -1915,11 +1922,11 @@ async test "YOLO allows ordinary files across directories, commands and network 
       ),
     })
     assert_false(result.is_error, msg=result.content)
-    for dir in [ws, scratch, outside] {
+    for dir in [ws, scratch, jobs, sibling, outside] {
       assert_eq(@fs.read_text("\{dir}/result.txt"), "ok")
       assert_eq(
         @fs.read_text("\{dir}/keep.MbT"),
-        if dir == outside {
+        if dir == scratch || dir == outside {
           "changed"
         } else {
           "original"
