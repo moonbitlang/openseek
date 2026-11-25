@@ -5,6 +5,14 @@ import XCTest
 
 @MainActor final class SeekMoonTests: XCTestCase {
     func testPackagedConsoleRestoresAndReloadsDeviceRoutes() async throws {
+        try await assertRouteRestored("/device/d/chat/session/a%2Fb")
+    }
+
+    func testPackagedConsoleRestoresAndReloadsCloudRoutes() async throws {
+        try await assertRouteRestored("/cloud/session/a%2Fb")
+    }
+
+    private func assertRouteRestored(_ path: String) async throws {
         let store = WKWebsiteDataStore.nonPersistent()
         let defaults = UserDefaults.standard
         let key = "console.lastPage"
@@ -17,8 +25,8 @@ import XCTest
         controller.loadViewIfNeeded()
         let web = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? WKWebView }.first)
         try await waitForFrontend(web, at: start)
-        let route = try XCTUnwrap(URL(string: "/device/d/chat/session/a%2Fb", relativeTo: Console.origin)?.absoluteURL)
-        _ = try await web.evaluateJavaScript("location.assign('/device/d/chat/session/a%2Fb'); true")
+        let route = try XCTUnwrap(URL(string: path, relativeTo: Console.origin)?.absoluteURL)
+        _ = try await web.callAsyncJavaScript("location.assign(path); return true", arguments: ["path": path], in: nil, contentWorld: .page)
         try await waitForFrontend(web, at: route)
         XCTAssertEqual(defaults.url(forKey: key), route)
         _ = try await web.evaluateJavaScript("window.beforeReload = true")

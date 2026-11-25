@@ -9,9 +9,17 @@ import sys
 from urllib.parse import quote
 
 root = Path(__file__).resolve().parent.parent
-browser = root / "desktop/dist/browser"
+# Xcode gives each target, platform and configuration its own intermediates.
+staging = Path(os.environ["TARGET_TEMP_DIR"]) / "seekmoon-browser"
+browser = staging / "browser"
+with (root / "ios/Info.plist").open("rb") as stream:
+    info = plistlib.load(stream)
+version = f"{info['CFBundleShortVersionString']} ({info['CFBundleVersion']})"
+build_env = os.environ.copy()
+build_env.setdefault("SEEKMOON_BROWSER_RELEASE", version)
 subprocess.run(
-    ["node", "desktop/package/build.mjs", "browser", "--release"], cwd=root, check=True
+    ["node", "desktop/package/build.mjs", "browser", "--release", "--staging-dir", str(staging)],
+    cwd=root, check=True, env=build_env,
 )
 
 
