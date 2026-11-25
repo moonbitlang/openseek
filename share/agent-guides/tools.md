@@ -20,7 +20,7 @@ Run a custom script in one of three forms:
 
 Save task-specific helper scripts in the session scratch directory shown in
 Environment; substitute its absolute path for `<session-scratch-directory>` below.
-Use workspace paths for scripts intended to remain in the project.
+Use the `write` tool for a new script intended to remain in the project.
 `description` is required on every call — a short label naming what the call does:
 
 `mbtx(description="...", source="...", filename="<session-scratch-directory>/check.mbtx", args=["--deny-warn"])`
@@ -101,6 +101,11 @@ with `@fs.read_text`, `@fs.write_text`, directory operations, or command argumen
 and output redirection. It is writable by mbtx and retained across calls. Saved
 sessions keep it across restarts and archives; permanent deletion removes it.
 Unsaved sessions retain scratch only while running.
+
+Sandboxed snippets can read workspace files. To publish a generated file,
+write it in scratch and call the PTC tool
+`@tools.call("copy", {"source": absolute_scratch_file, "destination": "output/report.pdf"})`.
+For MoonBit source and manifest destinations, use `write` or `edit`.
 
 Use `@fs.tmpdir(prefix="run-")` for data consumed within one execution. Read
 such files before the script exits; return their content, not a temporary path

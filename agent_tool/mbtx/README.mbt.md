@@ -103,11 +103,11 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   Supply at least one of these two fields. `cwd` does not change resolution. A filename-only call
   reads the current file once and compiles that snapshot through the same
   isolated execution path as inline source; diagnostics cite the filename.
-  With both source and filename, the tool saves the script inside the writable
-  workspace and runs the submitted snapshot. Missing parents are created;
+  With both source and filename, the tool saves the script inside the configured
+  session scratch directory and runs the submitted snapshot. Missing parents are created;
   identical existing content is reused, while different content is rejected
   without overwriting or running. Use edit to change a saved file. Subsequent
-  calls can use `{"filename":"scripts/check.mbtx"}` without source. Saving is
+  calls can use the same filename without source. Saving is
   unavailable in read-only mode and obeys worker write scopes. Namespaced
   filenames cannot accompany source: bundled scripts are read-only.
   Use `source` alone for one-off snippets.
@@ -148,13 +148,11 @@ from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 The wasm run carries a moonrun policy on every platform. Unsupported FFI is
 reported by the wasm compiler through normal build diagnostics. The snippet
-may read anywhere. It may write inside its own `@fs.tmpdir()` and any
-caller-provided scratch lab, and — for the main agent only — anywhere in the
-workspace except MoonBit sources, manifests, `.mbtx` scripts and `.git`, in
-any letter case. A scratch lab inside the workspace (the default session
-store is `<workspace>/.openseek`) keeps its own source writes; the exclusions
-skip its subtree. Read-only and worker roles get no workspace grant. Changing
-source belongs to the file tools.
+may read anywhere. All roles can write directly to the run's temporary
+directory and any configured session scratch directory, including a scratch
+directory inside the workspace. To publish a generated file, call PTC `copy`
+with the scratch file as its source and the workspace path as its destination.
+Use `write` or `edit` for MoonBit source and manifests.
 Process spawning is checked against the
 implementation's allowlist; the
 live tool description summarizes the command surface the model should use.
@@ -172,7 +170,7 @@ A denied write surfaces inside the program as a bare OS error (e.g.
 own reads like a filesystem fault. When a sandboxed run's output shows such a
 denial on a protected source path, the tool result appends an explanation: the
 sandbox denied the write by design, the snippet should not try to work around
-it, and source changes belong to the `edit` tool. Only a run that did not exit
+it, and workspace changes require an editing role. Only a run that did not exit
 0 is classified this way: output is data, and a program that prints a file or
 a log containing the refusal wording — as the bundled read workflow does when
 the file happens to contain it — is not being refused. A snippet that caught a

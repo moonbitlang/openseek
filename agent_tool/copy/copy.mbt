@@ -58,6 +58,7 @@ fn decode(arguments : Json) -> CopyInput raise {
 
 ///|
 fn is_moonbit_managed(path : String) -> Bool {
+  let path = path.to_lower()
   path.has_suffix(".mbt") ||
   path.has_suffix(".mbt.md") ||
   path.has_suffix(".mbtx") ||

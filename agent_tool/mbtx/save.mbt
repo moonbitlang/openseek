@@ -17,21 +17,18 @@ async fn save_script(
     )
   }
   let path = @workspace_path.resolve(workspace_root, filename)
-  async fn scope_at(root : String) -> @write_scope.WriteScope {
-    match @write_scope.WriteScope::create(root~) {
-      Ok(scope) => scope
-      Err(reason) => fail(reason)
-    }
+  guard scratch_dir is Some(root) else {
+    fail(
+      "saving a script requires a session scratch directory; use source alone to run inline",
+    )
   }
-  let scope = scope_at(workspace_root)
-  let scratch_scope = match scratch_dir {
-    Some(root) => Some(scope_at(root))
-    None => None
+  let scope = match @write_scope.WriteScope::create(root~) {
+    Ok(scope) => scope
+    Err(reason) => fail(reason)
   }
   async fn check_scope() {
-    if scope.deny_reason(path) is Some(reason) &&
-      !(scratch_scope is Some(scratch) && scratch.deny_reason(path) is None) {
-      fail("save blocked: \{reason}")
+    if scope.deny_reason(path) is Some(reason) {
+      fail("save the script inside the session scratch directory: \{reason}")
     }
     if write_scope is Some(worker) && worker.deny_reason(path) is Some(reason) {
       fail("save blocked: \{reason}")

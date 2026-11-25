@@ -150,7 +150,8 @@ async test "copy rejects MoonBit source and manifest destinations including syml
     for
       name in [
         "source.mbt", "doc.mbt.md", "script.mbtx", "api.mbti", "pkg.generated.mbti",
-        "moon.mod", "moon.pkg", "moon.work",
+        "moon.mod", "moon.pkg", "moon.work", "Source.MbT", "Doc.MBT.MD", "Script.MBTX",
+        "API.MbTi", "MOON.PKG",
       ] {
       guard run_copy(tool, {
           "destination": "new/\{name}",
@@ -166,7 +167,7 @@ async test "copy rejects MoonBit source and manifest destinations including syml
       )
       assert_false(@fs.exists("\{dir}/new"))
     }
-    for name in ["moon.pkg", "moon.work"] {
+    for name in ["moon.pkg", "MOON.WORK"] {
       let target = "\{dir}/\{name}"
       let link_name = "alias-\{name}.bin"
       @fs.write_text(target, "original")

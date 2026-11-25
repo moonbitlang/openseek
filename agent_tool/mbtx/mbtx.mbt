@@ -141,11 +141,6 @@ pub fn definition(
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
   let generations : Map[String, Int32] = Map([])
-  let workspace_writes = if read_only || worker_sandbox is Some(_) {
-    Denied
-  } else {
-    ExceptSource
-  }
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
   // out of the shared directory only after its own build returns. Two calls
@@ -160,7 +155,6 @@ pub fn definition(
       auto_background_after_ms~,
       foreground_timeout_ms~,
       build_timeout_ms~,
-      workspace_writes~,
       scratch_dir?,
     ),
     schema=JsonSchema(
@@ -194,7 +188,6 @@ pub fn definition(
           job_dir?,
           scratch_dir?,
           worker_sandbox?,
-          workspace_writes~,
           auto_background_after_ms~,
           foreground_timeout_ms~,
           build_timeout_ms~,
@@ -348,7 +341,6 @@ async fn execute(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  workspace_writes~ : WorkspaceWrites,
   // Independent injectable bounds: a runtime-backed run hands off at the
   // first; a runtime-less run is cancelled at the second; the snippet's
   // synchronous build phase is cancelled at the third.
@@ -360,11 +352,14 @@ async fn execute(
   program? : @ptc.Program,
   mcp_service? : @mcphost.Service,
 ) -> @agent_tool.ToolAction {
-  if scratch_dir is Some(dir) {
+  let scratch_root = if scratch_dir is Some(dir) {
     @fs.mkdir(dir, recursive=true, permission=0o700, allow_existing=true)
     guard @fs.kind(dir, follow_symlink=false) is Directory else {
       fail("scratch directory must not be a symlink")
     }
+    Some(@fs.realpath(dir))
+  } else {
+    None
   }
   // Read once, before validation/approval, then compile this same snapshot.
   // A saved script has the same isolation and execution path as inline code.
@@ -414,7 +409,7 @@ async fn execute(
         let source = read_script_snapshot(file_state, path) catch {
           error =>
             return @agent_tool.respond(
-              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
+              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new script, pass source and a filename inside session scratch together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
               is_error=true,
             )
         }
@@ -633,25 +628,6 @@ async fn execute(
   @fs.mkdir(snippet_tmp) catch {
     _ => ()
   }
-  // `cwd` is deliberately NOT a write root: naming where a program runs should
-  // not also grant writing there, and reads are open, so a snippet can still
-  // work in a directory it may not modify. The workspace root is
-  // canonicalized because the policy's globs must be (see
-  // `wasm_policy_document`).
-  let workspace_grant = match workspace_writes {
-    Denied => None
-    ExceptSource =>
-      Some(
-        @fs.realpath(workspace_root) catch {
-          error =>
-            return @agent_tool.respond(
-              "mbtx: could not resolve the workspace root \{workspace_root} (\{error}).",
-              is_error=true,
-              brief="mbtx",
-            )
-        },
-      )
-  }
   let injected : Map[String, String] = Map([])
   if mcp_service is Some(service) {
     injected.merge_in_place(service.env())
@@ -659,17 +635,9 @@ async fn execute(
   if program is Some(program) {
     injected.merge_in_place(program.env())
   }
-  // Canonical like the workspace root, so a scratch inside the workspace is
-  // recognized as such and stays writable for source (see
-  // `source_exclusions`).
-  let extra_roots = match scratch_dir {
-    Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
-    None => []
-  }
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
-    extra_roots~,
-    workspace?=workspace_grant,
+    scratch_dir?=scratch_root,
     inject=injected,
   )
   @fs.write_text(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
@@ -1059,16 +1027,6 @@ async fn execute(
       )
     }
   }
-}
-
-///|
-/// What a snippet may write in the workspace, decided once per role.
-priv enum WorkspaceWrites {
-  /// Read-only roles, and workers (a whole-tree grant would ignore their write
-  /// scope's allowed paths).
-  Denied
-  /// The main agent: everything but sources, manifests, `.mbtx` and `.git`.
-  ExceptSource
 }
 
 ///|
@@ -1607,7 +1565,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
             "source",
             Json({
               "type": "string",
-              "description": "Complete .mbtx program. Alone: run inline. With a workspace filename: save and run, then reuse filename-only calls. Cannot accompany a namespaced filename. Different existing content is never overwritten.",
+              "description": "Complete .mbtx program. Alone: run inline. With a session scratch filename: save and run, then reuse filename-only calls. Cannot accompany a namespaced filename. Different existing content is never overwritten.",
             }),
           ),
           (
@@ -1615,7 +1573,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the workspace or configured scratch directory, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the configured session scratch directory, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
             },
           ),
           (
@@ -1722,7 +1680,6 @@ fn description(
   auto_background_after_ms~ : Int32,
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
-  workspace_writes~ : WorkspaceWrites,
   scratch_dir? : String,
 ) -> String {
   // File artifacts live under the session scratch directory, so the
@@ -1765,14 +1722,13 @@ fn description(
     #|stdout/stderr and exit status.
     #|
     #|There are three ways to call the tool:
-    #|- source + filename: save the source to that writable filename and run it.
+    #|- source + filename: save the source to a filename inside session scratch and run it.
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
     #|- filename without source: run a script that already exists.
     #|
-    #|For example, create and run a reusable script with
-    #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
-    #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
+    #|Use the absolute session scratch path from Environment for a reusable
+    #|script, then pass the same filename alone to run it again.
     #|Missing parent directories are created. A saved script is never overwritten
     #|with different content; change it with the edit tool. Scripts compile to
     #|wasm and run under moonrun.
@@ -1794,36 +1750,13 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-  let write_rule = match workspace_writes {
-    ExceptSource =>
-      (
-        #|- Direct filesystem IO READS anywhere. It WRITES anything in its own
-        #|  `@fs.tmpdir()` and the configured session scratch directory shown in
-        #|  Environment, MoonBit sources and manifests included, even when that
-        #|  directory sits inside the workspace. Elsewhere in the workspace it WRITES
-        #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
-        #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
-        #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
-        #|  with `filename`) and `.git`. Use the actual scratch path for
-        #|  cross-call files, binary data, and command output. Temporary files must be
-        #|  consumed before the execution ends. Changing source is the file tools' job,
-        #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
-        #|  and run normally. Deleting a workspace file is `remove`'s job. A write
-        #|  refusal is that rule firing, not a filesystem fault to debug or route
-        #|  around.
-      )
-    Denied =>
-      (
-        #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
-        #|  and the configured session scratch directory shown in Environment. Use the
-        #|  actual scratch path for cross-call files, binary data, and command output.
-        #|  Temporary files must be consumed before the execution ends. Changing a
-        #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
-        #|  checkout` and friends are child processes and run normally. A write refusal
-        #|  is that rule firing, not a filesystem fault to debug or route around.
-      )
-  }
-  let base_rest =
+    #|- Direct filesystem IO reads anywhere and writes only in this run's
+    #|  `@fs.tmpdir()` or the session scratch directory shown in Environment.
+    #|  When PTC `copy` is available, publish a generated file to the workspace
+    #|  with its scratch path as source and the project path as destination.
+    #|  Editing roles use `write` or `edit` for MoonBit sources and manifests. Child commands
+    #|  such as `moon fmt` run under their existing process permissions.
+    #|  Files under `@fs.tmpdir()` must be consumed before the run ends.
     #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
     #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
     #|  These network rules do not constrain an allowed child process.
@@ -1843,8 +1776,6 @@ fn description(
     $|\{refusal_advice}
     $|
     $|\{base_tail}
-    $|\{write_rule}
-    $|\{base_rest}
   // The escalation paragraph goes BEFORE the background one so it sits next to
   // the refusal rules it qualifies.
   let base = if !escalation {

@@ -47,13 +47,13 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   use a git worktree inside the workspace. Once per repository, keep the
   parent checkout clean by ignoring the worktree area locally: run
   `git rev-parse --git-path info/exclude` through a `Cmd` in mbtx, then read that
-  file with `@fs` and append a `.worktrees/` line if it is missing (never
+  file and use the file tools to add a `.worktrees/` line if it is missing (never
   stage `.worktrees/` — without the exclude, `git add .` would stage the
   nested checkout as a gitlink). Then
   `git worktree add .worktrees/feature-x -b feature-x`, and work on the
   branch there. Run each worktree command as its own `Cmd`. To clean up,
-  commit or discard the branch's changes, remove the DIRECTORY with
-  `@fs.rmdir(path, recursive=true)`, then `git worktree prune` to drop the
+  commit or discard the branch's changes, use the `remove` tool on the worktree
+  directory, then `git worktree prune` to drop the
   stale record. `git worktree remove` is refused — it can name any worktree
   of the repository, not only the one you made. Keep worktree paths under
   `.worktrees/` inside the workspace so their source files get the same tool

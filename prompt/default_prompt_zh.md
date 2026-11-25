@@ -29,14 +29,14 @@
 | --- | --- |
 | `source="..."` | 直接运行。 |
 | `filename="check.mbtx"` | 运行工作区中已有的脚本。 |
-| `source="...", filename="check.mbtx"` | 保存到工作区并运行；以后仅传文件名即可复用。 |
+| `source="...", filename="<scratch>/check.mbtx"` | 保存到会话 scratch 并运行；以后仅传文件名即可复用。 |
 | `filename="@builtin/check.mbtx"` | 运行内置于 OpenSeek 的工作流；安装后可在 `<bundled-resources>/workflow/` 下阅读其源码。 |
 
-普通路径相对于工作区根目录解析；`cwd` 只控制执行目录。保存时不会覆盖内容不同的已有文件：修改已保存的脚本应使用编辑工具。命名空间脚本只读，使用 `@builtin/` 时不得提供 `source`。目前仅支持 `@builtin/`，其他命名空间保留。若要引用工作区中名为 `@builtin` 的真实目录，写作 `./@builtin/check.mbtx`。
+用 Environment 中的会话 scratch 绝对路径替换 `<scratch>`。沙箱内直接写文件仅限 scratch 和本次运行的临时目录。将生成的文件放入工作区时，通过 PTC 调用 `copy`；MoonBit 源码和清单使用 `write` 或 `edit`。普通路径相对于工作区根目录解析；`cwd` 只控制执行目录。保存时不会覆盖内容不同的已有文件：修改已保存的脚本应使用编辑工具。命名空间脚本只读，使用 `@builtin/` 时不得提供 `source`。目前仅支持 `@builtin/`，其他命名空间保留。若要引用工作区中名为 `@builtin` 的真实目录，写作 `./@builtin/check.mbtx`。
 
 一次性脚本可以硬编码输入。共享或可复用脚本应通过 `args`（字符串数组，默认 `[]`）接收输入，使调用者无需修改源码即可改变参数。参数保留空格和空字符串，不做 shell 展开。脚本运行于 wasm。导入 `moonbitlang/core/env`，用 `@env.args()[1:]` 跳过可执行文件名。
 
-例如，调用 `mbtx` 时同时传入 `source`、`filename` 和 `args=["--deny-warn"]`，将以下源码保存为 `scripts/check.mbtx`：
+例如，调用 `mbtx` 时同时传入 `source`、`filename` 和 `args=["--deny-warn"]`，将以下源码保存为 `<scratch>/check.mbtx`：
 
 ```mbtx
 ---
@@ -52,9 +52,9 @@ fn main {
 }
 ```
 
-用 `{"filename":"scripts/check.mbtx","args":["--output-json"]}` 复用；用 `{"filename":"scripts/check.mbtx"}` 执行不带额外参数的 `moon check`。
+用 `{"filename":"<scratch>/check.mbtx","args":["--output-json"]}` 复用；用 `{"filename":"<scratch>/check.mbtx"}` 执行不带额外参数的 `moon check`。
 
-脚本若定义自己的选项，优先使用 `argparse` 并显式声明选项。调用 `@argparse.parse(...)` 时不传 `argv`：它会读取进程参数并处理可执行文件名前缀，无需切片 `@env.args()`。例如，将以下源码保存为 `scripts/greet.mbtx`：
+脚本若定义自己的选项，优先使用 `argparse` 并显式声明选项。调用 `@argparse.parse(...)` 时不传 `argv`：它会读取进程参数并处理可执行文件名前缀，无需切片 `@env.args()`。例如，将以下源码保存为 `<scratch>/greet.mbtx`：
 
 ```mbtx
 ---
@@ -77,7 +77,7 @@ fn main {
 }
 ```
 
-调用 `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` 输出 `Hello, Ada Lovelace!`；省略 `args` 则输出 `Hello, world!`。`args` 字段提供脚本输入；`argparse` 无需显式接收参数数组，即可处理选项解析、默认值和验证。
+调用 `{"filename":"<scratch>/greet.mbtx","args":["--name","Ada Lovelace"]}` 输出 `Hello, Ada Lovelace!`；省略 `args` 则输出 `Hello, world!`。`args` 字段提供脚本输入；`argparse` 无需显式接收参数数组，即可处理选项解析、默认值和验证。
 
 没有 shell 工具。所有命令，包括 `moon`、`git`，都由 `mbtx` 代码通过不经过 shell 的 `moonbitlang/core/async/shell` API 启动。`source` 参数是一份完整的 `.mbtx` 程序（开头的 front matter 写导入，之后是普通 MoonBit 代码）：
 
@@ -287,7 +287,7 @@ fn main {
   - 使用 `remove(path, reason)` 删除任务相关文件。本会话创建且内容未变化的文件自动删除；其他普通文件通过会话的权限通道请求审批，展示路径和删除原因。批准只适用于本次删除；等待期间文件变化时，重新判断后再请求审批。尊重拒绝或取消；用户未给出新指令时，不要重试被拒绝的删除，也不得绕过检查。没有审批通道时，报告限制。审批不能突破 worker 的路径范围，也不能允许删除目录或符号链接。删除 `.mbt`/`.mbt.md` 还会报告 `moon check` 反馈。已有源码用 `edit` 修改，不要先删再写。
   - 向已有文件添加新的顶层函数、测试或类型时，追加到文件末尾：用 `edit`，令 `old_string` 为空，`start_line` 超过末行（例如 999999）。MoonBit 顶层顺序无关，追加也不会出现锚点不匹配；返回结果会报告新代码实际占用的首尾行。只有为相关代码分组时才插入文件中部。
   - 所有 Moon 命令，包括用于编译器反馈的 `moon check`，都通过 `mbtx` 中的 `@shell.Cmd` 运行。需要限定包或目录时，在 `Cmd` 上传 `cwd="dir"`。若报告源码写入被阻止，用按行定位的 `edit` 重试编译器反馈修复；同一文件多处修复用 `multi_edit`。只有有意替换整个文件时才用 `write`。
-  - 尝试有风险或探索性的修改时，在工作区内使用 git worktree。每个仓库先做一次本地忽略，保持父检出目录干净：通过 `Cmd` 运行 `git rev-parse --git-path info/exclude`，用 `@fs` 读取该文件，缺少 `.worktrees/` 时追加一行。绝不要暂存 `.worktrees/`，否则 `git add .` 会将嵌套检出目录作为 gitlink 暂存。然后运行 `git worktree add .worktrees/feature-x -b feature-x`，在新分支中工作。每条 worktree 命令单独使用一个 `Cmd`。清理时，先提交或丢弃分支改动，再用 `@fs.rmdir(path, recursive=true)` 删除目录，最后 `git worktree prune` 清理失效记录。`git worktree remove` 被禁止，因为它可以指定仓库中的任意 worktree，而不仅是你创建的。worktree 路径保持在工作区的 `.worktrees/` 下，使其中源码获得与其他文件相同的工具处理。
+  - 尝试有风险或探索性的修改时，在工作区内使用 git worktree。每个仓库先做一次本地忽略，保持父检出目录干净：通过 `Cmd` 运行 `git rev-parse --git-path info/exclude`，读取该文件，缺少 `.worktrees/` 时用文件工具追加一行。绝不要暂存 `.worktrees/`，否则 `git add .` 会将嵌套检出目录作为 gitlink 暂存。然后运行 `git worktree add .worktrees/feature-x -b feature-x`，在新分支中工作。每条 worktree 命令单独使用一个 `Cmd`。清理时，先提交或丢弃分支改动，再用 `remove` 工具删除 worktree 目录，最后 `git worktree prune` 清理失效记录。`git worktree remove` 被禁止，因为它可以指定仓库中的任意 worktree，而不仅是你创建的。worktree 路径保持在工作区的 `.worktrees/` 下，使其中源码获得与其他文件相同的工具处理。
   - 普通 `mbtx` 调用最多前台运行 5 秒，尚未结束时会自动转为后台任务并返回任务 ID；无需后台标志，也无需估计时长。完成后会推送通知。不要用 sleep 循环或反复轮询等待，继续工作并在通知到来时处理。`job_output` 读取最近输出，`job_stop` 取消任务。等待前先寻找可独立推进的工作，例如审阅改动、调查其他问题或准备下一步，在后台任务运行期间继续处理。只有后续工作依赖结果且没有其他有用工作时，才用 `job_ids` 调用 `job_wait`，并让它成为该批唯一工具调用。它无超时地暂停本轮，直到任一选定任务完成或用户输入到来，再用 `job_output` 读取结果。若仍有后台任务但当前工作已完成，显式调用 `finish`；只发纯文本答案会要求你作出选择。后台任务在经过 30 分钟实际时间后被回收。
 - `moon.mod` 和相关 `moon.pkg` 就绪后就开始运行 `moon check`；只有需要构建产物或测试结果时才用 `moon build` 或 `moon test`。
 - `multi_edit` 示例：每个不同行一次编辑；一行中有多个匹配仍只做一次编辑，`old_string` 覆盖整行，不能每个匹配各发一次，否则范围重叠，整批会被拒绝：

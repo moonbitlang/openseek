@@ -122,6 +122,7 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
       let definition = @mbtx.definition(
         workspace_root=ws,
         job_dir=ws,
+        scratch_dir="\{ws}/scratch",
         auto_background_after_ms=1,
         foreground_timeout_ms=10000,
         program_service=service,
@@ -138,14 +139,16 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         #|}
       for
         args in [
-          ({ "ptc": true, "source": source, "filename": "saved.mbtx" } : Json),
-          { "ptc": true, "filename": "saved.mbtx" },
+          (
+            { "ptc": true, "source": source, "filename": "scratch/saved.mbtx" } :
+            Json),
+          { "ptc": true, "filename": "scratch/saved.mbtx" },
         ] {
         let output = dispatch(definition, args)
         assert_false(output.is_error, msg=output.content)
         assert_true(output.content.contains("foreground done"))
       }
-      assert_eq(@fs.read_text("\{ws}/saved.mbtx"), source)
+      assert_eq(@fs.read_text("\{ws}/scratch/saved.mbtx"), source)
       for
         args in [
           ({ "ptc": true, "source": source, "escalated": true } : Json),
@@ -211,12 +214,16 @@ async test "PTC leaves the script namespace and source unchanged" {
         #|fn main { println(tools) }
       let service = @ptc.Service::start(group, Tools([]))
       let output = dispatch(
-        @mbtx.definition(workspace_root=ws, program_service=service),
-        { "ptc": true, "source": source, "filename": "unchanged.mbtx" },
+        @mbtx.definition(
+          workspace_root=ws,
+          scratch_dir="\{ws}/scratch",
+          program_service=service,
+        ),
+        { "ptc": true, "source": source, "filename": "scratch/unchanged.mbtx" },
       )
       assert_false(output.is_error, msg=output.content)
       assert_true(output.content.contains("user-owned name"))
-      assert_eq(@fs.read_text("\{ws}/unchanged.mbtx"), source)
+      assert_eq(@fs.read_text("\{ws}/scratch/unchanged.mbtx"), source)
       // No tool call was made, so no trace is persisted with the result.
       assert_true(output.data is None)
     })

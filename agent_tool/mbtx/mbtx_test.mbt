@@ -65,6 +65,7 @@ async fn prompt_workflow(name : String) -> String {
 async test "language guide reusable check script forwards arguments" {
   let source = prompt_workflow("check.mbtx")
   @vfs.with_tmpdir(ws => {
+    let tool = @mbtx.definition(workspace_root=ws, scratch_dir="\{ws}/scratch")
     @fs.write_text(
       "\{ws}/moon.mod",
       "name = \"test/args\"",
@@ -76,16 +77,16 @@ async test "language guide reusable check script forwards arguments" {
       "pub fn answer() -> Int { 42 }",
       create_mode=CreateOrTruncate,
     )
-    let saved = run_in(ws, {
+    let saved = dispatch(tool, {
       "source": source,
-      "filename": "scripts/check.mbtx",
+      "filename": "scratch/scripts/check.mbtx",
       "args": ["--deny-warn"],
     })
     assert_false(saved.is_error, msg=saved.content)
-    let reused = run_in(ws, { "filename": "scripts/check.mbtx" })
+    let reused = dispatch(tool, { "filename": "scratch/scripts/check.mbtx" })
     assert_false(reused.is_error, msg=reused.content)
-    let invalid = run_in(ws, {
-      "filename": "scripts/check.mbtx",
+    let invalid = dispatch(tool, {
+      "filename": "scratch/scripts/check.mbtx",
       "args": ["--not-a-moon-option"],
     })
     assert_true(invalid.is_error)
@@ -97,18 +98,19 @@ async test "language guide reusable check script forwards arguments" {
 async test "cli_greet example reads process arguments implicitly" {
   let source = unlinked_example("cli_greet.mbtx")
   @vfs.with_tmpdir(ws => {
-    let saved = run_in(ws, {
+    let tool = @mbtx.definition(workspace_root=ws, scratch_dir="\{ws}/scratch")
+    let saved = dispatch(tool, {
       "source": source,
-      "filename": "scripts/greet.mbtx",
+      "filename": "scratch/greet.mbtx",
       "args": ["--name", "Ada Lovelace"],
     })
     assert_false(saved.is_error, msg=saved.content)
     assert_true(saved.content.contains("Hello, Ada Lovelace!\n"))
-    let defaults = run_in(ws, { "filename": "scripts/greet.mbtx" })
+    let defaults = dispatch(tool, { "filename": "scratch/greet.mbtx" })
     assert_false(defaults.is_error, msg=defaults.content)
     assert_eq(defaults.content, "Hello, world!\n")
-    let invalid = run_in(ws, {
-      "filename": "scripts/greet.mbtx",
+    let invalid = dispatch(tool, {
+      "filename": "scratch/greet.mbtx",
       "args": ["--unknown"],
     })
     assert_true(invalid.is_error)
@@ -118,6 +120,7 @@ async test "cli_greet example reads process arguments implicitly" {
 ///|
 async test "script arguments reach inline and reused scripts verbatim" {
   @vfs.with_tmpdir(ws => {
+    let tool = @mbtx.definition(workspace_root=ws, scratch_dir="\{ws}/scratch")
     let values : Array[String] = [
       "--policy", "two words", "", "你好", "$(echo nope)", "--",
     ]
@@ -126,18 +129,18 @@ async test "script arguments reach inline and reused scripts verbatim" {
       #|import { "moonbitlang/core/env" }
       #|---
       #|fn main { println(ToJson::to_json(@env.args()[1:].to_array()).stringify()) }
-    let filename = "args.mbtx"
-    let inline = run_in(ws, { "source": source })
+    let filename = "scratch/args.mbtx"
+    let inline = dispatch(tool, { "source": source })
     assert_false(inline.is_error, msg=inline.content)
     assert_eq(inline.content, "[]\n")
-    let saved = run_in(ws, {
+    let saved = dispatch(tool, {
       "source": source,
       "filename": filename,
       "args": values,
     })
     assert_false(saved.is_error, msg=saved.content)
     assert_true(saved.content.contains(Json(values).stringify()))
-    let reused = run_in(ws, {
+    let reused = dispatch(tool, {
       "filename": filename,
       "args": ["different input"],
     })
@@ -150,84 +153,55 @@ async test "script arguments reach inline and reused scripts verbatim" {
 async test "save and run creates parents, suggests reuse, and preserves existing content" {
   @vfs.with_tmpdir(ws => {
     let state = @agent_tool.FileStateMap()
-    let tool = @mbtx.definition(workspace_root=ws, file_state=state)
+    let tool = @mbtx.definition(
+      workspace_root=ws,
+      scratch_dir="\{ws}/scratch",
+      file_state=state,
+    )
     let source = "fn main { println(42) }"
-    let args : Json = { "source": source, "filename": "scripts/check.mbtx" }
+    let args : Json = {
+      "source": source,
+      "filename": "scratch/scripts/check.mbtx",
+    }
     let out = dispatch(tool, args)
     assert_false(out.is_error, msg=out.content)
     assert_true(out.content.contains("42"))
-    assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
+    assert_true(
+      out.content.contains("{\"filename\":\"scratch/scripts/check.mbtx\"}"),
+    )
     assert_true(out.content.contains("omit source"))
-    let path = "\{ws}/scripts/check.mbtx"
+    let path = "\{ws}/scratch/scripts/check.mbtx"
     assert_eq(@fs.read_text(path), source)
     assert_true(
       state.created_and_unchanged(path, @agent_tool.content_digest(source)),
     )
     assert_false(dispatch(tool, args).is_error)
-    assert_false(dispatch(tool, { "filename": "scripts/check.mbtx" }).is_error)
+    assert_false(
+      dispatch(tool, { "filename": "scratch/scripts/check.mbtx" }).is_error,
+    )
     let out = dispatch(tool, {
       "source": "fn main { println(99) }",
-      "filename": "scripts/check.mbtx",
+      "filename": "scratch/scripts/check.mbtx",
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("different content"))
     assert_eq(@fs.read_text(path), source)
-    assert_false(
-      dispatch(tool, { "source": source, "filename": "check.mbtx" }).is_error,
-    )
-    assert_false(dispatch(tool, { "filename": "check.mbtx" }).is_error)
+    let denied = dispatch(tool, {
+      "source": source,
+      "filename": "new/check.mbtx",
+    })
+    assert_true(denied.is_error, msg=denied.content)
+    assert_false(@fs.exists("\{ws}/new"))
   })
 }
 
 ///|
-async test "saving rejects read-only, outside-workspace, namespace, and worker scope violations" {
+async test "saving requires session scratch even for a workspace filename" {
   @vfs.with_tmpdir(ws => {
-    @vfs.with_tmpdir(outside => {
-      let source = "fn main {}"
-      let read_only_tool = @mbtx.definition(workspace_root=ws, read_only=true)
-      assert_true(
-        dispatch(read_only_tool, { "source": source, "filename": "check.mbtx" }).is_error,
-      )
-      assert_false(@fs.exists("\{ws}/check.mbtx"))
-      let out = run_in(ws, {
-        "source": source,
-        "filename": "\{outside}/check.mbtx",
-      })
-      assert_true(out.is_error)
-      assert_false(@fs.exists("\{outside}/check.mbtx"))
-      assert_true(
-        run_in(ws, { "source": source, "filename": "@builtin/check.mbtx" }).is_error,
-      )
-      let scope = match
-        @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"]) {
-        Ok(scope) => scope
-        Err(reason) => fail(reason)
-      }
-      let worker = @mbtx.definition(workspace_root=ws, write_scope=scope)
-      assert_true(
-        dispatch(worker, { "source": source, "filename": "denied/check.mbtx" }).is_error,
-      )
-      assert_false(@fs.exists("\{ws}/denied"))
-      assert_false(
-        dispatch(worker, { "source": source, "filename": "allowed/check.mbtx" }).is_error,
-      )
-    })
-  })
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "saving refuses symlinks escaping the workspace" {
-  @vfs.with_tmpdir(ws => {
-    @vfs.with_tmpdir(outside => {
-      @fs.symlink(target=outside, "\{ws}/link")
-      let out = run_in(ws, {
-        "source": "fn main {}",
-        "filename": "link/check.mbtx",
-      })
-      assert_true(out.is_error)
-      assert_false(@fs.exists("\{outside}/check.mbtx"))
-    })
+    let out = run_in(ws, { "source": "fn main {}", "filename": "check.mbtx" })
+    assert_true(out.is_error)
+    assert_true(out.content.contains("session scratch"))
+    assert_false(@fs.exists("\{ws}/check.mbtx"))
   })
 }
 
@@ -587,10 +561,7 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 }
 
 ///|
-/// moonrun enforces the main agent's grant: a source (in any case) and paths
-/// outside the roots are refused; data files are writable and removable. The
-/// exact exclusion list is pinned in `wasm_policy.mbt`.
-async test "a snippet writes the workspace except its sources" {
+async test "a snippet cannot create, overwrite or remove workspace files" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       for file in ["keep.mbt", "notes.txt"] {
@@ -615,17 +586,21 @@ async test "a snippet writes the workspace except its sources" {
         #|  attempt("manifest_case", () => write("MOON.PKG"))
         #|  attempt("outside", () => write("OUTSIDE/escape.txt"))
         #|  attempt("data", () => write("data.json"))
+        #|  attempt("overwrite_data", () => write("notes.txt"))
         #|  attempt("remove_data", () => @fs.remove("notes.txt"))
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
       for
         line in [
-          "source=false", "manifest_case=false", "outside=false", "data=true", "remove_data=true",
+          "source=false", "manifest_case=false", "outside=false", "data=false", "overwrite_data=false",
+          "remove_data=false",
         ] {
         assert_true(out.content.contains(line), msg=out.content)
       }
       assert_eq(@fs.read_text("\{ws}/keep.mbt"), "keep me\n")
+      assert_eq(@fs.read_text("\{ws}/notes.txt"), "keep me\n")
+      assert_false(@fs.exists("\{ws}/data.json"))
       assert_false(@fs.exists("\{ws}/MOON.PKG"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
     })
@@ -633,11 +608,7 @@ async test "a snippet writes the workspace except its sources" {
 }
 
 ///|
-/// The default session store lives at `<workspace>/.openseek`, so the main
-/// agent's scratch is inside the workspace grant. Its sources stay writable as
-/// they are for a scratch outside it; every other directory along the way — the
-/// scratch's parents, a sibling session, a workspace package, names sharing a
-/// prefix with `.openseek` — keeps refusing source.
+/// Session scratch stays writable even when the store lives inside the workspace.
 async test "a scratch inside the workspace keeps its source writes" {
   @vfs.with_tmpdir(ws => {
     let scratch = "\{ws}/.openseek/sessions/s1/scratch"
@@ -1035,7 +1006,6 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
 }
 
 ///|
-/// Only the main agent gets the workspace grant, so even a data file is refused.
 async test "read-only and worker snippets write no workspace file at all" {
   @vfs.with_tmpdir(prefix="mbtx-roles-", repo => {
     let ws = "\{repo}/wt-1"
