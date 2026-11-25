@@ -33,18 +33,16 @@ fn is_text_file_busy(error : Error) -> Bool {
 
 ///|
 async fn[T] retry_text_file_busy(
-  delays_ms : Array[Int32],
+  strategy : @async.RetryMethod,
+  max_retry : Int32,
   action : async () -> T,
 ) -> T {
-  for delay in delays_ms {
-    try action() catch {
-      error if is_text_file_busy(error) => @async.sleep(delay)
-      error => raise error
-    } noraise {
-      value => return value
-    }
-  }
-  action()
+  @async.retry(
+    strategy,
+    max_retry~,
+    fatal_error=error => !is_text_file_busy(error),
+    action,
+  )
 }
 
 ///|
@@ -72,17 +70,21 @@ async fn command(
   args : Array[String],
   extra_env~ : Map[String, String] = {},
 ) -> String {
-  let result = retry_text_file_busy([10, 20, 40, 80, 160], () => {
-    @process.run(
-      program,
-      args,
-      stdin=Empty,
-      stdout=Collect,
-      stderr=Collect,
-      extra_env~,
-      no_console_window=true,
-    )
-  })
+  let result = retry_text_file_busy(
+    ExponentialDelay(initial=10, factor=2.0, maximum=160),
+    5,
+    () => {
+      @process.run(
+        program,
+        args,
+        stdin=Empty,
+        stdout=Collect,
+        stderr=Collect,
+        extra_env~,
+        no_console_window=true,
+      )
+    },
+  )
   guard result.exit_code == 0 else {
     fail("\{program} exited \{result.exit_code}: \{result.stderr_text()}")
   }

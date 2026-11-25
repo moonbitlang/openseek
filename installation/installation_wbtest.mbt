@@ -297,7 +297,7 @@ async test "retry_text_file_busy retries transient ETXTBSY and stops on other er
     return
   }
   let attempts = Ref(0)
-  let output = retry_text_file_busy([1, 1, 1], () => {
+  let output = retry_text_file_busy(Immediate, 3, () => {
     attempts.val += 1
     if attempts.val < 3 {
       raise @os_error.OsError::from_errno(
@@ -312,7 +312,7 @@ async test "retry_text_file_busy retries transient ETXTBSY and stops on other er
 
   let non_busy_attempts = Ref(0)
   let non_busy = try {
-    let _ : String = retry_text_file_busy([1, 1], () => {
+    let _ : String = retry_text_file_busy(Immediate, 2, () => {
       non_busy_attempts.val += 1
       raise @os_error.OsError::from_errno(2, context="@process.run()")
     })
@@ -326,7 +326,7 @@ async test "retry_text_file_busy retries transient ETXTBSY and stops on other er
 
   let exhausted_attempts = Ref(0)
   let exhausted = try {
-    let _ : String = retry_text_file_busy([1, 1], () => {
+    let _ : String = retry_text_file_busy(Immediate, 2, () => {
       exhausted_attempts.val += 1
       raise @os_error.OsError::from_errno(
         PosixEtxtbsy,
