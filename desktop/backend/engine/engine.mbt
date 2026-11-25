@@ -1444,24 +1444,15 @@ async fn engine_process_env(
   // ignores that and falls back to its default model. Other providers' shell
   // exports inherit untouched: the engine reads only its model's variable
   // for chat, and `web_search` may legitimately use an ambient `DEEPSEEK`.
-  env[config.key_env] = config.api_key
-  // A custom model's credential travels in the generic variable the CLI's
-  // `--api-key` reads. A built-in run must not inherit an ambient one: it
-  // would silently outrank the provider's own key.
-  if config.key_env != @deepseek.CustomApiKeyEnv {
-    env.remove(@deepseek.CustomApiKeyEnv)
-  }
+  apply_model_env(
+    env,
+    key_env=config.key_env,
+    api_key=config.api_key,
+    context_window=config.context_window,
+  )
   env["OPENSEEK_MODEL"] = config.model
   env["OPENSEEK_THINKING"] = config.thinking.wire()
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
-  // A user entry's own window travels with the run: no table in the engine can
-  // know an arbitrary endpoint's, and a value the parent shell exported must
-  // not leak into a built-in run (whose table is right).
-  if config.context_window is Some(window) {
-    env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
-  } else {
-    env.remove("OPENSEEK_CONTEXT_WINDOW")
-  }
   // The desktop host owns the Skills panel's library writes, so every serve
   // engine gets the same resolved global library instead of falling back to
   // whatever HOME means inside that engine host.
@@ -3047,7 +3038,6 @@ async test "native engine env has one authoritative bundled moon path" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "m",
-    images: false,
     context_window: None,
     thinking: ThinkingHigh,
     approval: ApprovalAsk,
@@ -3263,7 +3253,6 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "test",
-    images: false,
     context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
@@ -3383,7 +3372,6 @@ fn pump_test_config(session : String) -> RunConfig {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "test",
-    images: false,
     context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,

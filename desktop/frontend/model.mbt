@@ -409,12 +409,12 @@ fn @deepseek.Model::matches_provider(
 ///|
 fn provider_default_model_for(
   provider : ApiProvider,
-  models : Array[CustomModel],
+  models : Array[@protocol.CustomModel],
 ) -> @deepseek.Model {
   match provider {
     Custom =>
       match models {
-        [first, ..] => first.engine_model()
+        [first, ..] => custom_model_engine_model(first)
         [] => provider.default_model()
       }
     _ => provider.default_model()
@@ -1301,8 +1301,6 @@ priv struct Model {
   // The custom-model editor, open while `Some`. Its draft lives here rather
   // than in the settings page so navigating cannot lose typed fields.
   custom_model : CustomModelDraft?
-  // The entry a delete confirmation is open for; `None` when none is.
-  custom_model_delete : String?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1649,60 +1647,6 @@ priv struct ProviderConfig {
 }
 
 ///|
-/// One saved model entry as a client may see it: its credential reduced to
-/// presence, like every other status field.
-#derive(Eq)
-priv struct CustomModel {
-  id : String
-  // The name the list shows; absent means show the id.
-  label : String?
-  api_url : String?
-  // Whether the stored URL already ends at the endpoint, so the edit form
-  // re-opens with the switch it was saved with.
-  full_url : Bool
-  has_api_key : Bool
-  images : Bool
-  // The window the run plans against: the entry's own, which the edit form
-  // re-opens with so an endpoint serving less than the default can be lowered.
-  context_window : Int32
-}
-
-///|
-/// The engine model this entry resolves to: a built-in tier when the user
-/// configured one of the build's own ids (keeping its built-in protocol), or
-/// `Custom(id)` carrying the window this entry plans against.
-fn CustomModel::engine_model(self : CustomModel) -> @deepseek.Model {
-  parse_engine_model(self.id).unwrap_or(
-    @deepseek.Custom(self.id, context_window=self.context_window),
-  )
-}
-
-///|
-/// Whether `model` names this entry. A custom id is its identity, and the
-/// window belongs to the entry that named it, so a model parsed from a
-/// session record — which carries the default window — names the same entry.
-fn CustomModel::matches_model(
-  self : CustomModel,
-  model : @deepseek.Model,
-) -> Bool {
-  match (parse_engine_model(self.id), model) {
-    (Some(builtin), model) => builtin == model
-    (None, Custom(id, ..)) => id == self.id
-    (None, _) => false
-  }
-}
-
-///|
-/// The name a model list shows for this entry: the name the user gave it, or
-/// the built-in/id label when they gave none.
-fn CustomModel::display_name(self : CustomModel) -> String {
-  match self.label {
-    Some(label) => label
-    None => self.engine_model().label()
-  }
-}
-
-///|
 /// A host's engine endpoint settings, with key material reduced to presence:
 /// the key text never reaches a client — the Settings page only needs
 /// presence (placeholder wording, the ready gate).
@@ -1722,7 +1666,7 @@ priv struct HostSettings {
   revision : Int32
   endpoint : HostEndpoint
   // The models the user saved, in the order the host stores them.
-  models : Array[CustomModel]
+  models : Array[@protocol.CustomModel]
   // The default prompt for new chats: `builtin_moonbit_guide` or `custom`,
   // with the host's saved custom text either way.
   prompt_source : String
@@ -1964,23 +1908,10 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
-  // The saved entry to test (its row's id), or `None` for the provider's own
-  // default route.
-  TestApiConnection(String?)
+  TestApiConnection
   ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
-  // The custom endpoint's models. The endpoint and its key are the API
-  // section's, so an entry holds only what is specific to the model.
-  CustomModelAdd
-  CustomModelEdit(String)
-  CustomModelIdChanged(String)
-  CustomModelLabelChanged(String)
-  CustomModelWindowChanged(String)
-  CustomModelSubmit
-  CustomModelCancel
-  CustomModelDeleteRequest(String)
-  CustomModelDeleteCancelled
-  CustomModelDelete(String)
+  CustomModel(CustomModelMsg)
   OpenSchedules
   SchedulePage(SchedulePageMsg)
   OpenSkills
@@ -2864,8 +2795,6 @@ fn initial_model(
     api_connection_probe: None,
     setup_api_key: "",
     custom_model: None,
-    // The entry a delete confirmation is open for; `None` when none is.
-    custom_model_delete: None,
     is_desktop: desktop,
     is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),
@@ -3305,14 +3234,6 @@ fn Model::edit_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
 }
 
 ///|
-/// Show an edit of the focused host's endpoint without writing it: the field
-/// keeps what the user typed while nothing is pushed, so no write is counted
-/// and no reply has to settle it.
-fn Model::preview_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
-  self.map_host_settings(self.focused, mirror => mirror.preview(endpoint))
-}
-
-///|
 /// The base prompt a new draft on `channel` captures, once that host's
 /// settings have arrived; until then the draft cannot be sent.
 fn Model::draft_system_prompt(
@@ -3354,7 +3275,7 @@ fn Model::align_new_chats_with_provider(
     match provider {
       // On a custom endpoint, only models configured in its saved entries are
       // served; removed or unconfigured ones fall forward to a saved entry.
-      Custom => models.any(entry => entry.matches_model(model))
+      Custom => find_custom_model(models, model) is Some(_)
       _ => model.matches_provider(provider)
     }
   }
@@ -3490,59 +3411,6 @@ fn Model::api_ready(self : Model) -> Bool {
 /// against an endpoint every run fails on.
 fn plausible_endpoint_url(url : String) -> Bool {
   url.trim() =~ re"^https?://[^/]"
-}
-
-///|
-/// Why the endpoint URL is not one this endpoint can post to, or `None` when it
-/// is — blank included, which means "clear the stored value".
-///
-/// Mirrors the path rule in the engine's `normalize_custom_api_url`: a base URL
-/// (root or version root) or a URL that already names the completions endpoint.
-/// Anything else would be stored and then fail with a 404 on the first request,
-/// so the field says so while the user is still looking at it. A string with no
-/// `scheme://host` is left to the host, which names that error itself.
-fn endpoint_url_problem(value : String) -> @settings.Message? {
-  let url = value.trim().to_owned()
-  if url.is_empty() {
-    return None
-  }
-  let path = endpoint_url_path(url)
-  if path.is_empty() ||
-    path =~ re"/v[0-9]+$" ||
-    path.has_suffix("/chat/completions") {
-    None
-  } else {
-    Some(@settings.EndpointUrlInvalid)
-  }
-}
-
-///|
-/// The path of an absolute URL, with the query and fragment dropped and any
-/// trailing slashes removed. Empty when the string names no path, or is not an
-/// absolute URL at all.
-fn endpoint_url_path(url : String) -> String {
-  let after_scheme = match url.find("://") {
-    Some(index) => index + 3
-    None => return ""
-  }
-  let rest = url.unsafe_substring(start=after_scheme, end=url.length())
-  let path_start = match rest.find("/") {
-    Some(index) => index
-    None => return ""
-  }
-  let tail = rest.unsafe_substring(start=path_start, end=rest.length())
-  let end = match (tail.find("?"), tail.find("#")) {
-    (Some(query), Some(fragment)) =>
-      if query < fragment {
-        query
-      } else {
-        fragment
-      }
-    (Some(query), None) => query
-    (None, Some(fragment)) => fragment
-    (None, None) => tail.length()
-  }
-  tail.unsafe_substring(start=0, end~).trim_end(chars="/").to_owned()
 }
 
 ///|

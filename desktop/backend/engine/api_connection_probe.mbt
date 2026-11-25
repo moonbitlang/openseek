@@ -12,35 +12,8 @@ async fn resolve_api_connection_probe(
     raise EngineError("Settings changed. Try the connection test again.")
   }
   let settings = load_engine_settings(manager.runtime_dir)
-  let (model, endpoint) = match payload.model {
-    None =>
-      (
-        @deepseek.Model::parse(settings.provider.default_model()),
-        resolved_endpoint(settings),
-      )
-    Some(id) => {
-      // One row tests one saved entry: its own endpoint and key, falling back
-      // to the custom slot exactly as a run does.
-      guard find_saved_model_entry(settings.models, id) is Some(_) else {
-        raise EngineError(
-          "Model \{id} is no longer saved. Add it again to test the connection.",
-        )
-      }
-      let (route, _, _, _) = resolve_model_route(settings, id)
-      // A probe names the model it tests, not a run: the id and the protocol
-      // are what the client needs, and the entry's window travels only with an
-      // actual run. The id was validated above, so a parse failure cannot be
-      // reached here.
-      let model = match parse_model_opt(id) {
-        Some(model) => model
-        None =>
-          raise EngineError(
-            "Model \{id} has no name to test. Add it again to test the connection.",
-          )
-      }
-      (model, route)
-    }
-  }
+  let endpoint = resolved_endpoint(settings)
+  let model = @deepseek.Model::parse(settings.provider.default_model())
   Client(
     api_key=endpoint.api_key,
     api_url?=endpoint.api_url,
@@ -83,81 +56,4 @@ pub async fn test_api_connection(
       None
     },
   }
-}
-
-///|
-async test "a per-model connection test reads the saved entry and refuses an unknown id" {
-  with_settings_dir((_dir, manager) => {
-    let _ = update_settings(
-      manager,
-      {
-        provider: Some("custom"),
-        providers: Some({
-          "custom": {
-            api_url: Some("https://gateway.example/v1"),
-            api_key: Some("sk-custom"),
-          },
-        }),
-      },
-      models=[
-        {
-          id: "gateway-chat",
-          label: None,
-          api_url: None,
-          full_url: None,
-          api_key: None,
-          images: Some(true),
-          context_window: None,
-          removed: None,
-        },
-        {
-          id: "own-endpoint",
-          label: None,
-          api_url: Some("https://own.example/v1"),
-          full_url: None,
-          api_key: Some("sk-own"),
-          images: Some(false),
-          context_window: None,
-          removed: None,
-        },
-      ],
-    )
-    let payload : (String?) -> @protocol.ApiConnectionProbePayload = model => {
-      revision: manager.settings_revision,
-      model,
-    }
-    // A row tests its own entry, even when the entry names its own endpoint.
-    let own = resolve_api_connection_probe(
-      manager,
-      payload(Some("own-endpoint")),
-    )
-    assert_eq(
-      own.model,
-      Custom("own-endpoint", context_window=DefaultModelContextWindow),
-    )
-    assert_eq(own.api_url, "https://own.example/v1/chat/completions")
-    // An entry without an endpoint rides the custom slot, as a run would.
-    let shared = resolve_api_connection_probe(
-      manager,
-      payload(Some("gateway-chat")),
-    )
-    assert_eq(shared.api_url, "https://gateway.example/v1/chat/completions")
-    // Without a model the probe keeps testing the provider's own route.
-    let provider_default = resolve_api_connection_probe(manager, payload(None))
-    assert_eq(
-      provider_default.api_url,
-      "https://gateway.example/v1/chat/completions",
-    )
-    // A row whose entry is gone says so instead of testing something else.
-    let refusal = try {
-      ignore(resolve_api_connection_probe(manager, payload(Some("gone"))))
-      ""
-    } catch {
-      EngineError(message) => message
-      _ => "unexpected error"
-    }
-    assert_eq(
-      refusal, "Model gone is no longer saved. Add it again to test the connection.",
-    )
-  })
 }

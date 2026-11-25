@@ -13,5 +13,5 @@ test "official providers reject models from another provider" {
   assert_eq(key_env_for(Custom, "glm-5.3"), "GLM")
   assert_eq(key_env_for(Custom, "kimi-k2.7-code"), "KIMI")
   assert_eq(key_env_for(Custom, "deepseek-v4-flash"), "DEEPSEEK")
-  assert_eq(key_env_for(Custom, "some-proxy-model"), "DEEPSEEK")
+  assert_eq(key_env_for(Custom, "some-proxy-model"), @deepseek.CustomApiKeyEnv)
 }

@@ -191,10 +191,6 @@
   color: var(--color-success);
 }
 
-.form-row-status.danger {
-  color: var(--color-danger);
-}
-
 .form-row[hidden],
 .setup-guide[hidden] {
   display: none;

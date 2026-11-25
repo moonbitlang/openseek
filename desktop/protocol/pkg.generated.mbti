@@ -10,9 +10,19 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
+pub const DefaultCustomModelContextWindow : Int32 = 1_000_000
+
 pub const HostProtocolRevision : Int32 = 14
 
+pub const MaxCustomModelContextWindow : Int32 = 10_000_000
+
+pub const MaxCustomModelLabelChars : Int32 = 64
+
+pub const MaxCustomModels : Int32 = 50
+
 pub const MaxImageBytes : Int32 = 20971520
+
+pub const MinCustomModelContextWindow : Int32 = 1_024
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -110,7 +120,6 @@ pub impl @json.ToJson for AgentEventPayload
 #derive(Eq, @debug.Debug)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
-  model : String?
 }
 pub impl @json.FromJson for ApiConnectionProbePayload
 pub impl @json.ToJson for ApiConnectionProbePayload
@@ -1253,6 +1262,15 @@ pub fn CreateDirectoryPayload::to_json(Self) -> @json.Json
 pub fn CreateDirectoryPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for CreateDirectoryPayload
 pub impl @json.ToJson for CreateDirectoryPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct CustomModel {
+  id : String
+  label : String?
+  context_window : Int32
+}
+pub impl @json.FromJson for CustomModel
+pub impl @json.ToJson for CustomModel
 
 #derive(Eq, @debug.Debug)
 pub(all) struct DiagnosticsPayload {
@@ -2588,33 +2606,6 @@ pub fn McpStatusReply::to_json(Self) -> @json.Json
 pub fn McpStatusReply::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for McpStatusReply
 pub impl @json.ToJson for McpStatusReply
-
-#derive(Eq, @debug.Debug)
-pub(all) struct ModelPatch {
-  id : String
-  label : String?
-  api_url : String?
-  full_url : Bool?
-  api_key : String?
-  images : Bool?
-  context_window : Int32?
-  removed : Bool?
-}
-pub impl @json.FromJson for ModelPatch
-pub impl @json.ToJson for ModelPatch
-
-#derive(Eq, @debug.Debug)
-pub(all) struct ModelStatus {
-  id : String
-  label : String?
-  api_url : String?
-  full_url : Bool
-  has_api_key : Bool
-  images : Bool
-  context_window : Int32
-}
-pub impl @json.FromJson for ModelStatus
-pub impl @json.ToJson for ModelStatus
 
 #derive(Eq, @debug.Debug)
 pub(all) struct MoonIdeCodeLens {
@@ -4332,7 +4323,7 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
-  models : Array[ModelPatch]?
+  models : Array[CustomModel]?
 }
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
@@ -4350,7 +4341,7 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
-  models : Array[ModelStatus]
+  models : Array[CustomModel]
 }
 pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError

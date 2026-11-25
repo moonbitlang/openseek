@@ -27,15 +27,7 @@ fn HostSettings::from_status(
       providers,
       followup_behavior: FollowupBehavior::parse(payload.followup_behavior),
     },
-    models: payload.models.map(status => CustomModel::{
-      id: status.id,
-      label: status.label,
-      api_url: status.api_url,
-      full_url: status.full_url,
-      has_api_key: status.has_api_key,
-      images: status.images,
-      context_window: status.context_window,
-    }),
+    models: payload.models,
     prompt_source: payload.prompt_source,
     custom_prompt: payload.custom_prompt,
   }
@@ -117,19 +109,6 @@ fn HostSettingsMirror::edit(
 ) -> HostSettingsMirror {
   guard self.current is Some(current) else { return self }
   { ..self.write_sent(), current: Some({ ..current, endpoint, }), }
-}
-
-///|
-/// Show an edit that is not written to the host: the field keeps what the user
-/// typed, and the next authoritative snapshot still wins. Nothing is counted, so
-/// a value that never leaves the page cannot hold the mirror in a save that no
-/// reply will ever settle.
-fn HostSettingsMirror::preview(
-  self : HostSettingsMirror,
-  endpoint : HostEndpoint,
-) -> HostSettingsMirror {
-  guard self.current is Some(current) else { return self }
-  { ..self, current: Some({ ..current, endpoint, }), }
 }
 
 ///|

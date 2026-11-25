@@ -19,7 +19,7 @@
 // - Saves are atomic: temp file + rename, 0600.
 
 ///|
-const EngineSettingsVersion = 4
+const EngineSettingsVersion = 3
 
 ///|
 const EngineSettingsFileName = "engine-settings.json"
@@ -83,7 +83,7 @@ priv struct EngineSettings {
   provider : ApiProvider
   providers : Map[String, Provider]
   // The user's own model entries; this build's built-in catalog is not stored.
-  models : Array[ModelEntry]
+  models : Array[@protocol.CustomModel]
   followup_behavior : String
 }
 
@@ -145,7 +145,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
       }
       _ => Map([])
     },
-    models: decode_model_entries(raw),
+    models: decode_custom_models(raw),
     followup_behavior: match settings_text(raw, "followup_behavior") {
       Some("queue") => "queue"
       _ => "steer"
@@ -181,22 +181,11 @@ fn settings_status_payload(
       })
     providers[provider.wire()] = { api_url: config.api_url, has_api_key, }
   }
-  // The user's own entries, in saved order. The built-in catalog belongs to
-  // the build rather than the file, so it is not reported here.
-  let models = settings.models.map(entry => @protocol.ModelStatus::{
-    id: entry.id,
-    label: entry.label,
-    api_url: entry.api_url,
-    full_url: entry.full_url,
-    has_api_key: entry.api_key is Some(_),
-    images: entry.images,
-    context_window: entry.context_window,
-  })
   {
     revision,
     provider: settings.provider.wire(),
     providers,
-    models,
+    models: settings.models,
     followup_behavior: settings.followup_behavior,
     prompt_source: match settings.raw.get("prompt_source") {
       Some(String("custom")) => "custom"
@@ -257,11 +246,8 @@ pub async fn update_settings(
   followup_behavior? : String,
   prompt_source? : String,
   custom_prompt? : String,
-  // The model instructions this request applies: each upserts the entry it
-  // names, or drops it when marked `removed`, in the order given. They travel
-  // as a parameter rather than in `patch` because a model edit is not a
-  // provider edit: the provider slot keeps its own credential.
-  models? : Array[@protocol.ModelPatch],
+  // Complete replacement list of saved custom models, in display order.
+  models? : Array[@protocol.CustomModel],
   on_committed? : (@protocol.SettingsStatusPayload) -> Unit,
 ) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
@@ -331,12 +317,8 @@ pub async fn update_settings(
     }
     raw["providers"] = Json(providers)
   }
-  if models is Some(patches) {
-    let stored : Array[Json] = match raw.get("models") {
-      Some(Array(items)) => items
-      _ => []
-    }
-    let entries = apply_model_patches(stored, patches)
+  if models is Some(list) {
+    let entries = normalize_custom_models(list)
     // An empty list is removed rather than stored: absence is the default.
     if entries.is_empty() {
       raw.remove("models")
@@ -419,21 +401,6 @@ priv struct ResolvedEndpoint {
 }
 
 ///|
-fn resolved_custom_endpoint(
-  settings : EngineSettings,
-) -> ResolvedEndpoint raise EngineError {
-  guard settings.provider_config(Custom).api_url is Some(url) else {
-    raise EngineError("custom endpoint URL is required; set it in Settings")
-  }
-  let url = normalize_custom_api_url(url)
-  let key = configured_api_key(
-    stored_key?=settings.provider_config(Custom).api_key,
-    api_url=url,
-  )
-  { api_key: key, api_url: Some(url), }
-}
-
-///|
 fn resolved_endpoint(
   settings : EngineSettings,
 ) -> ResolvedEndpoint raise EngineError {
@@ -461,7 +428,17 @@ fn resolved_endpoint(
       )
       { api_key: key, api_url: Some(OpenRouterChatCompletionsUrl), }
     }
-    Custom => resolved_custom_endpoint(settings)
+    Custom => {
+      guard settings.provider_config(Custom).api_url is Some(url) else {
+        raise EngineError("custom endpoint URL is required; set it in Settings")
+      }
+      let url = normalize_custom_api_url(url)
+      let key = configured_api_key(
+        stored_key?=settings.provider_config(Custom).api_key,
+        api_url=url,
+      )
+      { api_key: key, api_url: Some(url), }
+    }
   }
 }
 
@@ -488,24 +465,20 @@ pub async fn pattern_repair_environment(
   model~ : String,
 ) -> PatternRepairEnvironment {
   let settings = manager.settings_snapshot() catch { _ => return Unavailable }
-  let (route, key_env, _, context_window) = resolve_model_route(settings, model) catch {
+  let (endpoint, key_env) = (
+    resolved_endpoint(settings),
+    key_env_for(settings.provider, model),
+  ) catch {
     EngineError(message) => return Configuration(message)
   }
   let env = @sys.get_env_vars()
-  env[key_env] = route.api_key
-  // A custom model's credential travels in the generic variable the CLI's
-  // `--api-key` reads. A built-in run must not inherit an ambient one: it
-  // would silently outrank the provider's own key.
-  if key_env != @deepseek.CustomApiKeyEnv {
-    env.remove(@deepseek.CustomApiKeyEnv)
-  }
-  // A repair child runs the same model as the run that asked for it, so it
-  // plans against the same window: a user entry's own, or the engine's table.
-  match context_window {
-    Some(window) => env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
-    None => env.remove("OPENSEEK_CONTEXT_WINDOW")
-  }
-  match route.api_url {
+  apply_model_env(
+    env,
+    key_env~,
+    api_key=endpoint.api_key,
+    context_window=configured_context_window(settings, model),
+  )
+  match endpoint.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
   }
@@ -829,7 +802,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             provider: None,
             providers: Some({
               "custom": {
-                api_url: Some("https://custom.example/v1/chat/completions"),
+                api_url: Some("https://custom.example/chat"),
                 api_key: Some("sk-custom"),
               },
             }),
@@ -858,7 +831,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
     )
     assert_true(
       stored.provider_config(Custom).api_url
-      is Some("https://custom.example/v1/chat/completions"),
+      is Some("https://custom.example/chat"),
     )
     assert_true(stored.provider_config(Custom).api_key is Some("sk-custom"))
     // Revision is a host-process epoch, not a persistence-format change.
@@ -1192,16 +1165,7 @@ async test "pattern repair carries a user entry's context window" {
         }),
       },
       models=[
-        {
-          id: "gemini-4-hydrogen",
-          label: None,
-          api_url: None,
-          full_url: None,
-          api_key: None,
-          images: None,
-          context_window: Some(131_072),
-          removed: None,
-        },
+        { id: "gemini-4-hydrogen", label: None, context_window: 131_072, },
       ],
     )
     let env = pattern_repair_environment(manager, model="gemini-4-hydrogen")

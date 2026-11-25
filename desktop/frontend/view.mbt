@@ -1405,11 +1405,6 @@ fn api_settings_rows(
       desc=provider_hint(model, model.api_provider()),
     ),
   ]
-  let custom_url = model
-    .host_settings()
-    .map(settings => settings.endpoint.config(Custom).api_url.unwrap_or(""))
-    .unwrap_or("")
-  let custom_url_problem = endpoint_url_problem(custom_url)
   rows.push(
     @ui.form_row(
       @settings.text(model.locale, EndpointUrl),
@@ -1417,18 +1412,16 @@ fn api_settings_rows(
         @html.input(
           class="setting-input field-surface",
           input_type=@html.InputType::Text,
-          value=custom_url,
+          value=model
+            .host_settings()
+            .map(settings => {
+              settings.endpoint.config(Custom).api_url.unwrap_or("")
+            })
+            .unwrap_or(""),
           placeholder="https://host/v1",
           on_change=dispatch.map(value => CustomApiUrlChanged(value)),
           attrs=@html.Attrs::build()
             .aria_label(@settings.text(model.locale, EndpointUrl))
-            .aria_invalid(
-              if custom_url_problem is Some(_) {
-                "true"
-              } else {
-                "false"
-              },
-            )
             .on_keydown(event => {
               if event.key() == "Enter" && !event.is_composing() {
                 event.prevent_default()
@@ -1442,11 +1435,7 @@ fn api_settings_rows(
             .disabled(!settings_loaded),
         ),
       ],
-      desc=match custom_url_problem {
-        Some(problem) => @settings.text(model.locale, problem)
-        None => @settings.text(model.locale, EndpointUrlDescription)
-      },
-      desc_invalid=custom_url_problem is Some(_),
+      desc=@settings.text(model.locale, EndpointUrlDescription),
       stack=true,
       hidden=!(model.api_provider() is Custom),
     ),
@@ -1460,7 +1449,7 @@ fn api_settings_rows(
       Deepseek => @settings.text(model.locale, DeepseekApiKey)
       Glm => @settings.text(model.locale, GlmApiKey)
       OpenRouter => @settings.text(model.locale, OpenRouterApiKey)
-      Custom => @settings.text(model.locale, ApiKey)
+      Custom => @settings.text(model.locale, CustomApiKey)
     }
     rows.push(
       @ui.form_row(

@@ -25,11 +25,8 @@ priv struct RunConfig {
   // default for the model's provider.
   api_url : String?
   model : String
-  // Whether this endpoint accepts image parts, resolved from the model entry
-  // (or the built-in tier's own rule) when the config is built.
-  images : Bool
-  // The window the run plans against when the model is a user entry that names
-  // its own; None leaves the engine's table for the model in charge.
+  // The window the run plans against when the model is a saved custom entry;
+  // None leaves the engine's built-in table in charge.
   context_window : Int32?
   thinking : @protocol.Thinking
   // Complete base system prompt used only when creating a new session.
@@ -84,98 +81,36 @@ fn configured_api_key(
 }
 
 ///|
-fn parse_model_opt(id : String) -> @deepseek.Model? {
-  Some(@deepseek.Model::parse(id)) catch {
+/// The context window a saved custom model entry specifies, or `None` when
+/// the engine's built-in table should decide.
+fn configured_context_window(
+  settings : EngineSettings,
+  model : String,
+) -> Int32? {
+  match settings.provider {
+    Custom =>
+      find_custom_model(settings.models, model).map(e => e.context_window)
     _ => None
   }
 }
 
 ///|
-fn find_saved_model_entry(
-  models : Array[ModelEntry],
-  model : String,
-) -> ModelEntry? {
-  match models.search_by(entry => entry.id == model) {
-    Some(index) => Some(models[index])
-    None =>
-      match parse_model_opt(model) {
-        Some(parsed) =>
-          match
-            models.search_by(entry => parse_model_opt(entry.id) == Some(parsed)) {
-            Some(index) => Some(models[index])
-            None => None
-          }
-        None => None
-      }
+/// Set the run's API key variable and optional context window in a child
+/// environment, clearing ambient custom overrides so they cannot leak into
+/// built-in runs.
+fn apply_model_env(
+  env : Map[String, String],
+  key_env~ : String,
+  api_key~ : String,
+  context_window~ : Int32?,
+) -> Unit {
+  env[key_env] = api_key
+  if key_env != @deepseek.CustomApiKeyEnv {
+    env.remove(@deepseek.CustomApiKeyEnv)
   }
-}
-
-///|
-/// The endpoint, key variable, and image capability one model runs with.
-///
-/// A built-in model on an official/OpenRouter provider uses that provider's
-/// slot and built-in rules. On the Custom provider (or for any non-built-in
-/// model id), a saved entry carries its own endpoint/credential fallback,
-/// context window, and — if the entry names a built-in id — keeps that
-/// built-in's protocol (`key_env` and image rules); otherwise it uses
-/// `OPENSEEK_API_KEY` and `entry.images`.
-fn resolve_model_route(
-  settings : EngineSettings,
-  model : String,
-) -> (ResolvedEndpoint, String, Bool, Int32?) raise EngineError {
-  let requested = parse_model_opt(model)
-  let is_builtin = match requested {
-    Some(Custom(_)) | None => false
-    Some(_) => true
-  }
-  let use_saved_entry = match (settings.provider, is_builtin) {
-    (Custom, _) | (_, false) => find_saved_model_entry(settings.models, model)
-    (_, true) => None
-  }
-  match use_saved_entry {
-    Some(entry) => {
-      // An entry may name its own endpoint and key; one that names neither
-      // rides the custom provider's endpoint, which the settings page shows
-      // once for the whole section. Never read a built-in provider's slot for
-      // a user entry, and never require the custom slot when the entry names
-      // its own endpoint and key.
-      let api_url = match entry.api_url {
-        Some(url) => Some(url)
-        None => resolved_custom_endpoint(settings).api_url
-      }
-      let api_key = match entry.api_key {
-        Some(key) => key
-        None =>
-          configured_api_key(
-            stored_key?=settings.provider_config(Custom).api_key,
-            api_url?,
-          )
-      }
-      let (key_env, images) = match parse_model_opt(entry.id) {
-        Some(Custom(_)) | None => (@deepseek.CustomApiKeyEnv, entry.images)
-        Some(builtin) =>
-          (
-            builtin.api_key_env(),
-            builtin_supports_images(builtin.to_string(), api_url),
-          )
-      }
-      (
-        { api_key, api_url, },
-        key_env,
-        images,
-        // The entry's own window, which the engine's table cannot know.
-        Some(entry.context_window),
-      )
-    }
-    None => {
-      let slot = resolved_endpoint(settings)
-      (
-        slot,
-        key_env_for(settings.provider, model),
-        builtin_supports_images(model, slot.api_url),
-        None,
-      )
-    }
+  match context_window {
+    Some(window) => env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
+    None => env.remove("OPENSEEK_CONTEXT_WINDOW")
   }
 }
 
@@ -193,12 +128,9 @@ fn ApiProvider::default_model(self : ApiProvider) -> String {
 ///|
 /// The environment variable the engine resolves for one model wire name.
 fn model_key_env(model : String) -> String {
-  if model.has_prefix("glm-") {
-    "GLM"
-  } else if model.has_prefix("kimi-") {
-    "KIMI"
-  } else {
-    "DEEPSEEK"
+  match parse_model_opt(model) {
+    Some(parsed) => parsed.api_key_env()
+    None => @deepseek.CustomApiKeyEnv
   }
 }
 
@@ -336,21 +268,7 @@ async fn serve_config(
 ) -> RunConfig {
   let engine = manager.engine
   let settings = manager.settings_snapshot()
-  let model = match model {
-    Some(model) => model
-    // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
-    // deliberately ignored — see `serve_engine_env`), so the host's
-    // fallback must read the same variable.
-    None =>
-      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
-  }
-  // A run whose model is a user entry talks to that entry's own endpoint with
-  // that entry's key; a built-in keeps its provider slot. Resolved before the
-  // workspace so a misconfigured endpoint reports itself first, as it always
-  // has.
-  let (route, key_env, images, context_window) = resolve_model_route(
-    settings, model,
-  )
+  let endpoint = resolved_endpoint(settings)
   // A workspace run happens in the project directory itself, with the
   // session's durable record in the in-project store. Only registered
   // workspaces qualify — the registry, not the payload, decides which
@@ -378,14 +296,21 @@ async fn serve_config(
       "this conversation has no workspace; attach a project first",
     )
   }
+  let model = match model {
+    Some(model) => model
+    // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
+    // deliberately ignored — see `serve_engine_env`), so the host's
+    // fallback must read the same variable.
+    None =>
+      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
+  }
   {
     content: Content([Text(task)]),
-    api_key: route.api_key,
-    key_env,
-    api_url: route.api_url,
+    api_key: endpoint.api_key,
+    key_env: key_env_for(settings.provider, model),
+    api_url: endpoint.api_url,
     model,
-    images,
-    context_window,
+    context_window: configured_context_window(settings, model),
     thinking: RunConfig::configured_thinking(thinking),
     system_prompt,
     // Absent is ask: what every request meant before the field existed.
@@ -440,7 +365,6 @@ test "a different endpoint cannot reuse a live engine process" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "deepseek-v4-pro",
-    images: false,
     context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
@@ -753,13 +677,10 @@ fn prompt_content(
 
 ///|
 fn RunConfig::supports_images(self : RunConfig) -> Bool {
-  self.images
-}
-
-///|
-/// The built-in tiers that accept image parts: only the DeepSeek flash tier,
-/// and never through its OpenRouter route.
-fn builtin_supports_images(model : String, api_url : String?) -> Bool {
-  model is ("deepseek-flash" | "deepseek-v4-flash") &&
-  api_url != Some("https://openrouter.ai/api/v1/chat/completions")
+  match parse_model_opt(self.model) {
+    Some(Custom(_)) => true
+    _ =>
+      self.model is ("deepseek-flash" | "deepseek-v4-flash") &&
+      self.api_url != Some(OpenRouterChatCompletionsUrl)
+  }
 }

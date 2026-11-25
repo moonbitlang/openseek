@@ -91,10 +91,10 @@ pub(all) enum Message {
   CustomUrl
   EndpointUrl
   EndpointUrlDescription
-  EndpointUrlInvalid
   DeepseekApiKey
   GlmApiKey
   OpenRouterApiKey
+  CustomApiKey
   SavedKey
   ApiKey
   TestConnection
@@ -156,12 +156,10 @@ pub(all) enum Message {
   CustomEndpoint
   CurrentVersion(String)
   LanguageStorageFailed(String)
-  CustomModels
   NoCustomModels
   ModelId
   ModelIdHint
   ModelIdDuplicate
-  RenameModelInUse(Int32)
   ModelName
   ModelNameHint
   ModelNameTooLong
@@ -172,11 +170,6 @@ pub(all) enum Message {
   SaveModel
   EditModel
   DeleteModel
-  DeleteModelTitle
-  DeleteModelUnused
-  DeleteModelInUse(Int32)
-  CustomModelInUse(Int32)
-  CustomModelUnused
   ModelDeletedNotice
   ModelNotOnEndpointNotice
   ModelNotOnEndpointLabel
@@ -854,16 +847,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "Introduce una URL base (https://host/v1) o la URL completa de Chat Completions. Se guarda al salir del campo o pulsar Enter."
     (English, EndpointUrl) => "Endpoint URL"
     (Spanish, EndpointUrl) => "URL del endpoint"
-    (English, EndpointUrlInvalid) =>
-      "That URL is neither a base URL nor a Chat Completions URL. Use https://host/v1 or the full endpoint."
-    (Spanish, EndpointUrlInvalid) =>
-      "Esa URL no es una URL base ni una URL de Chat Completions. Usa https://host/v1 o la URL completa."
-    (SimplifiedChinese, EndpointUrlInvalid) =>
-      "这个地址既不是基础 URL，也不是 Chat Completions 地址。请填 https://host/v1 这样的基础 URL，或完整地址。"
-    (TraditionalChinese, EndpointUrlInvalid) =>
-      "這個網址既不是基礎 URL，也不是 Chat Completions 網址。請填 https://host/v1 這樣的基礎 URL，或完整網址。"
-    (Japanese, EndpointUrlInvalid) =>
-      "ベース URL でも Chat Completions URL でもありません。https://host/v1 のようなベース URL か、完全な URL を入力してください。"
     (SimplifiedChinese, EndpointUrl) => "端点 URL"
     (TraditionalChinese, EndpointUrl) => "端點 URL"
     (Japanese, EndpointUrl) => "エンドポイント URL"
@@ -882,6 +865,11 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, OpenRouterApiKey) => "OpenRouter API 密钥"
     (TraditionalChinese, OpenRouterApiKey) => "OpenRouter API 金鑰"
     (Japanese, OpenRouterApiKey) => "OpenRouter API キー"
+    (English, CustomApiKey) => "Custom API key"
+    (Spanish, CustomApiKey) => "Clave de API personalizada"
+    (SimplifiedChinese, CustomApiKey) => "自定义 API 密钥"
+    (TraditionalChinese, CustomApiKey) => "自定義 API 金鑰"
+    (Japanese, CustomApiKey) => "カスタム API キー"
     (English, SavedKey) => "saved — enter to replace"
     (Spanish, SavedKey) => "guardada — introduce otra para reemplazarla"
     (SimplifiedChinese, SavedKey) => "已保存，输入新密钥可替换"
@@ -1234,11 +1222,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "無法訪問語言偏好設定：\{detail}"
     (Japanese, LanguageStorageFailed(detail)) =>
       "言語設定にアクセスできません：\{detail}"
-    (English, CustomModels) => "Custom models"
-    (Spanish, CustomModels) => "Modelos personalizados"
-    (SimplifiedChinese, CustomModels) => "自定义模型"
-    (TraditionalChinese, CustomModels) => "自訂模型"
-    (Japanese, CustomModels) => "カスタムモデル"
     (English, NoCustomModels) => "No custom models yet."
     (Spanish, NoCustomModels) => "Aún no hay modelos personalizados."
     (SimplifiedChinese, NoCustomModels) => "还没有自定义模型。"
@@ -1266,24 +1249,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "已存在相同 ID 的自訂模型。"
     (Japanese, ModelIdDuplicate) =>
       "この ID のカスタムモデルはすでに存在します。"
-    (English, RenameModelInUse(count)) =>
-      if count == 1 {
-        "1 chat uses the previous ID. Renaming leaves it needing another model picked."
-      } else {
-        "\{count} chats use the previous ID. Renaming leaves them needing another model picked."
-      }
-    (Spanish, RenameModelInUse(count)) =>
-      if count == 1 {
-        "1 chat usa el ID anterior. Al cambiarlo tendrá que elegir otro modelo."
-      } else {
-        "\{count} chats usan el ID anterior. Al cambiarlo tendrán que elegir otro modelo."
-      }
-    (SimplifiedChinese, RenameModelInUse(count)) =>
-      "有 \{count} 个会话正在使用旧模型 ID。改名后这些会话需要重新选择模型。"
-    (TraditionalChinese, RenameModelInUse(count)) =>
-      "有 \{count} 個會話正在使用舊模型 ID。改名後這些會話需要重新選擇模型。"
-    (Japanese, RenameModelInUse(count)) =>
-      "\{count} 件の会話が変更前のモデル ID を使っています。名前を変更すると、別のモデルを選び直す必要があります。"
     (English, ModelName) => "Model display name"
     (Spanish, ModelName) => "Nombre visible del modelo"
     (SimplifiedChinese, ModelName) => "模型展示名称"
@@ -1354,57 +1319,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, DeleteModel) => "删除"
     (TraditionalChinese, DeleteModel) => "刪除"
     (Japanese, DeleteModel) => "削除"
-    (English, DeleteModelTitle) => "Delete model?"
-    (Spanish, DeleteModelTitle) => "¿Eliminar el modelo?"
-    (SimplifiedChinese, DeleteModelTitle) => "删除模型？"
-    (TraditionalChinese, DeleteModelTitle) => "刪除模型？"
-    (Japanese, DeleteModelTitle) => "モデルを削除しますか？"
-    (English, DeleteModelUnused) => "No chat uses this model."
-    (Spanish, DeleteModelUnused) => "Ningún chat usa este modelo."
-    (SimplifiedChinese, DeleteModelUnused) =>
-      "没有会话在使用这个模型。"
-    (TraditionalChinese, DeleteModelUnused) =>
-      "沒有會話在使用這個模型。"
-    (Japanese, DeleteModelUnused) =>
-      "このモデルを使っている会話はありません。"
-    (English, DeleteModelInUse(count)) =>
-      if count == 1 {
-        "1 chat uses this model. Deleting it leaves it needing it re-added or another model picked."
-      } else {
-        "\{count} chats use this model. Deleting it leaves them needing it re-added or another model picked."
-      }
-    (Spanish, DeleteModelInUse(count)) =>
-      if count == 1 {
-        "1 chat usa este modelo. Al eliminarlo tendrá que volver a añadirlo o cambiar de modelo."
-      } else {
-        "\{count} chats usan este modelo. Al eliminarlo tendrán que volver a añadirlo o cambiar de modelo."
-      }
-    (SimplifiedChinese, DeleteModelInUse(count)) =>
-      "有 \{count} 个会话正在使用这个模型。删除后这些会话需要重新添加该模型，或换一个模型。"
-    (TraditionalChinese, DeleteModelInUse(count)) =>
-      "有 \{count} 個會話正在使用這個模型。刪除後這些會話需要重新新增該模型，或換一個模型。"
-    (Japanese, DeleteModelInUse(count)) =>
-      "\{count} 件の会話がこのモデルを使っています。削除すると、それらの会話は再追加するか別のモデルを選ぶ必要があります。"
-    (English, CustomModelInUse(count)) =>
-      if count == 1 {
-        "1 chat"
-      } else {
-        "\{count} chats"
-      }
-    (Spanish, CustomModelInUse(count)) =>
-      if count == 1 {
-        "1 chat"
-      } else {
-        "\{count} chats"
-      }
-    (SimplifiedChinese, CustomModelInUse(count)) => "\{count} 个会话"
-    (TraditionalChinese, CustomModelInUse(count)) => "\{count} 個會話"
-    (Japanese, CustomModelInUse(count)) => "\{count} 件の会話"
-    (English, CustomModelUnused) => "Unused"
-    (Spanish, CustomModelUnused) => "Sin usar"
-    (SimplifiedChinese, CustomModelUnused) => "未使用"
-    (TraditionalChinese, CustomModelUnused) => "未使用"
-    (Japanese, CustomModelUnused) => "未使用"
     (English, ModelDeletedNotice) =>
       "This conversation's model was deleted. Add it again in Settings, or pick another model."
     (Spanish, ModelDeletedNotice) =>

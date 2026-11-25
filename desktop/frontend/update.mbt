@@ -2328,18 +2328,7 @@ fn update_msg(
     return (@cmd.batch([focus, connect]), model)
   }
   match msg {
-    // The custom endpoint's model owns its own state; one arm keeps its
-    // messages out of the rest of this dispatch.
-    CustomModelAdd
-    | CustomModelEdit(_)
-    | CustomModelIdChanged(_)
-    | CustomModelLabelChanged(_)
-    | CustomModelWindowChanged(_)
-    | CustomModelCancel
-    | CustomModelSubmit
-    | CustomModelDeleteRequest(_)
-    | CustomModelDeleteCancelled
-    | CustomModelDelete(_) => model.update_custom_model(dispatch, msg)
+    CustomModel(sub) => model.update_custom_model(dispatch, sub)
     Init => {
       // Both pages boot the same console; they differ only in where its
       // device comes from. A browser console asks the relay who is signed
@@ -4526,21 +4515,6 @@ fn update_msg(
       guard model.host_settings() is Some({ endpoint, .. }) else {
         return (@cmd.none, model)
       }
-      let edited : HostEndpoint = {
-        ..endpoint,
-        providers: endpoint.providers.add(Custom, {
-          ..endpoint.config(Custom),
-          api_url: Some(value),
-        }),
-      }
-      // What the field shows is what the user typed; a URL this endpoint cannot
-      // post to is kept there with the hint under it and never pushed, because
-      // the host's refusal arrives as a generic save failure and the field
-      // would fall back to the value it had before. A preview, not an edit: a
-      // value that never leaves the page must not hold a save open.
-      if endpoint_url_problem(value) is Some(_) {
-        return (@cmd.none, model.preview_host_endpoint(edited))
-      }
       (
         push_host_settings(
           dispatch,
@@ -4548,7 +4522,13 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        model.edit_host_endpoint(edited),
+        model.edit_host_endpoint({
+          ..endpoint,
+          providers: endpoint.providers.add(Custom, {
+            ..endpoint.config(Custom),
+            api_url: Some(value),
+          }),
+        }),
       )
     }
     NotificationCornerChanged(value) => {
@@ -5175,8 +5155,7 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
-    TestApiConnection(model_id) =>
-      model.test_api_connection(dispatch, model_id~)
+    TestApiConnection => model.test_api_connection(dispatch)
     ApiConnectionProbed(attempt, reply) => {
       guard model.api_connection_probe is Some(probe) &&
         probe.attempt == attempt &&
@@ -17144,7 +17123,7 @@ fn host_settings(
   has_openrouter_key~ : Bool = false,
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
-  models~ : Array[@protocol.ModelStatus] = [],
+  models~ : Array[@protocol.CustomModel] = [],
 ) -> HostSettings {
   HostSettings::from_status({
     revision,
@@ -17170,48 +17149,6 @@ test "the OpenRouter provider restores independently of Custom" {
   )
   assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
-}
-
-///|
-test "a partial endpoint URL stays in the field instead of being saved" {
-  let model = test_model().with_host_settings(mirror => {
-    let current = mirror.current.unwrap_or(host_settings(provider="custom"))
-    { ..mirror, current: Some(current), }
-  })
-  // Base URLs, their already-complete form, and a blank field (which clears
-  // the stored value) all pass the check.
-  for
-    accepted in [
-      "https://host/v1", "https://host", "https://host/v1/chat/completions", "   ",
-    ] {
-    assert_true(endpoint_url_problem(accepted) is None)
-  }
-  // A path that is neither is refused while the user is looking at the field.
-  assert_true(
-    endpoint_url_problem("https://host/v1/chat") is Some(EndpointUrlInvalid),
-  )
-  let (_, edited) = update(
-    test_dispatch(),
-    CustomApiUrlChanged("https://host/v1/chat"),
-    model,
-  )
-  assert_eq(
-    edited
-    .host_settings()
-    .map(settings => settings.endpoint.config(Custom).api_url.unwrap_or("")),
-    Some("https://host/v1/chat"),
-  )
-  // A field that was never pushed must not count a write: no reply would ever
-  // settle it, and a stuck count keeps every connection test disabled.
-  assert_eq(edited.host_settings_mirror().saves, 0)
-  assert_false(edited.host_settings_saving())
-  let (_, saved) = update(
-    test_dispatch(),
-    CustomApiUrlChanged("https://host/v1"),
-    model,
-  )
-  assert_eq(saved.host_settings_mirror().saves, 1)
-  assert_true(saved.host_settings_saving())
 }
 
 ///|
@@ -17449,27 +17386,17 @@ test "the GLM provider aligns only a fresh chat to its model family" {
 }
 
 ///|
-/// A model whose host carries two saved custom entries, with the DeepSeek
-/// provider still selected — the state the app is in before a switch.
 fn model_with_custom_entries() -> Model {
-  let entries : Array[CustomModel] = [
+  let entries : Array[@protocol.CustomModel] = [
     {
       id: "gemini-4-hydrogen",
       label: Some("Gemini 4 Hydrogen"),
-      api_url: None,
-      full_url: false,
-      has_api_key: false,
-      images: true,
-      context_window: 1_000_000,
+      context_window: @protocol.DefaultCustomModelContextWindow,
     },
     {
       id: "gemini-4-neon",
       label: None,
-      api_url: None,
-      full_url: false,
-      has_api_key: false,
-      images: true,
-      context_window: 1_000_000,
+      context_window: @protocol.DefaultCustomModelContextWindow,
     },
   ]
   test_model().with_host_settings(mirror => {
@@ -17479,156 +17406,89 @@ fn model_with_custom_entries() -> Model {
 }
 
 ///|
-/// A custom endpoint serves the models its section named: switching to it
-/// starts a fresh chat on the first saved entry, and the menu offers those
-/// entries instead of the tiers this build ships — a tier would run there with
-/// no entry saying what window the endpoint serves.
-test "switching to the custom provider starts a fresh chat on a saved entry" {
+test "switching to and from the custom provider aligns fresh chats and guards unserved models" {
   let dispatch = test_dispatch()
-  let model = model_with_custom_entries()
-  assert_true(model.api_provider() is Deepseek)
-  assert_true(model.active().engine_model is Deepseek(V4Pro))
-  let (_, switched) = update(
-    dispatch,
-    ProviderChanged("custom"),
-    model.with_host_endpoint(
-      custom_api_url="https://openrouter.ai/api/v1",
-      custom_key_saved=true,
-    ),
+  let custom_ready = model_with_custom_entries().with_host_endpoint(
+    custom_api_url="https://openrouter.ai/api/v1",
+    custom_key_saved=true,
   )
-  assert_true(switched.api_provider() is Custom)
+  // Switching to Custom aligns a fresh chat to the first saved entry.
+  let (_, switched) = update(dispatch, ProviderChanged("custom"), custom_ready)
   assert_true(switched.default_model is Custom("gemini-4-hydrogen", ..))
   assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
-  let chip = switched.openseek_model_chip(switched.active())
-  assert_eq(chip.groups[0].options.map(option => option.label), [
-    "Gemini 4 Hydrogen", "gemini-4-neon",
-  ])
-}
-
-///|
-/// A chat that already has a transcript keeps the model it ran on — a provider
-/// switch never rewrites what a conversation is — and the menu keeps that row
-/// visible beside the entries, so the chip never names a model it cannot show.
-test "switching to the custom provider leaves a begun chat's model alone" {
-  let dispatch = test_dispatch()
-  let model = model_with_custom_entries().replace_conversation(
-    running_conversation(),
+  assert_eq(
+    switched.openseek_model_chip(switched.active()).groups[0].options.map(o => {
+      o.label
+    }),
+    ["Gemini 4 Hydrogen", "gemini-4-neon"],
   )
-  let (_, switched) = update(
+  // A begun chat keeps its model visible, marked unserved, with Send disabled.
+  let (_, begun_switched) = update(
     dispatch,
     ProviderChanged("custom"),
-    model.with_host_endpoint(
-      custom_api_url="https://openrouter.ai/api/v1",
-      custom_key_saved=true,
-    ),
+    custom_ready.replace_conversation(running_conversation()),
   )
-  assert_true(switched.api_provider() is Custom)
-  assert_true(switched.active().engine_model is Deepseek(V4Pro))
-  let chip = switched.openseek_model_chip(switched.active())
-  assert_eq(chip.groups[0].options.map(option => option.label), [
-    "Gemini 4 Hydrogen", "gemini-4-neon", "DeepSeek Pro (not served here)",
-  ])
-}
-
-///|
-/// Keeping a model the endpoint does not serve visible is not an offer to run
-/// it: the composer says so, and Send stays out of reach until an entry is
-/// picked or the provider changes back.
-test "a model the custom endpoint does not serve cannot be sent with" {
-  let stale = model_with_custom_entries()
-    .with_host_endpoint(
-      provider=Custom,
-      custom_api_url="https://openrouter.ai/api/v1",
-      custom_key_saved=true,
-    )
-    .replace_conversation({
-      ..test_conversation(),
-      engine_model: Deepseek(V4Pro),
-    })
-  let input = stale.composer_input()
-  guard input.presentation.primary_action is Send(available~) else {
-    fail("an idle conversation offers Send")
+  assert_true(begun_switched.active().engine_model is Deepseek(V4Pro))
+  assert_eq(
+    begun_switched.openseek_model_chip(begun_switched.active()).groups[0].options.map(o => {
+        o.label
+      },
+    ),
+    ["Gemini 4 Hydrogen", "gemini-4-neon", "DeepSeek Pro (not served here)"],
+  )
+  let unserved = switched.replace_conversation({
+    ..test_conversation(),
+    engine_model: Deepseek(V4Pro),
+  })
+  let unserved_input = unserved.composer_input()
+  guard unserved_input.presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
   }
   assert_false(available)
-  assert_true(
-    input.presentation.context.any(component => {
-      component is @composer.ApiSetupNotice(text~) &&
-      text.contains("does not serve")
+  assert_false(unserved_input.presentation.images_enabled)
+  // Switching back to DeepSeek stops a custom entry from running on a begun chat,
+  // while aligning a fresh chat to DeepSeek's default.
+  let on_entry = switched.replace_conversation({
+    ..running_conversation(),
+    engine_model: Custom(
+      "gemini-4-hydrogen",
+      context_window=@protocol.DefaultCustomModelContextWindow,
+    ),
+  })
+  let (_, back_to_ds) = update(dispatch, ProviderChanged("deepseek"), on_entry)
+  assert_eq(
+    back_to_ds.openseek_model_chip(back_to_ds.active()).groups[0].options.map(o => {
+      o.label
     }),
+    ["DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Hydrogen (not served here)"],
   )
-}
-
-///|
-/// The other direction of the same rule: an entry rides the custom endpoint's
-/// URL, so on a provider family it stays visible for the chat that ran it and
-/// stops being runnable — while a fresh chat moves to that provider's own model.
-test "switching away from the custom provider stops an entry from running" {
-  let dispatch = test_dispatch()
-  let on_entry = model_with_custom_entries()
-    .with_host_endpoint(
-      provider=Custom,
-      custom_api_url="https://openrouter.ai/api/v1",
-      custom_key_saved=true,
-    )
-    .replace_conversation({
-      ..running_conversation(),
-      engine_model: Custom(
-        "gemini-4-hydrogen",
-        context_window=DefaultContextWindow,
-      ),
-    })
-  let (_, switched) = update(dispatch, ProviderChanged("deepseek"), on_entry)
-  assert_true(switched.api_provider() is Deepseek)
-  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
-  let chip = switched.openseek_model_chip(switched.active())
-  assert_eq(chip.groups[0].options.map(option => option.label), [
-    "DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Hydrogen (not served here)",
-  ])
-  // A fresh chat has no history to protect, so it moves to the family's model
-  // instead of starting on one the provider cannot run.
-  let (_, aligned) = update(
+  let (_, fresh_ds) = update(
     dispatch,
     ProviderChanged("deepseek"),
-    model_with_custom_entries().replace_conversation({
+    switched.replace_conversation({
       ..test_conversation(),
       engine_model: Custom(
         "gemini-4-hydrogen",
-        context_window=DefaultContextWindow,
+        context_window=@protocol.DefaultCustomModelContextWindow,
       ),
     }),
   )
-  assert_true(aligned.active().engine_model is Deepseek(V4Flash))
-}
-
-///|
-/// A custom endpoint with no entry has nothing to run, and must not fall back to
-/// a tier this build ships: the composer says to add one, and offers neither a
-/// model menu nor Send.
-test "a custom endpoint with no saved model asks for one" {
+  assert_true(fresh_ds.active().engine_model is Deepseek(V4Flash))
+  // A custom endpoint with no saved model disables both Send and the model menu.
   let empty = test_model().with_host_endpoint(
     provider=Custom,
     custom_api_url="https://openrouter.ai/api/v1",
     custom_key_saved=true,
   )
-  let input = empty.composer_input()
-  guard input.presentation.primary_action is Send(available~) else {
-    fail("an idle conversation offers Send")
+  guard empty.composer_input().presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
   }
   assert_false(available)
-  assert_true(
-    input.presentation.context.any(component => {
-      component is @composer.ApiSetupNotice(text~) &&
-      text.contains("no model yet")
-    }),
-  )
   assert_true(empty.openseek_model_chip(empty.active()).disabled)
 }
 
 ///|
-/// Deleting or renaming the active custom entry moves `default_model` and fresh
-/// chats onto a remaining entry, while conversations that already have history
-/// stay pinned to the deleted name with Send disabled.
-test "deleting a custom model aligns default_model and fresh chats" {
+test "deleting and re-adding custom models aligns fresh chats without rewriting started ones" {
   let dispatch = test_dispatch()
   let (_, switched) = update(
     dispatch,
@@ -17638,29 +17498,14 @@ test "deleting a custom model aligns default_model and fresh chats" {
       custom_key_saved=true,
     ),
   )
-  assert_true(switched.default_model is Custom("gemini-4-hydrogen", ..))
-  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
-  // Add a started conversation that also ran on the soon-to-be-deleted entry.
   let with_started = switched.replace_conversation({
     ..running_conversation(),
     session_id: "started-custom",
     engine_model: Custom(
       "gemini-4-hydrogen",
-      context_window=DefaultContextWindow,
+      context_window=@protocol.DefaultCustomModelContextWindow,
     ),
   })
-  // Delete `gemini-4-hydrogen`, leaving `gemini-4-neon`.
-  let remaining : Array[@protocol.ModelStatus] = [
-    {
-      id: "gemini-4-neon",
-      label: None,
-      api_url: None,
-      full_url: false,
-      has_api_key: false,
-      images: true,
-      context_window: 1_000_000,
-    },
-  ]
   let base_settings = with_started.host_settings().unwrap()
   let status : @protocol.SettingsStatusPayload = {
     revision: base_settings.revision + 1,
@@ -17671,7 +17516,13 @@ test "deleting a custom model aligns default_model and fresh chats" {
         has_api_key: true,
       },
     },
-    models: remaining,
+    models: [
+      {
+        id: "gemini-4-neon",
+        label: None,
+        context_window: @protocol.DefaultCustomModelContextWindow,
+      },
+    ],
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
@@ -17693,8 +17544,6 @@ test "deleting a custom model aligns default_model and fresh chats" {
     after_delete.find_conversation(Local, "started-custom").unwrap().engine_model
     is Custom("gemini-4-hydrogen", ..),
   )
-  // Deleting the last entry resets fresh chats, and adding a new one later
-  // aligns them onto the newly added entry automatically.
   let (_, emptied) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -17718,11 +17567,7 @@ test "deleting a custom model aligns default_model and fresh chats" {
           {
             id: "gemini-4-argon",
             label: None,
-            api_url: None,
-            full_url: false,
-            has_api_key: false,
-            images: true,
-            context_window: 1_000_000,
+            context_window: @protocol.DefaultCustomModelContextWindow,
           },
         ],
       }),
@@ -17738,38 +17583,7 @@ test "deleting a custom model aligns default_model and fresh chats" {
 }
 
 ///|
-/// Images stay disabled when the conversation's model is not served by the
-/// active provider, and turn on once a served custom entry is selected.
-test "images_enabled requires a served model" {
-  let dispatch = test_dispatch()
-  let model = model_with_custom_entries().with_host_endpoint(
-    provider=Custom,
-    custom_api_url="https://openrouter.ai/api/v1",
-    custom_key_saved=true,
-  )
-  let unserved = model.replace_conversation({
-    ..running_conversation(),
-    engine_model: Deepseek(V4Flash),
-  })
-  assert_false(unserved.composer_input().presentation.images_enabled)
-  let (_, served) = update(
-    dispatch,
-    ModelPicked("openseek:gemini-4-hydrogen", draft={
-      task: "",
-      mentions: [],
-      images: [],
-    }),
-    unserved,
-  )
-  assert_true(served.composer_input().presentation.images_enabled)
-}
-
-///|
-/// Saving a built-in id such as `deepseek-flash` in Custom models makes it
-/// runnable under the Custom provider with its DeepSeek reasoning controls,
-/// while switching back to DeepSeek official uses the official label instead
-/// of the custom entry's display name.
-test "a built-in id added to Custom models runs with built-in controls" {
+test "a built-in id saved under Custom runs with built-in controls and custom label" {
   let with_ds_flash = test_model()
     .with_host_settings(mirror => {
       let current = mirror.current.unwrap_or(host_settings(provider="custom"))
@@ -17781,19 +17595,6 @@ test "a built-in id added to Custom models runs with built-in controls" {
             {
               id: "deepseek-flash",
               label: Some("Custom DS Flash"),
-              api_url: None,
-              full_url: false,
-              has_api_key: false,
-              images: true,
-              context_window: 131_072,
-            },
-            {
-              id: "text-only-custom",
-              label: None,
-              api_url: None,
-              full_url: false,
-              has_api_key: false,
-              images: false,
               context_window: 131_072,
             },
           ],
@@ -17811,7 +17612,7 @@ test "a built-in id added to Custom models runs with built-in controls" {
     })
   let input = with_ds_flash.composer_input()
   guard input.presentation.primary_action is Send(available~) else {
-    fail("an idle conversation offers Send")
+    fail("expected Send action")
   }
   assert_true(available)
   assert_true(input.presentation.images_enabled)
@@ -17822,22 +17623,12 @@ test "a built-in id added to Custom models runs with built-in controls" {
     with_ds_flash.selected_model_name(Deepseek(V4Flash)),
     "Custom DS Flash",
   )
-  let dispatch = test_dispatch()
   let (_, official) = update(
-    dispatch,
+    test_dispatch(),
     ProviderChanged("deepseek"),
     with_ds_flash,
   )
   assert_eq(official.selected_model_name(Deepseek(V4Flash)), "DeepSeek Flash")
-  // An entry with `images: false` disables image attachments.
-  let text_only = with_ds_flash.replace_conversation({
-    ..test_conversation(),
-    engine_model: Custom(
-      "text-only-custom",
-      context_window=DefaultContextWindow,
-    ),
-  })
-  assert_false(text_only.composer_input().presentation.images_enabled)
 }
 
 ///|

@@ -305,21 +305,15 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      // A custom entry honors its saved `images` flag; a built-in tier uses
-      // the route that carries images, and nothing accepts images when unserved.
+      // Custom models accept images by default; built-in tiers keep their route rule.
       images_enabled: self.conversation_model_ready(conv.engine_model) &&
-      (match conv.engine_model {
-        Custom(_) =>
-          match
-            self
-            .custom_models()
-            .search_by(entry => entry.matches_model(conv.engine_model)) {
-            Some(index) => self.custom_models()[index].images
-            None => true
-          }
-        Deepseek(V4Flash) => self.api_provider() is (Deepseek | Custom)
-        _ => false
-      }),
+      (
+        conv.engine_model is Custom(_) ||
+        (
+          conv.engine_model is Deepseek(V4Flash) &&
+          self.api_provider() is (Deepseek | Custom)
+        )
+      ),
       context,
       status,
       placeholder: if conv.controls.edit is Some(_) {

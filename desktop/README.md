@@ -395,26 +395,16 @@ returned. `has_api_key` includes the official provider's environment fallback.
 
 **Test connection** sends one short text prompt through the selected provider's
 saved API settings and the provider's default model, and reports whether it
-received streamed text. A custom model entry carries its own test instead: the
-probe names the entry, and the host routes it through that entry's endpoint and
-key with the fallbacks a run would use.
+received streamed text. For Custom URL, the gateway needs to accept
+`deepseek-flash`, the default model ID for that provider.
 
-`settings.set` also carries the user's own model entries: `models` is an
-ordered list of instructions keyed by id, where each one upserts the fields it
-names and a patch carrying `removed: true` drops that entry instead. Applying
-the list in order lets one request rename an entry (`[remove old, upsert
-new]`) or replace its contents, so editing one entry never touches another.
-`settings.status` returns the stored entries in saved order, each with its id,
-display name, endpoint, full-URL flag, image answer, key presence, and context
-window.
-
-A custom entry names its own context window, because no table in the host can
-know an arbitrary endpoint's: leaving the field blank uses the 1,000,000-token
-default and the field can lower it (1,024 to 10,000,000). The agent plans its
-context ceilings against that number, so an endpoint serving less compacts at
-the right point instead of being driven past its limit. The host exports the
-entry's window to every run it spawns for that model, and a built-in model
-keeps the engine's own table for its family.
+`settings.set` also accepts `models`, the complete replacement list of custom
+models saved for the Custom URL provider slot. Each entry names its wire `id`,
+optional display `label`, and `context_window` (default 1,000,000, allowed
+range 1,024 to 10,000,000). `settings.status` returns the saved entries in
+order, and the host exports a saved model's window as `OPENSEEK_CONTEXT_WINDOW`
+when running under the Custom provider (built-in providers keep the engine's
+built-in table).
 
 Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
 ending in `/v<number>` (with an optional trailing slash) receive
