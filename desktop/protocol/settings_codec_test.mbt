@@ -77,3 +77,32 @@ test "settings status preserves and requires the GLM capability flag" {
   }
   assert_true(malformed is None)
 }
+
+///|
+test "settings payloads round-trip custom models with trimmed ids and defaults" {
+  let patch : @protocol.SettingsSetPayload = @json.from_json({
+    "models": [
+      { "id": " gemini-4-hydrogen ", "label": "  " },
+      { "id": "o3-mini", "label": " o3 Mini ", "context_window": 32768 },
+    ],
+    "future_field": true,
+  })
+  guard patch.models is Some(entries) else { fail("models must decode") }
+  assert_eq(entries, [
+    {
+      id: "gemini-4-hydrogen",
+      label: None,
+      context_window: @protocol.DefaultCustomModelContextWindow,
+    },
+    { id: "o3-mini", label: Some("o3 Mini"), context_window: 32768, },
+  ])
+  @debug.assert_eq(patch.to_json(), {
+    "models": [
+      {
+        "id": "gemini-4-hydrogen",
+        "context_window": @protocol.DefaultCustomModelContextWindow,
+      },
+      { "id": "o3-mini", "label": "o3 Mini", "context_window": 32768 },
+    ],
+  })
+}

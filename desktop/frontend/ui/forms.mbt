@@ -26,16 +26,31 @@ pub fn switch_control(
 /// on the right. `stack=true` drops the control below the text at full
 /// width instead, for free-form fields (URLs, keys) that a narrow right
 /// column would squeeze.
+///
+/// `desc_invalid=true` marks the description as a rejection rather than the
+/// standing hint: it renders in the danger color and announces itself, so a
+/// value the form refused cannot be mistaken for help text.
 pub fn form_row(
   name : String,
   controls : Array[@html.Html],
   desc? : String,
   stack~ : Bool = false,
   hidden~ : Bool = false,
+  desc_invalid~ : Bool = false,
 ) -> @html.Html {
   let text : Array[@html.Html] = [@html.div(class="form-row-label", name)]
   if desc is Some(desc) && !desc.is_empty() {
-    text.push(@html.div(class="form-row-description", desc))
+    if desc_invalid {
+      text.push(
+        @html.div(
+          class="form-row-description danger",
+          attrs=@html.Attrs::build().role("alert"),
+          desc,
+        ),
+      )
+    } else {
+      text.push(@html.div(class="form-row-description", desc))
+    }
   }
   @html.div(
     class=if stack { "form-row stack" } else { "form-row" },

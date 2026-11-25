@@ -165,6 +165,23 @@ pub(all) enum Message {
   CustomEndpoint
   CurrentVersion(String)
   LanguageStorageFailed(String)
+  NoCustomModels
+  ModelId
+  ModelIdHint
+  ModelIdDuplicate
+  ModelName
+  ModelNameHint
+  ModelContextWindow
+  ModelContextWindowHint
+  ModelContextWindowInvalid
+  AddModel
+  SaveModel
+  EditModel
+  DeleteModel
+  ModelDeletedNotice
+  ModelNotOnEndpointNotice
+  ModelNotOnEndpointLabel
+  CustomModelsMissingNotice
 }
 
 // Type aliases

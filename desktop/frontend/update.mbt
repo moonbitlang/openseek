@@ -2328,6 +2328,7 @@ fn update_msg(
     return (@cmd.batch([focus, connect]), model)
   }
   match msg {
+    CustomModel(sub) => model.update_custom_model(dispatch, sub)
     Init => {
       // Both pages boot the same console; they differ only in where its
       // device comes from. A browser console asks the relay who is signed
@@ -4426,6 +4427,7 @@ fn update_msg(
         followup_behavior: None,
         prompt_source: source,
         custom_prompt: text,
+        models: None,
       }
       (
         push_host_settings(
@@ -5153,7 +5155,8 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
-    TestApiConnection => model.test_api_connection(dispatch)
+    TestApiConnection(model_id) =>
+      model.test_api_connection(dispatch, model_id~)
     ApiConnectionProbed(attempt, reply) => {
       guard model.api_connection_probe is Some(probe) &&
         probe.attempt == attempt &&
@@ -17121,6 +17124,7 @@ fn host_settings(
   has_openrouter_key~ : Bool = false,
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
+  models~ : Array[@protocol.CustomModel] = [],
 ) -> HostSettings {
   HostSettings::from_status({
     revision,
@@ -17134,6 +17138,7 @@ fn host_settings(
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
+    models,
   })
 }
 
@@ -17379,6 +17384,252 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(running.default_model is Glm(G53))
   assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
+}
+
+///|
+fn model_with_custom_entries() -> Model {
+  let entries : Array[@protocol.CustomModel] = [
+    {
+      id: "gemini-4-hydrogen",
+      label: Some("Gemini 4 Hydrogen"),
+      context_window: @protocol.DefaultCustomModelContextWindow,
+    },
+    {
+      id: "gemini-4-neon",
+      label: None,
+      context_window: @protocol.DefaultCustomModelContextWindow,
+    },
+  ]
+  test_model().with_host_settings(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
+    { ..mirror, current: Some({ ..current, models: entries, }), }
+  })
+}
+
+///|
+test "switching to and from the custom provider aligns fresh chats and guards unserved models" {
+  let dispatch = test_dispatch()
+  let custom_ready = model_with_custom_entries().with_host_endpoint(
+    custom_api_url="https://openrouter.ai/api/v1",
+    custom_key_saved=true,
+  )
+  // Switching to Custom aligns a fresh chat to the first saved entry.
+  let (_, switched) = update(dispatch, ProviderChanged("custom"), custom_ready)
+  assert_true(switched.default_model is Custom("gemini-4-hydrogen", ..))
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
+  assert_eq(
+    switched.openseek_model_chip(switched.active()).groups[0].options.map(o => {
+      o.label
+    }),
+    ["Gemini 4 Hydrogen", "gemini-4-neon"],
+  )
+  // A begun chat keeps its model visible, marked unserved, with Send disabled.
+  let (_, begun_switched) = update(
+    dispatch,
+    ProviderChanged("custom"),
+    custom_ready.replace_conversation(running_conversation()),
+  )
+  assert_true(begun_switched.active().engine_model is Deepseek(V4Pro))
+  assert_eq(
+    begun_switched.openseek_model_chip(begun_switched.active()).groups[0].options.map(o => {
+        o.label
+      },
+    ),
+    ["Gemini 4 Hydrogen", "gemini-4-neon", "DeepSeek Pro (not served here)"],
+  )
+  let unserved = switched.replace_conversation({
+    ..test_conversation(),
+    engine_model: Deepseek(V4Pro),
+  })
+  let unserved_input = unserved.composer_input()
+  guard unserved_input.presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
+  }
+  assert_false(available)
+  assert_false(unserved_input.presentation.images_enabled)
+  // Switching back to DeepSeek stops a custom entry from running on a begun chat,
+  // while aligning a fresh chat to DeepSeek's default.
+  let on_entry = switched.replace_conversation({
+    ..running_conversation(),
+    engine_model: Custom(
+      "gemini-4-hydrogen",
+      context_window=@protocol.DefaultCustomModelContextWindow,
+    ),
+  })
+  let (_, back_to_ds) = update(dispatch, ProviderChanged("deepseek"), on_entry)
+  assert_eq(
+    back_to_ds.openseek_model_chip(back_to_ds.active()).groups[0].options.map(o => {
+      o.label
+    }),
+    ["DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Hydrogen (not served here)"],
+  )
+  let (_, fresh_ds) = update(
+    dispatch,
+    ProviderChanged("deepseek"),
+    switched.replace_conversation({
+      ..test_conversation(),
+      engine_model: Custom(
+        "gemini-4-hydrogen",
+        context_window=@protocol.DefaultCustomModelContextWindow,
+      ),
+    }),
+  )
+  assert_true(fresh_ds.active().engine_model is Deepseek(V4Flash))
+  // A custom endpoint with no saved model disables both Send and the model menu.
+  let empty = test_model().with_host_endpoint(
+    provider=Custom,
+    custom_api_url="https://openrouter.ai/api/v1",
+    custom_key_saved=true,
+  )
+  guard empty.composer_input().presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
+  }
+  assert_false(available)
+  assert_true(empty.openseek_model_chip(empty.active()).disabled)
+}
+
+///|
+test "deleting and re-adding custom models aligns fresh chats without rewriting started ones" {
+  let dispatch = test_dispatch()
+  let (_, switched) = update(
+    dispatch,
+    ProviderChanged("custom"),
+    model_with_custom_entries().with_host_endpoint(
+      custom_api_url="https://openrouter.ai/api/v1",
+      custom_key_saved=true,
+    ),
+  )
+  let with_started = switched.replace_conversation({
+    ..running_conversation(),
+    session_id: "started-custom",
+    engine_model: Custom(
+      "gemini-4-hydrogen",
+      context_window=@protocol.DefaultCustomModelContextWindow,
+    ),
+  })
+  let base_settings = with_started.host_settings().unwrap()
+  let status : @protocol.SettingsStatusPayload = {
+    revision: base_settings.revision + 1,
+    provider: "custom",
+    providers: {
+      "custom": {
+        api_url: Some("https://openrouter.ai/api/v1/chat/completions"),
+        has_api_key: true,
+      },
+    },
+    models: [
+      {
+        id: "gemini-4-neon",
+        label: None,
+        context_window: @protocol.DefaultCustomModelContextWindow,
+      },
+    ],
+    followup_behavior: "steer",
+    prompt_source: "builtin_moonbit_guide",
+    custom_prompt: "",
+  }
+  let (_, after_delete) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      HostSettings::from_status(status),
+      connection_generation=with_started.focused_connection_generation(),
+    ),
+    with_started,
+  )
+  assert_true(after_delete.default_model is Custom("gemini-4-neon", ..))
+  assert_true(
+    after_delete.find_conversation(Local, "desktop-test").unwrap().engine_model
+    is Custom("gemini-4-neon", ..),
+  )
+  assert_true(
+    after_delete.find_conversation(Local, "started-custom").unwrap().engine_model
+    is Custom("gemini-4-hydrogen", ..),
+  )
+  let (_, emptied) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      HostSettings::from_status({
+        ..status,
+        revision: status.revision + 1,
+        models: [],
+      }),
+      connection_generation=None,
+    ),
+    after_delete,
+  )
+  assert_true(emptied.default_model is Deepseek(V4Flash))
+  let (_, readded) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      HostSettings::from_status({
+        ..status,
+        revision: status.revision + 2,
+        models: [
+          {
+            id: "gemini-4-argon",
+            label: None,
+            context_window: @protocol.DefaultCustomModelContextWindow,
+          },
+        ],
+      }),
+      connection_generation=None,
+    ),
+    emptied,
+  )
+  assert_true(readded.default_model is Custom("gemini-4-argon", ..))
+  assert_true(
+    readded.find_conversation(Local, "desktop-test").unwrap().engine_model
+    is Custom("gemini-4-argon", ..),
+  )
+}
+
+///|
+test "a built-in id saved under Custom runs with built-in controls and custom label" {
+  let with_ds_flash = test_model()
+    .with_host_settings(mirror => {
+      let current = mirror.current.unwrap_or(host_settings(provider="custom"))
+      {
+        ..mirror,
+        current: Some({
+          ..current,
+          models: [
+            {
+              id: "deepseek-flash",
+              label: Some("Custom DS Flash"),
+              context_window: 131_072,
+            },
+          ],
+        }),
+      }
+    })
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://gateway.example/v1",
+      custom_key_saved=true,
+    )
+    .replace_conversation({
+      ..test_conversation(),
+      engine_model: Deepseek(V4Flash),
+    })
+  let input = with_ds_flash.composer_input()
+  guard input.presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
+  }
+  assert_true(available)
+  assert_true(input.presentation.images_enabled)
+  assert_true(
+    with_ds_flash.openseek_reasoning_chip(with_ds_flash.active()) is Some(_),
+  )
+  assert_eq(
+    with_ds_flash.selected_model_name(Deepseek(V4Flash)),
+    "Custom DS Flash",
+  )
+  let (_, official) = update(
+    test_dispatch(),
+    ProviderChanged("deepseek"),
+    with_ds_flash,
+  )
+  assert_eq(official.selected_model_name(Deepseek(V4Flash)), "DeepSeek Flash")
 }
 
 ///|

@@ -389,16 +389,35 @@ fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
 }
 
 ///|
-/// Whether a model belongs to the selected provider. Custom endpoints accept
-/// every model; Kimi retains its existing endpoint selection.
+/// Whether a model belongs to the selected provider's family — the rule a fresh
+/// chat is aligned by, not the rule that says a model can run (see
+/// `Model::model_availability`). An entry names its own endpoint, so it belongs
+/// to the custom provider alone; a tier this build ships belongs to the family
+/// that serves it. Kimi retains its existing endpoint selection.
 fn @deepseek.Model::matches_provider(
   self : @deepseek.Model,
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
-    (Custom, _) | (_, Kimi(_)) => true
+    (Custom, Custom(_)) => true
+    (_, Kimi(_)) => true
     (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
+  }
+}
+
+///|
+fn provider_default_model_for(
+  provider : ApiProvider,
+  models : Array[@protocol.CustomModel],
+) -> @deepseek.Model {
+  match provider {
+    Custom =>
+      match models {
+        [first, ..] => custom_model_engine_model(first)
+        [] => provider.default_model()
+      }
+    _ => provider.default_model()
   }
 }
 
@@ -1279,6 +1298,9 @@ priv struct Model {
   // `DeviceState`.
   setup_api_key : String
   api_connection_probe : ApiConnectionProbe?
+  // The custom-model editor, open while `Some`. Its draft lives here rather
+  // than in the settings page so navigating cannot lose typed fields.
+  custom_model : CustomModelDraft?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1643,6 +1665,8 @@ priv struct HostEndpoint {
 priv struct HostSettings {
   revision : Int32
   endpoint : HostEndpoint
+  // The models the user saved, in the order the host stores them.
+  models : Array[@protocol.CustomModel]
   // The default prompt for new chats: `builtin_moonbit_guide` or `custom`,
   // with the host's saved custom text either way.
   prompt_source : String
@@ -1884,9 +1908,10 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
-  TestApiConnection
+  TestApiConnection(String?)
   ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
+  CustomModel(CustomModelMsg)
   OpenSchedules
   SchedulePage(SchedulePageMsg)
   OpenSkills
@@ -2769,6 +2794,7 @@ fn initial_model(
     cloud_followup_behavior: FollowupSteer,
     api_connection_probe: None,
     setup_api_key: "",
+    custom_model: None,
     is_desktop: desktop,
     is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),
@@ -3241,23 +3267,32 @@ fn Model::align_new_chats_with_provider(
   channel : @interop.ChannelId,
 ) -> Model {
   guard self.device_state(channel) is Some(dev) &&
-    dev.host_settings.current is Some({ endpoint: { provider, .. }, .. }) else {
+    dev.host_settings.current
+    is Some({ endpoint: { provider, .. }, models, .. }) else {
     return self
   }
-  let next = if channel == self.focused &&
-    !self.default_model.matches_provider(provider) {
-    { ..self, default_model: provider.default_model(), }
+  let model_aligned = (model : @deepseek.Model) => {
+    match provider {
+      // On a custom endpoint, only models configured in its saved entries are
+      // served; removed or unconfigured ones fall forward to a saved entry.
+      Custom => find_custom_model(models, model) is Some(_)
+      _ => model.matches_provider(provider)
+    }
+  }
+  let fallback = provider_default_model_for(provider, models)
+  let next = if channel == self.focused && !model_aligned(self.default_model) {
+    { ..self, default_model: fallback, }
   } else {
     self
   }
-  let new_chat_model = if next.default_model.matches_provider(provider) {
+  let new_chat_model = if model_aligned(next.default_model) {
     next.default_model
   } else {
-    provider.default_model()
+    fallback
   }
   let conversations = next.conversations.map(conv => {
     if conv.device == channel &&
-      !conv.engine_model.matches_provider(provider) &&
+      !model_aligned(conv.engine_model) &&
       next.conversation_is_new_chat(conv) {
       { ..conv, engine_model: new_chat_model, }
     } else {

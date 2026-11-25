@@ -1477,6 +1477,13 @@ fn api_settings_rows(
       ),
     )
   }
+  // The custom models this endpoint serves close the section: one row each,
+  // with the editor in place of the entry it changes.
+  if model.api_provider() is Custom {
+    for row in custom_model_rows(dispatch, model) {
+      rows.push(row)
+    }
+  }
   rows
 }
 

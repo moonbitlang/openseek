@@ -9,7 +9,7 @@ import {
 // Values
 pub fn dialog_page(Array[@html.Html], class~ : String, attrs? : @html.Attrs) -> @html.Html
 
-pub fn form_row(String, Array[@html.Html], desc? : String, stack? : Bool, hidden? : Bool) -> @html.Html
+pub fn form_row(String, Array[@html.Html], desc? : String, stack? : Bool, hidden? : Bool, desc_invalid? : Bool) -> @html.Html
 
 pub fn form_section(() -> @html.Html, String, Array[@html.Html], actions? : Array[@html.Html]) -> @html.Html
 

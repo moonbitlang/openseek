@@ -309,6 +309,8 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
+  // Complete replacement list of saved custom models, in display order.
+  models : Array[CustomModel]?
 }
 
 ///|
@@ -322,6 +324,9 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     followup_behavior: object.optional_string("followup_behavior"),
     prompt_source: object.optional_string("prompt_source"),
     custom_prompt: object.optional_string("custom_prompt"),
+    models: object
+    .optional_json("models")
+    .map(value => @json.from_json(value, path=path.add_key("models"))),
   }
 }
 
@@ -342,6 +347,9 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.custom_prompt is Some(value) {
     fields["custom_prompt"] = Json(value)
+  }
+  if self.models is Some(value) {
+    fields["models"] = Json(value)
   }
   Json(fields)
 }
@@ -1577,21 +1585,29 @@ pub impl ToJson for ProviderStatus with fn to_json(self) {
 }
 
 ///|
-/// Saved settings revision to test.
+/// Saved settings revision to test, with an optional saved custom model id.
 #derive(Debug, Eq)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
+  model : String?
 }
 
 ///|
 pub impl FromJson for ApiConnectionProbePayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "API connection probe payload")
-  { revision: object.required_int("revision"), }
+  {
+    revision: object.required_int("revision"),
+    model: object.optional_string("model"),
+  }
 }
 
 ///|
 pub impl ToJson for ApiConnectionProbePayload with fn to_json(self) {
-  { "revision": Json(self.revision) }
+  let fields : Map[String, Json] = { "revision": Json(self.revision) }
+  if self.model is Some(model) {
+    fields["model"] = Json(model)
+  }
+  Json(fields)
 }
 
 ///|
@@ -1615,6 +1631,67 @@ pub impl ToJson for ApiConnectionProbeReply with fn to_json(self) {
 }
 
 ///|
+/// Shared bounds and defaults for saved custom model entries.
+pub const DefaultCustomModelContextWindow : Int32 = 1_000_000
+
+///|
+pub const MinCustomModelContextWindow : Int32 = 1_024
+
+///|
+pub const MaxCustomModelContextWindow : Int32 = 10_000_000
+
+///|
+pub const MaxCustomModels : Int32 = 50
+
+///|
+/// One saved custom model served by the Custom URL provider slot.
+#derive(Debug, Eq)
+pub(all) struct CustomModel {
+  id : String
+  label : String?
+  context_window : Int32
+}
+
+///|
+pub impl FromJson for CustomModel with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "custom model")
+  let id = object.required_string("id").trim().to_owned()
+  guard !id.is_empty() else {
+    raise JsonDecodeError((path.add_key("id"), "expected non-empty model id"))
+  }
+  let label = match object.optional_string("label") {
+    Some(value) => {
+      let trimmed = value.trim().to_owned()
+      if trimmed.is_empty() {
+        None
+      } else {
+        Some(trimmed)
+      }
+    }
+    None => None
+  }
+  {
+    id,
+    label,
+    context_window: object
+    .optional_int("context_window")
+    .unwrap_or(DefaultCustomModelContextWindow),
+  }
+}
+
+///|
+pub impl ToJson for CustomModel with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "id": Json(self.id),
+    "context_window": Json(self.context_window),
+  }
+  if self.label is Some(value) {
+    fields["label"] = Json(value)
+  }
+  Json(fields)
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32
@@ -1623,6 +1700,9 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
+  // The user's own model entries, in saved order. Omitted while empty, so a
+  // host that configured nothing keeps the payload a client already knew.
+  models : Array[CustomModel]
 }
 
 ///|
@@ -1638,19 +1718,27 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     followup_behavior: object.required_string("followup_behavior"),
     prompt_source: object.required_string("prompt_source"),
     custom_prompt: object.required_string("custom_prompt"),
+    models: match object.optional_json("models") {
+      Some(value) => @json.from_json(value, path=path.add_key("models"))
+      None => []
+    },
   }
 }
 
 ///|
 pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
-  Json::object({
+  let fields : Map[String, Json] = {
     "revision": Json(self.revision),
     "provider": Json(self.provider),
     "providers": Json(self.providers.map((_name, entry) => entry.to_json())),
     "followup_behavior": Json(self.followup_behavior),
     "prompt_source": Json(self.prompt_source),
     "custom_prompt": Json(self.custom_prompt),
-  })
+  }
+  if !self.models.is_empty() {
+    fields["models"] = Json(self.models)
+  }
+  Json(fields)
 }
 
 ///|
