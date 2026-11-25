@@ -300,11 +300,8 @@
   font-size: var(--font-size-sm);
   line-height: var(--line-height-tight);
   cursor: pointer;
+  pointer-events: auto;
   visibility: hidden;
-}
-.conversation-row:hover .row-archive,
-.conversation-row:focus-within .row-archive {
-  visibility: visible;
 }
 .row-archive:hover {
   background: var(--color-hover-subtle);
@@ -361,6 +358,10 @@
   display: none;
 }
 .row-actions {
+  pointer-events: none;
+  visibility: hidden;
+}
+.conversation-row:not(.loading) .row-actions {
   position: absolute;
   inset-block: 0;
   inset-inline-end: 0;
@@ -371,47 +372,21 @@
     transparent,
     var(--row-bg) 1rem
   );
-  pointer-events: none;
-  visibility: hidden;
 }
-.conversation-row:hover .row-actions,
-.conversation-row:focus-within .row-actions,
-.row-actions:has(.row-menu-button[aria-expanded="true"]) {
-  visibility: visible;
+/* Reveal actions on hover, focus, or while the overflow menu is open; swap out
+   the status icon except while loading so the spinner stays beside the menu. */
+.conversation-row:is(:hover, :focus-within, :has(.row-menu-button[aria-expanded="true"])) {
+  & .row-actions,
+  & .row-archive {
+    visibility: visible;
+  }
+
+  &:not(.loading) .row-trailing:has(.row-actions) .row-status {
+    visibility: hidden;
+  }
 }
-.conversation-row:hover .row-actions .row-archive,
-.conversation-row:focus-within .row-actions .row-archive,
-.row-actions .row-menu-button[aria-expanded="true"] {
-  pointer-events: auto;
-}
-.conversation-row:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
-  visibility: hidden;
-}
-/* An open conversation menu keeps its hover-revealed trigger in place of the
-   status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
-  visibility: visible;
   color: var(--color-text-primary);
-}
-.conversation-row:not(.loading)
-  .row-trailing:has(.row-menu-button[aria-expanded="true"])
-  .row-status {
-  visibility: hidden;
-}
-.conversation-row.loading:is(
-  :hover,
-  :focus-within,
-  :has(.row-menu-button[aria-expanded="true"])
-) .row-actions {
-  position: static;
-  padding-inline: 0;
-  border-radius: 0;
-  background: none;
-}
-.conversation-row.loading:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row.loading:focus-within .row-trailing:has(.row-actions) .row-status {
-  visibility: visible;
 }
 
 .sidebar-group,
