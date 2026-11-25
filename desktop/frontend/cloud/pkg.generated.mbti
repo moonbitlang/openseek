@@ -46,6 +46,14 @@ pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, 
 
 // Types and methods
 #derive(Eq)
+pub struct CachedTranscript {
+  window : HistoryWindow
+  records : Array[Record]
+  document : @protocol.SessionDocument
+  etag : String?
+}
+
+#derive(Eq)
 pub enum CommandInput {
   Native(@openseek_protocol.Command)
   Terminal(@composer.ShellCommand?)
@@ -154,6 +162,8 @@ pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
 #derive(Eq)
 pub(all) struct Conversation {
   records : Array[Record]
+  other_history : CachedTranscript?
+  history_restore_range : (Int32, Int32)?
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
@@ -425,6 +435,7 @@ pub fn SessionListStatus::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct State {
+  history_view : @protocol.CloudHistoryView
   client_tools : Bool
   user_id : String?
   epoch : Int32
@@ -458,6 +469,7 @@ pub fn State::model(Self, String) -> @deepseek.DsVariant
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::replace(Self, String, Conversation) -> Self
 pub fn State::sidebar_sessions(Self) -> Array[Session]
+pub fn State::switch_history_view(Self, @protocol.CloudHistoryView, String?, Int32, String?, @cmd.Emit[Msg]) -> (Self, @cmd.Cmd)
 pub fn State::thinking(Self, String) -> @protocol.Thinking
 
 #derive(Eq)

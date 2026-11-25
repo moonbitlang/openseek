@@ -23,15 +23,25 @@ fn service_item(kind : String, data : Json) -> @protocol.SessionItem? {
     }
     return if item is @protocol.User(_) { Some(item) } else { None }
   }
-  guard kind == "task_finished" && data is { "status": "failed", .. } else {
+  guard kind == "task_finished" &&
+    data is { "status": String(status), .. } &&
+    status is ("failed" | "interrupted") else {
     return None
   }
   let reason = match data {
     { "reason": String(reason), .. } | { "error": String(reason), .. } => reason
     { "result": { "reason": String(reason), .. }, .. } => reason
-    _ => "Cloud task failed."
+    _ => if status == "interrupted" { "" } else { "Cloud task failed." }
   }
-  Some(@protocol.Terminal(@protocol.Failed(reason)))
+  Some(
+    @protocol.Terminal(
+      if status == "interrupted" {
+        Interrupted(reason)
+      } else {
+        Failed(reason)
+      },
+    ),
+  )
 }
 
 ///|
@@ -61,6 +71,40 @@ fn append_native(
 }
 
 ///|
+/// Cloud recovery can interrupt a task after the engine wrote its answer.
+/// Keep its text as process output so the shared renderer retains this turn.
+fn interrupt_answers(
+  items : Array[@transcript.TranscriptItem],
+  start : Int32,
+) -> Unit {
+  for index in start..<items.length() {
+    let item = items[index]
+    let kind : @transcript.ItemKind = match item.kind {
+      Assistant(finished=true, reasoning~, prose~, calls~, replay~, ..) =>
+        Assistant(
+          reasoning~,
+          prose~,
+          calls~,
+          replay~,
+          finished=false,
+          end_sequence=None,
+        )
+      Answer(text) =>
+        Assistant(
+          reasoning=None,
+          prose=Some(text),
+          calls=[],
+          replay=false,
+          finished=false,
+          end_sequence=None,
+        )
+      _ => continue
+    }
+    items[index] = { ..item, kind, }
+  }
+}
+
+///|
 pub fn Conversation::items(
   self : Conversation,
   locale : @i18n.Locale,
@@ -86,9 +130,12 @@ pub fn Conversation::items(
   let mut cursor = 0
   let mut task : String? = None
   let mut native_failure = false
+  let mut task_start = 0
   for (task_id, kind, data, ts, engine_sequence) in service {
     guard kind is ("user" | "task_finished") else { continue }
-    if task != Some(task_id) {
+    let new_task = task != Some(task_id)
+    if new_task {
+      task_start = items.length()
       native_failure = false
       task = Some(task_id)
     }
@@ -101,7 +148,11 @@ pub fn Conversation::items(
       // Only the explicit native sequence establishes that this service
       // submission is already represented. Equal text is not ownership.
       if index >= cursor {
-        ignore(append_native(items, native, cursor, index + 1))
+        ignore(append_native(items, native, cursor, index))
+        if new_task {
+          task_start = items.length()
+        }
+        ignore(append_native(items, native, index, index + 1))
         cursor = index + 1
         native_failure = false
       }
@@ -117,9 +168,17 @@ pub fn Conversation::items(
     native_failure = append_native(items, native, cursor, end) || native_failure
     cursor = end
     if item is @protocol.User(_) {
+      if new_task {
+        task_start = items.length()
+      }
       native_failure = false
-    } else if native_failure {
-      continue
+    } else {
+      if item is @protocol.Terminal(Interrupted(_)) {
+        interrupt_answers(items, task_start)
+      }
+      if native_failure {
+        continue
+      }
     }
     ignore(@transcript.apply_session_item(items, item, ts?))
   }

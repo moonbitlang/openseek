@@ -86,7 +86,8 @@ fn State::read_persistent_history(
       history_cache_request: Some(request),
     }),
     run(emit, () => {
-      let history = match self.history_cache(token, Read(session~)) {
+      let history = match
+        self.history_cache(token, Read(session~, view=self.history_view)) {
         Page(Some(page)) => cached_history(page)
         _ => None
       }

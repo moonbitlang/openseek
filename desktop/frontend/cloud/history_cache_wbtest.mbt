@@ -49,3 +49,43 @@ test "legacy cached history remains readable but cannot validate omitted metadat
   assert_eq(history.offset, Some(3))
   assert_eq(history.etag, None)
 }
+
+///|
+test "switching Cloud history view fences delayed page reads and validators" {
+  let initial = progress_test_state()
+  let active = initial.replace("session", {
+    ..initial.conversations["session"],
+    request: 3,
+    history_reading: true,
+    history_cache_request: Some(2),
+    history_older_request: Some((4, 0, 0)),
+    history_turn_request: Some((5, 0)),
+  })
+  let (detail, _) = { ..active, sequence: 5, }.switch_history_view(
+    Detail,
+    Some("session"),
+    0,
+    Some("fixture"),
+    _ => @cmd.none,
+  )
+  let stale : History = {
+    session: native_document([]),
+    messages: [],
+    offset: Some(0),
+    etag: Some("minimal"),
+    generating: false,
+    prediction: None,
+  }
+  let epoch = detail.epoch
+  for
+    msg in (
+      [
+        Loaded(epoch, "session", 3, stale),
+        HistoryUnchanged(epoch, "session", 3, "minimal"),
+        CachedHistoryLoaded(epoch, "session", 2, Some(stale)),
+        OlderLoaded(epoch, "session", 4, stale),
+        TurnLoaded(epoch, "session", 5, stale),
+      ] : Array[Msg]) {
+    assert_true(metadata_update(detail, msg) == detail)
+  }
+}

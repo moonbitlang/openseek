@@ -89,6 +89,9 @@ pub extend PendingAssistant with Eq::{equal, not_equal}
 #derive(Eq)
 pub(all) struct Conversation {
   records : Array[Record]
+  other_history : CachedTranscript?
+  // Navigation and earliest visible turn to restore after changing views.
+  history_restore_range : (Int32, Int32)?
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
@@ -161,6 +164,8 @@ pub(all) struct Conversation {
 fn Conversation::empty() -> Conversation {
   {
     records: [],
+    other_history: None,
+    history_restore_range: None,
     history_cached: false,
     history_etag: None,
     history_reading: false,
@@ -300,6 +305,7 @@ pub extend SessionListStatus with Eq::{equal, not_equal}
 ///|
 #derive(Eq)
 pub(all) struct State {
+  history_view : @protocol.CloudHistoryView
   client_tools : Bool
   user_id : String?
   epoch : Int32
@@ -321,6 +327,7 @@ pub(all) struct State {
 ///|
 pub fn State::empty() -> State {
   {
+    history_view: Minimal,
     client_tools: false,
     user_id: None,
     epoch: 0,

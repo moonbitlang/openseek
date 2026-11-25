@@ -1776,6 +1776,23 @@ fn update(
     model
   }
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let view : @protocol.CloudHistoryView = if model.minimal_transcript_effective() {
+    Minimal
+  } else {
+    Detail
+  }
+  let (cmd, model) = if model.cloud.history_view != view {
+    let (cloud, refresh) = model.cloud.switch_history_view(
+      view,
+      model.cloud_identity().map(owner => owner.session()),
+      model.chat_navigation_generation,
+      model.account.map(account => account.token),
+      dispatch.map(message => CloudAction(message)),
+    )
+    (@cmd.batch([cmd, refresh]), { ..model, cloud, })
+  } else {
+    (cmd, model)
+  }
   let model = match model.management_dialog {
     Some(Settings(section)) if !section.available(model) =>
       {

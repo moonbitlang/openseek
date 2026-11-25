@@ -40,6 +40,7 @@ priv enum LatestHistory {
 async fn load_history(
   token : String,
   session : String,
+  view : @protocol.CloudHistoryView,
   etag : String?,
   offset? : Int32,
 ) -> LatestHistory {
@@ -48,7 +49,7 @@ async fn load_history(
     headers["If-None-Match"] = etag
   }
   let path = CloudOrigin +
-    "/v1/sessions/\{@uri.encode_component(session)}/messages?limit=\{HistoryPageSize}"
+    "/v1/sessions/\{@uri.encode_component(session)}/messages?view=\{view.wire_name()}&limit=\{HistoryPageSize}"
   let path = offset.map_or(path, offset => path + "&offset=\{offset}")
   let (response, body) = @http.get(path, headers~) catch {
     _ => raise @cloud_client.RequestError(Unreachable)
@@ -68,11 +69,12 @@ async fn load_history(
 async fn load_latest_history(
   token : String,
   session : String,
+  view : @protocol.CloudHistoryView,
   etag : String?,
   epoch : Int32,
   request : Int32,
 ) -> Msg {
-  match load_history(token, session, etag) {
+  match load_history(token, session, view, etag) {
     Changed(history) => Loaded(epoch, session, request, history)
     Unchanged(etag) => HistoryUnchanged(epoch, session, request, etag)
   }
@@ -83,9 +85,10 @@ async fn load_latest_history(
 async fn load_turn_history(
   token : String,
   session : String,
+  view : @protocol.CloudHistoryView,
   offset : Int32,
 ) -> History {
-  guard load_history(token, session, None, offset~) is Changed(history) else {
+  guard load_history(token, session, view, None, offset~) is Changed(history) else {
     raise @cloud_client.RequestError(Malformed)
   }
   history

@@ -1,4 +1,33 @@
 ///|
+#derive(Eq)
+pub(all) enum CloudHistoryView {
+  Minimal
+  Detail
+}
+
+///|
+pub fn CloudHistoryView::wire_name(self : CloudHistoryView) -> String {
+  match self {
+    Minimal => "minimal"
+    Detail => "detail"
+  }
+}
+
+///|
+fn JsonObject::history_view(
+  self : JsonObject,
+) -> CloudHistoryView raise @json.JsonDecodeError {
+  match self.optional_string("view") {
+    None | Some("detail") => Detail
+    Some("minimal") => Minimal
+    _ =>
+      raise JsonDecodeError(
+        (self.path.add_key("view"), "unknown Cloud history view"),
+      )
+  }
+}
+
+///|
 /// The persisted part of a Cloud history page and its saved prediction.
 /// Live status is derived from current observations.
 pub(all) struct CloudHistoryCachePage {
@@ -12,8 +41,12 @@ pub(all) struct CloudHistoryCachePage {
 ///|
 pub(all) enum CloudHistoryCacheAction {
   List
-  Read(session~ : String)
-  Write(session~ : String, page~ : CloudHistoryCachePage)
+  Read(session~ : String, view~ : CloudHistoryView)
+  Write(
+    session~ : String,
+    view~ : CloudHistoryView,
+    page~ : CloudHistoryCachePage,
+  )
   Remove(session~ : String)
 }
 
@@ -81,10 +114,15 @@ pub impl FromJson for CloudHistoryCacheRequest with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Cloud history cache request")
   let action = match object.required_string("action") {
     "list" => List
-    "read" => Read(session=object.required_string("session"))
+    "read" =>
+      Read(
+        session=object.required_string("session"),
+        view=object.history_view(),
+      )
     "write" =>
       Write(
         session=object.required_string("session"),
+        view=object.history_view(),
         page=@json.from_json(
           object.required_json("page"),
           path=path.add_key("page"),
@@ -102,11 +140,13 @@ pub impl ToJson for CloudHistoryCacheRequest with fn to_json(self) {
   let fields : Map[String, Json] = { "token": Json(self.token) }
   match self.action {
     List => fields["action"] = Json("list")
-    Read(session~) => {
+    Read(session~, view~) => {
+      fields["view"] = Json(view.wire_name())
       fields["action"] = Json("read")
       fields["session"] = Json(session)
     }
-    Write(session~, page~) => {
+    Write(session~, view~, page~) => {
+      fields["view"] = Json(view.wire_name())
       fields["action"] = Json("write")
       fields["session"] = Json(session)
       fields["page"] = Json(page)
