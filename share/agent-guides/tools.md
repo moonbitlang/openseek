@@ -56,7 +56,7 @@ other results.
 
 Make your own source edits with `edit`/`multi_edit`/`write`, which are
 line-anchored and reviewable — not by having a snippet rewrite files. The
-tools that rewrite source as their job (`moon fmt`, `moon info`,
+tools that rewrite source as their job (`moon fmt`,
 `moon test --update`, `git checkout`) do run normally.
 
 ### Temporary and session files

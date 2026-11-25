@@ -243,7 +243,7 @@ async test "write rejects generated mbti files" {
     let result = execute({ "path": path, "content": "new interface" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("run moon info"))
+    assert_true(output.content.contains("run moon check"))
     assert_eq(@fs.read_text(path), "old interface")
   })
 }

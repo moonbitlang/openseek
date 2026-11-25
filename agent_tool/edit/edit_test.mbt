@@ -441,7 +441,7 @@ async test "edit rejects generated mbti files" {
     })
     let read_back = @fs.read_text(path)
     assert_true(output.is_error)
-    assert_true(output.content.contains("run moon info"))
+    assert_true(output.content.contains("run moon check"))
     assert_eq(read_back, "package old\n")
   })
 }

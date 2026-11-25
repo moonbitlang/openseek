@@ -236,7 +236,7 @@ async test "bundled workflows use cwd and propagate check and test failures" {
   let test_path = @fs.realpath("share/workflow/test.mbtx")
   let combined_path = @fs.realpath("share/workflow/check-test.mbtx")
   let json_path = @fs.realpath("share/workflow/check-json.mbtx")
-  let format_path = @fs.realpath("share/workflow/info-fmt.mbtx")
+  let format_path = @fs.realpath("share/workflow/fmt.mbtx")
   @vfs.with_tmpdir(ws => {
     let project = "\{ws}/nested"
     @fs.mkdir(project)
