@@ -533,6 +533,9 @@ export class DesktopBrowserHarness {
 
   async install({ offlineAssets = process.env.OPENSEEK_DESKTOP_OFFLINE_ASSETS } = {}) {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
+    // Keep the shared UI stylesheet independent of the font CDN so the
+    // asset and comment fixtures observe only the resources they exercise.
+    await this.page.route(url => url.origin === 'https://fonts.googleapis.com' && url.pathname === '/css2', route => route.abort());
     if (offlineAssets) {
       const root = resolve(offlineAssets);
       const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.wasm': 'application/wasm' };
