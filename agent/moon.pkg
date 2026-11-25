@@ -4,6 +4,7 @@ import {
   "moonbitlang/openseek/mcp/host" @mcphost,
   "moonbitlang/core/async/os_error",
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/store",
   "moonbitlang/core/int",
   "moonbitlang/openseek/agent_session/compact",
   "moonbitlang/openseek/agent_runtime",

@@ -321,6 +321,7 @@ async fn run_general(
         matches,
         session,
         append_item=(session, item) => turn.record(writer.append(session, item)),
+        store~,
         job_log_dir=store.job_logs_dir(id),
         session_scratch_dir=store.scratch_dir(id),
         api_key~,

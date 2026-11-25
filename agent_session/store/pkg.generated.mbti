@@ -69,6 +69,10 @@ pub async fn SessionStore::set_title(Self, @agent_session.SessionId, String) -> 
 pub async fn SessionStore::settle_claim(Self, @agent_session.SessionId) -> Unit
 pub async fn SessionStore::title(Self, @agent_session.SessionId) -> String?
 
+type WorkspaceMemory
+pub fn WorkspaceMemory::WorkspaceMemory(workspace_root~ : String, store? : SessionStore) -> Self
+pub async fn WorkspaceMemory::snapshot(Self, @agent_session.Session) -> String?
+
 // Type aliases
 
 // Traits

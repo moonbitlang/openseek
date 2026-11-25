@@ -24,6 +24,7 @@ async fn run_task_turn(
   job_log_dir? : String,
   session_scratch_dir~ : String,
   delegate~ : Bool,
+  store? : @store.SessionStore,
 ) -> Unit {
   @async.with_task_group() <| group => {
     let exe = @setup.self_executable()
@@ -112,6 +113,11 @@ async fn run_task_turn(
     } else {
       None
     }
+    let workspace_memory = if delegate {
+      Some(@store.WorkspaceMemory(workspace_root~, store?))
+    } else {
+      None
+    }
     @agent.run_turn_in_scope(
       runtime~,
       scope~,
@@ -131,6 +137,7 @@ async fn run_task_turn(
       retry_backoff_ms?,
       tools~,
       on_goal_met?,
+      workspace_memory?,
     )
     |> ignore
   }

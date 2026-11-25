@@ -247,6 +247,9 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// The caller owns the lifetime of `runtime`, `scope`, and any shared
 /// `tools` registry passed here. Provider reasoning fragments always join the
 /// transient event stream; consumers choose whether and how to present them.
+/// When supplied, `workspace_memory` resolves the pinned workspace reference
+/// used for the initial request and after a successful compaction reprojects
+/// the conversation.
 pub async fn run_turn_in_scope(
   runtime~ : @agent_runtime.AgentRuntime,
   scope~ : @agent_runtime.AgentTaskScope,
@@ -263,6 +266,7 @@ pub async fn run_turn_in_scope(
   retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
+  workspace_memory? : @store.WorkspaceMemory,
 ) -> @agent_session.Session {
   let client = @client.Client(
     api_key~,
@@ -303,6 +307,7 @@ pub async fn run_turn_in_scope(
     append_item~,
     session~,
     on_goal_met?,
+    workspace_memory?,
   ).run(session, max_steps)
 }
 

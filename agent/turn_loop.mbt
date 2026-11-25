@@ -14,6 +14,7 @@ priv struct AgentLoop {
   /// for a newly appended session item, the durable append has already
   /// succeeded.
   messages : Array[@deepseek.ChatMessage]
+  workspace_memory : @store.WorkspaceMemory?
   plan_cadence : PlanCadence
   goal_cadence : GoalCadence
   /// The advisory goal-met gate: given the met goal's text and its
@@ -40,6 +41,7 @@ fn AgentLoop::AgentLoop(
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   session~ : @agent_session.Session,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
+  workspace_memory? : @store.WorkspaceMemory,
 ) -> AgentLoop {
   {
     runtime,
@@ -52,6 +54,7 @@ fn AgentLoop::AgentLoop(
     },
     append_item,
     on_goal_met,
+    workspace_memory,
     messages: session.chat_messages(),
     plan_cadence: PlanCadence(registered=tools.find("plan") is Some(_)),
     goal_cadence: GoalCadence(
@@ -146,6 +149,7 @@ async fn AgentLoop::run(
   let mut failure : Error? = None
   errdefer self.seal_unwinding_turn(failure)
   let outcome = try {
+    self.attach_workspace_memory(session)
     for step in 0..<max_steps; session = session {
       let session = self.prepare_step(session)
       let response = self.chat(step)
@@ -303,6 +307,37 @@ async fn AgentLoop::run(
       raise error
     }
   }
+}
+
+///|
+/// Add the pinned workspace reference to the request's system message, after
+/// stable instructions. The session projection and compaction input stay pure.
+async fn AgentLoop::attach_workspace_memory(
+  self : Self,
+  session : @agent_session.Session,
+) -> Unit {
+  if self.workspace_memory is Some(memory) &&
+    memory.snapshot(session) is Some(body) {
+    let prompt =
+      $|\{session.system_prompt()}
+      $|
+      $|## Workspace memory
+      $|
+      $|Use the following workspace notes as reference material. Follow the current request and project instructions when they differ.
+      $|
+      $|\{body}
+    self.messages[0] = ChatMessage(System, content=[Text(prompt)])
+  }
+}
+
+///|
+async fn AgentLoop::rebuild_messages(
+  self : Self,
+  session : @agent_session.Session,
+) -> Unit {
+  self.messages.clear()
+  self.messages.append(session.chat_messages())
+  self.attach_workspace_memory(session)
 }
 
 ///|
@@ -1349,8 +1384,7 @@ async fn AgentLoop::continue_into_goal_check(
   if at_ceiling {
     // Re-seed the in-flight buffer from the compacted projection: the
     // whole point of the checkpoint is that the check round is small.
-    self.messages.clear()
-    self.messages.append(session.chat_messages())
+    self.rebuild_messages(session)
   }
   ContinueTurn(session)
 }
@@ -1456,8 +1490,7 @@ async fn AgentLoop::finish_turn(
       // Re-seed the in-flight buffer from the projection: the whole point
       // of the checkpoint is that the continuation request is small, and
       // the buffer must never disagree with Session::chat_messages.
-      self.messages.clear()
-      self.messages.append(session.chat_messages())
+      self.rebuild_messages(session)
       return ContinueTurn(session)
     }
     session

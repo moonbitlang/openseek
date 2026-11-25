@@ -121,6 +121,7 @@ async fn run_serve(
   // event, so even a turn that raises leaves `session` reflecting all the
   // events it recorded before failing.
   let mut session = initial_session
+  let workspace_memory = @store.WorkspaceMemory(workspace_root~, store?)
   // The desk outlives every turn: a question is asked by a tool inside one
   // turn's task and answered by the loop below, which is the process's single
   // command consumer. Both close over this one value.
@@ -500,6 +501,7 @@ async fn run_serve(
           content~,
           submission_id?,
           on_goal_met?,
+          workspace_memory~,
           append_item=(current, item) => {
             let next = match writer {
               Some(writer) => writer.append(current, item)
