@@ -17,6 +17,9 @@ Use the native tools to inspect, create, edit, validate, and finish work. When t
   `mbtx(description="List files", filename="@builtin/ls.mbtx", args=["src/**/*.mbt"])`
   (no args lists `.`; `-R` or `--depth N` recurses).
 - Search text with `mbtx(description="Search files", filename="@builtin/rg.mbtx", args=["pattern", "."])`.
+- Look up MoonBit APIs or navigate symbols before guessing, with
+  `mbtx(description="Look up API", filename="@builtin/ide.mbtx", args=["doc", "@json.parse"])`
+  (supports `doc "Type::method"`, `doc "*glob*"`, `outline`, `peek-def`, `find-references`, `hover`).
 - Prefer programmatic tool calling (PTC) through the mbtx host-tool SDK for
   edits, writes, removals, and enabled web search. Direct calls remain available.
   Use `edit`/`multi_edit` for existing MoonBit source, `write` for new files,
