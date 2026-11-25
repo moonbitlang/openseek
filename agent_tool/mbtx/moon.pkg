@@ -29,7 +29,7 @@ dev_build(
     "../../share/workflow/check.mbtx",
     "../../share/workflow/ci-watch.mbtx",
     "../../share/workflow/fix-deprecations.mbtx",
-    "../../share/workflow/info-fmt.mbtx",
+    "../../share/workflow/fmt.mbtx",
     "../../share/workflow/ls.mbtx",
     "../../share/workflow/read.mbtx",
     "../../share/workflow/repo-map.mbtx",

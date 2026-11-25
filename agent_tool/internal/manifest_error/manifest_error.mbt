@@ -12,7 +12,7 @@ pub async fn write_error(path : String, content : String) -> String? {
   let trimmed = content.trim()
   if @manifest_path.is_generated_mbti_path(path) {
     return Some(
-      "*.generated.mbti files are generated; run moon info instead of editing them",
+      "*.generated.mbti files are generated; run moon check instead of editing them",
     )
   }
   if @manifest_path.is_moon_mod_json_path(path) && !@fs.exists(path) {

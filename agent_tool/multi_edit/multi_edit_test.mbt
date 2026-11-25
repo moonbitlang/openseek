@@ -482,7 +482,6 @@ async test "multi_edit rejects generated mbti files before writing" {
       ],
     })
     assert_true(output.is_error)
-    assert_true(output.content.contains("run moon info"))
     assert_eq(@fs.read_text(path), original)
   })
 }

@@ -33,7 +33,7 @@ $ CHECK_TEST="$TESTDIR/../../share/workflow/check-test.mbtx"
 ```
 
 ```mooncram
-$ INFO_FMT="$TESTDIR/../../share/workflow/info-fmt.mbtx"
+$ FMT="$TESTDIR/../../share/workflow/fmt.mbtx"
 ```
 
 ```mooncram
@@ -98,16 +98,17 @@ $ moonx "$CHECK_TEST"
 Total tests: 1, passed: 1, failed: 0.
 ```
 
-## Generate interfaces and format source
+## Format source
 
-[`info-fmt.mbtx`](../../share/workflow/info-fmt.mbtx) runs `moon info`, then
-`moon fmt`. It modifies files in the selected project.
+[`fmt.mbtx`](../../share/workflow/fmt.mbtx) runs `moon fmt`. It modifies source
+files in the selected project. The earlier `moon check` already generated the
+package interface:
 
 ```mooncram
-$ moonx "$INFO_FMT"
+$ moonx "$FMT"
 ```
 
-The public function is now listed in the generated interface:
+The public function is listed in the generated interface:
 
 ```mooncram
 $ grep '^pub fn' pkg.generated.mbti

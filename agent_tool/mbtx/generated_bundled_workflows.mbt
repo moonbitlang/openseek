@@ -946,21 +946,19 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
         ),
       )
-    "info-fmt.mbtx" =>
+    "fmt.mbtx" =>
       Some(
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/env",
           #|}
           #|---
           #|
-          #|async fn main {
-          #|  for command in ["info", "fmt"] {
-          #|    let code = @shell.Cmd("moon", [command]).each_line(line => println(line))
-          #|    if code != 0 { fail("moon \{command} failed (exit=\{code})") }
-          #|  }
+          #|fn main {
+          #|  let code = @shell.Cmd("moon", ["fmt", ..@env.args()[1:]]).each_line(line => println(line))
+          #|  if code != 0 { fail("moon fmt failed (exit=\{code})") }
           #|}
           #|
         ),
@@ -3311,10 +3309,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|  files.
           #|  #|
           #|  #|## Verify
-          #|  #|`moon check` and `moon test` for the package, then `moon info` and
-          #|  #|`moon fmt` with the package path, and confirm pkg.generated.mbti is
-          #|  #|unchanged. `moon ide hover` confirms a method resolves on the receiver's
-          #|  #|type before you call it.
+          #|  #|`moon check` and `moon test` for the package, then `moon fmt` with the
+          #|  #|package path, and confirm pkg.generated.mbti is unchanged. `moon ide hover`
+          #|  #|confirms a method resolves on the receiver's type before you call it.
           #|
           #|///|
           #|async fn main {
@@ -3908,7 +3905,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    $|Rules:
           #|    $|- Apply only the candidates that are clearly safe and strictly simpler; you may fix the same idiom elsewhere in these files. Skip anything doubtful, and say in your report what you skipped and why.
           #|    $|- First read the AGENTS.md files on the path from the repository root to `\{dir}`, and the guidance they link, and run the validation they require for this package.
-          #|    $|- At least run `moon check` and `moon test` for the package in its module or workspace, with the target it needs. Then run `moon info` and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files), and confirm pkg.generated.mbti is unchanged.
+          #|    $|- At least run `moon check` and `moon test` for the package in its module or workspace, with the target it needs. Then run `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files), and confirm pkg.generated.mbti is unchanged.
           #|    $|- Report status done only when every required check passed, and name each command and its result in verification. If you change nothing, say why.
           #|  let started = @tools.call("subagent", {
           #|    "kind": "worker",

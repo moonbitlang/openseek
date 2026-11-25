@@ -19,7 +19,7 @@ this resource root's absolute path.
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.
-- `info-fmt.mbtx` runs info then fmt, modifying generated interfaces and formatting.
+- `fmt.mbtx` runs `moon fmt`, formatting MoonBit sources.
 - `check-json.mbtx` relays `moon check --output-json` diagnostics without filtering.
 - `fix-deprecations.mbtx` (needs `ptc=true`) fixes deprecation warnings whose
   message names a bare replacement (`use \`len\` instead`), one guarded `edit`

@@ -15,7 +15,7 @@ let source_write_denial_feedback : String =
   #|a directory in the workspace — not a filesystem or permissions problem to debug.
   #|Snippets run source-write-readonly by design; writing non-source files (data, logs,
   #|reports) into existing directories stays allowed, and source-writing moon commands
-  #|(`moon fmt`, `moon info`, `moon add`, `moon test --update`) are denied here by the
+  #|(`moon fmt`, `moon add`, `moon test --update`) are denied here by the
   #|same rule. Make source changes with the line-anchored `edit` tool, and keep
   #|mbtx for commands, compute, probing, and non-source IO.
 
