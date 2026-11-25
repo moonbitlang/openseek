@@ -963,6 +963,74 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
         ),
       )
+    "ide.mbtx" =>
+      Some(
+        (
+          #|---
+          #|import {
+          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/env",
+          #|  "moonbitlang/core/encoding/utf8",
+          #|}
+          #|---
+          #|
+          #|///|
+          #|/// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx and rg.mbtx do.
+          #|const OutputBytes : Int32 = 40_000
+          #|
+          #|///|
+          #|let usage : String =
+          #|  #|Usage: mbtx(filename="@builtin/ide.mbtx", args=["SUBCOMMAND", ...])
+          #|  #|Runs `moon ide` with these arguments, unchanged.
+          #|  #|Subcommands:
+          #|  #|  doc <query>...        search APIs & docs (e.g. ["doc", "@json", "StringView::split", "*parse*"])
+          #|  #|  outline <path>        summarize symbols in a file or package
+          #|  #|  peek-def <sym>        show definition & source context (supports --loc path:line:col)
+          #|  #|  find-references <sym> find usages across dependents (supports --loc path:line:col)
+          #|  #|  hover <sym> --loc ... show type and docs at path:line:col
+          #|  #|  workspace-symbols <q> search top-level workspace symbols
+          #|  #|Output is bounded to 40000 UTF-8 bytes; narrow the query when truncated.
+          #|  #|Relative paths use cwd (default workspace). args=["<subcommand>", "-h"] prints subcommand help.
+          #|
+          #|///|
+          #|fn main {
+          #|  let args = @env.args()[1:]
+          #|  if args is ([] | ["--help"] | ["-h"]) {
+          #|    println(usage)
+          #|    return
+          #|  }
+          #|  let mut remaining = OutputBytes - 256
+          #|  let mut shown = 0
+          #|  let mut total = 0
+          #|  let cmd = @shell.Cmd("moon", ["ide", ..args], stderr=Inherit)
+          #|  let exit_code = cmd.each_line(line => {
+          #|    total += 1
+          #|    let bytes = @utf8.encode(line).length() + 1
+          #|    if shown == total - 1 && bytes <= remaining {
+          #|      println(line)
+          #|      shown += 1
+          #|      remaining -= bytes
+          #|    }
+          #|  }) catch {
+          #|    error => {
+          #|      println(
+          #|        "error: could not run moon ide (\{error}); put the MoonBit toolchain on PATH",
+          #|      )
+          #|      @env.exit(2)
+          #|    }
+          #|  }
+          #|  if shown < total {
+          #|    println(
+          #|      "<system>truncated=true shown_lines=\{shown} total_lines=\{total} note=narrow the query to see the rest</system>",
+          #|    )
+          #|  }
+          #|  if exit_code != 0 {
+          #|    @env.exit(exit_code)
+          #|  }
+          #|}
+          #|
+        ),
+      )
     "ls.mbtx" =>
       Some(
         (

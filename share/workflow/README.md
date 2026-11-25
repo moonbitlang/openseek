@@ -16,6 +16,9 @@ this resource root's absolute path.
   its arguments go to rg unchanged (ripgrep flags and Rust regex, not POSIX
   grep; a PATH is required), output is `path:line:text` bounded to 40000
   bytes, and no match exits zero with a note.
+- `ide.mbtx` runs `moon ide` with its arguments unchanged (`doc`, `outline`,
+  `peek-def`, `find-references`, `hover`, `workspace-symbols`), bounding
+  output to 40000 bytes.
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.

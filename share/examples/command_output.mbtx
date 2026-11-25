@@ -16,12 +16,13 @@ fn main {
     "cli/rg@0.1.1", "--",
     // A regex needle is one ordinary string element, so double the
     // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
-    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
   ]).output()
-  // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
+  // Redirect input with `Cmd(prog, args, stdin=Text(s))` or `stdin=FromFile(p)`.
+  // Redirect output with `Cmd(.., stdout=ToFile(...))` to a file under
   // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
   // directory, and that directory is the one place a snippet may write (`/tmp`
-  // itself is refused)
+  // itself is refused).
 
   // `test` is a keyword, don't write `let test = ...`
   // Slicing clamps instead of panicking, so this is safe on shorter output.
