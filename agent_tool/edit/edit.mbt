@@ -60,9 +60,10 @@ pub fn definition(
     program_callable=true,
     name="edit",
     description=(
-      #|Replace the first exact text span at or after arguments.start_line in
-      #|arguments.path with arguments.new_string. Optional end_line restricts the search
-      #|to a 1-based inclusive line range. Because start_line anchors the location,
+      #|Replace the first exact text span at or after arguments.start_line (and
+      #|through arguments.end_line if supplied) in arguments.path with
+      #|arguments.new_string. Both line numbers are 1-based and inclusive. Because
+      #|start_line anchors the location,
       #|old_string can be a small exact span instead of a large context block. Matching
       #|normalizes CRLF (`\r\n`) to LF and curly/smart quotes to straight quotes, so
       #|old_string with LF matches `\r\n` in the file and straight quotes match curly
