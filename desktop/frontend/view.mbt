@@ -2274,7 +2274,8 @@ fn view(
   shell_overlays : (@html.Html, @html.Html, @html.Html),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, selection_actions_html, dialogs) = shell_overlays
+  let (quick_open_html, selection_actions_html, project_source_html) = shell_overlays
+  let codex_emit = dispatch.map(msg => Codex(channel=model.focused, msg))
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2609,7 +2610,6 @@ fn view(
       model.cloud,
     ),
     skills_detail_dialog_view(dispatch, model, skills_detail_html),
-    dialogs,
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -2625,6 +2625,37 @@ fn view(
     ),
     model.downloads.dialog(model.locale),
     model.downloads.add_device_dialog(model.locale),
+    ssh_modal(dispatch, model),
+    @project_picker.view(
+      locale=model.locale,
+      dispatch.map(msg => ProjectPicker(msg)),
+      model.project_picker,
+      location?=if model.is_desktop && model.project_picker is Some(_) {
+        Some(ssh_locations(dispatch, model, project_source_html))
+      } else {
+        None
+      },
+    ),
+    artifact_followup_dialog(dispatch, model),
+    update_confirm_modal(locale=model.locale, dispatch, model.update_ux),
+    api_setup_modal(dispatch, model),
+    @composer.worktree_archive_dialog(
+      locale=model.locale,
+      id="chat-worktree-archive-dialog",
+      model.archive_confirm.map(confirm => @composer.WorktreeArchiveDialog::{
+        refusal: confirm.refusal,
+        conversation_noun: "chat",
+        cancel: dispatch(CancelArchiveDiscard),
+        confirm: dispatch(ConfirmArchiveDiscard),
+      }),
+    ),
+    model.codex.archive_dialog(locale=model.locale, codex_emit),
+    @codex.permission_dialog(locale=model.locale, codex_emit),
+    @github.checkout_dialog(
+      locale=model.locale,
+      model.github,
+      dispatch.map(msg => Github(msg)),
+    ),
     quick_open_html,
     selection_actions_html,
   ]
@@ -2698,7 +2729,7 @@ fn bridge_lost_overlay(
 fn update_confirm_modal(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
-  version : String,
+  update : UpdateUx,
 ) -> @html.Html {
   @rui.dialog(
     id="update-restart-dialog",
@@ -2706,27 +2737,31 @@ fn update_confirm_modal(
     show_close=false,
     on_close=_ => dispatch(CancelUpdateRestart),
     attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
-    [
-      @rui.dialog_header(
-        @rui.dialog_title(
-          id="update-restart-title",
-          dynamic_text(locale, DRestartQuestion(version)),
+    if update is ConfirmingRestart(version~) {
+      [
+        @rui.dialog_header(
+          @rui.dialog_title(
+            id="update-restart-title",
+            dynamic_text(locale, DRestartQuestion(version)),
+          ),
         ),
-      ),
-      @html.div(shell_text(locale, InterruptForUpdate)),
-      @rui.dialog_footer([
-        @html.button(
-          class="button secondary",
-          on_click=@dialog.close("update-restart-dialog"),
-          shell_text(locale, KeepWorking),
-        ),
-        @html.button(
-          class="button primary",
-          on_click=dispatch(ConfirmUpdateRestart),
-          shell_text(locale, RestartNow),
-        ),
-      ]),
-    ],
+        @html.div(shell_text(locale, InterruptForUpdate)),
+        @rui.dialog_footer([
+          @html.button(
+            class="button secondary",
+            on_click=@dialog.close("update-restart-dialog"),
+            shell_text(locale, KeepWorking),
+          ),
+          @html.button(
+            class="button primary",
+            on_click=dispatch(ConfirmUpdateRestart),
+            shell_text(locale, RestartNow),
+          ),
+        ]),
+      ]
+    } else {
+      []
+    },
   )
 }
 

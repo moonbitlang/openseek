@@ -103,6 +103,13 @@ fn reconcile_navigation(
   }
   let (activate, next) = activate_navigation(dispatch, next)
   commands.push(activate)
+  let next = if previous.screen is Codex && next.screen is Chat {
+    let (close, codex) = next.codex.leave_confirmations()
+    commands.push(close)
+    { ..next, codex, }
+  } else {
+    next
+  }
   let host_project = match next.screen {
     Chat => next.host_selection().map(selection => selection.workspace)
     Codex =>

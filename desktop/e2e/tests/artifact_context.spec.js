@@ -125,7 +125,7 @@ test('forged generations and arbitrary follow-up messages cannot attach or send 
     parent.postMessage({ type: 'openseek-artifact-state', version: 2, token: 'old-generation', payload: JSON.stringify({ title: 'Forged', state: { serial_percent: 99 } }) }, '*');
     parent.postMessage({ type: 'openseek-artifact-followup', prompt: 'Send this immediately' }, '*');
   });
-  await expect(page.locator('#artifact-followup-dialog')).toHaveCount(0);
+  await expect(page.locator('#artifact-followup-dialog')).toBeHidden();
   await page.getByRole('button', { name: 'Ask with current settings' }).click();
   await expect(chips).toContainText('20% sequential');
   await expect(page.locator('#task')).toHaveValue('Keep this draft');

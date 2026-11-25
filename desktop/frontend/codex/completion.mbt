@@ -272,11 +272,6 @@ test "retiring another draft preserves a cached Codex conversation's actions" {
 }
 
 ///|
-pub fn State::confirming_full_access(self : State) -> Bool {
-  self.permission_picker is CodexPermissionConfirmingFullAccess(_)
-}
-
-///|
 pub fn permission_dialog(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
@@ -300,7 +295,7 @@ pub fn permission_dialog(
           ),
           @html.button(
             class="button danger",
-            type_="submit",
+            type_="button",
             on_click=dispatch(ConfirmFullAccess),
             ui(locale, EnableFullAccess),
           ),

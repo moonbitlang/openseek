@@ -134,21 +134,34 @@ fn empty_view(open : Open, locale : @i18n.Locale) -> @html.Html {
 }
 
 ///|
-/// Render the active run. The component retains this presentation on close.
 fn State::view(
   self : State,
   emit : @cmd.Emit[Msg],
   locale : @i18n.Locale,
 ) -> @html.Html {
-  guard self.open is Some(open) else { return @html.nothing }
-  dialog_view(emit, open, locale)
+  let label = if self.open is Some(open) && open.provider() is Symbols {
+    Message::SearchWorkspaceSymbols.text(locale)
+  } else {
+    Message::SearchWorkspaceFiles.text(locale)
+  }
+  @rui.dialog(
+    id="quick-open-dialog",
+    class="dialog-size-medium",
+    show_close=false,
+    on_close=_ => emit(Dismiss),
+    attrs=@html.Attrs::build().aria_label(label),
+    self.open
+    .map(open => dialog_contents(emit, open, locale, label))
+    .unwrap_or(@html.nothing),
+  )
 }
 
 ///|
-fn dialog_view(
+fn dialog_contents(
   emit : @cmd.Emit[Msg],
   open : Open,
   locale : @i18n.Locale,
+  dialog_label : String,
 ) -> @html.Html {
   let selected = if open.current() is Some(_) {
     Some(open.selected)
@@ -156,18 +169,10 @@ fn dialog_view(
     None
   }
   let active_id = selected.map(index => row_id(index)).unwrap_or("")
-  let (dialog_label, placeholder, group_label) = if open.provider() is Files {
-    (
-      Message::SearchWorkspaceFiles.text(locale),
-      Message::SearchFiles.text(locale),
-      Message::Files.text(locale),
-    )
+  let (placeholder, group_label) = if open.provider() is Files {
+    (Message::SearchFiles.text(locale), Message::Files.text(locale))
   } else {
-    (
-      Message::SearchWorkspaceSymbols.text(locale),
-      Message::SearchSymbols.text(locale),
-      Message::Symbols.text(locale),
-    )
+    (Message::SearchSymbols.text(locale), Message::Symbols.text(locale))
   }
   let base_input_attrs = key_attrs(emit, selected)
     .id(InputId)
@@ -230,38 +235,31 @@ fn dialog_view(
     Debouncing | Loading => "true"
     _ => "false"
   }
-  @rui.dialog(
-    id="quick-open-dialog",
-    class="dialog-size-medium",
-    show_close=false,
-    on_close=_ => emit(Dismiss),
-    attrs=@html.Attrs::build().aria_label(dialog_label),
-    @html.div([
-      @html.div(class="quick-open-input-wrap input-surface", [
-        @icons.icon(@icons.icon_search),
-        @html.input(
-          class="field-surface",
-          input_type=@html.InputType::Text,
-          value=open.value,
-          placeholder~,
-          on_input=emit.map(value => ValueChanged(value)),
-          attrs=input_attrs,
-        ),
-      ]),
-      @html.div(
-        class="quick-open-group-label",
-        attrs=@html.Attrs::build().id("quick-open-group-label"),
-        group_label,
-      ),
-      @html.div(
-        class="quick-open-list",
-        attrs=@html.Attrs::build()
-          .id(ListId)
-          .role("listbox")
-          .aria_labelledby("quick-open-group-label")
-          .aria_busy(list_busy),
-        list_children,
+  @html.div([
+    @html.div(class="quick-open-input-wrap input-surface", [
+      @icons.icon(@icons.icon_search),
+      @html.input(
+        class="field-surface",
+        input_type=@html.InputType::Text,
+        value=open.value,
+        placeholder~,
+        on_input=emit.map(value => ValueChanged(value)),
+        attrs=input_attrs,
       ),
     ]),
-  )
+    @html.div(
+      class="quick-open-group-label",
+      attrs=@html.Attrs::build().id("quick-open-group-label"),
+      group_label,
+    ),
+    @html.div(
+      class="quick-open-list",
+      attrs=@html.Attrs::build()
+        .id(ListId)
+        .role("listbox")
+        .aria_labelledby("quick-open-group-label")
+        .aria_busy(list_busy),
+      list_children,
+    ),
+  ])
 }

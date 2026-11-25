@@ -826,46 +826,49 @@ pub fn dirty_paths_preview(
 }
 
 ///|
-pub fn WorktreeArchiveDialog::render(
+pub fn worktree_archive_dialog(
   locale~ : @i18n.Locale = English,
-  id~ : String = "worktree-archive-dialog",
-  self : WorktreeArchiveDialog,
+  id~ : String,
+  prompt : WorktreeArchiveDialog?,
 ) -> @html.Html {
-  ignore(locale)
   @rui.dialog(
     id~,
     class="dialog-size-small",
     show_close=false,
-    on_close=_ => self.cancel,
+    on_close=_ => prompt.map(prompt => prompt.cancel).unwrap_or(@cmd.none),
     attrs=@html.Attrs::build().aria_labelledby(id + "-title"),
-    [
-      @rui.dialog_header(
-        @rui.dialog_title(
-          id=id + "-title",
-          dynamic_text(
-            locale,
-            DArchiveQuestion(self.conversation_noun.to_string()),
+    if prompt is Some(self) {
+      [
+        @rui.dialog_header(
+          @rui.dialog_title(
+            id=id + "-title",
+            dynamic_text(
+              locale,
+              DArchiveQuestion(self.conversation_noun.to_string()),
+            ),
           ),
         ),
-      ),
-      @html.div(self.message(locale~)),
-      @html.form(
-        method_="dialog",
-        @rui.dialog_footer([
-          @html.button(
-            class="button secondary",
-            type_="submit",
-            ui(locale, KeepWorking),
-          ),
-          @html.button(
-            class="button primary",
-            type_="submit",
-            on_click=self.confirm,
-            ui(locale, DiscardAndArchive),
-          ),
-        ]),
-      ),
-    ],
+        @html.div(self.message(locale~)),
+        @html.form(
+          method_="dialog",
+          @rui.dialog_footer([
+            @html.button(
+              class="button secondary",
+              type_="submit",
+              ui(locale, KeepWorking),
+            ),
+            @html.button(
+              class="button primary",
+              type_="button",
+              on_click=self.confirm,
+              ui(locale, DiscardAndArchive),
+            ),
+          ]),
+        ),
+      ]
+    } else {
+      []
+    },
   )
 }
 

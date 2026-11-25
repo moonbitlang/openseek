@@ -373,7 +373,23 @@ fn forget_ssh(
   } else {
     (@cmd.none, next)
   }
-  (@cmd.batch([focus, ssh_restore_focus()]), next)
+  (
+    @cmd.batch([
+      focus,
+      if !ui.editor_open {
+        @dialog.close("ssh-modal")
+      } else {
+        @cmd.none
+      },
+      if model.project_picker is Some(picker) && picker.channel() == channel {
+        @dialog.close("project-picker-dialog")
+      } else {
+        @cmd.none
+      },
+      ssh_restore_focus(),
+    ]),
+    next,
+  )
 }
 
 ///|
@@ -485,6 +501,7 @@ fn update_ssh(
       (
         @cmd.batch([
           ssh_remember_focus(),
+          @dialog.close("project-picker-dialog"),
           @dialog.show("ssh-modal"),
           ssh_focus("ssh-command"),
         ]),
@@ -506,7 +523,7 @@ fn update_ssh(
         },
       )
     Close => {
-      guard model.ssh_dialog_open() && !ui.busy else {
+      guard (ui.editor_open || ui.details is Some(_)) && !ui.busy else {
         return (@cmd.none, model)
       }
       if ui.remove_confirm is Some(_) {
@@ -787,7 +804,15 @@ fn update_ssh(
         model,
       )
       (
-        @cmd.batch([cmd, ssh_connect(dispatch, id, disconnect=true, attempt~)]),
+        @cmd.batch([
+          cmd,
+          if !ui.editor_open && ui.intents.get(id) == Some(WorkspaceConnect) {
+            @dialog.close("ssh-modal")
+          } else {
+            @cmd.none
+          },
+          ssh_connect(dispatch, id, disconnect=true, attempt~),
+        ]),
         model,
       )
     }
@@ -805,7 +830,14 @@ fn update_ssh(
             details: Some(id),
           },
         })
-        return (@cmd.batch([@dialog.show("ssh-modal"), connect]), model)
+        return (
+          @cmd.batch([
+            @dialog.close("project-picker-dialog"),
+            @dialog.show("ssh-modal"),
+            connect,
+          ]),
+          model,
+        )
       }
       let model = {
         ..model,
@@ -820,7 +852,7 @@ fn update_ssh(
       }
       let (cmd, model) = focus_channel(dispatch, model, channel)
       let (next, model) = update(dispatch, PickProject(channel), model)
-      (@cmd.batch([cmd, next]), model)
+      (@cmd.batch([@dialog.close("ssh-modal"), cmd, next]), model)
     }
     Event(value) => {
       let envelope : @protocol.SshEvent = @json.from_json(value) catch {
@@ -1039,6 +1071,15 @@ fn update_ssh(
         let (cmd, model) = (
           @cmd.batch([
             cmd,
+            if !ui.editor_open &&
+              (
+                (return_to_entry && ui.return_details is None) ||
+                ui.intents.get(id) == Some(WorkspaceConnect)
+              ) {
+              @dialog.close("ssh-modal")
+            } else {
+              @cmd.none
+            },
             if return_to_entry && ui.return_picker is Some(_) {
               @dialog.show("project-picker-dialog")
             } else {

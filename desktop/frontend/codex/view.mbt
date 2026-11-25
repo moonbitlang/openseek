@@ -550,24 +550,21 @@ pub fn State::header(
 }
 
 ///|
-pub fn State::confirming_archive(self : State) -> Bool {
-  self.archive_confirm is Some(_)
-}
-
-///|
 pub fn State::archive_dialog(
   self : State,
   locale~ : @i18n.Locale,
   emit : @cmd.Emit[Msg],
-) -> @html.Html? {
-  self.archive_confirm.map(confirm => {
-    @composer.WorktreeArchiveDialog::{
+) -> @html.Html {
+  @composer.worktree_archive_dialog(
+    locale~,
+    id="worktree-archive-dialog",
+    self.archive_confirm.map(confirm => @composer.WorktreeArchiveDialog::{
       refusal: confirm.refusal,
       conversation_noun: "task",
       cancel: emit(CancelArchiveDiscard),
       confirm: emit(ConfirmArchiveDiscard),
-    }.render(locale~)
-  })
+    }),
+  )
 }
 
 ///|
