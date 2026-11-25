@@ -279,12 +279,51 @@ test('quick open moves its keyboard selection and opens the chosen file', async 
   await expect(readmeResult).toHaveAttribute('aria-selected', 'true');
   await input.press('ArrowUp');
   await expect(mainResult).toHaveAttribute('aria-selected', 'true');
+  const dialogNode = await page.locator('#quick-open-dialog').elementHandle();
+  const inputNode = await input.elementHandle();
   await input.press('Enter');
 
   await expect(input).toBeHidden();
+  expect(await dialogNode.evaluate(node => node.isConnected && !node.open)).toBe(true);
+  expect(await inputNode.evaluate(node => node.isConnected)).toBe(true);
   await expect.poll(() => app.requests.find(request =>
     request.method === 'fs.read_file' &&
     request.params?.path === '/workspace/src/main.mbt')).toBeTruthy();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('quick open uses native dismissal and retains its dialog across reopen', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const dialog = page.locator('#quick-open-dialog');
+  await app.openQuickOpen();
+  const dialogNode = await dialog.elementHandle();
+  const input = page.locator('#quick-open-input');
+  await expect(input).toBeFocused();
+  const inputNode = await input.elementHandle();
+  await dialog.evaluate(node => {
+    node.addEventListener('cancel', event => { window.quickOpenCancel = event; }, { once: true });
+  });
+  await input.press('Escape');
+  await expect(dialog).not.toHaveAttribute('open');
+  expect(await page.evaluate(() => window.quickOpenCancel.defaultPrevented)).toBe(false);
+  expect(await inputNode.evaluate(node => node.isConnected)).toBe(true);
+
+  await app.openQuickOpen();
+  await expect(input).toBeFocused();
+  expect(await dialogNode.evaluate(node => node === document.querySelector('#quick-open-dialog'))).toBe(true);
+  // RUI's default closedby=any delegates backdrop dismissal to the browser.
+  await page.mouse.click(2, 2);
+  await expect(dialog).not.toHaveAttribute('open');
+  expect(await inputNode.evaluate(node => node.isConnected)).toBe(true);
+  await app.openQuickOpen();
+  await page.getByRole('option', { name: /main\.mbt/ }).click();
+  await expect(dialog).not.toHaveAttribute('open');
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'fs.read_file' &&
+    request.params?.path === '/workspace/src/main.mbt')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -765,7 +804,7 @@ for (const commitKey of ['Enter', 'Tab']) test(`settings persist host API change
   await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
     'https://example.test/chat/completions',
   );
-  const keyInput = page.getByLabel('API key', { exact: true });
+  const keyInput = page.getByRole('dialog', { name: 'Settings', exact: true }).getByLabel('API key', { exact: true });
   await expect(keyInput).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
   for (const provider of ['DeepSeek official (your API key)', 'Z.AI GLM (your API key)', 'OpenRouter', 'Custom URL']) {

@@ -136,6 +136,7 @@ pub(all) enum Msg {
   CheckedOut(Int32, Result[@protocol.GithubCheckoutReply, String])
   ConfirmCheckout(@protocol.GithubCheckoutChanges)
   DismissCheckout
+  CheckoutDialogClosed
   ToggleCheckoutDetails
   CurrentLoaded(Int32, Result[@protocol.GithubCheckoutStatus, String])
   DetailLoaded(Int32, Result[@protocol.GithubPullRequestDetail, String])
@@ -359,7 +360,9 @@ pub fn update(
       }
       request_checkout(emit, state, checkout, changes)
     }
-    DismissCheckout => {
+    CheckoutDialogClosed if !(state.checkout is Some({ phase: Confirming, .. })) =>
+      (@cmd.none, state)
+    CheckoutDialogClosed | DismissCheckout => {
       guard !state.checking_out() else { return (@cmd.none, state) }
       let focus = match state.checkout {
         Some(checkout) => focus_checkout_action(checkout.number)

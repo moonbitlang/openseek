@@ -66,17 +66,23 @@ pub fn checkout_notification(
 ///|
 pub fn checkout_dialog(
   locale~ : @i18n.Locale,
-  state : State,
+  checkout : Checkout,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  guard state.checkout is Some({ phase: Confirming, number, updating, .. }) else {
-    return @html.nothing
-  }
+  let { number, updating, .. } = checkout
   @rui.dialog(
     id="github-checkout-dialog",
     class="dialog-size-small",
     show_close=false,
-    on_cancel=emit(DismissCheckout),
+    on_close=_ => {
+      // Native close events are queued: an earlier close can arrive after
+      // showModal has reopened this same, permanently mounted element.
+      if !checkout_dialog_open() {
+        emit(CheckoutDialogClosed)
+      } else {
+        @cmd.none
+      }
+    },
     attrs=@html.Attrs::build().aria_label(
       if updating {
         ui(locale, UncommittedBeforeUpdate(number))
@@ -118,13 +124,17 @@ pub fn checkout_dialog(
         ),
         @html.button(
           class="button secondary",
-          on_click=emit(DismissCheckout),
+          on_click=@dialog.close("github-checkout-dialog"),
           ui(locale, CancelLabel),
         ),
       ]),
     ],
   )
 }
+
+///|
+extern "js" fn checkout_dialog_open() -> Bool =
+  #| () => document.getElementById('github-checkout-dialog')?.open === true
 
 ///|
 fn focus_checkout_action(number : Int32) -> @cmd.Cmd {

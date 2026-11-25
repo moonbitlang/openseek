@@ -550,29 +550,24 @@ pub fn State::header(
 }
 
 ///|
-/// Conversation content and dialogs beneath the shell-owned header.
-pub fn State::page(
-  locale~ : @i18n.Locale = English,
+pub fn State::confirming_archive(self : State) -> Bool {
+  self.archive_confirm is Some(_)
+}
+
+///|
+pub fn State::archive_dialog(
   self : State,
-  dispatch : @cmd.Emit[Msg],
-  actions : PageActions,
-) -> Array[@html.Html] {
-  let page : Array[@html.Html] = [actions.transcript, actions.composer]
-  if self.archive_confirm is Some(confirm) {
-    page.push(
-      @composer.WorktreeArchiveDialog::{
-        refusal: confirm.refusal,
-        conversation_noun: "task",
-        cancel: dispatch(CancelArchiveDiscard),
-        confirm: dispatch(ConfirmArchiveDiscard),
-      }.render(),
-    )
-  }
-  if self.permission_picker.confirmation_dialog(locale~, dispatch)
-    is Some(dialog) {
-    page.push(dialog)
-  }
-  page
+  locale~ : @i18n.Locale,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html? {
+  self.archive_confirm.map(confirm => {
+    @composer.WorktreeArchiveDialog::{
+      refusal: confirm.refusal,
+      conversation_noun: "task",
+      cancel: emit(CancelArchiveDiscard),
+      confirm: emit(ConfirmArchiveDiscard),
+    }.render(locale~)
+  })
 }
 
 ///|

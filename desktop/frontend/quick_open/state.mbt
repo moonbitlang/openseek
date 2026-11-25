@@ -163,8 +163,9 @@ pub fn State::handle(
     }
     Select(index) => (@cmd.none, self.select_row(index), None)
     Pick(index) => self.pick_row(index)
+    // The native close event reports a dialog that is already closed.
     Dismiss => {
-      let (cmd, next) = self.close()
+      let (cmd, next) = self.retire()
       (cmd, next, None)
     }
   }
@@ -185,7 +186,7 @@ pub fn State::reconcile(
   // The run belongs to the conversation focused when it opened. A switch
   // retires it rather than repointing it at data the user did not ask for.
   guard open.owner == input.owner && open.cloud_access == input.cloud_access else {
-    return (self.cancel_file_request(open), { ..self, open: None, })
+    return self.close()
   }
   guard open.root != input.root else { return (@cmd.none, self) }
   // Advancing the generation also fences replies already in flight against the
@@ -539,11 +540,8 @@ fn State::pick_row(self : State, index : Int32) -> (@cmd.Cmd, State, Accepted?) 
   guard self.open is Some(open) && open.items.get(index) is Some(item) else {
     return (@cmd.none, self, None)
   }
-  (
-    self.cancel_file_request(open),
-    { ..self, open: None, },
-    Some(item.accepted()),
-  )
+  let (cmd, next) = self.close()
+  (cmd, next, Some(item.accepted()))
 }
 
 ///|
@@ -551,6 +549,13 @@ fn State::pick_row(self : State, index : Int32) -> (@cmd.Cmd, State, Accepted?) 
 /// when it takes the screen for something else; the warm cache session is kept
 /// so the next run does not pay for it again.
 pub fn State::close(self : State) -> (@cmd.Cmd, State) {
+  guard self.open is Some(_) else { return (@cmd.none, self) }
+  let (cmd, next) = self.retire()
+  (@cmd.batch([cmd, @dialog.close("quick-open-dialog")]), next)
+}
+
+///|
+fn State::retire(self : State) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) else { return (@cmd.none, self) }
   (self.cancel_file_request(open), { ..self, open: None, })
 }

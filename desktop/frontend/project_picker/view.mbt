@@ -116,7 +116,6 @@ pub fn view(
     class="dialog-size-medium dialog-scroll-layout",
     close_label=ui(locale, ClosePicker),
     on_close=_ => emit(Close),
-    on_cancel=emit(Close),
     attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
     [
       @rui.dialog_header([
@@ -349,7 +348,7 @@ fn picker_footer(
       @html.button(
         class="button secondary",
         type_="button",
-        on_click=emit(Close),
+        on_click=@dialog.close("project-picker-dialog"),
         ui(locale, CancelLabel),
       ),
       @html.button(

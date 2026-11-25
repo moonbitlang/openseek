@@ -134,9 +134,7 @@ fn empty_view(open : Open, locale : @i18n.Locale) -> @html.Html {
 }
 
 ///|
-/// The palette, or nothing at all while it is closed. Rendering a placeholder
-/// rather than dropping the node keeps the shell's overlay child indices
-/// stable across open and close.
+/// Render the active run. The component retains this presentation on close.
 fn State::view(
   self : State,
   emit : @cmd.Emit[Msg],
@@ -236,7 +234,7 @@ fn dialog_view(
     id="quick-open-dialog",
     class="dialog-size-medium",
     show_close=false,
-    on_cancel=emit(Dismiss),
+    on_close=_ => emit(Dismiss),
     attrs=@html.Attrs::build().aria_label(dialog_label),
     @html.div([
       @html.div(class="quick-open-input-wrap input-surface", [

@@ -1186,9 +1186,9 @@ fn main {
     let shell_overlays = @rabbita.Val::map3(
       quick_open_html,
       selection_actions_html,
-      project_source_html,
-      (quick_open, selection_actions, project_source) => {
-        (quick_open, selection_actions, project_source)
+      shell_dialog_views(state, project_source_html, emit),
+      (quick_open, selection_actions, dialogs) => {
+        (quick_open, selection_actions, dialogs)
       },
     )
     let shell = state.view9(

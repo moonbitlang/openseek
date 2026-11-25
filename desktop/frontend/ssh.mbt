@@ -506,7 +506,9 @@ fn update_ssh(
         },
       )
     Close => {
-      guard !ui.busy else { return (@cmd.none, model) }
+      guard model.ssh_dialog_open() && !ui.busy else {
+        return (@cmd.none, model)
+      }
       if ui.remove_confirm is Some(_) {
         return update_ssh(dispatch, CancelRemove, model)
       }
@@ -1366,6 +1368,16 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let content : Array[@html.Html] = []
   let actions : Array[@html.Html] = []
   let mut title = ssh_text(locale, AddHost)
+  // These requests mean “stay here” (busy), “go back”, or “cancel the
+  // connection”. All other dismissals can use the native dialog default.
+  let stay = ui.busy ||
+    ui.remove_confirm is Some(_) ||
+    ui.return_details is Some(_) ||
+    (
+      ssh_visible_host(ui) is Some(id) &&
+      ui.connecting.contains(id) &&
+      ui.intents.get(id) == Some(DetailsConnect)
+    )
   if ui.editor_open {
     let draft = ssh_draft(ui)
     let editing = ui.editing is Some(_)
@@ -1467,7 +1479,11 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="button secondary",
             disabled=ui.busy,
-            on_click=dispatch(Ssh(Close)),
+            on_click=if stay {
+              dispatch(Ssh(Close))
+            } else {
+              @dialog.close("ssh-modal")
+            },
             if connecting {
               ssh_text(locale, CancelConnection)
             } else {
@@ -1596,12 +1612,21 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       "any"
     },
-    on_cancel=dispatch(Ssh(Close)),
+    on_cancel?=if stay { Some(dispatch(Ssh(Close))) } else { None },
+    on_close=_ => {
+      // Auth input is DOM-only; do not retain an unsubmitted secret in the closed dialog.
+      ignore(ssh_take_secret())
+      dispatch(Ssh(Close))
+    },
     attrs=@html.Attrs::build()
       .aria_labelledby("ssh-modal-title")
       .on_submit(event => {
-        event.prevent_default()
-        dispatch(Ssh(Close))
+        if stay {
+          event.prevent_default()
+          dispatch(Ssh(Close))
+        } else {
+          @cmd.none
+        }
       })
       .on_keydown(event => {
         if event.key() == "Enter" &&

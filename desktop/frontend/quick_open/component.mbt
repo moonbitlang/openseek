@@ -14,5 +14,13 @@ pub fn component(
   emit : @cmd.Emit[Msg],
   locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[@html.Html] {
-  state.map2(locale, (state, locale) => state.view(emit, locale))
+  // Keep only the rendered picker, not the retired request's credentials or
+  // file index. The DOM stays mounted for RUI's native close transition.
+  let mut last = @html.nothing
+  state.view2(locale, (state, locale) => {
+    if state.is_open() {
+      last = state.view(emit, locale)
+    }
+    last
+  })
 }

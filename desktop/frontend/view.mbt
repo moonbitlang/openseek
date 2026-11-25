@@ -2274,7 +2274,7 @@ fn view(
   shell_overlays : (@html.Html, @html.Html, @html.Html),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, selection_actions_html, project_source_html) = shell_overlays
+  let (quick_open_html, selection_actions_html, dialogs) = shell_overlays
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2480,11 +2480,7 @@ fn view(
         }
       }
     Codex => {
-      let page = model.codex.page(
-        locale=model.locale,
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
-        codex_actions,
-      )
+      let page = [codex_actions.transcript, codex_actions.composer]
       if model.new_chat_project() is Err(message) {
         page.push(@html.div(class="notice error", [@html.text(message)]))
       }
@@ -2613,7 +2609,7 @@ fn view(
       model.cloud,
     ),
     skills_detail_dialog_view(dispatch, model, skills_detail_html),
-    artifact_followup_dialog(dispatch, model),
+    dialogs,
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -2629,13 +2625,8 @@ fn view(
     ),
     model.downloads.dialog(model.locale),
     model.downloads.add_device_dialog(model.locale),
-    // Authentication input is deliberately DOM-only. Keep this slot before
-    // conditional overlays so resize/toasts cannot replace its input node.
-    if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
-      ssh_modal(dispatch, model)
-    } else {
-      @html.nothing
-    },
+    quick_open_html,
+    selection_actions_html,
   ]
   // On the narrow layout the sidebar's stable backdrop fades with the drawer;
   // keeping it mounted lets the closing transition finish before it becomes
@@ -2660,50 +2651,6 @@ fn view(
   if !model.notifications.is_empty() || model.github.checkout is Some(_) {
     children.push(notifications_view(dispatch, model))
   }
-  children.push(
-    @github.checkout_dialog(
-      locale=model.locale,
-      model.github,
-      dispatch.map(msg => Github(msg)),
-    ),
-  )
-  // The interrupt-confirmation modal floats the same way, above the toasts.
-  if model.update_ux is ConfirmingRestart(version~) {
-    children.push(update_confirm_modal(locale=model.locale, dispatch, version))
-  }
-  // The API-setup modal floats above the toasts like the other modals: it
-  // owns the screen until the user answers it or a usable endpoint arrives.
-  if model.api_setup_open && !model.cloud_selected() {
-    children.push(api_setup_modal(dispatch, model))
-  }
-  if model.project_picker is Some(picker) {
-    children.push(
-      @project_picker.view(
-        locale=model.locale,
-        dispatch.map(msg => ProjectPicker(msg)),
-        picker,
-        location?=if model.is_desktop {
-          Some(ssh_locations(dispatch, model, project_source_html))
-        } else {
-          None
-        },
-      ),
-    )
-  }
-  if model.archive_confirm is Some(confirm) {
-    children.push(
-      @composer.WorktreeArchiveDialog::{
-        refusal: confirm.refusal,
-        conversation_noun: "chat",
-        cancel: dispatch(CancelArchiveDiscard),
-        confirm: dispatch(ConfirmArchiveDiscard),
-      }.render(locale=model.locale),
-    )
-  }
-  // Rendered whether or not the palette is open — closed it is an empty
-  // placeholder — so opening it never shifts the overlay children around it.
-  children.push(quick_open_html)
-  children.push(selection_actions_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last
@@ -2757,7 +2704,7 @@ fn update_confirm_modal(
     id="update-restart-dialog",
     class="dialog-size-small",
     show_close=false,
-    on_cancel=dispatch(CancelUpdateRestart),
+    on_close=_ => dispatch(CancelUpdateRestart),
     attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
     [
       @rui.dialog_header(
@@ -2770,7 +2717,7 @@ fn update_confirm_modal(
       @rui.dialog_footer([
         @html.button(
           class="button secondary",
-          on_click=dispatch(CancelUpdateRestart),
+          on_click=@dialog.close("update-restart-dialog"),
           shell_text(locale, KeepWorking),
         ),
         @html.button(
@@ -2803,7 +2750,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     id="api-setup-dialog",
     class="setup-modal dialog-size-medium",
     show_close=false,
-    on_cancel=dispatch(DismissApiSetup),
+    on_close=_ => dispatch(DismissApiSetup),
     attrs=@html.Attrs::build().aria_labelledby("api-setup-title"),
     [
       @rui.dialog_header(@rui.dialog_title(id="api-setup-title", title)),
@@ -2811,7 +2758,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @rui.dialog_footer([
         @html.button(
           class="button secondary",
-          on_click=dispatch(DismissApiSetup),
+          on_click=@dialog.close("api-setup-dialog"),
           shell_text(model.locale, NotNow),
         ),
       ]),

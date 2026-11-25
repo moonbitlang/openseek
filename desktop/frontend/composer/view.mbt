@@ -828,19 +828,20 @@ pub fn dirty_paths_preview(
 ///|
 pub fn WorktreeArchiveDialog::render(
   locale~ : @i18n.Locale = English,
+  id~ : String = "worktree-archive-dialog",
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
   ignore(locale)
   @rui.dialog(
-    id="worktree-archive-dialog",
+    id~,
     class="dialog-size-small",
     show_close=false,
-    on_cancel=self.cancel,
-    attrs=@html.Attrs::build().aria_labelledby("worktree-archive-title"),
+    on_close=_ => self.cancel,
+    attrs=@html.Attrs::build().aria_labelledby(id + "-title"),
     [
       @rui.dialog_header(
         @rui.dialog_title(
-          id="worktree-archive-title",
+          id=id + "-title",
           dynamic_text(
             locale,
             DArchiveQuestion(self.conversation_noun.to_string()),
@@ -848,18 +849,22 @@ pub fn WorktreeArchiveDialog::render(
         ),
       ),
       @html.div(self.message(locale~)),
-      @rui.dialog_footer([
-        @html.button(
-          class="button secondary",
-          on_click=self.cancel,
-          ui(locale, KeepWorking),
-        ),
-        @html.button(
-          class="button primary",
-          on_click=self.confirm,
-          ui(locale, DiscardAndArchive),
-        ),
-      ]),
+      @html.form(
+        method_="dialog",
+        @rui.dialog_footer([
+          @html.button(
+            class="button secondary",
+            type_="submit",
+            ui(locale, KeepWorking),
+          ),
+          @html.button(
+            class="button primary",
+            type_="submit",
+            on_click=self.confirm,
+            ui(locale, DiscardAndArchive),
+          ),
+        ]),
+      ),
     ],
   )
 }

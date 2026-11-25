@@ -2202,6 +2202,7 @@ fn update(
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
+      close_finished_shell_dialogs(previous, model),
       cmd,
       navigation_cmd,
       preferences_cmd,
@@ -4974,6 +4975,7 @@ fn update_msg(
       )
     CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
+    DismissApiSetup if !model.api_setup_open => (@cmd.none, model)
     DismissApiSetup =>
       (
         @cmd.none,
@@ -9139,7 +9141,7 @@ fn update_device_msg(
       // changes; stage the discard-confirmation dialog, whose confirm
       // retries with force.
       (
-        @dialog.show("worktree-archive-dialog"),
+        @dialog.show("chat-worktree-archive-dialog"),
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteStopped(key~, checkout~) =>

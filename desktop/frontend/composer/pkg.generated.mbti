@@ -470,7 +470,7 @@ pub(all) struct WorktreeArchiveDialog {
   confirm : @cmd.Cmd
 }
 pub fn WorktreeArchiveDialog::message(locale? : @i18n.Locale, Self) -> String
-pub fn WorktreeArchiveDialog::render(locale? : @i18n.Locale, Self) -> @html.Html
+pub fn WorktreeArchiveDialog::render(locale? : @i18n.Locale, id? : String, Self) -> @html.Html
 
 #derive(Eq, @debug.Debug)
 pub(all) enum WorktreeChoice {

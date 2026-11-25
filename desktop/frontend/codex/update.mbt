@@ -1313,6 +1313,17 @@ test "Codex permission picker confirms full access and freezes while running" {
     open_external,
   )
   assert_eq(confirmed.permission_mode(), @protocol.FullAccess)
+  // Native form submission closes after the confirm click; close cleanup
+  // must not roll back the selected permission.
+  let (_, closed) = update(
+    dispatch,
+    CancelFullAccess,
+    confirmed,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  assert_eq(closed.permission_mode(), @protocol.FullAccess)
+  assert_true(closed.can_open_permission_menu())
 
   let running = State::from_thread_snapshot({
     "thread": {
@@ -1660,6 +1671,22 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
     _ => @cmd.none,
   )
   assert_true(cancelled.archive_confirm is None)
+  let (_, confirmed) = update(
+    dispatch,
+    ConfirmArchiveDiscard,
+    confirming,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, closed) = update(
+    dispatch,
+    CancelArchiveDiscard,
+    confirmed,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(closed.archive_confirm is None)
+  assert_true(closed.foreground is Some(CodexArchiveForeground("thread-1")))
   let rebuilt : CodexWorktree = {
     name: "wt-1",
     path: "/work/project/.worktrees/wt-1",

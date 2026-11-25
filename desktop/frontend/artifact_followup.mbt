@@ -72,8 +72,8 @@ fn confirm_artifact_followup(
 fn artifact_followup_dialog(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  followup : ArtifactFollowup,
 ) -> @html.Html {
-  guard model.artifact_followup is Some(followup) else { return @html.nothing }
   let locale = model.locale
   let cancel = dispatch(ArtifactFollowupDismissed)
   let title = if followup.title.is_empty() {
@@ -98,7 +98,7 @@ fn artifact_followup_dialog(
     id="artifact-followup-dialog",
     class="dialog-size-small",
     show_close=false,
-    on_cancel=cancel,
+    on_close=_ => cancel,
     attrs=@html.Attrs::build().aria_labelledby("artifact-followup-title"),
     [
       @rui.dialog_header(@rui.dialog_title(id="artifact-followup-title", title)),
@@ -120,7 +120,7 @@ fn artifact_followup_dialog(
       @rui.dialog_footer([
         @html.button(
           class="button secondary",
-          on_click=cancel,
+          on_click=@dialog.close("artifact-followup-dialog"),
           shell_text(locale, CancelLabel),
         ),
         @html.button(
