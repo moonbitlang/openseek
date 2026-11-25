@@ -291,7 +291,11 @@ class Build {
       await this.commandRun(esbuildBinary, [entry, "--bundle", "--external:*.ttf",
         "--external:*.woff2", `--outfile=${join(output, name)}`]);
     }
-    await cp(this.officeFontSource(), join(output, "fonts"), { recursive: true });
+    const officeFonts = this.officeFontSource();
+    await mkdir(join(output, "fonts", "LICENSES"), { recursive: true });
+    for (const name of OfficeFontFiles) {
+      await cp(join(officeFonts, name), join(output, "fonts", name));
+    }
     for (const file of ["page-thumbnails.js", "page-thumbnails.css"]) {
       await cp(join(this.officeViewerSource(), "public", file), join(output, file));
     }
