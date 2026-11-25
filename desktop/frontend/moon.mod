@@ -3,7 +3,7 @@ name = "openseek_desktop/frontend"
 version = "0.1.5"
 
 import {
-  "moonbitlang/openseek_protocol@0.4.2",
+  "moonbitlang/openseek_protocol@0.4.3",
   "moonbit-community/cmark@0.4.17",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/rabbita@0.17.0",
@@ -11,7 +11,7 @@ import {
   "Lampese/office-viewer@0.2.6",
   "moonbitlang/editor@0.4.6",
   "moonbitlang/x@0.5.7",
-  "moonbitlang/openseek@0.7.6",
+  "moonbitlang/openseek@0.7.7",
   "openseek_desktop@0.1.5",
   "moonbitlang/async@0.22.10",
   "moonbitlang/indexeddb@0.1.0",
