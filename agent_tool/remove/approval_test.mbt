@@ -121,10 +121,9 @@ async test "approval rechecks file kind and worker scope" {
   @vfs.with_tmpdir(dir => {
     @fs.mkdir("\{dir}/allowed")
     @fs.write_text("\{dir}/target", "same", create_mode=CreateNew)
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
+      "allowed",
+    ])
     let path = "\{dir}/allowed/file"
     for replace_with_link in [true, false] {
       @fs.write_text(path, "same", create_mode=CreateNew)
@@ -162,10 +161,9 @@ async test "symlinks never request approval" {
     @fs.mkdir("\{dir}/allowed/directory")
     @fs.write_text("\{dir}/outside", "keep", create_mode=CreateNew)
     @fs.symlink("\{dir}/allowed/link", target="\{dir}/outside")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
+      "allowed",
+    ])
     let definition = @remove.definition(
       workspace_root=dir,
       write_scope=scope,

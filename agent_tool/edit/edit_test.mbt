@@ -1038,10 +1038,7 @@ async test "a write scope confines edit to its allowed paths" {
       "lib/a.mbt": "pub fn f() -> Int { 1 }\n",
       "other/b.txt": "hello\n",
     }).write_to(dir)
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
-      is Ok(scope) else {
-      fail("expected the scope to build")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
     let run = match
       @edit.definition(workspace_root=dir, write_scope=scope).execute {
       Async(execute) => execute

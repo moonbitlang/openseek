@@ -15,10 +15,9 @@ async fn operation_result(
 async test "operation approval is one-shot for write and remove and never widens the original scope" {
   @vfs.with_tmpdir(ws => {
     @fs.mkdir("\{ws}/allowed")
-    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+      "allowed",
+    ])
     let asked : Array[String] = []
     let channel = @agent_runtime.ApprovalChannel(ask => {
       asked.push(ask.tool_name)
@@ -72,10 +71,9 @@ async test "operation approval is one-shot for write and remove and never widens
 async test "operation approval never asks for invalid arguments or invalid source" {
   @vfs.with_tmpdir(ws => {
     @fs.write_text("\{ws}/a.txt", "old")
-    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+      "allowed",
+    ])
     let asks = Ref(0)
     let approval = @agent_runtime.ApprovalChannel(_ => {
       asks.val += 1
@@ -108,10 +106,9 @@ async test "operation approval never asks for invalid arguments or invalid sourc
 async test "operation approval preserves targets on rejection cancellation unavailability or concurrent edits" {
   @vfs.with_tmpdir(ws => {
     let path = "\{ws}/outside.txt"
-    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+      "allowed",
+    ])
     for outcome in [@agent_runtime.Rejected, Cancelled, Unavailable] {
       @fs.write_text(path, "old", create_mode=CreateOrTruncate)
       let out = operation_result(
@@ -150,10 +147,9 @@ async test "operation approval pins prospective paths and rejects symlink redire
     @fs.mkdir("\{ws}/first")
     @fs.mkdir("\{ws}/second")
     @fs.symlink("\{ws}/alias", target="\{ws}/first")
-    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+      "allowed",
+    ])
     let tool = @write.definition(
       workspace_root=ws,
       write_scope=scope,
@@ -177,10 +173,9 @@ async test "operation approval pins prospective paths and rejects symlink redire
 async test "edit tools retain scope restrictions in direct and programmatic calls" {
   @vfs.with_tmpdir(ws => {
     @vfs.FileSystem({ "allowed/a": "old", "outside": "old" }).write_to(ws)
-    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+      "allowed",
+    ])
     let state = @agent_tool.FileStateMap()
     let tools = @agent_tool.Tools([
       state.serialize(
@@ -254,10 +249,9 @@ async test "write refuses to replace session-created source without requesting a
     let tool = @write.definition(file_state=state, approval~)
     let created = operation_result(tool, { "path": path, "content": before })
     assert_false(created.is_error, msg=created.content)
-    guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+      "allowed",
+    ])
     let scoped = @write.definition(
       file_state=state,
       write_scope=scope,

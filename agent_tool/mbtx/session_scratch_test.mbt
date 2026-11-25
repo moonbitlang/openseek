@@ -110,10 +110,7 @@ async test "scratch script saving preserves read-only and worker restrictions" {
     let workspace = "\{root}/project"
     let scratch = "\{root}/scratch"
     @fs.mkdir(workspace)
-    let worker = match @write_scope.WriteScope::create(root=workspace) {
-      Ok(scope) => scope
-      Err(reason) => fail(reason)
-    }
+    let worker = @write_scope.WriteScope::create(root=workspace)
     for
       tool in [
         @mbtx.definition(

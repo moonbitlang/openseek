@@ -17,15 +17,9 @@ async fn save_script(
     )
   }
   let path = @workspace_path.resolve(workspace_root, filename)
-  async fn scope_at(root : String) -> @write_scope.WriteScope {
-    match @write_scope.WriteScope::create(root~) {
-      Ok(scope) => scope
-      Err(reason) => fail(reason)
-    }
-  }
-  let scope = scope_at(workspace_root)
+  let scope = @write_scope.WriteScope::create(root=workspace_root)
   let scratch_scope = match scratch_dir {
-    Some(root) => Some(scope_at(root))
+    Some(root) => Some(@write_scope.WriteScope::create(root~))
     None => None
   }
   async fn check_scope() {
