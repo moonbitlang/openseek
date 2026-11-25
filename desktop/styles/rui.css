@@ -1,4 +1,7 @@
-/* RUI's inline theme defaults are adapted here, not at individual call sites. */
+:root {
+  --rui-font-sans: var(--font-family-sans);
+}
+
 [data-rui-theme] {
   color-scheme: inherit !important;
   --rui-radius: var(--radius-surface) !important;
@@ -41,29 +44,6 @@
   --rui-sidebar-accent-foreground: var(--color-text-primary) !important;
   --rui-sidebar-border: var(--color-seam) !important;
   --rui-sidebar-ring: var(--color-focus-ring) !important;
-}
-
-/* RUI sets Inter inline on its theme and these Desktop controls. Override
-   those defaults without changing fonts inside code, editors or terminals. */
-[data-rui-theme],
-[data-slot="avatar"],
-[data-slot="button"],
-[data-slot="button-group"],
-[data-slot="context-menu-content"],
-[data-slot="context-menu-item"],
-[data-slot="dialog-close"],
-[data-slot="dropdown-menu-trigger"],
-[data-slot="dropdown-menu-content"],
-[data-slot="dropdown-menu-item"],
-[data-slot="popover-close"],
-[data-slot="select"],
-[data-slot="select-trigger"],
-[data-slot="select-content"],
-[data-slot="select-item"],
-[data-slot="tabs"],
-[data-slot="tabs-list"],
-[data-slot="tabs-trigger"] {
-  font-family: var(--font-family-sans) !important;
 }
 
 /* These RUI slots calculate their radius inline from a single scale. Map
