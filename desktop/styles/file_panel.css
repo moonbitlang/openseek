@@ -3598,7 +3598,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
 .semantic-entry-editor-parent { position: relative; }
 .github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 var(--space-5); }
-.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: var(--radius-surface); overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
+.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: var(--radius-surface); overflow: hidden; font-family: var(--font-family-sans); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
 .github-review-thread + .github-review-thread { margin-top: var(--space-4); }
 .github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-seam); }
 .github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }

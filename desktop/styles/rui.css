@@ -43,6 +43,29 @@
   --rui-sidebar-ring: var(--color-focus-ring) !important;
 }
 
+/* RUI sets Inter inline on its theme and these Desktop controls. Override
+   those defaults without changing fonts inside code, editors or terminals. */
+[data-rui-theme],
+[data-slot="avatar"],
+[data-slot="button"],
+[data-slot="button-group"],
+[data-slot="context-menu-content"],
+[data-slot="context-menu-item"],
+[data-slot="dialog-close"],
+[data-slot="dropdown-menu-trigger"],
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-item"],
+[data-slot="popover-close"],
+[data-slot="select"],
+[data-slot="select-trigger"],
+[data-slot="select-content"],
+[data-slot="select-item"],
+[data-slot="tabs"],
+[data-slot="tabs-list"],
+[data-slot="tabs-trigger"] {
+  font-family: var(--font-family-sans) !important;
+}
+
 /* These RUI slots calculate their radius inline from a single scale. Map
    their painted edges here so native, custom and RUI controls agree. */
 [data-slot="select-trigger"],
@@ -67,7 +90,6 @@
 .menu-option[data-slot="select-item"] {
   display: grid !important;
   padding: var(--menu-option-padding) !important;
-  font-family: var(--font-family-sans) !important;
   font-size: var(--font-size-md) !important;
   line-height: var(--line-height-normal) !important;
   white-space: normal !important;
