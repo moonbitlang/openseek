@@ -1,7 +1,7 @@
-/* Keep the backdrop transparent through RUI's exit transition, after :modal stops matching. */
-html.native-titlebar-custom dialog[data-slot="dialog"] {
-  --rui-dialog-backdrop: transparent;
-  box-shadow: 0 0 0 1px var(--color-border), var(--shadow-overlay) !important;
+/* Caption buttons switch colors in one paint. Match that on the backdrop
+   without changing the dialog panel's own entrance and exit transitions. */
+html.native-titlebar-custom dialog[data-slot="dialog"]::backdrop {
+  transition: none;
 }
 
 /* rui sets dimensions inline; these classes override only the size contract. */

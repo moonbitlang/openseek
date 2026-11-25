@@ -98,7 +98,10 @@ fn publish_titlebar_area(area : TitlebarArea?, custom~ : Bool) -> Unit {
 }
 
 ///|
-fn desired_titlebar_style(dark : Bool) -> @protocol.AppTitlebarStylePayload? {
+fn desired_titlebar_style(
+  dark : Bool,
+  dialog_depth : Int32,
+) -> @protocol.AppTitlebarStylePayload? {
   guard @dom.document().get_document_element() is Some(root) else {
     return None
   }
@@ -107,17 +110,19 @@ fn desired_titlebar_style(dark : Bool) -> @protocol.AppTitlebarStylePayload? {
   guard height.strip_suffix("px") is Some(pixels) else { return None }
   let height = @string.parse_double(pixels) catch { _ => return None }
   let palette = if dark { "dark" } else { "light" }
+  let color = name => {
+    let token = css.get_property_value("--\{palette}-\{name}").trim().to_owned()
+    if dialog_depth == 0 {
+      token
+    } else {
+      titlebar_dialog_color(token, dialog_depth)
+    }
+  }
   Some({
     dark,
     height,
-    background_color: css
-    .get_property_value("--\{palette}-bg-canvas")
-    .trim()
-    .to_owned(),
-    symbol_color: css
-    .get_property_value("--\{palette}-text-muted")
-    .trim()
-    .to_owned(),
+    background_color: color("bg-canvas"),
+    symbol_color: color("text-muted"),
   })
 }
 
@@ -128,6 +133,8 @@ priv struct TitlebarGeometry {
   mut font_size : AppFontSize?
   mut applied_style : (@protocol.AppTitlebarStylePayload, Double)?
   mut custom_overlay : Bool
+  mut dialog_depth : Int32
+  mut immediate : Bool
   mut active : Bool
   mut revision : Int32
   mut in_flight : Bool
@@ -142,7 +149,17 @@ fn TitlebarGeometry::refresh(self : TitlebarGeometry) -> Unit {
 
 ///|
 async fn TitlebarGeometry::apply_style(self : TitlebarGeometry) -> Unit {
-  guard desired_titlebar_style(self.dark) is Some(style) else { return }
+  guard desired_titlebar_style(
+      self.dark,
+      if self.custom_overlay {
+        self.dialog_depth
+      } else {
+        0
+      },
+    )
+    is Some(style) else {
+    return
+  }
   // Page zoom can change the CSS-to-DIP conversion without a font setting
   // change. A changed CSS-to-device-pixel ratio also catches that case.
   let key = (style, @base_browser.device_pixel_ratio())
@@ -171,7 +188,9 @@ fn TitlebarGeometry::schedule(self : TitlebarGeometry) -> Unit {
 async fn TitlebarGeometry::read(self : TitlebarGeometry) -> Unit {
   self.frame = None
   let requested = self.revision
+  self.immediate = false
   self.in_flight = true
+  let was_custom = self.custom_overlay
   // Wait for the host to apply height and colors before publishing geometry.
   // If styling fails, still read the system overlay so controls remain usable.
   self.apply_style() catch {
@@ -195,7 +214,13 @@ async fn TitlebarGeometry::read(self : TitlebarGeometry) -> Unit {
       }
   }
   self.in_flight = false
-  if requested != self.revision {
+  if self.active &&
+    (
+      self.immediate ||
+      (!was_custom && self.custom_overlay && self.dialog_depth > 0)
+    ) {
+    self.read()
+  } else if requested != self.revision {
     self.schedule()
   }
 }
@@ -219,11 +244,26 @@ fn install_window_titlebar_geometry(
     font_size,
     applied_style: None,
     custom_overlay: false,
+    dialog_depth: 0,
+    immediate: false,
     active: true,
     revision: 0,
     in_flight: false,
     frame: None,
   }
+  let unsubscribe_dialogs = subscribe_titlebar_dialogs(depth => {
+    guard state.dialog_depth != depth else { return }
+    state.dialog_depth = depth
+    guard state.custom_overlay else { return }
+    state.revision += 1
+    state.immediate = true
+    if !state.in_flight {
+      if state.frame is Some(frame) {
+        @dom.window().cancel_animation_frame(frame)
+      }
+      ignore(@js.Promise::from_async(() => state.read()))
+    }
+  })
   let listener : @dom.Listener = _ => state.refresh()
   let unsubscribe = subscribe_titlebar_changes(bridge, () => state.refresh())
   let window = @dom.window().to_event_target()
@@ -238,6 +278,7 @@ fn install_window_titlebar_geometry(
       if state.frame is Some(frame) {
         @dom.window().cancel_animation_frame(frame)
       }
+      unsubscribe_dialogs()
       unsubscribe()
       window.remove_event_listener("resize", listener)
       window.remove_event_listener("focus", listener)

@@ -279,8 +279,20 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   await expect(root).toHaveClass(/native-titlebar-custom/);
   const initial = await geometry();
   expect(initial.rowHeight).toBe(initial.nativeHeight);
+  const underBackdrop = color => '#' + color.slice(1).match(/../g)
+    .map(hex => Math.round(parseInt(hex, 16) * 127 / 255).toString(16).padStart(2, '0')).join('');
+  const undimmed = lastStyle();
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect.poll(lastStyle).toMatchObject({
+    background_color: underBackdrop(undimmed.background_color),
+    symbol_color: underBackdrop(undimmed.symbol_color),
+  });
+  const backdrop = await page.locator('dialog:modal').evaluate(dialog => {
+    const style = getComputedStyle(dialog, '::backdrop');
+    return [style.backgroundColor, style.transitionDuration];
+  });
+  expect(backdrop).toEqual(['rgba(0, 0, 0, 0.5)', '0s']);
   await page.getByRole('button', { name: 'Font size', exact: true }).click();
   await page.getByRole('option', { name: '22px', exact: true }).click();
   await expect.poll(async () => (await geometry()).rowHeight).toBeGreaterThan(initial.rowHeight);
@@ -292,12 +304,14 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   await page.getByRole('button', { name: 'Theme', exact: true }).click();
   await page.getByRole('option', { name: 'Dark', exact: true }).click();
   await expect.poll(() => lastStyle()?.dark).toBe(true);
-  expect(lastStyle().background_color).not.toBe(lightBackground);
+  const darkBackdrop = lastStyle().background_color;
+  expect(darkBackdrop).not.toBe(lightBackground);
 
   await page.getByRole('dialog', { name: 'Settings', exact: true })
     .getByRole('button', { name: 'Dismiss', exact: true }).click();
   const toggle = page.getByRole('button', { name: 'Show panel', exact: true });
   await toggle.click();
+  await expect.poll(() => underBackdrop(lastStyle().background_color)).toBe(darkBackdrop);
   const rows = await page.evaluate(() => {
     const rows = ['.sidebar-header', '.topbar', '.editor-tabsbar'].map(selector => document.querySelector(selector));
     const controls = ['.sidebar-toggle', '.sidebar-mode', '.right-panel-toggle', '.editor-tabsbar .tab-add'];
@@ -338,6 +352,21 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   await expect(root).toHaveClass(/native-titlebar-custom/);
   expect((await geometry()).rowHeight).toBe(resized.nativeHeight);
   expect(app.pageErrors).toEqual([]);
+});
+
+test('Windows caption color returns to the outer dialog when the SSH editor unmounts', async ({ page }) => {
+  const app = await installDesktop(page, false, true);
+  const background = () => app.requests.findLast(r => r.method === 'app.set_titlebar_style')?.params.background_color;
+  await expect(page.locator('html')).toHaveClass(/native-titlebar-custom/);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
+  await expect.poll(background).toBe('#7f7f7f');
+  await page.locator('#ssh-settings-add-host').click();
+  await expect.poll(background).toBe('#3f3f3f');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ssh-modal')).toHaveCount(0);
+  await expect(page.locator('#management-dialog:modal')).toBeVisible();
+  await expect.poll(background).toBe('#7f7f7f');
 });
 
 // A native dialog can change CEF's media query without changing OS appearance.
