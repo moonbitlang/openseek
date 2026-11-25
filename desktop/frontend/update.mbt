@@ -7312,7 +7312,17 @@ fn update_msg(
         msg,
         model.changes,
       )
-      (cmd, { ..model, changes, })
+      let mut next = { ..model, changes, }
+      if msg is (Listed(_, ..) | Removed(_, _, _)) &&
+        changes.conversation is Some(conversation) &&
+        changes.phase is (Loaded(artifacts) | Reloading(artifacts)) &&
+        next.device_state(conversation.channel) is Some(dev) {
+        let urls = extract_pull_request_urls(artifacts)
+        next = next.replace_device(
+          dev.with_session_pull_requests(conversation.session, urls),
+        )
+      }
+      (cmd, next)
     }
     Github(msg) => {
       let completed = msg is @github.CheckedOut(epoch, _) &&
@@ -8208,6 +8218,7 @@ fn update_device_msg(
         archived_request_generation,
         projects_request_generation,
         archive_overrides: [],
+        session_pull_requests: {},
         project_catalog: None,
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
@@ -8833,6 +8844,18 @@ fn update_device_msg(
           }
         }
       }
+      let pr_urls = collect_session_pull_requests(
+        items,
+        dev.session_pull_requests,
+      )
+      let (pr_cmd, next) = batch_lookup_pull_requests(
+        dispatch,
+        channel,
+        pr_urls,
+        force=false,
+        next,
+      )
+      commands.push(pr_cmd)
       (@cmd.batch(commands), next)
     }
     ProjectsLoaded(
@@ -9595,6 +9618,7 @@ fn update_device_msg(
           workspace_name: "",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         }
         for live in dev.sessions {
           if key.matches(live) {
@@ -9899,6 +9923,26 @@ fn update_device_msg(
         return probe_pull_request(dispatch, model, channel, conv, current)
       }
       let model = model.replace_conversation(conv)
+      let model = if pull_request is Some(pr) {
+        let (_, changes) = @session_changes.update(
+          dispatch.map(msg => Changes(msg)),
+          RecordSummary({
+            number: pr.number,
+            title: pr.title,
+            state: match pr.state {
+              PullRequestOpen if pr.draft => Draft
+              PullRequestOpen => Open
+              PullRequestMerged => Merged
+              PullRequestClosed => Closed
+            },
+            url: pr.url,
+          }),
+          model.changes,
+        )
+        { ..model, changes, }
+      } else {
+        model
+      }
       // This answer may have named a base nobody knew when the diffstat beside
       // it was measured — the first pull request a session sees, or one that
       // has been retargeted since. Until it is measured again the popover
@@ -10385,13 +10429,36 @@ fn update_device_msg(
       (@cmd.none, { ..model, conversations: settled, })
     }
     ArtifactsChanged(session) => {
+      let key : @interop.ConversationKey = { channel, session, }
+      let owned_by_overview = model.changes.conversation == Some(key)
       let (cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
-        Changed({ channel, session, }),
+        Changed(key),
         model.changes,
       )
-      (cmd, { ..model, changes, })
+      // When the overview is already watching this conversation, its own
+      // `Listed` reply updates the sidebar too; otherwise sync any session
+      // shown in the sidebar so its PR badge stays live without extra RPCs.
+      let known_in_sidebar = dev.sessions.any(item => item.id == session) ||
+        model.find_conversation(channel, session) is Some(_)
+      let sync_cmd = if !owned_by_overview && known_in_sidebar {
+        sync_session_artifacts_cmd(dispatch, channel, session)
+      } else {
+        @cmd.none
+      }
+      (@cmd.batch([cmd, sync_cmd]), { ..model, changes, })
     }
+    SessionArtifactsSynced(session~, result) =>
+      match result {
+        Ok(artifacts) => {
+          let urls = extract_pull_request_urls(artifacts.artifacts)
+          let next = model.replace_device(
+            dev.with_session_pull_requests(session, urls),
+          )
+          batch_lookup_pull_requests(dispatch, channel, urls, force=false, next)
+        }
+        Err(_) => (@cmd.none, model)
+      }
     JobsChanged(session) => {
       let (jobs_cmd, model) = if model.jobs.owner is Some(owner) &&
         owner.channel == channel &&
@@ -11200,6 +11267,7 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
           workspace_name: "work",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         } : @transcript.SessionListItem)
     }),
   })
@@ -12682,6 +12750,7 @@ test "sessions loaded replaces the sidebar list" {
       workspace_name: "",
       updated_at_ms: None,
       model_settings: None,
+      pull_requests: [],
     },
   ]
   let (_, once) = update(dispatch, sessions_loaded(items), test_model())
@@ -12733,6 +12802,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
           workspace_name: "foreign",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
       request_generation=committed.dev().sessions_request_generation,
@@ -12855,6 +12925,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "desktop-listed-only",
@@ -12863,6 +12934,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -12921,6 +12993,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -13003,6 +13076,7 @@ test "a background session list updates only its channel's same-id workspace" {
             workspace_name: "remote-new",
             updated_at_ms: None,
             model_settings: None,
+            pull_requests: [],
           },
         ],
         connection_generation=0,
@@ -13065,6 +13139,7 @@ test "session list assigns a Started-first conversation to its durable workspace
         workspace_name: "started-first",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ]),
     started,
@@ -13811,6 +13886,7 @@ test "a restored session keeps the placement its listing named" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ]),
     test_model(),
@@ -13960,6 +14036,7 @@ test "reselecting a synced active session reloads idle external writes" {
         workspace_name: "",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -14468,6 +14545,7 @@ test "session loaded swaps the active conversation onto the stored session" {
           workspace_name: "work",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
     })
@@ -17116,6 +17194,7 @@ test "Codex threads share the Projects section's project rows" {
         workspace_name: "work",
         updated_at_ms: Some(3_000_000.0),
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "desktop-older",
@@ -17124,6 +17203,7 @@ test "Codex threads share the Projects section's project rows" {
         workspace_name: "work",
         updated_at_ms: Some(1_000_000.0),
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -18896,6 +18976,7 @@ fn archived_item(
     workspace_name: "work",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
 }
 
@@ -18910,6 +18991,7 @@ fn placed_archived_item(id : String) -> @transcript.SessionListItem {
     workspace_name: "work",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
 }
 
@@ -20292,6 +20374,7 @@ test "an older same-connection live list cannot replace a newer reply" {
     workspace_name: "",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
   let current = { ..old, title: Some("current title"), }
   let model = test_model().with_dev(dev => {
@@ -20322,6 +20405,7 @@ test "an older same-connection archived list cannot replace a newer reply" {
     workspace_name: "",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
   let current = { ..old, title: Some("current title"), }
   let model = test_model().with_dev(dev => {
@@ -23551,6 +23635,7 @@ test "a late commit cannot resurrect a locally known archived session" {
         workspace_name: "",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })

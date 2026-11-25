@@ -1,9 +1,11 @@
 ///|
-/// `models=false` leaves out each row's recorded model: title search reads
-/// only titles and would otherwise read every session's `model.json`.
+/// `models=false` leaves out each row's recorded model and `artifacts=false`
+/// skips its `artifacts.json` sidecar: title search reads only titles and would
+/// otherwise touch every session's sidecars.
 async fn session_listing_groups(
   archived~ : Bool,
   models~ : Bool = true,
+  artifacts~ : Bool = true,
 ) -> @protocol.SessionsReply {
   let workspaces = @workspaces.registered()
   let groups : Array[@protocol.SessionGroup] = []
@@ -18,6 +20,7 @@ async fn session_listing_groups(
           root
         },
         models~,
+        artifacts~,
       ),
     )
   }
@@ -29,10 +32,12 @@ async fn session_group(
   workspace : @pathx.Absolute,
   root : @pathx.Absolute,
   models~ : Bool,
+  artifacts~ : Bool,
 ) -> @protocol.SessionGroup {
   let name = workspace.to_path().basename().to_owned()
   let workspace = workspace.resource_path()
   let native_root = root.to_string()
+  let sessions_dir = root.join("sessions")
   let root = root.resource_path()
   fn failed(error : String) -> @protocol.SessionGroup {
     { workspace, name, session_root: root, sessions: [], error, }
@@ -69,6 +74,24 @@ async fn session_group(
         let (seconds, nanoseconds) = stamp
         (seconds * 1000 + (nanoseconds / 1000000).to_int64()).to_double()
       })
+      // Like the model record: a damaged artifacts sidecar must not hide the
+      // row; it simply renders without PR badges.
+      let pull_requests : Array[String] = if artifacts {
+        let attached = @session_store.read_artifacts(
+          sessions_dir.join(id.value()),
+        ) catch {
+          _ => @protocol.SessionArtifacts::empty()
+        }
+        let urls : Array[String] = []
+        for artifact in attached.artifacts {
+          if artifact.type_ is PullRequest && !urls.contains(artifact.url) {
+            urls.push(artifact.url)
+          }
+        }
+        urls
+      } else {
+        []
+      }
       let entry : @protocol.SessionListEntry = {
         id: id.value(),
         title: Some(title),
@@ -80,6 +103,7 @@ async fn session_group(
         } else {
           None
         },
+        pull_requests,
       }
       if stamp is Some((seconds, nanos)) {
         entries.push((entry, seconds, nanos))

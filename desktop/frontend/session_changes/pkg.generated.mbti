@@ -58,6 +58,9 @@ pub(all) enum Msg {
   RemoveAll(@interop.ConversationKey, Array[@protocol.SessionArtifact])
   Removed(@interop.ConversationKey, @protocol.SessionArtifact, Result[@protocol.SessionArtifacts, String])
   Summarized(url~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
+  BatchLookup(channel~ : @interop.ChannelId, urls~ : Array[String], force~ : Bool)
+  BatchSummarized(Result[@protocol.GithubPullRequestSummariesReply, String])
+  RecordSummary(PullRequest)
 }
 
 #derive(Eq)
@@ -90,6 +93,7 @@ pub(all) enum PullRequestState {
   Closed
 }
 pub fn PullRequestState::equal(Self, Self) -> Bool
+pub fn PullRequestState::label(Self, locale? : @i18n.Locale) -> String
 pub fn PullRequestState::not_equal(Self, Self) -> Bool
 pub fn PullRequestState::to_repr(Self) -> @debug.Repr
 

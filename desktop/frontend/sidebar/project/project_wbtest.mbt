@@ -36,6 +36,7 @@ fn test_conversations(
       openable: true,
       rename: None,
       run_mark: @conversation.NoRunMark,
+      pull_request: None,
       trailing: [],
     })
   }

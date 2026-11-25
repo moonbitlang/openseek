@@ -260,6 +260,7 @@ test "Chats use the shared section with existing ordering and create action" {
         workspace_name: "Unnamed workspace",
         updated_at_ms: Some(200),
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "local-b",
@@ -268,6 +269,7 @@ test "Chats use the shared section with existing ordering and create action" {
         workspace_name: "Unnamed workspace",
         updated_at_ms: Some(400),
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })

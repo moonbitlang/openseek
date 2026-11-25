@@ -20,6 +20,7 @@ fn inventory(count : Int32) -> @protocol.SessionsReply {
               ),
               updated_at_ms: None,
               model_settings: None,
+              pull_requests: [],
             }
           }
         ],
@@ -129,6 +130,7 @@ test "escaped long titles stop a page before the bridge truncation limit" {
               title: Some(title),
               updated_at_ms: None,
               model_settings: None,
+              pull_requests: [],
             }
           }
         ],

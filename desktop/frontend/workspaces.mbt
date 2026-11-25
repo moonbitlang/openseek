@@ -285,6 +285,7 @@ test "detaching the active workspace opens the newest remaining conversation" {
           workspace_name: "kept",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
         {
           id: "desktop-test",
@@ -293,6 +294,7 @@ test "detaching the active workspace opens the newest remaining conversation" {
           workspace_name: "gone",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
     })
@@ -381,6 +383,7 @@ test "detaching the active workspace preserves a fallback worktree" {
           workspace_name: "kept",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
         {
           id: "desktop-test",
@@ -389,6 +392,7 @@ test "detaching the active workspace preserves a fallback worktree" {
           workspace_name: "gone",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
     })
@@ -423,6 +427,7 @@ test "detaching the last workspace leaves the app on onboarding" {
           workspace_name: "gone",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
     })
@@ -445,6 +450,7 @@ test "detaching the last workspace leaves the app on onboarding" {
         workspace_name: "gone",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ]),
     detached,
@@ -579,6 +585,7 @@ test "opening a stored session joins its project and loaded worktree" {
         workspace_name: "proj",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })

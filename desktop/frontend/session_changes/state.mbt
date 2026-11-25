@@ -46,6 +46,19 @@ pub(all) enum Msg {
     generation~ : Int32,
     Result[@protocol.GitPullRequest?, String],
   )
+  /// Resolve pull request summaries in bulk (for sidebar badges) on `channel`.
+  /// When `force` is false, pull requests already known to be `Merged` are
+  /// skipped since merged pull requests do not change state.
+  BatchLookup(
+    channel~ : @interop.ChannelId,
+    urls~ : Array[String],
+    force~ : Bool,
+  )
+  /// GitHub answered a batch summary request. Failed lookups leave cached
+  /// summaries standing.
+  BatchSummarized(Result[@protocol.GithubPullRequestSummariesReply, String])
+  /// Seed the shared summary cache from another lookup (e.g. checkout PR probe).
+  RecordSummary(PullRequest)
 }
 
 ///|
@@ -249,6 +262,68 @@ pub fn update(
         }
         Err(_) => (@cmd.none, state)
       }
+    }
+    BatchLookup(channel~, urls~, force~) => {
+      let to_fetch : Array[String] = []
+      for url in urls {
+        guard !url.is_blank() && !to_fetch.contains(url) else { continue }
+        if !force && state.summary(url) is Some({ state: Merged, .. }) {
+          continue
+        }
+        to_fetch.push(url)
+      }
+      guard !to_fetch.is_empty() else { return (@cmd.none, state) }
+      let cmd = @cmd.attempt(
+        result => {
+          emit(BatchSummarized(result.map_err(@interop.bridge_error_text)))
+        },
+        () => {
+          @interop.bridge_request(
+            channel,
+            @commands.github_pull_request_summaries,
+            { urls: to_fetch, },
+          )
+        },
+      )
+      (cmd, state)
+    }
+    BatchSummarized(result) =>
+      match result {
+        Ok(reply) => {
+          let lookups = state.lookups.copy()
+          let mut changed = false
+          for url, pr in reply.pull_requests {
+            guard PullRequest::from_reply(pr) is Some(summary) else { continue }
+            let generation = lookups
+              .get(url)
+              .map(lookup => lookup.generation)
+              .unwrap_or(0)
+            let next : Lookup = { generation, summary: Some(summary), }
+            if lookups.get(url) != Some(next) {
+              lookups[url] = next
+              changed = true
+            }
+          }
+          if changed {
+            (@cmd.none, { ..state, lookups, })
+          } else {
+            (@cmd.none, state)
+          }
+        }
+        Err(_) => (@cmd.none, state)
+      }
+    RecordSummary(summary) => {
+      let lookups = state.lookups.copy()
+      let generation = lookups
+        .get(summary.url)
+        .map(lookup => lookup.generation)
+        .unwrap_or(0)
+      let next : Lookup = { generation, summary: Some(summary), }
+      if lookups.get(summary.url) == Some(next) {
+        return (@cmd.none, state)
+      }
+      lookups[summary.url] = next
+      (@cmd.none, { ..state, lookups, })
     }
   }
 }

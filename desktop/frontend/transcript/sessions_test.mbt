@@ -22,12 +22,14 @@ test "session list projection preserves grouping and skips empty ids" {
               title: Some("newest"),
               updated_at_ms: Some(2.0),
               model_settings: None,
+              pull_requests: [],
             },
             {
               id: "",
               title: Some("no id"),
               updated_at_ms: None,
               model_settings: None,
+              pull_requests: [],
             },
           ],
         },
@@ -42,6 +44,7 @@ test "session list projection preserves grouping and skips empty ids" {
               title: Some(""),
               updated_at_ms: None,
               model_settings: None,
+              pull_requests: [],
             },
           ],
         },
@@ -78,6 +81,7 @@ test "a group naming no readable workspace contributes no rows" {
               title: Some("newest"),
               updated_at_ms: None,
               model_settings: None,
+              pull_requests: [],
             },
           ],
         },
@@ -670,6 +674,7 @@ fn listed(ids : Array[String]) -> Array[@transcript.SessionListItem] {
     workspace_name: "work",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   })
 }
 

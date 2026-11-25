@@ -17,6 +17,7 @@ fn row(id : String, label : String) -> @conversation.Input {
     openable: true,
     rename: None,
     run_mark: NoRunMark,
+    pull_request: None,
     trailing: [Restore(title="restore"), Delete(title="delete")],
   }
 }

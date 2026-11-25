@@ -129,6 +129,7 @@
     var(--dark-danger-border)
   );
   --color-warning: light-dark(var(--light-warning), var(--dark-warning));
+  --color-pr-merged: light-dark(#8250df, #a371f7);
 
   --color-focus-ring: color-mix(
     in srgb,

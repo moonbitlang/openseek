@@ -137,6 +137,8 @@ pub(all) struct SessionListItem {
   // The model the session last ran on (its `model.json`); `None` when it has
   // not recorded one.
   model_settings : @desktop_protocol.SessionModelSettings?
+  // Attached pull request URLs from `artifacts.json`, in insertion order.
+  pull_requests : Array[String]
 }
 
 ///|

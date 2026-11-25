@@ -669,6 +669,7 @@ fn Model::cloud_chat_rows(
         } else {
           []
         },
+        pull_request: None,
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||
             conversation.map_or(false, conversation => {

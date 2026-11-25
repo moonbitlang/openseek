@@ -1095,6 +1095,10 @@ priv struct DeviceState {
   // Cleared only at BridgeReady, immediately before fresh live and archived
   // lists are requested for the new connection.
   archive_overrides : Array[ArchiveOverride]
+  // Per-session attached PR URLs synced via `session.artifacts_changed` or
+  // overview mutations newer than the last `session.list` reply. Cleared on
+  // BridgeReady before the fresh session list arrives.
+  session_pull_requests : Map[String, Array[String]]
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
@@ -1140,6 +1144,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     sessions: [],
     archived: [],
     archive_overrides: [],
+    session_pull_requests: {},
     projects: [],
     project_catalog: None,
     chat_root: None,
@@ -2587,6 +2592,11 @@ priv enum DeviceMsg {
   // The host saved a new list of this session's attached pull requests and
   // branches.
   ArtifactsChanged(String)
+  // Result of re-reading a session's attached artifacts for sidebar PR badges.
+  SessionArtifactsSynced(
+    session~ : String,
+    Result[@protocol.SessionArtifacts, String],
+  )
   Engine(String?, @wire.Event, session~ : String)
   // The exact local start request returned its run result. `accepted` is the
   // prompt's ownership receipt and can recover a Started notification lost on

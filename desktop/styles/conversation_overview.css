@@ -246,8 +246,11 @@ a.conv-changes-link:hover {
 .conv-changes-icon.open {
   color: var(--color-success);
 }
+.conv-changes-icon.draft {
+  color: var(--color-warning);
+}
 .conv-changes-icon.merged {
-  color: light-dark(#8250df, #a371f7);
+  color: var(--color-pr-merged);
 }
 .conv-changes-icon.closed {
   color: var(--color-danger);

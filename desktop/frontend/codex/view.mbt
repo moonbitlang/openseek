@@ -183,6 +183,7 @@ fn SidebarContext::draft_input(
     openable: true,
     rename: None,
     run_mark: @conversation.NoRunMark,
+    pull_request: None,
     trailing: [],
   }
 }
@@ -354,6 +355,7 @@ fn CodexThreadRow::archived_sidebar_input(
     openable: false,
     rename: None,
     run_mark: @conversation.NoRunMark,
+    pull_request: None,
     trailing: [@conversation.Restore(title=ui(locale, RestoreCodex))],
   }
 }
@@ -409,6 +411,7 @@ fn CodexThreadRow::sidebar_input(
     openable: true,
     rename: None,
     run_mark,
+    pull_request: None,
     trailing: [@conversation.Archive(title=ui(locale, ArchiveCodex))],
   }
 }

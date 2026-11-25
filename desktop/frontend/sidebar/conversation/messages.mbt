@@ -19,6 +19,12 @@ priv enum UiMessage {
   FailedUnread
   StoppedUnread
   EndedUnread
+  PullRequestOpen
+  PullRequestDraft
+  PullRequestMerged
+  PullRequestClosed
+  PullRequestAttached
+  PullRequestSummaryMulti(Int32, String)
 }
 
 ///|
@@ -115,5 +121,40 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, EndedUnread) => "已结束 — 未读"
     (TraditionalChinese, EndedUnread) => "已結束 — 未讀"
     (Japanese, EndedUnread) => "終了済み — 未読"
+    (English, PullRequestOpen) => "Open pull request"
+    (Spanish, PullRequestOpen) => "Pull request abierto"
+    (SimplifiedChinese, PullRequestOpen) => "打开的 PR"
+    (TraditionalChinese, PullRequestOpen) => "開啟中的 PR"
+    (Japanese, PullRequestOpen) => "オープン中の PR"
+    (English, PullRequestDraft) => "Draft pull request"
+    (Spanish, PullRequestDraft) => "Pull request en borrador"
+    (SimplifiedChinese, PullRequestDraft) => "草稿 PR"
+    (TraditionalChinese, PullRequestDraft) => "草稿 PR"
+    (Japanese, PullRequestDraft) => "ドラフト PR"
+    (English, PullRequestMerged) => "Merged pull request"
+    (Spanish, PullRequestMerged) => "Pull request fusionado"
+    (SimplifiedChinese, PullRequestMerged) => "已合并的 PR"
+    (TraditionalChinese, PullRequestMerged) => "已合併的 PR"
+    (Japanese, PullRequestMerged) => "マージ済みの PR"
+    (English, PullRequestClosed) => "Closed pull request"
+    (Spanish, PullRequestClosed) => "Pull request cerrado"
+    (SimplifiedChinese, PullRequestClosed) => "已关闭的 PR"
+    (TraditionalChinese, PullRequestClosed) => "已關閉的 PR"
+    (Japanese, PullRequestClosed) => "クローズ済みの PR"
+    (English, PullRequestAttached) => "Attached pull request"
+    (Spanish, PullRequestAttached) => "Pull request adjunto"
+    (SimplifiedChinese, PullRequestAttached) => "已关联的 PR"
+    (TraditionalChinese, PullRequestAttached) => "已關聯的 PR"
+    (Japanese, PullRequestAttached) => "関連付けられた PR"
+    (English, PullRequestSummaryMulti(count, state)) =>
+      "\{count} pull requests (\{state})"
+    (Spanish, PullRequestSummaryMulti(count, state)) =>
+      "\{count} pull requests (\{state})"
+    (SimplifiedChinese, PullRequestSummaryMulti(count, state)) =>
+      "\{count} 个 PR（\{state}）"
+    (TraditionalChinese, PullRequestSummaryMulti(count, state)) =>
+      "\{count} 個 PR（\{state}）"
+    (Japanese, PullRequestSummaryMulti(count, state)) =>
+      "\{count} 件の PR（\{state}）"
   }
 }
