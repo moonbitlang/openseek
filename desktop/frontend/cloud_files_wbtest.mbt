@@ -182,7 +182,7 @@ test "deleting an inactive Cloud session clears its documents and dock bookmarks
           updated_at: None,
           generating: false,
           archived: false,
-          approval: ApprovalAsk,
+          approval: "ask",
           model: @deepseek.V4Flash,
           thinking: @protocol.ThinkingHigh,
         },

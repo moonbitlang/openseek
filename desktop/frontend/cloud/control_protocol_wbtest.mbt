@@ -580,7 +580,7 @@ async fn check_approval_mode_requests() -> Unit {
     requests.push((url, method_, auth, body))
   })
   defer restore_saved()
-  edit_session("fixture", "session/?", SetApproval(ApprovalReview))
+  edit_session("fixture", "session/?", SetApproval("review"))
   assert_eq(requests.length(), 1)
   let (url, method_, auth, body) = requests[0]
   assert_eq(url, CloudOrigin + "/v1/sessions/session%2F%3F")
@@ -590,7 +590,7 @@ async fn check_approval_mode_requests() -> Unit {
   let restore = mock_control_http(409, "", (_, _, _, _) => ())
   defer restore()
   let busy = try {
-    edit_session("fixture", "session", SetApproval(ApprovalAsk))
+    edit_session("fixture", "session", SetApproval("ask"))
     false
   } catch {
     @cloud_client.RequestError(Http(409)) => true

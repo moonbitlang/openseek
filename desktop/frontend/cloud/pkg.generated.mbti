@@ -232,7 +232,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
-  approval : @protocol.OpenSeekApproval
+  approval : String
   model : @deepseek.DsVariant
   thinking : @protocol.Thinking
 }
@@ -406,7 +406,7 @@ pub(all) struct Session {
   updated_at : Double?
   generating : Bool
   archived : Bool
-  approval : @protocol.OpenSeekApproval
+  approval : String
   model : @deepseek.DsVariant
   thinking : @protocol.Thinking
 }
@@ -417,7 +417,7 @@ pub fn Session::not_equal(Self, Self) -> Bool
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
-  SetApproval(@protocol.OpenSeekApproval)
+  SetApproval(String)
   SetModel(@deepseek.DsVariant)
   SetThinking(@protocol.Thinking)
 }
@@ -453,7 +453,7 @@ pub(all) struct State {
   creation : Creation?
   notice : Notice?
 }
-pub fn State::approval(Self, String) -> @protocol.OpenSeekApproval
+pub fn State::approval(Self, String) -> String
 pub fn State::can_choose_settings(Self, String) -> Bool
 pub fn State::can_compose(Self, String) -> Bool
 pub fn State::can_delete(Self, String) -> Bool

@@ -11,7 +11,7 @@ fn controls_fixture() -> State {
         updated_at: None,
         generating: true,
         archived: false,
-        approval: ApprovalAsk,
+        approval: "ask",
         model: @deepseek.V4Flash,
         thinking: @protocol.ThinkingHigh,
       },
