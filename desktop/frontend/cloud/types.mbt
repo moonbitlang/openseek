@@ -269,7 +269,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
   match self {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
-    SetApproval(mode) => { "approval": mode.to_json() }
+    SetApproval(mode) => { "approval": Json(mode) }
     SetModel(model) => { "model": Json(@deepseek.Deepseek(model).to_string()) }
     SetThinking(thinking) => { "thinking": thinking.to_json() }
   }

@@ -26,7 +26,7 @@ fn State::submit_command(
           submission.request,
           required_string(
             request(CloudOrigin, "/v1/sessions", Post, token~, body={
-              "approval": creation.approval.to_json(),
+              "approval": Json(creation.approval),
             }),
             "id",
           ),
