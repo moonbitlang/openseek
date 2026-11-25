@@ -936,6 +936,7 @@ fn main {
     let sidebar_html = @sidebar.component(
       sidebar_input,
       SidebarDispatcher::{ emit, }.actions(),
+      auto_hide_scrollbar=desktop && @common.platform_is_win32(),
     )
     let quick_open_html = @quick_open.component(
       state.map(model => model.quick_open),
