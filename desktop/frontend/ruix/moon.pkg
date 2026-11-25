@@ -1,8 +1,0 @@
-import {
-  "moonbit-community/rabbita",
-  "moonbit-community/rabbita/cmd",
-  "moonbit-community/rabbita/html",
-  "moonbit-community/rui",
-}
-
-supported_targets = "js"

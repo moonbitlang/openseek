@@ -38,7 +38,7 @@ priv struct ReferenceMarkup {
   inline : @cmark.Inline
   html : @html.Html
   target : @action_menu.ContextTarget
-  revision : String
+  revision : (String, String)?
 }
 
 ///|
@@ -222,7 +222,7 @@ fn register_references(
                 inline,
                 html: render.citation_node(citation, node.v),
                 target: citation_menu_target(render, citation),
-                revision: markdown_revision((citation.number, citation.summary)),
+                revision: Some((citation.number, citation.summary)),
               })
             None =>
               if render.footnote_reference(node.v) is Some(note) {
@@ -230,7 +230,7 @@ fn register_references(
                   inline,
                   html: note,
                   target: NoTarget,
-                  revision: "",
+                  revision: None,
                 })
               }
           }
@@ -285,7 +285,51 @@ fn block_children(block : @cmark.Block, out : Array[@cmark.Block]) -> Unit {
 }
 
 ///|
+fn block_has_context_links(block : @cmark.Block) -> Bool {
+  let folder : @cmark.Folder[Bool] = @cmark.Folder::new(
+    block=(_, found, block) => {
+      if found {
+        Fold(true)
+      } else {
+        match block {
+          CodeBlock(_)
+          | HtmlBlock(_)
+          | ThematicBreak(_)
+          | BlankLine(_)
+          | LinkRefDefinition(_)
+          | ExtFootnoteDefinition(_) => Fold(false)
+          _ => Default
+        }
+      }
+    },
+    inline=(_, found, inline) => {
+      if found {
+        return Fold(true)
+      }
+      match inline {
+        Link(_) | Autolink(_) => Fold(true)
+        Text(node) =>
+          if bare_interactive_pattern.execute(node.v.clamped_view()) is Some(_) {
+            Fold(true)
+          } else {
+            Fold(false)
+          }
+        Image(_) | CodeSpan(_) | Break(_) | ExtMathSpan(_) | RawHtml(_) =>
+          Fold(false)
+        _ => Default
+      }
+    },
+  )
+  folder.fold_block(false, block) catch {
+    _ => true
+  }
+}
+
+///|
 fn block_key(block : @cmark.Block) -> String {
+  if !block_has_context_links(block) {
+    return "leaf"
+  }
   match block {
     Paragraph(_) => "paragraph"
     Heading(_) => "heading"
@@ -357,10 +401,16 @@ fn block_component(
     table_component(input, context)
   } else {
     input.map(input => {
-      let children : Array[@html.Html] = input.scope.render.block_nodes(
-        input.node,
-      )
-      children.get(0).unwrap_or(@html.nothing)
+      let children : Array[@html.Html] = if tight {
+        input.scope.render.list_item_nodes(input.node, tight=true)
+      } else {
+        input.scope.render.block_nodes(input.node)
+      }
+      match children {
+        [] => @html.nothing
+        [single] => single
+        _ => @html.fragment(children)
+      }
     })
   }
 }
@@ -544,51 +594,22 @@ fn inline_link_component(
     }
     let source_title = input.scope.is_title(input.node, 0)
     match input.node {
-      Link(node) => {
-        let title = render.link_title(node.v)
-        if render.open_file is Some(open) &&
-          render.file_destination(node.v) is Some(path) {
-          file_link_node(
-            locale=render.locale,
-            open,
-            path,
-            title?,
-            source_title~,
-            label,
-          )
-        } else {
-          match render.link_destination(node.v) {
-            Some(href) => link_node(href, title?, source_title~, label)
-            None => @html.span(title?, label)
-          }
-        }
-      }
-      Autolink(node) => {
-        let url = node.v.link.v
-        let href = if node.v.is_email {
-          Some("mailto:" + url)
-        } else {
-          render.safe_destination(url)
-        }
-        match href {
-          Some(href) => link_node(href, source_title~, [@html.text(url)])
-          None => @html.text(url)
-        }
-      }
+      Link(node) => render.render_link_html(node.v, label, source_title~)
+      Autolink(node) => render.render_autolink_html(node.v, source_title~)
       _ => @html.nothing
     }
   })
+  let locale = input.map(input => input.scope.render.locale)
   let target = input.map(input => {
-    let target = if input.scope.reference(input.node) is Some(reference) {
+    if input.scope.reference(input.node) is Some(reference) {
       reference.target
     } else if input.scope.is_title(input.node, 0) {
       NoTarget
     } else {
       inline_target(input.scope.render, input.node)
     }
-    (input.scope.render.locale, target)
   })
-  link_menu(target, context, content)
+  link_menu(locale, target, context, content)
 }
 
 ///|
@@ -615,17 +636,29 @@ fn prose_component(
       }),
     )
   })
-  pieces
-  .assoc_by(
-    (_, part) => {
-      let content = part.map2(locale, (part, locale) => {
-        let (_, text, target, source_title, destination) = part
-        let label = [@html.text(text)]
-        match target {
-          WebLink(href) => link_node(href, source_title~, label)
-          FileLink(path, ..) =>
-            file_link_node(
-              locale~,
+  let has_links = pieces.map(pieces => {
+    pieces.iter().any(part => part.2 != NoTarget)
+  })
+  has_links.switch_by(
+    interactive => {
+      if !interactive {
+        return input.map(input => {
+          if input.node is Text(node) {
+            @html.text(node.v)
+          } else {
+            @html.nothing
+          }
+        })
+      }
+      pieces
+      .assoc_by(
+        (_, part) => {
+          let content = part.map2(locale, (part, locale) => {
+            let (_, text, target, source_title, destination) = part
+            render_prose_part_html(
+              locale,
+              text,
+              target,
               path => {
                 (context.open_file)(
                   if path == text {
@@ -635,50 +668,53 @@ fn prose_component(
                   },
                 )
               },
-              path,
               source_title~,
-              label,
             )
-          _ => @html.text(text)
-        }
-      })
-      let target = part.map2(locale, (part, locale) => {
-        (locale, if part.3 { @action_menu.NoTarget } else { part.2 })
-      })
-      link_menu(target, context, content)
+          })
+          let target = part.map(part => {
+            if part.3 {
+              @action_menu.NoTarget
+            } else {
+              part.2
+            }
+          })
+          link_menu(locale, target, context, content)
+        },
+        by=part => part.0,
+      )
+      .map(children => @html.fragment(children.to_array()))
     },
-    by=part => part.0,
+    by=interactive => if interactive { "links" } else { "text" },
   )
-  .map(children => @html.fragment(children.to_array()))
 }
 
 ///|
 fn link_menu(
-  target : @rabbita.Val[(@i18n.Locale, @action_menu.ContextTarget)],
+  locale : @rabbita.Val[@i18n.Locale],
+  target : @rabbita.Val[@action_menu.ContextTarget],
   context : MarkdownContext,
   content : @rabbita.Val[@html.Html],
   inline~ : Bool = true,
 ) -> @rabbita.Val[@html.Html] {
-  let id = target
-    .map(target => target.1)
-    .map(target => {
-      guard !(target is NoTarget) else { return "" }
+  let keyed = target.map(target => {
+    if target is NoTarget {
+      ("", target)
+    } else {
       let id = "\{context.id}-\{context.next_menu.val}"
       context.next_menu.val += 1
-      id
-    })
-  id
-  .map3(target, context.input, (id, target, input) => (id, target, input))
-  .switch_by(
-    value => {
-      let (id, (locale, target), input) = value
+      (id, target)
+    }
+  })
+  keyed.switch_by(
+    entry => {
+      let (id, target) = entry
       if target is NoTarget {
         return content
       }
       @action_menu.link_context(
         id,
         locale,
-        input,
+        context.input,
         target,
         context.actions,
         content,
@@ -688,7 +724,7 @@ fn link_menu(
       // at this position needs a new trigger element with its new menu ID.
       .map(menu => @html.span(style=["display:contents"], Map([(id, menu)])))
     },
-    by=value => value.0,
+    by=entry => entry.0,
   )
 }
 
@@ -869,8 +905,9 @@ fn source_component(
   let card = source.map2(body, (source, body) => {
     source.scope.render.source_card_html(source.node, body)
   })
-  let target = input.map(input => (input.0.scope.render.locale, input.1))
-  let card = link_menu(target, context, card, inline=false)
+  let locale = source.map(source => source.scope.render.locale)
+  let target = input.map(input => input.1)
+  let card = link_menu(locale, target, context, card, inline=false)
   source.map2(card, (source, card) => {
     source.scope.render.source_row_html(source.node, card)
   })

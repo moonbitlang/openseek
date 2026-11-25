@@ -647,20 +647,7 @@ fn MarkdownRender::push_inline(
     ExtStrikethrough(node) =>
       out.push(@html.del(self.inline_nodes(node.v.0, linkify_urls~)))
     ExtMathSpan({ v, .. }) => out.push((self.render_math)(v.tex(), v.display))
-    Autolink(node) => {
-      let url = node.v.link.v
-      // Email autolinks resolve to a safe `mailto:`; a URI autolink like
-      // <javascript:alert(1)> must pass the same unsafe-scheme filter as
-      // regular links and images, otherwise it renders as inert text.
-      if node.v.is_email {
-        out.push(link_node("mailto:" + url, [@html.text(url)]))
-      } else {
-        match self.safe_destination(url) {
-          Some(href) => out.push(link_node(href, [@html.text(url)]))
-          None => out.push(@html.text(url))
-        }
-      }
-    }
+    Autolink(node) => out.push(self.render_autolink_html(node.v))
     Link(node) => {
       if self.citation(node.v) is Some(citation) {
         out.push(self.citation_node(citation, node.v))
@@ -670,25 +657,10 @@ fn MarkdownRender::push_inline(
         out.push(note)
         return
       }
-      let title = self.link_title(node.v)
       // The label is already inside an anchor. Leaving bare-URL detection on
       // here would turn `[https://label](https://target)` into nested anchors.
       let children = self.inline_nodes(node.v.text, linkify_urls=false)
-      // The destination is authoritative Markdown data; the label is only
-      // presentation and may deliberately describe another location.
-      // `file://` is deliberately handled as an app action before cmark's
-      // unsafe-scheme filter. It never becomes a browser anchor.
-      if self.open_file is Some(open) &&
-        self.file_destination(node.v) is Some(path) {
-        out.push(
-          file_link_node(locale=self.locale, open, path, title?, children),
-        )
-      } else {
-        match self.link_destination(node.v) {
-          Some(url) => out.push(link_node(url, title?, children))
-          None => out.push(@html.span(title?, children))
-        }
-      }
+      out.push(self.render_link_html(node.v, children))
     }
     // Images keep their alt text visible; the picture itself is only loaded
     // from destinations that pass the same safety filter as links.
@@ -833,6 +805,73 @@ pub fn linkified_text_nodes(source : String) -> Array[@html.Html] {
 }
 
 ///|
+fn MarkdownRender::render_autolink_html(
+  self : MarkdownRender,
+  autolink : @cmark.InlineAutolink,
+  source_title~ : Bool = false,
+) -> @html.Html {
+  let url = autolink.link.v
+  // Email autolinks resolve to a safe `mailto:`; a URI autolink like
+  // <javascript:alert(1)> must pass the same unsafe-scheme filter as
+  // regular links and images, otherwise it renders as inert text.
+  let href = if autolink.is_email {
+    Some("mailto:" + url)
+  } else {
+    self.safe_destination(url)
+  }
+  match href {
+    Some(href) => link_node(href, source_title~, [@html.text(url)])
+    None => @html.text(url)
+  }
+}
+
+///|
+fn MarkdownRender::render_link_html(
+  self : MarkdownRender,
+  link : @cmark.InlineLink,
+  children : Array[@html.Html],
+  source_title~ : Bool = false,
+) -> @html.Html {
+  let title = self.link_title(link)
+  // The destination is authoritative Markdown data; the label is only
+  // presentation and may deliberately describe another location.
+  // `file://` is deliberately handled as an app action before cmark's
+  // unsafe-scheme filter. It never becomes a browser anchor.
+  if self.open_file is Some(open) && self.file_destination(link) is Some(path) {
+    file_link_node(
+      locale=self.locale,
+      open,
+      path,
+      title?,
+      source_title~,
+      children,
+    )
+  } else {
+    match self.link_destination(link) {
+      Some(url) => link_node(url, title?, source_title~, children)
+      None => @html.span(title?, children)
+    }
+  }
+}
+
+///|
+fn render_prose_part_html(
+  locale : @i18n.Locale,
+  text : String,
+  target : @action_menu.ContextTarget,
+  open : (String) -> @cmd.Cmd,
+  source_title~ : Bool = false,
+) -> @html.Html {
+  let label = [@html.text(text)]
+  match target {
+    WebLink(url) => link_node(url, source_title~, label)
+    FileLink(path, ..) =>
+      file_link_node(locale~, open, path, source_title~, label)
+    _ => @html.text(text)
+  }
+}
+
+///|
 /// Render ordinary transcript prose. URL behavior stays identical to the
 /// public URL-only renderer, while a configured file opener additionally
 /// turns location-bearing path tokens into file buttons.
@@ -844,14 +883,7 @@ fn MarkdownRender::prose_nodes(
     return linkified_text_nodes(source)
   }
   prose_parts(source).map(part => {
-    let (text, target) = part
-    let label = [@html.text(text)]
-    match target {
-      WebLink(url) => link_node(url, label)
-      FileLink(path, ..) =>
-        file_link_node(locale=self.locale, open, path, label)
-      _ => @html.text(text)
-    }
+    render_prose_part_html(self.locale, part.0, part.1, open)
   })
 }
 

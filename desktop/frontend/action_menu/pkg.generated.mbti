@@ -24,7 +24,7 @@ pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput],
 
 pub fn dropdown(String, Definition, class~ : String, @html.Html) -> @rabbita.Val[@html.Html]
 
-pub fn link_context(String, @i18n.Locale, ContextInput, ContextTarget, ContextActions, @rabbita.Val[@html.Html], inline? : Bool) -> @rabbita.Val[@html.Html]
+pub fn link_context(String, @rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextTarget, ContextActions, @rabbita.Val[@html.Html], inline? : Bool) -> @rabbita.Val[@html.Html]
 
 pub fn link_target(String) -> ContextTarget
 

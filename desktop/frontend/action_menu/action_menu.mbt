@@ -15,7 +15,9 @@ pub(all) enum Entry {
 }
 
 ///|
-/// Menu entries and commands for one target.
+/// Current menu meaning for one target. The open state retains only the
+/// target and gesture; callers resolve this definition from their latest
+/// input whenever it is rendered or acted upon.
 pub(all) struct Definition {
   label : String
   entries : Array[Entry]
@@ -410,9 +412,13 @@ fn[Input : Eq] menu_component(
   resolve : (Input) -> Definition?,
   close : @cmd.Cmd,
 ) -> @rabbita.Val[@html.Html] {
-  input.switch_by(
-    current => {
-      guard resolve(current) is Some(definition) && definition.has_actions() else {
+  input
+  .map(input => {
+    resolve(input).map_or(false, definition => definition.has_actions())
+  })
+  .switch_by(
+    available => {
+      if !available {
         let (closed, _) = @rabbita.create_state_with_init(
           init=_ => ((), close),
           update=(state, _ : Unit, _) => (state, @cmd.none),
@@ -485,52 +491,60 @@ fn[Input : Eq] menu_component(
           )
         }
         Pointer(x, y) =>
-          @rui.dropdown_menu(
-            id=open.target + ":pointer-menu",
-            default_open=true,
-            on_open_change=changed,
-            scope => {
-              @html.fragment([
-                @rui.popover_anchor(
-                  id=open.target + ":pointer-menu-trigger",
-                  style=[
-                    "position:fixed;left:\{x}px;top:\{y}px;width:0;height:0",
-                  ],
-                  @html.nothing,
-                ),
-                @rui.dropdown_menu_content(
-                  scope,
-                  align=Start,
-                  side_offset=0,
-                  aria_label=definition.label,
-                  class="action-menu",
-                  attrs=surface_attrs(open, close),
-                  definition.entries.map(entry => {
-                    match entry {
-                      Separator => @rui.dropdown_menu_separator()
-                      Action(item) =>
-                        @rui.dropdown_menu_item(
-                          scope,
-                          disabled=!item.enabled,
-                          destructive=item.destructive,
-                          on_select=item.command,
-                          class="action-menu-item",
-                          title=item.title,
-                          item_children(item),
-                        )
-                    }
-                  }),
-                ),
-              ])
+          input.switch_by(
+            input => {
+              @rui.dropdown_menu(
+                id=open.target + ":pointer-menu",
+                default_open=true,
+                on_open_change=changed,
+                scope => {
+                  guard resolve(input) is Some(definition) else {
+                    return @html.nothing
+                  }
+                  @html.fragment([
+                    @rui.popover_anchor(
+                      id=open.target + ":pointer-menu-trigger",
+                      style=[
+                        "position:fixed;left:\{x}px;top:\{y}px;width:0;height:0",
+                      ],
+                      @html.nothing,
+                    ),
+                    @rui.dropdown_menu_content(
+                      scope,
+                      align=Start,
+                      side_offset=0,
+                      aria_label=definition.label,
+                      class="action-menu",
+                      attrs=surface_attrs(open, close),
+                      definition.entries.map(entry => {
+                        match entry {
+                          Separator => @rui.dropdown_menu_separator()
+                          Action(item) =>
+                            @rui.dropdown_menu_item(
+                              scope,
+                              disabled=!item.enabled,
+                              destructive=item.destructive,
+                              on_select=item.command,
+                              class="action-menu-item",
+                              title=item.title,
+                              item_children(item),
+                            )
+                        }
+                      }),
+                    ),
+                  ])
+                },
+              )
+            },
+            by=input => {
+              resolve(input).map_or("closed", definition => {
+                definition.revision()
+              })
             },
           )
       }
     },
-    by=input => {
-      resolve(input)
-      .map_or(false, definition => definition.has_actions())
-      .to_string()
-    },
+    by=available => available.to_string(),
   )
 }
 
