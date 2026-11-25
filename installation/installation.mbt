@@ -21,12 +21,44 @@ fn executable_name(name : String) -> String {
 }
 
 ///|
+const PosixEtxtbsy : Int32 = 26
+
+///|
+/// Linux `posix_spawn` can transiently fail with `ETXTBSY` when another thread
+/// in the same process holds a newly written executable open across
+/// `clone`/`vfork` before the child's `execve` closes `O_CLOEXEC` descriptors.
+fn is_text_file_busy(error : Error) -> Bool {
+  !is_windows() && error is @os_error.OsError(_, raw_code=PosixEtxtbsy, ..)
+}
+
+///|
+async fn[T] retry_text_file_busy(
+  strategy : @async.RetryMethod,
+  max_retry : Int32,
+  action : async () -> T,
+) -> T {
+  @async.retry(
+    strategy,
+    max_retry~,
+    fatal_error=error => !is_text_file_busy(error),
+    action,
+  )
+}
+
+///|
 async fn copy_file(
   source : String,
   destination : String,
   executable~ : Bool = false,
 ) -> Unit {
-  @fs.write_binary(destination, @fs.read_binary(source))
+  let bytes = @fs.read_binary(source)
+  let permission = if executable { 0o755 } else { 0o644 }
+  @atomic_file.write_atomic(
+    destination,
+    file => file.write(bytes),
+    replace=true,
+    permission~,
+  )
   if executable && !is_windows() {
     @fs.chmod(destination, 0o755)
   }
@@ -38,14 +70,20 @@ async fn command(
   args : Array[String],
   extra_env~ : Map[String, String] = {},
 ) -> String {
-  let result = @process.run(
-    program,
-    args,
-    stdin=Empty,
-    stdout=Collect,
-    stderr=Collect,
-    extra_env~,
-    no_console_window=true,
+  let result = retry_text_file_busy(
+    ExponentialDelay(initial=10, factor=2.0, maximum=160),
+    5,
+    () => {
+      @process.run(
+        program,
+        args,
+        stdin=Empty,
+        stdout=Collect,
+        stderr=Collect,
+        extra_env~,
+        no_console_window=true,
+      )
+    },
   )
   guard result.exit_code == 0 else {
     fail("\{program} exited \{result.exit_code}: \{result.stderr_text()}")
@@ -59,6 +97,7 @@ async fn usable(program : String, args : Array[String]) -> Bool {
     ignore(command(program, args))
     true
   } catch {
+    error if is_text_file_busy(error) => raise error
     _ => false
   }
 }

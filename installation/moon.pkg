@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/atomic_file",
   "moonbitlang/openseek/env" @exe,
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
