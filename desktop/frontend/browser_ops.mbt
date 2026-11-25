@@ -181,13 +181,6 @@ fn browser_set_theme_for_pages(
 }
 
 ///|
-/// Apply the effective palette to native caption controls on platforms where
-/// Proton supports an explicit per-window theme.
-fn app_set_titlebar_theme(dispatch : @cmd.Emit[Msg], dark : Bool) -> @cmd.Cmd {
-  browser_op(dispatch, @commands.app_set_titlebar_theme, { dark, }, quiet=true)
-}
-
-///|
 /// A history op on whatever Browser tab is active — a no-op when none is,
 /// or while a blank tab has no view yet.
 fn browser_history_for_active(

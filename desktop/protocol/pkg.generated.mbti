@@ -168,11 +168,20 @@ pub impl @json.FromJson for AppSystemAppearanceReply
 pub impl @json.ToJson for AppSystemAppearanceReply
 
 #derive(Eq, @debug.Debug)
-pub(all) struct AppTitlebarThemePayload {
+pub(all) struct AppTitlebarStylePayload {
   dark : Bool
+  height : Double
+  background_color : String
+  symbol_color : String
 }
-pub impl @json.FromJson for AppTitlebarThemePayload
-pub impl @json.ToJson for AppTitlebarThemePayload
+pub impl @json.FromJson for AppTitlebarStylePayload
+pub impl @json.ToJson for AppTitlebarStylePayload
+
+pub(all) struct AppTitlebarStyleReply {
+  custom_overlay : Bool
+}
+pub impl @json.FromJson for AppTitlebarStyleReply
+pub impl @json.ToJson for AppTitlebarStyleReply
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ApplyUpdateReply {

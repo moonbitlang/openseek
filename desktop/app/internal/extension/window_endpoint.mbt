@@ -61,7 +61,7 @@ async test "native window ops are absent from the relay method catalog" {
   )
   assert_true(
     window_only.any(endpoint => {
-      endpoint.name() == @commands.app_set_titlebar_theme.name()
+      endpoint.name() == @commands.app_set_titlebar_style.name()
     }),
   )
   let names : Set[String] = Set([])

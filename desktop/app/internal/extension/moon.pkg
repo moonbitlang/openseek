@@ -27,6 +27,8 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
+  "moonbitlang/core/math",
+  "moonbitlang/core/cmp",
   "openseek_desktop/uri",
   "tonyfettes/xlog",
 }

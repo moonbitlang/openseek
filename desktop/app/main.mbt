@@ -52,10 +52,10 @@ async fn main {
       Asset(frontend_entry),
       width=1120,
       height=760,
-      // Let the page palette paint the native titlebar area, including when
-      // the in-app palette differs from the system appearance.
+      // The page extends into the titlebar. On Windows, its window-local
+      // style command also sets the host-drawn caption buttons.
       titlebar_style=Overlay,
-      // Keep the traffic lights aligned with the 46px application header.
+      // Keep the macOS traffic lights at the existing inset.
       traffic_light_position={ x: 16, y: 16, },
       web_contents_policy=external_links.app_page_policy(),
     ),

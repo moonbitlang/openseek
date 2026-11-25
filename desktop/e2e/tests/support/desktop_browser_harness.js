@@ -682,6 +682,8 @@ export class DesktopBrowserHarness {
       }
       case 'app.info':
         return { version: '0.0.0-fixture' };
+      case 'app.set_titlebar_style':
+        return { custom_overlay: false };
       case 'settings.get':
         return this.hostSettings;
       case 'settings.set': {
