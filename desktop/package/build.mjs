@@ -139,6 +139,8 @@ class Build {
     this.app = join(this.desktop, "app");
     this.repo = resolve(this.desktop, "..");
     this.host = Hosts[process.platform];
+    this.webTarget = join(this.desktop, "target");
+    this.browserOutput = join(this.desktop, "dist/browser");
   }
 
   commandRun(program, args, { cwd = this.desktop, env = {} } = {}) {
@@ -156,6 +158,7 @@ class Build {
 
   parse() {
     const options = { help: { type: "boolean", short: "h" } };
+    if (this.command === "browser") options["staging-dir"] = { type: "string" };
     if (this.command !== "dev") options.release = { type: "boolean" };
     // A release-quality build can still take the development identity: it then
     // installs beside a shipped app instead of competing with it for the same
@@ -175,9 +178,15 @@ class Build {
         ? "[--release] [--dev-identity] [--target app|dmg|zip] [--sign IDENTITY] [--notarize PROFILE] [--no-open]"
         : this.command === "windows"
           ? "[--release] [--dev-identity] [--target app|zip|installer]"
-          : this.command === "linux" || this.command === "browser" ? "[--release] [--dev-identity]" : "";
+          : this.command === "browser" ? "[--release] [--dev-identity] [--staging-dir DIR]"
+          : this.command === "linux" ? "[--release] [--dev-identity]" : "";
       console.log(`Usage: moon run ./desktop/package/${this.command} -- ${suffix}`.trim());
       return null;
+    }
+    if (values["staging-dir"]) {
+      const staging = resolve(values["staging-dir"]);
+      this.webTarget = join(staging, "target");
+      this.browserOutput = join(staging, "browser");
     }
     const targets = values.target ?? (this.command === "macos"
       ? ["app"] : this.command === "windows" ? ["zip", "installer"] : []);
@@ -239,9 +248,9 @@ class Build {
 
   async webAssets() {
     if (!this.host) throw new Error(`browser assets cannot build on ${process.platform}/${process.arch}`);
-    const vendor = join(this.desktop, "target/vendor-web");
+    const vendor = join(this.webTarget, "vendor-web");
     const work = join(vendor, "work");
-    const output = join(this.desktop, "target/web");
+    const output = join(this.webTarget, "web");
 
     // Cache only verified archives. Extraction and generated outputs are
     // recreated so an interrupted build cannot leave a partial asset tree.
@@ -333,7 +342,7 @@ class Build {
       // frontend.js the packaged app loads, so the e2e suite can drive one
       // staging directory either as a browser console against a mocked relay
       // WebSocket or as the window against a stubbed proton bridge.
-      const output = join(this.desktop, "dist/browser");
+      const output = this.browserOutput;
       await rm(output, { recursive: true, force: true });
       await this.stageFrontend(output, profile, profile === "release");
       // The oldest Android shell this frontend works with; the APK adopts a
@@ -380,7 +389,7 @@ class Build {
   }
 
   async sharedWeb(output) {
-    const generated = join(this.desktop, "target/web");
+    const generated = join(this.webTarget, "web");
     for (const name of ["app.css", "viewer.css", "xterm.js", "xterm.css", "relative-time.js", "relative-time.LICENSE", "snapdom.js", "snapdom.LICENSE", "page-thumbnails.js", "page-thumbnails.css"]) {
       await cp(join(generated, name), join(output, name));
     }

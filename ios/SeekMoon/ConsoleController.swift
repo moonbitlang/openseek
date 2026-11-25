@@ -8,12 +8,14 @@ import WebKit
     private let errorView = UIStackView()
     private let errorText = UILabel()
     private var failedPage: URL?
+    private var loadingArchiveAt: URL?
     private var signIn: SignIn?
     private var downloads: [WKDownload: (temporaryFile: URL, filename: String)] = [:]
     private let lastPageKey = "console.lastPage"
 
-    init() {
+    init(dataStore: WKWebsiteDataStore? = nil) {
         let config = WKWebViewConfiguration()
+        config.websiteDataStore = dataStore ?? .default()
         config.applicationNameForUserAgent = "SeekMoonIOS/0.1.0"
         web = WKWebView(frame: .zero, configuration: config)
         super.init(nibName: nil, bundle: nil)
@@ -61,15 +63,34 @@ import WebKit
     }
 
     @objc private func rememberPage() {
-        if let page = web.url, Console.isPage(page) {
-            UserDefaults.standard.set(Console.origin.appending(path: page.path), forKey: lastPageKey)
+        if let page = web.url, Console.isPage(page),
+           var parts = URLComponents(url: page, resolvingAgainstBaseURL: false) {
+            parts.query = nil
+            parts.fragment = nil
+            UserDefaults.standard.set(parts.url, forKey: lastPageKey)
         }
     }
 
-    private func loadPage(_ page: URL?) {
+    private func loadPage(_ page: URL?, preservingHistory: Bool = false) {
         let url = page.flatMap { Console.isPage($0) ? $0 : nil } ?? Console.home
         failedPage = url; web.isHidden = false; errorView.isHidden = true; indicator.startAnimating()
-        web.load(URLRequest(url: url))
+        do {
+            guard let archive = Bundle.main.url(forResource: "Console", withExtension: "webarchive") else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+            let data = try Data(contentsOf: archive, options: .mappedIfSafe)
+            loadingArchiveAt = url
+            let mime = "application/x-webarchive"
+            if preservingHistory {
+                // Reload and traversal already have an entry in WebKit's back-forward list.
+                web.load(data, mimeType: mime, characterEncodingName: "utf-8", baseURL: url)
+            } else {
+                let response = URLResponse(url: url, mimeType: mime, expectedContentLength: data.count, textEncodingName: nil)
+                web.loadSimulatedRequest(URLRequest(url: url), response: response, responseData: data)
+            }
+        } catch {
+            showError(error.localizedDescription, url: url)
+        }
     }
 
     private func showError(_ description: String, url: URL?) {
@@ -90,6 +111,16 @@ import WebKit
         if Console.owns(url), url.path == "/v2/auth/login" {
             decisionHandler(.cancel)
             if action.sourceFrame.isMainFrame && Console.isPage(web.url) { beginSignIn() }
+            return
+        }
+        if action.targetFrame?.isMainFrame == true, action.request.httpMethod == "GET", Console.isPage(url) {
+            if url == loadingArchiveAt && action.navigationType == .other {
+                loadingArchiveAt = nil
+                decisionHandler(.allow)
+            } else {
+                decisionHandler(.cancel)
+                loadPage(url, preservingHistory: action.navigationType == .reload || action.navigationType == .backForward)
+            }
             return
         }
         if action.targetFrame != nil && Console.owns(url) { decisionHandler(.allow); return }

@@ -4,6 +4,89 @@ import XCTest
 @testable import SeekMoon
 
 @MainActor final class SeekMoonTests: XCTestCase {
+    func testPackagedConsoleRestoresAndReloadsDeviceRoutes() async throws {
+        try await assertRouteRestored("/device/d/chat/session/a%2Fb")
+    }
+
+    func testPackagedConsoleRestoresAndReloadsCloudRoutes() async throws {
+        try await assertRouteRestored("/cloud/session/a%2Fb")
+    }
+
+    private func assertRouteRestored(_ path: String) async throws {
+        let store = WKWebsiteDataStore.nonPersistent()
+        let defaults = UserDefaults.standard
+        let key = "console.lastPage"
+        let previous = defaults.url(forKey: key)
+        defer { defaults.set(previous, forKey: key) }
+        let start = Console.origin.appending(path: "cloud")
+        defaults.set(start, forKey: key)
+
+        let controller = ConsoleController(dataStore: store)
+        controller.loadViewIfNeeded()
+        let web = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? WKWebView }.first)
+        try await waitForFrontend(web, at: start)
+        let route = try XCTUnwrap(URL(string: path, relativeTo: Console.origin)?.absoluteURL)
+        _ = try await web.callAsyncJavaScript("location.assign(path); return true", arguments: ["path": path], in: nil, contentWorld: .page)
+        try await waitForFrontend(web, at: route)
+        XCTAssertEqual(defaults.url(forKey: key), route)
+        _ = try await web.evaluateJavaScript("window.beforeReload = true")
+        web.reload()
+        try await waitForFrontend(web, at: route)
+        XCTAssertEqual(web.backForwardList.backItem?.url, start)
+        web.goBack()
+        try await waitForFrontend(web, at: start)
+        web.goForward()
+        try await waitForFrontend(web, at: route)
+
+        let restored = ConsoleController(dataStore: store)
+        restored.loadViewIfNeeded()
+        let reopened = try XCTUnwrap(restored.view.subviews.compactMap { $0 as? WKWebView }.first)
+        try await waitForFrontend(reopened, at: route)
+        withExtendedLifetime((controller, restored)) {}
+    }
+
+    func testBrowserArchiveRendersAndLoadsLazyAssetsAtAnUnreachableOrigin() async throws {
+        // Rebase only the archive's URL keys. The unmodified HTML, JavaScript and styles
+        // cannot fall back to the hosted console if a packaged subresource is missing.
+        let file = try XCTUnwrap(Bundle.main.url(forResource: "Console", withExtension: "webarchive"))
+        let bytes = try Data(contentsOf: file, options: .mappedIfSafe)
+        var archive = try XCTUnwrap(PropertyListSerialization.propertyList(from: bytes, format: nil) as? [String: Any])
+        var resources = try XCTUnwrap(archive["WebSubresources"] as? [[String: Any]])
+        let offline = URL(string: "https://seekmoon.invalid")!
+        for index in resources.indices {
+            let original = try XCTUnwrap(resources[index]["WebResourceURL"] as? String)
+            XCTAssertTrue(original.hasPrefix(Console.origin.absoluteString + "/"))
+            resources[index]["WebResourceURL"] = offline.absoluteString + original.dropFirst(Console.origin.absoluteString.count)
+        }
+        archive["WebSubresources"] = resources
+        let data = try PropertyListSerialization.data(fromPropertyList: archive, format: .binary, options: 0)
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        let web = WKWebView(frame: .zero, configuration: config)
+        let url = offline.appending(path: "cloud")
+        web.load(data, mimeType: "application/x-webarchive", characterEncodingName: "utf-8", baseURL: url)
+        try await waitForFrontend(web, at: url)
+        let assetsLoaded = try await web.callAsyncJavaScript("""
+            const viewer = await fetch('/assets/viz/index.html');
+            const mermaid = await import('/assets/mermaid/mermaid.esm.min.mjs');
+            return (await viewer.text()).includes('OpenSeek session viewer') && typeof mermaid.default.render === 'function';
+            """, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(assetsLoaded as? Bool, true)
+    }
+
+    private func waitForFrontend(_ web: WKWebView, at url: URL) async throws {
+        let deadline = ContinuousClock.now + .seconds(25)
+        while ContinuousClock.now < deadline {
+            if !web.isLoading, web.url == url,
+               (try? await web.evaluateJavaScript("!window.beforeReload && document.querySelector('#app')?.childElementCount > 0 && document.styleSheets.length > 0")) as? Bool == true {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let state = try? await web.evaluateJavaScript("[location.href, document.readyState, document.body?.innerText?.slice(0, 150), window.beforeReload ?? false]")
+        XCTFail("Packaged frontend did not render at \(url): \(String(describing: state))")
+    }
+
     func testAttachmentCameraPurposeIsInAppBundle() throws {
         let purpose = try XCTUnwrap(Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") as? String)
         XCTAssertFalse(purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

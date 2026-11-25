@@ -1,7 +1,7 @@
 import XCTest
 
 final class LiveSmoke: XCTestCase {
-    @MainActor func testHostedConsoleOpensSystemSignInAndCanRetryAfterCancel() {
+    @MainActor func testPackagedConsoleOpensSystemSignInAndCanRetryAfterCancel() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.moonbit.seekmoon.ios.prototype")
         app.launch()
