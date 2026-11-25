@@ -3,7 +3,7 @@
  * The verified standalone esbuild follows these imports into packaged
  * app.css; development serves them in place so CSS edits need only a refresh.
  */
-@import url('https://fonts.googleapis.com/css?family=Google+Sans+Simplified+Chinese:400,500,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400..700&family=Noto+Sans:wght@400..700&family=Noto+Sans+JP:wght@400..700&family=Noto+Sans+SC:wght@400..700&family=Noto+Sans+TC:wght@400..700&display=swap');
 @import url("./styles/palette-light.css");
 @import url("./styles/palette-dark.css");
 @import url("./styles/tokens.css");

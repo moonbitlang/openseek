@@ -118,8 +118,9 @@
   font-display: block;
 }
 
+/* Keep document layout on the bundled face, not the UI's web font. */
 @font-face {
-  font-family: "Noto Sans SC";
+  font-family: "Office Viewer CJK";
   src: url("./fonts/NotoSansSC-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
@@ -600,9 +601,12 @@
   .word-page svg text[font-family="Liberation Mono"] {
   font-family: "Courier New", "Liberation Mono" !important;
 }
+.word-page svg text[font-family="Noto Sans SC"] {
+  font-family: "Office Viewer CJK";
+}
 .office-viewer-surface.prefer-system-fonts
   .word-page svg text[font-family="Noto Sans SC"] {
-  font-family: "Microsoft YaHei", "SimSun", "Noto Sans SC" !important;
+  font-family: "Microsoft YaHei", "SimSun", "Office Viewer CJK" !important;
 }
 
 /* The file panel already owns the document title and context actions. Keep
@@ -711,16 +715,16 @@
   background: #fff;
   box-shadow: 0 3px 14px rgba(15, 23, 42, .12);
   user-select: none;
-  font-family: "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+  font-family: "Carlito", "Liberation Sans", "Office Viewer CJK", sans-serif;
 }
 .sheet-document figure.chart svg text {
-  font-family: "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+  font-family: "Carlito", "Liberation Sans", "Office Viewer CJK", sans-serif;
 }
 .office-viewer-surface.prefer-system-fonts .sheet-document {
-  font-family: "Calibri", "Arial", "Microsoft YaHei", "SimSun", "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+  font-family: "Calibri", "Arial", "Microsoft YaHei", "SimSun", "Carlito", "Liberation Sans", "Office Viewer CJK", sans-serif;
 }
 .office-viewer-surface.prefer-system-fonts .sheet-document figure.chart svg text {
-  font-family: "Calibri", "Arial", "Microsoft YaHei", "SimSun", "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+  font-family: "Calibri", "Arial", "Microsoft YaHei", "SimSun", "Carlito", "Liberation Sans", "Office Viewer CJK", sans-serif;
 }
 .sheet-document > h1 { margin: 4px 0 14px; font-size: 17px; }
 .sheet-document section { margin: 0 0 22px; }
