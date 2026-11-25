@@ -157,9 +157,6 @@ fn Actions::placeholder_component(
       class = class + " " + row.class_name
     }
     let children : Array[@html.Html] = []
-    if row.nested {
-      children.push(@html.span(class="row-twisty spacer", ""))
-    }
     children.push(
       @html.span(
         class=if row.action is Some(_) {

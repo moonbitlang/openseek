@@ -93,13 +93,7 @@ fn unlisted_conversation_label(
 /// One sidebar row's component input. A conversation with a turn in flight
 /// gets a pulsing dot, so background work stays visible while another
 /// conversation is on screen. A durable, idle row also carries a
-/// hover-revealed archive button. `children` holds the sub-run transcripts
-/// this conversation folded under it; the conversation component owns their
-/// disclosure. `subrun` marks the row as one of those children — indented a
-/// step. Nested children have no independent archive action because
-/// archiving their parent moves the whole family; a legacy orphan that
-/// surfaces as a root row does get the action so old split state remains
-/// repairable.
+/// hover-revealed archive button.
 fn session_component_input(
   model : Model,
   channel : @interop.ChannelId,
@@ -108,9 +102,7 @@ fn session_component_input(
   archivable~ : Bool = false,
   nested~ : Bool = false,
   worktree? : String,
-  subrun~ : Bool = false,
   root? : String,
-  children~ : Array[@conversation.Input] = [],
 ) -> @conversation.Input {
   let active = model.screen is Chat &&
     channel == model.focused &&
@@ -160,7 +152,6 @@ fn session_component_input(
     title,
     label,
     nested,
-    subrun,
     active,
     loading: false,
     load_failed: false,
@@ -178,7 +169,6 @@ fn session_component_input(
     } else {
       []
     },
-    children,
   })
 }
 
@@ -219,7 +209,8 @@ fn Model::push_group_component_inputs(
     if conv.device != dev.channel ||
       conv.project() != workspace ||
       listed(conv.session_id) ||
-      archived(conv.session_id) {
+      archived(conv.session_id) ||
+      @transcript.subrun_parent(conv.session_id) is Some(_) {
       continue
     }
     let worth_keeping = conv.worth_keeping()
@@ -252,52 +243,20 @@ fn Model::push_group_component_inputs(
       model_settings: None,
     })
   }
-  // A child opened from Workflows may not be in the host inventory yet.
-  // Fold live and listed sessions together so either source can own a parent
-  // or child without creating a second top-level conversation.
+  // Sub-run transcripts are omitted from the left sidebar; they remain
+  // accessible from their parent transcript and workflow views.
   for item in dev.sessions {
-    if item.workspace == workspace && !archived(item.id) {
+    if item.workspace == workspace &&
+      !archived(item.id) &&
+      @transcript.subrun_parent(item.id) is None {
       items.push(item)
     }
   }
-  // Sub-run transcripts fold under the conversation that launched them: they
-  // are that turn's evidence, not conversations of their own. They ride the
-  // parent's component input, so their disclosure state lives in the
-  // conversation component. Listed records keep the host's resolved label;
-  // the unlisted records above already carry their temporary local label.
-  for tree in @transcript.session_tree(items) {
-    let parent_label = session_item_label(tree.item)
-    let children : Array[@conversation.Input] = []
-    for child in tree.children {
-      // The ordinal leads the row: it is what the transcript's sub-run
-      // lines name, and it orders runs whose questions read alike. A child
-      // that never got a question keeps the ordinal alone — its id would
-      // only repeat the parent's.
-      let question = match child.title {
-        Some(title) if !title.is_blank() => Some(title)
-        _ => None
-      }
-      let child_label = match (@transcript.subrun_label(child.id), question) {
-        (Some(ordinal), Some(title)) => "\{ordinal} · \{title}"
-        (Some(ordinal), None) => ordinal
-        (None, _) => session_item_label(child)
-      }
-      children.push(
-        session_component_input(
-          self,
-          dev.channel,
-          child.id,
-          child_label,
-          nested=true,
-          subrun=true,
-          root~,
-        ),
-      )
-    }
-    let stamp = if local_worktrees.contains(tree.item.id) {
+  for item in items {
+    let stamp = if local_worktrees.contains(item.id) {
       ComposingNow
     } else {
-      match tree.item.updated_at_ms {
+      match item.updated_at_ms {
         Some(ms) => ActiveAt(ms)
         None => Unstamped
       }
@@ -308,20 +267,15 @@ fn Model::push_group_component_inputs(
         session_component_input(
           self,
           dev.channel,
-          tree.item.id,
-          parent_label,
-          // Ordinary children are folded below a live parent and receive no
-          // action. A child-shaped root is legacy split state (or belongs to a
-          // parent in another store), so it remains independently archivable;
-          // once beside its archived parent, family restore picks it up.
-          archivable=!local_worktrees.contains(tree.item.id),
+          item.id,
+          session_item_label(item),
+          archivable=!local_worktrees.contains(item.id),
           nested=true,
-          worktree?=match local_worktrees.get(tree.item.id) {
+          worktree?=match local_worktrees.get(item.id) {
             Some(worktree) => worktree
-            None => worktree_name_for(dev, workspace, tree.item.id)
+            None => worktree_name_for(dev, workspace, item.id)
           },
           root~,
-          children~,
         ),
       ),
     )
@@ -2840,7 +2794,7 @@ fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-test "archived families collapse while a live orphan child stays archivable" {
+test "archived families collapse while live subrun transcripts stay hidden" {
   let archived_model = test_model().with_dev(dev => {
     ..dev,
     archived: [archived_item("chat"), archived_item("chat-sr-1")],
@@ -2860,26 +2814,15 @@ test "archived families collapse while a live orphan child stays archivable" {
     sessions: [placed_archived_item("chat-sr-1")],
   })
   let orphan_sections = orphan_model.work_sidebar_sections(orphan_model.dev())
-  // Live rows hang under their project's folder row.
-  let mut orphan : @conversation.Input? = None
   for section in orphan_sections {
     guard section.id().source() == "openseek.projects" else { continue }
     for entry in section.entries {
       guard entry is @section.Project(project) else { continue }
       for row in project.conversations {
-        if row.id().conversation() == "chat-sr-1" {
-          orphan = Some(row)
-        }
+        assert_true(row.id().conversation() != "chat-sr-1")
       }
     }
   }
-  guard orphan is Some(orphan) else {
-    fail("expected live orphan conversation")
-  }
-  assert_eq(orphan.id().conversation(), "chat-sr-1")
-  assert_true(
-    orphan.trailing is [@conversation.Archive(_), @conversation.Delete(_)],
-  )
 }
 
 ///|

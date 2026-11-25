@@ -638,7 +638,6 @@ fn Model::cloud_chat_rows(
         title: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         label: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         nested: false,
-        subrun: false,
         active,
         loading: conversation.map_or(false, conversation => {
           conversation.loading || conversation.history_older_request is Some(_)
@@ -672,7 +671,6 @@ fn Model::cloud_chat_rows(
         } else {
           []
         },
-        children: [],
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||
             conversation.map_or(false, conversation => {

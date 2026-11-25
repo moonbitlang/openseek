@@ -158,9 +158,9 @@
   gap: var(--space-3);
   min-width: 0;
   min-height: 2em;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-control);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   font-size: var(--font-size-md);
   cursor: pointer;
 }
@@ -454,10 +454,13 @@
   }
 }
 
+.sidebar-project + .sidebar-project {
+  margin-block-start: var(--space-2);
+}
 .conversation-row + .sidebar-project,
 .sidebar-conversation + .sidebar-project,
 .sidebar-project:not(.collapsed):has(.conversation-row) + .sidebar-project {
-  margin-block-start: var(--space-4);
+  margin-block-start: var(--space-6);
 }
 
 .workspace-row {
@@ -465,11 +468,12 @@
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  min-height: 2.5rem;
+  min-height: 1.75rem;
   padding: 0 var(--space-4);
   border-radius: var(--radius-control);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
 }
 .workspace-content {
   display: flex;
@@ -481,7 +485,7 @@
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-1);
   min-width: 0;
   align-self: stretch;
   padding: 0;
@@ -492,15 +496,32 @@
   text-align: left;
   cursor: pointer;
 }
+.workspace-disclosure:hover {
+  color: var(--color-text-secondary);
+}
 .workspace-disclosure > .sidebar-label {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-disclosure > .sidebar-icon {
+.workspace-chevron {
+  --icon-size: var(--icon-xs);
   flex: none;
-  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  transition: transform var(--disclosure-duration) ease;
+}
+.workspace-disclosure[aria-expanded="false"] > .workspace-chevron {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-chevron {
+    transition: none;
+  }
 }
 .workspace-disclosure:focus-visible,
 .project-show-more:focus-visible {
@@ -509,8 +530,8 @@
   border-radius: var(--radius-control);
 }
 .workspace-row.active {
-  color: var(--color-text-primary);
-  font-weight: 500;
+  color: var(--color-text-secondary);
+  font-weight: 600;
 }
 .workspace-row:hover .row-archive {
   visibility: visible;
@@ -523,20 +544,16 @@
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-.conversation-row.nested {
-  padding-left: var(--space-5);
-}
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  /* Match nested titles: row inset, twisty cell, then content gap. */
-  padding: 0 var(--space-4) 0 calc(var(--space-5) + 1rem + var(--space-2));
+  padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-xs);
   text-align: left;
   cursor: pointer;
 }
@@ -550,49 +567,6 @@
 }
 .conversation-row.placeholder:hover {
   background: transparent;
-}
-
-/* Rows without children retain an empty twisty slot to keep titles aligned. */
-.row-twisty {
-  --icon-size: var(--icon-sm);
-  flex: 0 0 1rem;
-  display: grid;
-  place-items: center;
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.row-twisty .icon {
-  transform: rotate(-90deg);
-  transition: transform var(--disclosure-duration) ease;
-}
-.row-twisty.expanded .icon {
-  transform: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .row-twisty .icon {
-    transition: none;
-  }
-}
-button.row-twisty:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
-}
-.row-twisty.spacer {
-  cursor: inherit;
-}
-
-.conversation-row.subrun {
-  padding-left: calc(2rem - var(--space-2));
-  color: var(--color-text-muted);
-}
-.conversation-row.subrun.nested {
-  padding-left: calc(2.5rem - var(--space-2));
 }
 
 #project-picker-dialog {

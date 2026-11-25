@@ -10,7 +10,6 @@ fn row(id : String, label : String) -> @conversation.Input {
     title: id,
     label,
     nested: false,
-    subrun: false,
     active: false,
     loading: false,
     load_failed: false,
@@ -19,7 +18,6 @@ fn row(id : String, label : String) -> @conversation.Input {
     rename: None,
     run_mark: NoRunMark,
     trailing: [Restore(title="restore"), Delete(title="delete")],
-    children: [],
   }
 }
 

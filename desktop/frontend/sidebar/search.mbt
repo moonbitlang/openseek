@@ -4,10 +4,9 @@ fn matching_rows(
   query : String,
 ) -> Array[@conversation.Input] {
   rows.filter_map(row => {
-    let children = matching_rows(row.children, query)
     if row.id().source() != @conversation.CodexDraft &&
-      (row.label.to_lower().contains(query) || !children.is_empty()) {
-      Some({ ..row, children, })
+      row.label.to_lower().contains(query) {
+      Some(row)
     } else {
       None
     }
@@ -64,7 +63,6 @@ fn push_results(
     if row.openable && row.label.to_lower().contains(query) {
       results.push(row.id())
     }
-    push_results(results, row.children, query)
   }
 }
 
