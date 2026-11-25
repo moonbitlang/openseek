@@ -254,3 +254,102 @@ test('sub-runs retain their DOM across their own and project folds', { tag: '@mo
   expect(await node.evaluate(node => node === document.querySelector('.conversation-row.subrun'))).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('idle rows give the full trailing width to titles and overlay actions on hover', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions[0].title = 'A long conversation title that truncates with an ellipsis near the sidebar edge';
+  app.liveSessions.push({
+    id: 'session-2',
+    title: 'Another long conversation title that should open when clicked in the fade area',
+    updated_at_ms: 2,
+  });
+  await app.install();
+  await app.goto();
+
+  const first = page.locator('.conversation-row[title="session-1"]');
+  const second = page.locator('.conversation-row[title="session-2"]');
+  const openFirst = first.locator('.conversation-open');
+  const openSecond = second.locator('.conversation-open');
+  const actionsFirst = first.locator('.row-actions');
+  const menuFirst = first.locator('.row-menu-button');
+
+  await page.mouse.move(1439, 899);
+  await expect(menuFirst).toBeHidden();
+
+  // At rest, the title reaches the row's right padding without reserving the
+  // hidden overflow trigger's width.
+  const idleMetrics = await first.evaluate(row => {
+    const label = row.querySelector('.conversation-open');
+    const rowRect = row.getBoundingClientRect();
+    const labelRect = label.getBoundingClientRect();
+    const paddingRight = parseFloat(getComputedStyle(row).paddingRight);
+    return {
+      rowRight: rowRect.right,
+      labelRight: labelRect.right,
+      labelWidth: labelRect.width,
+      paddingRight,
+    };
+  });
+  expect(idleMetrics.rowRight - idleMetrics.labelRight).toBeLessThanOrEqual(idleMetrics.paddingRight + 1);
+
+  // Hovering reveals the overlaid actions without shrinking or shifting the title.
+  await first.hover();
+  await expect(menuFirst).toBeVisible();
+  await expect(actionsFirst).toBeVisible();
+  const hoverMetrics = await first.evaluate(row => {
+    const label = row.querySelector('.conversation-open');
+    return { labelWidth: label.getBoundingClientRect().width };
+  });
+  expect(Math.abs(hoverMetrics.labelWidth - idleMetrics.labelWidth)).toBeLessThanOrEqual(0.5);
+
+  // Opening the menu keeps both the button and its backing overlay visible
+  // after the pointer leaves the row.
+  await menuFirst.click();
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await page.mouse.move(1439, 899);
+  await expect(actionsFirst).toBeVisible();
+  await expect(menuFirst).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
+  // Clicking the fade zone to the left of the overlaid action button still
+  // opens the conversation instead of being swallowed by `.row-actions`.
+  await second.hover();
+  await expect(second.locator('.row-menu-button')).toBeVisible();
+  const fadeClickPoint = await second.evaluate(row => {
+    const actions = row.querySelector('.row-actions');
+    const button = row.querySelector('.row-menu-button');
+    const actionsRect = actions.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    return {
+      x: (actionsRect.left + buttonRect.left) / 2,
+      y: actionsRect.top + actionsRect.height / 2,
+    };
+  });
+  app.rpcDelays.set('session.load', 600);
+  await page.mouse.click(fadeClickPoint.x, fadeClickPoint.y);
+  await expect(second).toHaveClass(/active/);
+  await expect(second).toHaveClass(/loading/);
+
+  // While loading and hovered, the spinner stays in flow without overlapping
+  // either the title or the action button.
+  await second.hover();
+  const loadingMetrics = await second.evaluate(row => {
+    const label = row.querySelector('.conversation-open').getBoundingClientRect();
+    const spinner = row.querySelector('.conversation-load-spinner').getBoundingClientRect();
+    const button = row.querySelector('.row-menu-button').getBoundingClientRect();
+    return {
+      labelRight: label.right,
+      spinnerLeft: spinner.left,
+      spinnerRight: spinner.right,
+      buttonLeft: button.left,
+    };
+  });
+  expect(loadingMetrics.labelRight).toBeLessThanOrEqual(loadingMetrics.spinnerLeft + 0.5);
+  expect(loadingMetrics.spinnerRight).toBeLessThanOrEqual(loadingMetrics.buttonLeft + 0.5);
+
+  app.rpcDelays.delete('session.load');
+  await expect(second).not.toHaveClass(/loading/);
+  await expect(openSecond).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});

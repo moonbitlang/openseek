@@ -153,6 +153,8 @@
 }
 
 .conversation-row {
+  --row-bg: var(--color-bg-surface);
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -227,11 +229,13 @@
   outline-offset: 2px;
 }
 .conversation-row:hover {
-  background: var(--color-bg-subtle);
+  --row-bg: var(--color-bg-subtle);
+  background: var(--row-bg);
 }
 
 .conversation-row.active {
-  background: var(--color-conversation-selected);
+  --row-bg: var(--color-conversation-selected);
+  background: var(--row-bg);
 }
 
 .conversation-row.load-failed {
@@ -279,8 +283,8 @@
   cursor: default;
 }
 
-/* Hover-revealed archive control on a durable row. Kept in layout
-   (visibility, not display) so the label doesn't shift as it appears. */
+/* Hover-revealed row action button. Kept in layout on workspace rows so their
+   controls stay aligned; conversation rows overlay `.row-actions` instead. */
 .row-archive {
   --icon-size: var(--icon-md);
   flex: 0 0 auto;
@@ -296,11 +300,8 @@
   font-size: var(--font-size-sm);
   line-height: var(--line-height-tight);
   cursor: pointer;
+  pointer-events: auto;
   visibility: hidden;
-}
-.conversation-row:hover .row-archive,
-.conversation-row:focus-within .row-archive {
-  visibility: visible;
 }
 .row-archive:hover {
   background: var(--color-hover-subtle);
@@ -318,16 +319,17 @@
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
-/* Stack status and actions in one cell sized to the wider group, so swapping
-   them on hover does not shift the conversation title. */
+/* Status icons stay in flow when present so titles never overlap them; when
+   idle, `.row-trailing` drops out of flex layout so titles use the full row
+   width and `.row-actions` overlays the trailing edge on hover or focus. */
 .row-trailing {
   flex: 0 0 auto;
-  display: grid;
+  display: flex;
   align-items: center;
-  justify-items: end;
+  gap: var(--space-3);
 }
-.row-trailing > * {
-  grid-area: 1 / 1;
+.row-trailing:has(> .row-status:empty) {
+  display: contents;
 }
 
 .sidebar-run-status {
@@ -352,28 +354,39 @@
   align-items: center;
   gap: var(--space-3);
 }
-.conversation-row:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
+.row-status:empty {
+  display: none;
+}
+.row-actions {
+  pointer-events: none;
   visibility: hidden;
 }
-/* An open conversation menu keeps its hover-revealed trigger in place of the
-   status glyphs while the pointer moves into the floating surface. */
+.conversation-row:not(.loading) .row-actions {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  padding-inline: 1rem var(--space-2);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--row-bg) 1rem
+  );
+}
+/* Reveal actions on hover, focus, or while the overflow menu is open; swap out
+   the status icon except while loading so the spinner stays beside the menu. */
+.conversation-row:is(:hover, :focus-within, :has(.row-menu-button[aria-expanded="true"])) {
+  & .row-actions,
+  & .row-archive {
+    visibility: visible;
+  }
+
+  &:not(.loading) .row-trailing:has(.row-actions) .row-status {
+    visibility: hidden;
+  }
+}
 .row-menu-button[aria-expanded="true"] {
-  visibility: visible;
   color: var(--color-text-primary);
-}
-.conversation-row:not(.loading)
-  .row-trailing:has(.row-menu-button[aria-expanded="true"])
-  .row-status {
-  visibility: hidden;
-}
-.conversation-row.loading .row-trailing {
-  display: flex;
-  gap: var(--space-3);
-}
-.conversation-row.loading:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row.loading:focus-within .row-trailing:has(.row-actions) .row-status {
-  visibility: visible;
 }
 
 .sidebar-group,
@@ -1122,7 +1135,10 @@ button.row-twisty:hover {
 }
 .sidebar-search input::placeholder { color: inherit; opacity: 1; }
 .sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
-.conversation-row.search-selected { background: var(--color-bg-subtle); }
+.conversation-row.search-selected {
+  --row-bg: var(--color-bg-subtle);
+  background: var(--row-bg);
+}
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 .workspace-trailing {
