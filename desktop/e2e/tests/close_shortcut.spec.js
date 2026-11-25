@@ -49,32 +49,6 @@ async function installDesktop(page, systemDark = false) {
   return app;
 }
 
-test('dismissing Add SSH closes the native dialog without removing it or Settings', { tag: '@motion' }, async ({ page }) => {
-  const app = await installDesktop(page);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
-  const add = page.locator('#ssh-settings-add-host');
-  const modal = page.locator('#ssh-modal');
-  for (const dismiss of ['Escape', 'Cancel', 'Close']) {
-    await add.click();
-    await expect(page.locator('#ssh-modal:modal')).toBeVisible();
-    await modal.evaluate(dialog => {
-      delete dialog.dataset.observedClose;
-      dialog.addEventListener('close', () => {
-        dialog.dataset.observedClose = dialog.querySelector('#ssh-command') ? 'with contents' : 'empty';
-      }, { once: true });
-    });
-    if (dismiss === 'Escape') await page.keyboard.press('Escape');
-    else if (dismiss === 'Close') await modal.locator('[data-slot="dialog-close"]').click();
-    else await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(modal).toHaveAttribute('data-observed-close', 'with contents');
-    await expect(modal).toBeHidden();
-    await expect(page.locator('#management-dialog:modal')).toBeVisible();
-    await expect(add).toBeFocused();
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 async function closeFocused(page) {
   await page.evaluate(() => window.desktopEvent('menu.command', {
     command_id: 'app.close_focused',

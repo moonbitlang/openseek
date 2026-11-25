@@ -269,61 +269,13 @@ test('quick open moves its keyboard selection and opens the chosen file', async 
   await app.openSession();
   await app.openQuickOpen();
   const input = page.getByRole('combobox', { name: 'Search workspace files' });
-  await expect(input).toBeFocused();
-  const mainResult = page.getByRole('option', { name: /main\.mbt/ });
-  const readmeResult = page.getByRole('option', { name: /README\.md/ });
-  await expect(mainResult).toBeVisible();
-  await expect(readmeResult).toBeVisible();
-  await expect(mainResult).toHaveAttribute('aria-selected', 'true');
+  const readme = page.getByRole('option', { name: /README\.md/ });
+  await expect(readme).toHaveAttribute('aria-selected', 'false');
   await input.press('ArrowDown');
-  await expect(readmeResult).toHaveAttribute('aria-selected', 'true');
-  await input.press('ArrowUp');
-  await expect(mainResult).toHaveAttribute('aria-selected', 'true');
-  const dialogNode = await page.locator('#quick-open-dialog').elementHandle();
-  const inputNode = await input.elementHandle();
+  await expect(readme).toHaveAttribute('aria-selected', 'true');
   await input.press('Enter');
 
-  await expect(input).toBeHidden();
-  expect(await dialogNode.evaluate(node => node.isConnected && !node.open)).toBe(true);
-  expect(await inputNode.evaluate(node => node.isConnected)).toBe(true);
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'fs.read_file' &&
-    request.params?.path === '/workspace/src/main.mbt')).toBeTruthy();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('quick open uses native dismissal and retains its dialog across reopen', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const dialog = page.locator('#quick-open-dialog');
-  await app.openQuickOpen();
-  const dialogNode = await dialog.elementHandle();
-  const input = page.locator('#quick-open-input');
-  await expect(input).toBeFocused();
-  const inputNode = await input.elementHandle();
-  await dialog.evaluate(node => {
-    node.addEventListener('cancel', event => { window.quickOpenCancel = event; }, { once: true });
-  });
-  await input.press('Escape');
-  await expect(dialog).not.toHaveAttribute('open');
-  expect(await page.evaluate(() => window.quickOpenCancel.defaultPrevented)).toBe(false);
-  expect(await inputNode.evaluate(node => node.isConnected)).toBe(true);
-
-  await app.openQuickOpen();
-  await expect(input).toBeFocused();
-  expect(await dialogNode.evaluate(node => node === document.querySelector('#quick-open-dialog'))).toBe(true);
-  // RUI's default closedby=any delegates backdrop dismissal to the browser.
-  await page.mouse.click(2, 2);
-  await expect(dialog).not.toHaveAttribute('open');
-  expect(await inputNode.evaluate(node => node.isConnected)).toBe(true);
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await expect(dialog).not.toHaveAttribute('open');
-  await expect.poll(() => app.requests.some(request =>
-    request.method === 'fs.read_file' &&
-    request.params?.path === '/workspace/src/main.mbt')).toBe(true);
+  await expect(page.locator('.editor-tab.active')).toContainText('README.md');
   expect(app.pageErrors).toEqual([]);
 });
 

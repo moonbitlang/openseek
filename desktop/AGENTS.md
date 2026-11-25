@@ -19,18 +19,6 @@
   decodable for every host: add fields, but never require one beyond
   `protocol`.
 
-## Dialogs
-
-- Render application modals with RUI. Dismiss using its native dialog form,
-  Escape/backdrop behavior, or a Rabbita `@dialog.close(id)` command. A
-  completed business action can request closure; clearing state must not
-  remove or replace an open `<dialog>`. Keep its position and presentation
-  stable through RUI's CSS exit transition. Do not introduce a second close
-  animation, timer, or backdrop lifecycle.
-- Reserve cancel interception for requests that should *not* dismiss (e.g.
-  cancel an in-progress connection). For nested dialogs, closing the inner one
-  must leave the outer modal and its focus restoration intact.
-
 ## Module Boundary
 
 - `desktop/backend` is a library whose direct and transitive dependencies are

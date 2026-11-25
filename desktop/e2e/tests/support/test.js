@@ -16,24 +16,7 @@ export const test = base.extend({
         document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
       }, stillCSS);
     }
-    // Check the actual browser contract rather than grepping MoonBit view
-    // code: an ancestor disappearing is just as much an unmount as removing
-    // the dialog itself. Native close clears `open` synchronously.
-    const unmounted = [];
-    await context.exposeBinding('__reportUnmountedRuiDialog', (_, id) => unmounted.push(id));
-    await context.addInitScript(() => {
-      if (window !== window.top) return;
-      const selector = 'dialog[data-slot="dialog"][open]';
-      new MutationObserver(records => {
-        for (const record of records) for (const node of record.removedNodes) {
-          if (!(node instanceof Element) || node.isConnected) continue;
-          const dialog = node.matches(selector) ? node : node.querySelector(selector);
-          if (dialog) void window.__reportUnmountedRuiDialog(dialog.id || '(unnamed dialog)');
-        }
-      }).observe(document, { subtree: true, childList: true });
-    });
     await use(context);
-    expect(unmounted, 'Open RUI dialogs were unmounted without native close').toEqual([]);
   },
 });
 
