@@ -74,15 +74,7 @@ pub fn checkout_dialog(
     id="github-checkout-dialog",
     class="dialog-size-small",
     show_close=false,
-    on_close=_ => {
-      // Native close events are queued: an earlier close can arrive after
-      // showModal has reopened this same, permanently mounted element.
-      if !checkout_dialog_open() {
-        emit(CheckoutDialogClosed)
-      } else {
-        @cmd.none
-      }
-    },
+    on_close=_ => emit(CheckoutDialogClosed),
     attrs=@html.Attrs::build().aria_label(
       if updating {
         ui(locale, UncommittedBeforeUpdate(number))
@@ -131,10 +123,6 @@ pub fn checkout_dialog(
     ],
   )
 }
-
-///|
-extern "js" fn checkout_dialog_open() -> Bool =
-  #| () => document.getElementById('github-checkout-dialog')?.open === true
 
 ///|
 fn focus_checkout_action(number : Int32) -> @cmd.Cmd {
