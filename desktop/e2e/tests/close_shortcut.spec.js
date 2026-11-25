@@ -354,7 +354,7 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Windows caption color returns to the outer dialog when the SSH editor unmounts', async ({ page }) => {
+test('Windows caption color returns to the outer dialog when the SSH editor closes', async ({ page }) => {
   const app = await installDesktop(page, false, true);
   const background = () => app.requests.findLast(r => r.method === 'app.set_titlebar_style')?.params.background_color;
   await expect(page.locator('html')).toHaveClass(/native-titlebar-custom/);
@@ -364,7 +364,7 @@ test('Windows caption color returns to the outer dialog when the SSH editor unmo
   await page.locator('#ssh-settings-add-host').click();
   await expect.poll(background).toBe('#3f3f3f');
   await page.keyboard.press('Escape');
-  await expect(page.locator('#ssh-modal')).toHaveCount(0);
+  await expect(page.locator('#ssh-modal')).toBeHidden();
   await expect(page.locator('#management-dialog:modal')).toBeVisible();
   await expect.poll(background).toBe('#7f7f7f');
 });
