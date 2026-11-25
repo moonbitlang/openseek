@@ -129,6 +129,37 @@ test('system language switching preserves palette IME, focus and editor contents
   expect(app.pageErrors).toEqual([]);
 });
 
+test('mixed-language transcript prose keeps its font stack when UI language changes', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const text = 'Hello，中文、繁體、こんにちは';
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: text } } },
+  ];
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en'] });
+  });
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const message = page.locator('#stream .msg-content').filter({ hasText: text });
+  const stack = await message.evaluate(node => getComputedStyle(node).fontFamily);
+  expect(stack).toMatch(/^"Google Sans", "Noto Sans JP Kana",/);
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  const settings = page.getByRole('complementary').getByRole('button', { name: '设置', exact: true });
+  await expect(settings).toHaveCSS('font-family', /^"Noto Sans SC",/);
+  await expect(message).toHaveCSS('font-family', stack);
+  // The kana face is packaged; the shared harness blocks Google Fonts.
+  expect(await page.evaluate(async () => {
+    const faces = await document.fonts.load('400 1rem "Noto Sans JP Kana"', 'こんにちは');
+    return faces.some(face => face.status === 'loaded');
+  })).toBe(true);
+});
+
 test('Traditional Chinese system startup yields to an explicit saved choice', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

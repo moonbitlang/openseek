@@ -45,7 +45,12 @@ fn message_context_view(
       ..if text.is_empty() {
         []
       } else {
-        [@html.div(class="msg-content", inline_code_nodes(text))]
+        [
+          @html.div(
+            class="msg-content transcript-prose",
+            inline_code_nodes(text),
+          ),
+        ]
       },
     ],
   )
@@ -79,7 +84,7 @@ fn question_response_view(
         children.push(
           @html.div(class="question-response-item", [
             @html.div(class="question-response-title", question.title),
-            @html.div(class="msg-content", answer),
+            @html.div(class="msg-content transcript-prose", answer),
           ]),
         )
       }

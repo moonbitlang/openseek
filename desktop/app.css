@@ -28,3 +28,15 @@
 @import url("./styles/github_markdown.css");
 @import url("./styles/office_viewer.css");
 @import url("../.mooncakes/Lampese/office-viewer/public/page-thumbnails.css");
+
+/* The Google Fonts Noto Sans JP text subset covers only these kana ranges.
+ * Give it a separate family so it can precede the Han fonts in message prose
+ * without changing their shared ideographs. */
+@font-face {
+  font-family: "Noto Sans JP Kana";
+  src: url("./vendor/noto-sans-jp/kana.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  unicode-range: U+3041-3096, U+3099-30FF, U+31F0-31FF, U+FF66-FF9F;
+}
