@@ -192,14 +192,48 @@ fn Actions::list_component(
 }
 
 ///|
+fn scroll_pane_attrs() -> @html.Attrs {
+  let mut hide_timer : Int32? = None
+  @html.Attrs::build()
+  .data_set("auto-hide-scrollbar", "")
+  .on_scroll(event => {
+    guard event.current_target().to_option() is Some(target) &&
+      target.to_element() is Some(pane) else {
+      return @cmd.none
+    }
+    let window = @dom.window()
+    if hide_timer is Some(timer) {
+      window.clear_timeout(timer)
+    }
+    pane.set_attribute("data-scrolling", "")
+    hide_timer = Some(
+      window.set_timeout(
+        () => {
+          hide_timer = None
+          pane.remove_attribute("data-scrolling")
+        },
+        500,
+      ),
+    )
+    @cmd.none
+  })
+}
+
+///|
 /// Both lists stay mounted: selecting a mode only hides the other list,
 /// preserving its keyed Project and Conversation component state.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  auto_hide_scrollbar~ : Bool,
 ) -> @rabbita.Val[@html.Html] {
   let chat_list = actions.list_component(input, ChatMode)
   let work_list = actions.list_component(input, WorkMode)
+  let scroll_attrs = if auto_hide_scrollbar {
+    scroll_pane_attrs()
+  } else {
+    @html.Attrs::build()
+  }
   let avatar = input
     .map(input => input.account.map(account => account.avatar).unwrap_or(""))
     .switch_by(
@@ -372,7 +406,7 @@ pub fn component(
         chat_list.tools,
         work_list.tools,
       ]),
-      @html.div(class="sidebar-main", [
+      @html.div(class="sidebar-main", attrs=scroll_attrs, [
         if input.notices.is_empty() {
           @html.nothing
         } else {
