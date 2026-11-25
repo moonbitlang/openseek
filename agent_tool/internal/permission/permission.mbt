@@ -54,10 +54,11 @@ pub async fn authorize(
   }
   if write_scope is Some(scope) {
     for path in paths {
-      match scope.check(path) {
-        Err(message) => fail("invalid write target: \{message}")
-        Ok(Some(message)) => reasons.push("write blocked: \{path}: \{message}")
-        Ok(None) => ()
+      let verdict = scope.check(path) catch {
+        error => fail("invalid write target: \{error}")
+      }
+      if verdict is Some(message) {
+        reasons.push("write blocked: \{path}: \{message}")
       }
     }
   }

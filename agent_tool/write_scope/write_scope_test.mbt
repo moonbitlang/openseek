@@ -181,3 +181,23 @@ async test "a scope never admits the root's git metadata" {
     assert_denies(scope, "meta/config", because="git metadata")
   })
 }
+
+///|
+async test "check distinguishes allowed, out-of-scope, and invalid paths" {
+  @vfs.with_tmpdir(prefix="write-scope-check-", root => {
+    @vfs.FileSystem({ "src/a.mbt": "a", "other/b.mbt": "b" }).write_to(root)
+    @fs.symlink(target="\{root}/missing.mbt", "\{root}/src/dangling")
+    let scope = @write_scope.WriteScope::create(root~, allowed_paths=["src"])
+    assert_eq(scope.check("src/a.mbt"), None)
+    guard scope.check("other/b.mbt") is Some(denied) else {
+      fail("expected out-of-scope denial")
+    }
+    assert_true(denied.contains("allowed_paths"))
+    try scope.check("src/dangling") catch {
+      InvalidPath(reason) => assert_true(reason.contains("does not resolve"))
+      other => fail("expected InvalidPath, got \{other}")
+    } noraise {
+      _ => fail("expected dangling symlink to raise InvalidPath")
+    }
+  })
+}

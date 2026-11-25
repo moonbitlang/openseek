@@ -27,13 +27,15 @@ struct WriteScope {
 }
 
 ///|
-/// Why a `WriteScope` could not be constructed.
+/// Errors raised when constructing or evaluating a `WriteScope`.
 #derive(Eq, Debug)
 pub suberror WriteScopeError {
   /// The scope root could not be canonicalized with `realpath`.
   UnresolvedRoot(String)
   /// An `allowed_paths` entry failed validation.
   InvalidAllowedPath(String)
+  /// A target path is invalid (hostile backslash or dangling/unreadable symlink).
+  InvalidPath(String)
 }
 
 ///|
@@ -42,6 +44,7 @@ pub impl Show for WriteScopeError with fn output(self, logger) {
     UnresolvedRoot(root) =>
       logger.write_string("write scope root does not resolve: \{root}")
     InvalidAllowedPath(reason) => logger.write_string(reason)
+    InvalidPath(reason) => logger.write_string(reason)
   }
 }
 
@@ -78,8 +81,8 @@ pub fn WriteScope::root(self : WriteScope) -> String {
 }
 
 ///|
-/// Distinguish an invalid path (Err) from a valid path outside the scope
-/// (Ok(Some(reason))) and an allowed path (Ok(None)).
+/// Distinguish an invalid path (raises `InvalidPath`) from a valid path
+/// outside the scope (`Some(reason)`) and an allowed path (`None`).
 ///
 /// Two forms of the path are checked against the root and the allowed
 /// prefixes: the fully RESOLVED location (every symlink followed — what the
@@ -95,20 +98,20 @@ pub fn WriteScope::root(self : WriteScope) -> String {
 pub async fn WriteScope::check(
   self : WriteScope,
   path : String,
-) -> Result[String?, String] {
+) -> String? raise WriteScopeError {
   // On POSIX a backslash is a legal filename byte, but every path helper in
   // this codebase (and the prefix slicing below) treats it as a separator —
   // a component literally named `src\x` would resolve as `src/x` and slip
   // inside an allowed prefix. A confined write has no business targeting
   // such a name: fail closed instead of normalizing.
   if backslash_is_hostile(path) {
-    return Err(
+    raise InvalidPath(
       "path contains a backslash, which this platform treats as a filename byte; confined writes refuse it",
     )
   }
   let requested = self.absolutize(path)
   guard resolve_existing_prefix(requested) is Some(resolved) else {
-    return Err(
+    raise InvalidPath(
       "path does not resolve to a real location under the writable root (dangling or unreadable symlink)",
     )
   }
@@ -121,38 +124,36 @@ pub async fn WriteScope::check(
             @workspace_path.path_basename(requested),
           )
         None =>
-          return Err(
+          raise InvalidPath(
             "path does not resolve to a real location under the writable root (dangling or unreadable symlink)",
           )
       }
     None => resolved
   }
   if self.grants.get(requested) is Some(approved) && approved == resolved {
-    return Ok(None)
+    return None
   }
   guard @workspace_path.is_under_workspace_root(self.root, resolved) else {
-    return Ok(
-      Some(
-        "path resolves outside the writable root \{self.root} (through a symlink or ..)",
-      ),
+    return Some(
+      "path resolves outside the writable root \{self.root} (through a symlink or ..)",
     )
   }
   guard @workspace_path.is_under_workspace_root(self.root, requested_form) else {
-    return Ok(Some("path is outside the writable root \{self.root}"))
+    return Some("path is outside the writable root \{self.root}")
   }
   // The root's git metadata — a worktree's gitfile, or the `.git` of a
   // repository whose root is the scope's — is never a confined write's.
   guard !(self.relative_parts(requested_form) is [".git", ..]) &&
     !(self.relative_parts(resolved) is [".git", ..]) else {
-    return Ok(Some("path is git metadata, which confined writes never change"))
+    return Some("path is git metadata, which confined writes never change")
   }
   if self.allowed.is_empty() {
-    return Ok(None)
+    return None
   }
   guard self.prefix_admits(requested_form) && self.prefix_admits(resolved) else {
-    return Ok(Some("path is outside allowed_paths (\{self.allowed_display})"))
+    return Some("path is outside allowed_paths (\{self.allowed_display})")
   }
-  Ok(None)
+  None
 }
 
 ///|
@@ -208,7 +209,7 @@ fn WriteScope::relative_parts(
 /// realpath of the full path) and re-append the not-yet-existing suffix.
 /// `None` means resolution failed — a dangling symlink somewhere on the
 /// path — and the caller must fail closed.
-async fn resolve_existing_prefix(path : String) -> String? {
+async fn resolve_existing_prefix(path : String) -> String? noraise {
   let suffix : Array[String] = []
   let mut prefix = path
   while !path_exists_no_follow(prefix) {
@@ -256,7 +257,7 @@ fn backslash_is_hostile(path : String) -> Bool {
 }
 
 ///|
-async fn path_exists_no_follow(path : String) -> Bool {
+async fn path_exists_no_follow(path : String) -> Bool noraise {
   let _ = @fs.kind(path, follow_symlink=false) catch { _ => return false }
   true
 }
@@ -310,10 +311,9 @@ fn validate_prefix(prefix : String) -> Array[String] raise WriteScopeError {
 pub async fn WriteScope::deny_reason(
   self : WriteScope,
   path : String,
-) -> String? {
-  match self.check(path) {
-    Ok(reason) => reason
-    Err(reason) => Some(reason)
+) -> String? noraise {
+  self.check(path) catch {
+    error => Some("\{error}")
   }
 }
 
@@ -323,12 +323,10 @@ pub async fn WriteScope::deny_reason(
 pub async fn WriteScope::destination(
   self : WriteScope,
   path : String,
-) -> String {
-  if self.check(path) is Err(reason) {
-    fail(reason)
-  }
+) -> String raise WriteScopeError {
+  let _ = self.check(path)
   guard resolve_existing_prefix(self.absolutize(path)) is Some(resolved) else {
-    fail("cannot resolve write target")
+    raise InvalidPath("cannot resolve write target")
   }
   resolved
 }
