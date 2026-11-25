@@ -249,6 +249,7 @@ async fn run_serve(
     let tools = @agent.build_tools(
       runtime,
       scope,
+      yolo=approval_policy is Yolo,
       subagents?,
       job_log_dir?,
       session_scratch_dir?,

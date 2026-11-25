@@ -162,20 +162,33 @@ fn save_conversation_approval(
 }
 
 ///|
-/// Read the asking list back; anything that will not parse degrades to
-/// remembering nothing, which is every conversation auto-reviewed.
-fn parse_conversation_approvals(text : String) -> Array[String] {
-  let keys : Array[String] = []
-  guard !text.is_blank() else { return keys }
-  let json = @json.parse(text) catch { _ => return keys }
-  guard json is Array(rows) else { return keys }
+/// Legacy string rows represent Ask. New rows store the mode explicitly.
+fn parse_conversation_approvals(
+  text : String,
+) -> Array[(String, @protocol.OpenSeekApproval)] {
+  let choices : Array[(String, @protocol.OpenSeekApproval)] = []
+  guard (@json.parse(text) catch { _ => return [] }) is Array(rows) else {
+    return []
+  }
   for row in rows {
-    guard keys.length() < ConversationApprovalsLimit else { break }
-    if row is String(key) && !key.is_empty() && !keys.contains(key) {
-      keys.push(key)
+    guard choices.length() < ConversationApprovalsLimit else { break }
+    let (key, mode) = match row {
+      String(key) => (key, @protocol.ApprovalAsk)
+      [String(key), String(value)] => {
+        guard @protocol.OpenSeekApproval::parse(value) is Some(mode) else {
+          continue
+        }
+        (key, mode)
+      }
+      _ => continue
+    }
+    if !key.is_empty() &&
+      !(mode is ApprovalReview) &&
+      !choices.any(row => row.0 == key) {
+      choices.push((key, mode))
     }
   }
-  keys
+  choices
 }
 
 ///|

@@ -1875,3 +1875,47 @@ async test "a described call is briefed with its description" {
     assert_true(long.brief is None)
   })
 }
+
+///|
+async test "YOLO allows ordinary files across directories, commands and network while protecting MoonBit files" {
+  @vfs.with_tmpdir(root => {
+    let ws = "\{root}/ws"
+    let scratch = "\{root}/scratch"
+    let outside = "\{root}/outside"
+    for dir in [ws, scratch, outside] {
+      @fs.mkdir(dir)
+      @fs.write_text("\{dir}/keep.MbT", "original")
+    }
+    let tool = @mbtx.definition(
+      workspace_root=ws,
+      scratch_dir=scratch,
+      yolo=true,
+    )
+    let result = dispatch(tool, {
+      "description": "Exercise YOLO access in temporary directories",
+      "args": [ws, scratch, outside],
+      "source": (
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/shell", "moonbitlang/core/async/socket", "moonbitlang/core/env" }
+        #|async fn main {
+        #|  for dir in @env.args()[1:] {
+        #|    @fs.write_text(dir + "/result.txt", "ok", create_mode=CreateNew)
+        #|    for name in ["keep.MbT", "api.MBTI", "run.mbtx", "guide.MBT.MD", "moon.mod", "moon.PKG", "moon.work", "moon.mod.json", "moon.pkg.json"] {
+        #|      try @fs.write_text(dir + "/" + name, "changed", create_mode=CreateOrTruncate) catch {
+        #|        _ => ()
+        #|      } noraise { _ => fail("unexpected write to " + name) }
+        #|    }
+        #|  }
+        #|  let server = @socket.TcpServer(@socket.Addr::parse("0.0.0.0:0"))
+        #|  server.close()
+        #|  let out = @shell.Cmd("moonrun", ["--version"]).output()
+        #|  guard out.exit_code() == 0 else { fail(out.stderr()) }
+        #|}
+      ),
+    })
+    assert_false(result.is_error, msg=result.content)
+    for dir in [ws, scratch, outside] {
+      assert_eq(@fs.read_text("\{dir}/result.txt"), "ok")
+      assert_eq(@fs.read_text("\{dir}/keep.MbT"), "original")
+    }
+  })
+}

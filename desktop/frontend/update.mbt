@@ -2574,7 +2574,7 @@ fn update_msg(
         minimal_transcript,
         default_model,
         default_agent,
-        asking_conversations: conversation_approvals
+        conversation_approval_modes: conversation_approvals
         .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,

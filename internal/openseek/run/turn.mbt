@@ -89,6 +89,7 @@ async fn run_task_turn(
     let tools = @agent.build_tools(
       runtime,
       scope,
+      yolo=approval_policy is Yolo,
       extra_tools~,
       mcp_service?=mcp.serve(
         scope,

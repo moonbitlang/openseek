@@ -36,18 +36,15 @@ at `<bundled-resources>/workflow/README.md`.
 
 ### Command execution
 
-Which programs a snippet may start is listed in the `mbtx` tool description, under
-"Which programs a snippet may start" — that list is rendered from the
-allowlist the sandbox enforces, so it is the current one; read it there rather
-than working from memory. `moonx` is on it, and runs other MoonBit binaries in
-wasm/sandbox mode.
+The active `mbtx` description gives the session's command and network policy.
+In standard modes it lists the allowed commands and their accepted arguments.
+`moonx` can run MoonBit binaries. Follow the tool's escalation guidance when
+a required command is refused.
 
-Anything else is refused, including the obvious ones such as `ls`, `cat`, and
-`sh`.
-
-If a refused command is genuinely what the task needs, say so rather than
-working around it — the `mbtx` tool description states the refusal and
-escalation rules.
+In YOLO mode a script may start any command and use any network address.
+Permission requests are granted immediately. Direct filesystem writes protect
+MoonBit source and manifest files everywhere, including scratch. Use the file
+tools to edit them.
 
 You can also use `mbtx` for probing MoonBit language. When probing,
 emit several independent `mbtx` calls in the same turn — one small program per

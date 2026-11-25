@@ -222,18 +222,12 @@ const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 const CloudFollowupBehaviorStorageKey : String = "openseek.cloud_followup_behavior"
 
 ///|
-/// Every conversation set to request approval, so reopening one keeps
-/// asking. Only that choice is stored: a conversation missing here is
-/// auto-reviewed, which is also what a new conversation does — asking is
-/// opted into per conversation, never inherited from an unrelated one. Rows
-/// are keys (`conversation_storage_key`), newest first, capped at
-/// `ConversationApprovalsLimit`. Builds that asked by default stored the opposite
-/// list under `openseek.conversation_approvals`; it is no longer read, since
-/// every conversation it held is auto-reviewed now anyway.
+/// Non-default local conversation approval modes, newest first. Older values
+/// contain only the keys of conversations set to ask.
 const ConversationApprovalsStorageKey : String = "openseek.conversation_asks"
 
 ///|
-/// How many conversations remember that they ask for approval.
+/// How many conversations retain a non-default approval mode.
 /// Conversations are unbounded and this is one localStorage value, so the
 /// list is capped; past the cap the least recently chosen conversation
 /// forgets and is auto-reviewed, exactly like one the user never set to ask.
@@ -1279,9 +1273,8 @@ priv struct Model {
   // unified model chip was last picked from, persisted page-locally. An
   // existing conversation never reads this — its agent is fixed at creation.
   default_agent : AgentChoice
-  // The conversations whose permission questions the person answers (see
-  // `ConversationApprovalsStorageKey`); a reviewer answers every other one.
-  asking_conversations : Array[String]
+  // Absent conversations use auto-review.
+  conversation_approval_modes : Array[(String, @protocol.OpenSeekApproval)]
   // The DeepSeek (and non-GLM custom-model) reasoning choice new chats start
   // from, and the fallback for a stored session that recorded none. GLM
   // keeps a separate preference below because its forced-thinking low mode
@@ -2787,7 +2780,7 @@ fn initial_model(
     default_model: Deepseek(V4Flash),
     default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
-    asking_conversations: [],
+    conversation_approval_modes: [],
     openseek_reasoning: ThinkingHigh,
     glm_reasoning: ThinkingOff,
     max_steps: DefaultMaxSteps,
@@ -3806,11 +3799,12 @@ fn Model::approval_for(
   session : String,
 ) -> @protocol.OpenSeekApproval {
   let key = conversation_storage_key(channel, session)
-  if self.asking_conversations.contains(key) {
-    ApprovalAsk
-  } else {
-    ApprovalReview
+  for (stored, mode) in self.conversation_approval_modes {
+    if stored == key {
+      return mode
+    }
   }
+  ApprovalReview
 }
 
 ///|
@@ -3823,8 +3817,8 @@ fn Model::with_approval(
 ) -> Model {
   {
     ..self,
-    asking_conversations: approvals_with(
-      self.asking_conversations,
+    conversation_approval_modes: approvals_with(
+      self.conversation_approval_modes,
       conversation_storage_key(channel, session),
       approval,
     ),
@@ -3832,20 +3826,16 @@ fn Model::with_approval(
 }
 
 ///|
-/// Fold one conversation's approval choice into the asking list: an ask
-/// moves the key to the front (dropping the oldest past the cap), a review
-/// removes it. Free-standing because the durable store folds the same way:
-/// a write merges into the rows already there rather than replacing them
-/// (see `save_conversation_approval`).
+/// Merge one choice into the persisted list and keep the most recent choices.
 fn approvals_with(
-  keys : Array[String],
+  rows : Array[(String, @protocol.OpenSeekApproval)],
   key : String,
   approval : @protocol.OpenSeekApproval,
-) -> Array[String] {
-  let merged : Array[String] = if approval is ApprovalAsk { [key] } else { [] }
-  for existing in keys {
-    if existing != key && merged.length() < ConversationApprovalsLimit {
-      merged.push(existing)
+) -> Array[(String, @protocol.OpenSeekApproval)] {
+  let merged = if approval is ApprovalReview { [] } else { [(key, approval)] }
+  for row in rows {
+    if row.0 != key && merged.length() < ConversationApprovalsLimit {
+      merged.push(row)
     }
   }
   merged

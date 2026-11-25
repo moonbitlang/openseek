@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub async fn build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope, on_background_wake? : () -> Unit, job_log_dir? : String, session_scratch_dir? : String, extra_tools? : Array[@agent_tool.AgentToolDefinition], subagents? : @subagent.Subagents, mcp_service? : @host.Service) -> @agent_tool.Tools
+pub async fn build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope, on_background_wake? : () -> Unit, job_log_dir? : String, session_scratch_dir? : String, yolo? : Bool, extra_tools? : Array[@agent_tool.AgentToolDefinition], subagents? : @subagent.Subagents, mcp_service? : @host.Service) -> @agent_tool.Tools
 
 pub let plan_reminder_after_steps : Int32
 

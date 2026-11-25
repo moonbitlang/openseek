@@ -133,3 +133,14 @@ async test "a question asked after the stream closed does not wait" {
   assert_true(outcome is Cancelled)
   assert_eq(desk.pending.length(), 0)
 }
+
+///|
+async test "YOLO grants tool requests without asking the controller or reviewer" {
+  let desk = ApprovalDesk(now_ms=0)
+  let reviewer = ApprovalReviewer(_ => fail("unexpected approval review"))
+  guard approval_channel(Yolo, desk, reviewer~) is Some(channel) else {
+    fail("missing channel")
+  }
+  assert_true(channel.ask(deletion_ask) is AllowedOnce)
+  assert_eq(desk.pending.length(), 0)
+}

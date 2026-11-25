@@ -12,6 +12,8 @@ pub enum ApprovalPolicy {
   /// Grant without showing it to anyone, but still announced on the wire, so
   /// the transcript records what was auto-granted.
   Always
+  /// Grant permission immediately and run mbtx with global MoonBit file guards.
+  Yolo
   /// A reviewer subagent decides each question against the user's own
   /// words. What it cannot settle (it escalates, times out, or never
   /// reports) goes to the controller when `ask_on_escalate`, and is refused
@@ -60,10 +62,11 @@ pub fn approval_policy(
       }
     "never" => Never
     "always" => Always
+    "yolo" => Yolo
     "review" => Review(ask_on_escalate=interactive)
     other =>
       fail(
-        "unknown --approval value: \{other} (use ask, never, always, or review)",
+        "unknown --approval value: \{other} (use ask, never, always, review, or yolo)",
       )
   }
 }

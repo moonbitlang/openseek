@@ -554,13 +554,55 @@ fn glob_literal(path : String) -> String {
 }
 
 ///|
-/// What the workspace grant refuses, relative to the directory it guards: names
-/// moon treats as source or a manifest, and git metadata. Each applies at any
-/// depth and in any letter case.
-let source_tails : Array[String] = [
+/// MoonBit sources and manifests protected by direct-write policies.
+let moonbit_tails : Array[String] = [
   "*{.mbt.md,.mbt,.mbti,.mbtx}", "{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
-  ".git", ".git/**",
 ]
+
+///|
+let source_tails : Array[String] = [..moonbit_tails, ".git", ".git/**"]
+
+///|
+/// moonrun resolves each exclusion against a filesystem root. Grant the same
+/// roots as the exclusions so every writable path has MoonBit file protection.
+fn yolo_policy_document(
+  tmp_dir : String,
+  inject : Map[String, String],
+  roots : Array[String],
+) -> Json {
+  let writes : Array[Json] = []
+  for root in roots {
+    writes.push(Json(root))
+    for tail in moonbit_tails {
+      writes.push({ "glob": "!\{root}**/\{case_insensitive_glob(tail)}" })
+    }
+  }
+  {
+    "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
+    "fs": { "read": ["*"], "write": Json(writes) },
+    "net": { "dns": ["*"], "connect": ["*:*"], "bind": ["*:*"] },
+    "process": { "spawn": true },
+  }
+}
+
+///|
+#cfg(not(platform="windows"))
+fn yolo_filesystem_roots() -> Array[String] {
+  ["/"]
+}
+
+///|
+#cfg(platform="windows")
+async fn yolo_filesystem_roots() -> Array[String] {
+  let roots = []
+  for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+    let root = "\{letter}:/"
+    if @fs.exists(root) {
+      roots.push(root)
+    }
+  }
+  roots
+}
 
 ///|
 /// The globs (without their `!`) refusing source under `workspace` everywhere
