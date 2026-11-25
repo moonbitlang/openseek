@@ -144,17 +144,16 @@ the workspace, not mbtx. Use it for self-contained scripts; to exercise
 your working-tree code, add a `*_test.mbt` to that package and run `moon test`
 from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
-## Sandbox policy and source-file protection
+## Sandbox policy and role confinement
 
 The wasm run carries a moonrun policy on every platform. Unsupported FFI is
 reported by the wasm compiler through normal build diagnostics. The snippet
-may read anywhere. It may write inside its own `@fs.tmpdir()` and any
-caller-provided scratch lab, and — for the main agent only — anywhere in the
-workspace except MoonBit sources, manifests, `.mbtx` scripts and `.git`, in
-any letter case. A scratch lab inside the workspace (the default session
-store is `<workspace>/.openseek`) keeps its own source writes; the exclusions
-skip its subtree. Read-only and worker roles get no workspace grant. Changing
-source belongs to the file tools.
+may read anywhere. It may write inside its own `@fs.tmpdir()`, any
+caller-provided scratch lab, and — for the main agent only — anywhere inside
+the workspace. Inside the workspace, prompts and tool descriptions guide the
+main agent to prefer `edit`/`multi_edit`, `write`, and `remove` for MoonBit
+source files, manifests, and deletions rather than blocking workspace source
+writes in the policy. Read-only and worker roles get no workspace grant.
 Process spawning is checked against the
 implementation's allowlist; the
 live tool description summarizes the command surface the model should use.
@@ -167,12 +166,11 @@ files, including writes attempted by allowed child commands. Worker roles use a
 separate profile that permits their own worktree and denies sibling/shared
 roots. The moonrun policy remains the cross-platform boundary.
 
-A denied write surfaces inside the program as a bare OS error (e.g.
-`OSError("@fs.open(): \"keep.mbt\": Operation not permitted")`), which on its
-own reads like a filesystem fault. When a sandboxed run's output shows such a
-denial on a protected source path, the tool result appends an explanation: the
-sandbox denied the write by design, the snippet should not try to work around
-it, and source changes belong to the `edit` tool. Only a run that did not exit
+A denied write or spawn surfaces inside the program as a bare OS error (e.g.
+`OSError("@fs.open(): \"/outside/escape.txt\": Permission denied")`), which on
+its own reads like a filesystem fault. When a sandboxed run's output shows a
+policy refusal or a role-profile denial, the tool result appends an explanation
+describing the boundary that fired. Only a run that did not exit
 0 is classified this way: output is data, and a program that prints a file or
 a log containing the refusal wording — as the bundled read workflow does when
 the file happens to contain it — is not being refused. A snippet that caught a

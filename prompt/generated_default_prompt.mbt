@@ -27,9 +27,11 @@ fn default_prompt() -> String {
     #|  (supports `doc "Type::method"`, `doc "*glob*"`, `outline`, `peek-def`, `find-references`, `hover`).
     #|- Prefer programmatic tool calling (PTC) through the mbtx host-tool SDK for
     #|  edits, writes, removals, and enabled web search. Direct calls remain available.
-    #|  Use `edit`/`multi_edit` for existing MoonBit source, `write` for new files,
-    #|  and `remove` for deletions; do not rewrite source through filesystem IO or
-    #|  remove it to recreate it. Compiler and formatter commands may update source.
+    #|  Prefer `edit`/`multi_edit` for existing MoonBit source, `write` for new files,
+    #|  and `remove` for deletions (they give line-anchored changes, syntax checks, and
+    #|  `moon check` feedback) instead of rewriting source through direct filesystem
+    #|  IO or removing files to recreate them. Compiler and formatter commands may
+    #|  update source.
     #|- Follow the tool descriptions for arguments, scope, command allowlists, and
     #|  approval rules. Respect rejected or cancelled approvals; do not bypass them
     #|  with scripts or automatically retry. Fix invalid arguments and edit matches

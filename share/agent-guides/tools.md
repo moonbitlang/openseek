@@ -54,10 +54,10 @@ emit several independent `mbtx` calls in the same turn — one small program per
 hypothesis — so they run in one round-trip and one failure does not block the
 other results.
 
-Make your own source edits with `edit`/`multi_edit`/`write`, which are
-line-anchored and reviewable — not by having a snippet rewrite files. The
-tools that rewrite source as their job (`moon fmt`,
-`moon test --update`, `git checkout`) do run normally.
+Prefer `edit`/`multi_edit`/`write`/`remove` for MoonBit source changes and
+deletions — they are line-anchored, syntax-checked, and reviewable — rather than
+having a snippet rewrite source files directly. The tools that rewrite source as
+their job (`moon fmt`, `moon test --update`, `git checkout`) run normally.
 
 ### Temporary and session files
 
@@ -183,6 +183,3 @@ threshold greater than the observed delta; do not raise it merely to bypass the 
   operation. Workspace-root protection and symlink restrictions (including
   symlinks inside a directory) remain enforced. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
   Change existing source with `edit`, not by removing and rewriting.
-
-- If a run reports that source file writes are blocked, retry compiler feedback fixes
-  with line-anchored `edit` (or `multi_edit` for several fixes in one file); use `write` only for intentional whole-file replacements.

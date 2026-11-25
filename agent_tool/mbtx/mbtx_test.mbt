@@ -585,10 +585,10 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 }
 
 ///|
-/// moonrun enforces the main agent's grant: a source (in any case) and paths
-/// outside the roots are refused; data files are writable and removable. The
-/// exact exclusion list is pinned in `wasm_policy.mbt`.
-async test "a snippet writes the workspace except its sources" {
+/// moonrun enforces the main agent's write boundary: files inside the workspace
+/// (including sources, manifests, and data files) are writable and removable,
+/// while writes outside the workspace and scratch roots remain refused.
+async test "a snippet writes inside the workspace and is refused outside" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       for file in ["keep.mbt", "notes.txt"] {
@@ -610,7 +610,7 @@ async test "a snippet writes the workspace except its sources" {
         #|
         #|async fn main {
         #|  attempt("source", () => write("keep.mbt"))
-        #|  attempt("manifest_case", () => write("MOON.PKG"))
+        #|  attempt("manifest", () => write("moon.pkg"))
         #|  attempt("outside", () => write("OUTSIDE/escape.txt"))
         #|  attempt("data", () => write("data.json"))
         #|  attempt("remove_data", () => @fs.remove("notes.txt"))
@@ -619,75 +619,62 @@ async test "a snippet writes the workspace except its sources" {
       let out = run_in(ws, { "source": source })
       for
         line in [
-          "source=false", "manifest_case=false", "outside=false", "data=true", "remove_data=true",
+          "source=true", "manifest=true", "outside=false", "data=true", "remove_data=true",
         ] {
         assert_true(out.content.contains(line), msg=out.content)
       }
-      assert_eq(@fs.read_text("\{ws}/keep.mbt"), "keep me\n")
-      assert_false(@fs.exists("\{ws}/MOON.PKG"))
+      assert_eq(@fs.read_text("\{ws}/keep.mbt"), "x")
+      assert_eq(@fs.read_text("\{ws}/moon.pkg"), "x")
       assert_false(@fs.exists("\{outside}/escape.txt"))
     })
   })
 }
 
 ///|
-/// The default session store lives at `<workspace>/.openseek`, so the main
-/// agent's scratch is inside the workspace grant. Its sources stay writable as
-/// they are for a scratch outside it; every other directory along the way — the
-/// scratch's parents, a sibling session, a workspace package, names sharing a
-/// prefix with `.openseek` — keeps refusing source.
-async test "a scratch inside the workspace keeps its source writes" {
+/// A session scratch inside the workspace stays writable alongside the
+/// workspace while paths outside both remain refused.
+async test "a scratch inside the workspace stays writable while outside paths stay refused" {
   @vfs.with_tmpdir(ws => {
-    let scratch = "\{ws}/.openseek/sessions/s1/scratch"
-    for
-      dir in [
-        scratch,
-        "\{ws}/.openseek/sessions/s2",
-        "\{ws}/src",
-        "\{ws}/.o",
-        "\{ws}/.openseekx",
-      ] {
-      @fs.mkdir(dir, recursive=true)
-    }
-    let source = (
-      #|---
-      #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs" }
-      #|---
-      #|
-      #|async fn attempt(label : String, path : String) -> Unit {
-      #|  let ok = try {
-      #|    @fs.write_text(path, "x", create_mode=CreateOrTruncate)
-      #|    true
-      #|  } catch { _ => false }
-      #|  println("\{label}=\{ok}")
-      #|}
-      #|
-      #|async fn main {
-      #|  attempt("scratch_source", "SCRATCH/probe.mbt")
-      #|  @fs.mkdir("SCRATCH/lab")
-      #|  attempt("scratch_manifest", "SCRATCH/lab/moon.pkg")
-      #|  attempt("session_dir", ".openseek/sessions/s1/probe.mbt")
-      #|  attempt("sibling_session", ".openseek/sessions/s2/probe.mbt")
-      #|  attempt("store_root", ".openseek/probe.mbt")
-      #|  attempt("workspace_root", "probe.mbt")
-      #|  attempt("package", "src/probe.mbt")
-      #|  attempt("short_prefix", ".o/probe.mbt")
-      #|  attempt("long_prefix", ".openseekx/probe.mbt")
-      #|  attempt("scratch_data", "SCRATCH/data.json")
-      #|}
-    ).replace_all(old="SCRATCH", new=scratch)
-    let tool = @mbtx.definition(workspace_root=ws, scratch_dir=scratch)
-    let out = dispatch(tool, { "source": source, "ptc": false })
-    for
-      line in [
-        "scratch_source=true", "scratch_manifest=true", "session_dir=false", "sibling_session=false",
-        "store_root=false", "workspace_root=false", "package=false", "short_prefix=false",
-        "long_prefix=false", "scratch_data=true",
-      ] {
-      assert_true(out.content.contains(line), msg=out.content)
-    }
-    assert_true(@fs.exists("\{scratch}/probe.mbt"))
-    assert_false(@fs.exists("\{ws}/src/probe.mbt"))
+    @vfs.with_tmpdir(outside => {
+      let scratch = "\{ws}/.openseek/sessions/s1/scratch"
+      @fs.mkdir(scratch, recursive=true)
+      let source = (
+          #|---
+          #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+          #|---
+          #|
+          #|async fn attempt(label : String, path : String) -> Unit {
+          #|  let ok = try {
+          #|    @fs.write_text(path, "x", create_mode=CreateOrTruncate)
+          #|    true
+          #|  } catch { _ => false }
+          #|  println("\{label}=\{ok}")
+          #|}
+          #|
+          #|async fn main {
+          #|  attempt("scratch_source", "SCRATCH/probe.mbt")
+          #|  @fs.mkdir("SCRATCH/lab")
+          #|  attempt("scratch_manifest", "SCRATCH/lab/moon.pkg")
+          #|  attempt("scratch_data", "SCRATCH/data.json")
+          #|  attempt("workspace_source", "probe.mbt")
+          #|  attempt("outside", "OUTSIDE/escape.mbt")
+          #|}
+        )
+        .replace_all(old="SCRATCH", new=scratch)
+        .replace_all(old="OUTSIDE", new=outside)
+      let tool = @mbtx.definition(workspace_root=ws, scratch_dir=scratch)
+      let out = dispatch(tool, { "source": source, "ptc": false })
+      for
+        line in [
+          "scratch_source=true", "scratch_manifest=true", "scratch_data=true", "workspace_source=true",
+          "outside=false",
+        ] {
+        assert_true(out.content.contains(line), msg=out.content)
+      }
+      assert_true(@fs.exists("\{scratch}/probe.mbt"))
+      assert_true(@fs.exists("\{ws}/probe.mbt"))
+      assert_false(@fs.exists("\{outside}/escape.mbt"))
+    })
   })
 }
 

@@ -144,7 +144,7 @@ pub fn definition(
   let workspace_writes = if read_only || worker_sandbox is Some(_) {
     Denied
   } else {
-    ExceptSource
+    Allowed
   }
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
@@ -635,12 +635,11 @@ async fn execute(
   }
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
-  // work in a directory it may not modify. The workspace root is
-  // canonicalized because the policy's globs must be (see
-  // `wasm_policy_document`).
+  // work in a directory it may not modify. Resolve `workspace_root` up front so
+  // an invalid root fails clearly before moonrun loads the policy.
   let workspace_grant = match workspace_writes {
     Denied => None
-    ExceptSource =>
+    Allowed =>
       Some(
         @fs.realpath(workspace_root) catch {
           error =>
@@ -659,9 +658,6 @@ async fn execute(
   if program is Some(program) {
     injected.merge_in_place(program.env())
   }
-  // Canonical like the workspace root, so a scratch inside the workspace is
-  // recognized as such and stays writable for source (see
-  // `source_exclusions`).
   let extra_roots = match scratch_dir {
     Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
     None => []
@@ -1067,8 +1063,8 @@ priv enum WorkspaceWrites {
   /// Read-only roles, and workers (a whole-tree grant would ignore their write
   /// scope's allowed paths).
   Denied
-  /// The main agent: everything but sources, manifests, `.mbtx` and `.git`.
-  ExceptSource
+  /// The main agent: the workspace root is writable.
+  Allowed
 }
 
 ///|
@@ -1795,22 +1791,17 @@ fn description(
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
   let write_rule = match workspace_writes {
-    ExceptSource =>
+    Allowed =>
       (
-        #|- Direct filesystem IO READS anywhere. It WRITES anything in its own
-        #|  `@fs.tmpdir()` and the configured session scratch directory shown in
-        #|  Environment, MoonBit sources and manifests included, even when that
-        #|  directory sits inside the workspace. Elsewhere in the workspace it WRITES
-        #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
-        #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
-        #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
-        #|  with `filename`) and `.git`. Use the actual scratch path for
-        #|  cross-call files, binary data, and command output. Temporary files must be
-        #|  consumed before the execution ends. Changing source is the file tools' job,
-        #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
-        #|  and run normally. Deleting a workspace file is `remove`'s job. A write
-        #|  refusal is that rule firing, not a filesystem fault to debug or route
-        #|  around.
+        #|- Direct filesystem IO READS anywhere and WRITES inside the workspace, its
+        #|  own `@fs.tmpdir()`, and the configured session scratch directory shown in
+        #|  Environment. Use the actual scratch path for cross-call files, binary
+        #|  data, and command output. Temporary files must be consumed before the
+        #|  execution ends. Prefer `edit`/`multi_edit`, `write`, and `remove` for
+        #|  MoonBit source files, manifests, and deletions so changes stay
+        #|  line-anchored, syntax-checked, and reviewable; commands such as `moon fmt`
+        #|  and `git checkout` run normally. Writing outside these roots is refused by
+        #|  policy — not a filesystem fault to debug or route around.
       )
     Denied =>
       (
