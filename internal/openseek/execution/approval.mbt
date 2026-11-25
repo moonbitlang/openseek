@@ -171,16 +171,17 @@ pub fn approval_channel(
 ) -> @agent_runtime.ApprovalChannel? {
   match policy {
     Never => None
-    Yolo => Some(ApprovalChannel(_ => AllowedOnce))
     Ask => Some(ApprovalChannel(ask => desk.ask(ask)))
-    // Announced and settled on the wire like any other question, so an
-    // auto-granted escalation is as visible in the stream as an answered one.
-    Always =>
+    // Always records the grant on the wire. YOLO skips the request event
+    // because controllers show it as a question requiring an answer.
+    Always | Yolo =>
       Some(
         ApprovalChannel(ask => {
-          let id = desk.mint_request_id()
-          announce_request(id, ask)
-          @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
+          if policy is Always {
+            let id = desk.mint_request_id()
+            announce_request(id, ask)
+            @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
+          }
           AllowedOnce
         }),
       )

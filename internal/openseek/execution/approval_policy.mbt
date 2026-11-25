@@ -12,7 +12,7 @@ pub enum ApprovalPolicy {
   /// Grant without showing it to anyone, but still announced on the wire, so
   /// the transcript records what was auto-granted.
   Always
-  /// Grant permission immediately and run mbtx with global MoonBit file guards.
+  /// Grant each permission request immediately without prompting the controller.
   Yolo
   /// A reviewer subagent decides each question against the user's own
   /// words. What it cannot settle (it escalates, times out, or never

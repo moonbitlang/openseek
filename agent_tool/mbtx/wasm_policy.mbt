@@ -554,39 +554,13 @@ fn glob_literal(path : String) -> String {
 }
 
 ///|
-/// MoonBit sources and manifests protected by direct-write policies.
-let moonbit_tails : Array[String] = [
+/// What the workspace grant refuses, relative to the directory it guards: names
+/// moon treats as source or a manifest, and git metadata. Each applies at any
+/// depth and in any letter case.
+let source_tails : Array[String] = [
   "*{.mbt.md,.mbt,.mbti,.mbtx}", "{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+  ".git", ".git/**",
 ]
-
-///|
-let source_tails : Array[String] = [..moonbit_tails, ".git", ".git/**"]
-
-///|
-/// Allow writes everywhere, keeping workspace MoonBit files outside scratch
-/// and this call's temporary directory protected.
-fn yolo_policy_document(
-  workspace : String,
-  tmp_dir : String,
-  extra_roots : Array[String],
-  inject : Map[String, String],
-) -> Json {
-  let writes : Array[Json] = ["*"]
-  for
-    glob in source_exclusions(
-      workspace,
-      [tmp_dir, ..extra_roots],
-      patterns=moonbit_tails,
-    ) {
-    writes.push({ "glob": "!\{glob}" })
-  }
-  {
-    "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
-    "fs": { "read": ["*"], "write": Json(writes) },
-    "net": { "dns": ["*"], "connect": ["*:*"], "bind": ["*:*"] },
-    "process": { "spawn": true },
-  }
-}
 
 ///|
 /// The globs (without their `!`) refusing source under `workspace` everywhere
@@ -603,22 +577,12 @@ fn yolo_policy_document(
 fn source_exclusions(
   workspace : String,
   roots : Array[String],
-  patterns~ : Array[String] = source_tails,
 ) -> Array[String] {
-  // Use slash-separated components for globs. An empty prefix represents /.
-  fn prefix(path : String) -> String {
-    let path = if @async.platform is Windows {
-      path.replace_all(old="\\", new="/")
-    } else {
-      path
-    }
-    path.trim_end(chars="/").to_owned()
-  }
-  let workspace = prefix(workspace)
+  let workspace = @workspace_path.strip_trailing_slash(workspace)
   // Each root inside, as its path components below the workspace.
   let inside : Array[ArrayView[String]] = []
   for root in roots {
-    let root = prefix(root)
+    let root = @workspace_path.strip_trailing_slash(root)
     if root == workspace {
       inside.push([])
     } else if root.strip_prefix("\{workspace}/") is Some(relative) {
@@ -631,7 +595,7 @@ fn source_exclusions(
     }
   }
   let globs = []
-  let tails = patterns.map(case_insensitive_glob)
+  let tails = source_tails.map(case_insensitive_glob)
   fn exclude_below(prefix : String, inside : Array[ArrayView[String]]) {
     if inside.iter().any(path => path.is_empty()) {
       return

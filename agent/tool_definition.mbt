@@ -77,7 +77,6 @@ pub async fn build_tools(
   on_background_wake? : () -> Unit,
   job_log_dir? : String,
   session_scratch_dir? : String,
-  yolo~ : Bool = false,
   extra_tools~ : Array[@agent_tool.AgentToolDefinition] = [],
   subagents? : @subagent.Subagents,
   mcp_service? : @mcphost.Service,
@@ -284,7 +283,6 @@ pub async fn build_tools(
       // `subagents` only says whether the description teaches delegation: a
       // script starts subagents through the program tools, never by spawning.
       @mbtx.definition(
-        yolo~,
         workspace_root~,
         file_state~,
         bg_runtime~,

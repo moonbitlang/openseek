@@ -52,7 +52,7 @@ pub(all) enum OpenSeekApproval {
   /// A reviewer subagent answers against the user's own messages; what it
   /// cannot settle comes to the person as an ordinary question.
   ApprovalReview
-  /// Grant immediately and enable the YOLO mbtx policy.
+  /// Automatically grant each tool permission request.
   ApprovalYolo
 }
 

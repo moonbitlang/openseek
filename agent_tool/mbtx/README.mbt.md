@@ -187,12 +187,9 @@ filesystem fault.
 
 Select YOLO in a local Desktop conversation's approval menu, or pass
 `--approval yolo` to `openseek run` or `openseek serve`. The engine grants
-tool permission requests immediately. Scripts can run any command, use any
-network address, and write files anywhere. Inside the workspace, direct writes
-exclude MoonBit sources, interfaces, scripts and manifests at every depth.
-Session scratch and the current call's `TMPDIR` allow all file writes, including
-when they are under the workspace. Outside the workspace all files are writable.
-Native subprocesses use the host's permissions.
+tool permission requests immediately. Ordinary snippets use the standard
+sandbox. A snippet requesting `escalated: true` receives a one-call grant
+and runs without the moonrun policy.
 
 ## Escalation
 

@@ -122,7 +122,6 @@ fn duration_label(milliseconds : Int32) -> String {
 pub fn definition(
   workspace_root~ : String,
   read_only~ : Bool = false,
-  yolo~ : Bool = false,
   file_state~ : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
   bg_runtime? : @bgjobs.BgJobRuntime,
@@ -142,14 +141,11 @@ pub fn definition(
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
   let generations : Map[String, Int32] = Map([])
-  let snippet_policy = if read_only || worker_sandbox is Some(_) {
+  let workspace_writes = if read_only || worker_sandbox is Some(_) {
     Denied
-  } else if yolo {
-    Yolo
   } else {
     ExceptSource
   }
-  let escalation = approval is Some(_) && !(snippet_policy is Yolo)
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
   // out of the shared directory only after its own build returns. Two calls
@@ -159,16 +155,19 @@ pub fn definition(
     name="mbtx",
     description=description(
       background=bg_runtime is Some(_),
-      escalation~,
+      escalation=approval is Some(_),
       delegation=subagents,
       auto_background_after_ms~,
       foreground_timeout_ms~,
       build_timeout_ms~,
-      snippet_policy~,
+      workspace_writes~,
       scratch_dir?,
     ),
     schema=JsonSchema(
-      schema(escalation~, programmatic=program_service is Some(_)),
+      schema(
+        escalation=approval is Some(_),
+        programmatic=program_service is Some(_),
+      ),
     ),
     execute=Async(arguments => {
       let saved : Ref[String?] = Ref(None)
@@ -179,11 +178,9 @@ pub fn definition(
             is_error=true,
           )
       }
-      // A saved tool call can carry escalated=true from another mode. YOLO
-      // already grants process and network access and always keeps its fs policy.
-      let policy_active = snippet_policy is Yolo || !input.escalated
+      let compatible = !input.escalated
       let enabled = input.ptc.unwrap_or(
-        policy_active && program_service is Some(_),
+        compatible && program_service is Some(_),
       )
       async fn run(program : @ptc.Program?) -> @agent_tool.ToolAction {
         execute(
@@ -197,19 +194,18 @@ pub fn definition(
           job_dir?,
           scratch_dir?,
           worker_sandbox?,
-          snippet_policy~,
-          policy_active~,
+          workspace_writes~,
           auto_background_after_ms~,
           foreground_timeout_ms~,
           build_timeout_ms~,
           generations~,
-          approval?=if escalation { approval } else { None },
+          approval?,
           program?,
           mcp_service?,
         )
       }
       let action = if enabled {
-        guard policy_active else {
+        guard compatible else {
           return @agent_tool.respond(
             "PTC cannot combine with escalated",
             is_error=true,
@@ -352,8 +348,7 @@ async fn execute(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  snippet_policy~ : SnippetPolicy,
-  policy_active~ : Bool,
+  workspace_writes~ : WorkspaceWrites,
   // Independent injectable bounds: a runtime-backed run hands off at the
   // first; a runtime-less run is cancelled at the second; the snippet's
   // synchronous build phase is cancelled at the third.
@@ -466,7 +461,7 @@ async fn execute(
   // A granted escalation is consumed by THIS call and nothing else. There is
   // no session-scoped grant and no rule to remember, so the next escalating
   // call asks again.
-  if !policy_active {
+  if input.escalated {
     let outcome = match approval {
       Some(channel) =>
         // The program goes with the question, headed by the working
@@ -495,6 +490,11 @@ async fn execute(
       return @agent_tool.respond(escalation_refused(outcome), is_error=true)
     }
   }
+  // One source of truth for whether moonrun's policy actually governs this
+  // execution. The launch argv, adopted-job metadata, and foreground refusal
+  // classifier must not drift: ordinary output from an escalated run is never
+  // evidence of a policy that was not active.
+  let policy_active = !input.escalated
   let handoff_dir_has_owner = job_dir is Some(_) || scratch_dir is Some(_)
   // A directory that an automatic handoff may give to a job must outlive this
   // call, so it gets a name of its own inside a caller-owned job dir or scratch
@@ -633,16 +633,14 @@ async fn execute(
   @fs.mkdir(snippet_tmp) catch {
     _ => ()
   }
-  let injected : Map[String, String] = Map([])
-  if mcp_service is Some(service) {
-    injected.merge_in_place(service.env())
-  }
-  if program is Some(program) {
-    injected.merge_in_place(program.env())
-  }
-  let workspace = match snippet_policy {
+  // `cwd` is deliberately NOT a write root: naming where a program runs should
+  // not also grant writing there, and reads are open, so a snippet can still
+  // work in a directory it may not modify. The workspace root is
+  // canonicalized because the policy's globs must be (see
+  // `wasm_policy_document`).
+  let workspace_grant = match workspace_writes {
     Denied => None
-    ExceptSource | Yolo =>
+    ExceptSource =>
       Some(
         @fs.realpath(workspace_root) catch {
           error =>
@@ -654,21 +652,26 @@ async fn execute(
         },
       )
   }
+  let injected : Map[String, String] = Map([])
+  if mcp_service is Some(service) {
+    injected.merge_in_place(service.env())
+  }
+  if program is Some(program) {
+    injected.merge_in_place(program.env())
+  }
+  // Canonical like the workspace root, so a scratch inside the workspace is
+  // recognized as such and stays writable for source (see
+  // `source_exclusions`).
   let extra_roots = match scratch_dir {
     Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
     None => []
   }
-  let policy = if (snippet_policy, workspace) is (Yolo, Some(root)) {
-    let tmp_dir = @fs.realpath(snippet_tmp) catch { _ => snippet_tmp }
-    yolo_policy_document(root, tmp_dir, extra_roots, injected)
-  } else {
-    wasm_policy_document(
-      tmp_dir=snippet_tmp,
-      extra_roots~,
-      workspace?,
-      inject=injected,
-    )
-  }
+  let policy = wasm_policy_document(
+    tmp_dir=snippet_tmp,
+    extra_roots~,
+    workspace?=workspace_grant,
+    inject=injected,
+  )
   @fs.write_text(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   // Wrap each phase's command in sandbox-exec for the roles that need a rule
   // the wasm policy cannot state: "may not write source". The policy's `fs`
@@ -1059,9 +1062,8 @@ async fn execute(
 }
 
 ///|
-/// The moonrun policy selected for this tool registry.
-priv enum SnippetPolicy {
-  Yolo
+/// What a snippet may write in the workspace, decided once per role.
+priv enum WorkspaceWrites {
   /// Read-only roles, and workers (a whole-tree grant would ignore their write
   /// scope's allowed paths).
   Denied
@@ -1720,7 +1722,7 @@ fn description(
   auto_background_after_ms~ : Int32,
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
-  snippet_policy~ : SnippetPolicy,
+  workspace_writes~ : WorkspaceWrites,
   scratch_dir? : String,
 ) -> String {
   // File artifacts live under the session scratch directory, so the
@@ -1777,19 +1779,12 @@ fn description(
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.
-  let spawn_section = if snippet_policy is Yolo {
-    "YOLO mode allows any host command and network address. Permission requests are granted automatically."
-  } else {
-    (
-      $|## Which programs a snippet may start
-      $|
-      $|These, and nothing else:
-      $|
-      $|\{spawn_list_markdown()}
-      $|
-      $|\{refusal_advice}
-    )
-  }
+  let spawn_section =
+    $|## Which programs a snippet may start
+    $|
+    $|These, and nothing else:
+    $|
+    $|\{spawn_list_markdown()}
   let base_tail =
     #|## Isolation and limits
     #|
@@ -1799,9 +1794,7 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-  let write_rule = match snippet_policy {
-    Yolo =>
-      "Direct filesystem IO reads anywhere and writes ordinary files anywhere. MoonBit source, scripts, interfaces and manifests are protected from direct writes inside the workspace, except in session scratch and this call's TMPDIR. Use the file tools for protected files. Outside the workspace all files are writable. Native child processes use normal host permissions."
+  let write_rule = match workspace_writes {
     ExceptSource =>
       (
         #|- Direct filesystem IO READS anywhere. It WRITES anything in its own
@@ -1830,16 +1823,10 @@ fn description(
         #|  is that rule firing, not a filesystem fault to debug or route around.
       )
   }
-  let network_rule = if snippet_policy is Yolo {
-    ""
-  } else {
-    (
-      #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
-      #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
-      #|  These network rules do not constrain an allowed child process.
-    )
-  }
   let base_rest =
+    #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
+    #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
+    #|  These network rules do not constrain an allowed child process.
     #|- Compiler warnings for the snippet are suppressed; pass `warning: "on"` to
     #|  see them.
     #|- For independent commands or probes, emit SEVERAL `mbtx` calls in the SAME
@@ -1853,9 +1840,10 @@ fn description(
     $|
     $|\{spawn_section}
     $|
+    $|\{refusal_advice}
+    $|
     $|\{base_tail}
     $|\{write_rule}
-    $|\{network_rule}
     $|\{base_rest}
   // The escalation paragraph goes BEFORE the background one so it sits next to
   // the refusal rules it qualifies.

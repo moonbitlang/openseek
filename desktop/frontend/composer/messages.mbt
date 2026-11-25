@@ -629,15 +629,13 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, AutoReviewDescription) =>
       "権限リクエストを自動で審査し、判断できない場合は手動で確認します"
     (English, YoloDescription) =>
-      "Allow requests automatically, with unrestricted commands and network access"
+      "Automatically approve tool permission requests"
     (Spanish, YoloDescription) =>
-      "Permite solicitudes automáticamente, con comandos y red sin restricciones"
-    (SimplifiedChinese, YoloDescription) =>
-      "自动允许权限请求，放开命令和网络限制"
-    (TraditionalChinese, YoloDescription) =>
-      "自動允許權限請求，開放命令和網路存取"
+      "Aprobar automáticamente las solicitudes de permiso de las herramientas"
+    (SimplifiedChinese, YoloDescription) => "自动批准工具的权限请求"
+    (TraditionalChinese, YoloDescription) => "自動核准工具的權限請求"
     (Japanese, YoloDescription) =>
-      "権限要求を自動で許可し、コマンドとネットワークの制限を解除します"
+      "ツールの権限リクエストを自動で許可します"
     (English, ApprovalLocked) =>
       "The approval mode cannot change while a turn is running"
     (Spanish, ApprovalLocked) =>
