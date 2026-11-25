@@ -124,12 +124,9 @@ async test "directory deletion refuses workspace ancestors symlinks and scope es
       }
       assert_true(out.is_error, msg=path)
     }
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=[
-        "workspace/tree",
-      ])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
+      "workspace/tree",
+    ])
     let confined = @remove.definition(
       workspace_root=dir,
       write_scope=scope,

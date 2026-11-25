@@ -116,10 +116,7 @@ async test "write records an overwrite of a pre-existing file as Modified" {
 async test "a write scope confines write to its allowed paths" {
   @vfs.with_tmpdir(prefix="openseek-write-scope-", dir => {
     @vfs.FileSystem({ "lib/keep.txt": "k\n" }).write_to(dir)
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
-      is Ok(scope) else {
-      fail("expected the scope to build")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
     let tool = @write.definition(workspace_root=dir, write_scope=scope)
     guard run_write(tool, { "path": "lib/new.txt", "content": "n\n" })
       is Respond(admitted) else {

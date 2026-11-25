@@ -198,11 +198,9 @@ async test "saving rejects read-only, outside-workspace, namespace, and worker s
       assert_true(
         run_in(ws, { "source": source, "filename": "@builtin/check.mbtx" }).is_error,
       )
-      let scope = match
-        @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"]) {
-        Ok(scope) => scope
-        Err(reason) => fail(reason)
-      }
+      let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+        "allowed",
+      ])
       let worker = @mbtx.definition(workspace_root=ws, write_scope=scope)
       assert_true(
         dispatch(worker, { "source": source, "filename": "denied/check.mbtx" }).is_error,

@@ -1,16 +1,4 @@
 ///|
-/// Build a scope over `root` or fail the test with the create error.
-async fn scope_of(
-  root : String,
-  allowed_paths~ : Array[String] = [],
-) -> @write_scope.WriteScope {
-  match @write_scope.WriteScope::create(root~, allowed_paths~) {
-    Ok(scope) => scope
-    Err(reason) => fail(reason)
-  }
-}
-
-///|
 async fn assert_admits(scope : @write_scope.WriteScope, path : String) -> Unit {
   if scope.deny_reason(path) is Some(reason) {
     fail("expected \{path} admitted, denied: \{reason}")
@@ -33,7 +21,7 @@ async fn assert_denies(
 async test "root-only scope admits inside and denies outside" {
   @vfs.with_tmpdir(prefix="write-scope-root-", root => {
     @vfs.FileSystem({ "src/a.mbt": "a", "top.txt": "t" }).write_to(root)
-    let scope = scope_of(root)
+    let scope = @write_scope.WriteScope::create(root~)
     assert_admits(scope, "\{root}/src/a.mbt")
     assert_admits(scope, "src/a.mbt")
     assert_admits(scope, "\{root}/src/newdir/deep/new.mbt")
@@ -56,7 +44,9 @@ async test "allowed prefixes are component-wise" {
       "src2/b.mbt": "b",
       "docs/notes/n.md": "n",
     }).write_to(root)
-    let scope = scope_of(root, allowed_paths=["src", "docs/notes"])
+    let scope = @write_scope.WriteScope::create(root~, allowed_paths=[
+      "src", "docs/notes",
+    ])
     assert_admits(scope, "\{root}/src/a.mbt")
     assert_admits(scope, "\{root}/src/sub/new.mbt")
     assert_admits(scope, "\{root}/docs/notes/n.md")
@@ -78,7 +68,7 @@ async test "symlinks cannot smuggle writes out of scope" {
     }).write_to(root)
     @vfs.with_tmpdir(prefix="write-scope-elsewhere-", elsewhere => {
       @vfs.write_text(elsewhere, "target.txt", "x")
-      let scope = scope_of(root, allowed_paths=["src"])
+      let scope = @write_scope.WriteScope::create(root~, allowed_paths=["src"])
       // Final-component symlink pointing out of the root: denied on the
       // resolved location even though the request is lexically in-scope.
       @fs.symlink(target="\{elsewhere}/target.txt", "\{root}/src/out_link")
@@ -106,26 +96,29 @@ async test "symlinks cannot smuggle writes out of scope" {
 ///|
 async test "create validates root and prefixes strictly" {
   @vfs.with_tmpdir(prefix="write-scope-validate-", root => {
-    guard @write_scope.WriteScope::create(root="\{root}/missing")
-      is Err(no_root) else {
-      fail("expected missing root rejected")
+    try @write_scope.WriteScope::create(root="\{root}/missing") catch {
+      UnresolvedRoot(missing_root) as no_root => {
+        assert_eq(missing_root, "\{root}/missing")
+        assert_true("\{no_root}".contains("does not resolve"))
+      }
+      other => fail("expected UnresolvedRoot, got \{other}")
+    } noraise {
+      _ => fail("expected missing root rejected")
     }
-    assert_true(no_root.contains("does not resolve"))
     for
       bad in [
         "", ".", "..", "a/../b", "/abs", "a//b", ".git/hooks", ".worktrees/x",
       ] {
-      guard @write_scope.WriteScope::create(root~, allowed_paths=[bad])
-        is Err(_) else {
-        fail("expected allowed_paths entry rejected: \{bad}")
+      try @write_scope.WriteScope::create(root~, allowed_paths=[bad]) catch {
+        InvalidAllowedPath(_) => ()
+        other => fail("expected InvalidAllowedPath for \{bad}, got \{other}")
+      } noraise {
+        _ => fail("expected allowed_paths entry rejected: \{bad}")
       }
     }
-    guard @write_scope.WriteScope::create(root~, allowed_paths=[
-        "src", "docs/notes", "a/b/c",
-      ])
-      is Ok(_) else {
-      fail("expected valid prefixes accepted")
-    }
+    let _ = @write_scope.WriteScope::create(root~, allowed_paths=[
+      "src", "docs/notes", "a/b/c",
+    ])
   })
 }
 
@@ -135,7 +128,7 @@ async test "the scope root is canonical so resolved comparisons match" {
   // un-resolved spelling must still admit realpath'd targets.
   @vfs.with_tmpdir(prefix="write-scope-canon-", root => {
     @vfs.FileSystem({ "src/a.mbt": "a" }).write_to(root)
-    let scope = scope_of(root)
+    let scope = @write_scope.WriteScope::create(root~)
     assert_true(scope.root() == @fs.realpath(root))
     assert_admits(scope, "\{scope.root()}/src/a.mbt")
   })
@@ -146,18 +139,20 @@ async test "the scope root is canonical so resolved comparisons match" {
 async test "a POSIX backslash is a filename byte, not a separator" {
   @vfs.with_tmpdir(prefix="write-scope-backslash-", root => {
     @vfs.FileSystem({ "src/a.mbt": "a" }).write_to(root)
-    let scope = scope_of(root, allowed_paths=["src"])
+    let scope = @write_scope.WriteScope::create(root~, allowed_paths=["src"])
     // A single component literally named `src\outside` is not under `src`;
     // the surrounding path machinery would treat the backslash as a
     // separator and smuggle it into the allowed prefix, so it fails closed.
     assert_denies(scope, "\{root}/src\\outside", because="backslash")
     // And a backslash-bearing prefix could never authorize anything here,
     // so create rejects it (on Windows it is a separator and normalizes).
-    guard @write_scope.WriteScope::create(root~, allowed_paths=[
-        "src\\generated",
-      ])
-      is Err(_) else {
-      fail("expected a backslash prefix rejected on POSIX")
+    try
+      @write_scope.WriteScope::create(root~, allowed_paths=["src\\generated"])
+    catch {
+      InvalidAllowedPath(_) => ()
+      other => fail("expected InvalidAllowedPath, got \{other}")
+    } noraise {
+      _ => fail("expected a backslash prefix rejected on POSIX")
     }
   })
 }
@@ -172,7 +167,7 @@ async test "a scope never admits the root's git metadata" {
       ".gitignore": "_build\n",
       "src/a.mbt": "a",
     }).write_to(root)
-    let scope = scope_of(root)
+    let scope = @write_scope.WriteScope::create(root~)
     assert_admits(scope, "src/a.mbt")
     assert_admits(scope, ".gitignore")
     assert_denies(scope, ".git/config", because="git metadata")

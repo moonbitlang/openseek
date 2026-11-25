@@ -205,10 +205,9 @@ async test "copy treats retired JSON manifest names as ordinary files" {
 async test "copy enforces write scope, one-shot approval, and symlink retarget checks" {
   @vfs.with_tmpdir(dir => {
     @fs.write_binary("\{dir}/candidate", b"\xff\x00")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
+      "allowed",
+    ])
     // Without an approval channel, out-of-scope destinations fail closed.
     guard run_copy(@copy.definition(workspace_root=dir, write_scope=scope), {
         "destination": "blocked/new.bin",
@@ -284,10 +283,9 @@ async test "copy cancellation during approval preserves target and releases the 
   @vfs.with_tmpdir(dir => {
     @fs.write_text("\{dir}/candidate", "new")
     @fs.write_text("\{dir}/target.txt", "old")
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["allowed"])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
+      "allowed",
+    ])
     let state = @agent_tool.FileStateMap()
     let asked = Ref(false)
     let waiting = @copy.definition(

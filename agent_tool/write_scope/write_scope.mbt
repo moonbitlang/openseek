@@ -27,6 +27,25 @@ struct WriteScope {
 }
 
 ///|
+/// Why a `WriteScope` could not be constructed.
+#derive(Eq, Debug)
+pub suberror WriteScopeError {
+  /// The scope root could not be canonicalized with `realpath`.
+  UnresolvedRoot(String)
+  /// An `allowed_paths` entry failed validation.
+  InvalidAllowedPath(String)
+}
+
+///|
+pub impl Show for WriteScopeError with fn output(self, logger) {
+  match self {
+    UnresolvedRoot(root) =>
+      logger.write_string("write scope root does not resolve: \{root}")
+    InvalidAllowedPath(reason) => logger.write_string(reason)
+  }
+}
+
+///|
 /// Build a scope from a root directory and optional relative prefixes.
 ///
 /// The root must exist (it is canonicalized with realpath so comparisons match
@@ -36,23 +55,20 @@ struct WriteScope {
 pub async fn WriteScope::create(
   root~ : String,
   allowed_paths~ : Array[String] = [],
-) -> Result[WriteScope, String] {
+) -> WriteScope raise WriteScopeError {
   let canonical_root = @fs.realpath(root) catch {
-    _ => return Err("write scope root does not resolve: \{root}")
+    _ => raise UnresolvedRoot(root)
   }
   let allowed : Array[Array[String]] = []
   for prefix in allowed_paths {
-    match validate_prefix(prefix) {
-      Ok(parts) => allowed.push(parts)
-      Err(reason) => return Err(reason)
-    }
+    allowed.push(validate_prefix(prefix))
   }
-  Ok({
+  {
     root: @workspace_path.strip_trailing_slash(canonical_root),
     allowed,
     allowed_display: allowed_paths.join(", "),
     grants: Map([]),
-  })
+  }
 }
 
 ///|
@@ -249,13 +265,13 @@ async fn path_exists_no_follow(path : String) -> Bool {
 /// Validate one model-supplied prefix into components. Strict: relative,
 /// slash-normalized, no empty/`.`/`..` components, no NUL, and not rooted at
 /// git or worktree bookkeeping.
-fn validate_prefix(prefix : String) -> Result[Array[String], String] {
+fn validate_prefix(prefix : String) -> Array[String] raise WriteScopeError {
   // On POSIX a backslash-bearing prefix could never authorize anything:
   // deny_reason fails closed on backslash targets, and a slash-spelled
   // target cannot match a literal-backslash component. Reject it up front
   // rather than accept a dead entry. (On Windows it normalizes instead.)
   guard !backslash_is_hostile(prefix) else {
-    return Err(
+    raise InvalidAllowedPath(
       "allowed_paths entries must not contain backslashes on this platform: \{prefix}",
     )
   }
@@ -263,26 +279,30 @@ fn validate_prefix(prefix : String) -> Result[Array[String], String] {
     normalize_separators(prefix),
   )
   guard normalized != "" else {
-    return Err("allowed_paths entries must be non-empty relative paths")
+    raise InvalidAllowedPath(
+      "allowed_paths entries must be non-empty relative paths",
+    )
   }
   guard !normalized.contains("\u{0}") else {
-    return Err("allowed_paths entry contains a NUL byte")
+    raise InvalidAllowedPath("allowed_paths entry contains a NUL byte")
   }
   guard !@path.Path(normalized).is_absolute() && !normalized.has_prefix("/") else {
-    return Err("allowed_paths entries must be relative, got: \{prefix}")
+    raise InvalidAllowedPath(
+      "allowed_paths entries must be relative, got: \{prefix}",
+    )
   }
   let parts = [ for part in normalized.split("/") => part.to_owned() ]
   guard !parts.any(part => part is ("" | "." | "..")) else {
-    return Err(
+    raise InvalidAllowedPath(
       "allowed_paths entries must not contain empty, `.`, or `..` components: \{prefix}",
     )
   }
   guard parts[0] != ".git" && parts[0] != ".worktrees" else {
-    return Err(
+    raise InvalidAllowedPath(
       "allowed_paths entries must not target git or worktree bookkeeping: \{prefix}",
     )
   }
-  Ok(parts)
+  parts
 }
 
 ///|

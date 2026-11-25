@@ -282,10 +282,7 @@ async test "a write scope confines remove to its allowed paths" {
       "\{dir}/other/mine.txt",
       recorded_digest("\{dir}/other/mine.txt"),
     )
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
-      is Ok(scope) else {
-      fail("expected the scope to build")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
     let run = match
       @remove.definition(
         workspace_root=dir,

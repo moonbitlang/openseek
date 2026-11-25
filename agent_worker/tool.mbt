@@ -167,13 +167,11 @@ pub async fn run_child(
     Ok(input) => input
     Err(reason) => return Err(reason)
   }
-  let write_scope = match
-    @write_scope.WriteScope::create(
-      root=input.worker_root,
-      allowed_paths=input.allowed_paths,
-    ) {
-    Ok(scope) => scope
-    Err(reason) => return Err(reason)
+  let write_scope = @write_scope.WriteScope::create(
+    root=input.worker_root,
+    allowed_paths=input.allowed_paths,
+  ) catch {
+    error => return Err("\{error}")
   }
   let worker_sandbox : @mbtx.WorkerSandbox = {
     deny_roots: input.deny_roots,
