@@ -336,7 +336,7 @@ pub fn State::handle(
       )
     }
     CancelPathEdit => (@cmd.none, Some(self), None)
-    Escape => (@cmd.none, None, None)
+    Escape => (@dialog.close("project-picker-dialog"), None, None)
     BeginCreateFolder =>
       if self.location is Some(Directory(_)) &&
         !self.loading &&
@@ -387,7 +387,11 @@ pub fn State::handle(
         !self.loading &&
         self.new_folder is None &&
         self.path_draft is None {
-        (@cmd.none, None, Some(Picked(self.channel, path)))
+        (
+          @dialog.close("project-picker-dialog"),
+          None,
+          Some(Picked(self.channel, path)),
+        )
       } else {
         (@cmd.none, Some(self), None)
       }

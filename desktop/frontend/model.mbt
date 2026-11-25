@@ -3151,16 +3151,19 @@ fn Model::host_settings_error(self : Model) -> String? {
 }
 
 ///|
-/// Show the setup dialog when `channel`'s settings left it open for the
-/// focused host; a background host's reply never raises it.
+/// Apply the focused host's setup decision after a settings change.
 fn Model::api_setup_dialog(
   self : Model,
   channel : @interop.ChannelId,
+  was_open~ : Bool,
 ) -> @cmd.Cmd {
-  if channel == self.focused && self.api_setup_open && !self.cloud_selected() {
+  guard channel == self.focused && self.api_setup_open != was_open else {
+    return @cmd.none
+  }
+  if self.api_setup_open {
     @dialog.show("api-setup-dialog")
   } else {
-    @cmd.none
+    @dialog.close("api-setup-dialog")
   }
 }
 

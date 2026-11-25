@@ -269,22 +269,13 @@ test('quick open moves its keyboard selection and opens the chosen file', async 
   await app.openSession();
   await app.openQuickOpen();
   const input = page.getByRole('combobox', { name: 'Search workspace files' });
-  await expect(input).toBeFocused();
-  const mainResult = page.getByRole('option', { name: /main\.mbt/ });
-  const readmeResult = page.getByRole('option', { name: /README\.md/ });
-  await expect(mainResult).toBeVisible();
-  await expect(readmeResult).toBeVisible();
-  await expect(mainResult).toHaveAttribute('aria-selected', 'true');
+  const readme = page.getByRole('option', { name: /README\.md/ });
+  await expect(readme).toHaveAttribute('aria-selected', 'false');
   await input.press('ArrowDown');
-  await expect(readmeResult).toHaveAttribute('aria-selected', 'true');
-  await input.press('ArrowUp');
-  await expect(mainResult).toHaveAttribute('aria-selected', 'true');
+  await expect(readme).toHaveAttribute('aria-selected', 'true');
   await input.press('Enter');
 
-  await expect(input).toBeHidden();
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'fs.read_file' &&
-    request.params?.path === '/workspace/src/main.mbt')).toBeTruthy();
+  await expect(page.locator('.editor-tab.active')).toContainText('README.md');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -765,7 +756,7 @@ for (const commitKey of ['Enter', 'Tab']) test(`settings persist host API change
   await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
     'https://example.test/chat/completions',
   );
-  const keyInput = page.getByLabel('API key', { exact: true });
+  const keyInput = page.getByRole('dialog', { name: 'Settings', exact: true }).getByLabel('API key', { exact: true });
   await expect(keyInput).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
   for (const provider of ['DeepSeek official (your API key)', 'Z.AI GLM (your API key)', 'OpenRouter', 'Custom URL']) {

@@ -272,37 +272,36 @@ test "retiring another draft preserves a cached Codex conversation's actions" {
 }
 
 ///|
-fn CodexPermissionPicker::confirmation_dialog(
+pub fn permission_dialog(
   locale~ : @i18n.Locale = English,
-  self : CodexPermissionPicker,
   dispatch : @cmd.Emit[Msg],
-) -> @html.Html? {
-  guard self is CodexPermissionConfirmingFullAccess(_) else { return None }
-  let cancel = dispatch(CancelFullAccess)
-  Some(
-    @rui.dialog(
-      id="codex-permission-dialog",
-      class="dialog-size-small",
-      show_close=false,
-      on_cancel=cancel,
-      attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),
-      [
-        @rui.dialog_header(@rui.dialog_title(ui(locale, EnableFullQuestion))),
-        @html.div(ui(locale, FullAccessWarning)),
+) -> @html.Html {
+  @rui.dialog(
+    id="codex-permission-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_close=_ => dispatch(CancelFullAccess),
+    attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),
+    [
+      @rui.dialog_header(@rui.dialog_title(ui(locale, EnableFullQuestion))),
+      @html.div(ui(locale, FullAccessWarning)),
+      @html.form(
+        method_="dialog",
         @rui.dialog_footer([
           @html.button(
             class="button secondary",
-            on_click=cancel,
+            type_="submit",
             ui(locale, CancelLabel),
           ),
           @html.button(
             class="button danger",
+            type_="button",
             on_click=dispatch(ConfirmFullAccess),
             ui(locale, EnableFullAccess),
           ),
         ]),
-      ],
-    ),
+      ),
+    ],
   )
 }
 

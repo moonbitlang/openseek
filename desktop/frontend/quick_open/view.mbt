@@ -1,6 +1,7 @@
-// The palette's markup and the two after-render DOM writes it needs. The
-// element ids below are also the handles those writes use, so they are private
-// constants rather than literals repeated at each site.
+// The palette's markup and after-render focus and dismissal handling.
+
+///|
+const DialogId : String = "quick-open-dialog"
 
 ///|
 const InputId : String = "quick-open-input"
@@ -14,11 +15,10 @@ fn row_id(index : Int32) -> String {
 }
 
 ///|
-/// Move keyboard focus into the palette input once it exists. Opening renders
-/// the dialog for the first time, so the write waits for that render.
+/// Open the palette and focus its input after rendering the search run.
 fn focus_after_render() -> @cmd.Cmd {
   @cmd.batch([
-    @dialog.show("quick-open-dialog"),
+    @dialog.show(DialogId),
     @cmd.custom_cmd(
       _ => {
         if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
@@ -30,6 +30,22 @@ fn focus_after_render() -> @cmd.Cmd {
       kind=@cmd.after_render,
     ),
   ])
+}
+
+///|
+fn dismiss_if_closed(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  // A pick retires its run immediately, but native `close` arrives later.
+  // Let any show queued by the next shortcut run before checking that close.
+  @cmd.custom_cmd(
+    scheduler => {
+      if @dom.document().get_element_by_id(DialogId).to_option() is Some(node) &&
+        node.to_html_dialog_element() is Some(dialog) &&
+        !dialog.open() {
+        scheduler.add(emit(Dismiss))
+      }
+    },
+    kind=@cmd.after_render,
+  )
 }
 
 ///|
@@ -134,23 +150,34 @@ fn empty_view(open : Open, locale : @i18n.Locale) -> @html.Html {
 }
 
 ///|
-/// The palette, or nothing at all while it is closed. Rendering a placeholder
-/// rather than dropping the node keeps the shell's overlay child indices
-/// stable across open and close.
 fn State::view(
   self : State,
   emit : @cmd.Emit[Msg],
   locale : @i18n.Locale,
 ) -> @html.Html {
-  guard self.open is Some(open) else { return @html.nothing }
-  dialog_view(emit, open, locale)
+  let label = if self.open is Some(open) && open.provider() is Symbols {
+    Message::SearchWorkspaceSymbols.text(locale)
+  } else {
+    Message::SearchWorkspaceFiles.text(locale)
+  }
+  @rui.dialog(
+    id=DialogId,
+    class="dialog-size-medium",
+    show_close=false,
+    on_close=_ => dismiss_if_closed(emit),
+    attrs=@html.Attrs::build().aria_label(label),
+    self.open
+    .map(open => dialog_contents(emit, open, locale, label))
+    .unwrap_or(@html.nothing),
+  )
 }
 
 ///|
-fn dialog_view(
+fn dialog_contents(
   emit : @cmd.Emit[Msg],
   open : Open,
   locale : @i18n.Locale,
+  dialog_label : String,
 ) -> @html.Html {
   let selected = if open.current() is Some(_) {
     Some(open.selected)
@@ -158,18 +185,10 @@ fn dialog_view(
     None
   }
   let active_id = selected.map(index => row_id(index)).unwrap_or("")
-  let (dialog_label, placeholder, group_label) = if open.provider() is Files {
-    (
-      Message::SearchWorkspaceFiles.text(locale),
-      Message::SearchFiles.text(locale),
-      Message::Files.text(locale),
-    )
+  let (placeholder, group_label) = if open.provider() is Files {
+    (Message::SearchFiles.text(locale), Message::Files.text(locale))
   } else {
-    (
-      Message::SearchWorkspaceSymbols.text(locale),
-      Message::SearchSymbols.text(locale),
-      Message::Symbols.text(locale),
-    )
+    (Message::SearchSymbols.text(locale), Message::Symbols.text(locale))
   }
   let base_input_attrs = key_attrs(emit, selected)
     .id(InputId)
@@ -232,38 +251,31 @@ fn dialog_view(
     Debouncing | Loading => "true"
     _ => "false"
   }
-  @rui.dialog(
-    id="quick-open-dialog",
-    class="dialog-size-medium",
-    show_close=false,
-    on_cancel=emit(Dismiss),
-    attrs=@html.Attrs::build().aria_label(dialog_label),
-    @html.div([
-      @html.div(class="quick-open-input-wrap input-surface", [
-        @icons.icon(@icons.icon_search),
-        @html.input(
-          class="field-surface",
-          input_type=@html.InputType::Text,
-          value=open.value,
-          placeholder~,
-          on_input=emit.map(value => ValueChanged(value)),
-          attrs=input_attrs,
-        ),
-      ]),
-      @html.div(
-        class="quick-open-group-label",
-        attrs=@html.Attrs::build().id("quick-open-group-label"),
-        group_label,
-      ),
-      @html.div(
-        class="quick-open-list",
-        attrs=@html.Attrs::build()
-          .id(ListId)
-          .role("listbox")
-          .aria_labelledby("quick-open-group-label")
-          .aria_busy(list_busy),
-        list_children,
+  @html.div([
+    @html.div(class="quick-open-input-wrap input-surface", [
+      @icons.icon(@icons.icon_search),
+      @html.input(
+        class="field-surface",
+        input_type=@html.InputType::Text,
+        value=open.value,
+        placeholder~,
+        on_input=emit.map(value => ValueChanged(value)),
+        attrs=input_attrs,
       ),
     ]),
-  )
+    @html.div(
+      class="quick-open-group-label",
+      attrs=@html.Attrs::build().id("quick-open-group-label"),
+      group_label,
+    ),
+    @html.div(
+      class="quick-open-list",
+      attrs=@html.Attrs::build()
+        .id(ListId)
+        .role("listbox")
+        .aria_labelledby("quick-open-group-label")
+        .aria_busy(list_busy),
+      list_children,
+    ),
+  ])
 }

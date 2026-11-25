@@ -199,7 +199,14 @@ fn focus_channel(
   // refetch reply arrives too late for a chat that was already sent. Its
   // committed prompt default refills the Settings editor the same way.
   (
-    @cmd.batch([focus_cmd, unwatch_cmd, catalogs_cmd]),
+    @cmd.batch([
+      @dialog.close("api-setup-dialog"),
+      @dialog.close("codex-permission-dialog"),
+      @dialog.close("worktree-archive-dialog"),
+      focus_cmd,
+      unwatch_cmd,
+      catalogs_cmd,
+    ]),
     next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }
@@ -1813,11 +1820,14 @@ fn update(
     model
   }
   let model = model.restore_message_approvals()
-  let model = if model.artifact_followup is Some(followup) &&
+  let (cmd, model) = if model.artifact_followup is Some(followup) &&
     model.transcript_slot().map(slot => slot.key()) != Some(followup.slot) {
-    { ..model, artifact_followup: None, }
+    (
+      @cmd.batch([cmd, @dialog.close("artifact-followup-dialog")]),
+      { ..model, artifact_followup: None, },
+    )
   } else {
-    model
+    (cmd, model)
   }
   let model = if navigates {
     { ..model, management_dialog: None, }
@@ -2414,7 +2424,7 @@ fn update_msg(
         !model.cloud.retired.contains(session) else {
         return (@cmd.none, model)
       }
-      update_cloud(dispatch, @cloud.Open(session), {
+      let (command, next) = update_cloud(dispatch, @cloud.Open(session), {
         ..model,
         screen: Chat,
         selected_conversation: Some(CloudSelection(account~, session~)),
@@ -2426,6 +2436,14 @@ fn update_msg(
         select_menu: None,
         sidebar_open: model.sidebar_open && !model.narrow,
       })
+      (
+        @cmd.batch([
+          @dialog.close("project-picker-dialog"),
+          @dialog.close("api-setup-dialog"),
+          command,
+        ]),
+        next,
+      )
     }
     Console(SignOutClicked) => sign_out_account(dispatch, model)
     Console(SignOutDone(token~)) => {
@@ -4492,11 +4510,7 @@ fn update_msg(
       (
         @cmd.batch([
           push,
-          if next.api_setup_open && !next.cloud_selected() {
-            @dialog.show("api-setup-dialog")
-          } else {
-            @cmd.none
-          },
+          next.api_setup_dialog(model.focused, was_open=model.api_setup_open),
         ]),
         next,
       )
@@ -4853,7 +4867,10 @@ fn update_msg(
     ConfirmUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
         (
-          apply_update(dispatch),
+          @cmd.batch([
+            @dialog.close("update-restart-dialog"),
+            apply_update(dispatch),
+          ]),
           { ..model, update_ux: RestartingForUpdate(version~), },
         )
       } else {
@@ -4914,7 +4931,7 @@ fn update_msg(
     OpenLocalApiSettings => {
       let (cmd, focused) = focus_channel(dispatch, model, Local)
       (
-        cmd,
+        @cmd.batch([cmd, @dialog.close("api-setup-dialog")]),
         {
           ..focused,
           management_dialog: Some(Settings(Engine)),
@@ -4926,7 +4943,7 @@ fn update_msg(
     }
     OpenSetup =>
       (
-        @cmd.none,
+        @dialog.close("api-setup-dialog"),
         {
           ..model,
           management_dialog: Some(Settings(General)),
@@ -4943,7 +4960,7 @@ fn update_msg(
         open_external=url => open_external_link(dispatch, url),
       )
       (
-        cmd,
+        @cmd.batch([cmd, @dialog.close("api-setup-dialog")]),
         {
           ..model,
           connectors,
@@ -4964,7 +4981,7 @@ fn update_msg(
     }
     SettingsSectionSelected(section) =>
       (
-        @cmd.none,
+        @dialog.close("api-setup-dialog"),
         {
           ..model,
           management_dialog: Some(Settings(section)),
@@ -4974,6 +4991,7 @@ fn update_msg(
       )
     CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
+    DismissApiSetup if !model.api_setup_open => (@cmd.none, model)
     DismissApiSetup =>
       (
         @cmd.none,
@@ -5215,14 +5233,21 @@ fn update_msg(
               }),
               setup_api_key: "",
             }
+            let next = next.settle_api_setup()
             (
-              push_host_settings(
-                dispatch,
-                model.focused,
-                api_key_settings_patch(provider, api_key),
-                model.focused_connection_generation(),
-              ),
-              next.settle_api_setup(),
+              @cmd.batch([
+                push_host_settings(
+                  dispatch,
+                  model.focused,
+                  api_key_settings_patch(provider, api_key),
+                  model.focused_connection_generation(),
+                ),
+                next.api_setup_dialog(
+                  model.focused,
+                  was_open=model.api_setup_open,
+                ),
+              ]),
+              next,
             )
           }
         }
@@ -5865,20 +5890,26 @@ fn update_msg(
           // the worktree's uncommitted changes. Same generation dance as
           // the plain archive click.
           guard model.device_state(confirm.channel) is Some(dev) else {
-            return (@cmd.none, { ..model, archive_confirm: None, })
+            return (
+              @dialog.close("chat-worktree-archive-dialog"),
+              { ..model, archive_confirm: None, },
+            )
           }
           let sessions_request_generation = dev.sessions_request_generation + 1
           let archived_request_generation = dev.archived_request_generation + 1
           (
-            archive_session(
-              dispatch,
-              confirm.channel,
-              confirm.session,
-              dev.connection_generation,
-              sessions_request_generation,
-              archived_request_generation,
-              force=true,
-            ),
+            @cmd.batch([
+              @dialog.close("chat-worktree-archive-dialog"),
+              archive_session(
+                dispatch,
+                confirm.channel,
+                confirm.session,
+                dev.connection_generation,
+                sessions_request_generation,
+                archived_request_generation,
+                force=true,
+              ),
+            ]),
             {
               ..model.replace_device({
                 ..dev,
@@ -6060,6 +6091,10 @@ fn update_msg(
         update(dispatch, PickProject(model.focused), model)
       }
     ProjectPicker(msg) => {
+      // SSH closes the native picker while keeping its browse state to resume.
+      if msg is @project_picker.Close && model.project_picker is None {
+        return (@cmd.none, model)
+      }
       // A suspended picker still owns its outstanding browse reply. Retain
       // that reply so cancelling SSH returns to a usable directory listing.
       if model.project_picker is None &&
@@ -8190,6 +8225,9 @@ fn update_device_msg(
         host_settings: HostSettingsMirror::loading(),
       })
       let model = if channel == model.focused {
+        if model.api_setup_open {
+          commands.push(@dialog.close("api-setup-dialog"))
+        }
         { ..model.reset_api_setup(), conversations, }
       } else {
         { ..model, conversations, }
@@ -8365,7 +8403,7 @@ fn update_device_msg(
         } else {
           next
         }
-        (next.api_setup_dialog(channel), next)
+        (next.api_setup_dialog(channel, was_open=model.api_setup_open), next)
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
@@ -8381,7 +8419,7 @@ fn update_device_msg(
       } else {
         next.flush_host_settings(channel)
       }
-      (next.api_setup_dialog(channel), next)
+      (next.api_setup_dialog(channel, was_open=model.api_setup_open), next)
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
@@ -8395,7 +8433,10 @@ fn update_device_msg(
         dispatch,
         SaveSettings(message.to_string()),
       )
-      let commands = [notice, next.api_setup_dialog(channel)]
+      let commands = [
+        notice,
+        next.api_setup_dialog(channel, was_open=model.api_setup_open),
+      ]
       if settled {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
@@ -9110,12 +9151,20 @@ fn update_device_msg(
           !rows.any(row => row.sessions.contains(confirm.session)) => None
         other => other
       }
+      let close = if next.archive_confirm is Some(_) && archive_confirm is None {
+        @dialog.close("chat-worktree-archive-dialog")
+      } else {
+        @cmd.none
+      }
       let next = { ..next, conversations, archive_confirm, }
       // `worktree.create` commits and broadcasts the owner row before the
       // initiating frontend receives its turn reply. Apply the same accepted
       // snapshot transition as reconnect, so every frontend displaying this
       // Codex task moves its native roots together.
-      next.apply_codex_worktree_snapshot(dispatch, channel, workspace, rows)
+      let (command, next) = next.apply_codex_worktree_snapshot(
+        dispatch, channel, workspace, rows,
+      )
+      (@cmd.batch([close, command]), next)
     }
     WorktreeCreated(workspace~, name~, session~) => {
       // The chain's checkout exists: bind the composing conversation, so
@@ -9139,7 +9188,7 @@ fn update_device_msg(
       // changes; stage the discard-confirmation dialog, whose confirm
       // retries with force.
       (
-        @dialog.show("worktree-archive-dialog"),
+        @dialog.show("chat-worktree-archive-dialog"),
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteStopped(key~, checkout~) =>

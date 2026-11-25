@@ -31,10 +31,11 @@ fn confirm_artifact_followup(
   model : Model,
 ) -> (@cmd.Cmd, Model) {
   let closed = { ..model, artifact_followup: None, }
+  let close = @dialog.close("artifact-followup-dialog")
   guard model.artifact_followup is Some(followup) &&
     model.artifact_followup_target(followup.slot) == Some(followup.identity) &&
     model.active_conversation() is Some(conversation) else {
-    return (@cmd.none, closed)
+    return (close, closed)
   }
   let mentions : Array[@composer.Mention] = match followup.snapshot {
     Some(snapshot) =>
@@ -53,6 +54,7 @@ fn confirm_artifact_followup(
       images: [],
     }),
   )
+  let command = @cmd.batch([close, command])
   guard submitted.active_conversation() is Some(next) else {
     return (command, submitted)
   }
@@ -73,9 +75,25 @@ fn artifact_followup_dialog(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> @html.Html {
-  guard model.artifact_followup is Some(followup) else { return @html.nothing }
+  @rui.dialog(
+    id="artifact-followup-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_close=_ => dispatch(ArtifactFollowupDismissed),
+    attrs=@html.Attrs::build().aria_labelledby("artifact-followup-title"),
+    model.artifact_followup
+    .map(followup => artifact_followup_contents(dispatch, model, followup))
+    .unwrap_or([]),
+  )
+}
+
+///|
+fn artifact_followup_contents(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  followup : ArtifactFollowup,
+) -> Array[@html.Html] {
   let locale = model.locale
-  let cancel = dispatch(ArtifactFollowupDismissed)
   let title = if followup.title.is_empty() {
     match locale {
       SimplifiedChinese => "发送追问？"
@@ -94,43 +112,36 @@ fn artifact_followup_dialog(
     Spanish => "Enviar"
     English => "Send"
   }
-  @rui.dialog(
-    id="artifact-followup-dialog",
-    class="dialog-size-small",
-    show_close=false,
-    on_cancel=cancel,
-    attrs=@html.Attrs::build().aria_labelledby("artifact-followup-title"),
-    [
-      @rui.dialog_header(@rui.dialog_title(id="artifact-followup-title", title)),
-      @html.div(
-        style=["white-space:pre-wrap", "overflow-wrap:anywhere"],
-        followup.prompt,
+  [
+    @rui.dialog_header(@rui.dialog_title(id="artifact-followup-title", title)),
+    @html.div(
+      style=["white-space:pre-wrap", "overflow-wrap:anywhere"],
+      followup.prompt,
+    ),
+    match followup.snapshot {
+      Some(snapshot) =>
+        @html.details([
+          @html.summary(snapshot.title),
+          @html.pre(
+            style=["white-space:pre-wrap", "overflow-wrap:anywhere"],
+            snapshot.state.stringify(indent=2),
+          ),
+        ])
+      None => @html.nothing
+    },
+    @rui.dialog_footer([
+      @html.button(
+        class="button secondary",
+        on_click=@dialog.close("artifact-followup-dialog"),
+        shell_text(locale, CancelLabel),
       ),
-      match followup.snapshot {
-        Some(snapshot) =>
-          @html.details([
-            @html.summary(snapshot.title),
-            @html.pre(
-              style=["white-space:pre-wrap", "overflow-wrap:anywhere"],
-              snapshot.state.stringify(indent=2),
-            ),
-          ])
-        None => @html.nothing
-      },
-      @rui.dialog_footer([
-        @html.button(
-          class="button secondary",
-          on_click=cancel,
-          shell_text(locale, CancelLabel),
-        ),
-        @html.button(
-          class="button primary",
-          on_click=dispatch(ArtifactFollowupConfirmed),
-          disabled=model.artifact_followup_target(followup.slot) !=
-            Some(followup.identity),
-          send,
-        ),
-      ]),
-    ],
-  )
+      @html.button(
+        class="button primary",
+        on_click=dispatch(ArtifactFollowupConfirmed),
+        disabled=model.artifact_followup_target(followup.slot) !=
+          Some(followup.identity),
+        send,
+      ),
+    ]),
+  ]
 }

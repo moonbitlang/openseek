@@ -50,7 +50,8 @@ test('language selection updates Settings and sidebar and persists across reload
   await expect(page.getByRole('button', { name: 'API 端点', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存 API 密钥', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '打开 config.toml', exact: true })).toBeVisible();
-  await expect(page.getByText('保存在此设备上，仅随 API 请求发送。SeekMoon 不会读取它。')).toBeVisible();
+  const settings = page.getByRole('dialog', { name: '设置', exact: true });
+  await expect(settings.getByText('保存在此设备上，仅随 API 请求发送。SeekMoon 不会读取它。')).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hans');
   await page.reload();
   await expect(page.getByRole('button', { name: '设置', exact: true })).toBeVisible();
