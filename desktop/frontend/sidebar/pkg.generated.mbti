@@ -15,7 +15,7 @@ import {
 // Values
 pub const ResizeHandleId : String = "sidebar-resize-handle"
 
-pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], Actions, auto_hide_scrollbar~ : Bool) -> @rabbita.Val[@html.Html]
 
 // Errors
 

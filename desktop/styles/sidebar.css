@@ -101,6 +101,14 @@
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
+.sidebar-main[data-auto-hide-scrollbar]:not([data-scrolling]) {
+  scrollbar-color: transparent transparent;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-main[data-auto-hide-scrollbar]:not([data-scrolling]) {
+    transition: scrollbar-color 250ms ease-out;
+  }
+}
 .sidebar-section {
   display: grid;
   --sidebar-row-gap: calc(1em / 14);
