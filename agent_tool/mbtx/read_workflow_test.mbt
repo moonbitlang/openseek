@@ -82,7 +82,9 @@ async test "read workflow continues after distinct file errors and fails the cal
     assert_true(
       out.content.contains("=== \"missing\" ===\nerror reading file:"),
     )
-    assert_true(out.content.contains("path is a directory; list it with mbtx"))
+    assert_true(
+      out.content.contains("path is a directory; list it with @builtin/ls.mbtx"),
+    )
     assert_true(
       out.content.contains("=== \"invalid\" ===\nerror reading file:"),
     )

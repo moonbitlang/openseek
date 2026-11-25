@@ -158,7 +158,7 @@ async fn read(input : Request, body~ : Int32, bytes~ : Int32) -> (String, Bool) 
   try {
     if @fs.kind(input.path, follow_symlink=true) is Directory {
       raise ReadError(
-        "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files",
+        "path is a directory; list it with @builtin/ls.mbtx, then read specific files",
       )
     }
     (render(@fs.read_text(input.path), input, body), false)
