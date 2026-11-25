@@ -1,12 +1,12 @@
 # SeekMoon for iPhone (local prototype)
 
-Open `ios/SeekMoon.xcodeproj` in Xcode, select **SeekMoon** and an iPhone simulator (iOS 17.4 or newer), then press **⌘R**. No developer account is needed for the simulator. To run on your iPhone, select it as the destination and choose your own development team in Signing & Capabilities. There is no release workflow for this project.
+Install the repository’s Node.js and MoonBit build tools, then open `ios/SeekMoon.xcodeproj` in Xcode, select **SeekMoon** and an iPhone simulator (iOS 17.4 or newer), then press **⌘R**. No developer account is needed for the simulator. To run on your iPhone, select it as the destination and choose your own development team in Signing & Capabilities. There is no release workflow for this project.
 
-The app opens the hosted `/cloud` in a persistent WKWebView. Cloud chats need no computer; for Connect, turn on Remote access in the desktop app, sign in with the same account and choose your online computer from the sidebar. The shared MoonBit/Rabbita page owns conversation history, streaming, approvals, stop and reconnection. The iPhone does not run an agent. Internet access is required for launch; a failed document load offers Retry and Open Cloud.
+The Xcode build packages the shared Browser release as a WebArchive in the app. A persistent WKWebView loads its HTML, scripts, styles and other assets at the HTTPS Cloud or device URL. The page can open offline. Account, Cloud and Connect requests use their usual online endpoints. Cloud chats need no computer; for Connect, turn on Remote access in the desktop app, sign in with the same account and choose your online computer from the sidebar. The shared MoonBit/Rabbita page owns conversation history, streaming, approvals, stop and reconnection. The iPhone does not run an agent. A failed document load offers Retry and Open Cloud.
 
 Find exported conversations and downloaded workspace files in **Files → Browse → On My iPhone → SeekMoon**. Downloading the same filename again keeps both copies.
 
-The shell appends `SeekMoonIOS/0.1.0` to the WebView user agent. The public page is the server's selected browser release, not the frontend in your checkout. It may still show browser download links. The prototype has no native command bridge, frontend updater, native push or background socket service. Returning to the foreground keeps the current web view; after process termination the app reopens the last saved Cloud or device page (path only). Unsaved drafts across process termination are not guaranteed.
+The shell appends `SeekMoonIOS/0.1.0` to the WebView user agent. The frontend comes from the checkout and ships with the app. The prototype has no native command bridge, frontend updater, native push or background socket service. Returning to the foreground keeps the current web view; after process termination the app reopens the last saved Cloud or device page (path only). Unsaved drafts across process termination are not guaranteed.
 
 ## Sign-in
 
@@ -24,7 +24,7 @@ xcodebuild -project ios/SeekMoon.xcodeproj -scheme SeekMoon \
   -derivedDataPath ios/.artifacts/simulator -parallel-testing-enabled NO test
 ```
 
-The native tests use a loopback callback and disposable WebKit storage. To check the live entry point, run the same command with `-scheme LiveSmoke` on a signed-out simulator with internet access. This UI test opens the hosted login button, cancels the system sign-in sheet and repeats the attempt. Neither test suite submits real credentials.
+The native tests use a loopback callback and disposable WebKit storage. To check the live entry point, run the same command with `-scheme LiveSmoke` on a signed-out simulator with internet access. This UI test opens the packaged login button, cancels the system sign-in sheet and repeats the attempt. Neither test suite submits real credentials.
 
 For the remaining acceptance checks, use your own account and, for Connect, your own online host:
 
