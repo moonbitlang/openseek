@@ -95,8 +95,7 @@ async fn usable(program : String, args : Array[String]) -> Bool {
     ignore(command(program, args))
     true
   } catch {
-    error if @async.is_being_cancelled() || is_text_file_busy(error) =>
-      raise error
+    error if is_text_file_busy(error) => raise error
     _ => false
   }
 }
