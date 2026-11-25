@@ -170,12 +170,6 @@
   content-visibility: auto;
   contain-intrinsic-block-size: auto 2em;
 }
-.sidebar-context-trigger {
-  display: flex;
-  align-self: stretch;
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .conversation-content {
   display: flex;
   align-items: center;

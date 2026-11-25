@@ -359,6 +359,8 @@ fn Model::update(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  context_input~ : @rabbita.Val[@action_menu.ContextInput],
+  context_actions~ : @action_menu.ContextActions,
 ) -> @rabbita.Val[@html.Html] {
   let localization = @localization.Localization()
   let (state, emit) = @rabbita.create_state_with_input(
@@ -424,41 +426,103 @@ pub fn component(
   let rows = rows.map2(input.map(input => input.artifact_owner()), (rows, owner) => {
     rows.map(row => (row.0, row.1, row.2, owner))
   })
+  let menus : TranscriptMarkdown = {
+    input: context_input,
+    actions: context_actions,
+  }
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
-      let (changes, changes_emit) = message_changes_state(
-        row.map(row => row.1),
-        actions,
-      )
-      let editor_emit = edit_emit.map(msg => (key, msg))
-      let (markdown, markdown_emit) = @rabbita.create_state(false, update=(
-        previewing,
-        _,
-        _,
-      ) => (!previewing, @cmd.none))
-      changes.map3(row, markdown, (changes, row, previewing) => {
-        let (locale, block, editor, owner) = row
+      let prefix = "transcript-link-" + @uuid.mint()
+      let memo = (block : Block, html : @html.Html) => {
         renders.val += 1
-        let html = @html.memo_by(
-          block,
-          block => {
-            block.render(
-              locale~,
-              actions,
-              artifact_view=reference => {
-                artifact_file_view(reference, locale, actions.open, owner)
-              },
-              changes?=changes.control(block, changes_emit),
-              editor?=editor.view(block, locale~, editor_emit),
-              begin_edit=editor_emit(BeginEdit),
-              user_markdown={ previewing, toggle: markdown_emit(()), },
-            )
-          },
-          by=_ => renders.val,
+        (
+          block.key.wire(),
+          @html.memo_by(html, html => html, by=_ => renders.val),
         )
-        (block.key.wire(), html)
-      })
+      }
+      row.switch_by(
+        initial => {
+          match initial.1.content {
+            Empty(_) =>
+              row.map(row => {
+                let (locale, block, _, _) = row
+                let html = match block.content {
+                  Empty(empty) => empty.render(locale~, actions)
+                  _ => @html.nothing
+                }
+                memo(block, html)
+              })
+            Minimal(initial) => {
+              let minimal = minimal_component(
+                row.map(row => {
+                  let (locale, block, _, owner) = row
+                  let content = if block.content is Minimal(content) {
+                    content
+                  } else {
+                    initial
+                  }
+                  (locale, content, owner, false)
+                }),
+                actions,
+                menus,
+                prefix + "-minimal",
+              )
+              row.map2(minimal, (row, html) => memo(row.1, html))
+            }
+            _ => {
+              let (changes, changes_emit) = message_changes_state(
+                row.map(row => row.1),
+                actions,
+              )
+              let editor_emit = edit_emit.map(msg => (key, msg))
+              let (markdown, markdown_emit) = @rabbita.create_state(false, update=(
+                previewing,
+                _,
+                _,
+              ) => (!previewing, @cmd.none))
+              let open_file = path => (actions.open)(path)
+              let prose = menus.body(
+                row.map(row => row.1.prose_markdown(row.0, row.3, actions)),
+                open_file,
+                prefix + "-prose",
+              )
+              let thought = menus.body(
+                row.map(row => row.1.thought_markdown(row.0)),
+                open_file,
+                prefix + "-thought",
+              )
+              row.map5(markdown, changes, prose, thought, (
+                row,
+                previewing,
+                changes,
+                prose,
+                thought,
+              ) => {
+                let (locale, block, editor, _) = row
+                let html = block.render(
+                  locale~,
+                  actions,
+                  prose_body=prose,
+                  thought_body=thought,
+                  changes?=changes.control(block, changes_emit),
+                  editor?=editor.view(block, locale~, editor_emit),
+                  begin_edit=editor_emit(BeginEdit),
+                  user_markdown={ previewing, toggle: markdown_emit(()), },
+                )
+                memo(block, html)
+              })
+            }
+          }
+        },
+        by=row => {
+          match row.1.content {
+            Empty(_) => "empty"
+            Minimal(_) => "minimal"
+            _ => "detailed"
+          }
+        },
+      )
     },
     by=pair => pair.1.branch_key(),
   )

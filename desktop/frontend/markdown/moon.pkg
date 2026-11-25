@@ -1,4 +1,9 @@
 import {
+  "openseek_desktop/frontend/action_menu",
+  "moonbit-community/rabbita",
+  "moonbitlang/core/immut/vector",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/int",
   "openseek_desktop/frontend/office_location",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/uri",

@@ -30,7 +30,8 @@ fn disclosure_icon() -> @html.Html {
 /// and output stay folded by default, like every other call.
 fn assistant_view(
   locale~ : @i18n.Locale = English,
-  on_open : (String) -> @cmd.Cmd,
+  prose_body~ : @html.Html,
+  thought_body~ : @html.Html,
   wait_labels~ : Map[Int32, String] = Map([]),
   prose? : String,
   reasoning? : String,
@@ -44,7 +45,6 @@ fn assistant_view(
   reasoning_complete~ : Bool = true,
   subrun? : SubrunLink,
   fork? : @html.Html,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -95,10 +95,7 @@ fn assistant_view(
         @html.text(text),
       )
     } else {
-      @html.div(
-        class="msg-content markdown moonbit-viewer-markdown-content activity-thinking",
-        @markdown.markdown_nodes(locale~, text, open_file=on_open),
-      )
+      thought_body
     }
     lead.push(
       @html.details(class="activity", open=live, [
@@ -131,10 +128,9 @@ fn assistant_view(
     }
     parts.push(
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        on_open,
+        prose_body,
         assistant_name,
         is_danger=false,
         completed_at?=if finished { ts } else { None },
@@ -1173,7 +1169,8 @@ fn step_time_label(
 fn transcript_item_view(
   locale~ : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
-  on_open : (String) -> @cmd.Cmd,
+  prose_body~ : @html.Html,
+  thought_body~ : @html.Html,
   user_markdown~ : UserMarkdown,
   wait_labels~ : Map[Int32, String] = Map([]),
   anchor? : String,
@@ -1185,7 +1182,6 @@ fn transcript_item_view(
   fork? : @html.Html,
   edit? : @html.Html,
   editor? : @html.Html,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   match item.kind {
     User(content~) =>
@@ -1202,9 +1198,9 @@ fn transcript_item_view(
       )
     Assistant(reasoning~, prose~, calls~, replay=_, finished~, end_sequence=_) =>
       assistant_view(
-        artifact_view?,
         locale~,
-        on_open,
+        prose_body~,
+        thought_body~,
         prose?,
         reasoning?,
         calls~,
@@ -1219,10 +1215,9 @@ fn transcript_item_view(
       )
     Answer(text) =>
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        on_open,
+        prose_body,
         assistant_name,
         is_danger=false,
         completed_at?=item.ts,
@@ -1231,10 +1226,9 @@ fn transcript_item_view(
       )
     Failure(text) | Stopped(text) =>
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        on_open,
+        prose_body,
         assistant_name,
         is_danger=true,
       )
@@ -1248,7 +1242,7 @@ fn transcript_item_view(
         ts?=item.ts,
         sequence?=item.sequence,
       )
-    Summary(text) => summary_card_view(locale~, text, on_open)
+    Summary(_) => summary_card_view(locale~, prose_body)
     TurnEnd => @html.nothing
   }
 }
@@ -1261,14 +1255,13 @@ fn transcript_item_view(
 fn assistant_message_view(
   locale~ : @i18n.Locale = English,
   content : String,
-  on_open : (String) -> @cmd.Cmd,
+  prose_body : @html.Html,
   assistant_name : String,
   is_danger~ : Bool,
   completed_at? : Double,
   show_actions~ : Bool = false,
   fork? : @html.Html,
   streaming~ : Bool = false,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
@@ -1283,20 +1276,7 @@ fn assistant_message_view(
       ),
     ])
   } else {
-    @html.div(
-      class="msg-content markdown moonbit-viewer-markdown-content",
-      @markdown.markdown_nodes(
-        locale~,
-        content,
-        open_file=on_open,
-        artifact_view?=if show_actions && !streaming {
-          artifact_view
-        } else {
-          None
-        },
-        defer_artifacts=!show_actions || streaming,
-      ),
-    )
+    prose_body
   }
   let children = [speaker_label(assistant_name), body]
   // Only an answer confirmed by the durable Finished terminal gets this row.
@@ -1349,8 +1329,7 @@ fn assistant_message_view(
 /// behind the fold.
 fn summary_card_view(
   locale~ : @i18n.Locale = English,
-  content : String,
-  on_open : (String) -> @cmd.Cmd,
+  body : @html.Html,
 ) -> @html.Html {
   @html.div(class="activity-row", [
     @html.details(class="summary-card", [
@@ -1359,10 +1338,7 @@ fn summary_card_view(
         @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
         disclosure_icon(),
       ]),
-      @html.div(
-        class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",
-        @markdown.markdown_nodes(locale~, content, open_file=on_open),
-      ),
+      body,
     ]),
   ])
 }

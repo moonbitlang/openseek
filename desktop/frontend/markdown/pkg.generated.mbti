@@ -2,10 +2,12 @@
 package "openseek_desktop/frontend/markdown"
 
 import {
+  "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbitlang/openseek/workspace_file_ref",
+  "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/i18n",
 }
 
@@ -13,6 +15,8 @@ import {
 pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : String, label~ : String) -> @html.Html
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
+
+pub fn markdown_component(@rabbita.Val[MarkdownInput], String, open_file~ : (String) -> @cmd.Cmd, @rabbita.Val[@action_menu.ContextInput], @action_menu.ContextActions) -> @rabbita.Val[@html.Html]
 
 pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html, defer_artifacts? : Bool, render_math? : (String, Bool) -> @html.Html) -> Array[@html.Html]
 
@@ -29,6 +33,15 @@ pub struct DiagramRenderers {
 pub fn DiagramRenderers::DiagramRenderers(() -> Unit) -> Self
 pub fn DiagramRenderers::dispose(Self) -> Unit
 pub fn DiagramRenderers::refresh(Self, @dom.Element, dark_mode~ : Bool) -> Unit
+
+pub(all) struct MarkdownInput {
+  source : String
+  locale : @i18n.Locale
+  class : String
+  defer_artifacts : Bool
+  artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
+}
+pub impl Eq for MarkdownInput
 
 // Type aliases
 

@@ -19,9 +19,12 @@ priv struct RenderedFootnote {
 let next_footnote_scope : Ref[Int32] = Ref(0)
 
 ///|
-fn Footnotes::new() -> Footnotes {
-  next_footnote_scope.val += 1
-  { prefix: "markdown-note-\{next_footnote_scope.val}", notes: [], }
+fn Footnotes::new(prefix? : String) -> Footnotes {
+  let prefix = prefix.unwrap_or_else(() => {
+    next_footnote_scope.val += 1
+    "markdown-note-\{next_footnote_scope.val}"
+  })
+  { prefix, notes: [], }
 }
 
 ///|
@@ -103,30 +106,36 @@ fn MarkdownRender::footnotes_node(self : MarkdownRender) -> @html.Html {
     let note = self.footnotes.notes[index]
     rendered.push((note, render.block_nodes(note.block)))
   }
-  let items : Array[@html.Html] = []
-  for (note, children) in rendered {
-    let backlinks : Array[@html.Html] = []
-    for reference in 1..<=note.references {
-      backlinks.push(
-        @html.a(
-          href="#\{note.id}-ref-\{reference}",
-          attrs=@html.Attrs::build().role("doc-backlink"),
-          escape=true,
-          [@html.text(if reference == 1 { "↩" } else { "↩\{reference}" })],
-        ),
-      )
-    }
-    children.push(@html.span(backlinks))
-    items.push(
-      @html.li(
-        id=note.id,
-        attrs=@html.Attrs::build()
-          .role("doc-footnote")
-          .data_set("footnote", note.key),
-        children,
+  footnotes_html(rendered.map(item => footnote_html(item.0, item.1)))
+}
+
+///|
+fn footnote_html(
+  note : RenderedFootnote,
+  children : Array[@html.Html],
+) -> @html.Html {
+  let backlinks : Array[@html.Html] = []
+  for reference in 1..<=note.references {
+    backlinks.push(
+      @html.a(
+        href="#\{note.id}-ref-\{reference}",
+        attrs=@html.Attrs::build().role("doc-backlink"),
+        escape=true,
+        [@html.text(if reference == 1 { "↩" } else { "↩\{reference}" })],
       ),
     )
   }
+  @html.li(
+    id=note.id,
+    attrs=@html.Attrs::build()
+      .role("doc-footnote")
+      .data_set("footnote", note.key),
+    [..children, @html.span(backlinks)],
+  )
+}
+
+///|
+fn footnotes_html(items : Array[@html.Html]) -> @html.Html {
   @html.section(
     class="footnote",
     attrs=@html.Attrs::build().role("doc-endnotes"),

@@ -724,40 +724,21 @@ fn MinimalContent::render(
   locale~ : @i18n.Locale = English,
   self : MinimalContent,
   actions : Actions,
+  body : @html.Html,
   active~ : Bool = false,
-  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   match self {
-    Messages(parts, active_group~) => {
-      // Preserve each child's identity while tool outcomes and live prose
-      // update. Grouping must not recreate an already-open tool disclosure.
-      let children : Map[String, @html.Html] = Map([])
-      for part in parts {
-        children[part.identity] = part.content.render(
-          locale~,
-          actions,
-          artifact_view?,
-          active=active_group is Some(identity) && identity == part.identity,
-        )
-      }
-      @html.div(class="minimal-messages minimal-rows", children)
-    }
-    ContextSummary(text) =>
+    Messages(_) => body
+    ContextSummary(_) =>
       @html.details(class="minimal-context-summary", [
         self.summary_view(locale~),
-        @html.div(
-          class="minimal-process-body msg-content markdown moonbit-viewer-markdown-content",
-          @markdown.markdown_nodes(locale~, text, open_file=path => {
-            (actions.open)(path)
-          }),
-        ),
+        body,
       ])
     Prose(text~, assistant~, finished~, live~, completed_at~, fork~) =>
       assistant_message_view(
-        artifact_view?,
         locale~,
         text,
-        path => (actions.open)(path),
+        body,
         assistant,
         is_danger=false,
         completed_at?,
