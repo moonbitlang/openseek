@@ -518,13 +518,18 @@
   white-space: nowrap;
 }
 .workspace-chevron {
-  --icon-size: var(--icon-xs);
+  --icon-size: var(--icon-sm);
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: inherit;
   transition: transform var(--disclosure-duration) ease;
+}
+.workspace-chevron svg {
+  stroke: currentColor;
+  stroke-width: 0.65;
+  stroke-linejoin: round;
 }
 .workspace-disclosure[aria-expanded="false"] > .workspace-chevron {
   transform: rotate(-90deg);
