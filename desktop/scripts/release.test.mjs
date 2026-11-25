@@ -81,6 +81,8 @@ test("mutating requests fail without retrying", async t => {
   assert.equal(requests, 1);
 });
 
+const browserPage = '<div id="app"></div><script type="module" src="/assets/frontend.js"></script>';
+
 test("verify checks the current Browser bundle the API serves", async t => {
   const release = new Release();
   release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-"));
@@ -97,10 +99,11 @@ test("verify checks the current Browser bundle the API serves", async t => {
   for (const file of Object.values(files)) await fs.writeFile(join(release.dist, file), bytes);
   await fs.mkdir(join(release.dist, "browser/assets"), { recursive: true });
   const documents = new Map([
-    ["/cloud", "packaged document"],
+    ["/cloud", '<div id="app"></div><script type="module">import("https://cdn.example/assets/frontend.js")</script>'],
+    ["/console/releases/v0.1.9/index.html", browserPage],
     ["/assets/frontend.js", "packaged frontend"],
   ]);
-  await fs.writeFile(join(release.dist, "browser/index.html"), "packaged document");
+  await fs.writeFile(join(release.dist, "browser/index.html"), browserPage);
   await fs.writeFile(join(release.dist, "browser/assets/frontend.js"), "packaged frontend");
   const manifest = { version: "0.1.9", platforms: {} };
   let current = "0.1.8";
@@ -125,8 +128,14 @@ test("verify checks the current Browser bundle the API serves", async t => {
   await assert.rejects(release.verify("v0.1.9"), /browser current\.json version 0\.1\.8 is not 0\.1\.9/);
   current = "0.1.9";
   await release.verify("v0.1.9");
+  documents.set("/console/releases/v0.1.9/index.html", "previous document");
+  await assert.rejects(release.verify("v0.1.9"), /served index\.html does not match/);
+  documents.set("/console/releases/v0.1.9/index.html", browserPage);
   documents.set("/assets/frontend.js", "previous frontend");
   await assert.rejects(release.verify("v0.1.9"), /served assets\/frontend\.js does not match/);
+  documents.set("/assets/frontend.js", "packaged frontend");
+  documents.set("/cloud", documents.get("/cloud").replace('id="app"', 'id="wrong"'));
+  await assert.rejects(release.verify("v0.1.9"), /did not serve the Browser entry page/);
   documents.delete("/cloud");
   await assert.rejects(release.verify("v0.1.9"), /GET \/cloud failed: HTTP 404/);
 });
@@ -494,7 +503,7 @@ test("browser releases dist/'s archive to the console alone, and a retry publish
   await fs.writeFile(join(release.dist, "SeekMoon.browser.tar.gz"), archive);
   t.mock.method(release, "unpackBrowser", async () => {
     await fs.mkdir(join(release.dist, "browser/assets"), { recursive: true });
-    await fs.writeFile(join(release.dist, "browser/index.html"), "packaged document");
+    await fs.writeFile(join(release.dist, "browser/index.html"), browserPage);
     await fs.writeFile(join(release.dist, "browser/assets/frontend.js"), "packaged frontend");
   });
   t.mock.method(release, "env", name => {
@@ -511,7 +520,7 @@ test("browser releases dist/'s archive to the console alone, and a retry publish
     requests.push(`${request.method} ${request.url}`);
     if (request.url === "/console/releases/vbrowser-3.1/index.html") {
       response.writeHead(extracted ? 200 : 404);
-      response.end();
+      response.end(extracted ? browserPage : undefined);
     } else if (request.method === "PUT") {
       assert.equal(request.url, "/desktop/releases/vbrowser-3.1/SeekMoon.browser.tar.gz?platform=browser");
       response.end(JSON.stringify({ sha256: createHash("sha256").update(body).digest("hex") }));
@@ -524,7 +533,7 @@ test("browser releases dist/'s archive to the console alone, and a retry publish
     } else if (request.url === "/browser/releases/current.json") {
       response.end(JSON.stringify({ version: current }));
     } else if (request.url === "/cloud") {
-      response.end("packaged document");
+      response.end(browserPage);
     } else if (request.url === "/assets/frontend.js") {
       response.end("packaged frontend");
     } else {
