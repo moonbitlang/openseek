@@ -250,7 +250,10 @@ test('sub-run transcripts are omitted from the sidebar', async ({ page }) => {
   await expect(page.locator('.workspace-disclosure .sidebar-icon')).toHaveCount(0);
   await expect(page.locator('.workspace-disclosure .workspace-chevron')).toBeVisible();
   const sidebarBox = await page.locator('.sidebar-main').boundingBox();
+  const rowBox = await row.boundingBox();
   const contentBox = await row.locator('.conversation-content').boundingBox();
   expect(contentBox.width).toBeLessThan(sidebarBox.width);
+  // At rest without status glyphs, hidden hover actions do not reserve trailing width.
+  expect(rowBox.x + rowBox.width - (contentBox.x + contentBox.width)).toBeLessThan(12);
   expect(app.pageErrors).toEqual([]);
 });

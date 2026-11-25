@@ -332,6 +332,14 @@
 .row-trailing > * {
   grid-area: 1 / 1;
 }
+/* Collapse empty trailing slots at rest so idle rows use the full width for
+   their titles instead of reserving space for hidden hover actions. */
+.conversation-row:not(:hover):not(:focus-within):not(
+    :has(.row-menu-button[aria-expanded="true"])
+  )
+  .row-trailing:not(:has(.row-status > *)) {
+  display: none;
+}
 
 .sidebar-run-status {
   --icon-size: var(--icon-md);
