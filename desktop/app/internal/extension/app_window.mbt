@@ -31,9 +31,29 @@ test "titlebar height converts browser CSS pixels to DIPs" {
 }
 
 ///|
+priv struct MacTitlebarBaseline {
+  position : @proton.WindowButtonPosition
+  height_points : Double
+}
+
+///|
+fn MacTitlebarBaseline::aligned_position(
+  self : MacTitlebarBaseline,
+  header_height_points : Double,
+) -> @proton.WindowButtonPosition {
+  // Proton reports a symmetric row around the buttons. Increasing the top
+  // inset by one point grows that row by two; round up so CSS uses its height.
+  let extra = @cmp.maximum(0.0, header_height_points - self.height_points)
+  let inset = @math.ceil(extra / 2.0).to_int()
+  // Grow the left inset by the same amount to preserve the corner spacing.
+  { x: self.position.x + inset, y: self.position.y + inset, }
+}
+
+///|
 fn app_window_endpoints(
   window : () -> @proton.WindowHandle raise,
 ) -> Array[WindowEndpoint] {
+  let mut mac_titlebar_baseline : MacTitlebarBaseline? = None
   [
     WindowEndpoint(@commands.app_language_apply, (_, payload) => {
       if !(@async.platform is Windows) {
@@ -70,7 +90,27 @@ fn app_window_endpoints(
           { custom_overlay: true, }
         }
         MacOS => {
-          window().set_theme(theme)
+          let handle = window()
+          handle.set_theme(theme)
+          let zoom = handle.zoom_percent().to_double() / 100.0
+          if handle.window_button_position() is Some(position) {
+            // Capture the original inset before moving the buttons. Proton
+            // keeps a new position in fullscreen but only exposes the normal
+            // overlay geometry outside it.
+            if mac_titlebar_baseline is None &&
+              handle.titlebar_area() is Some(area) {
+              mac_titlebar_baseline = Some({
+                position,
+                height_points: @math.round(area.height * zoom),
+              })
+            }
+            if mac_titlebar_baseline is Some(baseline) {
+              let target = baseline.aligned_position(payload.height * zoom)
+              if target.x != position.x || target.y != position.y {
+                handle.set_window_button_position(Some(target))
+              }
+            }
+          }
           { custom_overlay: false, }
         }
         _ => { custom_overlay: false, }
