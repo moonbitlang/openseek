@@ -551,7 +551,7 @@ fn State::pick_row(self : State, index : Int32) -> (@cmd.Cmd, State, Accepted?) 
 pub fn State::close(self : State) -> (@cmd.Cmd, State) {
   guard self.open is Some(_) else { return (@cmd.none, self) }
   let (cmd, next) = self.retire()
-  (@cmd.batch([cmd, @dialog.close("quick-open-dialog")]), next)
+  (@cmd.batch([cmd, @dialog.close(DialogId)]), next)
 }
 
 ///|

@@ -1,6 +1,7 @@
-// The palette's markup and the two after-render DOM writes it needs. The
-// element ids below are also the handles those writes use, so they are private
-// constants rather than literals repeated at each site.
+// The palette's markup and after-render focus and dismissal handling.
+
+///|
+const DialogId : String = "quick-open-dialog"
 
 ///|
 const InputId : String = "quick-open-input"
@@ -14,11 +15,10 @@ fn row_id(index : Int32) -> String {
 }
 
 ///|
-/// Move keyboard focus into the palette input once it exists. Opening renders
-/// the dialog for the first time, so the write waits for that render.
+/// Open the palette and focus its input after rendering the search run.
 fn focus_after_render() -> @cmd.Cmd {
   @cmd.batch([
-    @dialog.show("quick-open-dialog"),
+    @dialog.show(DialogId),
     @cmd.custom_cmd(
       _ => {
         if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
@@ -30,6 +30,22 @@ fn focus_after_render() -> @cmd.Cmd {
       kind=@cmd.after_render,
     ),
   ])
+}
+
+///|
+fn dismiss_if_closed(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  // A pick retires its run immediately, but native `close` arrives later.
+  // Let any show queued by the next shortcut run before checking that close.
+  @cmd.custom_cmd(
+    scheduler => {
+      if @dom.document().get_element_by_id(DialogId).to_option() is Some(node) &&
+        node.to_html_dialog_element() is Some(dialog) &&
+        !dialog.open() {
+        scheduler.add(emit(Dismiss))
+      }
+    },
+    kind=@cmd.after_render,
+  )
 }
 
 ///|
@@ -145,10 +161,10 @@ fn State::view(
     Message::SearchWorkspaceFiles.text(locale)
   }
   @rui.dialog(
-    id="quick-open-dialog",
+    id=DialogId,
     class="dialog-size-medium",
     show_close=false,
-    on_close=_ => emit(Dismiss),
+    on_close=_ => dismiss_if_closed(emit),
     attrs=@html.Attrs::build().aria_label(label),
     self.open
     .map(open => dialog_contents(emit, open, locale, label))
