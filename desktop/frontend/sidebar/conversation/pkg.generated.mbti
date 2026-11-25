@@ -70,7 +70,6 @@ pub(all) struct Input {
   title : String
   label : String
   nested : Bool
-  subrun : Bool
   active : Bool
   loading : Bool
   load_failed : Bool
@@ -79,7 +78,6 @@ pub(all) struct Input {
   rename : Rename?
   run_mark : RunMark
   trailing : Array[TrailingAction]
-  children : Array[Input]
 }
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id

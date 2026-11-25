@@ -176,7 +176,6 @@ fn SidebarContext::draft_input(
     // chip already names which agent the chat will start with.
     label: ui(locale, NewChat),
     nested,
-    subrun: false,
     active: self.selected,
     loading: false,
     load_failed: false,
@@ -185,7 +184,6 @@ fn SidebarContext::draft_input(
     rename: None,
     run_mark: @conversation.NoRunMark,
     trailing: [],
-    children: [],
   }
 }
 
@@ -349,7 +347,6 @@ fn CodexThreadRow::archived_sidebar_input(
     title: self.cwd.unwrap_or(self.title.unwrap_or(ui(locale, NewChat))),
     label: self.title.unwrap_or(ui(locale, NewChat)),
     nested: false,
-    subrun: false,
     active: false,
     loading: false,
     load_failed: false,
@@ -358,7 +355,6 @@ fn CodexThreadRow::archived_sidebar_input(
     rename: None,
     run_mark: @conversation.NoRunMark,
     trailing: [@conversation.Restore(title=ui(locale, RestoreCodex))],
-    children: [],
   }
 }
 
@@ -406,7 +402,6 @@ fn CodexThreadRow::sidebar_input(
     title: self.cwd.unwrap_or(self.title.unwrap_or(ui(locale, NewChat))),
     label: self.title.unwrap_or(ui(locale, NewChat)),
     nested,
-    subrun: false,
     active: selected,
     loading: false,
     load_failed: false,
@@ -415,7 +410,6 @@ fn CodexThreadRow::sidebar_input(
     rename: None,
     run_mark,
     trailing: [@conversation.Archive(title=ui(locale, ArchiveCodex))],
-    children: [],
   }
 }
 

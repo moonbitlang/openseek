@@ -340,17 +340,11 @@ pub fn component(
               @cmd.none
             }),
           [
-            @html.span(
-              class="sidebar-icon",
-              @icons.icon(
-                if collapsed {
-                  @icons.icon_folder
-                } else {
-                  @icons.icon_folder_opened
-                },
-              ),
-            ),
             @html.span(class="sidebar-label", input.label),
+            @html.span(
+              class="workspace-chevron",
+              @icons.icon(@icons.icon_chevron_down),
+            ),
           ],
         ),
       ),

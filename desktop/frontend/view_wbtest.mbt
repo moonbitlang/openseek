@@ -93,7 +93,7 @@ test "a fresh chat selects its project and materializes on first send" {
 }
 
 ///|
-test "workflow children fold under live or listed parents before inventory refresh" {
+test "subrun transcripts are omitted from the sidebar before and after inventory refresh" {
   let workspace = @interop.ChannelId::Local.test_project()
   for parent_listed in [false, true] {
     let page = subrun_page(active="desktop-test-sr-1")
@@ -128,13 +128,9 @@ test "workflow children fold under live or listed parents before inventory refre
       })
     let project = sidebar_project_for_test(page)
     assert_eq(project.conversations.length(), 1)
-    let parent = project.conversations[0]
-    assert_eq(parent.children.length(), 1)
-    assert_eq(parent.children[0].label, "sr-1 · The criteria under audit")
-    assert_true(parent.children[0].active)
-    assert_true(parent.children[0].subrun)
+    assert_eq(project.conversations[0].id.conversation(), "desktop-test")
 
-    // Once the host lists both records, the same family remains without duplicates.
+    // Once the host lists both records, only the parent remains in the sidebar.
     let refreshed = page.with_dev(dev => {
       ..dev,
       sessions: [
@@ -158,7 +154,7 @@ test "workflow children fold under live or listed parents before inventory refre
     })
     let project = sidebar_project_for_test(refreshed)
     assert_eq(project.conversations.length(), 1)
-    assert_eq(project.conversations[0].children.length(), 1)
+    assert_eq(project.conversations[0].id.conversation(), "desktop-test")
   }
 }
 

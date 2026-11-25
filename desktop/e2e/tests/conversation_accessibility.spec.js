@@ -233,25 +233,28 @@ test('folding a project retains its expanded preview and reopens with five chats
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sub-runs retain their DOM across their own and project folds', { tag: '@motion' }, async ({ page }) => {
+test('sub-run transcripts are omitted from the sidebar', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  app.liveSessions[0] = {
+    ...app.liveSessions[0],
+    title: 'A very long conversation title that must truncate with ellipsis instead of overflowing the sidebar width',
+  };
   app.liveSessions.push({ id: 'session-1-sr-1', title: 'Inspect animation', updated_at_ms: 2 });
   await app.install();
   await app.goto();
-  const disclosure = page.locator('button.row-twisty');
-  const child = page.locator('.conversation-row.subrun');
-  await expect(child).toHaveCount(1);
-  const node = await child.elementHandle();
-  await disclosure.click();
-  await expect(child.getByRole('button', { name: /Inspect animation/ })).toBeVisible();
-  await expectRetainedFold(disclosure);
-  await disclosure.click();
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-  const projectDisclosure = page.locator('.workspace-disclosure').first();
-  await expectRetainedFold(projectDisclosure);
-  await projectDisclosure.click();
-  await expect(child.getByRole('button', { name: /Inspect animation/ })).toBeVisible();
-  expect(await node.evaluate(node => node === document.querySelector('.conversation-row.subrun'))).toBe(true);
+  const row = page.locator('.conversation-row[title="session-1"]');
+  await expect(row).toBeVisible();
+  await expect(page.locator('.conversation-row[title="session-1-sr-1"]')).toHaveCount(0);
+  await expect(page.locator('.conversation-row.subrun')).toHaveCount(0);
+  await expect(page.locator('.row-twisty')).toHaveCount(0);
+  await expect(page.locator('.workspace-disclosure .sidebar-icon')).toHaveCount(0);
+  await expect(page.locator('.workspace-disclosure .workspace-chevron')).toBeVisible();
+  const sidebarBox = await page.locator('.sidebar-main').boundingBox();
+  const rowBox = await row.boundingBox();
+  const contentBox = await row.locator('.conversation-content').boundingBox();
+  expect(contentBox.width).toBeLessThan(sidebarBox.width);
+  // At rest without status glyphs, hidden hover actions do not reserve trailing width.
+  expect(rowBox.x + rowBox.width - (contentBox.x + contentBox.width)).toBeLessThan(12);
   expect(app.pageErrors).toEqual([]);
 });
 

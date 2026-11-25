@@ -2,7 +2,6 @@
 
 ///|
 priv enum UiMessage {
-  SubagentRuns(Int32)
   RenameLabel
   RenameConversation
   ArchiveLabel
@@ -25,15 +24,6 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, SubagentRuns(1)) => "1 subagent run"
-    (Spanish, SubagentRuns(1)) => "1 ejecución de subagente"
-    (English, SubagentRuns(count)) => "\{count} subagent runs"
-    (Spanish, SubagentRuns(count)) => "\{count} ejecuciones de subagentes"
-    (SimplifiedChinese, SubagentRuns(count)) => "\{count} 次子智能体运行"
-    (TraditionalChinese, SubagentRuns(count)) =>
-      "\{count} 次子代理程式執行"
-    (Japanese, SubagentRuns(count)) =>
-      "\{count} 件のサブエージェント実行"
     (English, RenameLabel) => "Rename…"
     (Spanish, RenameLabel) => "Cambiar nombre…"
     (SimplifiedChinese, RenameLabel) => "重命名…"

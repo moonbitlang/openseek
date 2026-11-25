@@ -149,16 +149,13 @@ pub(all) enum RenameEdit {
 }
 
 ///|
-/// Plain, comparable input to one conversation component. Child runs are
-/// nested data so their lifetime follows the parent branch rather than array
-/// position in the global sidebar.
+/// Plain, comparable input to one conversation component.
 #derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
   title : String
   label : String
   nested : Bool
-  subrun : Bool
   active : Bool
   loading : Bool
   load_failed : Bool
@@ -167,7 +164,6 @@ pub(all) struct Input {
   rename : Rename?
   run_mark : RunMark
   trailing : Array[TrailingAction]
-  children : Array[Input]
 }
 
 ///|
@@ -216,17 +212,6 @@ fn highlighted(value : String, query : String) -> @html.Html {
 }
 
 ///|
-priv enum Msg {
-  ToggleChildren
-}
-
-///|
-#derive(Eq)
-priv struct State {
-  children_open : Bool
-}
-
-///|
 fn Actions::command(
   self : Actions,
   action : TrailingAction,
@@ -248,7 +233,7 @@ priv enum MenuKind {
 
 ///|
 fn Input::menu_kind(self : Input) -> MenuKind? {
-  if self.subrun || self.trailing.is_empty() {
+  if self.trailing.is_empty() {
     return None
   }
   match self.id.source() {
@@ -447,49 +432,14 @@ fn rename_field(
 }
 
 ///|
-fn Actions::child_component(
-  self : Actions,
-  locale : @rabbita.Val[@i18n.Locale],
-  _id : Id,
-  input : @rabbita.Val[Input],
-  search : @rabbita.Val[Search],
-) -> @rabbita.Val[(String, @html.Html)] {
-  component(locale, input, self, search)
-}
-
-///|
 /// A real Rabbita component: it is constructed once for an `assoc_by` key,
-/// owns its sub-run disclosure state, consumes incremental input, and returns
-/// an incremental DOM value. Child branches stay mounted when folded.
+/// consumes incremental input, and returns an incremental DOM value.
 pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
   search : @rabbita.Val[Search],
 ) -> @rabbita.Val[(String, @html.Html)] {
-  let (state, emit) = @rabbita.create_state_with_input(
-    input~,
-    init=(_, _) => ({ children_open: false, }, @cmd.none),
-    update=(state, _, msg, _) => {
-      match msg {
-        ToggleChildren => ({ children_open: !state.children_open, }, @cmd.none)
-      }
-    },
-  )
-  let child_inputs = input.map3(locale, search, (input, locale, search) => {
-    @vector.from_array(input.children.map(child => (locale, child, search)))
-  })
-  let child_rows = child_inputs.assoc_by(
-    (id, child) => {
-      actions.child_component(
-        child.map(pair => pair.0),
-        id,
-        child.map(pair => pair.1),
-        child.map(parts => parts.2),
-      )
-    },
-    by=child => child.1.id(),
-  )
   let menu = input
     .map2(locale, (input, locale) => (input, locale))
     .switch_by(
@@ -511,24 +461,11 @@ pub fn component(
       },
     )
   let input = input.map2(menu, (input, menu) => (input, menu))
-  let rendered = state.map5(input, child_rows, locale, search, (
-    state,
-    pair,
-    child_rows,
-    locale,
-    search,
-  ) => {
+  let rendered = input.map3(locale, search, (pair, locale, search) => {
     let (input, menu) = pair
-    // Opening a workflow child must keep its selected row visible under the parent.
-    let children_open = !search.query.is_blank() ||
-      state.children_open ||
-      input.children.any(child => child.active || child.loading)
     let mut class = "conversation-row"
     if input.nested {
       class += " nested"
-    }
-    if input.subrun {
-      class += " subrun"
     }
     if input.active {
       class += " active"
@@ -549,27 +486,7 @@ pub fn component(
     if renaming {
       class += " renaming"
     }
-    let children : Array[@html.Html] = []
-    if input.children.is_empty() {
-      children.push(@html.span(class="row-twisty spacer", ""))
-    } else {
-      children.push(
-        @html.button(
-          class=if children_open { "row-twisty expanded" } else { "row-twisty" },
-          type_="button",
-          title=ui(locale, SubagentRuns(input.children.length())),
-          attrs=@html.Attrs::build()
-            .aria_expanded(children_open.to_string())
-            .aria_controls(input.id.key() + ":children")
-            .on_click(event => {
-              event.stop_propagation()
-              emit(ToggleChildren)
-            }),
-          @icons.icon(@icons.icon_chevron_down),
-        ),
-      )
-    }
-    children.push(
+    let children : Array[@html.Html] = [
       if input.rename is Some(rename) {
         rename_field(locale, input.id, rename, actions)
       } else if input.openable {
@@ -604,7 +521,7 @@ pub fn component(
       } else {
         @html.span(class="sidebar-label", input.label)
       },
-    )
+    ]
     let status : Array[@html.Html] = []
     if input.loading {
       status.push(
@@ -762,8 +679,6 @@ pub fn component(
           input.rename,
           input.openable,
           input.active,
-          input.children.length(),
-          children_open,
           input.trailing,
           locale,
           search.query,
@@ -781,38 +696,16 @@ pub fn component(
         })
       },
     }
-    let rows = Map::from_iter(child_rows.iter())
-    let collapsed = !children_open || input.children.is_empty()
-    (
-      input.id.key(),
-      class,
-      input.title,
-      context,
-      trailing_slot,
-      @html.div(
-        id=input.id.key() + ":children",
-        class="conversation-children sidebar-branch-content",
-        attrs=@html.Attrs::build()
-          .aria_hidden(collapsed.to_string())
-          .inert(collapsed),
-        rows,
-      ),
-      collapsed,
-    )
+    (input.id.key(), class, input.title, context, trailing_slot)
   })
   let context = @action_menu.row_context(rendered.map(row => row.3))
   rendered.map2(context, (row, context) => {
-    let (id, class, title, _, trailing, children, collapsed) = row
+    let (id, class, title, _, trailing) = row
     (
       id,
-      @html.div(
-        class=if collapsed {
-          "sidebar-conversation sidebar-branch collapsed"
-        } else {
-          "sidebar-conversation sidebar-branch"
-        },
-        [@html.div(class~, title~, [context, ..trailing]), children],
-      ),
+      @html.div(class="sidebar-conversation", [
+        @html.div(class~, title~, [context, ..trailing]),
+      ]),
     )
   })
 }
