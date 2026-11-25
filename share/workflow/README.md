@@ -6,6 +6,12 @@ alongside the official documentation in `share/doc/moonbit/`.
 this resource root's absolute path.
 
 - `read.mbtx` reads text files with numbered lines and per-file ranges (see below).
+- `ls.mbtx` lists directories and glob patterns (`src/**/*.mbt`) as
+  `COUNT PATH` lines: line counts, `NB` byte sizes for binary or large files,
+  `-` for directories. `-R`/`--depth N` recurse past build and dependency
+  directories (`--all` includes them), `-g GLOB` filters as in rg, and output
+  is bounded to 40000 bytes. See
+  [Listing files with `ls.mbtx`](../../tests/cram/ls-workflow.md).
 - `rg.mbtx` searches text with `moonx cli/rg`, the MoonBit port of ripgrep:
   its arguments go to rg unchanged (ripgrep flags and Rust regex, not POSIX
   grep; a PATH is required), output is `path:line:text` bounded to 40000

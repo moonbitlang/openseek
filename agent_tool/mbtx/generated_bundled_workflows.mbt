@@ -965,6 +965,592 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
         ),
       )
+    "ls.mbtx" =>
+      Some(
+        (
+          #|---
+          #|import {
+          #|  "moonbitlang/core/async",
+          #|  "moonbitlang/core/async/fs",
+          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/env",
+          #|  "moonbitlang/core/encoding/utf8",
+          #|  "moonbitlang/core/json",
+          #|  "moonbitlang/core/string",
+          #|}
+          #|---
+          #|
+          #|///|
+          #|/// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.
+          #|const OutputBytes : Int32 = 40_000
+          #|
+          #|///|
+          #|/// Stop walking after this many entries; the footer then gives a lower bound.
+          #|const MaxEntries : Int32 = 50_000
+          #|
+          #|///|
+          #|/// Larger files show their size in bytes instead of being read for lines.
+          #|const MaxCountedBytes : Int64 = 4_000_000
+          #|
+          #|///|
+          #|/// Build output, dependencies and VCS data: rarely what a listing is after,
+          #|/// and large enough to crowd out everything else.
+          #|let skip_names : Array[String] = [
+          #|  "_build", ".git", ".mooncakes", "node_modules", "target",
+          #|]
+          #|
+          #|///|
+          #|let usage : String =
+          #|  #|Usage: mbtx(filename="@builtin/ls.mbtx", args=["PATH or GLOB", ...])
+          #|  #|Lists paths; no args lists `.`. A directory lists its entries; a glob such
+          #|  #|as `src/*.mbt`, `tests/m0?/*.sql` or `src/**/*.mbt` lists what it matches
+          #|  #|(`*` and `?` stay inside one path segment, `**` spans directories, hidden
+          #|  #|names need an explicit `.`).
+          #|  #|Each line is `COUNT PATH`, sorted, with PATH ready for
+          #|  #|`@builtin/read.mbtx PATH:start:end`. COUNT is the file's line count (like
+          #|  #|wc -l; a last line without a newline counts too); `NB` is a size in bytes,
+          #|  #|for binary files and files over 4 MB; `-` marks a directory, whose PATH
+          #|  #|ends in `/`.
+          #|  #|-R recurses; --depth N recurses N levels (1 lists entries only). _build,
+          #|  #|.git, .mooncakes, node_modules and target are skipped inside listings;
+          #|  #|--all includes them. -g GLOB keeps matching entries, as in rg: a GLOB
+          #|  #|without `/` matches names, `!GLOB` excludes, and it repeats. -a and -l are
+          #|  #|accepted and ignored: hidden entries and counts are always shown.
+          #|  #|Output is bounded to 40000 UTF-8 bytes; narrow the listing when truncated.
+          #|  #|A glob that matches nothing exits 0 with a note; a missing path is an
+          #|  #|error. -- ends options. Relative paths use cwd (default workspace).
+          #|
+          #|///|
+          #|suberror LsError {
+          #|  LsError(String)
+          #|}
+          #|
+          #|///|
+          #|priv enum Kind {
+          #|  Directory
+          #|  File
+          #|  /// Sockets, pipes, devices and dangling links: listed, never read.
+          #|  Special
+          #|}
+          #|
+          #|///|
+          #|priv enum Item {
+          #|  Entry(String, Kind)
+          #|  Note(String)
+          #|  Failure(String)
+          #|}
+          #|
+          #|///|
+          #|priv struct Options {
+          #|  /// Levels to list below a directory argument; `None` is unlimited.
+          #|  depth : Int32?
+          #|  all : Bool
+          #|  selects : Array[String]
+          #|  rejects : Array[String]
+          #|}
+          #|
+          #|///|
+          #|priv struct Listing {
+          #|  items : Array[Item]
+          #|  skipped : Array[String]
+          #|  mut entries : Int32
+          #|  mut capped : Bool
+          #|  mut failed : Bool
+          #|}
+          #|
+          #|///|
+          #|fn Listing::push(self : Listing, path : String, kind : Kind) -> Unit {
+          #|  self.items.push(Entry(path, kind))
+          #|  self.entries += 1
+          #|}
+          #|
+          #|///|
+          #|fn Listing::fail(self : Listing, message : String) -> Unit {
+          #|  self.items.push(Failure(message))
+          #|  self.failed = true
+          #|}
+          #|
+          #|///|
+          #|fn Listing::skip(self : Listing, name : String) -> Unit {
+          #|  if !self.skipped.contains(name) {
+          #|    self.skipped.push(name)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Shell order: by UTF-16 code unit. `String::compare` puts shorter strings
+          #|/// first, which would list `b` before `aa`.
+          #|fn compare_code_units(left : String, right : String) -> Int32 {
+          #|  let shared = left.length().min(right.length())
+          #|  for index in 0..<shared {
+          #|    let order = left[index].compare(right[index])
+          #|    if order != 0 {
+          #|      return order
+          #|    }
+          #|  }
+          #|  left.length().compare(right.length())
+          #|}
+          #|
+          #|///|
+          #|fn quoted(text : String) -> String {
+          #|  Json(text).stringify()
+          #|}
+          #|
+          #|///|
+          #|fn has_glob(text : String) -> Bool {
+          #|  text.contains_any(chars="*?[")
+          #|}
+          #|
+          #|///|
+          #|/// One element of a segment pattern at `index`: whether it accepts `char`, and
+          #|/// where the next element starts. An unclosed `[` is a literal.
+          #|fn element(pattern : Array[Char], index : Int32, char : Char) -> (Bool, Int32) {
+          #|  let head = pattern[index]
+          #|  if head == '?' {
+          #|    return (true, index + 1)
+          #|  }
+          #|  if head == '[' {
+          #|    let mut cursor = index + 1
+          #|    let negated = cursor < pattern.length() &&
+          #|      (pattern[cursor] == '!' || pattern[cursor] == '^')
+          #|    if negated {
+          #|      cursor += 1
+          #|    }
+          #|    let first = cursor
+          #|    let mut matched = false
+          #|    while cursor < pattern.length() &&
+          #|          (cursor == first || pattern[cursor] != ']') {
+          #|      let low = pattern[cursor]
+          #|      if cursor + 2 < pattern.length() &&
+          #|        pattern[cursor + 1] == '-' &&
+          #|        pattern[cursor + 2] != ']' {
+          #|        matched = matched || (char >= low && char <= pattern[cursor + 2])
+          #|        cursor += 3
+          #|      } else {
+          #|        matched = matched || char == low
+          #|        cursor += 1
+          #|      }
+          #|    }
+          #|    if cursor < pattern.length() {
+          #|      return (matched != negated, cursor + 1)
+          #|    }
+          #|  }
+          #|  (head == char, index + 1)
+          #|}
+          #|
+          #|///|
+          #|/// `*`, `?` and `[...]` within one path segment, with linear backtracking on
+          #|/// the last `*`.
+          #|fn segment_matches(pattern : String, name : String) -> Bool {
+          #|  let pattern = pattern.to_array()
+          #|  let name = name.to_array()
+          #|  let mut p = 0
+          #|  let mut n = 0
+          #|  let mut star : Int32? = None
+          #|  let mut retry = 0
+          #|  while n < name.length() {
+          #|    if p < pattern.length() && pattern[p] == '*' {
+          #|      star = Some(p)
+          #|      retry = n
+          #|      p += 1
+          #|      continue
+          #|    }
+          #|    if p < pattern.length() && element(pattern, p, name[n]) is (true, next) {
+          #|      p = next
+          #|      n += 1
+          #|    } else if star is Some(at) {
+          #|      p = at + 1
+          #|      retry += 1
+          #|      n = retry
+          #|    } else {
+          #|      return false
+          #|    }
+          #|  }
+          #|  while p < pattern.length() && pattern[p] == '*' {
+          #|    p += 1
+          #|  }
+          #|  p == pattern.length()
+          #|}
+          #|
+          #|///|
+          #|fn segments_match(
+          #|  pattern : ArrayView[StringView],
+          #|  parts : ArrayView[StringView],
+          #|) -> Bool {
+          #|  match pattern {
+          #|    [] => parts is []
+          #|    ["**", .. rest] => {
+          #|      for skip in 0..<=parts.length() {
+          #|        if segments_match(rest, parts[skip:]) {
+          #|          return true
+          #|        }
+          #|      }
+          #|      false
+          #|    }
+          #|    [head, .. rest] =>
+          #|      parts is [part, .. remaining] &&
+          #|      segment_matches(head.to_owned(), part.to_owned()) &&
+          #|      segments_match(rest, remaining)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// rg's `-g` reading: a pattern without `/` matches the last component, one
+          #|/// with `/` matches the whole path relative to the listed directory.
+          #|fn filter_matches(pattern : String, path : String) -> Bool {
+          #|  let pattern = pattern.trim_start(chars="/").trim_end(chars="/")
+          #|  let parts = path.split("/").collect()
+          #|  if pattern.contains("/") {
+          #|    segments_match(pattern.split("/").collect(), parts)
+          #|  } else {
+          #|    parts is [.., last] && segment_matches(pattern.to_owned(), last.to_owned())
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|fn Options::excludes(self : Options, path : String) -> Bool {
+          #|  self.rejects.iter().any(glob => filter_matches(glob, path))
+          #|}
+          #|
+          #|///|
+          #|/// Exclusions apply to every entry, and prune the directories they name;
+          #|/// inclusions select files, so a filtered listing shows no directory lines.
+          #|fn Options::keeps(self : Options, path : String, kind : Kind) -> Bool {
+          #|  if self.excludes(path) {
+          #|    false
+          #|  } else if kind is Directory {
+          #|    self.selects.is_empty()
+          #|  } else {
+          #|    self.selects.is_empty() ||
+          #|    self.selects.iter().any(glob => filter_matches(glob, path))
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|async fn kind_of(path : String) -> (Kind, Bool) {
+          #|  fn classify(kind : @fs.FileKind) -> Kind {
+          #|    if kind is Directory {
+          #|      Directory
+          #|    } else if kind is Regular {
+          #|      File
+          #|    } else {
+          #|      Special
+          #|    }
+          #|  }
+          #|
+          #|  let direct = @fs.kind(path, follow_symlink=false)
+          #|  if direct is SymLink {
+          #|    let target = @fs.kind(path, follow_symlink=true) catch {
+          #|      _ => return (Special, true)
+          #|    }
+          #|    (classify(target), true)
+          #|  } else {
+          #|    (classify(direct), false)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|fn child_prefix(directory : String) -> String {
+          #|  if directory == "." || directory == "./" {
+          #|    ""
+          #|  } else if directory.has_suffix("/") {
+          #|    directory
+          #|  } else {
+          #|    directory + "/"
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Pre-order, each directory's entries sorted, so a subtree follows the line
+          #|/// of the directory that holds it. `relative` is what `-g` sees.
+          #|async fn walk(
+          #|  listing : Listing,
+          #|  options : Options,
+          #|  directory : String,
+          #|  relative~ : String,
+          #|  level~ : Int32,
+          #|) -> Unit {
+          #|  let names = @fs.readdir(directory, include_hidden=true) catch {
+          #|    error => {
+          #|      listing.fail("cannot list \{quoted(directory)}: \{error}")
+          #|      return
+          #|    }
+          #|  }
+          #|  names.sort_by(compare_code_units)
+          #|  let prefix = child_prefix(directory)
+          #|  for name in names {
+          #|    if listing.entries >= MaxEntries {
+          #|      listing.capped = true
+          #|      return
+          #|    }
+          #|    let path = prefix + name
+          #|    let relative = relative + name
+          #|    let (kind, link) = kind_of(path) catch { _ => (Special, false) }
+          #|    if kind is Directory && !options.all && skip_names.contains(name) {
+          #|      listing.skip(name)
+          #|      continue
+          #|    }
+          #|    // An excluded directory is pruned, not just hidden.
+          #|    if kind is Directory && options.excludes(relative) {
+          #|      continue
+          #|    }
+          #|    if options.keeps(relative, kind) {
+          #|      listing.push(path, kind)
+          #|    }
+          #|    let deeper = options.depth is None ||
+          #|      (options.depth is Some(depth) && level < depth)
+          #|    if kind is Directory && !link && deeper {
+          #|      walk(listing, options, path, relative=relative + "/", level=level + 1)
+          #|    }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|async fn list_glob(
+          #|  listing : Listing,
+          #|  options : Options,
+          #|  pattern : String,
+          #|) -> Unit {
+          #|  let matches = @shell.glob(pattern)
+          #|  if matches.is_empty() {
+          #|    listing.items.push(Note("no matches for \{quoted(pattern)}"))
+          #|    return
+          #|  }
+          #|  // A skipped directory the pattern spells out was asked for by name.
+          #|  let spelled = pattern.split("/").map(segment => segment.to_owned()).collect()
+          #|  for found in matches {
+          #|    if listing.entries >= MaxEntries {
+          #|      listing.capped = true
+          #|      return
+          #|    }
+          #|    let path = found.trim_end(chars="/").to_owned()
+          #|    let parts = path.split("/").map(part => part.to_owned()).collect()
+          #|    if !options.all &&
+          #|      parts
+          #|      .iter()
+          #|      .find_first(part => skip_names.contains(part) && !spelled.contains(part))
+          #|      is Some(name) {
+          #|      listing.skip(name)
+          #|      continue
+          #|    }
+          #|    let (kind, _) = kind_of(path) catch { _ => (Special, false) }
+          #|    if options.keeps(path, kind) {
+          #|      listing.push(path, kind)
+          #|    }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|async fn list_path(listing : Listing, options : Options, path : String) -> Unit {
+          #|  let exists = @fs.exists(path)
+          #|  // An existing path is taken literally, so `name[1].txt` lists that file.
+          #|  if has_glob(path) && !exists {
+          #|    return list_glob(listing, options, path)
+          #|  }
+          #|  guard exists else {
+          #|    listing.fail("no such file or directory: \{quoted(path)}")
+          #|  }
+          #|  let (kind, _) = kind_of(path) catch {
+          #|    error => {
+          #|      listing.fail("cannot read \{quoted(path)}: \{error}")
+          #|      return
+          #|    }
+          #|  }
+          #|  if kind is Directory {
+          #|    let before = listing.items.length()
+          #|    walk(listing, options, path, relative="", level=1)
+          #|    if listing.items.length() == before {
+          #|      listing.items.push(Note("no entries in \{quoted(path)}"))
+          #|    }
+          #|  } else {
+          #|    listing.push(path, kind)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Line count like `wc -l`, plus an unterminated last line; bytes, marked with
+          #|/// `B`, for binary files (a NUL in the first 8000 bytes) and large ones.
+          #|async fn count(path : String, kind : Kind) -> String {
+          #|  match kind {
+          #|    Directory => "-"
+          #|    Special => "?"
+          #|    File =>
+          #|      try {
+          #|        let size = @fs.file_size(path)
+          #|        if size > MaxCountedBytes {
+          #|          return "\{size}B"
+          #|        }
+          #|        let bytes = @fs.read_binary(path)
+          #|        let mut lines = 0
+          #|        for index in 0..<bytes.length() {
+          #|          let byte = bytes[index]
+          #|          if byte == b'\x00' && index < 8000 {
+          #|            return "\{bytes.length()}B"
+          #|          }
+          #|          if byte == b'\n' {
+          #|            lines += 1
+          #|          }
+          #|        }
+          #|        if bytes.length() > 0 && bytes[bytes.length() - 1] != b'\n' {
+          #|          lines += 1
+          #|        }
+          #|        lines.to_string()
+          #|      } catch {
+          #|        _ => "?"
+          #|      }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|priv enum Row {
+          #|  Listed(String, String)
+          #|  Text(String)
+          #|}
+          #|
+          #|///|
+          #|async fn render(listing : Listing) -> Unit {
+          #|  let rows : Array[Row] = []
+          #|  // `used` covers everything but the count column, which is padded to
+          #|  // `width` on every listed row once the widest count is known.
+          #|  let budget = OutputBytes - 1024
+          #|  let mut used = 0
+          #|  let mut width = 0
+          #|  let mut listed = 0
+          #|  let mut truncated = false
+          #|  for item in listing.items {
+          #|    let text = match item {
+          #|      Entry(path, kind) => {
+          #|        let label = if kind is Directory { path + "/" } else { path }
+          #|        let count = count(path, kind)
+          #|        let bytes = @utf8.encode(label).length() + 2
+          #|        let wider = width.max(count.length())
+          #|        if used + bytes + (listed + 1) * wider > budget {
+          #|          truncated = true
+          #|          break
+          #|        }
+          #|        rows.push(Listed(count, label))
+          #|        used += bytes
+          #|        width = wider
+          #|        listed += 1
+          #|        continue
+          #|      }
+          #|      Note(text) => "<system>\{text}</system>"
+          #|      Failure(text) => "error: \{text}"
+          #|    }
+          #|    let bytes = @utf8.encode(text).length() + 1
+          #|    if used + bytes + listed * width > budget {
+          #|      truncated = true
+          #|      break
+          #|    }
+          #|    rows.push(Text(text))
+          #|    used += bytes
+          #|  }
+          #|  for row in rows {
+          #|    match row {
+          #|      Listed(count, label) => println("\{count.pad_start(width, ' ')} \{label}")
+          #|      Text(text) => println(text)
+          #|    }
+          #|  }
+          #|  if truncated {
+          #|    let total = if listing.capped {
+          #|      "\{listing.entries}+"
+          #|    } else {
+          #|      listing.entries.to_string()
+          #|    }
+          #|    println(
+          #|      "<system>truncated=true shown_entries=\{listed} total_entries=\{total} note=narrow the listing with a glob, -g GLOB or --depth N</system>",
+          #|    )
+          #|  }
+          #|  if !listing.skipped.is_empty() {
+          #|    listing.skipped.sort_by(compare_code_units)
+          #|    println(
+          #|      "<system>skipped=\{listing.skipped.join(",")} note=pass --all to list them</system>",
+          #|    )
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|async fn main {
+          #|  let args = @env.args()[1:]
+          #|  let paths : Array[String] = []
+          #|  let selects : Array[String] = []
+          #|  let rejects : Array[String] = []
+          #|  let mut depth : Int32? = Some(1)
+          #|  let mut all = false
+          #|  let mut options = true
+          #|  let mut index = 0
+          #|  try {
+          #|    while index < args.length() {
+          #|      let arg = args[index]
+          #|      if options && arg == "--help" {
+          #|        println(usage)
+          #|        return
+          #|      } else if options && arg == "--" {
+          #|        options = false
+          #|      } else if options && arg == "-R" {
+          #|        if depth is Some(1) {
+          #|          depth = None
+          #|        }
+          #|      } else if options && arg == "--all" {
+          #|        all = true
+          #|      } else if options && arg is ("-a" | "-l" | "-la" | "-al") {
+          #|        ()
+          #|      } else if options && arg is ("--depth" | "-g" | "--glob") {
+          #|        index += 1
+          #|        guard args.get(index) is Some(value) else {
+          #|          raise LsError("\{arg} requires a value")
+          #|        }
+          #|        if arg == "--depth" {
+          #|          let levels = @string.parse_int(value) catch {
+          #|            _ => raise LsError("--depth expects a positive integer")
+          #|          }
+          #|          guard levels > 0 else {
+          #|            raise LsError("--depth expects a positive integer")
+          #|          }
+          #|          depth = Some(levels)
+          #|        } else if value.strip_prefix("!") is Some(negated) {
+          #|          rejects.push(negated.to_owned())
+          #|        } else {
+          #|          selects.push(value)
+          #|        }
+          #|      } else {
+          #|        guard !options || !arg.has_prefix("-") || arg == "-" else {
+          #|          raise LsError(
+          #|            "unknown option \{arg}; use --help, or -- before a path starting with -",
+          #|          )
+          #|        }
+          #|        paths.push(arg)
+          #|      }
+          #|      index += 1
+          #|    }
+          #|  } catch {
+          #|    LsError(message) => {
+          #|      println("error: ls \{message}")
+          #|      @env.exit(1)
+          #|    }
+          #|  }
+          #|  if paths.is_empty() {
+          #|    paths.push(".")
+          #|  }
+          #|  let listing : Listing = {
+          #|    items: [],
+          #|    skipped: [],
+          #|    entries: 0,
+          #|    capped: false,
+          #|    failed: false,
+          #|  }
+          #|  let options : Options = { depth, all, selects, rejects, }
+          #|  for path in paths {
+          #|    list_path(listing, options, path)
+          #|  }
+          #|  render(listing)
+          #|  if listing.failed {
+          #|    @env.exit(1)
+          #|  }
+          #|}
+          #|
+        ),
+      )
     "read.mbtx" =>
       Some(
         (
@@ -1128,7 +1714,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  try {
           #|    if @fs.kind(input.path, follow_symlink=true) is Directory {
           #|      raise ReadError(
-          #|        "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files",
+          #|        "path is a directory; list it with @builtin/ls.mbtx, then read specific files",
           #|      )
           #|    }
           #|    (render(@fs.read_text(input.path), input, body), false)

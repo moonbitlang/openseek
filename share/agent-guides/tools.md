@@ -31,43 +31,8 @@ Ordinary paths resolve from the workspace root; `cwd` controls execution only.
 Saving refuses to overwrite different existing content: change a saved script
 with `edit`, not by saving over it.
 
-### Bundled scripts
-
-Set `filename="@builtin/<name>.mbtx"` to run a workflow built into OpenSeek.
-Supply its arguments in `args` and omit `source`. `cwd` defaults to the
-workspace. Read `<bundled-resources>/workflow/README.md` for the
-[workflow reference](../workflow/README.md). The script sources are in the
-same directory.
-
-#### Read files
-
-```text
-mbtx(description="Read the module and entry point", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200"])
-```
-
-Results appear in the order requested. Successful reads have a status footer
-that indicates empty files or truncated output. A file error appears under
-that file's heading and marks the call as failed. The other files still return.
-
-#### Search text or list files
-
-`@builtin/rg.mbtx` passes `args` to `cli/rg` unchanged. Use ripgrep flags and
-regex syntax. Include an explicit search path. For `--files`, pass the flag
-followed by the path.
-
-```text
-mbtx(description="Find parser definitions", filename="@builtin/rg.mbtx", args=["fn parse", "-g", "*.mbt", "."])
-mbtx(description="List workspace files", filename="@builtin/rg.mbtx", args=["--files", "."])
-```
-
-#### Check a MoonBit project
-
-`@builtin/check.mbtx` runs `moon check`. Supply only options and package paths
-in `args`. Set `cwd` to check a module in a subdirectory.
-
-```text
-mbtx(description="Check the workspace", filename="@builtin/check.mbtx", args=["--diagnostic-limit", "30"])
-```
+For `@builtin/` scripts, see the [workflow reference](../workflow/README.md)
+at `<bundled-resources>/workflow/README.md`.
 
 ### Command execution
 
