@@ -563,19 +563,16 @@ let moonbit_tails : Array[String] = [
 let source_tails : Array[String] = [..moonbit_tails, ".git", ".git/**"]
 
 ///|
-/// moonrun resolves each exclusion against a filesystem root. Grant the same
-/// roots as the exclusions so every writable path has MoonBit file protection.
+/// Allow writes anywhere except to MoonBit files under the canonical workspace.
 fn yolo_policy_document(
+  workspace : String,
   tmp_dir : String,
   inject : Map[String, String],
-  roots : Array[String],
 ) -> Json {
-  let writes : Array[Json] = []
-  for root in roots {
-    writes.push(Json(root))
-    for tail in moonbit_tails {
-      writes.push({ "glob": "!\{root}**/\{case_insensitive_glob(tail)}" })
-    }
+  let prefix = glob_literal(workspace).trim_end(chars="/")
+  let writes : Array[Json] = ["*"]
+  for tail in moonbit_tails {
+    writes.push({ "glob": "!\{prefix}/**/\{case_insensitive_glob(tail)}" })
   }
   {
     "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
@@ -583,25 +580,6 @@ fn yolo_policy_document(
     "net": { "dns": ["*"], "connect": ["*:*"], "bind": ["*:*"] },
     "process": { "spawn": true },
   }
-}
-
-///|
-#cfg(not(platform="windows"))
-fn yolo_filesystem_roots() -> Array[String] {
-  ["/"]
-}
-
-///|
-#cfg(platform="windows")
-async fn yolo_filesystem_roots() -> Array[String] {
-  let roots = []
-  for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
-    let root = "\{letter}:/"
-    if @fs.exists(root) {
-      roots.push(root)
-    }
-  }
-  roots
 }
 
 ///|

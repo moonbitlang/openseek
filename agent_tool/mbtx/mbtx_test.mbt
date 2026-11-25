@@ -1877,11 +1877,11 @@ async test "a described call is briefed with its description" {
 }
 
 ///|
-async test "YOLO allows ordinary files across directories, commands and network while protecting MoonBit files" {
+async test "YOLO allows ordinary files across directories, commands and network while protecting workspace MoonBit files" {
   @vfs.with_tmpdir(root => {
-    let ws = "\{root}/ws"
-    let scratch = "\{root}/scratch"
-    let outside = "\{root}/outside"
+    let ws = "\{root}/workspace[v1]"
+    let scratch = "\{ws}/scratch"
+    let outside = "\{root}/workspacev"
     for dir in [ws, scratch, outside] {
       @fs.mkdir(dir)
       @fs.write_text("\{dir}/keep.MbT", "original")
@@ -1897,12 +1897,14 @@ async test "YOLO allows ordinary files across directories, commands and network 
       "source": (
         #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/shell", "moonbitlang/core/async/socket", "moonbitlang/core/env" }
         #|async fn main {
-        #|  for dir in @env.args()[1:] {
+        #|  guard @env.args() is [_, workspace, scratch, outside] else { fail("expected three directories") }
+        #|  for dir in [workspace, scratch, outside] {
         #|    @fs.write_text(dir + "/result.txt", "ok", create_mode=CreateNew)
+        #|    let protected = dir != outside
         #|    for name in ["keep.MbT", "api.MBTI", "run.mbtx", "guide.MBT.MD", "moon.mod", "moon.PKG", "moon.work", "moon.mod.json", "moon.pkg.json"] {
         #|      try @fs.write_text(dir + "/" + name, "changed", create_mode=CreateOrTruncate) catch {
-        #|        _ => ()
-        #|      } noraise { _ => fail("unexpected write to " + name) }
+        #|        err => if !protected { raise err }
+        #|      } noraise { _ => if protected { fail("unexpected write to " + name) } }
         #|    }
         #|  }
         #|  let server = @socket.TcpServer(@socket.Addr::parse("0.0.0.0:0"))
@@ -1915,7 +1917,14 @@ async test "YOLO allows ordinary files across directories, commands and network 
     assert_false(result.is_error, msg=result.content)
     for dir in [ws, scratch, outside] {
       assert_eq(@fs.read_text("\{dir}/result.txt"), "ok")
-      assert_eq(@fs.read_text("\{dir}/keep.MbT"), "original")
+      assert_eq(
+        @fs.read_text("\{dir}/keep.MbT"),
+        if dir == outside {
+          "changed"
+        } else {
+          "original"
+        },
+      )
     }
   })
 }

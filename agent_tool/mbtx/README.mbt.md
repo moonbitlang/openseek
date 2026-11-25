@@ -188,11 +188,11 @@ filesystem fault.
 Select YOLO in a local Desktop conversation's approval menu, or pass
 `--approval yolo` to `openseek run` or `openseek serve`. The engine grants
 tool permission requests immediately. Scripts can run any command, use any
-network address, and write ordinary files across directories. Direct writes
-to MoonBit sources, interfaces, scripts and manifests remain protected,
-including in session scratch. Native subprocesses use the host's permissions.
-On Windows the filesystem rules cover available drive letters, including
-mapped shares.
+network address, and write files anywhere. Inside the workspace, direct writes
+exclude MoonBit sources, interfaces, scripts and manifests at every depth.
+This includes session scratch when it lives under the workspace. Outside the
+workspace, scripts can write MoonBit files too. Native subprocesses use the
+host's permissions.
 
 ## Escalation
 

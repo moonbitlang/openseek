@@ -640,12 +640,9 @@ async fn execute(
   if program is Some(program) {
     injected.merge_in_place(program.env())
   }
-  let policy = if snippet_policy is Yolo {
-    yolo_policy_document(snippet_tmp, injected, yolo_filesystem_roots())
-  } else {
-    // Standard exclusions are anchored at the canonical workspace and leave
-    // a scratch directory inside it writable for source.
-    let workspace_grant = if snippet_policy is ExceptSource {
+  let workspace = match snippet_policy {
+    Denied => None
+    ExceptSource | Yolo =>
       Some(
         @fs.realpath(workspace_root) catch {
           error =>
@@ -656,9 +653,10 @@ async fn execute(
             )
         },
       )
-    } else {
-      None
-    }
+  }
+  let policy = if (snippet_policy, workspace) is (Yolo, Some(root)) {
+    yolo_policy_document(root, snippet_tmp, injected)
+  } else {
     let extra_roots = match scratch_dir {
       Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
       None => []
@@ -666,7 +664,7 @@ async fn execute(
     wasm_policy_document(
       tmp_dir=snippet_tmp,
       extra_roots~,
-      workspace?=workspace_grant,
+      workspace?,
       inject=injected,
     )
   }
@@ -1802,7 +1800,7 @@ fn description(
     #|  `moon test` as an admitted child process.
   let write_rule = match snippet_policy {
     Yolo =>
-      "Direct filesystem IO reads anywhere and writes ordinary files anywhere. MoonBit source, scripts, interfaces and manifests are protected from direct writes in every directory, including scratch. Use the file tools for those changes. Native child processes use normal host permissions."
+      "Direct filesystem IO reads anywhere and writes ordinary files anywhere. MoonBit source, scripts, interfaces and manifests are protected from direct writes inside the workspace. Use the file tools for those changes. Outside the workspace all files are writable. Native child processes use normal host permissions."
     ExceptSource =>
       (
         #|- Direct filesystem IO READS anywhere. It WRITES anything in its own
