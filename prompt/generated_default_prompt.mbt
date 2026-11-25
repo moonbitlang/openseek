@@ -34,9 +34,6 @@ fn default_prompt() -> String {
     #|- Use the actual session scratch directory from Environment for helper scripts
     #|  and cross-call data; use workspace paths for files intended for the project.
     #|  Files in `@fs.tmpdir()` must be consumed before that execution ends.
-    #|  Publish generated binary artifacts with
-    #|  `@tools.call("copy", {"source": absolute_source_path, "destination": "output/report.pdf"})`.
-    #|  Use this PTC tool before the script exits.
     #|- `mbtx` requires a short `description`. Ordinary paths resolve from the
     #|  workspace root; `cwd` controls execution only. `@builtin/` scripts are
     #|  read-only: pass `filename` and `args`, never `source`.

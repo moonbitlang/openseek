@@ -237,15 +237,7 @@ pub async fn build_tools(
     }
   })
   let program_tools = @agent_tool.Tools(
-    [
-      ..file_tools,
-      @copy.definition(
-        workspace_root~,
-        file_state~,
-        approval?=runtime.approval_channel(),
-      ),
-      ..extras,
-    ],
+    file_tools + extras,
     image_input_supported~,
   )
   // A script reaches only the subagents it started: each program gets the

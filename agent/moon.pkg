@@ -22,7 +22,6 @@ import {
   "moonbitlang/openseek/agent_tool/mbtx",
   "moonbitlang/openseek/agent_tool/remove",
   "moonbitlang/openseek/agent_tool/write",
-  "moonbitlang/openseek/agent_tool/copy",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client",
   "moonbitlang/openseek_protocol" @protocol,
