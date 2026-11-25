@@ -171,7 +171,6 @@ pub(all) enum Message {
   ModelIdDuplicate
   ModelName
   ModelNameHint
-  ModelNameTooLong
   ModelContextWindow
   ModelContextWindowHint
   ModelContextWindowInvalid

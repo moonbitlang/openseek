@@ -77,9 +77,6 @@ fn normalize_custom_models(
     let label = match entry.label {
       Some(raw) => {
         let trimmed = raw.trim().to_owned()
-        guard trimmed.length() <= @protocol.MaxCustomModelLabelChars else {
-          raise EngineError("a model name is limited to 64 characters")
-        }
         if trimmed.is_empty() {
           None
         } else {
@@ -122,7 +119,7 @@ test "custom models decode tolerantly with defaults and deduplication" {
 }
 
 ///|
-test "custom model normalization enforces bounds, label limit, duplicates, and cap" {
+test "custom model normalization enforces bounds, duplicates, and cap" {
   let err_of = (models : Array[@protocol.CustomModel]) => {
     let _ = normalize_custom_models(models) catch {
       EngineError(message) => return Some(message)
@@ -135,9 +132,6 @@ test "custom model normalization enforces bounds, label limit, duplicates, and c
     context_window: @protocol.DefaultCustomModelContextWindow,
   }
   assert_true(err_of([{ ..valid, id: "   ", }]) is Some(_))
-  assert_true(
-    err_of([{ ..valid, label: Some(String::make(65, 'a')), }]) is Some(_),
-  )
   assert_true(
     err_of([
       { ..valid, context_window: @protocol.MinCustomModelContextWindow - 1, },

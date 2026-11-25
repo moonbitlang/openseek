@@ -105,11 +105,6 @@ fn CustomModelDraft::window_ok(self : CustomModelDraft) -> Bool {
 }
 
 ///|
-fn CustomModelDraft::label_ok(self : CustomModelDraft) -> Bool {
-  self.label.trim().length() <= @protocol.MaxCustomModelLabelChars
-}
-
-///|
 fn CustomModelDraft::id_error(
   self : CustomModelDraft,
   existing : Array[@protocol.CustomModel],
@@ -138,7 +133,6 @@ fn CustomModelDraft::can_submit(
 ) -> Bool {
   !self.id.trim().is_empty() &&
   self.id_error(existing) is None &&
-  self.label_ok() &&
   self.window_ok()
 }
 
@@ -276,7 +270,7 @@ fn Model::update_custom_model(
 }
 
 ///|
-test "custom model draft validates ids, labels, windows, and applies edits in place" {
+test "custom model draft validates ids, windows, and applies edits in place" {
   let existing : Array[@protocol.CustomModel] = [
     { id: "alpha-model", label: Some("Alpha"), context_window: 131_072, },
     {
@@ -306,8 +300,6 @@ test "custom model draft validates ids, labels, windows, and applies edits in pl
     { ..empty, id: "deepseek-v4-flash", }.id_error(existing)
     is Some(ModelIdDuplicate),
   )
-  // Label longer than 64 chars blocks save.
-  assert_false({ ..named, label: String::make(65, 'a'), }.can_submit(existing))
   // Renaming replaces in place, keeping list order.
   let renamed = {
     ..CustomModelDraft::of(existing[0]),

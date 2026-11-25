@@ -5155,7 +5155,8 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
-    TestApiConnection => model.test_api_connection(dispatch)
+    TestApiConnection(model_id) =>
+      model.test_api_connection(dispatch, model_id~)
     ApiConnectionProbed(attempt, reply) => {
       guard model.api_connection_probe is Some(probe) &&
         probe.attempt == attempt &&

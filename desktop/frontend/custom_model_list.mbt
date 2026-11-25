@@ -55,6 +55,8 @@ fn custom_model_entry_row(
   @ui.form_row(
     custom_model_display_name(entry),
     [
+      connection_probe_status_line(model, model_id=Some(entry.id)),
+      connection_test_button(dispatch, model, model_id=Some(entry.id)),
       @html.button(
         class="button secondary compact",
         type_="button",
@@ -126,16 +128,10 @@ fn custom_model_editor_rows(
           "Gemini 4 Hydrogen",
           ModelName,
           dispatch.map(value => CustomModel(LabelChanged(value))),
-          !draft.label_ok(),
+          false,
         ),
-        @html.span("\{draft.label.trim().length()}/64"),
       ],
-      desc=if draft.label_ok() {
-        @settings.text(locale, ModelNameHint)
-      } else {
-        @settings.text(locale, ModelNameTooLong)
-      },
-      desc_invalid=!draft.label_ok(),
+      desc=@settings.text(locale, ModelNameHint),
     ),
     @ui.form_row(
       @settings.text(locale, ModelContextWindow),

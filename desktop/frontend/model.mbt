@@ -1908,7 +1908,7 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
-  TestApiConnection
+  TestApiConnection(String?)
   ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
   CustomModel(CustomModelMsg)

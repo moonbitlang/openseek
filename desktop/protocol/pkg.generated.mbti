@@ -16,8 +16,6 @@ pub const HostProtocolRevision : Int32 = 14
 
 pub const MaxCustomModelContextWindow : Int32 = 10_000_000
 
-pub const MaxCustomModelLabelChars : Int32 = 64
-
 pub const MaxCustomModels : Int32 = 50
 
 pub const MaxImageBytes : Int32 = 20971520
@@ -120,6 +118,7 @@ pub impl @json.ToJson for AgentEventPayload
 #derive(Eq, @debug.Debug)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
+  model : String?
 }
 pub impl @json.FromJson for ApiConnectionProbePayload
 pub impl @json.ToJson for ApiConnectionProbePayload

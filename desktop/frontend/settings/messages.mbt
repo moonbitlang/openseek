@@ -162,7 +162,6 @@ pub(all) enum Message {
   ModelIdDuplicate
   ModelName
   ModelNameHint
-  ModelNameTooLong
   ModelContextWindow
   ModelContextWindowHint
   ModelContextWindowInvalid
@@ -1264,16 +1263,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "在模型列表中顯示的名稱，未設定時預設顯示 Model ID。"
     (Japanese, ModelNameHint) =>
       "モデル一覧に表示される名前です。未設定の場合は Model ID を表示します。"
-    (English, ModelNameTooLong) =>
-      "A model display name is limited to 64 characters."
-    (Spanish, ModelNameTooLong) =>
-      "El nombre visible del modelo no puede superar los 64 caracteres."
-    (SimplifiedChinese, ModelNameTooLong) =>
-      "模型展示名称不能超过 64 个字符。"
-    (TraditionalChinese, ModelNameTooLong) =>
-      "模型顯示名稱不能超過 64 個字元。"
-    (Japanese, ModelNameTooLong) =>
-      "モデル表示名は 64 文字以内で入力してください。"
     (English, ModelContextWindow) => "Context window"
     (Spanish, ModelContextWindow) => "Ventana de contexto"
     (SimplifiedChinese, ModelContextWindow) => "上下文窗口"
