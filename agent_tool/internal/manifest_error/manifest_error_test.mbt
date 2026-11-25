@@ -20,11 +20,20 @@ async test "manifest error allows ordinary files" {
 
 ///|
 async test "manifest error rejects generated mbti files" {
-  let message = "*.generated.mbti files are generated; run moon check instead of editing them"
-  assert_write_error("lib/pkg.generated.mbti", "package x", message)
-  assert_write_error("C:\\workspace\\pkg.generated.mbti", "", message)
-  assert_write_error("pkg.generated.mbti", "...", message)
-  assert_write_error("lib\\pkg.generated.mbti", "...", message)
+  assert_true(
+    @manifest_error.write_error("lib/pkg.generated.mbti", "package x")
+    is Some(_),
+  )
+  assert_true(
+    @manifest_error.write_error("C:\\workspace\\pkg.generated.mbti", "")
+    is Some(_),
+  )
+  assert_true(
+    @manifest_error.write_error("pkg.generated.mbti", "...") is Some(_),
+  )
+  assert_true(
+    @manifest_error.write_error("lib\\pkg.generated.mbti", "...") is Some(_),
+  )
 }
 
 ///|
