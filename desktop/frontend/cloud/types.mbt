@@ -7,7 +7,7 @@ pub(all) struct Session {
   generating : Bool
   archived : Bool
   // The policy the next engine starts with; a running turn keeps its own.
-  approval : @protocol.OpenSeekApproval
+  approval : String
   model : @deepseek.DsVariant
   thinking : @protocol.Thinking
 }
@@ -229,7 +229,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
-  approval : @protocol.OpenSeekApproval
+  approval : String
   model : @deepseek.DsVariant
   thinking : @protocol.Thinking
 }
@@ -259,7 +259,7 @@ pub enum CommandInput {
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
-  SetApproval(@protocol.OpenSeekApproval)
+  SetApproval(String)
   SetModel(@deepseek.DsVariant)
   SetThinking(@protocol.Thinking)
 }
@@ -269,7 +269,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
   match self {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
-    SetApproval(mode) => { "approval": mode.to_json() }
+    SetApproval(mode) => { "approval": Json(mode) }
     SetModel(model) => { "model": Json(@deepseek.Deepseek(model).to_string()) }
     SetThinking(thinking) => { "thinking": thinking.to_json() }
   }
@@ -480,12 +480,8 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
     },
     // Servers that predate approval modes start every engine asking.
     approval: match item {
-      Object(fields) if !fields.contains("approval") => ApprovalAsk
-      Object(fields) =>
-        @json.from_json(fields["approval"]) catch {
-          _ => raise @cloud_client.RequestError(Malformed)
-        }
-      _ => raise @cloud_client.RequestError(Malformed)
+      Object(fields) if !fields.contains("approval") => "ask"
+      _ => required_string(item, "approval")
     },
     model: match item {
       Object(fields) if !fields.contains("model") => V4Flash

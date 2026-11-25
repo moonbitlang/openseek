@@ -2881,7 +2881,8 @@ fn update_msg(
               return (@cmd.none, model)
             }
             let edit = match action {
-              @composer.ApprovalSelected(mode~, ..) => @cloud.SetApproval(mode)
+              @composer.ApprovalSelected(mode~, ..) =>
+                @cloud.SetApproval(mode.wire())
               @composer.ModelSelected(value~, ..) => {
                 guard ModelChoice::parse(value)
                   is Some(OpenSeekModel(Deepseek(engine_model))) else {

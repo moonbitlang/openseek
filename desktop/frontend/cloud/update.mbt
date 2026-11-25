@@ -342,13 +342,13 @@ pub fn State::can_choose_settings(self : State, id : String) -> Bool {
 
 ///|
 /// The mode the session's next engine starts with, including a draft's choice.
-pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+pub fn State::approval(self : State, id : String) -> String {
   if self.creation is Some({ id: draft, approval, .. }) && draft == id {
     return approval
   }
   match self.sessions.iter().find_first(session => session.id == id) {
     Some(session) => session.approval
-    None => ApprovalAsk
+    None => "ask"
   }
 }
 
@@ -654,7 +654,7 @@ pub fn update(
             updated_at: None,
             generating: false,
             archived: false,
-            approval: ApprovalAsk,
+            approval: "ask",
             model: V4Flash,
             thinking: ThinkingHigh,
           })
@@ -683,7 +683,7 @@ pub fn update(
           id,
           request,
           navigation,
-          approval: ApprovalReview,
+          approval: "review",
           model: V4Flash,
           thinking: ThinkingHigh,
         }),

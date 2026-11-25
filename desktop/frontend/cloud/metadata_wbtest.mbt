@@ -453,26 +453,17 @@ test "Cloud sessions decode their approval mode and treat an absent one as ask" 
     "updated_at": 1,
     "generating": false,
   }
-  assert_true(
-    decode_sessions({ "sessions": [base] })[0].approval is ApprovalAsk,
-  )
+  assert_eq(decode_sessions({ "sessions": [base] })[0].approval, "ask")
   guard base is Object(fields) else { fail("object fixture") }
-  for
-    (wire, expected) in [
-      ("ask", @protocol.ApprovalAsk),
-      ("review", @protocol.ApprovalReview),
-    ] {
+  for mode in ["ask", "review", "Future-mode"] {
     let item = fields.copy()
-    item["approval"] = Json(wire)
-    assert_eq(
-      decode_sessions({ "sessions": [Json(item)] })[0].approval,
-      expected,
-    )
-    assert_eq(ToJson::to_json(SessionEdit::SetApproval(expected)), {
-      "approval": Json(wire),
+    item["approval"] = Json(mode)
+    assert_eq(decode_sessions({ "sessions": [Json(item)] })[0].approval, mode)
+    assert_eq(ToJson::to_json(SessionEdit::SetApproval(mode)), {
+      "approval": Json(mode),
     })
   }
-  for invalid in [Json::null(), Json("auto"), Json(1)] {
+  for invalid in [Json::null(), Json(1)] {
     let item = fields.copy()
     item["approval"] = invalid
     let failed = try {
@@ -490,12 +481,12 @@ test "Cloud sessions decode their approval mode and treat an absent one as ask" 
 test "approval mode saves only between turns and holds sending until saved" {
   let initial = deletion_state()
   assert_true(initial.can_choose_settings("a"))
-  assert_true(initial.approval("a") is ApprovalAsk)
+  assert_eq(initial.approval("a"), "ask")
   // Choosing the mode already in effect saves nothing.
   assert_true(
     metadata_update(
       initial,
-      Edit(account="fixture", session="a", edit=SetApproval(ApprovalAsk)),
+      Edit(account="fixture", session="a", edit=SetApproval("ask")),
     ) ==
     initial,
   )
@@ -507,7 +498,7 @@ test "approval mode saves only between turns and holds sending until saved" {
   assert_true(
     metadata_update(
       running,
-      Edit(account="fixture", session="a", edit=SetApproval(ApprovalReview)),
+      Edit(account="fixture", session="a", edit=SetApproval("review")),
     ) ==
     running,
   )
@@ -520,13 +511,13 @@ test "approval mode saves only between turns and holds sending until saved" {
     ..initial,
     sessions: initial.sessions.map(item => { ..item, archived: true, }),
   }
-  assert_false(archived.can_edit("a", SetApproval(ApprovalReview)))
+  assert_false(archived.can_edit("a", SetApproval("review")))
   let pending = metadata_update(
     initial,
-    Edit(account="fixture", session="a", edit=SetApproval(ApprovalReview)),
+    Edit(account="fixture", session="a", edit=SetApproval("review")),
   )
-  assert_true(pending.metadata_saves["a"].edit is SetApproval(ApprovalReview))
-  assert_true(pending.approval("a") is ApprovalAsk)
+  assert_true(pending.metadata_saves["a"].edit is SetApproval("review"))
+  assert_eq(pending.approval("a"), "ask")
   assert_false(pending.can_choose_settings("a"))
   // The next turn's engine starts with the mode the server holds.
   assert_false(pending.can_send("a"))
@@ -534,19 +525,19 @@ test "approval mode saves only between turns and holds sending until saved" {
     pending,
     Edited(2, "a", pending.metadata_saves["a"].request),
   )
-  assert_true(saved.approval("a") is ApprovalReview)
+  assert_eq(saved.approval("a"), "review")
   assert_true(saved.metadata_saves.is_empty())
   assert_true(saved.can_send("a"))
   assert_true(saved.can_choose_settings("a"))
   let pending = metadata_update(
     saved,
-    Edit(account="fixture", session="a", edit=SetApproval(ApprovalAsk)),
+    Edit(account="fixture", session="a", edit=SetApproval("ask")),
   )
   let refused = metadata_update(
     pending,
     EditFailed(2, "a", pending.metadata_saves["a"].request, Http(409)),
   )
-  assert_true(refused.approval("a") is ApprovalReview)
+  assert_eq(refused.approval("a"), "review")
   assert_true(refused.can_choose_settings("a"))
   assert_true(refused.can_send("a"))
   assert_true(refused.notice is Some(SettingsSaveRaced))
@@ -554,5 +545,5 @@ test "approval mode saves only between turns and holds sending until saved" {
   let drafting = metadata_update(initial, Create)
   guard drafting.creation is Some(creation) else { fail("expected a draft") }
   assert_true(drafting.can_choose_settings(creation.id))
-  assert_true(drafting.approval(creation.id) is ApprovalReview)
+  assert_eq(drafting.approval(creation.id), "review")
 }
