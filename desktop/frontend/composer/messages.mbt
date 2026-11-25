@@ -80,6 +80,7 @@ priv enum UiMessage {
   ApprovalMode
   RequestApprovalDescription
   AutoReviewDescription
+  YoloDescription
   ApprovalLocked
   KeepWorking
   DiscardAndArchive
@@ -627,6 +628,14 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "自動審核權限請求，無法判斷時由你確認"
     (Japanese, AutoReviewDescription) =>
       "権限リクエストを自動で審査し、判断できない場合は手動で確認します"
+    (English, YoloDescription) =>
+      "Automatically approve tool permission requests"
+    (Spanish, YoloDescription) =>
+      "Aprobar automáticamente las solicitudes de permiso de las herramientas"
+    (SimplifiedChinese, YoloDescription) => "自动批准工具的权限请求"
+    (TraditionalChinese, YoloDescription) => "自動核准工具的權限請求"
+    (Japanese, YoloDescription) =>
+      "ツールの権限リクエストを自動で許可します"
     (English, ApprovalLocked) =>
       "The approval mode cannot change while a turn is running"
     (Spanish, ApprovalLocked) =>

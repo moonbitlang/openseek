@@ -52,6 +52,8 @@ pub(all) enum OpenSeekApproval {
   /// A reviewer subagent answers against the user's own messages; what it
   /// cannot settle comes to the person as an ordinary question.
   ApprovalReview
+  /// Automatically grant each tool permission request.
+  ApprovalYolo
 }
 
 ///|
@@ -60,14 +62,16 @@ pub fn OpenSeekApproval::wire(self : OpenSeekApproval) -> String {
   match self {
     ApprovalAsk => "ask"
     ApprovalReview => "review"
+    ApprovalYolo => "yolo"
   }
 }
 
 ///|
-fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
+pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
   match value {
     "ask" => Some(ApprovalAsk)
     "review" => Some(ApprovalReview)
+    "yolo" => Some(ApprovalYolo)
     _ => None
   }
 }
@@ -1756,7 +1760,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 14
+pub const HostProtocolRevision : Int32 = 15
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads

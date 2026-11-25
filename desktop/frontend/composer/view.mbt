@@ -212,9 +212,7 @@ fn WorktreeControl::render(
 }
 
 ///|
-/// The approval mode menu: "Request approval" while the person answers,
-/// "Auto-review" while the reviewer does. A change applies from the
-/// conversation's next start.
+/// The approval mode applies to the conversation's next engine start.
 fn ApprovalSelect::render(
   locale~ : @i18n.Locale = English,
   self : ApprovalSelect,
@@ -233,6 +231,9 @@ fn ApprovalSelect::render(
       ui(locale, AutoReviewDescription),
     ),
   ]
+  if identity.owner is Host(_) {
+    modes.push((@protocol.ApprovalYolo, "YOLO", ui(locale, YoloDescription)))
+  }
   let mut title = ui(locale, ApprovalLocked)
   if self.enabled {
     for mode in modes {
@@ -260,15 +261,10 @@ fn ApprovalSelect::render(
     open=self.open,
     toggle=action_emit(ApprovalMenuToggled(identity~)),
     dismiss=action_emit(SelectMenuDismissed(identity~)),
-    // The menu offers exactly the two wire values above.
     change=action_emit.map(value => {
       ApprovalSelected(
         identity~,
-        mode=if value == @protocol.ApprovalReview.wire() {
-          @protocol.ApprovalReview
-        } else {
-          @protocol.ApprovalAsk
-        },
+        mode=@protocol.OpenSeekApproval::parse(value).unwrap_or(self.mode),
       )
     }),
     title~,

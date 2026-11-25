@@ -63,7 +63,19 @@ test "asking is remembered for that conversation only" {
   // Choosing auto-review again forgets it.
   let reviewed = choose_approval(asking, ApprovalReview)
   assert_true(approval_select(reviewed) is Some({ mode: ApprovalReview, .. }))
-  assert_true(reviewed.asking_conversations.is_empty())
+  assert_true(reviewed.conversation_approval_modes.is_empty())
+}
+
+///|
+test "YOLO is persisted per conversation alongside legacy Ask choices" {
+  let rows = parse_conversation_approvals(
+    "[\"local/old\", [\"local/new\", \"yolo\"]]",
+  )
+  let model = { ..test_model(), conversation_approval_modes: rows, }
+  assert_true(model.approval_for(Local, "old") is ApprovalAsk)
+  assert_true(model.approval_for(Local, "new") is ApprovalYolo)
+  assert_true(model.approval_for(Local, "other") is ApprovalReview)
+  assert_true(parse_conversation_approvals(Json(rows).stringify()) == rows)
 }
 
 ///|
@@ -75,9 +87,9 @@ test "the asking list keeps the newest choices within the cap" {
     approvals_with(acc, key, ApprovalAsk)
   })
   assert_eq(folded.length(), ConversationApprovalsLimit)
-  assert_eq(folded[0], "local/s\{ConversationApprovalsLimit + 4}")
-  assert_eq(parse_conversation_approvals(Json(folded).stringify()), folded)
-  assert_eq(parse_conversation_approvals("not json"), [])
+  assert_eq(folded[0].0, "local/s\{ConversationApprovalsLimit + 4}")
+  assert_true(parse_conversation_approvals(Json(folded).stringify()) == folded)
+  assert_true(parse_conversation_approvals("not json").is_empty())
 }
 
 ///|

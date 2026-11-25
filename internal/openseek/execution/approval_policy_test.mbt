@@ -27,6 +27,9 @@ test "approval values parse, and default to never" {
   assert_true(
     try_approval_policy(["--approval", "ask"], interactive=true) is Ok(Ask),
   )
+  assert_true(
+    try_approval_policy(["--approval", "yolo"], interactive=false) is Ok(Yolo),
+  )
   assert_true(try_approval_policy([], interactive=true) is Ok(Never))
 }
 
@@ -59,9 +62,9 @@ test "ask is refused where nobody can answer" {
 
 ///|
 test "an unknown approval value names the accepted ones" {
-  guard try_approval_policy(["--approval", "yolo"], interactive=true)
+  guard try_approval_policy(["--approval", "unknown"], interactive=true)
     is Err(message) else {
     fail("an unknown --approval value should be refused")
   }
-  assert_true(message.contains("ask, never, always, or review"))
+  assert_true(message.contains("ask, never, always, review, or yolo"))
 }

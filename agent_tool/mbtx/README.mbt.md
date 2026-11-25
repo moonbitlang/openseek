@@ -183,6 +183,14 @@ nested sandbox; it is defense in depth, not the cross-platform policy. A denied
 write is surfaced as a tool error with guidance instead of being mistaken for a
 filesystem fault.
 
+## YOLO mode
+
+Select YOLO in a local Desktop conversation's approval menu, or pass
+`--approval yolo` to `openseek run` or `openseek serve`. The engine grants
+tool permission requests immediately. Ordinary snippets use the standard
+sandbox. A snippet requesting `escalated: true` receives a one-call grant
+and runs without the moonrun policy.
+
 ## Escalation
 
 `definition` takes an optional `approval` channel. Its presence is the
