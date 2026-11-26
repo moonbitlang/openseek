@@ -361,7 +361,7 @@ async fn run_against(
       })
       let handoff : Json = {
         "version": 1,
-        "url": "http://127.0.0.1:\{server.addr.port}/call",
+        "url": "http://127.0.0.1:\{server.local_addr().port}/call",
         "token": "fixture-token",
         "approval_tools": [],
       }

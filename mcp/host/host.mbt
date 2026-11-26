@@ -152,7 +152,7 @@ pub fn Service::env(self : Service) -> Map[String, String] {
     "OPENSEEK_MCP": (
       {
         "version": 1,
-        "url": "http://127.0.0.1:\{self.server.addr.port}/call",
+        "url": "http://127.0.0.1:\{self.server.local_addr().port}/call",
         "token": self.token,
       } : Json).stringify(),
   }

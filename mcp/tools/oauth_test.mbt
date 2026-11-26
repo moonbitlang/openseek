@@ -24,7 +24,7 @@ async test "a corrupt OAuth credential is isolated and a repaired credential ret
         }
       })
     }
-    let url = "http://127.0.0.1:\{server.addr.port}/mcp"
+    let url = "http://127.0.0.1:\{server.local_addr().port}/mcp"
     let oauth : @config.OAuthConfig = DeviceCode({
       client_id: "test",
       device_authorization_endpoint: "https://example.com/device",

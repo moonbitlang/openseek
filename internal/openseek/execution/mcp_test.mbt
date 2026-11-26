@@ -80,7 +80,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
           allow_failure=true,
         )
       })
-      let base = "http://127.0.0.1:\{server.addr.port}"
+      let base = "http://127.0.0.1:\{server.local_addr().port}"
       let earlier : Json = {
         "mcpServers": {
           "seekmoon": { "url": base + "/overridden" },

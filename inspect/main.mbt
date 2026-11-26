@@ -387,7 +387,7 @@ async fn local_lan_ip() -> String? {
   let probe = @socket.UdpClient(@socket.Addr::parse("8.8.8.8:53")) catch {
     _ => return None
   }
-  let addr = probe.addr
+  let addr = probe.local_addr()
   probe.close()
   // The probe forces an IPv4 route, so the local address is IPv4; bail on the
   // unexpected IPv6 case rather than mis-format it.
@@ -508,7 +508,7 @@ async fn send_reply(
     headers.set(@http.CaseInsensitiveString("Set-Cookie"), cookie)
   }
   conn.send_response(reply.code, reply.reason, extra_headers=headers)
-  conn.write_string(reply.body)
+  conn.text.write(reply.body)
   conn.end_response()
 }
 
