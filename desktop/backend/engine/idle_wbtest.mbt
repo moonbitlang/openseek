@@ -49,7 +49,7 @@ async fn start_fake_idle_engine(
 ) -> ServeEngine {
   let snapshot : @wire.Event = JobsSnapshot(request_id="__RID__", jobs~)
   let other : @wire.Event = BackgroundNotice(content="a job finished")
-  let process = @process.spawn(
+  let process = @managed_process.spawn(
     group,
     "/bin/sh",
     [

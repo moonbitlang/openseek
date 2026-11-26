@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/process_lifecycle" @managed_process,
   "tonyfettes/url",
   "openseek_desktop/backend/internal/session_import",
   "moonbitlang/x/crypto",

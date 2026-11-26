@@ -884,7 +884,7 @@ async test "a committed terminal does not settle a run the stream never ended" {
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 0"],
@@ -951,7 +951,7 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 7"],
@@ -1082,7 +1082,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
     // still live. Detach must retry it and propagate the failure again — so
     // the fixture's child exits on its own and its close barrier is the
     // process task, exactly as it would be in production.
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 0"],

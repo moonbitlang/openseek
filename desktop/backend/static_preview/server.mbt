@@ -124,7 +124,7 @@ async fn serve(
   @async.with_task_group(group => {
     // GUI launches on Windows need a valid stdin handle even for a CLI
     // that does not read from it.
-    let child = @process.spawn(
+    let child = @managed_process.spawn(
       group,
       provider.command,
       [
@@ -145,9 +145,9 @@ async fn serve(
       inherit_env=false,
       extra_env=provider.environment,
       no_console_window=true,
-      cancel_handler=if @async.platform is Windows {
-        // moonx delegates to a child moonrun on Windows rather than exec.
-        CancellationHandler(pid => {
+      on_cancel=pid => {
+        if @async.platform is Windows {
+          // moonx delegates to a child moonrun on Windows rather than exec.
           @processx.collect_output_no_stdin("taskkill", [
             "/PID",
             pid.to_string(),
@@ -155,9 +155,7 @@ async fn serve(
             "/F",
           ])
           |> ignore
-        })
-      } else {
-        @process.hard_cancel()
+        }
       },
     )
     let port = @async.with_timeout(120000, () => {

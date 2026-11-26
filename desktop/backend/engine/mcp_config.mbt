@@ -219,7 +219,7 @@ async test "MCP configs report broken files once" {
         #|printf '{"event":"mcp_status","status":{"configs":[%s],"servers":[]}}\n' "$configs"
         #|printf '{"event":"mcp_connect_failed","server":"%s","error":"marker"}\n' "$1"
         #|cat >/dev/null
-      let process = @process.spawn(
+      let process = @managed_process.spawn(
         group,
         "/bin/sh",
         [
@@ -420,7 +420,7 @@ async test "MCP status is the live engine's latest report" {
     #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","transport":"stdio","target":"a","state":"lost","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
     #|cat >/dev/null
   @async.with_task_group(group => {
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", script],

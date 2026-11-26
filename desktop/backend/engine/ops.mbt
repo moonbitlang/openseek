@@ -1307,7 +1307,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
 #cfg(not(platform="windows"))
 async test "a discarded command answers its sender" {
   @async.with_task_group(group => {
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "sleep 30"],

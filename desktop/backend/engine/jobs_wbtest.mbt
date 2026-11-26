@@ -302,7 +302,7 @@ async test "correlated job replies reach their waiter but never the stream sink"
       job_id="bg-1",
       outcome=Stopped,
     )
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/echo",
       [snapshot.to_json().stringify() + "\n" + stopped.to_json().stringify()],

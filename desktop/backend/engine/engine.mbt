@@ -38,7 +38,7 @@ priv struct ServeEngine {
   // synchronous handoff to that one writer rather than a lock a request holds
   // across its own write. Receipt order is enqueue order.
   commands : @async.Queue[EngineCommand]
-  process : @process.Process
+  process : @managed_process.Process
   sink : EventSink
   // Exact follower generation established for this writer. Cleanup never
   // performs a session-key lookup that could stop a successor generation.
@@ -1609,7 +1609,7 @@ async fn start_serve_engine(
     .write_object_end()
   }
   let engine_id = @uuid.mint()
-  let process = @process.spawn(
+  let process = @managed_process.spawn(
     group,
     program,
     args,
@@ -1622,7 +1622,8 @@ async fn start_serve_engine(
     // The GUI-subsystem host has no console, so a console-subsystem child
     // would otherwise open its own visible conhost window on Windows.
     no_console_window=true,
-    cancel_handler=CancellationHandler(pid => {
+    cancel_handler=graceful_cancel,
+    on_cancel=pid => {
       if @xlog.warn() is Some(w) {
         w
         ..write_object_begin()
@@ -1631,8 +1632,7 @@ async fn start_serve_engine(
         ..write_object_field("pid", pid)
         .write_object_end()
       }
-      graceful_cancel(pid)
-    }),
+    },
     no_wait=true,
   )
   let writer = process.stdin
@@ -2363,7 +2363,7 @@ fn emit_on_behalf(
 fn test_serve_engine(
   session : String,
   writer : @process.WriteToProcess,
-  process : @process.Process,
+  process : @managed_process.Process,
   sink : EventSink,
   phase~ : EnginePhase,
   session_root? : @pathx.Absolute,
@@ -2414,7 +2414,7 @@ async test "a failed pump closes its open run and retires the slot" {
   @async.with_task_group(group => {
     // Unreadable output, then a child that would otherwise outlive the pump:
     // the kill is what ends it, not a cooperative exit.
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf 'not json\\n'; sleep 30"],
@@ -2475,7 +2475,7 @@ async test "an engine that dies between turns still reports why" {
     // Malformed stdout from an engine holding no open turn: the pump cannot
     // go on reading it, so the consumer's catch stashes the cause and forces
     // retirement from `Idle`.
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf '%s\\n' 'not json'"],
@@ -2530,7 +2530,7 @@ async test "a failed turn reports its own reason exactly once" {
   @async.with_task_group(group => {
     // A turn that fails and exits: `turn_failed` is both the run's close and
     // the only place its reason is written down.
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"boom\"}'"],
@@ -2591,7 +2591,7 @@ async test "a failed command leaves settlement to the EOF retirement" {
   @async.with_task_group(group => {
     // A child that is already gone, so the first write hits a closed pipe
     // and the pump reaches EOF on its first read.
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "exit 0"],
@@ -2689,7 +2689,7 @@ async test "a run's close spares the commands queued to outlive its turn" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
-    let process = @process.spawn(
+    let process = @managed_process.spawn(
       group,
       "/bin/sh",
       ["-c", "sleep 30"],
