@@ -841,7 +841,7 @@ async test "network allows outbound use and localhost-only binds" {
       #|  let localhost = try {
       #|    let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
       #|    defer server.close()
-      #|    let client = @socket.Tcp::connect(server.addr)
+      #|    let client = @socket.Tcp::connect(server.local_addr())
       #|    client.close()
       #|    "allowed"
       #|  } catch {
