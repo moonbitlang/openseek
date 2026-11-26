@@ -96,6 +96,12 @@ other colons. Paths with spaces are single args without shell quoting.
   extension points for a new contributor.
 - `simplify.mbtx` sweeps the repository's MoonBit packages for safe, obvious
   simplifications and opens one pull request per changed package (see below).
+- `dream.mbtx` consolidates high-signal lessons (user corrections, error-to-fix
+  recoveries, and repeated workflows) from recorded OpenSeek sessions into the
+  bounded `.openseek/memory/MEMORY.md` pointer index, `.openseek/memory/topics/`,
+  and reusable `.openseek/memory/skills/<slug>/SKILL.md` playbooks (discovered
+  via pointers in `MEMORY.md` without colliding with user-installed skills),
+  tracking progress in `.openseek/dream-state.json`.
 
 Run these in a session that can start subagents; they start them through the
 host with `@tools.call("subagent", ...)`:
@@ -114,6 +120,10 @@ host with `@tools.call("subagent", ...)`:
 
 ```json
 {"description":"Simplify the project","filename":"@builtin/simplify.mbtx","args":["--max-prs","2","--","pattern matching"]}
+```
+
+```json
+{"description":"Consolidate session memories and skills","filename":"@builtin/dream.mbtx"}
 ```
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no

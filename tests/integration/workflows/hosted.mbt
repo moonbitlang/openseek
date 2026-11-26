@@ -87,6 +87,8 @@ fn FakeHost::answer(
       }
       self.reports[job] = if self.name == "simplify" {
         self.simplify_child(job, arguments)
+      } else if self.name == "dream" {
+        dream_child(self.mode, arguments)
       } else {
         child_report(self.name, self.mode, job, arguments)
       }

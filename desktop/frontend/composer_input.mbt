@@ -535,6 +535,18 @@ const SimplifyPrompt : String =
   #|Focus:
 
 ///|
+/// What `/dream [focus]` sends. It ends on `Focus:`, which the text typed
+/// after the command completes.
+const DreamPrompt : String =
+  #|Consolidate recent OpenSeek sessions into durable project memory and reusable skills with the bundled dream workflow.
+  #|
+  #|1. Call the `mbtx` tool with `filename: "@builtin/dream.mbtx"` and `args: ["--", <focus>]`, where the focus is the Focus text below; when it is empty, pass no args.
+  #|2. Wait for the job with `job_wait` and read it with `job_output`.
+  #|3. Report what was added, updated, or pruned in `.openseek/memory/` (MEMORY.md, topics/, and skills/), or say plainly if everything was already up to date.
+  #|
+  #|Focus:
+
+///|
 fn Model::openseek_commands(
   self : Model,
   editing_queue~ : Bool,
@@ -563,6 +575,12 @@ fn Model::openseek_commands(
       detail: shell_text(self.locale, SimplifyProject),
       command: "simplify",
       prompt: Some(SimplifyPrompt),
+    },
+    {
+      label: "/dream",
+      detail: shell_text(self.locale, DreamConsolidate),
+      command: "dream",
+      prompt: Some(DreamPrompt),
     },
   ]
   if !editing_queue {
