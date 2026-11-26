@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { selectAccountMenuItem } from './support/account_menu.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const details = page => page.getByRole('dialog', { name: 'Skill details', exact: true });
@@ -69,7 +70,7 @@ class SkillsHarness extends DesktopBrowserHarness {
   // Skills only once the page has sent a request over a new socket.
   async openSkills(previousRequests = 0) {
     await expect.poll(() => this.requests.length).toBeGreaterThan(previousRequests);
-    await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
+    await selectAccountMenuItem(this.page, 'Skills');
   }
 
   async openDetails(section = 'Discover') {

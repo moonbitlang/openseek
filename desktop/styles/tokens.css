@@ -157,6 +157,7 @@
   /* Shape and elevation */
   --radius-inline: 4px;
   --radius-control: 6px;
+  --radius-control-lg: 9px;
   --radius-surface: 9px;
   --radius-composer: 1rem;
   --radius-modal: 14px;

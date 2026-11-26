@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { selectAccountMenuItem } from './support/account_menu.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // Exercise the browser packager's normal HTML, CSS and frontend bundle.
@@ -123,7 +124,7 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
   await assertFits(page);
   // The sidebar's dialog shows the list the page already read.
   await page.locator('.sidebar-toggle').click();
-  await page.getByRole('button', { name: 'Download apps' }).click();
+  await selectAccountMenuItem(page, 'Download apps');
   const dialog = page.getByRole('dialog', { name: 'Download apps' });
   await expect(dialog.getByText('Download v0.3.1', { exact: true })).toHaveCount(1);
   await expect(dialog.getByRole('link', { name: 'macOS · Apple Silicon 139.5 MB', exact: true }))

@@ -47,8 +47,6 @@ pub(all) struct Input {
   work_sections : Array[@section.Input]
   update_label : String?
   update_enabled : Bool
-  schedules_active : Bool
-  skills_active : Bool
   settings_active : Bool
   // Whether the page's relay publishes the apps the footer offers to
   // download, signed in or not.
@@ -220,6 +218,133 @@ fn scroll_pane_attrs() -> @html.Attrs {
 }
 
 ///|
+#derive(Debug, Eq)
+priv struct AccountMenu {
+  locale : @i18n.Locale
+  login : String?
+  account_action : AccountAction
+  update_label : String?
+  update_enabled : Bool
+  skills_available : Bool
+  has_host : Bool
+  downloads : Bool
+}
+
+///|
+fn account_menu_item(
+  scope : @rui.DropdownMenuScope,
+  label : String,
+  icon : () -> @html.Html,
+  command : @cmd.Cmd,
+  disabled~ : Bool = false,
+) -> @html.Html {
+  @rui.dropdown_menu_item(scope, on_select=command, disabled~, [
+    @icons.icon(icon),
+    @html.span(label),
+  ])
+}
+
+///|
+fn Actions::account_menu(
+  self : Actions,
+  scope : @rui.DropdownMenuScope,
+  menu : AccountMenu,
+) -> @html.Html {
+  let account_title = @settings.text(menu.locale, Account)
+  let settings_title = @messages.text(menu.locale, Settings)
+  let item = (label, icon, command) => {
+    account_menu_item(scope, label, icon, command)
+  }
+  let entries = []
+  if menu.login is Some(login) {
+    entries.push(
+      @rui.dropdown_menu_label(class="sidebar-label", title=login, login),
+    )
+  }
+  entries.push(
+    item(settings_title, @icons.icon_settings_gear, self.open_settings),
+  )
+  if menu.skills_available {
+    entries.push(
+      item(
+        @messages.text(menu.locale, Skills),
+        @icons.icon_extensions,
+        self.open_skills,
+      ),
+    )
+  }
+  if menu.has_host {
+    entries.push(
+      item(
+        @messages.text(menu.locale, Scheduled),
+        @icons.icon_clockface,
+        self.open_schedules,
+      ),
+    )
+  }
+  if menu.downloads {
+    entries.push(
+      item(
+        @messages.text(menu.locale, DownloadApps),
+        @icons.icon_arrow_down,
+        self.open_downloads,
+      ),
+    )
+  }
+  if menu.update_label is Some(label) {
+    entries.push(
+      account_menu_item(
+        scope,
+        label,
+        @icons.icon_arrow_up,
+        self.update,
+        disabled=!menu.update_enabled,
+      ),
+    )
+  }
+  entries.push(@rui.dropdown_menu_separator())
+  let (label, icon, command, disabled) = match menu.account_action {
+    SignIn(disabled~) =>
+      (
+        @settings.text(menu.locale, SignIn),
+        @icons.icon_account,
+        self.sign_in,
+        disabled,
+      )
+    CancelSignIn(disabled~) =>
+      (
+        @settings.text(menu.locale, CancelSignIn),
+        @icons.icon_close,
+        self.cancel_sign_in,
+        disabled,
+      )
+    OpenSettings =>
+      (account_title, @icons.icon_account, self.open_account, false)
+  }
+  entries.push(account_menu_item(scope, label, icon, command, disabled~))
+  @html.fragment([
+    @rui.dropdown_menu_trigger(
+      scope,
+      variant=Ghost,
+      style=["font-size:var(--font-size-md)"],
+      [
+        @html.span(class="sidebar-label", menu.login.unwrap_or(account_title)),
+        @icons.icon(@icons.icon_chevron_down),
+      ],
+    ),
+    @rui.dropdown_menu_content(
+      scope,
+      side=Top,
+      side_offset=6,
+      aria_label=account_title,
+      class="sidebar-account-menu",
+      style=["font-size:var(--font-size-md)"],
+      entries,
+    ),
+  ])
+}
+
+///|
 /// Both lists stay mounted: selecting a mode only hides the other list,
 /// preserving its keyed Project and Conversation component state.
 pub fn component(
@@ -235,7 +360,7 @@ pub fn component(
     @html.Attrs::build()
   }
   let avatar = input
-    .map(input => input.account.map(account => account.avatar).unwrap_or(""))
+    .map(input => input.account.map_or("", account => account.avatar))
     .switch_by(
       src => {
         @rui.avatar_with_fallback(
@@ -243,14 +368,53 @@ pub fn component(
           src~,
           alt="",
           class="console-avatar",
-          style=["--rui-avatar-size:var(--icon-size)"],
+          // The image has its own circular crop; the fallback glyph doesn't need one.
+          style=["--rui-avatar-size:var(--icon-size);overflow:visible"],
           fallback_style=["background:transparent;color:inherit"],
           @icons.icon(@icons.icon_account),
         )
       },
       by=src => src,
     )
-  input.map4(chat_list, work_list, avatar, (input, chat_list, work_list, avatar) => {
+  // A download can update a menu label while the user is choosing an item.
+  // Keep the popover open when the RUI scope is rebuilt for that new input.
+  let menu_open = Ref(false)
+  let menu = input
+    .map(input => AccountMenu::{
+      locale: input.locale,
+      login: input.account.map(account => account.login),
+      account_action: input.account_action,
+      update_label: input.update_label,
+      update_enabled: input.update_enabled,
+      skills_available: input.skills_available,
+      has_host: input.has_host,
+      downloads: input.downloads,
+    })
+    .switch_by(
+      menu => {
+        @rui.dropdown_menu(
+          id="sidebar-account-menu",
+          default_open=menu_open.val,
+          on_open_change=@cmd.Emit(open => {
+            menu_open.val = open
+            @cmd.none
+          }),
+          scope => actions.account_menu(scope, menu),
+        )
+      },
+      by=menu => Repr::Repr(menu).to_string(),
+    )
+  let menu = menu.map2(avatar, (menu, avatar) => {
+    @html.div(class="sidebar-account-control", [
+      menu,
+      @html.span(
+        class="sidebar-account-avatar",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        avatar,
+      ),
+    ])
+  })
+  input.map4(chat_list, work_list, menu, (input, chat_list, work_list, menu) => {
     let rows : Map[String, @html.Html] = Map([])
     for index, notice in input.notices {
       rows["notice:\{index}"] = @html.div(
@@ -258,125 +422,7 @@ pub fn component(
         [@html.span(class="sidebar-label sidebar-notice", title=notice, notice)],
       )
     }
-    let footer : Array[@html.Html] = [
-      @html.button(
-        class="sidebar-button console-account",
-        disabled=match input.account_action {
-          SignIn(disabled~) | CancelSignIn(disabled~) => disabled
-          OpenSettings => false
-        },
-        on_click=match input.account_action {
-          SignIn(..) => actions.sign_in
-          CancelSignIn(..) => actions.cancel_sign_in
-          OpenSettings => actions.open_account
-        },
-        [
-          @html.span(
-            class="sidebar-icon",
-            if input.account_action is CancelSignIn(..) {
-              @icons.icon(@icons.icon_close)
-            } else {
-              avatar
-            },
-          ),
-          @html.span(
-            class="sidebar-label console-login",
-            if input.account_action is CancelSignIn(..) {
-              @settings.text(input.locale, CancelSignIn)
-            } else if input.account is Some(account) {
-              account.login
-            } else {
-              @settings.text(input.locale, SignIn)
-            },
-          ),
-        ],
-      ),
-    ]
-    if input.update_label is Some(label) {
-      footer.push(
-        @html.button(
-          class="sidebar-button primary",
-          disabled=!input.update_enabled,
-          on_click=actions.update,
-          [
-            @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_up)),
-            @html.span(class="sidebar-label", label),
-          ],
-        ),
-      )
-    }
-    if input.skills_available {
-      footer.push(
-        @html.button(
-          class=if input.skills_active {
-            "sidebar-button active"
-          } else {
-            "sidebar-button"
-          },
-          on_click=actions.open_skills,
-          [
-            @html.span(
-              class="sidebar-icon",
-              @icons.icon(@icons.icon_extensions),
-            ),
-            @html.span(
-              class="sidebar-label",
-              @messages.text(input.locale, Skills),
-            ),
-          ],
-        ),
-      )
-    }
-    if input.has_host {
-      footer.push(
-        @html.button(
-          class=if input.schedules_active {
-            "sidebar-button active"
-          } else {
-            "sidebar-button"
-          },
-          on_click=actions.open_schedules,
-          [
-            @html.span(class="sidebar-icon", @icons.icon(@icons.icon_clockface)),
-            @html.span(
-              class="sidebar-label",
-              @messages.text(input.locale, Scheduled),
-            ),
-          ],
-        ),
-      )
-    }
-    if input.downloads {
-      footer.push(
-        @html.button(class="sidebar-button", on_click=actions.open_downloads, [
-          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_arrow_down)),
-          @html.span(
-            class="sidebar-label",
-            @messages.text(input.locale, DownloadApps),
-          ),
-        ]),
-      )
-    }
-    footer.push(
-      @html.button(
-        class=if input.settings_active {
-          "sidebar-button active"
-        } else {
-          "sidebar-button"
-        },
-        on_click=actions.open_settings,
-        [
-          @html.span(
-            class="sidebar-icon",
-            @icons.icon(@icons.icon_settings_gear),
-          ),
-          @html.span(
-            class="sidebar-label",
-            @messages.text(input.locale, Settings),
-          ),
-        ],
-      ),
-    )
+    let settings_title = @messages.text(input.locale, Settings)
     @html.aside(attrs=@action_menu.content_attrs("sidebar"), [
       // The leading edge stays clear for the shell-owned fixed toggle and
       // native controls; the mode switch sits at the trailing edge.
@@ -415,7 +461,22 @@ pub fn component(
         chat_list.content,
         work_list.content,
       ]),
-      @html.div(class="sidebar-footer", footer),
+      @html.div(class="sidebar-footer", [
+        menu,
+        @rui.button(
+          variant=Ghost,
+          size=Icon,
+          class=if input.settings_active {
+            "sidebar-settings active"
+          } else {
+            "sidebar-settings"
+          },
+          title=settings_title,
+          attrs=@html.Attrs::build().aria_label(settings_title),
+          on_click=actions.open_settings,
+          @icons.icon(@icons.icon_settings_gear),
+        ),
+      ]),
       // Grab strip for drag-to-resize; wired imperatively by the shell's
       // sidebar_resize. Absolutely positioned, so it is not a grid item and
       // never disturbs the aside's rows.

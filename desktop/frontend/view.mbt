@@ -601,9 +601,8 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     }
     []
   }
-  // The footer's update button tracks the automatic download so its progress
-  // stays visible from any screen, and asks for the restart once the release
-  // is staged.
+  // The Account menu tracks the automatic download and offers a restart
+  // once the release is staged.
   let update_label : String? = match self.update_ux {
     UpdateAvailable(installable=true, ..) =>
       Some(shell_text(self.locale, UpdateLabel))
@@ -626,8 +625,6 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     work_sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
-    schedules_active: self.management_dialog is Some(Schedules),
-    skills_active: self.management_dialog is Some(Skills),
     settings_active: self.management_dialog is Some(Settings(_)),
     downloads: self.show_app_downloads(),
     account: self.sidebar_account(),

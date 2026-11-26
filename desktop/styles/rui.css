@@ -50,7 +50,6 @@
    their painted edges here so native, custom and RUI controls agree. */
 [data-slot="select-trigger"],
 [data-slot="select-item"],
-[data-slot="dropdown-menu-trigger"],
 [data-slot="dropdown-menu-item"],
 [data-slot="context-menu-item"] {
   border-radius: var(--radius-control) !important;
