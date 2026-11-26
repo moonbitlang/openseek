@@ -543,6 +543,7 @@
   padding: 0 var(--space-4);
   border-radius: var(--radius-control);
   color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 .workspace-content {
   display: flex;
@@ -562,8 +563,6 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: var(--font-size-xs);
-  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -574,8 +573,12 @@
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.workspace-row.active .workspace-disclosure > .sidebar-label {
+  font-weight: 600;
 }
 .workspace-chevron {
   --icon-size: var(--icon-sm);
