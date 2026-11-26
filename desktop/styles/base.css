@@ -426,15 +426,24 @@ html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
   --resize-handle-height: 6px;
   --conversation-width: 820px;
   --sidebar-mode-padding: calc(var(--titlebar-control-gap) / 2);
-  /* Native controls, navigation and the mode switch must all fit. The
-     trailing 13px includes the sidebar inset and its border. */
+  --sidebar-mode-height: calc(
+    var(--titlebar-control-size) + 2 * var(--sidebar-mode-padding)
+  );
+  /* Match the space below the vertically centered switch. */
+  --sidebar-header-inset: max(
+    0px,
+    (var(--topbar-height) - var(--sidebar-mode-height)) / 2
+  );
   --sidebar-mode-width: calc(
     2 * var(--titlebar-control-size) + var(--titlebar-control-gap) +
       2 * var(--sidebar-mode-padding)
   );
   --sidebar-min-width: max(
     calc(1rem * 220 / 15),
-    calc(var(--sidebar-toggle-reserved-width) + var(--sidebar-mode-width) + 13px)
+    calc(
+      var(--sidebar-toggle-reserved-width) + var(--sidebar-mode-width) +
+        var(--sidebar-header-inset) + 1px /* sidebar border */
+    )
   );
   --sidebar-column-width: calc(
     clamp(

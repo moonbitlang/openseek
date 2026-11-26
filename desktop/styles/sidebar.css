@@ -3,9 +3,7 @@
    The child selector keeps other `aside`s, such as the conversation
    overview, from taking the sidebar's look and its `--sidebar-edge` anchor. */
 .app > aside {
-  /* How far in from the aside's edges the sessions list and the footer sit.
-     The header keeps its own, wider inset for the icon buttons. */
-  --sidebar-inset: 8px;
+  --sidebar-content-inset: 8px;
   anchor-name: --sidebar-edge;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -39,14 +37,11 @@
    Its leading edge stays clear for them and the native controls; the
    Chat/Work switch takes the trailing edge. */
 .sidebar-header {
-  --sidebar-mode-size: calc(
-    var(--titlebar-control-size) + 2 * var(--sidebar-mode-padding)
-  );
   display: flex;
   align-items: center;
   justify-content: flex-end;
   height: var(--topbar-height);
-  padding-inline: var(--sidebar-toggle-reserved-width) var(--sidebar-inset);
+  padding-inline: var(--sidebar-toggle-reserved-width) var(--sidebar-header-inset);
 }
 
 .sidebar-mode {
@@ -55,7 +50,7 @@
   display: flex;
   gap: var(--titlebar-control-gap);
   box-sizing: border-box;
-  height: var(--sidebar-mode-size);
+  height: var(--sidebar-mode-height);
   padding: var(--sidebar-mode-padding);
   border-radius: var(--radius-control);
   background: var(--color-bg-subtle);
@@ -97,7 +92,7 @@
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-3);
   padding-bottom: 0.8em;
-  padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
+  padding-right: max(0px, var(--sidebar-content-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
 .sidebar-main[data-auto-hide-scrollbar]:not([data-scrolling]) {
@@ -113,10 +108,8 @@
   --sidebar-row-gap: calc(1em / 14);
   gap: var(--sidebar-row-gap);
   min-width: 0;
-  /* The outer scroll lane owns the right inset — its gutter and padding add
-     up to `--sidebar-inset` between them. Keep only the matching left inset
-     here so nested sections do not double the empty space on the right. */
-  padding: 0 0 0 var(--sidebar-inset);
+  /* The scroll container already accounts for the right inset. */
+  padding-left: var(--sidebar-content-inset);
 }
 
 .sidebar-heading {
@@ -1061,7 +1054,7 @@
   gap: var(--space-4);
   min-width: 0;
   border-top: 1px solid var(--color-border);
-  padding: var(--sidebar-inset);
+  padding: var(--sidebar-content-inset);
 }
 
 .sidebar-footer :is([data-slot="dropdown-menu-trigger"], .sidebar-settings) {
@@ -1157,7 +1150,7 @@
   flex-direction: column;
   gap: calc(1em / 14);
   min-width: 0;
-  padding: var(--space-3) var(--sidebar-inset);
+  padding: var(--space-3) var(--sidebar-content-inset);
 }
 
 /* Hidden lists stay mounted without taking space or exposing focus targets. */
