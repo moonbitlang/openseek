@@ -209,13 +209,15 @@ async fn Dispatcher::call_tool(
   let (content, is_error) = match outcome {
     Ok(content) => (content, false)
     Err(error) => {
-      @xlog.warn(category="mcp") <?
-        {
-          "event": "mcp_tool_failed",
-          "tool": name,
-          "session": session,
-          "error": error,
-        }
+      if @xlog.warn(category="mcp") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "mcp_tool_failed")
+        ..write_object_field("tool", name)
+        ..write_object_field("session", session)
+        ..write_object_field("error", error)
+        .write_object_end()
+      }
       ([Text(error)], true)
     }
   }

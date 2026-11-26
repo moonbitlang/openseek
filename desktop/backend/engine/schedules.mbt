@@ -318,8 +318,13 @@ pub async fn Schedules::run(
     for ;; {
       let launches = self.take_due() catch {
         error => {
-          @xlog.warn() <?
-            { "event": "schedules_unavailable", "message": "\{error}" }
+          if @xlog.warn() is Some(w) {
+            w
+            ..write_object_begin()
+            ..write_object_field("event", "schedules_unavailable")
+            ..write_object_field("message", "\{error}")
+            .write_object_end()
+          }
           @async.sleep(5000)
           continue
         }
@@ -408,12 +413,16 @@ async fn Schedules::take_due(
       // still launch on this tick.
       let workspace = schedule_run_workspace(entry) catch {
         error => {
-          @xlog.warn() <?
-            {
-              "event": "schedule_automatic_folder_unavailable",
-              "schedule": entry.id,
-              "message": "\{error}",
-            }
+          if @xlog.warn() is Some(w) {
+            w
+            ..write_object_begin()
+            ..write_object_field(
+              "event", "schedule_automatic_folder_unavailable",
+            )
+            ..write_object_field("schedule", entry.id)
+            ..write_object_field("message", "\{error}")
+            .write_object_end()
+          }
           entries[index] = {
             ..entries[index],
             skipped: Some(AutomaticFolderUnavailable),

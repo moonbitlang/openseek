@@ -131,21 +131,25 @@ async fn EngineManager::reap_idle_engines(
       engine.last_activity_ms == seen else {
       continue
     }
-    @xlog.info() <?
-      {
-        "event": "desktop_engine_idle_stop",
-        "session": engine.session_key,
-        "pid": engine.process.pid,
-        "idle_ms": Json::number((now - seen).to_double()),
-      }
+    if @xlog.info() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("event", "desktop_engine_idle_stop")
+      ..write_object_field("session", engine.session_key)
+      ..write_object_field("pid", engine.process.pid)
+      ..write_object_field("idle_ms", Json::number((now - seen).to_double()))
+      .write_object_end()
+    }
     engine.close_and_wait() catch {
       error => {
-        @xlog.warn() <?
-          {
-            "event": "desktop_engine_idle_stop_failed",
-            "session": engine.session_key,
-            "error": "\{error}",
-          }
+        if @xlog.warn() is Some(w) {
+          w
+          ..write_object_begin()
+          ..write_object_field("event", "desktop_engine_idle_stop_failed")
+          ..write_object_field("session", engine.session_key)
+          ..write_object_field("error", "\{error}")
+          .write_object_end()
+        }
         continue
       }
     }
@@ -156,12 +160,14 @@ async fn EngineManager::reap_idle_engines(
     if engine.follower is Some(follower) {
       stop_follower_instance(self, follower, writer_exited=true) catch {
         error =>
-          @xlog.debug() <?
-            {
-              "event": "desktop_follower_final_scan_failed",
-              "session": engine.session_key,
-              "error": "\{error}",
-            }
+          if @xlog.debug() is Some(w) {
+            w
+            ..write_object_begin()
+            ..write_object_field("event", "desktop_follower_final_scan_failed")
+            ..write_object_field("session", engine.session_key)
+            ..write_object_field("error", "\{error}")
+            .write_object_end()
+          }
       }
     }
     reaped.push(engine.session_key)

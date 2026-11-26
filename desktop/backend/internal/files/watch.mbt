@@ -234,12 +234,14 @@ async fn FsWatchRequest::activate(
       let active = target.activate(emit) catch {
         error => {
           target.alive.val = false
-          @xlog.warn(category="filesystem") <?
-            {
-              "event": "watch_activation_failed",
-              "root": target.root.to_string(),
-              "error": "\{error}",
-            }
+          if @xlog.warn(category="filesystem") is Some(w) {
+            w
+            ..write_object_begin()
+            ..write_object_field("event", "watch_activation_failed")
+            ..write_object_field("root", target.root.to_string())
+            ..write_object_field("error", "\{error}")
+            .write_object_end()
+          }
           reply.put(Some(error))
           return None
         }
@@ -342,12 +344,14 @@ pub async fn Watcher::run(
           error => {
             target.alive.val = false
             let message = "File watching stopped: \{error}"
-            @xlog.warn(category="filesystem") <?
-              {
-                "event": "watch_failed",
-                "root": target.root.to_string(),
-                "error": "\{error}",
-              }
+            if @xlog.warn(category="filesystem") is Some(w) {
+              w
+              ..write_object_begin()
+              ..write_object_field("event", "watch_failed")
+              ..write_object_field("root", target.root.to_string())
+              ..write_object_field("error", "\{error}")
+              .write_object_end()
+            }
             emit(
               FsWatchFailed({
                 root: target.root.resource_path(),

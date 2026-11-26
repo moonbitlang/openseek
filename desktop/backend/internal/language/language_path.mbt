@@ -43,25 +43,29 @@ async fn LanguageRoot::authorize(
     None => @work_dir.resolve_in_workspace(session, "")
   }
   guard authorized is Some(authorized) else {
-    @xlog.warn(category="language") <?
-      {
-        "event": "language_root_ownership_missing",
-        "session": session,
-        "requested_root": root,
-      }
+    if @xlog.warn(category="language") is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("event", "language_root_ownership_missing")
+      ..write_object_field("session", session)
+      ..write_object_field("requested_root", root)
+      .write_object_end()
+    }
     raise RootNotOwned
   }
   let physical = real_path(lexical, "requested language root")
   let authorized = real_path(authorized, "authorized language root")
   guard physical.relative_to(root=authorized) is Some(relative) &&
     relative.is_root() else {
-    @xlog.warn(category="language") <?
-      {
-        "event": "language_root_ownership_mismatch",
-        "session": session,
-        "requested_root": physical.to_string(),
-        "authorized_root": authorized.to_string(),
-      }
+    if @xlog.warn(category="language") is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("event", "language_root_ownership_mismatch")
+      ..write_object_field("session", session)
+      ..write_object_field("requested_root", physical.to_string())
+      ..write_object_field("authorized_root", authorized.to_string())
+      .write_object_end()
+    }
     raise RootMismatch
   }
   { lexical, physical, }

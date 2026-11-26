@@ -615,11 +615,13 @@ fn external_link_policy() -> @proton.WebContentsPolicy {
 async fn open_page_link(url : String) -> Unit noraise {
   ignore(open_external({ url, })) catch {
     error =>
-      @xlog.error() <?
-        {
-          "event": "external_link_open_failed",
-          "url": url,
-          "error": @debug.render(Repr(error)),
-        }
+      if @xlog.error() is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "external_link_open_failed")
+        ..write_object_field("url", url)
+        ..write_object_field("error", @debug.render(Repr(error)))
+        .write_object_end()
+      }
   }
 }

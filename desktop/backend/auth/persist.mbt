@@ -122,10 +122,14 @@ async fn delete_session_file(runtime_dir : @pathx.Path) -> Unit {
   }
   @fsx.remove_if_exists(target) catch {
     error =>
-      @xlog.warn(category="auth") <?
-        {
-          "message": "could not remove the cleared sign-in marker",
-          "error": "\{error}",
-        }
+      if @xlog.warn(category="auth") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field(
+          "message", "could not remove the cleared sign-in marker",
+        )
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
   }
 }

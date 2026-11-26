@@ -25,29 +25,35 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @pathx.Absolute? {
   ]
   for candidate in candidates {
     let version = bundled_moonbit_seed_version(candidate)
-    @xlog.debug() <?
-      {
-        "event": "desktop_moonbit_seed_candidate",
-        "engine_command": engine_command,
-        "command_dir": command_dir.to_string(),
-        "candidate": candidate.to_string(),
-        "seed_version": version,
-      }
+    if @xlog.debug() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("event", "desktop_moonbit_seed_candidate")
+      ..write_object_field("engine_command", engine_command)
+      ..write_object_field("command_dir", command_dir.to_string())
+      ..write_object_field("candidate", candidate.to_string())
+      ..write_object_field("seed_version", version)
+      .write_object_end()
+    }
     if version is Some(_) {
-      @xlog.debug() <?
-        {
-          "event": "desktop_moonbit_seed_selected",
-          "candidate": candidate.to_string(),
-        }
+      if @xlog.debug() is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_moonbit_seed_selected")
+        ..write_object_field("candidate", candidate.to_string())
+        .write_object_end()
+      }
       return Some(candidate)
     }
   }
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_seed_missing",
-      "engine_command": engine_command,
-      "command_dir": command_dir.to_string(),
-    }
+  if @xlog.debug() is Some(w) {
+    w
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_seed_missing")
+    ..write_object_field("engine_command", engine_command)
+    ..write_object_field("command_dir", command_dir.to_string())
+    .write_object_end()
+  }
   None
 }
 
@@ -58,35 +64,45 @@ async fn prepared_moonbit_payload_dir(
   payload_name? : String,
 ) -> @pathx.Path? {
   guard runtime_dir is Some(runtime_dir) else {
-    @xlog.debug() <?
-      {
-        "event": "desktop_moonbit_payload_dir_missing_runtime",
-        "seed_dir": seed_dir.to_string(),
-      }
+    if @xlog.debug() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field(
+        "event", "desktop_moonbit_payload_dir_missing_runtime",
+      )
+      ..write_object_field("seed_dir", seed_dir.to_string())
+      .write_object_end()
+    }
     return None
   }
   let seed_name = payload_name.unwrap_or_else(() => {
     seed_dir.to_path().basename().to_owned()
   })
   if seed_name.is_empty() {
-    @xlog.debug() <?
-      {
-        "event": "desktop_moonbit_payload_dir_missing_seed_name",
-        "seed_dir": seed_dir.to_string(),
-        "runtime_dir": runtime_dir.to_string(),
-      }
+    if @xlog.debug() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field(
+        "event", "desktop_moonbit_payload_dir_missing_seed_name",
+      )
+      ..write_object_field("seed_dir", seed_dir.to_string())
+      ..write_object_field("runtime_dir", runtime_dir.to_string())
+      .write_object_end()
+    }
     return None
   }
   let root = runtime_dir.join("toolchains/moonbit")
   @fsx.ensure_dir(root)
   let moon_home = root.join(seed_name)
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_payload_dir",
-      "seed_dir": seed_dir.to_string(),
-      "runtime_dir": runtime_dir.to_string(),
-      "moon_home": moon_home.to_string(),
-    }
+  if @xlog.debug() is Some(w) {
+    w
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_payload_dir")
+    ..write_object_field("seed_dir", seed_dir.to_string())
+    ..write_object_field("runtime_dir", runtime_dir.to_string())
+    ..write_object_field("moon_home", moon_home.to_string())
+    .write_object_end()
+  }
   Some(moon_home)
 }
 

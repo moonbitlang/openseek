@@ -508,8 +508,14 @@ async fn file_signature(absolute : String) -> @protocol.FileSignature {
   } catch {
     @os_error.OsError(NotFound | NotDirectory, ..) => return Missing
     error => {
-      @xlog.warn(category="filesystem") <?
-        { "event": "stat_failed", "path": absolute, "error": "\{error}" }
+      if @xlog.warn(category="filesystem") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "stat_failed")
+        ..write_object_field("path", absolute)
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       return Failed("\{error}")
     }
   }

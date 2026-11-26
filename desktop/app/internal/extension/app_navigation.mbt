@@ -87,8 +87,13 @@ pub fn ExternalLinkOpener::app_page_policy(
           Deny
         }
         Block => {
-          @xlog.warn() <?
-            { "event": "app_navigation_blocked", "url": request.url }
+          if @xlog.warn() is Some(w) {
+            w
+            ..write_object_begin()
+            ..write_object_field("event", "app_navigation_blocked")
+            ..write_object_field("url", request.url)
+            .write_object_end()
+          }
           Deny
         }
       }
@@ -104,7 +109,13 @@ fn ExternalLinkOpener::request(self : ExternalLinkOpener, url : String) -> Unit 
     _ => false
   }
   if !queued {
-    @xlog.warn() <? { "event": "external_link_dropped", "url": url }
+    if @xlog.warn() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("event", "external_link_dropped")
+      ..write_object_field("url", url)
+      .write_object_end()
+    }
   }
 }
 

@@ -120,12 +120,14 @@ async fn fork_session_in(
   async fn announce() -> Unit {
     store.set_title(id, title) catch {
       error =>
-        @xlog.warn() <?
-          {
-            "event": "desktop_fork_title_save_failed",
-            "session": session,
-            "error": error.to_string(),
-          }
+        if @xlog.warn() is Some(w) {
+          w
+          ..write_object_begin()
+          ..write_object_field("event", "desktop_fork_title_save_failed")
+          ..write_object_field("session", session)
+          ..write_object_field("error", error.to_string())
+          .write_object_end()
+        }
     }
     on_created(session)
   }
@@ -186,12 +188,16 @@ async fn fork_session_in(
         raise EngineError("engine reported a fork it did not write")
       }
       if failure is Some(error) {
-        @xlog.warn() <?
-          {
-            "event": "desktop_fork_engine_failed_after_commit",
-            "session": session,
-            "error": error.to_string(),
-          }
+        if @xlog.warn() is Some(w) {
+          w
+          ..write_object_begin()
+          ..write_object_field(
+            "event", "desktop_fork_engine_failed_after_commit",
+          )
+          ..write_object_field("session", session)
+          ..write_object_field("error", error.to_string())
+          .write_object_end()
+        }
       }
     }
 

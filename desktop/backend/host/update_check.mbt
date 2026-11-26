@@ -75,17 +75,24 @@ async fn SelfUpdate::check(self : SelfUpdate) -> @protocol.CheckUpdateReply {
   let info = @update.check_for_update(current=self.app_version) catch {
     @update.Unreachable(reason~) => return Unreachable(reason~)
     @update.MalformedManifest(reason~) => {
-      @xlog.warn(category="update") <?
-        { "event": "manifest_malformed", "error": reason }
+      if @xlog.warn(category="update") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "manifest_malformed")
+        ..write_object_field("error", reason)
+        .write_object_end()
+      }
       return Malformed(reason~)
     }
     @update.MalformedArtifact(version~, reason~) => {
-      @xlog.warn(category="update") <?
-        {
-          "event": "manifest_artifact_malformed",
-          "version": version,
-          "error": reason,
-        }
+      if @xlog.warn(category="update") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "manifest_artifact_malformed")
+        ..write_object_field("version", version)
+        ..write_object_field("error", reason)
+        .write_object_end()
+      }
       return Broken(version~, reason~)
     }
     error => raise error
@@ -152,12 +159,14 @@ async fn SelfUpdate::download_package(
     total_bytes,
   ) => emit(UpdateDownloadProgress({ downloaded_bytes, total_bytes, }))) catch {
     error => {
-      @xlog.warn(category="update") <?
-        {
-          "event": "stage_failed",
-          "version": info.version,
-          "error": "\{error}",
-        }
+      if @xlog.warn(category="update") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "stage_failed")
+        ..write_object_field("version", info.version)
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       raise match error {
         @update.UpdateError(message) => HostError(message)
         _ => HostError("\{error}")
@@ -181,8 +190,13 @@ async fn SelfUpdate::run(
   defer self.downloads.close()
   self.cleanup() catch {
     error =>
-      @xlog.warn(category="update") <?
-        { "event": "cleanup_failed", "error": "\{error}" }
+      if @xlog.warn(category="update") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "cleanup_failed")
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
   }
   for ;; {
     self.downloads.get()

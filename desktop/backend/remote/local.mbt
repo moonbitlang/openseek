@@ -258,12 +258,14 @@ async fn serve_static(
       return
     }
     error => {
-      @xlog.error(category="transport") <?
-        {
-          "event": "console_asset_unreadable",
-          "path": relative,
-          "error": "\{error}",
-        }
+      if @xlog.error(category="transport") is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "console_asset_unreadable")
+        ..write_object_field("path", relative)
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       respond_status(conn, 500, "Internal Server Error")
       return
     }

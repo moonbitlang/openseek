@@ -218,13 +218,15 @@ async fn ActionsMonitor::watch_actions(
       ChecksOpen(head~, checks~) => (head, checks)
       ChecksUnavailable(error) => {
         if !unavailable {
-          @xlog.warn() <?
-            {
-              "event": "actions_monitor_unavailable",
-              "session": session,
-              "pr": url,
-              "error": error,
-            }
+          if @xlog.warn() is Some(w) {
+            w
+            ..write_object_begin()
+            ..write_object_field("event", "actions_monitor_unavailable")
+            ..write_object_field("session", session)
+            ..write_object_field("pr", url)
+            ..write_object_field("error", error)
+            .write_object_end()
+          }
         }
         unavailable = true
         green = None

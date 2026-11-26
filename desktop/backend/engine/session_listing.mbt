@@ -56,12 +56,16 @@ async fn session_group(
         // A damaged transcript must not hide the rest of the sidebar.
         let title = store.backfill_title(id) catch {
           @store.TitleBackfillError(title~, cause~) => {
-            @xlog.warn() <?
-              {
-                "event": "desktop_session_title_backfill_failed",
-                "session": id.value(),
-                "error": cause.to_string(),
-              }
+            if @xlog.warn() is Some(w) {
+              w
+              ..write_object_begin()
+              ..write_object_field(
+                "event", "desktop_session_title_backfill_failed",
+              )
+              ..write_object_field("session", id.value())
+              ..write_object_field("error", cause.to_string())
+              .write_object_end()
+            }
             Some(title)
           }
           _ => None

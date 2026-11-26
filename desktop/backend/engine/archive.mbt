@@ -23,12 +23,14 @@ async fn EngineManager::sweep_archived_deletions_in(
   // stores after it.
   let present = @fsx.is_dir(deleting.to_path()) catch {
     error => {
-      @xlog.warn() <?
-        {
-          "event": "desktop_archived_delete_sweep_failed",
-          "path": deleting.to_string(),
-          "error": "\{error}",
-        }
+      if @xlog.warn() is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_archived_delete_sweep_failed")
+        ..write_object_field("path", deleting.to_string())
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       return
     }
   }
@@ -41,24 +43,28 @@ async fn EngineManager::sweep_archived_deletions_in(
     sort=true,
   ) catch {
     error => {
-      @xlog.warn() <?
-        {
-          "event": "desktop_archived_delete_sweep_failed",
-          "path": deleting.to_string(),
-          "error": "\{error}",
-        }
+      if @xlog.warn() is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_archived_delete_sweep_failed")
+        ..write_object_field("path", deleting.to_string())
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       []
     }
   }
   for name in entries {
     @fs.remove(deleting.join(name).to_string(), recursive=true) catch {
       error =>
-        @xlog.warn() <?
-          {
-            "event": "desktop_archived_delete_sweep_failed",
-            "path": deleting.join(name).to_string(),
-            "error": "\{error}",
-          }
+        if @xlog.warn() is Some(w) {
+          w
+          ..write_object_begin()
+          ..write_object_field("event", "desktop_archived_delete_sweep_failed")
+          ..write_object_field("path", deleting.join(name).to_string())
+          ..write_object_field("error", "\{error}")
+          .write_object_end()
+        }
     }
   }
 }
