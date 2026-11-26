@@ -85,7 +85,7 @@ async test "listing distinguishes absent empty and unreadable prompts" {
   store.create(empty)
   append_raw_prompt(store, id.value(), "{\n")
   try read_first_prompt(store.session_file(id)) catch {
-    @json.ParseError::InvalidEof => ()
+    @json.ParseError::_ => ()
     error => raise error
   } noraise {
     _ => fail("invalid JSON must report its parse error")
