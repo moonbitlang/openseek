@@ -67,7 +67,10 @@ button {
 }
 
 input,
-textarea,
+textarea {
+  background-color: transparent;
+}
+
 .input-surface,
 .field-surface {
   background-color: var(--color-bg-canvas);
