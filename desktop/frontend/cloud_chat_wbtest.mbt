@@ -79,7 +79,7 @@ fn Model::with_cloud_baseline(self : Model, session : String) -> Model {
   conversations[session] = {
     ..conversations[session],
     last_seq: Some(0),
-    client_tools_ready: self.is_desktop,
+    client_tools_ready: true,
   }
   { ..self, cloud: { ..self.cloud, conversations, }, }
 }

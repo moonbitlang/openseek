@@ -5589,8 +5589,7 @@ fn update_msg(
       }
     }
     CloudQuestions(account~, msg) => {
-      guard model.has_cloud_client_tools() &&
-        model.account.map(a => a.user.user_id) == Some(account) else {
+      guard model.account.map(a => a.user.user_id) == Some(account) else {
         return (@cmd.none, model)
       }
       let (command, questions) = model.cloud_questions.update(
@@ -5598,8 +5597,8 @@ fn update_msg(
         Local,
         dispatch.map(msg => CloudQuestions(account~, msg)),
         submit=(answer, emit) => {
-          if model.mobile_questions is Some(mobile) {
-            return mobile.answer(account, answer, dispatch, emit)
+          if model.browser_questions is Some(browser) {
+            return browser.answer(account, answer, dispatch, emit)
           }
           @cmd.attempt(
             result => {

@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 function clientTools(app) {
   let generation = 0;
@@ -201,4 +201,25 @@ test('reconnect does not replay calls and answers to detached questions use Clou
   expect(delivery.command.submission_id).toBe('question-40-result');
   expect(app.mcpFrames.filter(f => f.frame.id === 40)).toHaveLength(0);
   expect(app.hostRequests.filter(r => r.method === 'cloud.mcp' && r.params.action === 'dispatch' && r.params.message.id === 40)).toHaveLength(1);
+});
+
+test('an ordinary desktop browser answers Cloud ask_user without a connected host', async ({ page }) => {
+  const app = new CloudHarness(page);
+  app.device.connectionAvailable = false;
+  await app.install();
+  await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
+  await connected(app);
+  request(app, sessionA, 1, 'tools/list');
+  await expect.poll(() => app.mcpFrames.find(({ frame }) => frame.id === 1)?.frame.result.tools.map(t => t.name)).toEqual(['ask_user']);
+
+  request(app, sessionA, 2, 'tools/call', { name: 'ask_user', arguments: { questions: [{ id: 'target', title: 'Which branch?' }] } });
+  const card = page.locator('.user-question-card');
+  await expect(card).toContainText('Which branch?');
+  await card.locator('textarea').fill('release');
+  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  const answer = () => app.mcpFrames.find(({ frame }) => frame.id === 2)?.frame.result.content[0].text;
+  await expect.poll(answer).toBeTruthy();
+  expect(JSON.parse(answer())).toMatchObject({ status: 'answered', answers: { target: 'release' } });
+  await expect(card).toHaveCount(0);
+  expect(app.device.socket).toBeNull();
 });

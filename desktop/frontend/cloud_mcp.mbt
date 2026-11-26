@@ -7,9 +7,7 @@ priv suberror CloudMcpConnection {
 /// Every real Cloud conversation opened on this device keeps its connection
 /// across selection changes. Account retirement unloads all sockets and timers.
 fn cloud_mcp_subscriptions(model : Model, emit : @cmd.Emit[Msg]) -> @sub.Sub {
-  guard model.has_cloud_client_tools() &&
-    !model.cloud.needs_sign_in &&
-    model.account is Some(account) else {
+  guard !model.cloud.needs_sign_in && model.account is Some(account) else {
     return @sub.batch([])
   }
   @sub.batch(
@@ -24,7 +22,7 @@ fn cloud_mcp_subscriptions(model : Model, emit : @cmd.Emit[Msg]) -> @sub.Sub {
           model.cloud.epoch,
           session,
           emit,
-          model.mobile_questions,
+          model.browser_questions,
           model.app_version,
         )
       }
@@ -38,7 +36,7 @@ fn cloud_mcp_connection(
   epoch : Int32,
   session : String,
   emit : @cmd.Emit[Msg],
-  mobile : MobileCloudQuestions?,
+  browser : BrowserCloudQuestions?,
   version : String,
 ) -> @sub.Sub {
   @sub.custom_sub(
@@ -50,7 +48,7 @@ fn cloud_mcp_connection(
       let current : Ref[@js.Value?] = Ref(None)
       let timer : Ref[@common.Disposable?] = Ref(None)
       let account_id = account.user.user_id
-      let dispatcher = mobile.map(host => {
+      let dispatcher = browser.map(host => {
         @mcp.Dispatcher(
           [
             host.questions.tool(_ => (), () => {
@@ -115,7 +113,7 @@ fn cloud_mcp_connection(
               timer.val = None
             }
             ready_changed(true)
-            if mobile is Some(_) {
+            if browser is Some(_) {
               return
             }
             scheduler.add(
@@ -195,7 +193,7 @@ fn cloud_mcp_connection(
           // A later answer must use Cloud input rather than an MCP reply to
           // this dead socket. Finish detaching before accepting new calls.
           @js.Promise::from_async(() => {
-            if mobile is Some(host) {
+            if browser is Some(host) {
               host.questions.detach(session)
             } else {
               let _ : Json = @interop.bridge_request(
@@ -230,7 +228,7 @@ fn cloud_mcp_connection(
       Some({
         unload: _ => {
           active.val = false
-          if mobile is Some(host) {
+          if browser is Some(host) {
             host.questions.detach(session)
           }
           if timer.val is Some(handle) {
