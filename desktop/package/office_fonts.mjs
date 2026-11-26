@@ -18,10 +18,8 @@ export const OfficeFontFiles = [
   "LiberationMono-Bold.ttf",
   "LiberationMono-Italic.ttf",
   "LiberationMono-BoldItalic.ttf",
-  "NotoSansSC-Regular.ttf",
   "LICENSES/Carlito-OFL.txt",
   "LICENSES/Liberation-LICENSE.txt",
-  "LICENSES/NotoSansSC-OFL.txt",
   "LICENSES/MODIFICATIONS.md",
 ];
 

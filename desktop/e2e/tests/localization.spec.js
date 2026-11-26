@@ -36,14 +36,15 @@ test('language selection updates Settings and sidebar and persists across reload
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sidebar = page.getByRole('complementary');
+  await sidebar.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.locator('#language-select').click();
   await page.getByRole('option', { name: '简体中文', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
   await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '技能', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '对话', exact: true })).toBeVisible();
-  await expect(page.getByRole('complementary').getByRole('button', { name: '新建', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: '新建', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '主题', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: '通用', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: '引擎', exact: true }).click();
@@ -54,8 +55,7 @@ test('language selection updates Settings and sidebar and persists across reload
   await expect(settings.getByText('保存在此设备上，仅随 API 请求发送。SeekMoon 不会读取它。')).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hans');
   await page.reload();
-  await expect(page.getByRole('button', { name: '设置', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await sidebar.getByRole('button', { name: '设置', exact: true }).click();
   await page.locator('#language-select').click();
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
@@ -70,8 +70,7 @@ test('Chinese system preference resolves at startup and a failed save keeps the 
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hans-CN'] });
   });
   await app.goto();
-  await expect(page.getByRole('button', { name: '设置', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('complementary').getByRole('button', { name: '设置', exact: true }).click();
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
@@ -138,7 +137,7 @@ test('Traditional Chinese system startup yields to an explicit saved choice', as
   });
   await app.goto();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hant');
-  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await page.getByRole('complementary').getByRole('button', { name: '設定', exact: true }).click();
   await page.locator('#language-select').click();
   await page.getByRole('option', { name: '简体中文', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
