@@ -2842,7 +2842,7 @@ fn initial_model(
     transcript_request_generation: 0,
     page_namespace: generated_session_id(),
     submission_sequence: 0,
-    transcript_scroll: @sorted_map.new(),
+    transcript_scroll: @sorted_map.SortedMap::empty(),
     conversations: [],
     project_picker: None,
     pending_project_adoption: None,
