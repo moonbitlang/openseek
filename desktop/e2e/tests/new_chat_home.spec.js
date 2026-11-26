@@ -7,10 +7,7 @@ async function open(page, workspaces = ['/workspace'], signedIn = false) {
   app.codexModels = [{ id: 'gpt-test', displayName: 'Codex test', isDefault: true }];
   app.searchFiles = ['src/main.mbt'];
   if (signedIn) {
-    const reply = app.replyFor.bind(app);
-    app.replyFor = request => request.method === 'codex.account.read'
-      ? { account: { type: 'chatgpt', planType: 'pro' }, requiresOpenaiAuth: true }
-      : reply(request);
+    app.onRpc('codex.account.read', () => ({ account: { type: 'chatgpt', planType: 'pro' }, requiresOpenaiAuth: true }));
   }
   await app.install();
   await app.goto();
@@ -102,7 +99,6 @@ test('both agents share the first screen and Codex can choose its project in the
     { type: 'mention', name: 'main.mbt', path: 'src/main.mbt' },
     { type: 'image', url: imageURL },
   ]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const failure of ['rpc', 'malformed']) {
@@ -115,11 +111,11 @@ for (const failure of ['rpc', 'malformed']) {
     const task = page.locator('#task');
     await task.fill('Keep this input after an open failure');
     const session = await page.locator('#transcript').getAttribute('data-transcript-session');
-    const reply = app.replyFor.bind(app);
+    let restoreDraftOpen;
     if (failure === 'rpc') {
       app.rpcErrors.set('codex.draft.open', 'Project unavailable');
     } else {
-      app.replyFor = request => request.method === 'codex.draft.open' ? {} : reply(request);
+      restoreDraftOpen = app.onRpc('codex.draft.open', () => ({}));
     }
     await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
     const picker = page.getByRole('dialog', { name: 'Choose a project' });
@@ -130,7 +126,7 @@ for (const failure of ['rpc', 'malformed']) {
     // Wait for the error result to settle before retrying the same project.
     await expect(page.getByText(failure === 'rpc' ? /Project unavailable/ : /Malformed reply from codex.draft.open/)).toBeVisible();
     app.rpcErrors.delete('codex.draft.open');
-    app.replyFor = reply;
+    restoreDraftOpen?.();
     await other.click();
     if (failure === 'rpc') {
       await picker.getByRole('button', { name: /^other, current project/ }).click();
@@ -143,7 +139,6 @@ for (const failure of ['rpc', 'malformed']) {
     await page.locator('#send').click();
     await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd)
       .toBe(failure === 'rpc' ? '/other' : '/workspace');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -167,21 +162,19 @@ test('a failed thread start keeps its original draft identity and project for re
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
   await expect(page.getByRole('button', { name: 'New', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('the title cannot add or change projects until draft opening settles', async ({ page }) => {
   const app = await open(page, ['/workspace', '/other']);
   const pending = Promise.withResolvers();
-  const reply = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'codex.draft.open' ? pending.promise : reply(request);
+  const restoreDraftOpen = app.onRpc('codex.draft.open', () => pending.promise);
   await choose(page, 'Codex test');
   await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New', exact: true })).toBeDisabled();
   const request = app.requests.find(r => r.method === 'codex.draft.open');
-  app.replyFor = reply;
-  pending.resolve(reply(request));
+  restoreDraftOpen();
+  pending.resolve(app.replyFor(request));
   await expect(page.getByRole('button', { name: 'New', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
   await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
@@ -192,7 +185,6 @@ test('the title cannot add or change projects until draft opening settles', asyn
   await page.locator('#task').fill('Use the newly added project');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('returning to the same blank Codex entry retains its pending project add', async ({ page }) => {
@@ -201,8 +193,7 @@ test('returning to the same blank Codex entry retains its pending project add', 
   await expect(page).toHaveURL(/\/codex\/new$/);
   const session = await page.locator('#transcript').getAttribute('data-transcript-session');
   const pending = Promise.withResolvers();
-  const reply = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
+  app.onRpc('workspace.add', () => pending.promise);
   await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
   await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
@@ -212,13 +203,12 @@ test('returning to the same blank Codex entry retains its pending project add', 
   await expect(page).toHaveURL(/\/codex\/new$/);
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
-  pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
+  pending.resolve(app.replyFor(app.requests.find(r => r.method === 'workspace.add')));
   app.notify('workspace.changed', { workspaces: app.workspaces });
   await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(page).toHaveURL(/\/codex\/new$/);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const agent of ['Codex', 'OpenSeek']) {
@@ -230,13 +220,11 @@ for (const agent of ['Codex', 'OpenSeek']) {
       preview: 'Existing Codex task', updatedAt: 2, turns: [],
     };
     const pending = Promise.withResolvers();
-    const reply = app.replyFor.bind(app);
-    app.replyFor = request => {
-      if (request.method === 'codex.thread.list') return { data: request.params?.archived ? [] : [existing] };
-      if (request.method === 'codex.thread.history.read') return { thread: existing };
-      if (request.method === 'workspace.add') return pending.promise;
-      return reply(request);
-    };
+    app.mockRpc({
+      'codex.thread.list': request => ({ data: request.params?.archived ? [] : [existing] }),
+      'codex.thread.history.read': () => ({ thread: existing }),
+      'workspace.add': () => pending.promise,
+    });
     await app.install();
     await app.goto();
     await choose(page, 'Codex test');
@@ -250,13 +238,12 @@ for (const agent of ['Codex', 'OpenSeek']) {
     await page.getByRole('button', { name: title, exact: true }).click();
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
     const opens = app.requests.filter(r => r.method === 'codex.draft.open').length;
-    pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
+    pending.resolve(app.replyFor(app.requests.find(r => r.method === 'workspace.add')));
     app.notify('workspace.changed', { workspaces: app.workspaces });
     await expect(app.projectRow('/Users/test')).toBeVisible();
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
     await expect(app.projectRow('/workspace')).toHaveClass(/\bactive\b/);
     expect(app.requests.filter(r => r.method === 'codex.draft.open')).toHaveLength(opens);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -275,5 +262,4 @@ test('a failed hidden Codex draft does not block adding a project from OpenSeek'
   await expect(page.getByRole('button', { name: 'New', exact: true })).toBeEnabled();
   await page.keyboard.press('ControlOrMeta+o');
   await expect(page.getByRole('dialog', { name: 'Add a project' })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });

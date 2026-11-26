@@ -29,12 +29,5 @@ test('Cloud /simplify expands its workflow prompt in the existing session', asyn
   expect(content).toContain('Focus: the parser');
   await expect(task).toHaveValue('');
   expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-  expect(app.device.pageErrors).toEqual([]);
 });
-
-async function compact(page) {
-  await page.locator('#task').fill('/compact');
-  await expect(page.locator('.completion-item').filter({ hasText: '/compact' })).toBeVisible();
-  await page.locator('#task').press('Enter');
-}
 

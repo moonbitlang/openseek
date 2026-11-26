@@ -33,7 +33,6 @@ test('panel toggle keeps its node, focus and position across drawer transitions'
       expect(reverse).toBeLessThanOrEqual(1);
     }
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('shell panel control remains reachable when expanded and on narrow screens', async ({ page }) => {
@@ -74,5 +73,4 @@ test('shell panel control remains reachable when expanded and on narrow screens'
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Show panel');
   expect(await original.evaluate(node => node.isConnected)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });

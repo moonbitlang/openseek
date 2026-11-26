@@ -43,7 +43,6 @@ for (const entry of ['sidebar', 'Settings']) {
     await expect(sidebar).toHaveText('octocat');
     if (entry === 'sidebar') await sidebar.click();
     await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-    expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   });
 }
@@ -71,6 +70,5 @@ for (const locale of ['en', 'zh-Hans']) {
     await signIn.click();
     await expect(home.getByRole('button', { name: chinese ? '退出登录' : 'Sign out', exact: true })).toBeVisible();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(2);
-    expect(cloud.device.pageErrors).toEqual([]);
   });
 }

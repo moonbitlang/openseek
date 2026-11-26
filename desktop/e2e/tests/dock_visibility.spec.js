@@ -67,5 +67,4 @@ test('active dock tab stays visible when opening, switching, closing and resizin
   await page.locator('.editor-tab.active .tab-close').click();
   await expect(page.locator('.editor-tab')).toHaveCount(7);
   await expectActiveVisible(page);
-  expect(app.pageErrors).toEqual([]);
 });

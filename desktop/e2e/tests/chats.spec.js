@@ -25,7 +25,6 @@ test('an empty Chat list starts a draft without creating a session', async ({ pa
   await expect(page.locator('#task')).toBeEnabled();
   await page.locator('#task').fill('An unsent chat draft');
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('a project draft survives Chat navigation and account sign-out', async ({ page }) => {
@@ -48,7 +47,6 @@ test('a project draft survives Chat navigation and account sign-out', async ({ p
   await page.locator('#send').click();
   await expect.poll(() => cloud.hostRequests.find(request => request.method === 'agent.start')?.params.task).toBe('Keep this project draft');
   expect(cloud.requests.some(request => request.method === 'POST' && request.path.endsWith('/commands'))).toBe(false);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('retired standalone history cannot be reopened through its old URL', async ({ page }) => {
@@ -59,7 +57,6 @@ test('retired standalone history cannot be reopened through its old URL', async 
   await page.goto('/device/device-a/chat/session/legacy-chat');
   await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'legacy-chat')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a user project named Unnamed workspace remains a project', async ({ page }) => {
@@ -72,7 +69,6 @@ test('a user project named Unnamed workspace remains a project', async ({ page }
   await expect(launchMode).toHaveText('Local');
   await launchMode.click();
   await expect(launchMode).toHaveText('Worktree');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('project history retries a failed directory snapshot without losing its destination', async ({ page }) => {
@@ -87,5 +83,4 @@ test('project history retries a failed directory snapshot without losing its des
   await notice.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.locator('#transcript')).toContainText('Browser result');
   await expect(page).toHaveURL(/chat\/session\/session-1$/);
-  expect(app.pageErrors).toEqual([]);
 });

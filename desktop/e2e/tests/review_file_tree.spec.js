@@ -59,5 +59,4 @@ test('Review tree supports keyboard folding and independent tri-state review che
   app.gitChanges.unshift({ path: 'new/file.mbt', kind: 'added', index_status: 'A', worktree_status: ' ' });
   await expect(tree.getByRole('treeitem', { name: 'new', exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(main).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
 });

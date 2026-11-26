@@ -81,7 +81,6 @@ test('sending re-pins a transcript the reader had scrolled up', async ({ page })
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight))
     .toBeGreaterThan(heightBeforeStream);
   await expect.poll(() => distanceFromBottom(transcript)).toBeLessThanOrEqual(4);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('returning to a conversation restores where the reader left it', async ({ page }) => {
@@ -93,19 +92,15 @@ test('returning to a conversation restores where the reader left it', async ({ p
     title: 'Second browser fixture',
     updated_at_ms: 2,
   });
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = (request) => {
-    if (request.method === 'session.load') {
-      const id = request.params?.session;
-      const events = id === 'session-2' ? second : first;
-      return {
-        session: { version: 1, id, events },
-        prediction: null,
-        watermark: events.at(-1).sequence,
-      };
-    }
-    return replyFor(request);
-  };
+  app.onRpc('session.load', request => {
+    const id = request.params?.session;
+    const events = id === 'session-2' ? second : first;
+    return {
+      session: { version: 1, id, events },
+      prediction: null,
+      watermark: events.at(-1).sequence,
+    };
+  });
   await app.install();
   await app.goto();
   await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 1$/);
@@ -123,5 +118,4 @@ test('returning to a conversation restores where the reader left it', async ({ p
   await page.locator('.conversation-row[title="session-1"]').click();
   await page.locator('.transcript .msg-content', { hasText: /^First fixture: question 1$/ }).waitFor();
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(600);
-  expect(app.pageErrors).toEqual([]);
 });

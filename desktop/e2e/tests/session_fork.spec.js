@@ -21,32 +21,32 @@ async function setup(page, minimal, child = false, events = history) {
   app.sessionEvents = events;
   const sourceSessions = new Set(app.liveSessions.map(session => session.id));
   const replies = new Map();
-  const original = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method === 'session.fork' || request.method === 'session.edit') {
-      const session = 'fork-session';
-      const title = request.params.source_title;
-      const copied = events.filter(e => request.params.through != null && e.sequence <= request.params.through);
-      if (request.method === 'session.edit') {
-        copied.push(event((copied.at(-1)?.sequence ?? 0) + 1, 'user', { content: request.params.task }));
-      }
-      replies.set(session, copied);
-      app.liveSessions.push({ id: session, title, updated_at_ms: 10 });
-      if (request.method === 'session.edit') {
-        app.liveSessions = app.liveSessions.filter(row => row.id !== request.params.session);
-        app.notify('session.changed', { change: 'deleted', session: request.params.session, workspace: '/workspace' });
-      }
-      return { session, title };
+  const forkOrEdit = request => {
+    const session = 'fork-session';
+    const title = request.params.source_title;
+    const copied = events.filter(e => request.params.through != null && e.sequence <= request.params.through);
+    if (request.method === 'session.edit') {
+      copied.push(event((copied.at(-1)?.sequence ?? 0) + 1, 'user', { content: request.params.task }));
     }
-    if (request.method === 'session.load') {
+    replies.set(session, copied);
+    app.liveSessions.push({ id: session, title, updated_at_ms: 10 });
+    if (request.method === 'session.edit') {
+      app.liveSessions = app.liveSessions.filter(row => row.id !== request.params.session);
+      app.notify('session.changed', { change: 'deleted', session: request.params.session, workspace: '/workspace' });
+    }
+    return { session, title };
+  };
+  app.mockRpc({
+    'session.fork': forkOrEdit,
+    'session.edit': forkOrEdit,
+    'session.load': request => {
       // A newly created chat has no source history, including when the
       // post-send reload races the first render.
       const events = replies.get(request.params.session)
         ?? (sourceSessions.has(request.params.session) ? app.sessionEvents : []);
       return { session: { version: 1, id: request.params.session, events }, watermark: events.at(-1)?.sequence ?? 0, prediction: null };
-    }
-    return original(request);
-  };
+    },
+  });
   await app.install();
   await app.goto();
   await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
@@ -74,7 +74,6 @@ for (const minimal of [false, true]) {
     expect(app.requests.find(r => r.method === 'session.fork').params.source_title).toBe('Rabbita browser fixture');
     await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toHaveCount(2);
     expect(app.requests.filter(r => r.method === 'agent.start')).toEqual([]);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -85,8 +84,11 @@ test('a delayed fork cannot replace a newer missing destination', async ({ page 
   await page.locator('.conversation-row[title="session-1"]').click();
   await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
   const pending = Promise.withResolvers();
-  const reply = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'session.fork' ? pending.promise : reply(request);
+  let finishFork;
+  app.onRpc('session.fork', (_request, next) => {
+    finishFork = next;
+    return pending.promise;
+  });
   await page.getByRole('button', { name: 'Fork from here', exact: true }).first().click();
   await expect.poll(() => app.requests.some(r => r.method === 'session.fork')).toBe(true);
   app.liveSessions = app.liveSessions.filter(row => row.id !== 'session-other');
@@ -96,77 +98,70 @@ test('a delayed fork cannot replace a newer missing destination', async ({ page 
   await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
   const unavailable = page.getByText('This destination no longer exists or is no longer attached.');
   await expect(unavailable).toBeVisible();
-  pending.resolve(reply(app.requests.find(r => r.method === 'session.fork')));
+  pending.resolve(finishFork());
   const fork = page.locator('.conversation-row[title="fork-session"]');
   await expect(fork).toBeVisible();
   await expect(fork).not.toHaveClass(/active/);
   await expect(unavailable).toBeVisible();
   await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
-  expect(app.pageErrors).toEqual([]);
 });
 
-{
-  const minimal = true;
+test('minimal edit stays inline until Send and preserves the original composer', async ({ page }) => {
+  const app = await setup(page, true);
+  await page.locator('#task').fill('Keep my original draft');
+  const original = page.locator('.conversation-row[title="session-1"]');
+  const target = page.locator('.msg.user').filter({ hasText: 'Explore another approach.' });
+  await target.getByRole('button', { name: 'Edit message', exact: true }).click();
+  const editor = page.locator('.message-editor');
+  const input = editor.getByRole('textbox', { name: 'Edit message', exact: true });
+  await expect(input).toHaveValue('Explore another approach.');
+  await expect(input).toBeFocused();
+  await expect(original).toHaveClass(/active/);
+  await expect(page.locator('#transcript')).toContainText('Second answer.');
+  await expect(page.locator('#transcript')).toContainText('Still working.');
+  await expect(page.locator('#task')).toHaveValue('Keep my original draft');
+  expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
+  await input.fill('Try my revised approach.');
+  await input.press('End');
+  await input.press('Shift+Enter');
+  await input.press('x');
+  await expect(input).toHaveValue('Try my revised approach.\nx');
+  await expect(input).toBeFocused();
+  await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+  expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
+  app.rpcDelays.set('session.edit', 500);
+  // Use the same Enter-to-send contract as the bottom composer.
+  await input.press('Enter');
+  await expect(input).toBeDisabled();
+  await expect(page.locator('#transcript')).toContainText('Second answer.');
+  await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+  await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
+  expect(app.requests.filter(r => r.method === 'session.edit').map(r => r.params.through)).toEqual([3]);
+  const sent = app.requests.find(r => r.method === 'session.edit');
+  expect(sent.params.session).toBe('session-1');
+  expect(sent.params.task).toBe('Try my revised approach.\nx');
+  await expect(original).toHaveCount(0);
+  await expect(page.locator('#task')).toHaveValue('');
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+});
 
-  test(`${minimal ? 'minimal' : 'detailed'} edit stays inline until Send and preserves the original composer`, async ({ page }) => {
-    const app = await setup(page, minimal);
-    await page.locator('#task').fill('Keep my original draft');
-    const original = page.locator('.conversation-row[title="session-1"]');
-    const target = page.locator('.msg.user').filter({ hasText: 'Explore another approach.' });
-    await target.getByRole('button', { name: 'Edit message', exact: true }).click();
-    const editor = page.locator('.message-editor');
-    const input = editor.getByRole('textbox', { name: 'Edit message', exact: true });
-    await expect(input).toHaveValue('Explore another approach.');
-    await expect(input).toBeFocused();
-    await expect(original).toHaveClass(/active/);
-    await expect(page.locator('#transcript')).toContainText('Second answer.');
-    await expect(page.locator('#transcript')).toContainText('Still working.');
-    await expect(page.locator('#task')).toHaveValue('Keep my original draft');
-    expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
-    await input.fill('Try my revised approach.');
-    await input.press('End');
-    await input.press('Shift+Enter');
-    await input.press('x');
-    await expect(input).toHaveValue('Try my revised approach.\nx');
-    await expect(input).toBeFocused();
-    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
-    expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
-    app.rpcDelays.set('session.edit', 500);
-    // Use the same Enter-to-send contract as the bottom composer.
-    await input.press('Enter');
-    await expect(input).toBeDisabled();
-    await expect(page.locator('#transcript')).toContainText('Second answer.');
-    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
-    await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
-    expect(app.requests.filter(r => r.method === 'session.edit').map(r => r.params.through)).toEqual([3]);
-    const sent = app.requests.find(r => r.method === 'session.edit');
-    expect(sent.params.session).toBe('session-1');
-    expect(sent.params.task).toBe('Try my revised approach.\nx');
-    await expect(original).toHaveCount(0);
-    await expect(page.locator('#task')).toHaveValue('');
-    expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-    expect(app.pageErrors).toEqual([]);
-  });
-
-  test(`${minimal ? 'minimal' : 'detailed'} first-message edit creates a new chat only on Send`, async ({ page }) => {
-    const app = await setup(page, minimal);
-    await page.getByRole('button', { name: 'Edit message', exact: true }).first().click();
-    const editor = page.locator('.message-editor');
-    await expect(editor.locator('textarea')).toHaveValue('Explore the first approach.');
-    await expect(page.locator('#transcript')).toContainText('First answer.');
-    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveClass(/active/);
-    expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
-    await editor.locator('textarea').fill('Start with a different question.');
-    await editor.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
-    expect(app.requests.find(r => r.method === 'session.edit').params.through).toBeUndefined();
-    expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Start with a different question.');
-    expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(0);
-    await expect(page.locator('#transcript')).not.toContainText('First answer.');
-    await expect(page).toHaveURL(/\/chat\/session\/fork-session$/);
-    expect(app.pageErrors).toEqual([]);
-  });
-}
+test('minimal first-message edit creates a new chat only on Send', async ({ page }) => {
+  const app = await setup(page, true);
+  await page.getByRole('button', { name: 'Edit message', exact: true }).first().click();
+  const editor = page.locator('.message-editor');
+  await expect(editor.locator('textarea')).toHaveValue('Explore the first approach.');
+  await expect(page.locator('#transcript')).toContainText('First answer.');
+  await expect(page.locator('.conversation-row[title="session-1"]')).toHaveClass(/active/);
+  expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
+  await editor.locator('textarea').fill('Start with a different question.');
+  await editor.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
+  expect(app.requests.find(r => r.method === 'session.edit').params.through).toBeUndefined();
+  expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Start with a different question.');
+  expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(0);
+  await expect(page.locator('#transcript')).not.toContainText('First answer.');
+  await expect(page).toHaveURL(/\/chat\/session\/fork-session$/);
+});
 
 test('cancel and Escape restore the original bubble without creating a conversation', async ({ page }) => {
   const app = await setup(page, true);
@@ -182,7 +177,6 @@ test('cancel and Escape restore the original bubble without creating a conversat
     await expect(page.locator('#task')).toHaveValue('My separate draft');
   }
   expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('expanding an older message keeps the reader in place while later answers stream', async ({ page }) => {
@@ -214,7 +208,6 @@ test('expanding an older message keeps the reader in place while later answers s
   await expect(editor.locator('textarea')).toBeFocused();
   await expect.poll(async () => Math.abs((await editor.boundingBox()).y - before.y)).toBeLessThan(4);
   expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('failed fork retains the edited text and later transcript for retry', async ({ page }) => {
@@ -234,7 +227,6 @@ test('failed fork retains the edited text and later transcript for retry', async
   await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(2);
   await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
   expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Retry this edited request');
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const navigate of [false, true]) {
@@ -243,14 +235,13 @@ for (const navigate of [false, true]) {
     const error = 'The original conversation was deleted by another client';
     app.rpcErrors.set('session.edit', error);
     app.rpcDelays.set('session.edit', 2000);
-    const originalReply = app.replyFor.bind(app);
-    app.replyFor = request => {
-      if (request.method === 'session.load' && request.params.session === 'session-other') {
+    app.onRpc('session.load', (request, next) => {
+      if (request.params.session === 'session-other') {
         const events = [event(1, 'user', { content: 'An unrelated conversation' })];
         return { session: { version: 1, id: 'session-other', events }, watermark: 1, prediction: null };
       }
-      return originalReply(request);
-    };
+      return next();
+    });
     await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
     const editor = page.locator('.message-editor');
     await editor.locator('textarea').fill('An edit overtaken by deletion');
@@ -285,7 +276,6 @@ for (const navigate of [false, true]) {
       await expect(page.locator('#task')).toHaveValue('Keep this unrelated draft');
     }
     expect(app.requests.filter(request => ['session.edit', 'session.fork', 'agent.start', 'session.delete'].includes(request.method)).map(request => request.method)).toEqual(['session.edit']);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -301,7 +291,6 @@ test('Send completes in its fork after navigation without replacing the other co
   expect(app.requests.find(r => r.method === 'session.edit').params.session).toBe('session-1');
   await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
   await expect(page.locator('#task')).toHaveValue('Unrelated draft');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('inline edit preserves image attachments and mention chips on Send', async ({ page }) => {
@@ -320,7 +309,6 @@ test('inline edit preserves image attachments and mention chips on Send', async 
   await editor.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => app.requests.find(r => r.method === 'session.edit')?.params.images).toEqual([image]);
   expect(app.requests.find(r => r.method === 'session.edit').params.task).toContain('<file path="src/main.mbt"/>');
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const first of [false, true]) {
@@ -335,7 +323,6 @@ for (const first of [false, true]) {
     expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(1);
     expect(app.requests.find(r => r.method === 'session.edit').params).toMatchObject({ session: 'session-1', source_sequence: 8 });
     expect(app.requests.filter(r => ['agent.start', 'session.edit_prepare', 'session.edit_commit'].includes(r.method))).toHaveLength(0);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -374,5 +361,4 @@ test('typing and an external run in the same render keep the draft and disable i
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(app.requests.filter(r => ['agent.cancel', 'session.edit'].includes(r.method))).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });

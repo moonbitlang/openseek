@@ -51,5 +51,4 @@ test('Excel annotation highlights retain the full source range while the live se
   const quote = JSON.parse(task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
   expect(quote.selection.range).toBe('A1:B2');
   expect(quote.comment).toBe('Explain the original four cells');
-  expect(app.pageErrors).toEqual([]);
 });

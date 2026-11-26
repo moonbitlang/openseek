@@ -22,7 +22,6 @@ async function expectOpened(page, cloud, dialog) {
   await expect(cloud.row(importedSession)).toBeVisible();
   await expect(page.locator('main .topbar-title')).toHaveText('Imported chat');
   expect(cloud.hostRequests.filter(request => request.method === 'session.import')).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 }
 
 test('a share link imports into Cloud chats and opens the new chat', async ({ page }) => {

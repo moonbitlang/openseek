@@ -33,7 +33,6 @@ test('bundled diagram examples render as SVG in the transcript', async ({ page }
       await expect(diagram.locator('pre')).toHaveCount(0);
     }
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('transcript renders editor diagram fences and retains them across updates and themes', async ({ page }) => {
@@ -92,7 +91,6 @@ test('transcript renders editor diagram fences and retains them across updates a
   await expect(transcript.locator('.chat-mermaid')).toHaveCount(0);
   await app.openSession();
   await expect(transcript.locator('.chat-mermaid').first().locator('svg')).toContainText('Alpha');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('transcript keeps escaped Mermaid source when local module loading fails', async ({ page }) => {
@@ -109,7 +107,6 @@ test('transcript keeps escaped Mermaid source when local module loading fails', 
   const diagram = page.locator('#transcript .chat-mermaid');
   await expect(diagram.locator('pre code')).toHaveText(source);
   await expect(diagram.locator('img, svg')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('transcript ignores a Mermaid result after its conversation is removed', async ({ page }) => {
@@ -141,7 +138,6 @@ test('transcript ignores a Mermaid result after its conversation is removed', as
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   expect(await oldTarget.evaluate(element => element.innerHTML)).toBe(disposedHtml);
   await expect(page.locator('#transcript .chat-mermaid')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const language of ['mermaid', 'd2', 'diago']) {
@@ -194,6 +190,5 @@ for (const language of ['mermaid', 'd2', 'diago']) {
     await expect(diagrams).toHaveCount(1);
     await expect(diagrams.first().locator('svg').first()).toBeVisible();
     await expect(page.locator('#transcript pre code').last()).toHaveText(language === 'mermaid' ? 'flowchart LR\nFinal --> Done' : 'final -> done');
-    expect(app.pageErrors).toEqual([]);
   });
 }

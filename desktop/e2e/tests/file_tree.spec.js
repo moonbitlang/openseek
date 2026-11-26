@@ -33,7 +33,6 @@ test('switching editors reveals the active file inside collapsed directories', a
   await expect(main).toBeVisible();
   await expect(main).toHaveAttribute('aria-selected', 'true');
   await expect(src).toHaveAttribute('aria-expanded', 'true');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Quick Open centers the revealed file and centers again when Files becomes visible', async ({ page }) => {
@@ -90,7 +89,6 @@ test('Quick Open centers the revealed file and centers again when Files becomes 
   await expect(row).toHaveCount(0);
   await files.focus();
   await expect(src).toHaveAttribute('aria-expanded', 'false');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a late directory reply cannot reveal an editor that is no longer active', async ({ page }) => {
@@ -121,7 +119,6 @@ test('a late directory reply cannot reveal an editor that is no longer active', 
   await expect(readme).toHaveAttribute('tabindex', '0');
   await expect(main).toHaveAttribute('aria-selected', 'false');
   await expect(page.locator('.editor-tab.active')).toContainText('README.md');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a failed ancestor listing stops until the next explicit reveal', async ({ page }) => {
@@ -153,7 +150,6 @@ test('a failed ancestor listing stops until the next explicit reveal', async ({ 
   await files.click();
   await expect(tree.getByRole('treeitem', { name: 'main.mbt', exact: true })).toHaveAttribute('aria-selected', 'true');
   expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Files scrolls below the view tabs and keeps desktop row height on narrow screens', async ({ page }) => {
@@ -184,7 +180,6 @@ test('Files scrolls below the view tabs and keeps desktop row height on narrow s
   await expect.poll(async () => (await tree.locator('.tree-file').first().boundingBox()).height).toBe(desktopRowHeight);
   expect(await tree.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect.poll(() => tree.locator('.tree-name').first().evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('file tree exposes hierarchy and one keyboard entry with directional navigation', async ({ page }) => {
@@ -279,7 +274,6 @@ test('file tree exposes hierarchy and one keyboard entry with directional naviga
   await expect(files).toBeFocused();
   await files.press('Tab');
   await expect(tree).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const layout of ['right-sidebar', 'bottom-panel']) {
@@ -331,7 +325,6 @@ for (const layout of ['right-sidebar', 'bottom-panel']) {
     await tree.getByRole('treeitem', { name: 'b.mbt', exact: true }).click();
     await expect(page.locator('.editor-tab.active')).toContainText('b.mbt');
     await expectFullViewer();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -349,10 +342,7 @@ for (const target of ['group_40', 'group_40/nested']) {
         content: `[Target directory](./${target}/)`,
       } } },
     ];
-    const replyFor = app.replyFor.bind(app);
-    app.replyFor = request => request.method === 'host.open_path'
-      ? { opened: false, directory_target: { path: target } }
-      : replyFor(request);
+    app.onRpc('host.open_path', () => ({ opened: false, directory_target: { path: target } }));
     app.rpcDelays.set('fs.read_directory', 300);
     await app.install();
     await app.goto();
@@ -373,7 +363,6 @@ for (const target of ['group_40', 'group_40/nested']) {
     await expect(destination).toBeFocused();
     await expect(destination).toBeInViewport();
     expect(app.requests.filter(request => request.method === 'fs.read_directory')).toHaveLength(reads);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -386,10 +375,7 @@ test('a repeated directory link retries failed listings without rereading cached
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture directory' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '[Target directory](./src/nested/)' } } },
   ];
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'host.open_path'
-    ? { opened: false, directory_target: { path: 'src/nested' } }
-    : replyFor(request);
+  app.onRpc('host.open_path', () => ({ opened: false, directory_target: { path: 'src/nested' } }));
   await app.install();
   await app.goto();
   await app.openSession();
@@ -423,5 +409,4 @@ test('a repeated directory link retries failed listings without rereading cached
   await expect(destination).toBeFocused();
   expect(reads('/workspace/src')).toBe(2);
   expect(reads('/workspace/src/nested')).toBe(2);
-  expect(app.pageErrors).toEqual([]);
 });

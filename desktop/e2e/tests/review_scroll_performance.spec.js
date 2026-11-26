@@ -86,6 +86,5 @@ for (const mode of ['Token', 'Tree']) {
     await first.click();
     await expect(first).toHaveAttribute('aria-pressed', 'false');
     for (const button of retained) expect(await button.evaluate(node => node.isConnected)).toBe(true);
-    expect(app.pageErrors).toEqual([]);
   });
 }

@@ -27,7 +27,6 @@ test('a signed-out device page offers login and preserves the page return path',
   await page.getByRole('link', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'OAuth fixture' })).toBeVisible();
   await expect(page).toHaveURL(/\/v2\/auth\/login\?/);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('device management lists connection states and refreshes the roster', async ({ page }) => {
@@ -92,7 +91,6 @@ test('device management lists connection states and refreshes the roster', async
   await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(row('Office computer')).toHaveCount(0);
   await expect(row('Test Mac').getByRole('status')).toHaveText('Connected');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a signed-out visitor finds the relay app downloads beside sign-in and in the sidebar', async ({ page }) => {
@@ -133,7 +131,6 @@ test('a signed-out visitor finds the relay app downloads beside sign-in and in t
   expect(manifestRequests).toBe(1);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Device settings explain how to add a computer, starting from its installer', async ({ page }, testInfo) => {
@@ -171,7 +168,6 @@ test('Device settings explain how to add a computer, starting from its installer
   expect(manifestRequests).toBe(1);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a device page whose roster failed can retry', async ({ page }) => {
@@ -187,7 +183,6 @@ test('a device page whose roster failed can retry', async ({ page }) => {
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect.poll(() => app.socket !== null).toBe(true);
   await expect(page.getByRole('main').getByText(/HTTP 502/)).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Chat is the signed-out launch page and a saved Work preference cannot replace it', async ({ page }) => {
@@ -203,5 +198,4 @@ test('Chat is the signed-out launch page and a saved Work preference cannot repl
   // The phone drawer starts closed, so query the mode switch by markup.
   await expect(page.locator('.sidebar-mode-option[aria-label="Chat"]')).toHaveAttribute('aria-pressed', 'true');
   expect(app.socket).toBeNull();
-  expect(app.pageErrors).toEqual([]);
 });

@@ -16,35 +16,34 @@ async function openComments(page, { holdReview = false, missingRevision = false,
   const fixture = { open: true, threads: [makeThread('right', 'RIGHT', 8), makeThread('left', 'LEFT', 3)], failure: undefined };
   fixture.missingRevision = missingRevision;
   if (holdReview) fixture.pendingReview = new Promise(resolve => { fixture.releaseReview = resolve; });
-  const fallback = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method === 'github.checkout_status') {
+  app.mockRpc({
+    'github.checkout_status': () => {
       const status = { branch: 'codex/browser-fixture', pull_request_url: prURL, has_open_pull_request: fixture.open };
       return fixture.pendingStatus ? fixture.pendingStatus.then(() => status) : status;
-    }
-    if (request.method === 'github.list') {
-      return { repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
-        items: request.params.kind === 'issues' ? [] : [{ number: 42, title: 'Current PR', url: prURL, draft: false }] };
-    }
-    if (request.method === 'github.review') {
+    },
+    'github.list': request => ({
+      repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
+      items: request.params.kind === 'issues' ? [] : [{ number: 42, title: 'Current PR', url: prURL, draft: false }],
+    }),
+    'github.review': () => {
       const response = { status: 'ok', review: { url: prURL, head, base: app.gitBaseline, threads: fixture.threads,
         commentable: [{ path: 'src/main.mbt', left_lines: [3, 8], right_lines: Array.from({ length: 9 }, (_, i) => i + 1) }] } };
       return fixture.pendingReview ? fixture.pendingReview.then(() => response) : response;
-    }
-    if (request.method === 'github.review_file') {
+    },
+    'github.review_file': request => {
       if (fixture.missingRevision) return { status: 'error', message: 'Could not load this file at the GitHub PR revision. fatal: bad object' };
       const path = request.params.path;
       return { status: 'ok', file: { path, original: app.gitFilesByRevision[app.gitBaseline][path], modified: app.workingFiles[path] } };
-    }
-    if (request.method === 'github.checkout') {
+    },
+    'github.checkout': () => {
       const finish = () => {
         if (fixture.checkoutFailure) return { status: 'error', message: fixture.checkoutFailure };
         fixture.missingRevision = false;
         return { status: 'success', branch: 'local-pr' };
       };
       return fixture.pendingCheckout ? fixture.pendingCheckout.then(finish) : finish();
-    }
-    if (request.method === 'github.review_mutate') {
+    },
+    'github.review_mutate': request => {
       if (fixture.failure) return { status: 'error', message: fixture.failure };
       const action = request.params.action;
       if (action.kind === 'reply') fixture.threads.find(t => t.comments[0].id === action.comment).comments.push(makeComment('7000000001', action.body, true));
@@ -52,9 +51,8 @@ async function openComments(page, { holdReview = false, missingRevision = false,
       if (action.kind === 'delete') fixture.threads.forEach(t => { t.comments = t.comments.filter(c => c.id !== action.comment); });
       if (action.kind === 'resolve') Object.assign(fixture.threads.find(t => t.id === action.thread), { resolved: action.resolved, can_resolve: !action.resolved, can_unresolve: action.resolved });
       return { status: 'ok' };
-    }
-    return fallback(request);
-  };
+    },
+  });
   await app.install();
   await app.goto();
   await app.openSession();
@@ -111,7 +109,6 @@ test('mounted GitHub comments, draft failures and focus follow live language cha
     await expect(right.locator('.github-review-markdown')).toContainText('Could we add coverage for the new limit?');
   }
   expect(app.requests.filter(request => request.method === 'github.review_mutate')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('inline Review comments render HTML and media and preserve disclosure state across edits', async ({ page }) => {
@@ -146,7 +143,6 @@ test('inline Review comments render HTML and media and preserve disclosure state
   await page.locator('.github-review-inline-block [data-thread-id="right"]').getByRole('textbox', { name: 'Reply', exact: true }).fill('Local draft triggers a render');
   await expect.poll(() => handle.evaluate(el => el.isConnected && el.open)).toBe(true);
   await expect.poll(() => comment.locator('relative-time').evaluate(el => Boolean(el.shadowRoot?.textContent))).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('missing PR commits recover from Update checkout with retry, pending feedback and preserved drafts', async ({ page }) => {
@@ -180,7 +176,6 @@ test('missing PR commits recover from Update checkout with retry, pending feedba
   expect(app.requests.filter(r => r.method === 'github.checkout').map(r => r.params)).toEqual([1, 2].map(() => ({
     cwd: '/workspace', repository_url: 'https://github.com/owner/project', number: 42, changes: 'ask', update: true,
   })));
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('inline discussions work across Line, Token and Tree with shared reply, resolve and delete actions', async ({ page }) => {
@@ -232,7 +227,6 @@ test('inline discussions work across Line, Token and Tree with shared reply, res
   await own.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(own).toHaveCount(0);
   expect(app.requests.filter(r => r.method === 'github.review_mutate').map(r => r.params.action.kind)).toEqual(['reply', 'resolve', 'resolve', 'delete']);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('local line draft survives reload, failures and layout changes; Send publishes the anchored revision', async ({ page }) => {
@@ -269,7 +263,6 @@ test('local line draft survives reload, failures and layout changes; Send publis
   expect(posted.url).toBe(prURL);
   expect(posted.action).toEqual({ kind: 'post', path: 'src/main.mbt', side: 'RIGHT', line: 3, body: 'Please test the delay too.', head });
   expect(await page.evaluate(url => localStorage.getItem(`seekmoon.github-comment-drafts.v1:${url}`), prURL)).toBeNull();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('GitHub comments disable feedback during loading; file switches and refresh do not hide ready comment actions', async ({ page }) => {
@@ -318,7 +311,6 @@ test('GitHub comments disable feedback during loading; file switches and refresh
   fixture.pendingReview = undefined;
   await expect(page.getByTitle('Refresh GitHub comments', { exact: true })).toBeEnabled();
   await expect(input).toHaveValue('Draft without waiting for refreshed discussions.');
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -343,7 +335,6 @@ test('Panel and Review share PR discovery and a pending refresh closes comments 
   await expect(page.getByRole('switch', { name: 'GitHub comments' })).toHaveCount(0);
   await expect(page.locator('.github-review-inline-block [data-thread-id="right"]')).toHaveCount(0);
   expect(statusReads()).toBe(initial + 1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('comment actions use GitHub patch lines and exclude missing or unchanged sides', async ({ page }) => {
@@ -360,7 +351,6 @@ test('comment actions use GitHub patch lines and exclude missing or unchanged si
   await editor.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: /^\/\/\s+untouched\s+24$/ }).hover();
   await expect(action).toBeHidden();
   expect(app.requests.filter(r => r.method === 'github.review_mutate')).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('semantic comment actions preserve the full-file coordinate allowed by GitHub', async ({ page }) => {
@@ -377,5 +367,4 @@ test('semantic comment actions preserve the full-file coordinate allowed by GitH
     await page.locator('.github-review-inline-block').filter({ has: input }).getByRole('button', { name: 'Cancel', exact: true }).click();
   }
   expect(app.requests.filter(r => r.method === 'github.review_mutate')).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });

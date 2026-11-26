@@ -70,7 +70,6 @@ for (const existing of [false, true]) {
     expect(quote.source.reference).toEqual(reference);
     expect(quote.selection.text).toBe(text);
     expect(quote.comment).toBe('Annotate the recovered selection');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -113,5 +112,4 @@ test('an unavailable Word anchor clears the old composer and permits reselection
   await expect(input).toBeVisible();
   await input.fill('A fresh, valid source');
   await expect(input).toHaveValue('A fresh, valid source');
-  expect(app.pageErrors).toEqual([]);
 });

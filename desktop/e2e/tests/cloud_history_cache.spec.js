@@ -113,7 +113,6 @@ for (const desktop of [true, false]) {
     await expect.poll(async () => (await cache()).has(sessionA)).toBe(false);
     expect((await cache()).has(sessionB)).toBe(true);
     expect(cloud.requests.some(request => request.method === 'DELETE' && request.path === `/v1/sessions/${sessionA}`)).toBe(true);
-    expect(cloud.device.pageErrors).toEqual([]);
   });
 }
 
@@ -184,5 +183,4 @@ test('logout clears only its account and fences a delayed history response befor
   expect(rows.filter(row => row.origin === cloudOrigin && row.user === '123')).toEqual([]);
   expect(rows.filter(row => row.origin !== cloudOrigin || row.user === '456')).toHaveLength(2);
   expect(JSON.stringify(rows)).not.toContain('ts_fixture');
-  expect(cloud.device.pageErrors).toEqual([]);
 });

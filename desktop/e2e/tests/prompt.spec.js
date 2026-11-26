@@ -84,7 +84,6 @@ test('custom prompt persists and both sources send complete system prompts', asy
   await expect(editor).toHaveValue('Saved by another client');
   await newChat(page);
   expect((await send(page, app, 'Use the shared host setting')).system_prompt.endsWith('\n\nSaved by another client')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }) => {
@@ -109,7 +108,6 @@ test('the host custom prompt can be cleared in narrow dark Settings', async ({ p
   const complete = (await send(page, app, 'Create without additional instructions')).system_prompt;
   expect(typeof complete).toBe('string');
   expect(complete.length).toBeGreaterThan(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('the first native goal carries the same custom prompt as a first message', async ({ page }) => {
@@ -134,5 +132,4 @@ test('the first native goal carries the same custom prompt as a first message', 
   const complete = requests()[0].params.system_prompt;
   expect(complete).not.toBe(custom);
   expect(complete.endsWith('\n\n' + custom)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });

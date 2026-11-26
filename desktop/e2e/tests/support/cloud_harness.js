@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
+import { installNativeBridge } from './native_bridge.js';
 
 export const authOrigin = 'https://seekmoon.moonbitlang.com';
 export const cloudOrigin = 'https://cloud.moonbitlang.com';
@@ -40,10 +41,7 @@ export class CloudHarness {
     this.requests = [];
     this.hostRequests = [];
     this.notifications = [];
-    this.codes = new Map();
     this.userId = '123';
-    this.apiStatus = 200;
-    this.meStatus = 401;
     this.listStatus = 200;
     this.importStatus = 201;
     this.createStatus = 201;
@@ -59,25 +57,13 @@ export class CloudHarness {
       enabled: true, builtin: true,
     }];
     this.skillCatalog = [];
-    this.patchStatus = 204;
-    this.patchOffline = false;
-    this.pausePatch = null;
-    this.deleteOffline = false;
-    this.pauseDelete = null;
     this.logoutStatus = 204;
     this.listOffline = false;
-    this.disconnectSend = false;
     this.streamCancellations = 0;
-    this.fileStreamCancellations = 0;
-    this.sessionEventStatus = 200;
     this.pauseSessionEvents = null;
     this.controlSnapshots = new Map();
     this.manualTasks = false;
-    this.controlRejected = null;
-    this.controlOffline = false;
-    this.fileEventStatus = 200;
     this.pauseHistory = null;
-    this.pauseStream = null;
     this.sessionIds = [sessionA, sessionB];
     this.generating = new Set();
     this.archived = new Set();
@@ -98,12 +84,9 @@ export class CloudHarness {
 
   async install() {
     await this.device.install();
-    await this.page.exposeFunction('cloudWaitForStream', () => this.pauseStream);
     await this.page.exposeFunction('cloudWaitForEvent', index => this.eventPauses?.get(index));
     await this.page.exposeFunction('cloudStreamCancelled', () => this.streamCancellations++);
-    await this.page.exposeFunction('cloudFileStreamCancelled', () => this.fileStreamCancellations++);
-    await this.page.exposeFunction('cloudSessionStreamCancelled', () => this.streamCancellations++);
-    await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, streamChunkSize }) => {
+    await this.page.addInitScript(({ cached, authOrigin, cloudOrigin }) => {
       window.cloudUnhandledRejections = [];
       window.addEventListener('unhandledrejection', event => window.cloudUnhandledRejections.push(String(event.reason)));
       const key = 'seekmoon.cloud.token.v1';
@@ -144,7 +127,7 @@ export class CloudHarness {
             controller.enqueue(initial);
           }, cancel() {
             window.cloudSessionStreams.get(session)?.delete(current);
-            window.cloudSessionStreamCancelled();
+            window.cloudStreamCancelled();
           } }), { status: response.status, headers: response.headers });
         }
         const fileEvents = String(args[0]).match(/\/v1\/sessions\/([^/]+)\/files\/events$/);
@@ -160,33 +143,24 @@ export class CloudHarness {
             controller.enqueue(initial);
           }, cancel() {
             window.cloudFileStreams.get(session)?.delete(current);
-            window.cloudFileStreamCancelled();
           } }), { status: response.status, headers: response.headers });
         }
         if (String(args[0]).startsWith(cloudOrigin) && response.headers.get('content-type')?.startsWith('text/event-stream')) {
           const bytes = new TextEncoder().encode(await response.text());
           let cancelled = false;
           return new Response(new ReadableStream({ async start(controller) {
-            // Default to byte-sized chunks to split UTF-8 and SSE fields.
-            // Large fixtures can use normal network-sized chunks.
-            const boundary = response.headers.get('x-fixture-admission-bytes');
+            // Stream byte-sized chunks to split UTF-8 and SSE fields.
             const boundaries = JSON.parse(response.headers.get('x-fixture-event-boundaries') || '[]');
-            const disconnectAfter = response.headers.get('x-fixture-disconnect-after');
             let eventIndex = 0;
             for (let i = 0; i < bytes.length;) {
               if (cancelled) return;
-              const end = [Number(boundary), boundaries[eventIndex]]
-                .filter(value => value > i)
-                .reduce((end, value) => Math.min(end, value), Math.min(bytes.length, i + streamChunkSize));
+              const end = boundaries[eventIndex] > i
+                ? Math.min(bytes.length, i + 1, boundaries[eventIndex])
+                : Math.min(bytes.length, i + 1);
               controller.enqueue(bytes.slice(i, end));
               i = end;
-              if (i === Number(boundary)) await window.cloudWaitForStream();
               if (i === boundaries[eventIndex]) {
                 await window.cloudWaitForEvent(eventIndex);
-                if (disconnectAfter !== null && eventIndex === Number(disconnectAfter)) {
-                  controller.error(new Error('Fixture stream disconnected'));
-                  return;
-                }
                 eventIndex++;
               }
             }
@@ -198,7 +172,7 @@ export class CloudHarness {
         }
         return response;
       };
-    }, { cached: this.cached, authOrigin, cloudOrigin, streamChunkSize: this.streamChunkSize ?? 1 });
+    }, { cached: this.cached, authOrigin, cloudOrigin });
     await this.page.route(`${authOrigin}/console/**`, async route => {
       const path = new URL(route.request().url()).pathname.replace(/^\/console\/(?:releases\/v[^/]+\/)?/, '') || 'index.html';
       const contentType = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.html') ? 'text/html' : 'application/octet-stream';
@@ -221,11 +195,11 @@ export class CloudHarness {
       this.requests.push({ side: 'api', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
       if (path === '/v2/auth/me') {
         const signed = this.accountSignedIn || (request.headers().cookie || '').includes('fixture-account');
-        return route.fulfill({ status: signed ? 200 : this.meStatus, contentType: 'application/json', body: JSON.stringify({ user_id: this.userId, login: 'octocat', avatar_url: '' }) });
+        return route.fulfill({ status: signed ? 200 : 401, contentType: 'application/json', body: JSON.stringify({ user_id: this.userId, login: 'octocat', avatar_url: '' }) });
       }
       if (path === '/v2/auth/session') {
         this.accountSignedIn = true;
-        return route.fulfill({ status: this.apiStatus, contentType: 'application/json', body: JSON.stringify(this.account()) });
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(this.account()) });
       }
       if (path === '/v2/auth/logout') {
         this.accountSignedIn = false;
@@ -266,62 +240,42 @@ export class CloudHarness {
   account() { return { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: 'octocat', avatar_url: '' } }; }
 
   async installDesktopBridge() {
-    await this.page.exposeFunction('cloudNotification', (method, params) => {
-      this.notifications.push({ method, params });
-    });
-    await this.page.exposeFunction('cloudHostRequest', async request => {
-      this.hostRequests.push(request);
-      if (request.method === 'app.system_appearance') return { dark: false };
-      if (request.method === 'auth.status') return { connected: false, server_url: authOrigin };
-      if (request.method === 'account.session') return this.accountSignedIn ? { session: this.account() } : {};
-      if (request.method === 'auth.connect') {
-        const authorization = this.authorization;
-        if (authorization) await authorization.promise;
-        if (this.authorizationError) throw new Error(this.authorizationError);
-        this.accountSignedIn = true;
-        return { connected: false, server_url: authOrigin, user: { login: 'octocat', avatar_url: '' } };
-      }
-      if (request.method === 'auth.cancel') {
-        const authorization = this.authorization;
-        if (this.pauseAuthorizationCancel) await this.pauseAuthorizationCancel;
-        authorization?.reject(new Error('the sign-in was cancelled'));
-        return { connected: false, server_url: authOrigin };
-      }
-      if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
-      if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
-      if (request.method === 'cloud.history_cache') return this.historyCache?.(request.params) ?? { kind: 'done' };
-      if (request.method === 'cloud.mcp') return this.clientMcp?.(request.params) ?? { generation: 0, requests: [] };
-      if (request.method === 'cloud.key') throw new Error('Cloud must not read local credentials');
-      return this.device.replyFor(request);
-    });
-    await this.page.addInitScript(() => {
-      const listeners = new Map();
-      const events = { on(name, callback) {
-        const callbacks = listeners.get(name) || new Set();
-        listeners.set(name, callbacks);
-        callbacks.add(callback);
-        return () => callbacks.delete(callback);
-      } };
-      window.desktopEvent = (name, payload) => {
-        for (const callback of listeners.get(name) || []) callback({ payload });
-      };
-      window.__MoonBit__ = { getTitlebarArea: async () => null, app: events, events,
-        notification: {
-          show: params => window.cloudNotification('show', params),
-          setBadge: params => window.cloudNotification('setBadge', params),
-        },
-        openseek: new Proxy({}, { get: (_, method) => async params => {
-          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 6 } });
-          return window.cloudHostRequest({ method, params });
-        } }),
-      };
+    await installNativeBridge(this.page, {
+      hostProtocol: this.device.hostProtocol,
+      onNotification: (method, params) => {
+        this.notifications.push({ method, params });
+      },
+      onRequest: async request => {
+        this.hostRequests.push(request);
+        if (request.method === 'auth.status') return { connected: false, server_url: authOrigin };
+        if (request.method === 'account.session') return this.accountSignedIn ? { session: this.account() } : {};
+        if (request.method === 'auth.connect') {
+          const authorization = this.authorization;
+          if (authorization) await authorization.promise;
+          if (this.authorizationError) throw new Error(this.authorizationError);
+          this.accountSignedIn = true;
+          return { connected: false, server_url: authOrigin, user: { login: 'octocat', avatar_url: '' } };
+        }
+        if (request.method === 'auth.cancel') {
+          const authorization = this.authorization;
+          if (this.pauseAuthorizationCancel) await this.pauseAuthorizationCancel;
+          authorization?.reject(new Error('the sign-in was cancelled'));
+          return { connected: false, server_url: authOrigin };
+        }
+        if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
+        if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
+        if (request.method === 'cloud.history_cache') return this.historyCache?.(request.params) ?? { kind: 'done' };
+        if (request.method === 'cloud.mcp') return this.clientMcp?.(request.params) ?? { generation: 0, requests: [] };
+        if (request.method === 'cloud.key') throw new Error('Cloud must not read local credentials');
+        return this.device.dispatchRpc(request);
+      },
     });
   }
 
   async cloudRequest(route) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'ETag, x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'ETag, x-fixture-event-boundaries' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
@@ -337,7 +291,7 @@ export class CloudHarness {
       return json(empty[moonide[1]]);
     }
     if (/^\/v1\/sessions\/[^/]+\/files\/events$/.test(path)) {
-      return route.fulfill({ status: this.fileEventStatus, headers, contentType: 'text/event-stream', body: 'event: workspace_invalidated\ndata: {}\n\n' });
+      return route.fulfill({ status: 200, headers, contentType: 'text/event-stream', body: 'event: workspace_invalidated\ndata: {}\n\n' });
     }
     const control = path.match(/^\/v1\/sessions\/([^/]+)\/(control|events|commands|queue)$/);
     if (control) {
@@ -347,7 +301,7 @@ export class CloudHarness {
       if (operation === 'control') return json(snapshot);
       if (operation === 'events') {
         if (this.pauseSessionEvents) await this.pauseSessionEvents;
-        return route.fulfill({ status: this.sessionEventStatus, headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', this.controlState(session)) });
+        return route.fulfill({ status: 200, headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', this.controlState(session)) });
       }
       const envelope = request.postDataJSON();
       if (operation === 'commands' && 'settings' in envelope) return json({}, 422);
@@ -355,8 +309,7 @@ export class CloudHarness {
         return this.promptCommand(route, json, headers, session, envelope.command);
       }
       if (operation === 'commands' && ['goal', 'compact'].includes(envelope.command.command)) {
-        if (this.controlOffline) return route.abort('failed');
-        const rejected = this.controlRejected || (envelope.task_id !== undefined && envelope.task_id !== snapshot.data.active_task_id ? 'task_mismatch' : null);
+        const rejected = envelope.task_id !== undefined && envelope.task_id !== snapshot.data.active_task_id ? 'task_mismatch' : null;
         if (rejected) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: rejected });
         if (envelope.command.command === 'compact') {
           if (snapshot.data.compact_queued || snapshot.data.compacting) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: 'compaction_busy' });
@@ -366,12 +319,10 @@ export class CloudHarness {
       }
       const body = operation === 'commands' ? { task_id: envelope.task_id, ...envelope.command } : envelope;
       if (operation === 'commands') operation = body.command === 'cancel' ? 'stop' : body.command;
-      if (this.controlOffline) return route.abort('failed');
       const current = this.controlState(session);
       const idleQueueEdit = operation === 'queue' && ['edit', 'withdraw'].includes(body.action)
         && current.data.status === 'idle' && current.data.paused;
-      const rejected = this.controlRejected
-        || (current.task_id !== body.task_id ? 'task_mismatch' : null)
+      const rejected = (current.task_id !== body.task_id ? 'task_mismatch' : null)
         || (!current.data.active_task_id && !idleQueueEdit ? 'task_not_running' : null)
         || (operation !== 'stop' && current.data.status === 'stopping' ? 'task_stopping' : null);
       if (rejected) return control[2] === 'commands'
@@ -461,9 +412,6 @@ export class CloudHarness {
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();
       const session = decodeURIComponent(path.split('/').pop());
-      if (this.pausePatch) await this.pausePatch;
-      if (this.patchOffline) return route.abort('failed');
-      if (this.patchStatus !== 204) return json({}, this.patchStatus);
       const state = this.controlState(session).data;
       if (['model', 'thinking', 'approval'].some(key => key in body) && (this.generating.has(session) || state.compacting || state.compact_queued)) return json({}, 409);
       if (body.title !== undefined) this.titles.set(session, body.title);
@@ -477,8 +425,6 @@ export class CloudHarness {
       return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
-      if (this.pauseDelete) await this.pauseDelete;
-      if (this.deleteOffline) return route.abort('failed');
       const session = decodeURIComponent(path.split('/').pop());
       this.sessionIds = this.sessionIds.filter(id => id !== session);
       this.histories.delete(session);
@@ -543,7 +489,6 @@ export class CloudHarness {
     const previous = this.histories.get(session)?.messages || [];
     const messages = [...previous, { task_id: task, kind: 'user', data: { content: body.content }, created_at: 1000 }];
     this.histories.set(session, { messages, generating: true, outcome: null });
-    if (this.disconnectSend) return route.abort('failed');
     await json({ accepted: true }, 202);
     await this.publishTaskStream(session, task, data);
   }
@@ -673,21 +618,7 @@ export class CloudHarness {
     for (let index = 0; index < events.length; index++) {
       const [kind, data] = events[index];
       await this.emitSessionEvent(session, kind, data, { task });
-      if (index === 0 && this.pauseStream) await this.pauseStream;
       if (this.eventPauses?.get(index)) await this.eventPauses.get(index);
-      if (this.disconnectStreamAfter === index) {
-        // The reader disconnects independently of the server task. Complete
-        // this fixture's work so the history read sees the durable result.
-        for (let remaining = index + 1; remaining < events.length; remaining++) {
-          const [kind, data] = events[remaining];
-          await this.emitSessionEvent(session, kind, data, { task, silent: true });
-        }
-        await this.page.evaluate(session => {
-          for (const controller of window.cloudSessionStreams.get(session) || []) controller.error(new Error('Fixture stream disconnected'));
-          window.cloudSessionStreams.delete(session);
-        }, session);
-        return;
-      }
     }
   }
 
@@ -707,7 +638,7 @@ export class CloudHarness {
     await this.page.goto(`${authOrigin}/console/index.html?device=device-a`);
     const dismiss = this.page.getByRole('button', { name: 'Not now', exact: true });
     const hasCookie = (await this.page.context().cookies(authOrigin)).some(cookie => cookie.name === 'session');
-    if (!this.device.hostSettings.providers.deepseek.has_api_key && (this.desktop || this.accountSignedIn || this.meStatus === 200 || hasCookie)) {
+    if (!this.device.hostSettings.providers.deepseek.has_api_key && (this.desktop || this.accountSignedIn || hasCookie)) {
       await expect(dismiss).toBeVisible();
       await dismiss.click();
     } else {
@@ -723,21 +654,6 @@ export class CloudHarness {
 
   rowContainer(id) {
     return this.page.locator('.conversation-row').filter({ has: this.row(id) });
-  }
-
-  // Archived conversations are managed within the Settings dialog.
-  async openArchivedChats() {
-    await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await this.page.getByRole('tab', { name: 'Archive', exact: true }).click();
-  }
-
-  archivedRow(id) {
-    return this.page.getByRole('tabpanel', { name: 'Archive', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
-  }
-
-  async openArchived(id) {
-    await this.openArchivedChats();
-    await this.archivedRow(id).getByRole('button', { name: new RegExp(`^${this.titles.get(id)}`) }).click();
   }
 
   async open(id = sessionA) {

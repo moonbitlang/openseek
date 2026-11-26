@@ -34,7 +34,6 @@ test('local Console shows account storage failures and retries without reconnect
   await expect(home.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await openLocalWork(page, local);
   expect(local.localSockets).toHaveLength(1);
-  expect(local.device.pageErrors).toEqual([]);
 });
 
 test('local Console signs in independently and keeps its account across reload and Desktop auth changes', async ({ page, baseURL }) => {
@@ -65,7 +64,6 @@ test('local Console signs in independently and keeps its account across reload a
   expect(local.localRequests.filter(request => request.path.startsWith('/v1/')).every(request => !request.headers.authorization)).toBe(true);
   expect(local.localSockets.every(url => new URL(url).search === '')).toBe(true);
   expect(local.device.ticketRequests).toEqual([]);
-  expect(local.device.pageErrors).toEqual([]);
 });
 
 test('local Console logout clears only Cloud account state and preserves local work', async ({ page, baseURL }) => {
@@ -108,5 +106,4 @@ test('a fresh browser opens the local host directly without a Cloud account or c
   await openLocalWork(page, local);
   expect(local.localSockets.length).toBeGreaterThan(0);
   expect(local.device.ticketRequests).toEqual([]);
-  expect(local.device.pageErrors).toEqual([]);
 });

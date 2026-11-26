@@ -48,5 +48,4 @@ test('Cloud reconnects after EOF without resubmitting input', async ({ page }) =
   expect(app.postCount).toBe(1);
   expect(app.requests.filter(request => request.method === 'POST' && /\/(stop|steer|queue)$/.test(request.path))).toEqual([]);
   expect(await page.evaluate(() => window.cloudSessionStreams.get('11111111-1111-4111-8111-111111111111')?.size)).toBe(1);
-  expect(app.device.pageErrors).toEqual([]);
 });

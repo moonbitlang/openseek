@@ -108,7 +108,6 @@ test('the changes card lists the checkout and what the agent attached, and remov
   expect(requests(app, 'session.artifacts_remove').map(request => request.params)).toEqual([
     { session: 'session-1', artifact: { type: 'pull_request', url: `${repo}/pull/2119` } },
   ]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('the changes card appears when the agent attaches something to a conversation outside a repository', async ({ page }) => {
@@ -146,7 +145,6 @@ test('the changes card appears when the agent attaches something to a conversati
   app.notify('session.artifacts_changed', { session: 'another-session' });
   await page.waitForTimeout(200);
   expect(requests(app, 'session.artifacts_list')).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a checkout without a pull request reads as its branch and local diff, marked when the count stopped short', async ({ page }) => {
@@ -168,7 +166,6 @@ test('a checkout without a pull request reads as its branch and local diff, mark
   // floor, and the row says so instead of presenting them as the whole size.
   await expect(current.locator('.conv-changes-diff')).toHaveAttribute('title', 'Some untracked files were not counted');
   await expect(current.getByRole('link')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('merged attached pull requests fold into one row that unfolds them', async ({ page }) => {
@@ -228,5 +225,4 @@ test('merged attached pull requests fold into one row that unfolds them', async 
     `${repo}/pull/2202`,
     `${repo}/pull/2203`,
   ]);
-  expect(app.pageErrors).toEqual([]);
 });

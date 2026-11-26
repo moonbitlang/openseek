@@ -28,7 +28,6 @@ test('management dialogs preserve the work surface, draft and browser entry', as
     await expect(page.locator('#management-dialog')).not.toBeVisible();
     await expect(composer).toHaveValue('Unsent input survives dialogs');
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('local console opens a session without a device query', async ({ page }) => {
@@ -58,7 +57,6 @@ test('local console opens a session without a device query', async ({ page }) =>
   expect(new URL(page.url()).search).toBe('');
   await expect.poll(() => app.socketURLs.length).toBe(2);
   expect(app.ticketRequests).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('dialogs can open over an invalid route without changing it', async ({ page }) => {
@@ -68,7 +66,6 @@ test('dialogs can open over an invalid route without changing it', async ({ page
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(dialog(page)).toBeVisible(); await expect(page).toHaveURL(new RegExp(invalid + '$'));
   await page.keyboard.press('Escape'); await expect(page.locator('.navigation-notice')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('session deep links wait for catalogs and distinguish missing from failed loading', async ({ page }) => {
@@ -82,7 +79,6 @@ test('session deep links wait for catalogs and distinguish missing from failed l
   await page.goto(path('chat/session/does-not-exist'));
   await expect(page.locator('.navigation-notice')).toContainText('catalog unavailable');
   await expect(page.locator('.navigation-notice')).not.toContainText('no longer exists');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('first send promotes an OpenSeek draft in place without adding a history entry', async ({ page }) => {
@@ -96,7 +92,6 @@ test('first send promotes an OpenSeek draft in place without adding a history en
   await expect(page.locator('#task')).toHaveValue('Promote this draft');
   await page.locator('#send').click(); await expect(page).toHaveURL(new RegExp(draft.replace('/draft/', '/session/') + '$'));
   expect(await page.evaluate(() => history.length)).toBe(entries);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const refresh of [false, true]) {
@@ -104,12 +99,11 @@ for (const refresh of [false, true]) {
     const app = new DesktopBrowserHarness(page);
     app.codexModels = [{ id: 'gpt-test', displayName: 'Navigation Codex', isDefault: true }];
     let finishStart; const pendingStart = new Promise(resolve => { finishStart = resolve; });
-    const fallback = app.replyFor.bind(app);
-    app.replyFor = request => {
-      if (request.method === 'codex.thread.start') return pendingStart.then(() => fallback(request));
-      if (['codex.thread.read', 'codex.thread.resume'].includes(request.method)) return { thread: { id: 'codex-thread-e2e', cwd: '/workspace', projectRoot: '/workspace', preview: 'Navigation thread', updatedAt: 2, turns: [] } };
-      return fallback(request);
-    };
+    app.mockRpc({
+      'codex.thread.start': (_request, next) => pendingStart.then(() => next()),
+      'codex.thread.read': () => ({ thread: { id: 'codex-thread-e2e', cwd: '/workspace', projectRoot: '/workspace', preview: 'Navigation thread', updatedAt: 2, turns: [] } }),
+      'codex.thread.resume': () => ({ thread: { id: 'codex-thread-e2e', cwd: '/workspace', projectRoot: '/workspace', preview: 'Navigation thread', updatedAt: 2, turns: [] } }),
+    });
     await app.install(); await app.goto();
     await page.locator('#task').fill('Transfer this addressed draft'); await expect(page).toHaveURL(/\/chat\/draft\//);
     await page.getByRole('button', { name: 'Model', exact: true }).click();
@@ -123,7 +117,6 @@ for (const refresh of [false, true]) {
     if (refresh) await page.reload(); else await page.keyboard.press('Escape');
     await expect(dialog(page)).not.toBeVisible(); await expect(page.locator('.codex-topbar')).toBeVisible();
     expect(await page.evaluate(() => history.length)).toBe(entries);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -145,7 +138,7 @@ for (const engine of ['chat', 'codex']) {
     } else {
       await app.openSession(); await page.goBack(); await expect(page).toHaveURL(draft);
     }
-    await expect(page.locator('#task')).toHaveValue(''); expect(app.pageErrors).toEqual([]);
+    await expect(page.locator('#task')).toHaveValue('');
   });
 }
 
@@ -154,8 +147,7 @@ test('history restores the project before creating the next conversation', async
   app.workspaces = ['/project-a', '/project-b'];
   app.liveSessions = [{ id: 'session-a', title: 'A', updated_at_ms: 1 }, { id: 'session-b', title: 'B', updated_at_ms: 2 }];
   app.sessionGroups = sessions => ({ groups: app.workspaces.map((workspace, i) => ({ workspace, name: workspace, session_root: workspace + '/.openseek', sessions: sessions.filter(s => s.id === (i === 0 ? 'session-a' : 'session-b')), error: '' })) });
-  const fallback = app.replyFor.bind(app);
-  app.replyFor = request => { const result = fallback(request); if (request.method === 'session.load') result.session.id = request.params.session; return result; };
+  app.onRpc('session.load', (request, next) => { const result = next(); result.session.id = request.params.session; return result; });
   await app.install(); await app.goto();
   for (const id of ['session-a', 'session-b']) {
     await page.locator(`.conversation-row[title="${id}"]`).click(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
@@ -164,17 +156,17 @@ test('history restores the project before creating the next conversation', async
   await expect(page.locator('.topbar-workspace')).toContainText('project-a');
   const shortcut = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta+N' : 'Control+N');
   await page.keyboard.press(shortcut); await expect(page).toHaveURL(/\/chat\/new$/);
-  await expect(page.locator('.topbar-workspace')).toContainText('project-a'); expect(app.pageErrors).toEqual([]);
+  await expect(page.locator('.topbar-workspace')).toContainText('project-a');
 });
 
 for (const failure of ['rpc', 'store']) {
   test(`archived session deep links report ${failure} errors and recover on retry`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page); app.liveSessions = [];
     app.archivedSessions = [{ id: 'session-1', title: 'Archived fixture', updated_at_ms: 1 }];
-    let unavailable = true; const fallback = app.replyFor.bind(app);
-    app.replyFor = request => failure === 'store' && unavailable && request.method === 'session.list_archived'
+    let unavailable = true;
+    app.onRpc('session.list_archived', (_request, next) => failure === 'store' && unavailable
       ? { groups: [{ workspace: '/workspace', name: 'workspace', session_root: '/workspace/.openseek', sessions: [], error: 'Archive unavailable' }] }
-      : fallback(request);
+      : next());
     if (failure === 'rpc') app.rpcErrors.set('session.list_archived', 'Archive unavailable');
     await app.install(); await page.goto(path('chat/session/session-1'));
     await expect(page.locator('.navigation-notice')).toContainText('Archive unavailable');
@@ -183,7 +175,7 @@ for (const failure of ['rpc', 'store']) {
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
     await expect(page.locator('.navigation-notice')).toHaveCount(0);
-    expect(app.requests.some(r => r.method === 'session.load_archived')).toBe(true); expect(app.pageErrors).toEqual([]);
+    expect(app.requests.some(r => r.method === 'session.load_archived')).toBe(true);
   });
 }
 
@@ -200,5 +192,4 @@ test("Back closes the management dialog before it reaches the page", async ({ pa
   await expect(dialog(page)).not.toBeVisible();
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
   expect(await hostBack()).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });

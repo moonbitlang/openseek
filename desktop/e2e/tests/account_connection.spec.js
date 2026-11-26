@@ -24,7 +24,6 @@ test('device sockets use the cached account ticket instead of another account co
   await expect.poll(() => app.socketTickets.length).toBe(2);
   expect(app.socketTickets[1]).not.toBe(first);
   expect(app.ticketRequests[1].headers.authorization).toBe('Bearer ts_account-A');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a ticket response arriving after browser logout cannot open a socket', async ({ page }) => {
@@ -43,7 +42,6 @@ test('a ticket response arriving after browser logout cannot open a socket', asy
   await expect.poll(() => app.issuedTickets.size).toBe(1);
   expect(app.socketURLs).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const status of [401, 503]) {
@@ -62,7 +60,6 @@ for (const status of [401, 503]) {
       await expect.poll(() => app.socketTickets.length).toBe(1);
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_account-A');
     }
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -78,7 +75,6 @@ test('browser logout 401 retires both its cached account and device state', asyn
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
   await expect(page.locator('#task')).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -101,5 +97,4 @@ test('unreadable account storage does not fall through to another browser cookie
   await expect(page.getByRole('main').getByText(/Could not read account storage:/)).toBeVisible();
   expect(cookieChecks).toBe(0);
   expect(app.socketURLs).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });

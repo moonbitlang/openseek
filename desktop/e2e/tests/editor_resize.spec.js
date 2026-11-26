@@ -44,7 +44,6 @@ test('code editor follows expand and restore panel animations', { tag: '@motion'
   await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
   await expect(host.locator('.view-lines')).toBeVisible();
   await expectViewportFits();
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
@@ -107,7 +106,6 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
     await content.hover();
     await expect.poll(() => viewer.getAttribute('data-test-mouse-moves'))
       .not.toBe('0');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -150,5 +148,4 @@ test('dragging a vertical resize handle highlights only that handle', async ({ p
     await expect(active).toHaveCSS('background-image', 'none');
     await expect(sibling).toHaveCSS('background-image', 'none');
   }
-  expect(app.pageErrors).toEqual([]);
 });

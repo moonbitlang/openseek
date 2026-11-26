@@ -64,7 +64,6 @@ test('schedule form, running controls, and completed session navigation', async 
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
   await expect.poll(() => app.requests.some(r => r.method === 'session.load')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('failed save retains the draft and editing preserves its fields', async ({ page }) => {
@@ -88,7 +87,6 @@ test('failed save retains the draft and editing preserves its fields', async ({ 
   await page.setViewportSize({ width: 420, height: 900 });
   await expect(page.getByRole('dialog', { name: 'Scheduled tasks', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('automatic directory and save-and-run-now work without choosing a project', async ({ page }) => {
@@ -110,7 +108,6 @@ test('automatic directory and save-and-run-now work without choosing a project',
   await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByLabel('Working directory', { exact: true })).toHaveValue('auto');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('old setup failure remains readable when no log file was created', async ({ page }) => {
@@ -123,7 +120,6 @@ test('old setup failure remains readable when no log file was created', async ({
   await page.getByRole('button', { name: 'View log', exact: true }).click();
   await expect(page.locator('.schedule-log-content')).toContainText('Could not prepare working directory');
   await expect(page.getByRole('alert')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const broadcastDirectory of [true, false]) {
@@ -173,7 +169,6 @@ for (const broadcastDirectory of [true, false]) {
     app.notify('session.changed', { change: 'created', session: 'session-1', workspace });
     await expect(page.getByRole('region', { name: 'Running', exact: true }).getByRole('button', { name: 'Open session' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Run history', exact: true })).toContainText('Completed');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -193,5 +188,4 @@ test('skip reasons and declined actions are shown in the page language', async (
   await expect(page.getByRole('alert')).toHaveText('This schedule is already queued to run');
   // A declined action leaves the controls usable.
   await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });

@@ -22,7 +22,6 @@ test('PR descriptions and comments use GitHub HTML', async ({ page }) => {
   await expect(comment.locator('details')).toHaveAttribute('name', 'user-content-group');
   await expect(comment.locator('#user-content-link')).toHaveAttribute('href', `${prURL}#box`);
   await expect(page.locator('.github-detail')).not.toContainText('Legacy');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('unchanged bodyHTML preserves native disclosure nodes and changed HTML replaces them', async ({ page }) => {
@@ -51,7 +50,6 @@ test('unchanged bodyHTML preserves native disclosure nodes and changed HTML repl
     await expect.poll(() => handles[i].evaluate(el => el.isConnected)).toBe(false);
     await expect(root.locator('details').first()).not.toHaveAttribute('open');
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('GitHub code highlighting and task lists remain native without local diagram enhancements', async ({ page }) => {
@@ -67,7 +65,6 @@ test('GitHub code highlighting and task lists remain native without local diagra
   await expect(tasks.nth(0)).toBeChecked();
   await expect(tasks.nth(1)).not.toBeChecked();
   for (const task of await tasks.all()) await expect(task).toBeDisabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('GitHub media keeps proxy URLs, native playback and responsive sizing', async ({ page }) => {
@@ -111,7 +108,6 @@ test('GitHub media keeps proxy URLs, native playback and responsive sizing', asy
   expect(requests.some(url => url.startsWith('https://camo.githubusercontent.com/'))).toBe(true);
   expect(requests.filter(url => /https:\/\/example\.com\/(?:markdown|html|dark|fallback)\.png/.test(url))).toEqual([]);
   expect(app.requests.filter(r => r.method === 'fs.read_file')).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('GitHub HTML links normalize source URLs, copy correctly and route each click once', async ({ page, context }) => {
@@ -141,5 +137,4 @@ test('GitHub HTML links normalize source URLs, copy correctly and route each cli
   expect(opened).toHaveLength(3);
   expect(page.url()).toBe(originalURL);
   expect(app.requests.filter(r => ['shell.open_external', 'browser.open', 'host.open_path'].includes(r.method))).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });

@@ -50,7 +50,6 @@ test('inline title search reuses project rows and keeps results when opening unl
   await expect(input).toHaveValue('Unicode');
   await expect(rows(page)).toHaveCount(2);
   expect(app.requests.some(r => r.method === 'session.search')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('clear and Escape restore the normal list and keep typing focus; switching modes clears', async ({ page }) => {
@@ -72,7 +71,6 @@ test('clear and Escape restore the normal list and keep typing focus; switching 
   await expect(rows(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Work', exact: true }).click();
   await expect(input).toHaveValue('');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('all matching rows bypass compact previews and the old global limit; keyboard selection scrolls', async ({ page }) => {
@@ -97,7 +95,6 @@ test('all matching rows bypass compact previews and the old global limit; keyboa
   expect(row.y + row.height).toBeLessThanOrEqual(list.y + list.height + 1);
   await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
   expect(app.requests.some(r => r.method === 'session.load')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Chat search includes Cloud live titles, leaves archived ones out, then removes them on sign-out', async ({ page }) => {
@@ -126,7 +123,6 @@ test('Chat search includes Cloud live titles, leaves archived ones out, then rem
   await input.fill('matching');
   await expect(rows(page)).toHaveCount(0);
   await input.press('Enter');
-  expect(app.device.pageErrors).toEqual([]);
 });
 
 
@@ -171,7 +167,6 @@ test('Chat and Work searches isolate Cloud and project history and leave archive
   await input.fill('matching');
   await expect(rows(page)).toHaveText(['Matching work']);
   await expect(projects).toHaveText('workspace');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a late catalog refresh respects the current cleared query', async ({ page }) => {
@@ -183,5 +178,4 @@ test('a late catalog refresh respects the current cleared query', async ({ page 
   await expect(input).toHaveValue('');
   await expect(rows(page).filter({ hasText: 'Terminal rendering' })).toHaveCount(1);
   await expect(input).toHaveValue('');
-  expect(app.pageErrors).toEqual([]);
 });

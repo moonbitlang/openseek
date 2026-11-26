@@ -59,9 +59,16 @@ traffic with Playwright routes and use retrying assertions instead of fixed
 sleeps.
 
 Import `test` and `expect` from `tests/support/test.js`. Its pages run with CSS
-transitions and animations disabled, so clicks do not wait for moving targets.
-Tag a test `{ tag: '@motion' }` when it checks motion itself, such as a running
-spinner, reduced-motion handling, or geometry during or after a transition.
+transitions and animations disabled, so clicks do not wait for moving targets,
+and automatically fail on uncaught `pageerror` events. Tag a test
+`{ tag: '@motion' }` when it checks motion itself (such as a running spinner,
+reduced-motion handling, or geometry during or after a transition), or
+`{ tag: '@allow-pageerror' }` when an uncaught error is expected.
+
+Customize host RPCs on `DesktopBrowserHarness` with `app.onRpc(methodOrMatcher, handler)`
+or `app.mockRpc({ ... })`, and simulate the native Proton bridge with
+`await app.installNative()` (backed by `tests/support/native_bridge.js`) rather
+than monkey-patching `replyFor` or hand-rolling `window.__MoonBit__`.
 
 ## IndexedDB module contracts
 

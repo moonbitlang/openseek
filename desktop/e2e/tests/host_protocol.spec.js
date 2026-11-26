@@ -13,5 +13,4 @@ test('a host built for another protocol revision is reported once and not retrie
   expect(app.ticketRequests.length).toBe(tickets);
   // The handshake decides before the page sends the host any request.
   expect(app.requests.map(request => request.method)).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });

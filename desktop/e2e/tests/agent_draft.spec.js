@@ -73,7 +73,6 @@ test('one draft carries current text, file mentions and images through repeated 
     { type: 'image', url: imageURL },
   ]);
   await expect(page.locator('.conversation-row')).toHaveCount(initialRows + 1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('an image-only Codex draft migrates back and sends through DeepSeek', async ({ page }) => {
@@ -92,18 +91,16 @@ test('an image-only Codex draft migrates back and sends through DeepSeek', async
   await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.images).toEqual([imageURL]);
   expect(app.requests.filter(r => r.method === 'codex.thread.start')).toHaveLength(0);
   await expect(page.locator('.conversation-row')).toHaveCount(initialRows + 1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a submitted Codex draft cannot switch agents while thread creation is pending', async ({ page }) => {
   const app = await open(page);
   await choose(page, 'Codex');
   const pending = Promise.withResolvers();
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = async request => {
-    if (request.method === 'codex.thread.start') await pending.promise;
-    return replyFor(request);
-  };
+  app.onRpc('codex.thread.start', async (_request, next) => {
+    await pending.promise;
+    return next();
+  });
   await page.locator('#task').fill('Create this conversation');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.some(r => r.method === 'codex.thread.start')).toBe(true);
@@ -112,7 +109,6 @@ test('a submitted Codex draft cannot switch agents while thread creation is pend
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('group', { name: 'OpenSeek', exact: true })).toHaveCount(0);
   pending.resolve();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('ultrareview stays a command in the composer and sends the swarm prompt', async ({ page }) => {
@@ -132,7 +128,6 @@ test('ultrareview stays a command in the composer and sends the swarm prompt', a
   expect(sent).toContain('"--swarm"');
   // The composer clears as for any sent prompt; the expansion is not left behind.
   await expect(task).toHaveValue('');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('simplify sends the sweep prompt with its focus', async ({ page }) => {
@@ -147,7 +142,6 @@ test('simplify sends the sweep prompt with its focus', async ({ page }) => {
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: pattern matching');
   expect(app.requests.find(r => r.method === 'agent.start').params.task).toContain('"@builtin/simplify.mbtx"');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a failed first Codex send keeps the agent fixed while retrying', async ({ page }) => {
@@ -170,28 +164,27 @@ test('a failed first Codex send keeps the agent fixed while retrying', async ({ 
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('reusing a draft waits for its pending open and close before reopening', async ({ page }) => {
   const app = await open(page);
   const firstOpen = Promise.withResolvers();
   const closing = Promise.withResolvers();
-  const reply = app.replyFor.bind(app);
   const authorized = new Set();
   let opens = 0;
-  app.replyFor = async request => {
-    if (request.method === 'codex.draft.open') {
+  app.mockRpc({
+    'codex.draft.open': async (request, next) => {
       opens += 1;
       if (opens === 1) await firstOpen.promise;
       authorized.add(request.params.draft_id);
-    }
-    if (request.method === 'codex.draft.close') {
+      return next();
+    },
+    'codex.draft.close': async (request, next) => {
       await closing.promise;
       authorized.delete(request.params.draft_id);
-    }
-    return reply(request);
-  };
+      return next();
+    },
+  });
   await page.locator('#task').fill('Retain this prompt');
   await choose(page, 'Codex');
   await expect.poll(() => opens).toBe(1);
@@ -210,7 +203,6 @@ test('reusing a draft waits for its pending open and close before reopening', as
   expect(app.requests.filter(r => r.method === 'codex.draft.open').every(r => r.params.draft_id === id)).toBe(true);
   await page.locator('#send').click();
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Local native goal and compact commands share input and wait for engine confirmation', async ({ page }) => {
@@ -245,5 +237,4 @@ test('Local native goal and compact commands share input and wait for engine con
   app.notify('agent.event', {session: 'session-1', event: {event: 'compaction_finished', from_sequence: 1, to_sequence: sequence, summary: 'Shared command work'}});
   await expect(page.locator('.composer-notice-text')).toHaveCount(0);
   await task.fill('Keep this draft');
-  expect(app.pageErrors).toEqual([]);
 });

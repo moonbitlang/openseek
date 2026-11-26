@@ -69,6 +69,5 @@ for (const mode of ['Token', 'Tree']) {
     await expect.poll(() => host.evaluate(node => node.scrollLeft)).toBe(0);
     await page.mouse.wheel(0, 300);
     await expect.poll(() => host.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
-    expect(app.pageErrors).toEqual([]);
   });
 }

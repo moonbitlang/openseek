@@ -16,15 +16,14 @@ test('one connection notice replaces pending inventory failures and preserves th
   await page.locator('#task').fill('Keep this unsent draft');
   await page.locator('#task').focus();
   const draft = await page.locator('#task').elementHandle();
-  const original = app.replyFor.bind(app);
   const pending = [];
-  app.replyFor = request => {
-    if (['session.list', 'worktree.list'].includes(request.method)) {
+  const restorePending = app.onRpc(
+    method => method === 'session.list' || method === 'worktree.list',
+    request => {
       pending.push(request.method);
       return new Promise(() => {});
-    }
-    return original(request);
-  };
+    },
+  );
   app.notify('workspace.changed', { workspaces: ['/workspace', ...Array.from({ length: 8 }, (_, i) => `/project-${i}`)] });
   app.notify('session.changed', { change: 'created', session: 'new-session', workspace: '/workspace' });
   await expect.poll(() => pending.filter(m => m === 'worktree.list').length).toBeGreaterThanOrEqual(8);
@@ -49,13 +48,12 @@ test('one connection notice replaces pending inventory failures and preserves th
   await page.waitForTimeout(2200);
   await expect(banner).toHaveCount(1);
   await expect(page.locator('.notification')).toHaveCount(0);
-  app.replyFor = original;
+  restorePending();
   app.connectionAvailable = true;
   await expect(banner).toHaveCount(0, { timeout: 15000 });
   await expect(page.locator('#send')).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('Keep this unsent draft');
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a host rejection with connection-like wording is still reported', async ({ page }) => {
@@ -67,7 +65,6 @@ test('a host rejection with connection-like wording is still reported', async ({
   app.rpcErrors.set('worktree.list', 'SeekMoon connection lost');
   app.notify('workspace.changed', { workspaces: ['/workspace', '/rejected-project'] });
   await expect(page.locator('.notification').filter({ hasText: '/rejected-project' })).toContainText('SeekMoon connection lost');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Codex drafts use the same reconnecting notice and cannot send offline', async ({ page }) => {
@@ -89,5 +86,4 @@ test('Codex drafts use the same reconnecting notice and cannot send offline', as
   await expect(page.locator('#send')).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('Keep this Codex draft');
   expect(app.requests.filter(r => r.method === 'codex.turn.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
