@@ -2352,8 +2352,7 @@ fn view(
           CloudTranscript(..) =>
             [
               transcript_html,
-              if model.is_desktop &&
-                model.cloud_identity()
+              if model.cloud_identity()
                 is Some(@interop.Cloud(account~, session~)) {
                 model.cloud_questions.view(
                   session,

@@ -12,6 +12,7 @@ import {
   "moonbitlang/editor@0.4.6",
   "moonbitlang/x@0.5.7",
   "moonbitlang/openseek@0.7.7",
+  "openseek_desktop/backend@0.1.5",
   "openseek_desktop@0.1.5",
   "moonbitlang/async@0.22.10",
   "moonbitlang/indexeddb@0.1.0",

@@ -209,13 +209,7 @@ async fn Dispatcher::call_tool(
   let (content, is_error) = match outcome {
     Ok(content) => (content, false)
     Err(error) => {
-      @xlog.warn(category="mcp") <?
-        {
-          "event": "mcp_tool_failed",
-          "tool": name,
-          "session": session,
-          "error": error,
-        }
+      log_tool_failure(name, session, error)
       ([Text(error)], true)
     }
   }
@@ -231,4 +225,22 @@ fn offered(name : String, groups : Array[String]) -> Bool {
     name
   }
   groups.is_empty() || groups.contains(group)
+}
+
+///|
+#cfg(target="native")
+fn log_tool_failure(name : String, session : String, error : String) -> Unit {
+  @xlog.warn(category="mcp") <?
+    {
+      "event": "mcp_tool_failed",
+      "tool": name,
+      "session": session,
+      "error": error,
+    }
+}
+
+///|
+#cfg(not(target="native"))
+fn log_tool_failure(_name : String, _session : String, _error : String) -> Unit {
+  ()
 }

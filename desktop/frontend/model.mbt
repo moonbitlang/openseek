@@ -1250,6 +1250,7 @@ priv struct Model {
     @interop.ConversationIdentity,
     Array[@protocol.PreviewOpenRequest],
   ]
+  browser_questions : BrowserCloudQuestions?
   cloud_questions : @user_questions.Model
   cloud : @cloud.State
   chat_navigation_generation : Int32
@@ -2771,6 +2772,7 @@ fn initial_model(
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
     pending_previews: Map([]),
+    browser_questions: None,
     cloud_questions: @user_questions.Model(),
     cloud: @cloud.State::empty(),
     chat_navigation_generation: 0,

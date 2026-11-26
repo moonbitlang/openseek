@@ -17,6 +17,7 @@ pub fn Dispatcher::Dispatcher(
 
 ///|
 /// Register a batch atomically before serving requests.
+#cfg(target="native")
 pub fn Dispatcher::add_tools(
   self : Dispatcher,
   tools : Array[Tool],

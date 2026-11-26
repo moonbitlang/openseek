@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/backend/mcp",
   "moonbitlang/core/async",
   "moonbitlang/core/async/cond_var",
   "openseek_desktop/backend/uuid",
@@ -7,7 +8,7 @@ import {
   "moonbitlang/core/json",
 }
 
-supported_targets = "+native+wasm"
+supported_targets = "js+native+wasm"
 
 options(
   "allow-experimental-packages": [

@@ -1,26 +1,39 @@
 import {
   "moonbitlang/openseek/mcp/wire",
-  "openseek_desktop/backend/entropy",
   "moonbitlang/core/async",
+}
+
+#cfg(target="native")
+import {
+  "moonbitlang/core/json",
+  "openseek_desktop/backend/entropy",
   "moonbitlang/core/async/http",
   "moonbitlang/core/async/io",
   "moonbitlang/core/async/socket",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/json",
   "tonyfettes/xlog",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
-supported_targets = "+native"
+supported_targets = "js+native+wasm"
 
+#cfg(target="native")
 import {
   "moonbitlang/openseek/mcp/streamhttp",
   "moonbitlang/openseek/mcp/config" @mcpconfig,
 } for "test"
 
 options(
+  targets: {
+    "dispatcher_test.mbt": [ "native" ],
+    "server.mbt": [ "native" ],
+    "server_test.mbt": [ "native" ],
+    "stateless_test.mbt": [ "native" ],
+    "stdio.mbt": [ "native" ],
+    "stdio_test.mbt": [ "native" ],
+  },
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/http",

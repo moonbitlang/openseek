@@ -7,9 +7,7 @@ priv suberror CloudMcpConnection {
 /// Every real Cloud conversation opened on this device keeps its connection
 /// across selection changes. Account retirement unloads all sockets and timers.
 fn cloud_mcp_subscriptions(model : Model, emit : @cmd.Emit[Msg]) -> @sub.Sub {
-  guard model.is_desktop &&
-    !model.cloud.needs_sign_in &&
-    model.account is Some(account) else {
+  guard !model.cloud.needs_sign_in && model.account is Some(account) else {
     return @sub.batch([])
   }
   @sub.batch(
@@ -19,7 +17,14 @@ fn cloud_mcp_subscriptions(model : Model, emit : @cmd.Emit[Msg]) -> @sub.Sub {
       .map_or(true, owner => owner.session() != session) &&
       !model.cloud.retired.contains(session) &&
       !model.cloud.deletions.contains(session) => {
-        cloud_mcp_connection(account, model.cloud.epoch, session, emit)
+        cloud_mcp_connection(
+          account,
+          model.cloud.epoch,
+          session,
+          emit,
+          model.browser_questions,
+          model.app_version,
+        )
       }
     ],
   )
@@ -31,6 +36,8 @@ fn cloud_mcp_connection(
   epoch : Int32,
   session : String,
   emit : @cmd.Emit[Msg],
+  browser : BrowserCloudQuestions?,
+  version : String,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "cloud-mcp-\{epoch}:\{account.user.user_id}:\{session}",
@@ -41,6 +48,25 @@ fn cloud_mcp_connection(
       let current : Ref[@js.Value?] = Ref(None)
       let timer : Ref[@common.Disposable?] = Ref(None)
       let account_id = account.user.user_id
+      let dispatcher = browser.map(host => {
+        @mcp.Dispatcher(
+          [
+            host.questions.tool(_ => (), () => {
+              if active.val {
+                scheduler.add(
+                  emit(
+                    CloudQuestions(
+                      account=account_id,
+                      @user_questions.Snapshot(host.questions.snapshot()),
+                    ),
+                  ),
+                )
+              }
+            }),
+          ],
+          version~,
+        )
+      })
       let ready_changed = ready => {
         scheduler.add(
           emit(CloudAction(@cloud.ClientToolsReady(epoch, session, ready))),
@@ -87,6 +113,9 @@ fn cloud_mcp_connection(
               timer.val = None
             }
             ready_changed(true)
+            if browser is Some(_) {
+              return
+            }
             scheduler.add(
               @cmd.attempt(
                 result => {
@@ -116,15 +145,22 @@ fn cloud_mcp_connection(
           // TODO: bound concurrent dispatches if the service broadcasts bursts
           // large enough to overload this device. Calls are not replayed.
           @js.Promise::from_async(() => {
-            let answer : Json = @interop.bridge_request(
-              Local,
-              @commands.cloud_mcp,
-              @protocol.CloudMcpRequest::Dispatch(
-                account=account_id,
-                session~,
-                message~,
-              ),
-            ) catch {
+            let answer : Json = try {
+              match dispatcher {
+                Some(dispatcher) =>
+                  dispatcher.dispatch(message, session~).unwrap_or(null)
+                None =>
+                  @interop.bridge_request(
+                    Local,
+                    @commands.cloud_mcp,
+                    @protocol.CloudMcpRequest::Dispatch(
+                      account=account_id,
+                      session~,
+                      message~,
+                    ),
+                  )
+              }
+            } catch {
               error => {
                 // A failed host hop ends the connection. Dispatcher owns
                 // protocol errors and tool-failure responses.
@@ -157,12 +193,16 @@ fn cloud_mcp_connection(
           // A later answer must use Cloud input rather than an MCP reply to
           // this dead socket. Finish detaching before accepting new calls.
           @js.Promise::from_async(() => {
-            let _ : Json = @interop.bridge_request(
-              Local,
-              @commands.cloud_mcp,
-              @protocol.CloudMcpRequest::Detach(account=account_id, session~),
-            ) catch {
-              _ => null
+            if browser is Some(host) {
+              host.questions.detach(session)
+            } else {
+              let _ : Json = @interop.bridge_request(
+                Local,
+                @commands.cloud_mcp,
+                @protocol.CloudMcpRequest::Detach(account=account_id, session~),
+              ) catch {
+                _ => null
+              }
             }
             if active.val {
               timer.val = Some(@base_browser.schedule_timeout(connect, 1500))
@@ -188,6 +228,9 @@ fn cloud_mcp_connection(
       Some({
         unload: _ => {
           active.val = false
+          if browser is Some(host) {
+            host.questions.detach(session)
+          }
           if timer.val is Some(handle) {
             handle.dispose()
           }

@@ -37,7 +37,7 @@ fn ApiState::cloud_mcp_client(
       [
         browser(account),
         self.preview_tool(account~),
-        ask_user_tool(questions, _ => (), () => {
+        questions.tool(_ => (), () => {
           self.cloud_questions_changed(account, questions)
         }),
       ],

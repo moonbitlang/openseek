@@ -290,6 +290,11 @@ fn account_loaded(
   let next = {
     ..model,
     account,
+    browser_questions: if changed && !model.is_desktop {
+      account.map(_ => BrowserCloudQuestions())
+    } else {
+      model.browser_questions
+    },
     cloud_questions: if changed {
       @user_questions.Model()
     } else {

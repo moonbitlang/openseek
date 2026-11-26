@@ -1,6 +1,7 @@
 ///|
 /// Validate the metadata of this request, without consulting any previous call.
 /// Legacy requests keep their existing handshake and header semantics.
+#cfg(target="native")
 fn Server::validate_http_metadata(
   self : Server,
   headers : @http.Headers,
