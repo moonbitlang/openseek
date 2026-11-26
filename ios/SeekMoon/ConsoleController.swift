@@ -3,17 +3,34 @@ import UIKit
 import WebKit
 
 @MainActor final class ConsoleController: UIViewController, WKNavigationDelegate, WKUIDelegate {
+    private let navigation = ConsoleNavigation()
     private let web: WKWebView
+    let conversationView = UIView()
+    private var canvasObservation: NSKeyValueObservation?
+    private var scrollObservation: NSKeyValueObservation?
+    private var composerCanvas: UIColor?
+    private var dialogDim: CGFloat?
+    private var lastInputHeight: CGFloat?
+    let inputViewport = UIView()
+    private var keyboardFrames: CADisplayLink?
+    private lazy var keyboardLimit = inputViewport.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor)
+    private lazy var resizeWebForKeyboard = web.bottomAnchor.constraint(equalTo: inputViewport.bottomAnchor)
+    private lazy var fixedWebBottom = web.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
     private let indicator = UIActivityIndicatorView(style: .medium)
-    private let errorView = UIStackView()
-    private let errorText = UILabel()
+    private let statusCover = UIView()
+    private let statusText = UILabel()
+    private let recovery = UIStackView()
+    private var slowLoad: Task<Void, Never>?
+    private var localDocument: WKNavigation?
+    private var pendingNavigation: WKNavigation?
     private var failedPage: URL?
     private var signIn: SignIn?
     private var downloads: [WKDownload: (temporaryFile: URL, filename: String)] = [:]
     private let lastPageKey = "console.lastPage"
 
-    init() {
+    init(websiteDataStore: WKWebsiteDataStore? = nil) {
         let config = WKWebViewConfiguration()
+        if let websiteDataStore { config.websiteDataStore = websiteDataStore }
         config.applicationNameForUserAgent = "SeekMoonIOS/0.1.0"
         web = WKWebView(frame: .zero, configuration: config)
         super.init(nibName: nil, bundle: nil)
@@ -26,56 +43,227 @@ import WebKit
         view.backgroundColor = .systemBackground
         web.navigationDelegate = self; web.uiDelegate = self
         web.allowsBackForwardNavigationGestures = true
-        web.scrollView.contentInsetAdjustmentBehavior = .always
+        web.scrollView.contentInsetAdjustmentBehavior = .never
         #if DEBUG
         web.isInspectable = true
         #endif
+        conversationView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(conversationView)
         web.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(web)
-        let safe = view.safeAreaLayoutGuide
-        let keyboard = view.keyboardLayoutGuide
-        keyboard.usesBottomSafeArea = false
+        conversationView.addSubview(web)
+        inputViewport.translatesAutoresizingMaskIntoConstraints = false
+        inputViewport.isUserInteractionEnabled = false
+        conversationView.insertSubview(inputViewport, belowSubview: web)
+        navigation.attach(to: self, web: web)
+        // The page canvas continues behind the keyboard's transparent margins.
+        // The input viewport ends at the top of its accessory bar.
+        view.keyboardLayoutGuide.usesBottomSafeArea = false
+        let restingBottom = inputViewport.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+        restingBottom.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            web.topAnchor.constraint(equalTo: view.topAnchor),
-            web.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            web.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            web.bottomAnchor.constraint(equalTo: keyboard.topAnchor)
+            conversationView.topAnchor.constraint(equalTo: view.topAnchor),
+            conversationView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            conversationView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            conversationView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            web.topAnchor.constraint(equalTo: conversationView.safeAreaLayoutGuide.topAnchor),
+            web.leadingAnchor.constraint(equalTo: conversationView.safeAreaLayoutGuide.leadingAnchor),
+            web.trailingAnchor.constraint(equalTo: conversationView.safeAreaLayoutGuide.trailingAnchor),
+            inputViewport.topAnchor.constraint(equalTo: conversationView.safeAreaLayoutGuide.topAnchor),
+            inputViewport.leadingAnchor.constraint(equalTo: conversationView.safeAreaLayoutGuide.leadingAnchor),
+            inputViewport.trailingAnchor.constraint(equalTo: conversationView.safeAreaLayoutGuide.trailingAnchor),
+            restingBottom
         ])
+        resizeWebForKeyboard.isActive = true
+        for event in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardWillHideNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(keyboardVisibilityChanged(_:)), name: event, object: nil)
+        }
+        for event in [UIResponder.keyboardDidChangeFrameNotification, UIResponder.keyboardDidHideNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(finishKeyboardAnimation), name: event, object: nil)
+        }
+        canvasObservation = web.observe(\.underPageBackgroundColor, options: [.initial, .new]) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.paintCanvas() }
+        }
 
-        indicator.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(indicator)
-        NSLayoutConstraint.activate([indicator.centerXAnchor.constraint(equalTo: safe.centerXAnchor), indicator.centerYAnchor.constraint(equalTo: safe.centerYAnchor)])
-        let retry = UIButton(type: .system); retry.setTitle("Retry", for: .normal)
-        retry.addAction(UIAction { [weak self] _ in self?.loadPage(self?.failedPage) }, for: .touchUpInside)
-        let home = UIButton(type: .system); home.setTitle("Open Cloud", for: .normal)
-        home.addAction(UIAction { [weak self] _ in self?.loadPage(Console.home) }, for: .touchUpInside)
-        errorText.numberOfLines = 0; errorText.textAlignment = .center
-        errorText.font = .preferredFont(forTextStyle: .body); errorText.adjustsFontForContentSizeCategory = true
-        errorView.axis = .vertical; errorView.spacing = 12; errorView.alignment = .center
-        [errorText, retry, home].forEach(errorView.addArrangedSubview)
-        errorView.isHidden = true; errorView.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(errorView)
-        NSLayoutConstraint.activate([errorView.centerYAnchor.constraint(equalTo: safe.centerYAnchor),
-                                     errorView.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 24),
-                                     errorView.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -24)])
+        // The chat already moves its editor above the keyboard. WebKit also
+        // tries to scroll the whole document to reveal the focused textarea.
+        scrollObservation = web.scrollView.observe(\.contentOffset) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                guard let self, self.fixedWebBottom.isActive, self.keyboardLimit.isActive else { return }
+                let scroll = self.web.scrollView
+                if scroll.zoomScale == 1, !scroll.isZooming, scroll.contentOffset.y != 0 {
+                    scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: 0), animated: false)
+                }
+            }
+        }
+        statusCover.backgroundColor = .systemBackground
+        statusCover.accessibilityIdentifier = "console.loading"
+        statusCover.frame = view.bounds
+        statusCover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(statusCover)
+        let retry = UIButton(type: .system)
+        retry.setTitle(String(localized: "Retry"), for: .normal)
+        retry.addAction(UIAction { [weak self] _ in self?.loadPage(self?.failedPage, retry: true) }, for: .touchUpInside)
+        let home = UIButton(type: .system)
+        home.setTitle(String(localized: "Open Cloud"), for: .normal)
+        home.addAction(UIAction { [weak self] _ in self?.loadPage(Console.home, retry: true) }, for: .touchUpInside)
+        if #available(iOS 26.0, *) {
+            retry.configuration = .prominentGlass()
+            home.configuration = .glass()
+        }
+        recovery.spacing = 20
+        [retry, home].forEach(recovery.addArrangedSubview)
+        statusText.numberOfLines = 0
+        statusText.textAlignment = .center
+        statusText.textColor = .label
+        statusText.font = .preferredFont(forTextStyle: .body)
+        statusText.adjustsFontForContentSizeCategory = true
+        let status = UIStackView(arrangedSubviews: [indicator, statusText, recovery])
+        status.axis = .vertical
+        status.spacing = 12
+        status.alignment = .center
+        status.translatesAutoresizingMaskIntoConstraints = false
+        statusCover.addSubview(status)
+        let safe = statusCover.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([status.centerYAnchor.constraint(equalTo: safe.centerYAnchor),
+                                     status.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 24),
+                                     status.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -24)])
         NotificationCenter.default.addObserver(self, selector: #selector(rememberPage), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        loadPage(UserDefaults.standard.url(forKey: lastPageKey))
+        let saved = UserDefaults.standard.url(forKey: lastPageKey)
+        let destination = saved.flatMap { Console.isPage($0) ? $0 : nil } ?? Console.home
+        failedPage = destination
+        showLoading()
+        // This fixed local document opens WebKit's existing first-party storage.
+        // No console scripts or network request are needed to show the login buttons.
+        localDocument = web.loadHTMLString(Self.accountDocument, baseURL: destination)
+        pendingNavigation = localDocument
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if keyboardFrames == nil { syncInputHeight() }
+        navigation.layoutControls()
+    }
+
+    // Sample the keyboard animation UIKit is actually displaying. Changing
+    // WKWebView's frame here would also animate its document scroll offset.
+    @objc private func syncInputHeight() {
+        guard fixedWebBottom.isActive else { return }
+        let displayed = keyboardFrames == nil ? nil : inputViewport.layer.presentation()?.bounds.height
+        let height = (displayed ?? inputViewport.bounds.height).rounded()
+        guard height > 0, height != lastInputHeight else { return }
+        lastInputHeight = height
+        web.callAsyncJavaScript("document.documentElement.style.setProperty('--ios-chat-height', height + 'px')",
+            arguments: ["height": height], in: nil, in: .defaultClient, completionHandler: nil)
+    }
+
+    func setComposerCanvas(_ color: UIColor?, dialogDim: CGFloat? = nil) {
+        composerCanvas = color
+        self.dialogDim = dialogDim
+        // While a dialog owns the keyboard, resize its WebKit viewport normally.
+        let tracksComposer = color != nil && dialogDim == nil
+        if tracksComposer != fixedWebBottom.isActive {
+            lastInputHeight = nil
+            if tracksComposer {
+                resizeWebForKeyboard.isActive = false
+                fixedWebBottom.isActive = true
+            } else {
+                finishKeyboardAnimation()
+                fixedWebBottom.isActive = false
+                resizeWebForKeyboard.isActive = true
+            }
+            view.setNeedsLayout()
+        }
+        paintCanvas()
+    }
+
+    @objc private func keyboardVisibilityChanged(_ notification: Notification) {
+        guard let window = view.window, window.isKeyWindow else { return }
+        if let screen = notification.object as? UIScreen, screen !== window.windowScene?.screen { return }
+        // WebKit's accessory can leave the guide above the home indicator
+        // after hiding. Only a visible keyboard limits the resting viewport.
+        if fixedWebBottom.isActive, keyboardFrames == nil {
+            let link = CADisplayLink(target: self, selector: #selector(syncInputHeight))
+            keyboardFrames = link
+            link.add(to: .main, forMode: .common)
+        }
+        let end = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+        let onScreen = end.map { window.windowScene?.screen.coordinateSpace.bounds.intersects($0) == true } ?? false
+        keyboardLimit.isActive = notification.name != UIResponder.keyboardWillHideNotification && onScreen
+        view.layoutIfNeeded()
+        syncInputHeight()
+    }
+
+    @objc private func finishKeyboardAnimation() {
+        keyboardFrames?.invalidate()
+        keyboardFrames = nil
+        syncInputHeight()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        finishKeyboardAnimation()
+    }
+
+    private func paintCanvas() {
+        let color = composerCanvas ?? web.underPageBackgroundColor ?? .systemBackground
+        let fill = color.cgColor.alpha > 0 ? color : .systemBackground
+        // The WK dialog dims everything inside the web viewport. Continue the
+        // same scrim into the safe areas, keeping the base under the glass opaque.
+        inputViewport.backgroundColor = dialogDim == nil ? nil : fill
+        conversationView.backgroundColor = dialogDim.map { fill.withAlphaComponent(1 - $0) } ?? fill
+        view.backgroundColor = dialogDim == nil ? fill : .black
+    }
+
+    static let accountDocument = """
+        <!doctype html><html data-seekmoon-account><head>
+        <meta name="color-scheme" content="light dark">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'">
+        </head><body></body></html>
+        """
+
     @objc private func rememberPage() {
-        if let page = web.url, Console.isPage(page) {
+        if localDocument == nil, let page = web.url, Console.isPage(page) {
             UserDefaults.standard.set(Console.origin.appending(path: page.path), forKey: lastPageKey)
         }
     }
 
-    private func loadPage(_ page: URL?) {
+    private func loadPage(_ page: URL?, retry: Bool = false) {
         let url = page.flatMap { Console.isPage($0) ? $0 : nil } ?? Console.home
-        failedPage = url; web.isHidden = false; errorView.isHidden = true; indicator.startAnimating()
-        web.load(URLRequest(url: url))
+        localDocument = nil
+        failedPage = url
+        navigation.reset()
+        showLoading()
+        let policy: URLRequest.CachePolicy = retry ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
+        pendingNavigation = web.load(URLRequest(url: url, cachePolicy: policy))
+    }
+
+    private func showLoading() {
+        slowLoad?.cancel()
+        statusCover.isHidden = false
+        recovery.isHidden = true
+        statusText.text = String(localized: "Opening SeekMoon…")
+        indicator.startAnimating()
+        slowLoad = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(12)) } catch { return }
+            self?.statusText.text = String(localized: "Loading is taking longer than usual. You can wait or retry.")
+            self?.recovery.isHidden = false
+        }
+    }
+
+    func consoleDidRender() {
+        slowLoad?.cancel()
+        indicator.stopAnimating()
+        statusCover.isHidden = true
     }
 
     private func showError(_ description: String, url: URL?) {
+        slowLoad?.cancel()
+        navigation.reset()
         if Console.isPage(url) { failedPage = url }
-        indicator.stopAnimating(); web.isHidden = true
-        errorText.text = "Couldn't open SeekMoon.\n\(description)"; errorView.isHidden = false
+        indicator.stopAnimating()
+        statusText.text = String(localized: "Couldn’t open SeekMoon.") + "\n" + description
+        statusCover.isHidden = false
+        recovery.isHidden = false
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
@@ -89,7 +277,7 @@ import WebKit
         if action.targetFrame?.isMainFrame == false { decisionHandler(.allow); return }
         if Console.owns(url), url.path == "/v2/auth/login" {
             decisionHandler(.cancel)
-            if action.sourceFrame.isMainFrame && Console.isPage(web.url) { beginSignIn() }
+            if action.sourceFrame.isMainFrame && Console.isPage(web.url) { beginSignIn(fromWebPage: true) }
             return
         }
         if action.targetFrame != nil && Console.owns(url) { decisionHandler(.allow); return }
@@ -109,21 +297,67 @@ import WebKit
         decisionHandler(.allow)
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        indicator.stopAnimating(); rememberPage()
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if navigation !== pendingNavigation {
+            localDocument = nil
+            if Console.isPage(webView.url) {
+                failedPage = webView.url
+                showLoading()
+            }
+        }
+        pendingNavigation = navigation
+        self.navigation.reset()
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { navigationFailed(error) }
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { navigationFailed(error) }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let document = localDocument, document === navigation else {
+            if !Console.isPage(webView.url) { consoleDidRender() }
+            rememberPage()
+            return
+        }
+        Task {
+            do {
+                let stored = try await web.callAsyncJavaScript(
+                    "return Boolean(localStorage.getItem('seekmoon.account.v1') || localStorage.getItem('seekmoon.cloud.token.v1'))",
+                    arguments: [:], in: nil, contentWorld: .defaultClient)
+                let cookies = await web.configuration.websiteDataStore.httpCookieStore.allCookies()
+                guard localDocument === document else { return }
+                // A previous browser session can recover its account from an
+                // HTTP-only cookie even when there is no local account object.
+                let host = Console.origin.host!
+                let hasSiteCookie = cookies.contains { cookie in
+                    let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                    return domain == host || host.hasSuffix("." + domain)
+                }
+                if stored as? Bool == true || hasSiteCookie {
+                    loadPage(failedPage)
+                } else {
+                    consoleDidRender()
+                    self.navigation.showWelcome(true)
+                }
+            } catch {
+                if localDocument === document { loadPage(failedPage) }
+            }
+        }
+    }
 
-    private func navigationFailed(_ error: Error) {
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        navigationFailed(navigation, error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        navigationFailed(navigation, error)
+    }
+
+    private func navigationFailed(_ navigation: WKNavigation?, _ error: Error) {
         let reason = error as NSError
         if reason.domain == NSURLErrorDomain && reason.code == NSURLErrorCancelled { return }
         if reason.domain == "WebKitErrorDomain" && reason.code == 102 { return }
+        if let pendingNavigation, let navigation, pendingNavigation !== navigation && web.isLoading { return }
         showError(reason.localizedDescription, url: reason.userInfo[NSURLErrorFailingURLErrorKey] as? URL)
     }
 
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loadPage(webView.url) }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loadPage(webView.url ?? failedPage) }
 
     static func installAccount(_ account: String, in webView: WKWebView) async throws {
         let installed = try await webView.callAsyncJavaScript("""
@@ -134,23 +368,24 @@ import WebKit
         guard installed as? Bool == true else { throw SignInError.callback }
     }
 
-    private func beginSignIn() {
-        guard signIn == nil, let window = view.window else { return }
+    func beginSignIn(method: SignInMethod? = nil, fromWebPage: Bool = false) {
+        guard signIn == nil, Console.isPage(web.url), let window = view.window else { return }
         let attempt = SignIn(window: window)
         signIn = attempt
-        attempt.start { [weak self] result in
+        attempt.start(method: method) { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 defer { signIn = nil }
                 do {
                     let session = try result.get()
                     try await Self.installAccount(session, in: web)
-                    web.reload()
+                    loadPage(web.url)
                 } catch {
-                    if Console.isPage(web.url) { web.reload() }
+                    // The web-initiated flow marks its own login action as pending.
+                    if fromWebPage && Console.isPage(web.url) { web.reload() }
                     if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { return }
-                    let alert = UIAlertController(title: "Unable to sign in", message: error.localizedDescription, preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true)
+                    let alert = UIAlertController(title: String(localized: "Unable to sign in"), message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: String(localized: "OK"), style: .default)); present(alert, animated: true)
                 }
             }
         }
