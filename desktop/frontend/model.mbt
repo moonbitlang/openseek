@@ -2772,11 +2772,7 @@ fn initial_model(
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
     pending_previews: Map([]),
-    browser_questions: if desktop {
-      None
-    } else {
-      Some(BrowserCloudQuestions())
-    },
+    browser_questions: None,
     cloud_questions: @user_questions.Model(),
     cloud: @cloud.State::empty(),
     chat_navigation_generation: 0,
