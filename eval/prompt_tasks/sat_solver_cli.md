@@ -32,7 +32,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes:
   - a satisfiable formula (must print a `v ` assignment line).
   - a contradiction such as `(x1) ∧ (¬x1)` → `UNSATISFIABLE`.

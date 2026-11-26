@@ -24,7 +24,7 @@ Validation expectations before finishing:
 
 - Run `moon check`.
 - Run targeted `moon test`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes:
   - file input containing a nested table and array
   - stdin input containing dotted keys

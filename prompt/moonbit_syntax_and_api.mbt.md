@@ -19,6 +19,9 @@ MoonBit.
 - Declare async helpers with `async fn` and write async calls directly.
 - Use `println` (no `print`).
 
+A successful `moon check` updates `pkg.generated.mbti` for checked local
+packages whose preferred backend is included. Review the diff for public API changes.
+
 A minimal `moon check` script:
 
 [share/workflow/check.mbtx](../share/workflow/check.mbtx)

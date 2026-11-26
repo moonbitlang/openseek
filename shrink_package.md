@@ -41,7 +41,7 @@ packages actually use. Repo-agnostic; drive it with `moon ide analyze`.
    - **No usage at all, vestigial** → delete the block. (Making it `priv`
      instead just trades an over-export for an unused-symbol warning.)
 3. **Verify per package, not per sweep**: `moon check --deny-warn`, run the
-   package's tests, then `moon info` and check the `.mbti` diff shrank the way
+   package's tests, then check the `.mbti` diff shrank the way
    you intended. The `.mbti` diff is the review artifact.
 
 ## Traps

@@ -11,8 +11,8 @@ MoonBit Validation Loop Addendum
   the first concrete diagnostic before adding more code, and re-run it when
   you need fresh compiler feedback.
 - Use `mbtx` snippets for final project validation beyond raw compiler
-  feedback: targeted `moon test`, `moon run`, `moon info`, and `moon fmt`.
+  feedback: targeted `moon test`, `moon run`, and `moon fmt`.
 - Do not finish from intuition. Before `finish`, confirm the latest
   `moon check` output is clean or understood, then run targeted `moon test`,
-  `moon info`, `moon fmt`, and at least two task-specific CLI probes derived
+  `moon fmt`, and at least two task-specific CLI probes derived
   from the requested behavior.

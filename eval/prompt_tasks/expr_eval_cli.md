@@ -38,7 +38,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes (stdin → expected stdout):
   - `2 + 3 * 4` → `14` (precedence).
   - `2 ^ 3 ^ 2` → `512` (right associativity).
