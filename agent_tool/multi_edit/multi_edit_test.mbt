@@ -880,10 +880,10 @@ async test "multi_edit caps file context blocks when many edits fail in one batc
     assert_true(
       output.content.contains("edit[9] from line 10: old_string not found"),
     )
-    // Context blocks are capped at FailureContextSiteLimit (8), omitting 2.
+    // Context blocks are capped at FailureContextSiteLimit (3), omitting 7.
     assert_true(
       output.content.contains(
-        "(file context omitted for 2 additional failure(s) to keep output concise)",
+        "(file context omitted for 7 additional failure(s) to keep output concise)",
       ),
     )
   })

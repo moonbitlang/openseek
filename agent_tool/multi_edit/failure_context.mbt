@@ -17,8 +17,9 @@ const FailureLineDisplayCap : Int32 = 200
 
 ///|
 /// Maximum number of failed edits in one batch that include a file context
-/// block, and total character budget across all context blocks in a batch.
-const FailureContextSiteLimit : Int32 = 8
+/// block (matching `RejectedFileDisplayLimit`), and total character budget
+/// across all context blocks in a batch.
+const FailureContextSiteLimit : Int32 = 3
 
 ///|
 const FailureContextBudgetChars : Int32 = 12_000
