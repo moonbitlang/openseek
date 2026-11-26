@@ -26,7 +26,7 @@ pub fn Dispatcher::add_tools(
     if self.tools.contains(tool.name) || names.contains(tool.name) {
       raise ServerError("duplicate host tool: \{tool.name}")
     }
-    names.add(tool.name)
+    names.insert(tool.name)
   }
   for tool in tools {
     self.tools[tool.name] = tool

@@ -229,7 +229,7 @@ async fn read_body(conn : @http.ServerConnection) -> Bytes? {
     guard buffer.length() + chunk.length() <= MaxRequestBytes else {
       return None
     }
-    buffer.write_bytes(chunk)
+    buffer.write_bytesview(chunk)
   }
   Some(buffer.contents())
 }
