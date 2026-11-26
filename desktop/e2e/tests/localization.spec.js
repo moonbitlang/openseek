@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { openAccountMenu, selectAccountMenuItem } from './support/account_menu.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('Chinese covers feature pages, composer and dock after live switching', async ({ page }) => {
@@ -16,7 +17,7 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   await page.locator('#task').fill('');
   await page.getByRole('button', { name: '显示面板', exact: true }).click();
   await expect(page.getByRole('button', { name: /搜索 在工作区中搜索文本/ })).toBeVisible();
-  await page.getByRole('button', { name: '技能', exact: true }).click();
+  await selectAccountMenuItem(page, '技能', '账户');
   await expect(page.getByRole('heading', { name: '技能', exact: true })).toBeVisible();
   const skills = page.getByRole('dialog', { name: '技能', exact: true });
   const dismiss = skills.getByRole('button', { name: '关闭', exact: true });
@@ -24,7 +25,7 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   await expect(dismiss).toHaveText('');
   await expect(page.getByPlaceholder('搜索技能…')).toBeVisible();
   await dismiss.click();
-  await page.getByRole('button', { name: '定时任务', exact: true }).click();
+  await selectAccountMenuItem(page, '定时任务', '账户');
   await expect(page.getByRole('heading', { name: '定时任务', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '新建计划', exact: true }).click();
   await expect(page.getByText('超时时间（分钟）', { exact: true })).toBeVisible();
@@ -41,7 +42,6 @@ test('language selection updates Settings and sidebar and persists across reload
   await page.getByRole('option', { name: '简体中文', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
   await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '技能', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '对话', exact: true })).toBeVisible();
   await expect(sidebar.getByRole('button', { name: '新建', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '主题', exact: true })).toBeVisible();
@@ -53,6 +53,9 @@ test('language selection updates Settings and sidebar and persists across reload
   const settings = page.getByRole('dialog', { name: '设置', exact: true });
   await expect(settings.getByText('保存在此设备上，仅随 API 请求发送。SeekMoon 不会读取它。')).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hans');
+  await settings.getByRole('button', { name: '关闭', exact: true }).click();
+  const accountMenu = await openAccountMenu(page, '账户');
+  await expect(accountMenu.getByRole('menuitem', { name: '技能', exact: true })).toBeVisible();
   await page.reload();
   await sidebar.getByRole('button', { name: '设置', exact: true }).click();
   await page.locator('#language-select').click();

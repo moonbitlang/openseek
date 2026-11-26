@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { selectAccountMenuItem } from './support/account_menu.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function expectHeader(page, title) {
@@ -20,8 +21,8 @@ test('management dialogs preserve the empty project header', async ({ page }) =>
   await app.goto();
   await expectHeader(page, 'SeekMoon');
   const original = await page.locator('main > .topbar').elementHandle();
-  for (const [button, title] of [['Settings', 'Settings'], ['Skills', 'Skills'], ['Scheduled', 'Scheduled tasks']]) {
-    await page.getByRole('button', { name: button, exact: true }).click();
+  for (const [entry, title] of [['Settings', 'Settings'], ['Skills', 'Skills'], ['Scheduled', 'Scheduled tasks']]) {
+    await selectAccountMenuItem(page, entry);
     await expect(page.getByRole('dialog')).toHaveAccessibleName(title);
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
@@ -60,8 +61,8 @@ test('loading and failure retain the selected conversation title', async ({ page
   const title = await page.locator('main > .topbar h1').textContent();
   const composer = page.getByRole('textbox', { name: 'Ask SeekMoon to inspect, edit, or explain this workspace.' });
   await composer.fill('Keep my unfinished draft');
-  for (const name of ['Settings', 'Skills', 'Scheduled']) {
-    await page.getByRole('button', { name, exact: true }).click();
+  for (const entry of ['Settings', 'Skills', 'Scheduled']) {
+    await selectAccountMenuItem(page, entry);
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   }
