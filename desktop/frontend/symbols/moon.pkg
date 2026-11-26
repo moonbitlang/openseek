@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/core/json",
+  "openseek_desktop/frontend/cloud_client",
+  "openseek_desktop/uri",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
