@@ -1296,6 +1296,7 @@ test "a feedback receipt from the previous account cannot settle a retry" {
   let emit = Action::test_emit()
   let (reset, _) = sending.command_result(
     FeedbackAccountUpdated(signed_in=true, changed=true),
+    Msg::test_emit(),
     emit,
   )
   assert_true(reset.active(input).feedback is None)
@@ -1305,8 +1306,27 @@ test "a feedback receipt from the previous account cannot settle a retry" {
   })
   let (late, _) = retry.command_result(
     FeedbackSettled(input.identity, "first", Ok(())),
+    Msg::test_emit(),
     emit,
   )
   assert_true(late.active(input).feedback is Some(Sending("retry", _)))
   assert_eq(late.active(input).draft.task, "/feedback keep this")
+}
+
+///|
+test "a previous feedback confirmation cannot dismiss a newer submission" {
+  let input = Input::fixture("")
+  let model = Model(input)
+  let entry = model.active(input)
+  for status in [Sending("new", "/feedback again"), Submitted("new")] {
+    let (next, _) = model
+      .with_entry({ ..entry, feedback: Some(status), })
+      .update(
+        input,
+        FeedbackConfirmationExpired("old"),
+        Msg::test_emit(),
+        Action::test_emit(),
+      )
+    assert_true(next.active(input).feedback == Some(status))
+  }
 }
